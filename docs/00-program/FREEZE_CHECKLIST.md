@@ -40,8 +40,8 @@ BLOCKING: YES
 - [x] Feature Catalog seeded.
 - [ ] Feature Catalog reviewed against reality.
 - [ ] Feature dependencies mapped fully.
-- [ ] First release boundary defined.
 - [ ] Deferred features explicitly marked.
+- [ ] Final implementation sequence defined after freeze.
 
 BLOCKING: YES
 
@@ -56,9 +56,11 @@ BLOCKING: YES
 - [x] Payroll flow v0.1.
 - [x] Approval model v0.1.
 - [x] Automation map v0.1.
-- [ ] Client/service lifecycle expanded.
-- [ ] Finance/payment lifecycle expanded.
-- [ ] Support/maintenance lifecycle expanded.
+- [x] Client support/service lifecycle v0.1.
+- [x] Finance/payment lifecycle v0.1.
+- [x] Maintenance/managed-service lifecycle v0.1.
+- [x] Document/handover lifecycle v0.1.
+- [x] Security/facilities lifecycle v0.1.
 - [ ] All important workflows reality-validated.
 
 BLOCKING: YES
@@ -70,11 +72,15 @@ BLOCKING: YES
 - [x] Object model seed.
 - [x] State machines seed.
 - [x] Event registry seed.
+- [x] Transition tables first pass for high-risk objects.
+- [ ] Exact object field definitions.
 - [ ] Object ownership frozen.
-- [ ] Transition tables complete for first release.
-- [ ] Invariants complete for first release.
+- [ ] Transition tables complete for implementation scope.
+- [ ] Invariants complete for implementation scope.
+- [ ] Data classification.
 - [ ] Retention/privacy rules.
 - [ ] Ledger models validated.
+- [ ] Database schema strategy frozen.
 
 BLOCKING: YES
 
@@ -84,6 +90,7 @@ BLOCKING: YES
 
 - [x] Permission model v0.1.
 - [x] Authorization matrix v0.1.
+- [x] Object × Action permission matrix v0.1.
 - [ ] Actual company authority validated.
 - [ ] External org boundaries validated.
 - [ ] Critical re-auth rules.
@@ -128,7 +135,8 @@ BLOCKING: YES before production UI.
 - [x] Offline-first model.
 - [x] Sync model.
 - [x] Conflict classes.
-- [ ] Per-feature offline classification.
+- [x] Capability-level offline classification first pass.
+- [ ] Per-feature-ID offline classification for implementation scope.
 - [ ] Sync protocol frozen.
 - [ ] Local schema.
 - [ ] Upload strategy.
@@ -150,9 +158,9 @@ BLOCKING: YES for field foundation.
 - [ ] Test-equipment integrations.
 - [ ] Push/email/SMS provider research.
 - [ ] Tag/label pilot.
-- [ ] Integration contracts for release 1.
+- [ ] Integration contracts for implementation scope.
 
-BLOCKING: PARTIAL — only for integrations included in first release.
+BLOCKING: PARTIAL — only for included integrations.
 
 ---
 
@@ -190,7 +198,7 @@ BLOCKING: YES.
 - [x] Monorepo structure proposal.
 - [ ] ADRs accepted.
 - [ ] API conventions.
-- [ ] first release schemas.
+- [ ] exact object/API schemas.
 - [ ] module public contracts.
 - [ ] technical spikes reflected.
 - [ ] final monorepo structure.
@@ -204,7 +212,6 @@ BLOCKING: YES.
 - [x] Definition of COMPLETE.
 - [x] Dependency graph v0.1.
 - [x] Technical spike plan.
-- [ ] First production vertical slices selected.
 - [ ] Implementation order.
 - [ ] Test strategy.
 - [ ] CI gates.
@@ -222,4 +229,4 @@ Current: NOT READY.
 
 Freeze review can only be called when every blocking section is either:
 - complete as a planning/architecture artifact, or
-- explicitly deferred outside release scope with no hidden dependency.
+- explicitly deferred with no hidden dependency.
