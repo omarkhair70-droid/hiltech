@@ -8,7 +8,7 @@ PRE-CODE PRODUCT / ARCHITECTURE DISCOVERY
 Freeze status: NOT READY
 
 ## Meaning
-The product is increasingly specified at workflow, state, permission, offline, and architecture level. No production capability is COMPLETE and no final technical stack has been frozen.
+HILTECH is now specified deeply enough that most major business objects, transitions, commands, permissions, offline classes, and architecture boundaries are visible before code. No production capability is COMPLETE and no final stack/schema has been frozen.
 
 ---
 
@@ -17,21 +17,23 @@ The product is increasingly specified at workflow, state, permission, offline, a
 | Layer | State | Notes |
 |---|---|---|
 | Program governance | STRONG FIRST PASS | Constitution, completeness, freeze/status controls exist |
-| Company reality | EARLY | Internal validation still required |
+| Company reality | EARLY | Internal validation remains the biggest business blocker |
 | Human map | FIRST PASS | Main personas covered |
 | Role experiences | FIRST PASS | Main personas covered |
 | Product map | FIRST PASS | Domains/surfaces mapped |
-| Master workflows | STRONG FIRST PASS | Project/employee/warehouse/procurement/payroll/approval/finance/support/maintenance/docs/security |
-| Object/state/event | SECOND PASS STARTED | Transition tables now exist for high-risk objects |
-| Permissions | SECOND PASS STARTED | Object × Action matrix added |
-| Automation/notifications | FIRST PASS | Needs exact event-to-policy matrix |
+| Master workflows | STRONG FIRST PASS | Major company lifecycles covered |
+| Object/state/event | STRONG SECOND PASS | Exact object specs + transition tables + command catalog |
+| Permissions | STRONG SECOND PASS | Object/action + field-level access models |
+| Data governance | FIRST PASS | Classification/retention model exists; legal validation pending |
+| Automation/notifications | FIRST PASS | Needs exact policy/trigger registry |
 | Information architecture | FIRST PASS | Final navigation not frozen |
-| UI reference research | PASS 01 + 02 | More component/visual research may continue |
+| UI reference research | PASS 01 + 02 | More visual/component research can continue |
 | Mobile surface | FIRST PASS | Not wireframed |
 | Desktop surface | FIRST PASS | Not wireframed |
 | Design thesis/system | FIRST PASS | Visual tokens/font/colors not frozen |
-| Offline/sync | STRONG ARCH MODEL | Conflict + classification matrix exist; spike required |
+| Offline/sync | STRONG ARCH MODEL | Conflict + capability classification + commands; spike required |
 | Integration/hardware | FIRST PASS | Real vendors/systems unknown |
+| API/read models | FIRST PASS | Conventions/error/versioning/read architecture defined |
 | Stack | RESEARCH PASS 01 | Leading candidates, no final stack |
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
@@ -42,24 +44,35 @@ The product is increasingly specified at workflow, state, permission, offline, a
 
 ---
 
-# Newly Added High-Detail Models
+# Newly Matured Layers
 
-## Workflows
-- Finance & Payment Lifecycle
-- Client Support & Service Lifecycle
-- Maintenance & Managed Service Lifecycle
-- Documents / Evidence / Handover Lifecycle
-- Security & Facilities Lifecycle
+## Data Model
+First-pass exact specs now cover:
+- identity/organizations,
+- sales/commercial,
+- projects/work,
+- assets/warehouse,
+- people/payroll,
+- procurement/finance,
+- support/documents/security,
+- approvals/notifications/sync/audit,
+- maintenance/managed service/NOC.
 
-## Transition tables
-- Project & Work
-- Asset & Warehouse
-- Procurement & Finance
-- People / Payroll / Support
+## Security
+Now includes:
+- role/context matrix,
+- object/action matrix,
+- field-level access matrix,
+- sensitive-data classification.
 
-## Security / Offline
-- Object × Action Permission Matrix
-- Offline Classification Matrix
+## API / Concurrency
+Now includes:
+- business command catalog,
+- idempotency rules,
+- optimistic versioning,
+- error families,
+- read-model architecture,
+- ID/versioning conventions.
 
 ---
 
@@ -73,9 +86,10 @@ The product is increasingly specified at workflow, state, permission, offline, a
 6. Android devices and site restrictions.
 7. KMP/Compose Desktop dense-data viability.
 8. Native authentication/authorization model.
-9. Offline conflict ergonomics.
-10. Exact object fields/data classification/retention rules.
-11. First production implementation order after freeze.
+9. Offline conflict ergonomics in real field use.
+10. Legal/accounting/privacy retention requirements.
+11. Final visual/navigation/component system.
+12. Exact DB/API schemas after reality validation.
 
 ---
 
@@ -92,11 +106,12 @@ High confidence:
 - Shared approval system.
 - Audit/history first-class.
 - No microservices/Redis/Temporal/search cluster by default.
-- UI research/design system before production screens.
 - Product completeness is strict and layered.
-- Critical state changes are commands/transitions, not arbitrary CRUD.
-- Financial/physical history should be append/audit oriented.
+- Critical state changes are typed commands/transitions, not arbitrary CRUD.
+- Critical physical/financial history is append/audit oriented.
 - Bank/external integration result is authoritative for external actions.
+- Field-level security matters independently of object visibility.
+- Business version and optimistic technical version are separate concepts.
 
 Leading but still spike-dependent:
 - Kotlin Multiplatform + Compose Multiplatform.
@@ -111,12 +126,11 @@ Leading but still spike-dependent:
 
 # Immediate Next Work
 
-1. Define exact high-risk object fields + sensitivity + invariants.
-2. Define data classification / retention model.
-3. Expand exact transition/action tables as object catalog becomes precise.
-4. Reality validation with Mohamed/Ahmed/project/warehouse/field.
-5. Representative wireflows/prototypes.
-6. Execute technical spikes after enough reality validation.
-7. Finalize ADRs/stack only after proof.
+1. Reality validation with Mohamed/Ahmed/project/warehouse/field.
+2. Exact approval-policy / automation-policy modeling.
+3. Representative wireflows and navigation candidates.
+4. Technical spikes after enough reality validation.
+5. Convert validated object specs into exact DB/API/local schemas.
+6. Final ADRs/stack only after proof.
 
 No production code yet by design.
