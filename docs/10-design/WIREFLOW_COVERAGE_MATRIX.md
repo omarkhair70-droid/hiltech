@@ -1,6 +1,6 @@
 # HILTECH Wireflow Coverage Matrix
 
-Status: ACTIVE TRACKER
+Status: STRONG FIRST PASS / REPRESENTATIVE FLOWS COVERED
 
 ## Completed — Representative Critical Flows
 
@@ -12,71 +12,88 @@ Status: ACTIVE TRACKER
 | Technician field job | Primary | N/A | Core | Yes | Supervisor/PM | v0.1 |
 | Warehouse asset checkout | Primary | Supporting | Limited | Yes | Technician/PM | v0.1 |
 | Client approval/support | Primary | Supported | Read/cache | Yes | PM/Support/Finance | v0.1 |
+| Sales/tender -> project | Field support | Primary | Partial draft | Yes | PM/Owner | v0.1 |
+| Procurement | Secondary | Primary | Partial capture | Yes | Warehouse/Finance/Supplier | v0.1 |
+| New hire/onboarding | Primary | HR desktop | Partial | Yes | HR/Manager/Assets | v0.1 |
+| Offboarding | Employee limited | Primary | No final | Yes | HR/PM/Warehouse/Finance/Security | v0.1 |
+| Engineer/test | Primary | Primary review | Core capture | Yes | Field/PM/Handover | v0.1 |
+| Handover -> maintenance | Client mobile | Primary | Read/cache | Yes | PM/Client/Support | v0.1 |
+| Supplier | Supported | Primary | Limited | Yes | Procurement/Warehouse/Finance | v0.1 |
+| Security incident | Critical mobile | Primary | Provider-dependent | Yes | Owner/Warehouse | v0.1 |
+| Global search/command | Supported | Primary | Recent/cache | Yes | all roles | v0.1 |
 
 ---
 
-# Next Wireflows Required
+# Coverage Achieved
 
-## Sales / Tender
-```text
-Lead -> Discovery -> BOQ/Costing -> Quote -> Approval -> Submission -> Win -> Project Handoff
-```
+Representative flows now cover:
+- every main internal role.
+- client.
+- supplier.
+- subcontractor indirectly through work model.
+- executive decision.
+- financial decision.
+- field offline.
+- physical asset custody.
+- project control.
+- commercial acquisition.
+- employee lifecycle.
+- handover/service.
+- security.
+- global object navigation.
 
-## Procurement
-```text
-Requirement -> Stock Check -> RFQ -> Quotes -> Comparison -> Approval -> PO -> Delivery -> Match -> Payable
-```
+---
 
-## New Hire
-```text
-Invite -> Documents -> Role -> Training -> Asset/Access -> First Day -> Active
-```
+# Still Needed Before UX Freeze
 
-## Offboarding
-```text
-Start -> Project Transfer -> Asset Return -> Access Revoke -> Finance -> Final Payroll -> Former
-```
+## Detailed micro-wireflows
+Not every sub-action needs its own large document, but representative prototypes must still test:
+- leave/expense.
+- variation.
+- stocktake.
+- partial delivery.
+- payment unknown outcome.
+- support SLA breach.
+- camera provider unavailable.
+- multi-role user.
+- document superseded.
+- sync conflict recovery.
 
-## Engineer/Test
-```text
-Assigned technical job -> Drawing -> Test -> Evidence -> Technical Review -> Accept/Rework
-```
+## Visual wireframes
+Current wireflows define behavior, not layout.
 
-## Handover
-```text
-Completeness -> Missing artifacts -> Package -> Internal Review -> Client Review -> Accept -> Warranty
-```
+Need representative layout prototypes for:
+1. Mohamed Home + Approval.
+2. Ahmed Payroll.
+3. PM Project Command Center.
+4. Technician Today/Job.
+5. Warehouse Scan/Asset.
+6. Client My HILTECH.
+7. Search/Command.
+8. Shared object detail.
+9. Inbox/Work queue.
 
-## Maintenance
-```text
-Schedule -> Visit -> Checklist -> Findings -> Follow-up -> Complete -> Next Due
-```
+## Arabic / RTL
+All representative wireframes must exist/test in Arabic RTL and English LTR.
 
-## Supplier
-```text
-RFQ -> Quote -> PO -> Confirm -> Delivery -> Invoice -> Status
-```
-
-## Security
-```text
-Critical event -> Correlation -> Review -> Incident -> Resolution
-```
-
-## Search / Command
-```text
-Global query -> result -> authorized actions -> context navigation
-```
+## Adaptive
+Representative screens need:
+- phone.
+- large Android/tablet.
+- Windows desktop.
 
 ---
 
 # Coverage Rule
 
-Before final UI navigation freeze:
-- every major persona has at least one representative end-to-end wireflow.
-- every high-risk command appears in at least one wireflow.
-- every primary cross-device handoff is tested.
-- representative offline/error states exist.
-- client/external user flow tested.
-- Arabic/RTL is applied to prototypes.
+Wireflow stage is strong first pass when:
+- every major persona has representative end-to-end flow,
+- core cross-role handoffs appear,
+- high-risk actions/conflicts are represented,
+- offline field path exists,
+- external user flows exist.
 
-Wireflow complete as a planning artifact does NOT mean final UX complete.
+That gate is now satisfied as a planning artifact.
+
+Next:
+SCREEN INVENTORY -> REPRESENTATIVE WIREFRAMES -> VISUAL SYSTEM.
