@@ -1,0 +1,412 @@
+# Transition Tables — Project & Work
+
+Status: DOMAIN MODEL v0.1 / NOT FROZEN
+
+Format:
+FROM -> COMMAND -> PRECONDITIONS -> AUTHORITY -> TO -> EVENT -> SIDE EFFECTS -> OFFLINE
+
+---
+
+# Project
+
+## DRAFT -> StartKickoff -> KICKOFF
+Preconditions:
+- client/org exists
+- project baseline source exists
+- responsible owner/PM assigned or explicitly pending
+
+Authority:
+Sales handoff / Project authority.
+
+Event:
+project.kickoff_started
+
+Side effects:
+- create kickoff action set
+- notify assigned PM
+
+Offline:
+No.
+
+---
+
+## KICKOFF -> CompleteKickoff -> PLANNING
+Preconditions:
+- scope acknowledged
+- primary team roles known
+- major sites/context known
+- commercial source linked
+
+Authority:
+PM / authorized project authority.
+
+Event:
+project.kickoff_completed
+
+Offline:
+No.
+
+---
+
+## PLANNING -> MarkReady -> READY
+Preconditions:
+- required baseline plan exists
+- project can start under policy
+- no mandatory kickoff blockers
+
+Authority:
+PM.
+
+Event:
+project.ready
+
+Side effects:
+- enable active work scheduling
+
+Offline:
+No.
+
+---
+
+## READY -> ActivateProject -> ACTIVE
+Preconditions:
+- approved start authority
+- start date/condition satisfied
+
+Authority:
+PM / policy.
+
+Event:
+project.activated
+
+Offline:
+No.
+
+---
+
+## ACTIVE -> PutOnHold -> ON_HOLD
+Preconditions:
+- reason required
+
+Authority:
+PM / owner depending impact.
+
+Event:
+project.put_on_hold
+
+Side effects:
+- work scheduling restrictions
+- notify relevant team/client only if policy
+
+Offline:
+No.
+
+---
+
+## ON_HOLD -> ResumeProject -> ACTIVE
+Preconditions:
+- blocking reason resolved
+- authority confirms
+
+Event:
+project.resumed
+
+Offline:
+No.
+
+---
+
+## ACTIVE -> StartDeliveryReview -> DELIVERY_REVIEW
+Preconditions:
+- delivery scope substantially completed
+- mandatory work states satisfied
+
+Authority:
+PM.
+
+Event:
+project.delivery_review_started
+
+Side effects:
+- build handover completeness view
+
+Offline:
+No.
+
+---
+
+## DELIVERY_REVIEW -> StartHandover -> HANDOVER
+Preconditions:
+- internal review passed
+- required package ready enough for client review
+
+Authority:
+PM / handover authority.
+
+Event:
+handover.started
+
+Offline:
+No.
+
+---
+
+## HANDOVER -> AcceptDelivery -> DELIVERED
+Preconditions:
+- client/internal acceptance conditions satisfied
+- required snags handled according to contract
+
+Authority:
+client acceptance + HILTECH closing authority as configured
+
+Event:
+project.delivery_completed
+
+Side effects:
+- warranty/service eligibility
+- final billing eligibility if contract says
+- asset/document history remains active
+
+Offline:
+No.
+
+---
+
+## DELIVERED -> CloseProject -> CLOSED
+Preconditions:
+- commercial/operational close conditions satisfied
+- company tools/materials reconciled
+- project records finalized
+
+Authority:
+PM + finance/management conditions as policy
+
+Event:
+project.closed
+
+Offline:
+No.
+
+---
+
+# Project Invariants
+
+- Project cannot be CLOSED with unresolved mandatory close blockers.
+- Baseline changes after ACTIVE require structured change/variation where applicable.
+- Client-visible progress cannot exceed internally accepted progress source.
+- Project history survives closure.
+- Project health is not lifecycle state; it is a computed/managed dimension.
+
+---
+
+# Work Order
+
+## DRAFT -> PlanWork -> PLANNED
+Preconditions:
+- project/site context
+- scope/instruction
+
+Authority:
+PM/supervisor depending work type.
+
+Event:
+work.planned
+
+Offline:
+No.
+
+---
+
+## PLANNED -> EvaluateReadiness -> READY / BLOCKED
+Preconditions:
+readiness checks:
+- people
+- material
+- equipment
+- drawing/spec
+- access
+- dependencies
+
+Authority:
+system derived + responsible user confirmation where required.
+
+Event:
+work.readiness_changed
+
+Offline:
+Cached evaluation may display offline, authoritative readiness server-side.
+
+---
+
+## READY -> AssignWork -> ASSIGNED
+Preconditions:
+- eligible assignee
+- schedule/context
+
+Authority:
+PM/supervisor.
+
+Event:
+work.assigned
+
+Offline:
+No authoritative reassignment offline.
+
+---
+
+## ASSIGNED -> StartWork -> IN_PROGRESS
+Preconditions:
+- actor is assigned/authorized
+- work not cancelled/reassigned
+- mandatory start conditions
+
+Authority:
+assigned technician/supervisor.
+
+Event:
+work.started
+
+Offline:
+YES. Queue command with base version.
+
+---
+
+## IN_PROGRESS -> BlockWork -> BLOCKED
+Preconditions:
+- blocker reason/type required
+
+Authority:
+assigned field user/supervisor.
+
+Event:
+work.blocked
+
+Side effects:
+- PM/supervisor attention depending severity
+
+Offline:
+YES.
+
+---
+
+## BLOCKED -> ResumeWork -> IN_PROGRESS
+Preconditions:
+- blocker resolved/waived
+
+Authority:
+assigned/supervisor.
+
+Event:
+work.resumed
+
+Offline:
+YES if local context valid; server may reject stale state.
+
+---
+
+## IN_PROGRESS -> SubmitCompletion -> SUBMITTED_FOR_REVIEW
+Preconditions:
+- mandatory evidence present locally/authoritatively as policy
+- required measurements/tests captured
+- material usage declared
+- unresolved blocker rule satisfied
+
+Authority:
+assigned executor.
+
+Event:
+work.submitted_for_review
+
+Offline:
+YES as queued command after evidence dependencies.
+
+---
+
+## SUBMITTED_FOR_REVIEW -> AcceptWork -> ACCEPTED
+Preconditions:
+- evidence review passed
+- technical review if required
+
+Authority:
+supervisor/engineer/PM according work type.
+
+Event:
+work.accepted
+
+Side effects:
+- project progress
+- billing/milestone eligibility calculations
+- client update potential
+- material/project actuals confirmed
+
+Offline:
+Normally online-authoritative.
+
+---
+
+## SUBMITTED_FOR_REVIEW -> RequestRework -> REWORK_REQUIRED
+Preconditions:
+- reason/evidence required
+
+Authority:
+reviewer.
+
+Event:
+rework.requested
+
+Offline:
+No.
+
+---
+
+## REWORK_REQUIRED -> ResumeRework -> IN_PROGRESS
+Authority:
+assigned executor/supervisor.
+
+Event:
+work.rework_started
+
+Offline:
+YES.
+
+---
+
+## ACCEPTED -> CloseWork -> CLOSED
+Preconditions:
+- no follow-up action required
+- post-acceptance workflow complete
+
+Authority:
+system/policy or PM.
+
+Event:
+work.closed
+
+Offline:
+No.
+
+---
+
+## Active state -> CancelWork -> CANCELLED
+Preconditions:
+- reason
+- cancellation authority
+- impact handled
+
+Authority:
+PM/policy.
+
+Event:
+work.cancelled
+
+Offline:
+No.
+
+---
+
+# Work Invariants
+
+- Work cannot be accepted without required evidence.
+- One accepted version is authoritative; stale offline completion cannot overwrite reassignment/cancellation.
+- Material/equipment usage is not silently inferred if accountability requires confirmation.
+- Review/rework history remains immutable.
