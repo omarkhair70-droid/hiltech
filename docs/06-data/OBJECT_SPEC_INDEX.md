@@ -1,6 +1,6 @@
 # HILTECH Object Specification Index
 
-Status: ACTIVE INDEX / GROWING
+Status: STRONG FIRST PASS / NOT SCHEMA-FROZEN
 
 ## Purpose
 Track which discovered business objects have exact field-level specifications and which still need deeper work.
@@ -8,6 +8,36 @@ Track which discovered business objects have exact field-level specifications an
 ---
 
 # Specified — First Pass
+
+## Identity / Organization
+- UserIdentity
+- Device
+- Session
+- Organization
+- OrganizationMembership
+- Contact
+- RoleDefinition
+- Team
+- TeamMembership
+- Delegation
+
+File:
+`object-specs/IDENTITY_ORGANIZATION_OBJECTS.md`
+
+## Sales / Commercial
+- Opportunity
+- Tender/RFQ
+- SiteVisit
+- Scope
+- BOQ
+- Costing
+- Quote
+- Contract
+- ClientPurchaseOrder
+- CommercialApprovalContext
+
+File:
+`object-specs/SALES_COMMERCIAL_OBJECTS.md`
 
 ## Project / Delivery
 - Project
@@ -104,45 +134,52 @@ File:
 File:
 `object-specs/SUPPORT_DOCUMENT_SECURITY_OBJECTS.md`
 
----
-
-# Still Need Exact Specs
-
-## Identity / Organization
-- UserIdentity
-- Device
-- Session
-- Organization
-- OrganizationMembership
-- Contact
-- Role
-- Team
-- Delegation
-
-## Sales
-- Opportunity
-- Tender/RFQ
-- SiteVisit
-- Scope
-- BOQ
-- Costing
-- Quote/QuoteVersion
-- Contract
-- ClientPO
-
-## Approval
+## Approval / Inbox / Notification / Sync / Audit
 - ApprovalRequest
-- ApprovalPolicy
 - ApprovalStep
+- ApprovalAssignment
 - ApprovalDecision
-- ApprovalDelegation/Escalation
-
-## Notifications / Inbox
 - InboxItem
 - Notification
-- DeliveryAttempt
-- Preference
-- Digest
+- NotificationDeliveryAttempt
+- NotificationPreference
+- DeviceOperation
+- SyncCursor
+- SyncConflict
+- UploadSession
+- AuditEvent
+
+File:
+`object-specs/APPROVAL_NOTIFICATION_SYNC_OBJECTS.md`
+
+## Maintenance / Managed Service / NOC
+- ServiceContract
+- CoverageRule
+- SLADefinition
+- PreventiveSchedule
+- MaintenanceChecklistTemplate
+- ManagedService
+- MonitoringProfile
+- MonitoredNode
+- MonitoredEdge
+- MonitoringSignal concept
+- MonitoringIncidentLink
+- ServiceHealthSummary
+
+File:
+`object-specs/SERVICE_NOC_OBJECTS.md`
+
+---
+
+# Still Need Deeper Exact Specs / Decisions
+
+These areas are discovered but not yet fully exact enough for schema freeze:
+
+## Approval Policy Internals
+- ApprovalPolicy
+- approval condition language
+- escalation policy
+- delegation policy
 
 ## Automation
 - AutomationDefinition
@@ -150,24 +187,27 @@ File:
 - Rule
 - AIRequest/Audit if adopted
 
-## Managed Service / NOC
-- ServiceContract
-- CoverageRule
-- SLADefinition
-- PreventiveSchedule
-- ManagedService
-- MonitoringProfile
-- MonitoredNode/Edge
-- Incident linkage
+## Client-specific service objects
+Some may remain projections over Organization/Projects/Support rather than separate entities.
 
-## Audit
-- AuditEvent
+## Search / Read Projections
+Read-model catalog exists conceptually but exact schemas remain.
 
-## Sync
-- DeviceOperation
-- SyncCursor
-- Conflict
-- UploadSession
+## High-volume monitoring telemetry
+Storage strategy intentionally not frozen in OLTP model.
+
+---
+
+# Cross-cutting Models Now Defined
+
+- `DATA_CLASSIFICATION_AND_RETENTION.md`
+- `COMMAND_CATALOG.md`
+- `DATA_MODEL_FREEZE_GAPS.md`
+- transition tables for high-risk domains
+- `OBJECT_ACTION_PERMISSION_MATRIX.md`
+- `FIELD_LEVEL_ACCESS_MATRIX.md`
+- `OFFLINE_CLASSIFICATION_MATRIX.md`
+- API / error / ID-versioning / read-model conventions
 
 ---
 
@@ -191,4 +231,5 @@ An object is not DATA-SPEC COMPLETE until it has:
 - permission rules,
 - schema/API representation.
 
-Current objects are still first-pass specs, not schema-frozen.
+Current state:
+Strong domain-data first pass. Not schema-frozen until reality validation + technical decisions.
