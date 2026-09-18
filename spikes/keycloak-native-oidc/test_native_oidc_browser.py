@@ -273,8 +273,10 @@ def windows_browser_flow():
                 "SSO authorization returned wrong user",
             )
 
-            # Explicit re-auth must show an interactive login even with SSO.
-            _, challenge3 = core.pkce_pair()
+            # Explicit re-auth must stop automatic SSO reuse and require
+            # an interactive credential step. Keycloak may show username +
+            # password or password-only for the already-known user.
+            verifier3, challenge3 = core.pkce_pair()
             state3 = secrets.token_urlsafe(24)
             reauth_url = core.authorization_url(
                 core.WINDOWS_REDIRECT,
@@ -284,13 +286,38 @@ def windows_browser_flow():
             )
 
             page.goto(reauth_url, wait_until="domcontentloaded")
+
             core.require(
-                page.locator("#username").is_visible(),
-                "prompt=login did not render username field",
+                not page.url.startswith(core.WINDOWS_REDIRECT),
+                "prompt=login unexpectedly reused SSO without interaction",
+            )
+
+            password = page.locator("#password")
+            core.require(
+                password.is_visible(),
+                "prompt=login did not require an interactive password step",
+            )
+
+            username = page.locator("#username")
+            if username.is_visible():
+                username.fill(core.USERNAME)
+
+            password.fill(core.PASSWORD)
+            page.locator("#kc-login").click()
+
+            reauth_code = expect_callback(callback, state3)
+            reauth_tokens = core.exchange_code(
+                reauth_code,
+                verifier3,
+                core.WINDOWS_REDIRECT,
+            )
+
+            reauth_payload = core.jwt_payload(
+                reauth_tokens["access_token"],
             )
             core.require(
-                page.locator("#password").is_visible(),
-                "prompt=login did not render password field",
+                reauth_payload.get("preferred_username") == core.USERNAME,
+                "Re-auth authorization returned wrong user",
             )
 
             print(
