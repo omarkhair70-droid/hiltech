@@ -277,33 +277,53 @@ Indexes:
 ## site
 
 - id uuid primary key
-- project_id uuid not null
+- client_organization_id uuid not null
 - site_code varchar not null
 - name varchar not null
-- client_site_ref varchar/uuid null
 - address_text text null
 - latitude numeric null
 - longitude numeric null
-- access_instructions text null
-- lifecycle_state varchar not null
 - timezone varchar null
-- notes text null
+- status varchar not null
+- created_at timestamptz not null
+- created_by uuid not null
+- updated_at timestamptz not null
 - version bigint not null
 
 Unique:
-- project_id, site_code.
+- client_organization_id, site_code.
+
+Indexes:
+- client_organization_id + status.
+
+## project_site
+
+- id uuid primary key
+- project_id uuid not null
+- site_id uuid not null
+- project_site_code varchar null
+- lifecycle_state varchar not null
+- access_instructions text null
+- project_specific_notes text null
+- active_from timestamptz null
+- active_until timestamptz null
+- version bigint not null
+
+Unique candidate:
+- project_id, site_id.
 
 Indexes:
 - project_id + lifecycle_state.
+- site_id + lifecycle_state.
 
-## site_contact_link
+## project_site_contact_link
 
-- site_id uuid not null
+- project_site_id uuid not null
 - contact_id uuid not null
 - relationship_type varchar null
 
 Primary key:
-- site_id + contact_id + relationship_type where representation permits.
+- project_site_id + contact_id + relationship_type where representation permits.
 
 ## area
 
@@ -332,6 +352,7 @@ Cycle prevention requires application + DB-safe validation strategy.
 - work_order_code varchar not null
 - project_id uuid not null
 - site_id uuid not null
+- project_site_id uuid null
 - area_id uuid null
 - work_package_id uuid null
 - title varchar not null
