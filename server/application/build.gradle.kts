@@ -66,6 +66,7 @@ val generateJooq by tasks.registering(JavaExec::class) {
 
     outputs.dir(generatedJooqDir)
     outputs.upToDateWhen { false }
+    notCompatibleWithConfigurationCache("jOOQ code generation reads a live database schema and environment-backed connection settings.")
 
     doFirst {
         val dbUrl = System.getenv("HILTECH_DB_URL") ?: "jdbc:postgresql://localhost:5432/hiltech"
@@ -118,28 +119,33 @@ tasks.register("verifyJooqGeneration") {
     group = "verification"
     description = "Generate jOOQ and assert the frozen first-slice tables are represented."
     dependsOn(generateJooq)
+    notCompatibleWithConfigurationCache("Verification inspects files generated from the live PostgreSQL schema.")
 
     doLast {
-        val tablesFile = generatedJooqDir.file("com/hiltech/server/generated/jooq/Tables.kt").asFile
-        check(tablesFile.isFile) {
-            "jOOQ KotlinGenerator did not create Tables.kt at the frozen output path."
+        val generatedFiles = generatedJooqDir.asFile
+            .walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .toList()
+
+        check(generatedFiles.isNotEmpty()) {
+            "jOOQ KotlinGenerator produced no Kotlin sources at the frozen output path."
         }
 
-        val generated = tablesFile.readText()
+        val generatedFileNames = generatedFiles.map { it.name }.toSet()
         listOf(
-            "ORGANIZATION",
-            "USER_IDENTITY",
-            "CONFIG_REVISION",
-            "PROJECT",
-            "WORK_ORDER",
-            "ASSET",
-            "STOCK_BALANCE",
-            "EVIDENCE",
-            "AUTHORIZATION_RELATION_PROJECTION",
-            "AUTHORIZATION_PROJECTION_OUTBOX",
-        ).forEach { table ->
-            check(generated.contains(table)) {
-                "Generated jOOQ schema is missing required first-slice table: $table"
+            "Organization.kt",
+            "UserIdentity.kt",
+            "ConfigRevision.kt",
+            "Project.kt",
+            "WorkOrder.kt",
+            "Asset.kt",
+            "StockBalance.kt",
+            "Evidence.kt",
+            "AuthorizationRelationProjection.kt",
+            "AuthorizationProjectionOutbox.kt",
+        ).forEach { expected ->
+            check(expected in generatedFileNames) {
+                "Generated jOOQ schema is missing required first-slice table source: $expected"
             }
         }
     }
