@@ -80,7 +80,7 @@ class EndToEndTraceTest {
             clientContext,
             carrier,
         ) { map, key, value ->
-            map[key] = value
+            map?.set(key, value)
         }
 
         client.end()
@@ -153,7 +153,7 @@ class EndToEndTraceTest {
         command.end()
         api.end()
 
-        provider.forceFlush().join(5_000)
+        provider.forceFlush().join(5, java.util.concurrent.TimeUnit.SECONDS)
 
         val spans = exporter.finishedSpanItems
         assertEquals(5, spans.size)
