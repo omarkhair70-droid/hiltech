@@ -12,7 +12,14 @@ from urllib.parse import parse_qs, urlencode, urlparse
 import requests
 from bs4 import BeautifulSoup
 
-BASE = os.environ.get("KEYCLOAK_URL", "http://127.0.0.1:8080").rstrip("/")
+BASE = os.environ.get("KEYCLOAK_URL", "https://127.0.0.1:8443").rstrip("/")
+TLS_VERIFY = not (
+    BASE.startswith("https://127.0.0.1") or
+    BASE.startswith("https://localhost")
+)
+
+if not TLS_VERIFY:
+    requests.packages.urllib3.disable_warnings()
 ADMIN_USER = os.environ.get("KEYCLOAK_ADMIN", "admin")
 ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
 REALM = "hiltech"
@@ -36,7 +43,7 @@ def wait_for_keycloak():
 
     while time.time() < deadline:
         try:
-            response = requests.get(url, timeout=3)
+            response = requests.get(url, timeout=3, verify=TLS_VERIFY)
             if response.status_code == 200:
                 return
             last_error = f"HTTP {response.status_code}: {response.text[:300]}"
@@ -214,6 +221,8 @@ def authorization_url(redirect_uri, challenge, state, prompt=None):
 
 
 def normalize_local_http_cookies(session):
+    # Compatibility fallback only. The active CI spike runs Keycloak over HTTPS,
+    # so Secure cookies are exercised without mutation.
     if BASE.startswith("http://127.0.0.1") or BASE.startswith("http://localhost"):
         for cookie in session.cookies:
             cookie.secure = False
@@ -238,7 +247,7 @@ def parse_login_form(response):
 
 
 def submit_browser_login(session, auth_url, redirect_uri):
-    response = session.get(auth_url, allow_redirects=False, timeout=15)
+    response = session.get(auth_url, allow_redirects=False, timeout=15, verify=TLS_VERIFY)
     require(response.status_code == 200, f"Expected login page, got {response.status_code}")
 
     # Keycloak 26.x marks auth cookies Secure even in local dev HTTP.
@@ -305,6 +314,7 @@ def native_login(redirect_uri):
     verifier, challenge = pkce_pair()
     state = secrets.token_urlsafe(24)
     session = requests.Session()
+    session.verify = TLS_VERIFY
     auth_url = authorization_url(
         redirect_uri=redirect_uri,
         challenge=challenge,
