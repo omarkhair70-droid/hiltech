@@ -1,6 +1,6 @@
 # 00 — Configuration / Policy Schemas
 
-Status: **CONTRACT CANDIDATE v0.1 / PRE-FREEZE**
+Status: **CONTRACT CANDIDATE v0.2 / CORE SCOPE DECISIONS CLOSED**
 Date: 2026-09-18
 
 ## Purpose
@@ -21,13 +21,32 @@ The schema must continue working as HILTECH adds people, teams, projects, branch
 
 ## IDs / Time / Version
 
-Accepted candidate baseline:
-- IDs: UUID.
+Accepted baseline:
+- domain/config IDs use UUID physical representation.
+- server-owned business objects receive server-generated UUIDs.
+- client-created retry operation IDs are client-generated UUIDs.
+- clients never infer time/order/authorization from UUID value.
 - optimistic aggregate version: Long, starting at 1.
 - timestamps: UTC Instant.
 - effective business dates/times: Instant unless a domain-specific LocalDate is explicitly required.
 - human/business code: stable String, unique within its declared scope.
 - mutable configuration is never identified only by display name.
+
+## Configuration scope
+
+First-slice scope model:
+- SYSTEM — platform-managed built-in configuration/schema definitions.
+- ORGANIZATION — operating configuration owned by one Organization.
+
+Fields:
+- scopeType: SYSTEM / ORGANIZATION
+- scopeOrganizationId: UUID? required when ORGANIZATION
+
+Rules:
+- normal HILTECH operating policies are ORGANIZATION scoped.
+- external Client/Supplier organizations do not inherit HILTECH operating config unless an explicit product feature later permits it.
+- SYSTEM configuration cannot be casually edited by organization admins.
+- future additional scope types require contract/ADR extension; do not overload scope IDs.
 
 ## Configuration lifecycle
 
@@ -52,7 +71,8 @@ Rules:
 All first-slice configuration aggregates use equivalent metadata:
 
 - id: UUID
-- organizationId: UUID
+- scopeType: SYSTEM / ORGANIZATION
+- scopeOrganizationId: UUID?
 - code: String
 - name: String
 - description: String? 
@@ -187,7 +207,8 @@ Built-in typed families:
 - SAFETY_PPE
 
 Extension mechanism:
-- CUSTOM_TYPED_REQUIREMENT using a registered typed requirement definition.
+- CUSTOM_TYPED_REQUIREMENT is **not enabled in the first production slice**.
+- adding a new requirement semantic requires an explicit typed code/schema extension.
 - no arbitrary script execution.
 
 ## ReadinessRequirement
@@ -566,6 +587,13 @@ No arbitrary executable code/scripts inside templates.
 
 ---
 
+## Work policy binding lifecycle
+
+- DRAFT/PLANNED WorkOrder may be explicitly rebound to newer policy revisions through a controlled RebindWorkPolicies command.
+- every rebind writes binding history.
+- once WorkOrder becomes ASSIGNED, the bound WorkType/Assignment/Readiness/Evidence/Review revisions are immutable for that execution cycle unless a dedicated reopen/replan workflow explicitly creates a new binding version.
+- configuration activation never silently rewrites an assigned/in-progress/submitted/accepted WorkOrder.
+
 # 15. Policy Binding To WorkOrder
 
 The production WorkOrder contract must store enough immutable references to explain the rules applied to that work.
@@ -710,13 +738,15 @@ This candidate is structurally strong enough to drive DB/API design.
 
 Still to settle before final freeze:
 - exact maximum lengths for code/name/description.
-- exact organization/global scope mechanism.
-- exact policy-binding storage representation.
-- exact custom typed extension registry shape.
 - exact retention/legal rules for tracking/location.
-- exact Configuration Center UI.
-- whether some configuration families require formal ApprovalPolicy before activation.
+- exact Configuration Center visual design.
 - exact import/export/seed format.
+
+Closed:
+- SYSTEM/ORGANIZATION scope mechanism.
+- WorkOrder policy-binding lifecycle.
+- no arbitrary/custom requirement extension in first slice.
+- activation can invoke ApprovalPolicy/re-auth by family without hard-coding today's approver.
 
 These are **contract closure items**, not reasons to rediscover HILTECH's whole operating model.
 
