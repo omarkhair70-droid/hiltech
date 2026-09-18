@@ -97,6 +97,68 @@ Invariants:
 
 ---
 
+# 1A. CodePolicy
+
+Human-facing business codes are separate from UUID identity.
+
+Fields:
+- common configuration metadata
+- targetObjectType: PROJECT / WORK_ORDER / SITE / ASSET / STOCK_ITEM / other typed target
+- prefix: String?
+- includeYear: Boolean
+- separator: String
+- sequenceScope: ORGANIZATION / PROJECT / SITE / OBJECT_TYPE
+- sequencePadding: Int
+- manualOverrideAllowed: Boolean
+- uniquenessScope: ORGANIZATION / PROJECT / SITE / CLIENT_ORGANIZATION
+- resetRule: NEVER / YEARLY
+
+Rules:
+- generated code allocation is server-authoritative.
+- code format can change without changing object UUID.
+- historical codes are never rewritten when CodePolicy changes.
+- manual code entry is accepted only when the active CodePolicy allows it.
+- uniqueness is enforced by the owning domain/database.
+
+Current prefixes/formats are seed configuration, not source code.
+
+---
+
+# 1B. ProjectHealthPolicy
+
+Project health is derived from explicit signals, never a manually typed percentage/score.
+
+Health states:
+- UNKNOWN
+- HEALTHY
+- ATTENTION
+- CRITICAL
+- ON_HOLD
+
+Configurable signal families may include:
+- OVERDUE_WORK
+- BLOCKED_WORK
+- REWORK_BACKLOG
+- RESOURCE_READINESS
+- MILESTONE_DELAY
+- CLIENT_ACTION_REQUIRED
+- OTHER_TYPED_SIGNAL only when a typed implementation exists
+
+Fields:
+- common configuration metadata
+- signal rules
+- severity mapping
+- overdue grace windows where applicable
+- aggregation precedence
+
+Hard rules:
+- Project lifecycle ON_HOLD yields health ON_HOLD.
+- health stores/exposes contributing signals so the result is explainable.
+- no AI/opaque score is authoritative.
+- manual health override is not part of the first production slice.
+
+---
+
 # 2. WorkTypeDefinition
 
 ## Purpose
@@ -131,6 +193,8 @@ Examples are not hard-coded product limits.
 - instructionTemplateId: UUID?
 - completionPolicyId: UUID?
 - defaultPriorityCode: String?
+- defaultProgressWeight: Decimal = 1.0
+- countsTowardProjectProgress: Boolean = true
 - effectiveFrom: Instant?
 - effectiveTo: Instant?
 - supersedesId: UUID?
@@ -574,14 +638,27 @@ escalation never means automatic approval.
 
 # 14. Template Definitions
 
-Typed templates may support:
-- ChecklistTemplate
-- InstructionTemplate
-- AssetRequirementTemplate
-- MaterialRequirementTemplate
-- CompletionPolicy
+TemplateKind:
+- INSTRUCTION
+- CHECKLIST
+- ASSET_REQUIREMENT
+- MATERIAL_REQUIREMENT
+- COMPLETION
 
-Templates are configuration, but their typed schema is frozen before production.
+TemplateDefinition fields:
+- common configuration metadata
+- templateKind
+- payloadSchemaVersion: Int
+- definitionJson: typed/schema-validated JSON
+- renderHintsJson: optional UI hints only
+- active language/translation references where used
+
+Rules:
+- templates are configuration, not executable scripts.
+- JSON shape is validated by the typed TemplateKind schema.
+- template activation follows normal config revision rules.
+- changing a TemplateDefinition never rewrites already-materialized WorkOrder instructions/checklists.
+- checklist items that need individual completion/query/audit are materialized as WorkChecklistItemInstance rows rather than remaining only inside a JSON blob.
 
 No arbitrary executable code/scripts inside templates.
 
@@ -757,16 +834,20 @@ These are **contract closure items**, not reasons to rediscover HILTECH's whole 
 
 # Freeze Outcome
 
-Current: **CONTRACT CANDIDATE v0.1**
+Current: **CONTRACT CANDIDATE v0.3 / STRUCTURAL CONFIG CONTRACT CLOSED**
 
-Next:
-1. reflect these objects in Data Dictionary,
-2. define PostgreSQL/Flyway table ownership,
-3. define API DTO/command/read-model shapes,
-4. define OpenFGA/application authorization for Configuration Center,
-5. define representative Admin UI,
-6. run contract consistency review,
-7. mark configuration contract FROZEN when remaining closure items are resolved.
+Already reflected into:
+- Data Dictionary,
+- PostgreSQL table candidates,
+- API/DTO candidates,
+- Room/offline contracts,
+- OpenFGA/application authorization,
+- cross-contract consistency review.
+
+Remaining before FROZEN:
+- Configuration Center visual proof,
+- active-location tracking retention/legal policy before that mode is enabled,
+- final physical DDL/API normalization/contract tests.
 
 
 ---
