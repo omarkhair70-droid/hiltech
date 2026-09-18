@@ -1,7 +1,7 @@
 # HILTECH OS — FINAL STACK
 
 Date: 2026-09-18
-Status: **FROZEN FOR FIRST PRODUCTION SLICE / PRE-CODE**
+Status: **FROZEN FOR FIRST PRODUCTION SLICE / REPOSITORY BOOTSTRAP AUTHORIZED**
 
 This file is the canonical first-slice technology baseline.
 
