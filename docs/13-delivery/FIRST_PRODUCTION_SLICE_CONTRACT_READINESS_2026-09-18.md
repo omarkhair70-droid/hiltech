@@ -22,6 +22,22 @@ PM Desktop
 SPIKE-15 proves the hardest shared architecture path.
 It does **not** authorize freezing real HILTECH business fields/policies that have not been validated.
 
+## Configuration Principle
+
+The product must freeze typed/versioned **configuration mechanisms**, not today's mutable company answers.
+
+Examples that should be configurable:
+- WorkTypes,
+- readiness/evidence/review policies,
+- approval routing,
+- crew/assignment rules,
+- tracking policy,
+- warehouse/site storage locations,
+- asset/stock categories,
+- role/team/delegation relationships.
+
+Reality provides model validation and initial seed values. It is not a reason to hard-code Mohamed, a current technician count, one evidence checklist, or one permanent warehouse structure.
+
 ---
 
 # Status Legend
@@ -194,19 +210,16 @@ Strong transition model already exists for:
 - accept/rework,
 - close/cancel.
 
-Reality blockers before schema/API freeze:
-- actual HILTECH work-order types,
-- exact readiness checks by work type,
-- who may create/assign by real authority,
-- technician vs engineer vs supervisor executor rules,
-- evidence required by work type,
-- measurements/test reports required,
-- material declaration rules,
-- reviewer/acceptance authority,
-- rework/closure rules,
-- real field naming/codes/instruction format.
+Before schema/API freeze:
+- define a typed WorkTypeDefinition schema,
+- define versioned ReadinessPolicy,
+- define versioned EvidencePolicy,
+- define versioned ReviewPolicy,
+- define assignment/crew policy,
+- define configurable instruction/checklist templates,
+- ensure field terminology/codes can be configured or seeded without schema change.
 
-This is the best first domain to freeze immediately after field/project reality validation.
+A representative real job validates those schemas and supplies initial configuration. The current HILTECH reviewer, evidence checklist, or crew makeup is not itself a code blocker.
 
 ---
 
@@ -246,21 +259,15 @@ Strong command model exists for:
 - ReportAssetDamage/Missing,
 - stock receive/reserve/issue/consume/return/count/adjust.
 
-Reality blockers:
-- actual warehouse count/locations,
-- who physically controls checkout/return,
-- asset categories and approximate quantities,
-- serialized vs quantity-tracked rules,
-- units of measure,
-- existing asset codes/serial conventions,
-- calibration-required tool classes,
-- current issue/return paperwork,
-- direct-to-site receiving,
-- whether any safe offline checkout mode is needed,
-- QR/barcode pilot format,
-- high-value/restricted asset rules.
+Before schema freeze:
+- storage-location model must support Main Warehouse + Project/Site temporary storage,
+- asset/stock categories and units must be configurable master data,
+- serialized-vs-quantity rules must be configurable by item/category where safe,
+- calibration requirement must be configurable by asset type,
+- custody/checkout/return invariants remain hard domain rules,
+- offline final checkout remains a policy/architecture decision only if HILTECH truly needs it.
 
-Warehouse walkthrough is blocking before exact custody schema is frozen.
+A warehouse walkthrough validates the model and seeds initial locations/categories; it should not force permanent hard-coded warehouse/category lists.
 
 ---
 
