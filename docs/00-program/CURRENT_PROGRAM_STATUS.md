@@ -38,7 +38,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | ACTIVE — 01/02/03/04/06/09/10/11/12/14 PASSED | Client platform, RTL/adaptive structure, dense desktop, local DB, offline queue, authorization, modular backend events, PostgreSQL concurrency, binary evidence and observability proven; remaining spikes active |
+| Technical spikes | ACTIVE — 01/02/03/04/06/08/09/10/11/12/14 PASSED | Client platform, RTL/adaptive structure, dense desktop, local DB, offline queue, authorization, modular backend events, PostgreSQL concurrency, binary evidence and observability proven; remaining spikes active |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -84,9 +84,9 @@ Now includes:
 4. Existing CCTV/access-control systems and vendors.
 5. Exact organization/authority structure and delegation reality.
 6. Android device fleet, camera/QR restrictions and site-security constraints.
-7. Native identity operational proof — Keycloak SPIKE-08 is still active; object/action authorization is already proven by SPIKE-09.
-8. Android background execution/reconnect reliability — SPIKE-13 pending.
-9. Windows install/update/rollback operations — SPIKE-07 active.
+7. Android background execution/reconnect reliability — SPIKE-13 active.
+8. Windows install/update/rollback operations — SPIKE-07 active.
+9. Android camera/QR/secure-site field evidence — SPIKE-05 active.
 10. Offline conflict ergonomics in real field use.
 11. Legal/accounting/privacy/retention requirements.
 12. Final visual/navigation/component/Arabic typography system.
@@ -140,7 +140,7 @@ Proven / accepted directions:
 Leading but still spike/freeze dependent:
 - Ktor Client / exact HTTP client integration.
 - jOOQ — runtime/transaction use passed; final code-generation conventions still to freeze.
-- Keycloak — SPIKE-08 still active.
+- Keycloak 26.7.4 + native OIDC Authorization Code/PKCE — **SPIKE-08 accepted**.
 - WorkManager background execution — SPIKE-13 pending.
 - exact Windows update/distribution strategy — SPIKE-07 active.
 - exact production object-storage provider remains intentionally open.
@@ -331,3 +331,21 @@ GitHub Actions run 35305946228 proved:
 - real desktop LTR render.
 
 Final Arabic font, exact pane ordering, navigation and visual system remain design decisions.
+
+
+## SPIKE-08 — Keycloak Native OIDC
+Decision: **ACCEPT — native OIDC identity/session architecture passed.**
+
+GitHub Actions run 35307236838 proved:
+- Keycloak 26.7.4 over HTTPS,
+- Android private-use redirect + PKCE S256,
+- Windows loopback redirect through real Chromium,
+- browser SSO reuse,
+- prompt=login credential re-auth,
+- refresh,
+- logout refresh invalidation,
+- remote admin session revoke,
+- WebAuthn/passwordless registration paths,
+- Direct Access Grant disabled for the native client.
+
+Offline business work remains the local command queue; long-lived Keycloak offline tokens are not the default architecture.
