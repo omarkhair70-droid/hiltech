@@ -159,7 +159,7 @@ switch ($Stage) {
 
         Import-Certificate -FilePath $CertDer -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
 
-        $trusted = Get-Item "Cert:\CurrentUser\Root\\$($publicCertificate.Thumbprint)" -ErrorAction Stop
+        $trusted = Get-Item "Cert:\CurrentUser\Root\$($publicCertificate.Thumbprint)" -ErrorAction Stop
         if (-not $trusted) {
             throw "Disposable signing certificate was not imported into CurrentUser Root"
         }
@@ -270,7 +270,7 @@ switch ($Stage) {
         }
 
         $thumb = Get-SigningThumbprint
-        $trustedCertPath = "Cert:\CurrentUser\Root\\$thumb"
+        $trustedCertPath = "Cert:\CurrentUser\Root\$thumb"
         if (Test-Path $trustedCertPath) {
             Remove-Item $trustedCertPath -Force
         }
