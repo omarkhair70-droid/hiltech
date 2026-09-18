@@ -107,6 +107,7 @@ These are not reopened without a concrete contradiction/revisit trigger.
 - `14_FREEZE_GAP_REGISTER.md`
 - `15_AUTHORIZATION_CONSISTENCY_CONTRACT.md`
 - `16_DATABASE_DDL_CONSTRAINT_CONTRACT.md`
+- `17_FREEZE_TO_BOOTSTRAP_BOUNDARY.md`
 
 ---
 
@@ -138,3 +139,17 @@ Then:
 3. generate/build Phase 0 foundation,
 4. implement the first vertical slice from these contracts,
 5. do not redesign fundamentals during implementation without formal change control.
+
+
+---
+
+## Freeze / Bootstrap Boundary
+
+Use:
+`17_FREEZE_TO_BOOTSTRAP_BOUNDARY.md`
+
+Pre-code Freeze requires exact contracts + test specifications.
+
+It does not require production Flyway SQL, Spring/Ktor/Room implementation, production UI code, or implementation tests that only exist after repository bootstrap.
+
+Those become immediate Bootstrap Verification gates.
