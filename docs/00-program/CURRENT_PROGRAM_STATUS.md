@@ -31,14 +31,14 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | Mobile surface | FIRST PASS | Not wireframed |
 | Desktop surface | FIRST PASS | Not wireframed |
 | Design thesis/system | FIRST PASS | Visual tokens/font/colors not frozen |
-| Offline/sync | STRONG ARCH MODEL | Conflict + capability classification + commands; spike required |
+| Offline/sync | SPIKE-PROVEN CORE | Restart-safe queue, idempotent retry and stale conflict semantics passed; HTTP/background/UX spikes remain |
 | Integration/hardware | FIRST PASS | Real vendors/systems unknown |
 | API/read models | FIRST PASS | Conventions/error/versioning/read architecture defined |
 | Stack | RESEARCH PASS 01 | Leading candidates, no final stack |
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | ACTIVE — SPIKE-01 PASSED | Android + Windows KMP feasibility proven; remaining spikes active |
+| Technical spikes | ACTIVE — 01/03/04/11 PASSED | Client platform, local DB, core offline queue and PostgreSQL concurrency proven; remaining spikes active |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -118,7 +118,7 @@ Leading but still spike-dependent:
 - Room/SQLite — **SPIKE-03 feasibility ACCEPTED** with real SQLite tests on Linux/Windows and Android generated-code compile.
 - Ktor Client.
 - Spring Boot + Spring Modulith.
-- jOOQ.
+- jOOQ — SPIKE-11 runtime/transaction use passed; final code-generation conventions still to freeze.
 - Keycloak.
 - OpenFGA.
 
@@ -180,11 +180,6 @@ Proven in GitHub Actions:
 This does not mark the client stack FINAL. Remaining relevant spikes still gate final freeze.
 
 ## SPIKE-03 — Room KMP Local DB
-Status: RUNNING on isolated branch/PR.
-Uses a HILTECH-shaped PendingCommand local queue with Room3 + BundledSQLiteDriver.
-
-
-## SPIKE-03 — Room KMP Local DB
 Decision: **ACCEPT — local database feasibility passed.**
 
 GitHub Actions run 35295195896 proved:
@@ -195,3 +190,33 @@ GitHub Actions run 35295195896 proved:
 - shared PendingCommand schema/DAO with BundledSQLiteDriver.
 
 Full offline business lifecycle remains SPIKE-04.
+
+
+## SPIKE-04 — Offline Command Queue
+Decision: **ACCEPT — core offline queue semantics passed.**
+
+GitHub Actions run 35296098137 proved:
+- restart-safe real SQLite queue,
+- ordered replay,
+- idempotent ambiguous retry using operationId,
+- no duplicate authoritative business action,
+- stale-version conflict,
+- blocking of dependent later local work,
+- preservation of local evidence/payload,
+- Linux + Windows tests,
+- Android compile with shared sync code.
+
+Remaining: real HTTP/Ktor transport, WorkManager, binary upload and final conflict UX.
+
+## SPIKE-11 — PostgreSQL + jOOQ Ledger
+Decision: **ACCEPT — authoritative ledger/concurrency thesis passed.**
+
+GitHub Actions run 35296301835 proved on real PostgreSQL:
+- one-winner concurrent asset checkout,
+- optimistic-version conflict,
+- idempotent operationId retry,
+- append ledger integrity,
+- stock cannot go negative under concurrent issue,
+- final quantity/version/movement count remain correct.
+
+Production schema/codegen remains future freeze work.
