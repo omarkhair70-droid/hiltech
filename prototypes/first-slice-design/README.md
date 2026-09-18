@@ -22,7 +22,9 @@ Technician simulated states:
 
 Warehouse simulated states:
 - AVAILABLE
+- RESERVED SAME WORK
 - CALIBRATION BLOCKED
+- ALREADY CHECKED OUT
 - CHECKOUT COLLISION
 - SUCCESS
 
@@ -101,4 +103,4 @@ If prototype behavior contradicts a frozen contract, fix/review the design; do n
 - Desktop
 - authoritative vs local/conflict states
 
-Automated Playwright capture produces 36 rendered proof images in CI.
+Automated Playwright capture produces 37 rendered proof images in CI.
