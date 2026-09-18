@@ -1,6 +1,6 @@
 # 11 — Project / Site / Work Contract
 
-Status: **CONTRACT CANDIDATE v0.1**
+Status: **CONTRACT CANDIDATE v0.2**
 Date: 2026-09-18
 
 ## Purpose
@@ -135,52 +135,78 @@ All lifecycle-changing commands are online-authoritative.
 
 ---
 
-# 3. Site
+# 3. Site / ProjectSite
 
 ## Structural decision
 
-For the first production slice, Site is a Project delivery context:
+A physical/client Site must survive beyond one delivery project because the same location can later participate in:
+- another project,
+- support,
+- warranty,
+- maintenance,
+- managed service,
+- asset history.
 
-- Site.projectId is required.
-- siteCode is unique within Project.
+Therefore production separates:
 
-The existing question of reusable ClientSite identity remains a broader-domain freeze item.
+### Site
+Canonical durable physical/client location.
 
-To avoid future rewrite pressure:
-- references to a client-owned physical location may use `clientSiteRef` / future canonical external-location link,
-- Project Site remains the delivery-context object.
+### ProjectSite
+Association between one Project and one Site with project-specific delivery context.
 
-If reality proves reusable client-site identity is required before production freeze, introduce a separate canonical ClientSite/Facility identity rather than making Project Site ambiguous.
+This preserves one physical/site truth while allowing many project/service relationships over time.
 
 ## Site fields
 
 - id: UUID
-- projectId: UUID
+- clientOrganizationId: UUID
 - siteCode: String
 - name: String
-- clientSiteRef: String/UUID?
 - addressText: String? RESTRICTED
 - latitude: Decimal? RESTRICTED
 - longitude: Decimal? RESTRICTED
-- accessInstructions: Text? RESTRICTED
-- contactIds: List<UUID>
-- lifecycleState: SiteState
 - timezone: IANA timezone?
-- notes: Text? INTERNAL/RESTRICTED
+- status: ACTIVE / INACTIVE candidate
+- createdAt/by
+- updatedAt
 - version: Long
 
-## SiteState
+Unique candidate:
+- clientOrganizationId + siteCode.
 
-Exact enum remains a closure item because current source docs do not define a complete transition table.
+Site itself does not carry project-specific access instructions that may change by contract/project.
 
-Minimum semantic requirements:
-- active/usable vs inactive/closed distinction,
-- state cannot be inferred only from Project state,
-- field bundle includes only valid authorized site context.
+## ProjectSite fields
 
-Do not fabricate a final SiteState enum before the lifecycle is explicitly reviewed.
+- id: UUID
+- projectId: UUID
+- siteId: UUID
+- projectSiteCode: String?
+- lifecycleState: ProjectSiteState
+- accessInstructions: Text? RESTRICTED
+- projectContactIds / link table
+- projectSpecificNotes: Text?
+- activeFrom: Instant?
+- activeUntil: Instant?
+- version: Long
+
+Unique:
+- projectId + siteId unless a rare explicit multi-association case is justified.
+
+## ProjectSiteState candidate
+
+- PLANNED
+- ACTIVE
+- ON_HOLD
+- COMPLETED
+- CLOSED
+
+This state describes the site's participation in a Project, not whether the physical Site still exists.
 
 ## Area / Room / Zone
+
+Area belongs to Site.
 
 - id: UUID
 - siteId: UUID
@@ -192,12 +218,20 @@ Do not fabricate a final SiteState enum before the lifecycle is explicitly revie
 - restrictedAccess: Boolean
 - version: Long
 
+Project-specific scope can reference Areas through Work/ProjectSite context.
+
 Invariant:
 no cyclic hierarchy.
 
-Type is configurable rather than fixed forever to ROOM/FLOOR/RACK_ROOM/ZONE.
+## Consequence
 
----
+WorkOrder stores:
+- projectId
+- siteId
+- projectSiteId where needed for exact project-specific context
+- areaId optional
+
+Support/Maintenance can reference the same Site after Project closure without duplicating physical identity.
 
 # 4. WorkType / policy binding
 
@@ -655,7 +689,6 @@ Work:
 # 17. Open items before final freeze
 
 - exact SiteState enum.
-- reusable ClientSite/Facility identity decision.
 - exact projectCode/workOrderCode generation rules.
 - exact string lengths.
 - exact ProjectHealth model.
