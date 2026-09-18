@@ -25,7 +25,9 @@ jobs:
           python-version: "3.13"
 
       - name: Install test dependencies
-        run: python -m pip install --disable-pip-version-check requests beautifulsoup4
+        run: |
+          python -m pip install --disable-pip-version-check requests beautifulsoup4 playwright==1.63.0
+          python -m playwright install --with-deps chromium
 
       - name: Generate disposable localhost TLS certificate
         run: |
@@ -68,7 +70,7 @@ jobs:
           KEYCLOAK_ADMIN: admin
           KEYCLOAK_ADMIN_PASSWORD: admin
           REQUESTS_CA_BUNDLE: ${{ runner.temp }}/keycloak-tls/cert.pem
-        run: python spikes/keycloak-native-oidc/test_native_oidc.py
+        run: python spikes/keycloak-native-oidc/test_native_oidc_browser.py
 
       - name: Keycloak logs on failure
         if: failure()
