@@ -1,6 +1,6 @@
 # HILTECH Database Architecture
 
-Status: ARCHITECTURE MODEL v0.1 / POSTGRESQL LEADING
+Status: ARCHITECTURE MODEL v0.2 / POSTGRESQL + JOOQ ACCEPTED / EXACT SCHEMA NOT FROZEN
 
 ## Goal
 Preserve authoritative transactional truth, history, auditability, and performance without turning PostgreSQL into a shared unstructured dump.
@@ -9,7 +9,9 @@ Preserve authoritative transactional truth, history, auditability, and performan
 
 # 1. Primary Database
 
-PostgreSQL 18.x candidate.
+PostgreSQL is the accepted authoritative relational store (ADR-004).
+
+SPIKE-11 proved the PostgreSQL 18.6 line under concurrent HILTECH-shaped asset/stock mutations. Exact production minor version is rechecked at final technical freeze.
 
 One primary database at launch does NOT mean no domain ownership.
 
@@ -195,7 +197,9 @@ Need:
 
 # 13. Migrations
 
-Flyway candidate.
+Flyway remains the leading migration mechanism, but exact Flyway version/baseline is intentionally not accepted until the first exact schema/migration set is defined.
+
+jOOQ is accepted as the PostgreSQL persistence/SQL access layer (ADR-005).
 
 Rules:
 - production schema only through reviewed migrations.
