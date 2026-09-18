@@ -62,6 +62,15 @@ This pack is therefore **not a spike plan**.
 9. `09_FREEZE_RECORD.md`
    - one final evidence-backed record that allows repository bootstrap.
 
+10. `10_CROSS_CONTRACT_CONSISTENCY.md`
+   - verifies Configuration → Domain → DB → API → Room → Auth → UI → Tests remain coherent.
+
+11. `11_PROJECT_SITE_WORK_CONTRACT.md`
+   - implementation-facing Project/Site/Work lifecycle, policy-binding, assignment and offline contract.
+
+12. `12_ASSET_WAREHOUSE_CONTRACT.md`
+   - implementation-facing Asset/Stock/Storage/Custody contract.
+
 ---
 
 # Editing Rule
