@@ -448,6 +448,81 @@ function renderProject(){
   '</div>';
 }
 
+
+const navigationCopy={
+  en:{
+    product:"HILTECH · NAVIGATION", title:"One product · different role emphasis", subtitle:"Same truth, different entry points. Roles change emphasis — not separate apps.",
+    mobile:"Mobile navigation", desktop:"Desktop navigation", principle:"Navigation rules",
+    rules:[
+      "Home is role/context aware, not a generic dashboard.",
+      "Work is the primary execution surface for internal users.",
+      "Explore/Search reaches permitted objects — never a second source of truth.",
+      "Inbox carries approvals, review, exceptions and communication.",
+      "Me contains identity, device, sync and personal settings.",
+      "Scan is contextual/global action only for roles that use physical objects.",
+      "Configuration Center is a permissioned area inside HILTECH — not a separate admin app."
+    ],
+    roles:[
+      ["Technician","Home · Work · Explore · Inbox · Me","Today / Assigned Work / Evidence / Offline state"],
+      ["Warehouse","Home · Work · Scan · Inbox · Me","Scan-first / Inventory / Custody / Exceptions"],
+      ["Project Manager","Home · Work · Explore · Inbox · Me","Projects / Waiting On / Review / Resources"],
+      ["Finance/Admin","Home · Work · Explore · Inbox · Me","Dense queues / Finance objects / Exceptions"],
+      ["Configuration Admin","Home · Work · Explore · Inbox · Me","Configuration Center appears by permission"],
+      ["Client","Home · Projects · Inbox · Me","Restricted My HILTECH — no internal margin/admin surfaces"]
+    ]
+  },
+  ar:{
+    product:"هيلتك · التنقل", title:"منتج واحد · تركيز مختلف حسب الدور", subtitle:"نفس الحقيقة ونفس النظام؛ الاختلاف في نقطة الدخول والتركيز، مش تطبيقات منفصلة.",
+    mobile:"تنقل الموبايل", desktop:"تنقل الديسكتوب", principle:"قواعد التنقل",
+    rules:[
+      "Home بتتغير حسب الدور والسياق، مش Dashboard عامة.",
+      "Work هي مساحة التنفيذ الأساسية للمستخدم الداخلي.",
+      "Explore/Search بيوصل للأشياء المسموح بيها من غير مصدر حقيقة تاني.",
+      "Inbox للموافقات والمراجعات والاستثناءات والتواصل.",
+      "Me للهوية والجهاز والمزامنة والإعدادات الشخصية.",
+      "Scan فعل contextual/global للأدوار اللي بتتعامل مع أشياء مادية.",
+      "Configuration Center جزء مصرح جوه HILTECH، مش تطبيق Admin منفصل."
+    ],
+    roles:[
+      ["الفني","Home · Work · Explore · Inbox · Me","اليوم / الشغل المكلّف / الإثبات / حالة الأوفلاين"],
+      ["المخزن","Home · Work · Scan · Inbox · Me","المسح / المخزون / العهدة / الاستثناءات"],
+      ["مدير المشروع","Home · Work · Explore · Inbox · Me","المشاريع / Waiting On / المراجعة / الموارد"],
+      ["المالية / الإدارة","Home · Work · Explore · Inbox · Me","Queues كثيفة / المالية / الاستثناءات"],
+      ["مسؤول الإعدادات","Home · Work · Explore · Inbox · Me","Configuration Center يظهر حسب الصلاحية"],
+      ["العميل","Home · Projects · Inbox · Me","My HILTECH محدود — من غير هوامش أو إدارة داخلية"]
+    ]
+  }
+};
+
+function renderNavigation(){
+  const t=navigationCopy[state.lang];
+  const dir=state.lang==="ar"?"rtl":"ltr";
+  const roleRows=t.roles.map((r,i)=>
+    '<div class="nav-role-card">'+
+      '<div class="nav-role-head"><b>'+r[0]+'</b><span class="code">'+(i<5?'INTERNAL':'EXTERNAL')+'</span></div>'+
+      '<div class="mobile-nav-demo">'+r[1].split(" · ").map((x,j)=>'<span class="'+(j===0?'active':'')+'">'+x+'</span>').join("")+'</div>'+
+      '<small>'+r[2]+'</small>'+
+    '</div>'
+  ).join("");
+
+  const rail=["Home","Work","Projects","People","Warehouse","Finance","Search","Inbox","Configuration"].map((x,i)=>
+    '<div class="rail-item '+(i===1?'selected':'')+'"><span>'+x+'</span><small>'+(x==="Configuration"?"permissioned":"")+'</small></div>'
+  ).join("");
+
+  document.getElementById("screen").innerHTML=
+  '<div class="app admin-app" dir="'+dir+'">'+
+    '<header class="topbar"><div class="top-left"><button class="icon-btn">⌘</button><span class="product-word">'+t.product+'</span></div><span class="sync"><i></i>DESIGN RULE</span></header>'+
+    '<div class="content nav-content">'+
+      '<section class="hero"><span class="kicker">Navigation comparison</span><div class="title-row"><div><h1>'+t.title+'</h1><p class="workspace-summary">'+t.subtitle+'</p></div><span class="status ready">ONE PRODUCT</span></div></section>'+
+      '<div class="nav-proof-grid">'+
+        '<section class="section"><div class="section-head"><strong>'+t.mobile+'</strong><span class="code">role emphasis</span></div><div class="section-body nav-role-list">'+roleRows+'</div></section>'+
+        '<section class="section"><div class="section-head"><strong>'+t.desktop+'</strong><span class="code">global + context + inspector</span></div><div class="section-body desktop-nav-demo"><aside>'+rail+'</aside><main><div class="fake-command">⌘K · Search / Command</div><div class="fake-workspace"><b>Context workspace</b><small>Project / Site / Work / Object</small></div><div class="fake-inspector"><b>Inspector</b><small>Selected object, state, history, actions</small></div></main></div></section>'+
+      '</div>'+
+      '<section class="section"><div class="section-head"><strong>'+t.principle+'</strong><span class="code">frozen interaction rule</span></div><div class="section-body rule-grid">'+t.rules.map((x,i)=>'<div class="rule-card"><span>'+(i+1)+'</span><b>'+x+'</b></div>').join("")+'</div></section>'+
+    '</div>'+
+  '</div>';
+}
+
 const stateSets = {
   technician: [
     ["ready","Ready / Online"],
@@ -483,6 +558,9 @@ const stateSets = {
     ["attention","Attention"],
     ["critical","Critical"],
     ["hold","On hold"]
+  ],
+  navigation: [
+    ["comparison","All roles"]
   ]
 };
 
@@ -506,6 +584,7 @@ function render(){
   else if(state.screen==="config") renderConfig();
   else if(state.screen==="review") renderReview();
   else if(state.screen==="project") renderProject();
+  else if(state.screen==="navigation") renderNavigation();
   else renderTechnician();
 }
 
@@ -514,9 +593,9 @@ document.querySelectorAll("[data-screen]").forEach(btn=>{
     document.querySelectorAll("[data-screen]").forEach(x=>x.classList.remove("active"));
     btn.classList.add("active");
     state.screen=btn.dataset.screen;
-    const defaults={technician:"ready",warehouse:"available",config:"active",review:"clean",project:"healthy"};
+    const defaults={technician:"ready",warehouse:"available",config:"active",review:"clean",project:"healthy",navigation:"comparison"};
     state.mode=defaults[state.screen]||"ready";
-    if(["config","review","project"].includes(state.screen)){
+    if(["config","review","project","navigation"].includes(state.screen)){
       state.view="desktop";
       document.getElementById("device").className="device desktop";
       document.querySelectorAll("[data-view]").forEach(x=>x.classList.toggle("active",x.dataset.view==="desktop"));
