@@ -58,6 +58,7 @@ Exact bottom-navigation structure is not frozen.
 - Receivables/payables
 - Invoice mismatches
 - Expense/advance queue
+- Imprest settlement/replenishment exceptions
 
 ## PM
 - My Projects
@@ -371,6 +372,7 @@ Dense payroll editing remains desktop-oriented.
 - leave
 - expense
 - advances
+- financial imprest / cash custody when assigned as custodian
 - assigned assets/tools
 - certifications/training
 - onboarding
