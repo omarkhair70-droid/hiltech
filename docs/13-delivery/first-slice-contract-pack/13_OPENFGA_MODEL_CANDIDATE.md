@@ -1,7 +1,39 @@
 # 13 — OpenFGA First-Slice Model Candidate
 
-Status: **CONTRACT CANDIDATE v0.2 / CONSISTENCY MODEL LINKED**
+Status: **VALIDATED CONTRACT CANDIDATE v0.3 / MODEL TESTS GREEN**
 Date: 2026-09-18
+
+## Contract validation evidence
+
+Model:
+`openfga/first-slice-model.fga`
+
+Fixture tests:
+`openfga/first-slice-model.fga.yaml`
+
+GitHub Actions:
+- workflow: Contract — OpenFGA First Slice
+- run: **35331537375**
+- CLI: **v0.7.20**
+- result: **PASS**
+
+Marker:
+`HILTECH_OPENFGA_CONTRACT_PASS model=first-slice checks=PASS cli=v0.7.20`
+
+Validated cases include:
+- PM project permissions,
+- Team userset → project technician inheritance,
+- technician Site/Work execution,
+- supervisor review,
+- unrelated-user denies,
+- Warehouse operator Asset checkout,
+- current custodian return/damage,
+- Project-linked Asset visibility without technician checkout,
+- Project SiteStorage visibility,
+- Configuration editor vs activator separation,
+- Evidence inheritance,
+- client Organization userset visibility,
+- Team manager membership authority.
 
 ## Purpose
 
