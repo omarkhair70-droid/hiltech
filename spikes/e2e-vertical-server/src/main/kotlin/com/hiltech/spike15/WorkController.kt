@@ -304,12 +304,17 @@ class WorkController(
         }
     }
 
-    private fun actor(auth: JwtAuthenticationToken): String =
-        auth.token.getClaimAsString("preferred_username")
-            ?: throw ResponseStatusException(
-                HttpStatus.UNAUTHORIZED,
-                "preferred_username missing",
-            )
+    private fun actor(auth: JwtAuthenticationToken): String {
+        val raw =
+            auth.token.getClaimAsString("preferred_username")
+                ?: auth.token.getClaimAsString("azp")
+                ?: throw ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "actor claim missing",
+                )
+
+        return raw.removePrefix("service-account-")
+    }
 
     private fun outcome(
         result: CommandOutcome,
