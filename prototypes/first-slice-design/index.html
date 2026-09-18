@@ -19,16 +19,16 @@
 
       <section>
         <p class="eyebrow">SCREEN</p>
-        <h2>Technician Job</h2>
+        <div class="control-group">
+          <button data-screen="technician" class="control active">Technician Job</button>
+          <button data-screen="warehouse" class="control">Warehouse Checkout</button>
+        </div>
         <p class="muted">Interactive design proof — not production code.</p>
       </section>
 
       <section class="control-group">
         <p class="eyebrow">STATE</p>
-        <button data-state="ready" class="control active">Ready / Online</button>
-        <button data-state="offline" class="control">In progress / Offline</button>
-        <button data-state="conflict" class="control">Conflict</button>
-        <button data-state="rework" class="control">Rework</button>
+        <div id="state-controls"></div>
       </section>
 
       <section class="control-group">
