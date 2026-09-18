@@ -307,6 +307,23 @@ Prove:
 Pass:
 large evidence does not pass inefficiently through normal JSON API.
 
+**Result 2026-09-18: ACCEPT — S3-PROTOCOL BINARY EVIDENCE PATH PASSED.**
+
+Evidence:
+- pre-signed PUT passed.
+- SHA-256 expected digest is part of the upload contract.
+- correct binary upload finalized successfully.
+- finalization recomputed stored bytes before READY.
+- truncated/corrupt body could not finalize successfully.
+- retry with correct bytes succeeded.
+- pre-signed GET returned the evidence.
+- unsigned direct read was denied with 403.
+
+GitHub Actions run: 35305216130.
+
+Important:
+provider checksum enforcement is defense-in-depth. HILTECH finalization must independently verify stored bytes/size/digest before evidence becomes authoritative.
+
 ---
 
 # SPIKE-13 — Android Background Sync
