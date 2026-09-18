@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "spike/kmp-android-windows-20260918"
+      - "validation/agp-9.3.2-20260918"
     paths:
       - "spikes/kmp-android-windows/**"
       - ".github/workflows/spike-kmp-android-windows.yml"
