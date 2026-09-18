@@ -69,6 +69,8 @@ Ahmed:
 - supplier invoices
 - expenses
 - advances
+- financial imprest / cash custody
+- imprest settlement / replenishment
 - payments
 - reconciliation
 - project cost
