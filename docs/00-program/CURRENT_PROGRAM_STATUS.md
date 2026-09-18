@@ -3,12 +3,29 @@
 Updated: 2026-09-18
 
 ## Overall Stage
-PRE-CODE PRODUCT / ARCHITECTURE DISCOVERY
+**FIRST-SLICE PRE-CODE FREEZE CLOSURE**
 
-Freeze status: NOT READY
+Freeze status: **NOT READY — PRIMARY BLOCKER IS ACTUAL RENDERED DESIGN PROOF**
 
 ## Meaning
-HILTECH is now specified deeply enough that most major business objects, transitions, commands, permissions, offline classes, and architecture boundaries are visible before code. No production capability is COMPLETE and no final stack/schema has been frozen.
+The first production slice has moved beyond broad product/architecture discovery.
+
+Technical feasibility is closed and the core first-slice Configuration / Project / Site / Work / Asset / Warehouse / Evidence / Offline / Authorization / HTTP / Database contracts are now structurally defined.
+
+Provider architecture is also selected:
+- OCI infrastructure baseline,
+- OCI Object Storage/KMS/Secrets,
+- staged DR,
+- DigiCert OV + KeyLocker,
+- HILTECH Update Service.
+
+The remaining pre-code work is a narrow Freeze closure:
+1. actual rendered design/RTL/conflict/adaptive proof,
+2. final stack/version + CI-action pin review,
+3. contradiction cleanup if either review exposes one,
+4. First-Slice Freeze Review.
+
+Production code is still intentionally not started.
 
 ---
 
@@ -28,9 +45,9 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | Automation/notifications | FIRST PASS | Needs exact policy/trigger registry |
 | Information architecture | FIRST PASS | Final navigation not frozen |
 | UI reference research | PASS 01 + 02 | More visual/component research can continue |
-| Mobile surface | FIRST PASS | Not wireframed |
-| Desktop surface | FIRST PASS | Not wireframed |
-| Design thesis/system | FIRST PASS | Visual tokens/font/colors not frozen |
+| Mobile surface | LOW-FI PARTIAL / SPECS COMPLETE | Existing M01–M05; M06/M07 exact build pack ready; actual canvas continuation Figma quota-blocked |
+| Desktop surface | LOW-FI PARTIAL / SPECS COMPLETE | D01/D02 existing; Configuration/Review and remaining proof specified; actual canvas continuation quota-blocked |
+| Design thesis/system | FIRST PASS / VISUAL FREEZE OPEN | Structural interaction contract strong; final rendered RTL/conflict/adaptive proof still blocks Freeze |
 | Offline/sync | SPIKE-PROVEN CORE | Room queue, idempotent retry, stale conflict, WorkManager reconnect and real Ktor replay proven; final field UX/policy remains |
 | Integration/hardware | FIRST PASS | Real vendors/systems unknown |
 | API/read models | FIRST-SLICE CONTRACT v0.3 | /v1 routes, DTO/error/cursor/visibility/OpenAPI publication semantics closed for first slice |
@@ -182,12 +199,12 @@ Contract conversion status:
 - remaining work is primarily visual/design proof + OCI cutover/ops + Windows signing/distribution + final stack/version review.
 
 Immediate pre-code continuation:
-1. Complete representative low-fi / RTL / conflict / adaptive design validation for the first production slice.
-2. Validate OCI tenancy/Jeddah quota/service/latency and close runtime sizing/DR/observability operations.
-3. Close Windows production signing + enterprise distribution/update choice.
-4. Review initial seed data/device constraints only where the pilot needs them.
-5. Re-check version pins and create FINAL_STACK.md when the remaining operational/design evidence supports it.
-6. Call first-slice Freeze Review.
+1. Complete actual rendered first-slice low-fi / RTL / conflict / adaptive proof when Figma MCP quota permits.
+2. Run final explicit stack/version + CI-action pin review; create FINAL_STACK.md only when that review passes.
+3. Perform First-Slice Freeze Review.
+4. After Freeze: repository bootstrap → generated DB/API/Room/Auth/IaC/test foundations → production vertical implementation.
+
+OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 
 No production code yet by design.
 
