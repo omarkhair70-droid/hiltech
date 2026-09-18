@@ -107,3 +107,52 @@ The application should not become visually dead because it is enterprise softwar
 **Status:** `VALIDATED`
 
 No domain is frozen while significant questions remain undocumented or answered only by “later.”
+
+
+## D-018 — Internal company operating system is the build priority; client-facing surface is last
+
+**Status:** `VALIDATED BY OWNER INPUT / 2026-09-18`
+
+Mohamed stated that the internal HILTECH system used by management, finance/admin, project delivery, field staff, warehouse, procurement, HR, and company operations is more important than the external client-facing experience.
+
+Implications:
+
+- Design the whole product now so client requirements are not forgotten.
+- Build and stabilize the internal operating system first.
+- The external Client Portal / My HILTECH surface is intentionally one of the final build layers.
+- Internal client data is still core early: client organizations, contracts, project relationships, invoices, approvals, and support context remain necessary for internal operations.
+- “Client last” means the **external client login/experience**, not removing client-related business objects from the internal core.
+
+This decision supersedes any accidental implication that Client UX should be an early implementation slice.
+
+## D-019 — Employee cash advances and financial imprest/custody are separate concepts
+
+**Status:** `VALIDATED AS REQUIRED PRODUCT COVERAGE`
+
+HILTECH must distinguish:
+
+1. **Employee Advance / سلفة**
+   - money advanced to an employee,
+   - outstanding balance,
+   - settlement or payroll deduction,
+   - approval and finance history.
+
+2. **Financial Imprest / عهدة مالية**
+   - company money temporarily entrusted to an employee/project/site for operational spending,
+   - opening amount,
+   - permitted purpose/context,
+   - spending lines/receipts,
+   - remaining cash,
+   - replenishment if policy allows,
+   - settlement,
+   - return of unused amount,
+   - shortages/overages,
+   - approval/reconciliation/audit.
+
+3. **Physical Asset Custody / عهدة معدات**
+   - tools/equipment assigned to a person/site,
+   - checkout/return/transfer,
+   - damage/loss,
+   - offboarding clearance.
+
+These must not be collapsed into one generic “advance” object.
