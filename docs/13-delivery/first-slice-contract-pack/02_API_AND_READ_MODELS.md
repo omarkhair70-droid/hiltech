@@ -232,6 +232,7 @@ Optional client metadata may later include app version, platform and installatio
 - areaId?
 - workPackageId?
 - workTypeCode or active WorkTypeDefinition id
+- humanCode? only when CodePolicy allows manual override
 - title
 - description?
 - plannedStart?
@@ -252,6 +253,27 @@ Project id comes from route.
 - plannedEnd?
 - reason?
 - clientOccurredAt
+
+## ReviseWorkInstructionRequest
+
+Route candidate:
+POST /v1/work-orders/{workOrderId}/instruction-revisions
+
+Fields:
+- operationId
+- baseVersion
+- sourceInstructionTemplateId/revision?
+- payloadSchemaVersion
+- structuredPayload
+- summaryText?
+- changeReason
+- clientOccurredAt
+
+Result:
+- WorkOrderCommandResult
+- new instructionRevision/currentInstructionRevisionId
+
+After ASSIGNED this command is online-authoritative and intentionally makes stale offline bundles conflict/reload.
 
 ## StartWorkRequest
 
@@ -515,6 +537,20 @@ Uses the exact local contract in 04_ROOM_OFFLINE_SYNC.md.
 - assignment/context
 - prior rework/review history
 - allowed actions
+
+## ProjectProgressSummary
+
+- baselineVersion
+- acceptedWeight: Decimal
+- totalWeight: Decimal
+- progressPercent: Decimal?
+- asOf
+
+## ProjectHealthSummary
+
+- state: UNKNOWN / HEALTHY / ATTENTION / CRITICAL / ON_HOLD
+- signals: list of typed safe signal summaries
+- asOf
 
 ## PMProjectCommandCenter
 
