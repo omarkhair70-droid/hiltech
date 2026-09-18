@@ -89,19 +89,19 @@ Real project data is used to validate terminology/coverage and seed initial valu
 # Site / Area
 
 First-slice structural contract:
+- Site is durable physical/client location independent of a single Project.
 - Site.id: UUID
-- Site.projectId: UUID required for delivery context
-- Site.siteCode: String unique within Project
+- Site.clientOrganizationId: UUID
+- Site.siteCode: String unique within client organization candidate
 - Site.name: String
-- clientSiteRef: optional future canonical client-location link
-- address/location/access/contact fields are optional and permission-scoped
-- lifecycleState exists; exact enum is a final-freeze item
-- timezone optional IANA value
-- version: Long
-- Area/Room/Zone hierarchy is optional, recursive, acyclic and type-code driven
+- address/location/timezone fields are optional and permission-scoped
+- Site.status: ACTIVE / INACTIVE candidate
+- ProjectSite joins Project ↔ Site and owns project-specific lifecycle/access/contacts/notes
+- WorkOrder references Project + Site and ProjectSite where exact delivery context is needed
+- Area/Room/Zone belongs to Site, recursive/acyclic/type-code driven
+- version: Long on mutable aggregates
 
-A real project/site validates that no structural field is missing and supplies seed data.
-Reusable ClientSite/Facility identity remains a narrow structural closure item, not a requirement to wait for every current project detail.
+A real project/site validates terminology/coverage and supplies seed data; repeat projects/support/maintenance reuse the same Site identity.
 
 ---
 
