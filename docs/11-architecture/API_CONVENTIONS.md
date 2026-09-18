@@ -54,8 +54,8 @@ Clients do not send trusted role/permission claims.
 
 Required for retry-sensitive commands.
 
-Header candidate:
-Idempotency-Key
+Accepted header:
+`Idempotency-Key`
 
 Server stores/recognizes:
 - actor
@@ -72,8 +72,10 @@ Duplicate replay returns same semantic outcome where safe.
 
 Concurrency-sensitive commands carry expected/base version.
 
-Candidate:
-If-Match / explicit baseVersion.
+Accepted current wire baseline:
+explicit `baseVersion` in the command body.
+
+A future HTTP `If-Match` mapping may be added only if it improves a specific public/API boundary; it is not required by the current native client contract.
 
 On stale version:
 return VERSION_CONFLICT with:
@@ -325,11 +327,28 @@ Every API request logs/traces:
 without sensitive payload.
 
 ## Freeze Gate
-Requires:
-- actual auth flow,
-- JSON serialization choice,
-- API contract tooling,
-- versioning policy,
-- pagination/filter conventions,
-- generated client decision,
-- contract tests.
+
+Validated:
+- [x] native auth architecture — Keycloak/OIDC PKCE.
+- [x] shared client transport — Ktor Client 3.5.2.
+- [x] Android/Windows shared DTO/header/result path.
+- [x] bearer-token attachment.
+- [x] Idempotency-Key propagation.
+- [x] explicit baseVersion conflict path.
+- [x] X-Correlation-Id + W3C traceparent.
+- [x] direct binary upload/finalization pattern.
+- [x] offline replay / duplicate replay / stale conflict.
+
+Still required:
+- [ ] exact first-slice endpoint + request/response schemas.
+- [ ] exact Kotlinx Serialization production options.
+- [ ] API contract tooling / schema publication convention.
+- [ ] breaking-change/versioning policy beyond the /v1 major baseline.
+- [ ] cursor pagination/filter schemas on real read models.
+- [ ] generated vs manual typed-client convention.
+- [ ] REAUTH_REQUIRED representative command.
+- [ ] production-shaped retryable/safe 4xx/5xx mappings.
+- [ ] contract tests for the frozen first-slice schemas.
+
+Canonical implementation-facing detail:
+`CROSS_CUTTING_BUILD_CONTRACTS.md`.
