@@ -73,29 +73,47 @@ class KtorPendingCommandTransportTest {
         )
 
         val request = assertNotNull(captured)
-        assertEquals("/v1/work-orders/work-42/start", request.path, "Frozen StartWork route drifted.")
-        assertEquals("Bearer access-token", request.authorization, "Bearer token header drifted.")
-        assertEquals("op-42", request.idempotencyKey, "Idempotency-Key must equal operationId.")
-        assertEquals("corr-42", request.correlationId, "Correlation header drifted.")
-        assertEquals("android", request.platform, "Native platform header drifted.")
-        assertEquals("0.1.0", request.clientVersion, "Native version header drifted.")
-        assertEquals("device-42", request.installationId, "Installation identity header drifted.")
-        assertEquals("00-trace-parent", request.traceParent, "W3C traceparent header drifted.")
-
         val jsonBody = Json.parseToJsonElement(request.body).jsonObject
-        assertEquals("op-42", jsonBody["operationId"]?.jsonPrimitive?.content)
-        assertEquals("7", jsonBody["baseVersion"]?.jsonPrimitive?.content)
-        assertEquals("2023-11-14T22:13:20Z", jsonBody["clientOccurredAt"]?.jsonPrimitive?.content)
-        assertEquals("site-session", jsonBody["localSiteSessionRef"]?.jsonPrimitive?.content)
 
-        assertEquals(
-            CommandTransportResult.Applied(
+        val wireSnapshot = linkedMapOf(
+            "path" to request.path,
+            "authorization" to request.authorization,
+            "idempotencyKey" to request.idempotencyKey,
+            "correlationId" to request.correlationId,
+            "platform" to request.platform,
+            "clientVersion" to request.clientVersion,
+            "installationId" to request.installationId,
+            "traceParent" to request.traceParent,
+            "operationId" to jsonBody["operationId"]?.jsonPrimitive?.content,
+            "baseVersion" to jsonBody["baseVersion"]?.jsonPrimitive?.content,
+            "clientOccurredAt" to jsonBody["clientOccurredAt"]?.jsonPrimitive?.content,
+            "localSiteSessionRef" to jsonBody["localSiteSessionRef"]?.jsonPrimitive?.content,
+            "result" to result.toString(),
+        )
+
+        val expectedSnapshot = linkedMapOf(
+            "path" to "/v1/work-orders/work-42/start",
+            "authorization" to "Bearer access-token",
+            "idempotencyKey" to "op-42",
+            "correlationId" to "corr-42",
+            "platform" to "android",
+            "clientVersion" to "0.1.0",
+            "installationId" to "device-42",
+            "traceParent" to "00-trace-parent",
+            "operationId" to "op-42",
+            "baseVersion" to "7",
+            "clientOccurredAt" to "2023-11-14T22:13:20Z",
+            "localSiteSessionRef" to "site-session",
+            "result" to CommandTransportResult.Applied(
                 currentVersion = 8,
                 correlationId = "server-corr",
                 duplicateReplay = false,
-            ),
-            result,
+            ).toString(),
         )
+
+        check(wireSnapshot == expectedSnapshot) {
+            "HILTECH_KTOR_WIRE_MISMATCH expected=${expectedSnapshot} actual=${wireSnapshot} rawBody=${request.body}"
+        }
     }
 
     @Test
