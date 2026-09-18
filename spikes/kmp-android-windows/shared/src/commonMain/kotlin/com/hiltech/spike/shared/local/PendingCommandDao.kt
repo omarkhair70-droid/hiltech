@@ -101,6 +101,9 @@ interface PendingCommandDao {
         serverVersion: Long?,
     )
 
+    @Query("DELETE FROM pending_command")
+    suspend fun clear()
+
     @Query("SELECT COUNT(*) FROM pending_command")
     suspend fun count(): Int
 }
