@@ -89,11 +89,12 @@ Accepted/proven questions are no longer open:
 - Keycloak native OIDC and OpenFGA object/action authorization are accepted.
 - S3-compatible binary evidence semantics and OpenTelemetry correlation contract are accepted.
 - GitHub Actions is accepted as the CI/delivery control plane.
+- Ktor Client shared networking is accepted through SPIKE-15 / ADR-007.
+- The complete technical-spike gate 01–15 is closed.
 - Temporal, Redis, dedicated broker and dedicated search cluster are not baseline without a concrete trigger.
 
-Still open before technical/final freeze:
-- SPIKE-15 full cross-surface architectural proof and Ktor Client acceptance.
-- exact HTTP wire conventions that SPIKE-15 is intended to lock.
+Still open before final freeze:
+- exact production endpoint/payload schemas and wire contracts for the starting implementation slices.
 - final Flyway baseline/version after exact schemas exist.
 - production object-storage provider.
 - infrastructure/hosting/runtime packaging.
