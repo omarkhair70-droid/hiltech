@@ -131,7 +131,29 @@ function Sign-Msi([string] $Msi) {
     }
 
     Invoke-ProcessChecked $signTool "sign /f `"$Pfx`" /p $PfxPasswordPlain /fd SHA256 `"$Msi`"" 60
-    Invoke-ProcessChecked $signTool "verify /pa /v `"$Msi`"" 60
+
+    # The disposable spike certificate is intentionally self-signed and not
+    # installed into the runner's trusted Root store. Importing a test root can
+    # invoke Windows trust UI and hang a headless GitHub runner.
+    #
+    # For this spike we verify that Authenticode signing is embedded and that
+    # the embedded signer is exactly the certificate generated for this run.
+    # Production certificate-chain trust remains a separate release decision.
+    $signature = Get-AuthenticodeSignature -FilePath $Msi
+    if (-not $signature.SignerCertificate) {
+        throw "MSI does not contain an Authenticode signer certificate"
+    }
+
+    $expectedThumbprint = Get-SigningThumbprint
+    if ($signature.SignerCertificate.Thumbprint -ne $expectedThumbprint) {
+        throw "MSI signer thumbprint does not match disposable spike certificate"
+    }
+
+    if ($signature.Status -eq "NotSigned") {
+        throw "MSI is not Authenticode signed"
+    }
+
+    Write-Host "AUTHENTICODE_SIGNER_MATCH=PASS status=$($signature.Status) thumbprint=$expectedThumbprint"
 }
 
 switch ($Stage) {
@@ -157,14 +179,7 @@ switch ($Stage) {
         $publicCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($CertDer)
         Set-Content -Path $ThumbFile -Value $publicCertificate.Thumbprint
 
-        Import-Certificate -FilePath $CertDer -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
-
-        $trusted = Get-Item "Cert:\CurrentUser\Root\$($publicCertificate.Thumbprint)" -ErrorAction Stop
-        if (-not $trusted) {
-            throw "Disposable signing certificate was not imported into CurrentUser Root"
-        }
-
-        Write-Host "Disposable public certificate trusted in CurrentUser Root; private key remains PFX-only"
+        Write-Host "Disposable signer prepared; no test root is installed into the runner trust store"
 
         Copy-Item (Get-BuiltMsi) $V1 -Force
         Write-Host "MSI copied to $V1"
@@ -267,12 +282,6 @@ switch ($Stage) {
 
         if (Test-Path "HKCU:\Software\Classes\hiltech") {
             Remove-Item "HKCU:\Software\Classes\hiltech" -Recurse -Force
-        }
-
-        $thumb = Get-SigningThumbprint
-        $trustedCertPath = "Cert:\CurrentUser\Root\$thumb"
-        if (Test-Path $trustedCertPath) {
-            Remove-Item $trustedCertPath -Force
         }
 
         if (Test-Path $DataDir) {
