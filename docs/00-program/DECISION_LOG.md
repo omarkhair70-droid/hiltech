@@ -76,23 +76,41 @@ A screen is not a finished feature. Relevant normal/error/offline/integration/pe
 
 Field workflows must be designed to work through unreliable connectivity where appropriate. Exact technical implementation remains under research.
 
-## D-013 — Current preferred client technology direction: Kotlin Multiplatform + Compose Multiplatform
+## D-013 — Client technology direction: Kotlin Multiplatform + Compose Multiplatform
 
-**Status:** `PROPOSED / RESEARCHING`
+**Status:** `ACCEPTED / PRE-FREEZE`
 
-Reason explored so far: strong Android fit, desktop support, iOS path, shared business/data code, local database/hardware-friendly architecture, and high-quality native motion/UI possibilities.
+Accepted by technical evidence across the current client spike line:
+- Android + Windows shared client feasibility,
+- Arabic/RTL adaptive structure,
+- Room/SQLite shared persistence,
+- offline command semantics,
+- dense Compose Desktop,
+- Android camera/evidence,
+- Android WorkManager background scheduling.
 
-This is **not frozen**. It must survive focused technical research and proof-of-concept validation.
+This accepts the client architecture direction. It is still not a FINAL_STACK declaration; Windows operational closure, SPIKE-15 integration, final design contracts, and final version re-check remain freeze gates.
 
-## D-014 — Current preferred backend direction: Kotlin/JVM modular monolith
+## D-014 — Backend direction: Kotlin/JVM modular monolith
 
-**Status:** `PROPOSED / RESEARCHING`
+**Status:** `ACCEPTED / PRE-FREEZE`
 
-Spring Boot, PostgreSQL, explicit modules, auditable workflows, and enterprise integration have been proposed. Exact backend framework/data/workflow/auth stack is not frozen.
+Accepted evidence-based baseline:
+- Kotlin/JVM + Java 21,
+- Spring Boot,
+- Spring Modulith modular monolith,
+- PostgreSQL authoritative relational store,
+- jOOQ persistence/SQL layer,
+- Keycloak native OIDC identity,
+- OpenFGA object/action authorization,
+- S3-compatible binary evidence protocol,
+- OpenTelemetry-compatible correlation contract.
+
+Exact production schemas, providers, deployment/runtime packaging and final version pins remain freeze decisions.
 
 ## D-015 — Do not begin with microservices
 
-**Status:** `PROPOSED`, high confidence.
+**Status:** `ACCEPTED`.
 
 Prefer a well-bounded modular monolith initially. Split services only when scale, isolation, or operational evidence requires it.
 
