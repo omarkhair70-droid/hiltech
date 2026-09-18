@@ -188,7 +188,8 @@ These are candidate production shapes, not generated migrations yet.
 Candidate base metadata:
 
 - id uuid primary key
-- organization_id uuid not null
+- scope_type varchar not null
+- scope_organization_id uuid null
 - family varchar not null
 - code varchar not null
 - name varchar not null
@@ -206,7 +207,11 @@ Candidate base metadata:
 - version bigint not null
 
 Unique:
-- organization_id, family, code, revision_number.
+- scope_type, scope_organization_id, family, code, revision_number.
+
+Checks:
+- SYSTEM requires scope_organization_id IS NULL.
+- ORGANIZATION requires scope_organization_id IS NOT NULL.
 
 Checks:
 - revision_number > 0.
@@ -615,6 +620,25 @@ Calibration/maintenance/incident state is resolved from their owned records plus
 
 Movement + projection update are one authoritative command transaction.
 
+## asset_return_inspection
+
+- id uuid primary key
+- asset_id uuid not null
+- return_movement_id uuid not null
+- inspected_by uuid not null
+- inspected_at timestamptz not null
+- condition_observed varchar not null
+- accessory_template_id uuid null
+- accessory_template_revision integer null
+- accessory_results jsonb null
+- damage_incident_id uuid null
+- notes text null
+- resulting_availability_summary varchar null
+- version bigint not null
+
+Unique candidate:
+- return_movement_id.
+
 ## stock_item
 
 - id uuid primary key
@@ -634,10 +658,10 @@ Movement + projection update are one authoritative command transaction.
 
 - stock_item_id uuid not null
 - storage_location_id uuid not null
-- on_hand_qty numeric not null
-- reserved_qty numeric not null
-- damaged_qty numeric not null
-- quarantine_qty numeric not null
+- on_hand_qty numeric(20,6) not null
+- reserved_qty numeric(20,6) not null
+- damaged_qty numeric(20,6) not null
+- quarantine_qty numeric(20,6) not null
 - version bigint not null
 - updated_at timestamptz not null
 
@@ -650,7 +674,7 @@ Available quantity is derived.
 
 - id uuid primary key
 - stock_item_id uuid not null
-- quantity numeric not null
+- quantity numeric(20,6) not null
 - unit_code varchar not null
 - movement_type varchar not null
 - from_storage_location_id uuid null
@@ -668,12 +692,28 @@ Available quantity is derived.
 - recorded_by uuid not null
 - correlation_id varchar not null
 
-## reservation
+## asset_reservation
 
 - id uuid primary key
-- resource_type varchar not null
-- resource_id uuid not null
-- quantity numeric null
+- asset_id uuid not null
+- project_id uuid not null
+- site_id uuid null
+- work_order_id uuid null
+- requested_by uuid not null
+- reserved_for_target_type varchar null
+- reserved_for_target_id uuid null
+- start_at timestamptz null
+- end_at timestamptz null
+- state varchar not null
+- priority_code varchar null
+- version bigint not null
+
+## stock_reservation
+
+- id uuid primary key
+- stock_item_id uuid not null
+- quantity numeric(20,6) not null
+- unit_code varchar not null
 - project_id uuid not null
 - site_id uuid null
 - work_order_id uuid null
