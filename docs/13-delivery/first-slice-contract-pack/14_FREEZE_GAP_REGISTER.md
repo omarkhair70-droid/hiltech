@@ -93,13 +93,15 @@ Resolved:
 
 ---
 
-## A4 — API final normalization
+## A4 — API finalization
 
-Still need:
-- final route wording normalization for configuration/project admin surfaces.
-- exact optional client-metadata headers only where server behavior consumes them.
-- Project/Site admin create/update DTOs outside the core vertical where needed.
-- executable contract tests for REAUTH_REQUIRED, cursor and representative safe 4xx/5xx mappings.
+Pre-code Freeze blockers:
+- none at first-slice HTTP semantic level.
+
+Post-Freeze Bootstrap verification:
+- generate OpenAPI 3.1 snapshot.
+- run REAUTH_REQUIRED/cursor/4xx/5xx integration tests.
+- run Android/Desktop DTO compatibility tests.
 
 Resolved:
 - /v1 baseline and additive compatibility.
@@ -113,6 +115,9 @@ Resolved:
 - stateless tamper-protected opaque cursor contract.
 - Work/Asset/Evidence DTO candidates.
 - Project progress/health summaries.
+- Configuration + Project/Site admin route grammar.
+- native X-Client-Platform / X-Client-Version / X-Device-Installation-Id metadata.
+- OpenAPI publication/drift rule.
 
 ---
 
