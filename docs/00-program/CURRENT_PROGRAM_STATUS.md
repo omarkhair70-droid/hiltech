@@ -79,17 +79,31 @@ Now includes:
 # Highest-Risk Unknowns
 
 1. Actual HILTECH finance/payroll/accounting/bank workflow.
-2. Real project management handoff and field reporting.
-3. Warehouse current process and physical hardware.
-4. Existing CCTV/access systems.
-5. Exact organization/authority structure.
-6. Android devices and site restrictions.
-7. KMP/Compose Desktop dense-data viability.
-8. Native authentication/authorization model.
-9. Offline conflict ergonomics in real field use.
-10. Legal/accounting/privacy retention requirements.
-11. Final visual/navigation/component system.
-12. Exact DB/API schemas after reality validation.
+2. Real project-management handoff and field-reporting practice.
+3. Warehouse current process and actual physical hardware.
+4. Existing CCTV/access-control systems and vendors.
+5. Exact organization/authority structure and delegation reality.
+6. Android device fleet, camera/QR restrictions and site-security constraints.
+7. Native identity operational proof — Keycloak SPIKE-08 is still active; object/action authorization is already proven by SPIKE-09.
+8. Android background execution/reconnect reliability — SPIKE-13 pending.
+9. Windows install/update/rollback operations — SPIKE-07 active.
+10. Offline conflict ergonomics in real field use.
+11. Legal/accounting/privacy/retention requirements.
+12. Final visual/navigation/component/Arabic typography system.
+13. Exact production DB/API/local schemas after reality validation.
+14. Full cross-surface end-to-end vertical proof — SPIKE-15 pending.
+
+No longer architecture unknowns:
+- KMP Android + Windows platform feasibility,
+- Compose Desktop 50k-row dense-data feasibility,
+- Arabic RTL/adaptive structural feasibility,
+- Room/SQLite shared local persistence,
+- core offline command semantics,
+- OpenFGA relationship authorization,
+- Spring Modulith durable internal events,
+- PostgreSQL concurrency/ledger thesis,
+- S3-protocol binary evidence path,
+- end-to-end telemetry correlation contract.
 
 ---
 
@@ -113,14 +127,23 @@ High confidence:
 - Field-level security matters independently of object visibility.
 - Business version and optimistic technical version are separate concepts.
 
-Leading but still spike-dependent:
-- Kotlin Multiplatform + Compose Multiplatform — **SPIKE-01 feasibility ACCEPTED**; final stack still depends on RTL/dense-data/offline/auth evidence.
-- Room/SQLite — **SPIKE-03 feasibility ACCEPTED** with real SQLite tests on Linux/Windows and Android generated-code compile.
-- Ktor Client.
-- Spring Boot + Spring Modulith.
-- jOOQ — SPIKE-11 runtime/transaction use passed; final code-generation conventions still to freeze.
-- Keycloak.
-- OpenFGA — **SPIKE-09 authorization model ACCEPTED** for object/action authorization; field-level redaction stays server-side.
+Proven / accepted directions:
+- Kotlin Multiplatform + Compose Multiplatform — SPIKE-01 + SPIKE-02 + SPIKE-06 accepted across Android/Windows, RTL/adaptive structure and dense desktop feasibility.
+- Room3 + SQLite/BundledSQLiteDriver — SPIKE-03 accepted.
+- Offline typed-command semantics — SPIKE-04 accepted.
+- Spring Boot + Spring Modulith modular monolith — SPIKE-10 accepted.
+- PostgreSQL authoritative transactional store — SPIKE-11 accepted.
+- OpenFGA object/action relationship authorization — SPIKE-09 accepted.
+- S3-compatible binary-evidence protocol — SPIKE-12 accepted.
+- OpenTelemetry correlation/safe-telemetry contract — SPIKE-14 accepted.
+
+Leading but still spike/freeze dependent:
+- Ktor Client / exact HTTP client integration.
+- jOOQ — runtime/transaction use passed; final code-generation conventions still to freeze.
+- Keycloak — SPIKE-08 still active.
+- WorkManager background execution — SPIKE-13 pending.
+- exact Windows update/distribution strategy — SPIKE-07 active.
+- exact production object-storage provider remains intentionally open.
 
 ---
 
