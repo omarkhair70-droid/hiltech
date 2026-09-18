@@ -98,14 +98,15 @@ function Invoke-App([string] $Exe, [string[]] $Arguments) {
 }
 
 function Get-SignTool {
-    $signTool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse |
-        Where-Object { $_.FullName -match "\\x64\\signtool\.exe$" } |
+    $signTool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -File |
         Sort-Object FullName -Descending |
         Select-Object -First 1
 
     if (-not $signTool) {
         throw "signtool.exe not found"
     }
+
+    Write-Host "signtool=$($signTool.FullName)"
     return $signTool.FullName
 }
 
@@ -141,6 +142,7 @@ switch ($Stage) {
             Remove-Item "HKCU:\Software\Classes\hiltech" -Recurse -Force
         }
 
+        Write-Host "Creating disposable code-signing certificate"
         $certificate = New-SelfSignedCertificate `
             -Type CodeSigningCert `
             -Subject "CN=HILTECH Spike Test Signing" `
@@ -152,11 +154,14 @@ switch ($Stage) {
         $root.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
         $root.Add($certificate)
         $root.Close()
+        Write-Host "Disposable certificate created and trusted"
 
         Set-Content -Path $ThumbFile -Value $certificate.Thumbprint
 
         Copy-Item (Get-BuiltMsi) $V1 -Force
+        Write-Host "MSI copied to $V1"
         Sign-Msi $V1
+        Write-Host "MSI signed and verified"
 
         Write-Host "HILTECH_WINDOWS_STAGE_PASS prepare-v1"
     }
