@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.JavaExec
+
 plugins {
     id("com.hiltech.base")
     alias(libs.plugins.kotlinJvm)
@@ -10,6 +12,9 @@ java {
         languageVersion.set(JavaLanguageVersion.of(21))
     }
 }
+
+val jooqCodegen by configurations.creating
+val generatedJooqDir = rootProject.layout.projectDirectory.dir("server/build/generated-src/jooq/main")
 
 dependencies {
     implementation(platform("org.springframework.boot:spring-boot-dependencies:${libs.versions.springBoot.get()}"))
@@ -28,6 +33,9 @@ dependencies {
     implementation(libs.jooq)
     runtimeOnly(libs.postgresql)
 
+    add(jooqCodegen.name, libs.jooq.codegen)
+    add(jooqCodegen.name, libs.postgresql)
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.modulith:spring-modulith-starter-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -36,5 +44,103 @@ dependencies {
 kotlin {
     compilerOptions {
         freeCompilerArgs.add("-Xjsr305=strict")
+    }
+
+    sourceSets.named("main") {
+        kotlin.srcDir(generatedJooqDir)
+    }
+}
+
+fun String.xmlEscaped(): String =
+    replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&apos;")
+
+val generateJooq by tasks.registering(JavaExec::class) {
+    group = "code generation"
+    description = "Generate first-slice jOOQ Kotlin sources from the migrated PostgreSQL schema."
+    classpath = jooqCodegen
+    mainClass.set("org.jooq.codegen.GenerationTool")
+
+    outputs.dir(generatedJooqDir)
+    outputs.upToDateWhen { false }
+
+    doFirst {
+        val dbUrl = System.getenv("HILTECH_DB_URL") ?: "jdbc:postgresql://localhost:5432/hiltech"
+        val dbUser = System.getenv("HILTECH_DB_USER") ?: "hiltech"
+        val dbPassword = System.getenv("HILTECH_DB_PASSWORD") ?: "hiltech"
+
+        val configFile = layout.buildDirectory.file("tmp/jooq/codegen.xml").get().asFile
+        configFile.parentFile.mkdirs()
+
+        generatedJooqDir.asFile.deleteRecursively()
+        generatedJooqDir.asFile.mkdirs()
+
+        configFile.writeText(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <configuration>
+              <jdbc>
+                <driver>org.postgresql.Driver</driver>
+                <url>${dbUrl.xmlEscaped()}</url>
+                <user>${dbUser.xmlEscaped()}</user>
+                <password>${dbPassword.xmlEscaped()}</password>
+              </jdbc>
+              <generator>
+                <name>org.jooq.codegen.KotlinGenerator</name>
+                <database>
+                  <name>org.jooq.meta.postgres.PostgresDatabase</name>
+                  <inputSchema>public</inputSchema>
+                  <excludes>flyway_schema_history</excludes>
+                </database>
+                <generate>
+                  <deprecated>false</deprecated>
+                  <records>true</records>
+                  <pojos>false</pojos>
+                  <javaTimeTypes>true</javaTimeTypes>
+                </generate>
+                <target>
+                  <packageName>com.hiltech.server.generated.jooq</packageName>
+                  <directory>${generatedJooqDir.asFile.absolutePath.xmlEscaped()}</directory>
+                </target>
+              </generator>
+            </configuration>
+            """.trimIndent(),
+        )
+
+        args(configFile.absolutePath)
+    }
+}
+
+tasks.register("verifyJooqGeneration") {
+    group = "verification"
+    description = "Generate jOOQ and assert the frozen first-slice tables are represented."
+    dependsOn(generateJooq)
+
+    doLast {
+        val tablesFile = generatedJooqDir.file("com/hiltech/server/generated/jooq/Tables.kt").asFile
+        check(tablesFile.isFile) {
+            "jOOQ KotlinGenerator did not create Tables.kt at the frozen output path."
+        }
+
+        val generated = tablesFile.readText()
+        listOf(
+            "ORGANIZATION",
+            "USER_IDENTITY",
+            "CONFIG_REVISION",
+            "PROJECT",
+            "WORK_ORDER",
+            "ASSET",
+            "STOCK_BALANCE",
+            "EVIDENCE",
+            "AUTHORIZATION_RELATION_PROJECTION",
+            "AUTHORIZATION_PROJECTION_OUTBOX",
+        ).forEach { table ->
+            check(generated.contains(table)) {
+                "Generated jOOQ schema is missing required first-slice table: $table"
+            }
+        }
     }
 }

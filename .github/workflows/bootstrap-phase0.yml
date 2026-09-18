@@ -123,3 +123,13 @@ jobs:
           HILTECH_DB_PASSWORD: hiltech
           HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
         run: ./gradlew :server:application:test --tests com.hiltech.server.DatabaseMigrationContractTest
+
+      - name: Generate and verify jOOQ Kotlin sources
+        env:
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
+          HILTECH_DB_USER: hiltech
+          HILTECH_DB_PASSWORD: hiltech
+        run: ./gradlew :server:application:verifyJooqGeneration
+
+      - name: Compile server against generated jOOQ sources
+        run: ./gradlew :server:application:compileKotlin
