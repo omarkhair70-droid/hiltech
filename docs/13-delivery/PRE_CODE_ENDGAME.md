@@ -9,10 +9,12 @@ We are no longer discovering HILTECH from zero.
 
 The remaining pre-code phase is about:
 1. validating the model against the real company,
-2. proving risky technical choices,
-3. finishing representative UX/design,
-4. freezing exact contracts/schemas/versions,
-5. locking implementation order.
+2. finishing representative UX/design,
+3. freezing exact contracts/schemas/versions,
+4. locking remaining provider/operations decisions,
+5. passing Freeze Review.
+
+Risky technical feasibility has already been proven through SPIKE-01…15.
 
 Production coding does not begin until Freeze Review passes.
 
@@ -147,6 +149,9 @@ No final stack based only on preference.
 
 # Gate 5 — Exact Build Contracts
 
+First-slice readiness/blocker map:
+`FIRST_PRODUCTION_SLICE_CONTRACT_READINESS_2026-09-18.md`
+
 Convert validated domain specs into exact implementation contracts:
 
 ## Database
@@ -235,14 +240,15 @@ REPOSITORY BOOTSTRAP -> PRODUCTION CODE.
 # What Can Be Completed Without Mohamed Tonight?
 
 Can continue:
-- implementation order,
-- test strategy,
-- CI/release planning,
-- remaining low-fi if Figma access is available,
-- approval/automation refinements,
-- exact contract templates,
-- ADR templates,
-- spike execution plans.
+- implementation-order freeze preparation,
+- exact first-slice contract templates/readiness matrices,
+- data dictionary/read-model/API-schema skeletons,
+- permission/contract test matrices,
+- provider/runtime research,
+- remaining low-fi when Figma access is available,
+- approval/automation refinements.
+
+Technical spike planning/execution is complete.
 
 Cannot honestly freeze without company input:
 - payroll/accounting/bank exact schema,
