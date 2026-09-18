@@ -38,7 +38,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | ACTIVE — 01/03/04/06/09/10/11/12 PASSED | Client platform, dense desktop, local DB, offline queue, authorization, modular backend events, PostgreSQL concurrency and binary evidence protocol proven; remaining spikes active |
+| Technical spikes | ACTIVE — 01/03/04/06/09/10/11/12/14 PASSED | Client platform, dense desktop, local DB, offline queue, authorization, modular backend events, PostgreSQL concurrency, binary evidence and observability proven; remaining spikes active |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -280,3 +280,17 @@ GitHub Actions run 35305553872 proved:
 - real Compose Desktop first-frame render under Xvfb.
 
 This removes the main current feasibility trigger for abandoning Compose Desktop, while final dense UX/performance budgets remain design/freeze work.
+
+
+## SPIKE-14 — Observability
+Decision: **ACCEPT — end-to-end trace/correlation contract passed.**
+
+GitHub Actions run 35305996737 proved:
+- W3C client→server trace propagation,
+- API/command/DB/event-listener trace continuity,
+- failed listener ERROR status,
+- correlationId + operationId continuity,
+- safe client sync-failure diagnostics,
+- no tested payroll/PII/auth/payload leakage into telemetry attributes.
+
+Collector/backend/vendor and production sampling remain open infrastructure decisions.
