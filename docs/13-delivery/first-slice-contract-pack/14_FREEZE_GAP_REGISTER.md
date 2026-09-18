@@ -318,7 +318,6 @@ Operational activation evidence still required before real production cutover, n
 - production domain/TLS ownership.
 - DigiCert certificate issuance/KeyLocker credential setup.
 - signed-MSI staging proof.
-- final CI action pin review.
 
 These are operational instantiation/validation items and do not reopen application/domain architecture.
 
@@ -425,9 +424,10 @@ Provider/ops activation:
 **POST-FREEZE / PRE-CUTOVER VALIDATION REMAINS**
 
 Production code:
-**NOT STARTED BY DESIGN**
+**NOT STARTED YET**
 
-The remaining work is now a narrow closure exercise, not broad product discovery.
+The first-slice pre-code closure is complete.
+Remaining work is Bootstrap, pilot setup, production activation/cutover, and later-domain closure.
 
 
 ---
