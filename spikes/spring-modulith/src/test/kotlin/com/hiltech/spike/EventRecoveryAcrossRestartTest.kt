@@ -1,15 +1,15 @@
 package com.hiltech.spike
 
 import com.hiltech.spike.work.WorkService
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.modulith.events.core.EventPublicationRegistry
 import java.nio.file.Files
 import java.time.Duration
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
 
 class EventRecoveryAcrossRestartTest {
     @Test
@@ -28,14 +28,17 @@ class EventRecoveryAcrossRestartTest {
             first.getBean(WorkService::class.java)
                 .completeWork(workOrderId = "wo-42", version = 8)
 
-            waitUntil(Duration.ofSeconds(10)) {
-                val incomplete = incompletePublicationCount(first)
-                println("SPIKE-10 first-context incomplete publications: " + incomplete)
-                incomplete >= 1
+            waitUntil(Duration.ofSeconds(15)) {
+                val publication = publication(first)
+                println("SPIKE-10 first-context publication=" + publication)
+                publication?.status == "FAILED"
             }
 
+            val failed = requireNotNull(publication(first))
+            assertEquals("FAILED", failed.status)
             assertEquals(0, auditCount(first))
-            assertTrue(incompletePublicationCount(first) >= 1)
+            assertTrue(failed.completionAttempts >= 1)
+            assertEquals(false, failed.hasCompletionDate)
         } finally {
             first.close()
         }
@@ -47,15 +50,25 @@ class EventRecoveryAcrossRestartTest {
         )
 
         try {
-            waitUntil(Duration.ofSeconds(20)) {
+            waitUntil(Duration.ofSeconds(25)) {
                 val audit = auditCount(second)
-                val incomplete = incompletePublicationCount(second)
-                println("SPIKE-10 restarted-context audit=" + audit + " incomplete=" + incomplete)
-                audit == 1 && incomplete == 0
+                val publication = publication(second)
+                println(
+                    "SPIKE-10 restarted-context audit=" + audit +
+                        " publication=" + publication,
+                )
+
+                audit == 1 &&
+                    publication?.status == "COMPLETED" &&
+                    publication.hasCompletionDate
             }
 
+            val completed = requireNotNull(publication(second))
             assertEquals(1, auditCount(second))
-            assertEquals(0, incompletePublicationCount(second))
+            assertEquals("COMPLETED", completed.status)
+            assertNotNull(completed.completionAttempts)
+            assertTrue(completed.completionAttempts >= 2)
+            assertTrue(completed.hasCompletionDate)
         } finally {
             second.close()
             directory.toFile().deleteRecursively()
@@ -90,10 +103,27 @@ class EventRecoveryAcrossRestartTest {
         ) ?: 0
     }
 
-    private fun incompletePublicationCount(context: ConfigurableApplicationContext): Int =
-        context.getBean(EventPublicationRegistry::class.java)
-            .findIncompletePublications()
-            .size
+    private fun publication(
+        context: ConfigurableApplicationContext,
+    ): PublicationSnapshot? {
+        val jdbc = context.getBean(JdbcTemplate::class.java)
+
+        val rows = jdbc.query(
+            """
+            SELECT STATUS, COMPLETION_DATE, COMPLETION_ATTEMPTS
+            FROM EVENT_PUBLICATION
+            ORDER BY PUBLICATION_DATE
+            """.trimIndent(),
+        ) { rs, _ ->
+            PublicationSnapshot(
+                status = rs.getString("STATUS"),
+                completionAttempts = rs.getInt("COMPLETION_ATTEMPTS"),
+                hasCompletionDate = rs.getTimestamp("COMPLETION_DATE") != null,
+            )
+        }
+
+        return rows.lastOrNull()
+    }
 
     private fun waitUntil(
         timeout: Duration,
@@ -111,4 +141,10 @@ class EventRecoveryAcrossRestartTest {
 
         error("Condition did not become true within $timeout")
     }
+
+    private data class PublicationSnapshot(
+        val status: String?,
+        val completionAttempts: Int,
+        val hasCompletionDate: Boolean,
+    )
 }
