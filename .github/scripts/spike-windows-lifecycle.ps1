@@ -12,6 +12,12 @@ $TempRoot = $env:RUNNER_TEMP
 $V1 = Join-Path $TempRoot "HILTECHSpike-1.0.0.msi"
 $V2 = Join-Path $TempRoot "HILTECHSpike-2.0.0.msi"
 $ThumbFile = Join-Path $TempRoot "hiltech-signing-thumbprint.txt"
+$CertDir = Join-Path $TempRoot "hiltech-signing"
+$CertPem = Join-Path $CertDir "cert.pem"
+$CertDer = Join-Path $CertDir "cert.cer"
+$KeyPem = Join-Path $CertDir "key.pem"
+$Pfx = Join-Path $CertDir "signing.pfx"
+$PfxPasswordPlain = "hiltech-spike-test"
 
 $DataDir = Join-Path $env:LOCALAPPDATA "HILTECHSpike"
 $StateFile = Join-Path $DataDir "state.txt"
@@ -110,24 +116,21 @@ function Get-SignTool {
     return $signTool.FullName
 }
 
-function Get-Certificate {
+function Get-SigningThumbprint {
     if (-not (Test-Path $ThumbFile)) {
         throw "Signing thumbprint file missing"
     }
-
-    $thumb = (Get-Content -Raw $ThumbFile).Trim()
-    $cert = Get-Item "Cert:\CurrentUser\My\$thumb"
-    if (-not $cert) {
-        throw "Signing certificate not found"
-    }
-    return $cert
+    return (Get-Content -Raw $ThumbFile).Trim()
 }
 
 function Sign-Msi([string] $Msi) {
     $signTool = Get-SignTool
-    $certificate = Get-Certificate
 
-    Invoke-ProcessChecked $signTool "sign /sha1 $($certificate.Thumbprint) /s My /fd SHA256 `"$Msi`"" 60
+    if (-not (Test-Path $Pfx)) {
+        throw "Signing PFX missing: $Pfx"
+    }
+
+    Invoke-ProcessChecked $signTool "sign /f `"$Pfx`" /p $PfxPasswordPlain /fd SHA256 `"$Msi`"" 60
     Invoke-ProcessChecked $signTool "verify /pa /v `"$Msi`"" 60
 }
 
@@ -145,36 +148,18 @@ switch ($Stage) {
         Write-Host "Creating disposable code-signing certificate with OpenSSL"
 
         $openssl = (Get-Command openssl.exe -ErrorAction Stop).Source
-        $certDir = Join-Path $TempRoot "hiltech-signing"
-        New-Item -ItemType Directory -Force -Path $certDir | Out-Null
+        New-Item -ItemType Directory -Force -Path $CertDir | Out-Null
 
-        $keyPem = Join-Path $certDir "key.pem"
-        $certPem = Join-Path $certDir "cert.pem"
-        $pfx = Join-Path $certDir "signing.pfx"
-        $pfxPasswordPlain = "hiltech-spike-test"
-        $pfxPassword = ConvertTo-SecureString $pfxPasswordPlain -AsPlainText -Force
+        Invoke-ProcessChecked $openssl "req -x509 -newkey rsa:2048 -sha256 -nodes -keyout `"$KeyPem`" -out `"$CertPem`" -days 2 -subj /CN=HILTECH-Spike-Test-Signing -addext keyUsage=digitalSignature -addext extendedKeyUsage=codeSigning" 60
+        Invoke-ProcessChecked $openssl "x509 -in `"$CertPem`" -outform der -out `"$CertDer`"" 60
+        Invoke-ProcessChecked $openssl "pkcs12 -export -out `"$Pfx`" -inkey `"$KeyPem`" -in `"$CertPem`" -passout pass:$PfxPasswordPlain" 60
 
-        Invoke-ProcessChecked $openssl "req -x509 -newkey rsa:2048 -sha256 -nodes -keyout `"$keyPem`" -out `"$certPem`" -days 2 -subj /CN=HILTECH-Spike-Test-Signing -addext keyUsage=digitalSignature -addext extendedKeyUsage=codeSigning" 60
-        Invoke-ProcessChecked $openssl "pkcs12 -export -out `"$pfx`" -inkey `"$keyPem`" -in `"$certPem`" -passout pass:$pfxPasswordPlain" 60
+        $publicCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($CertDer)
+        Set-Content -Path $ThumbFile -Value $publicCertificate.Thumbprint
 
-        $certificate = Import-PfxCertificate `
-            -FilePath $pfx `
-            -CertStoreLocation "Cert:\CurrentUser\My" `
-            -Password $pfxPassword `
-            -Exportable
+        Invoke-ProcessChecked "certutil.exe" "-user -addstore -f Root `"$CertDer`"" 60
 
-        if (-not $certificate) {
-            throw "Failed to import disposable code-signing certificate"
-        }
-
-        $root = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "CurrentUser")
-        $root.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-        $root.Add($certificate)
-        $root.Close()
-
-        Write-Host "Disposable certificate created and trusted via OpenSSL/PFX"
-
-        Set-Content -Path $ThumbFile -Value $certificate.Thumbprint
+        Write-Host "Disposable public certificate trusted; private key remains PFX-only"
 
         Copy-Item (Get-BuiltMsi) $V1 -Force
         Write-Host "MSI copied to $V1"
@@ -279,15 +264,8 @@ switch ($Stage) {
             Remove-Item "HKCU:\Software\Classes\hiltech" -Recurse -Force
         }
 
-        $certificate = Get-Certificate
-        $thumb = $certificate.Thumbprint
-
-        if (Test-Path "Cert:\CurrentUser\My\$thumb") {
-            Remove-Item "Cert:\CurrentUser\My\$thumb" -Force
-        }
-        if (Test-Path "Cert:\CurrentUser\Root\$thumb") {
-            Remove-Item "Cert:\CurrentUser\Root\$thumb" -Force
-        }
+        $thumb = Get-SigningThumbprint
+        Invoke-ProcessChecked "certutil.exe" "-user -delstore Root $thumb" 60 -AllowFailure
 
         if (Test-Path $DataDir) {
             Remove-Item $DataDir -Recurse -Force
