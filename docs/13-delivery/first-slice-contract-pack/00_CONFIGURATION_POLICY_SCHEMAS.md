@@ -737,10 +737,13 @@ Must pass before FIRST_SLICE_FREEZE:
 This candidate is structurally strong enough to drive DB/API design.
 
 Still to settle before final freeze:
-- exact maximum lengths for code/name/description.
-- exact retention/legal rules for tracking/location.
+- exact retention/legal rules for active location tracking before enabling that mode.
 - exact Configuration Center visual design.
-- exact import/export/seed format.
+
+Closed:
+- code/name/description bounds inherit cross-cutting baseline unless stricter.
+- JSON v1 draft-only import/export/seed contract.
+- activation sensitivity model.
 
 Closed:
 - SYSTEM/ORGANIZATION scope mechanism.
@@ -764,3 +767,48 @@ Next:
 5. define representative Admin UI,
 6. run contract consistency review,
 7. mark configuration contract FROZEN when remaining closure items are resolved.
+
+
+---
+
+# 22. Import / Export / Seed Contract
+
+Runtime/admin interchange baseline:
+- UTF-8 JSON.
+- top-level schemaVersion.
+- explicit configuration family.
+- scopeType/scopeOrganizationId.
+- code/name.
+- revision payload.
+- dependency references by stable config code/id.
+- no secrets/tokens/credentials.
+
+Import behavior:
+1. parse + schema validate.
+2. resolve dependencies.
+3. create DRAFT revisions only.
+4. never auto-activate.
+5. show diff/validation/usage impact.
+6. authorized user explicitly activates through normal command/approval/re-auth path.
+
+Export:
+- can include ACTIVE + historical metadata according permission.
+- sensitive integration secrets are references/redacted, never exported plaintext.
+
+Git/dev fixtures may use YAML for human readability, but production configuration import/export contract is JSON v1.
+
+---
+
+# 23. Activation Control
+
+Every configuration family declares activation sensitivity:
+
+- STANDARD — config_activator permission sufficient.
+- REAUTH — config_activator + recent authentication.
+- APPROVAL — config_activator + configured ApprovalPolicy decision.
+- REAUTH_AND_APPROVAL — both.
+
+The engine supports all four.
+Which current HILTECH family uses which class is seed/policy configuration.
+
+Critical security/authorization/integration configuration may not use weaker activation than its system-defined minimum.
