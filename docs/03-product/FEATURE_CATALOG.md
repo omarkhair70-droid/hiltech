@@ -137,6 +137,8 @@ See `docs/13-delivery/DEFINITION_OF_COMPLETE.md`.
 - FIELD-018 Evidence completeness check
 - FIELD-019 Sync state/retry
 - FIELD-020 Site contact/access context
+- FIELD-021 Site map / navigation
+- FIELD-022 Active site-visit presence / location tracking when policy-enabled
 
 # ENG — Engineering
 
