@@ -1,7 +1,7 @@
 # HILTECH First-Slice Design Freeze Execution Pack
 
 Date: 2026-09-18
-Status: **CANVAS-READY / FIGMA MCP QUOTA BLOCKED**
+Status: **INTERACTIVE RENDERED PROOF ACTIVE / FIGMA OPTIONAL**
 
 Figma file:
 `HILTECH OS — Low Fidelity Product Prototypes`
@@ -16,9 +16,21 @@ Current MCP account:
 - MCP quota: exhausted after metadata access
 - write/metadata expansion cannot currently continue
 
-This file is the exact canvas execution queue once quota/access returns.
+The first-slice visual gate is now **tool-neutral**.
 
-It does not replace visual validation.
+Primary active proof engine:
+`prototypes/first-slice-design/`
+
+Automated rendered proof:
+- browser-executed with Playwright,
+- 36 required screenshots,
+- English + Arabic RTL,
+- phone + tablet + desktop,
+- conflict/error/authoritative/local states.
+
+Figma remains useful for later visual-system craft and may continue when quota returns, but Figma itself is no longer a hard pre-code dependency.
+
+This file remains the acceptance/spec queue regardless of rendering tool.
 
 ---
 
@@ -428,22 +440,26 @@ It DOES require:
 
 ---
 
-# 12. Canvas build order once Figma quota returns
+# 12. Rendered proof execution order
 
-1. inspect current file/pages/frames.
-2. complete M06 variants.
-3. complete M07 variants.
-4. create D06 Configuration Center variants.
-5. create D07 Supervisor Review variants.
-6. update D02 progress/health if required.
-7. create 4 conflict proof frames.
-8. create R02/R04/R06/R07 RTL frames.
-9. create T01/T02 tablet frames.
-10. create navigation comparison board/frame.
-11. screenshot every Priority A proof.
-12. update `FIGMA_LOW_FI_STATUS_2026-09-18.md`.
-13. update first-slice `07_UI_FLOW_CONTRACTS.md`.
-14. mark Design blocker closed only after actual rendered review.
+Interactive prototype implementation now covers:
+1. M06 Technician Job variants.
+2. M07 Warehouse Checkout variants.
+3. D06 Configuration Center variants.
+4. D07 Supervisor Review variants.
+5. D02 Project Command Center states.
+6. all four required conflict patterns.
+7. Arabic RTL representative renders.
+8. Technician/Warehouse tablet proof.
+9. navigation comparison.
+
+Automated next steps:
+10. render 36 screenshots in Chromium.
+11. inspect the actual images.
+12. correct visual/interaction issues.
+13. rerun proof until accepted.
+14. update first-slice `07_UI_FLOW_CONTRACTS.md`.
+15. mark Design blocker closed only after actual rendered review.
 
 ---
 
@@ -461,6 +477,7 @@ Figma MCP check on 2026-09-18:
 Therefore:
 - do not spam Figma MCP calls.
 - product/design ambiguity is already removed by this pack.
-- actual visual proof remains blocked by external quota/seat/tool limit.
+- Figma quota is no longer the proof blocker because the interactive prototype provides the rendering path.
+- actual Design Freeze still requires review of the rendered proof artifact.
 
-This blocker does **not** justify starting production UI without rendered validation.
+Production UI still must not begin before that rendered review passes.
