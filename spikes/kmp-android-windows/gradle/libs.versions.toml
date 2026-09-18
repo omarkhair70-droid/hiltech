@@ -1,11 +1,11 @@
 [versions]
 kotlin = "2.4.20"
-compose = "1.12.0"
+compose = "1.11.1"
 agp = "9.3.1"
 androidCompileSdk = "36"
 androidMinSdk = "21"
 androidTargetSdk = "36"
-androidxActivity = "1.13.0"
+androidxActivity = "1.12.4"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
