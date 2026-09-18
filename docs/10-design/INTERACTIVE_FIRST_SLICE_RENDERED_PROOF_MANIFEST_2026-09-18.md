@@ -171,7 +171,7 @@ This manifest alone does not close Design Freeze.
 
 After CI is green:
 
-1. download/open the 36 rendered images,
+1. download/open the 37 rendered images,
 2. review them against the questions above,
 3. record any required corrections,
 4. rerun until corrected proof is green,
