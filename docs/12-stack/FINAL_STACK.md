@@ -208,9 +208,9 @@ Root:
 
 One global ordered stream:
 
-- V0001 platform
-- V0002 configuration
-- V0003 identity_organization
+- V0001 identity_organization
+- V0002 platform
+- V0003 configuration
 - V0004 projects_sites
 - V0005 work
 - V0006 warehouse_assets
