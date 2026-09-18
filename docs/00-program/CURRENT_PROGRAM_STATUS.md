@@ -161,6 +161,19 @@ Canonical next-step artifacts:
 - `docs/01-reality/FIRST_PRODUCTION_SLICE_REALITY_CLOSURE.md` — minimum Project/Field/Warehouse/Authority reality evidence.
 - `docs/13-delivery/FIRST_PRODUCTION_SLICE_CONTRACT_READINESS_2026-09-18.md` — readiness/blocker map.
 - `docs/13-delivery/first-slice-contract-pack/README.md` — exact freeze artifacts that feed repository bootstrap.
+- `docs/13-delivery/first-slice-contract-pack/14_FREEZE_GAP_REGISTER.md` — current narrow remaining blockers; use this instead of broad old “reality/technical unknown” language.
+
+Contract conversion status:
+- Configuration contract candidate complete.
+- Project/Site/Work contract candidate complete.
+- Asset/Warehouse/Stock contract candidate complete.
+- API route/DTO candidate v0.2 complete.
+- PostgreSQL table-shape candidate v0.2 complete.
+- Room local entity candidate v0.2 complete.
+- Authorization/OpenFGA candidate complete.
+- Evidence and test matrix candidates complete.
+- Representative internal reality fixtures added.
+- remaining work is narrow finalization + visual/provider/ops closure.
 
 Immediate pre-code continuation:
 1. Reality validation with Mohamed/Ahmed/project/warehouse/field.
