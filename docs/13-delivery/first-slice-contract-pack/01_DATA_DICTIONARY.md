@@ -1,6 +1,6 @@
 # 01 — First-Slice Data Dictionary
 
-Status: **CONTRACT CANDIDATE v0.1 / CONFIGURATION-INTEGRATED**
+Status: **CONTRACT CANDIDATE v0.2 / STRUCTURE SEPARATED FROM SEED DATA**
 
 ## Rule
 
@@ -59,9 +59,11 @@ Current HILTECH values are seed data; the schemas are production contracts.
 |---|---|---:|---|---|---|---|---|---|
 | UserIdentity.id | UUID | NO | Identity | INTERNAL | HILTECH | minimal | technical model | PROPOSED_FOR_REVIEW |
 | UserIdentity.authSubject | String | NO | Identity | HIGHLY_RESTRICTED | Keycloak link | no UI cache | SPIKE-08 | LOCKED_TECHNICAL |
-| UserIdentity.status | enum TBD exact | NO | Identity | INTERNAL | HILTECH | session bootstrap | reality + policy | REALITY_REQUIRED |
-| Organization subset | TBD | TBD | Organizations | TBD | HILTECH/current source | context only | org reality | REALITY_REQUIRED |
-| Team/membership subset | TBD | TBD | People/Organizations | INTERNAL | current org structure | assigned context | Mohamed/PM reality | REALITY_REQUIRED |
+| UserIdentity.status | ACTIVE / LOCKED / REVOKED / PENDING candidate | NO | Identity | INTERNAL | HILTECH | session bootstrap | identity contract | CONTRACT_CANDIDATE |
+| Organization | typed object: HILTECH / CLIENT / SUPPLIER / SUBCONTRACTOR / PARTNER / OTHER | NO | Organizations | INTERNAL/RESTRICTED by field | HILTECH | context subset only | organization object spec | CONTRACT_CANDIDATE |
+| OrganizationMembership | typed membership with validity/state | NO | Organizations | INTERNAL | HILTECH | assigned context | identity/org contract | CONTRACT_CANDIDATE |
+| Team | UUID/code/name/parent/manager/active/version | NO | People/Organizations | INTERNAL | HILTECH | assigned context | configurable operating model | CONTRACT_CANDIDATE |
+| TeamMembership | team/employee/roleInTeam/validity | NO | People/Organizations | INTERNAL | HILTECH | assigned context | configurable operating model | CONTRACT_CANDIDATE |
 
 ---
 
@@ -72,28 +74,34 @@ Required decisions before freeze:
 | Field | Exact type | Null | Owner | Classification | Source | Local cache | Evidence | Status |
 |---|---|---:|---|---|---|---|---|---|
 | id | UUID | NO | Projects | INTERNAL | HILTECH | YES | technical | CONTRACT_CANDIDATE |
-| projectCode | TBD max/pattern | NO | Projects | INTERNAL | existing/new convention | YES | real project | REALITY_REQUIRED |
-| name | TBD | NO | Projects | INTERNAL | current project source | YES | real project | REALITY_REQUIRED |
-| clientOrganizationId | ID | NO | Projects | RESTRICTED | commercial/project handoff | YES-safe subset | real project | REALITY_REQUIRED |
-| lifecycleState | exact Project lifecycle enum | NO | Projects | INTERNAL | Projects | YES | lifecycle contract | PROPOSED_FOR_REVIEW |
-| projectManagerId | ID | TBD | Projects | INTERNAL | authority/assignment | YES | real project | REALITY_REQUIRED |
-| planned dates | LocalDate | TBD | Projects | INTERNAL | project planning | YES | real project | REALITY_REQUIRED |
+| projectCode | String; exact max/pattern final-freeze item | NO | Projects | INTERNAL | configured/generated/manual policy | YES | project contract | CONTRACT_CANDIDATE |
+| name | String | NO | Projects | INTERNAL | commercial/project creation | YES | project contract | CONTRACT_CANDIDATE |
+| clientOrganizationId | UUID | NO | Projects | RESTRICTED | commercial/project handoff | YES-safe subset | organization/project contract | CONTRACT_CANDIDATE |
+| lifecycleState | ProjectState enum candidate | NO | Projects | INTERNAL | Projects | YES | project contract | CONTRACT_CANDIDATE |
+| projectManagerId | UUID | YES until policy requires active PM | Projects | INTERNAL | assignment/config | YES | project contract | CONTRACT_CANDIDATE |
+| planned dates | LocalDate | YES | Projects | INTERNAL | project planning | YES | project contract | CONTRACT_CANDIDATE |
 | version | Long | NO | Projects | INTERNAL | server | YES | SPIKE-15 pattern | LOCKED_TECHNICAL |
 
-Add/remove fields only from verified pilot reality.
+Real project data is used to validate terminology/coverage and seed initial values; it does not define the production schema by itself.
 
 ---
 
 # Site / Area
 
-Freeze:
-- exact project/site cardinality,
-- reusable vs project-bound site identity,
-- code/name fields,
-- access/contact/location fields,
-- Area/Zone hierarchy actually needed for pilot.
+First-slice structural contract:
+- Site.id: UUID
+- Site.projectId: UUID required for delivery context
+- Site.siteCode: String unique within Project
+- Site.name: String
+- clientSiteRef: optional future canonical client-location link
+- address/location/access/contact fields are optional and permission-scoped
+- lifecycleState exists; exact enum is a final-freeze item
+- timezone optional IANA value
+- version: Long
+- Area/Room/Zone hierarchy is optional, recursive, acyclic and type-code driven
 
-All exact rows remain `REALITY_REQUIRED` until one real project/site is mapped.
+A real project/site validates that no structural field is missing and supplies seed data.
+Reusable ClientSite/Facility identity remains a narrow structural closure item, not a requirement to wait for every current project detail.
 
 ---
 
@@ -170,12 +178,17 @@ Technically fixed:
 - server finalization verifies stored bytes,
 - restricted evidence has no permanent public URL.
 
-Reality-required:
-- evidence categories,
-- mandatory evidence by work type,
-- size/file-type limits,
-- retention,
-- client visibility.
+Configuration-driven:
+- evidence type/category master data,
+- mandatory evidence by WorkType through EvidencePolicy,
+- allowed content types and count constraints,
+- client visibility mode,
+- reviewer requirement.
+
+Provider/legal freeze items:
+- maximum file-size policy,
+- retention/legal hold,
+- exact client sharing/download policy by classification.
 
 ---
 
