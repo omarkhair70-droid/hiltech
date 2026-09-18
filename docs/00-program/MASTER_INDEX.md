@@ -77,6 +77,7 @@ Start here:
 7. `../01-reality/REALITY_VALIDATION_PLAN.md` — how assumptions become verified reality.
 8. `../11-architecture/CROSS_CUTTING_BUILD_CONTRACTS.md` — implementation-facing API/sync/security/file contract candidate.
 9. `../12-stack/STACK_VERSION_MATRIX.md` — evidence-based pre-freeze version ledger.
+10. `../13-delivery/FIRST_PRODUCTION_SLICE_CONTRACT_READINESS_2026-09-18.md` — post-spike readiness/blocker map for the first production vertical.
 
 ## Current planning coverage
 
@@ -125,31 +126,38 @@ Strong first pass:
 Remaining work is reality validation and implementation-scope contract freezing, not discovery of those lifecycle families from zero.
 
 ### Data
-First pass:
+Strong pre-freeze model:
 - Object Model
+- exact object-spec first passes
 - State Machines
+- transition tables
+- command catalog
 - Event Map
 - module ownership
+- data classification / retention model
 
 Still required:
-- exact first-release object fields
-- transition tables
-- invariants
-- retention
-- ledgers/schema
+- reality-validated first-slice field definitions,
+- exact production DB/API/local schemas,
+- final invariants/policies where company reality still matters,
+- migration/import mappings,
+- legal retention confirmation.
 
 ### Security
-First pass:
+Strong pre-freeze model:
 - Permission Map
 - Authorization Matrix
+- object × action matrix
+- field-level access matrix
 - deny-by-default model
 - external organization boundaries
+- OpenFGA authorization proof / ADR-009
 
 Still required:
-- reality validation
-- re-auth/device-trust rules
-- authorization spike
-- test matrix
+- real authority/delegation validation,
+- exact re-auth/device-trust obligations,
+- frozen authorization tuples/policies for starting slices,
+- permission/field-level test matrix.
 
 ### Product surfaces
 First pass:
