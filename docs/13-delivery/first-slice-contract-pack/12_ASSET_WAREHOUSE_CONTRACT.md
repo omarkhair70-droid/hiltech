@@ -1,6 +1,6 @@
 # 12 — Asset / Warehouse / Stock Contract
 
-Status: **CONTRACT CANDIDATE v0.1**
+Status: **CONTRACT CANDIDATE v0.2**
 Date: 2026-09-18
 
 ## Purpose
@@ -48,9 +48,90 @@ Do not model a high-value individually accountable tool as anonymous quantity st
 
 ---
 
-# 2. Asset
+# 2. Asset state normalization
 
-## Asset fields
+The earlier lifecycle table mixed:
+- identity lifecycle,
+- custody/location,
+- physical condition,
+- calibration/maintenance,
+- reservation,
+- missing/lost incident.
+
+Production separates these dimensions.
+
+## AssetLifecycleState
+
+- ACTIVE
+- RETIREMENT_REQUESTED
+- RETIRED
+
+This answers whether the asset identity is operationally alive in HILTECH.
+
+## AssetConditionState
+
+- UNKNOWN
+- GOOD
+- FAIR
+- DAMAGED
+- UNFIT
+
+Condition is inspected fact, not custody.
+
+## AssetCustodyState
+
+Derived from authoritative movement/custody projection:
+- STORED
+- CHECKED_OUT
+- IN_TRANSFER
+- UNKNOWN
+
+Project/Site location is context on the custody projection, not a new lifecycle enum.
+
+## CalibrationStatus
+
+Derived from AssetTypeDefinition + latest calibration:
+- NOT_REQUIRED
+- VALID
+- DUE
+- EXPIRED
+- IN_PROGRESS
+
+## MaintenanceStatus
+
+Derived:
+- NONE
+- DUE
+- IN_PROGRESS
+
+## Missing/lost
+
+MISSING/LOST are explicit AssetIncident facts and availability blockers.
+They are not destructive replacement of Asset identity/history.
+
+## Reservation
+
+RESERVED is Reservation state, not Asset lifecycle.
+
+## AvailabilityState — derived read model
+
+Candidate:
+- AVAILABLE
+- RESERVED
+- CHECKED_OUT
+- BLOCKED_CONDITION
+- BLOCKED_CALIBRATION
+- BLOCKED_MAINTENANCE
+- BLOCKED_INCIDENT
+- RETIRED
+
+Availability is derived from lifecycle + custody + reservation + condition + calibration + maintenance + incidents.
+
+Do not store a second editable availability truth.
+
+---
+
+# Asset fields
 
 - id: UUID
 - assetCode: String
@@ -68,7 +149,7 @@ Do not model a high-value individually accountable tool as anonymous quantity st
 - currencyCode: ISO-4217 String?
 - warrantyStart: LocalDate?
 - warrantyEnd: LocalDate?
-- calibrationDueAt: Instant?
+- calibrationDueAt: Instant? derived/cached optimization allowed
 - maintenancePlanRef: UUID?
 - lastObservedAt: Instant?
 - lastObservedSource: String?
@@ -77,39 +158,16 @@ Do not model a high-value individually accountable tool as anonymous quantity st
 - retiredAt: Instant?
 - version: Long
 
-Current location/custodian/project/site are **projections**, not arbitrary writable source fields.
+Current location/custodian/project/site/work are projections from accepted movements.
 
-## AssetLifecycleState
+## Hard invariants
 
-Candidate semantic states:
-
-- REGISTERED
-- AVAILABLE
-- RESERVED
-- CHECKED_OUT
-- IN_USE
-- UNDER_INSPECTION
-- MAINTENANCE
-- CALIBRATION_BLOCKED
-- DAMAGED
-- MISSING
-- RETIRED
-
-Exact transition table may collapse/split some states before final freeze.
-The important invariant is that custody/availability and condition/calibration are not blindly conflated.
-
-## AssetConditionState
-
-Candidate:
-- UNKNOWN
-- GOOD
-- FAIR
-- DAMAGED
-- UNFIT
-
-Condition vocabulary may be configurable/master data if operationally useful, but hard availability rules still live in domain policy.
-
----
+- Asset identity survives tag replacement, transfer, damage, repair and project changes.
+- RETIRED cannot be checked out/reserved for normal use.
+- one active authoritative custody.
+- condition/calibration/maintenance/incident blocks normal availability according contract/policy.
+- no command directly edits a fake currentCustodian/currentLocation truth.
+- acquisition cost remains separately permissioned.
 
 # 3. Asset type configuration
 
@@ -336,12 +394,14 @@ Requires:
 - return condition.
 - accessory/inspection requirements according policy.
 
-May transition to:
-- AVAILABLE.
-- UNDER_INSPECTION.
-- DAMAGED.
-- CALIBRATION_BLOCKED.
-- MAINTENANCE.
+Return updates custody/location and may trigger inspection.
+
+After inspection:
+- condition is updated,
+- calibration/maintenance/incident facts are evaluated,
+- derived availability changes accordingly.
+
+The return command does not force all these facts into one lifecycle enum.
 
 ## TransferAsset
 Moves storage/custody/context under policy.
@@ -786,7 +846,6 @@ Offline:
 
 # 25. Open items before final freeze
 
-- exact AssetLifecycleState/Condition enums and transition matrix normalization.
 - exact Warehouse vs StorageLocation table split.
 - exact custody projection persistence strategy.
 - exact reservation table model for Asset vs Stock.
