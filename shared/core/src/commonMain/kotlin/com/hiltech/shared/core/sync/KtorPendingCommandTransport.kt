@@ -130,8 +130,11 @@ class KtorPendingCommandTransport(
         val merged = buildJsonObject {
             payload.forEach { (key, value) -> put(key, value) }
             put("operationId", JsonPrimitive(command.operationId))
-            command.baseVersion?.let { put("baseVersion", JsonPrimitive(it)) }
-                ?: put("baseVersion", JsonNull)
+            if (command.baseVersion != null) {
+                put("baseVersion", JsonPrimitive(command.baseVersion))
+            } else {
+                put("baseVersion", JsonNull)
+            }
             put(
                 "clientOccurredAt",
                 JsonPrimitive(
