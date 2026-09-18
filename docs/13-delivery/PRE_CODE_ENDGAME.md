@@ -98,22 +98,27 @@ External Client experience remains documented but is intentionally last in imple
 
 # Gate 3 — Technical Spikes
 
-Run and document:
-- KMP Android + Windows shared feature.
-- Arabic/RTL.
-- Room shared local DB.
-- offline command queue/conflict.
-- Android Camera/QR/evidence.
-- desktop dense grid.
-- Windows packaging/update.
-- Keycloak native OIDC.
-- authorization model/OpenFGA.
-- Spring Modulith recovery.
-- PostgreSQL + jOOQ concurrency/ledger.
-- binary upload.
-- WorkManager sync.
-- observability.
-- end-to-end PM -> technician offline -> supervisor proof.
+Accepted:
+- SPIKE-01 KMP Android + Windows shared platform.
+- SPIKE-02 Arabic/RTL adaptive structure.
+- SPIKE-03 Room shared local DB.
+- SPIKE-04 offline command queue/conflict.
+- SPIKE-06 desktop dense data.
+- SPIKE-08 Keycloak native OIDC.
+- SPIKE-09 authorization model/OpenFGA.
+- SPIKE-10 Spring Modulith recovery.
+- SPIKE-11 PostgreSQL + jOOQ concurrency/ledger.
+- SPIKE-12 binary evidence upload.
+- SPIKE-14 observability.
+
+Active:
+- SPIKE-05 Android Camera/QR/evidence.
+- SPIKE-07 Windows packaging/update/rollback.
+- SPIKE-13 WorkManager background sync.
+
+Ready after active isolated gates:
+- SPIKE-15 end-to-end PM -> technician offline -> supervisor -> PM proof.
+- SPIKE-15 also acts as the final Ktor/shared-networking acceptance gate.
 
 Every spike ends:
 ACCEPT / REJECT / MODIFY.
