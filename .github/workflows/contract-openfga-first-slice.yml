@@ -1,0 +1,37 @@
+name: Contract — OpenFGA First Slice
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/13-delivery/first-slice-contract-pack/openfga/**"
+      - ".github/workflows/contract-openfga-first-slice.yml"
+  pull_request:
+    paths:
+      - "docs/13-delivery/first-slice-contract-pack/openfga/**"
+      - ".github/workflows/contract-openfga-first-slice.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  model-contract:
+    name: Validate model + authorization fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Test OpenFGA model
+        uses: openfga/action-openfga-test@v0.1.2
+        with:
+          test_path: docs/13-delivery/first-slice-contract-pack/openfga/first-slice-model.fga.yaml
+          fga_cli_version: v0.7.20
+
+      - name: Contract marker
+        run: echo "HILTECH_OPENFGA_CONTRACT_PASS model=first-slice checks=PASS cli=v0.7.20"
