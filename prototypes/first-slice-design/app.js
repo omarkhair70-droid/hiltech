@@ -213,6 +213,203 @@ function metric(label,value){
   return '<div class="metric"><small>'+label+'</small><b>'+value+'</b></div>';
 }
 
+
+const configCopy = {
+  en: {
+    product:"HILTECH · CONTROL", synced:"CONFIG LIVE", title:"Configuration Center", scope:"HILTECH Organization",
+    active:"ACTIVE", draft:"DRAFT", invalid:"INVALID DRAFT", conflict:"VERSION CONFLICT",
+    families:["Work Types","Assignment Policies","Readiness Policies","Evidence Policies","Review Policies","Tracking Policies","Approval Policies","Teams / Roles / Delegations","Warehouses / Site Storage","Asset / Stock Master Data","Code Policies","Project Health Policies","Templates / Checklists"],
+    selected:"Work Type · DATA_RACK_INSTALL", revision:"Revision 4", activeRev:"Active revision 3",
+    summary:"Install, dress and evidence a network/data rack delivery task.",
+    fields:[["Assignment Policy","FIELD_CREW_V2"],["Readiness Policy","SITE_READY_R3"],["Evidence Policy","RACK_EVIDENCE_R4"],["Review Policy","TECH_REVIEW_R2"],["Progress Weight","3.000000"],["Tracking","NAVIGATION_ONLY"]],
+    save:"SAVE DRAFT", validate:"VALIDATE", compare:"COMPARE ACTIVE", activate:"ACTIVATE REVISION",
+    invalidTitle:"Activation blocked",
+    invalidText:"Evidence Policy RACK_EVIDENCE_R4 requires Label Photo but the selected template does not materialize that item.",
+    conflictTitle:"Draft was based on an older revision",
+    conflictText:"Current active revision is 4. Your draft started from revision 3. Nothing was overwritten.",
+    usage:"Usage impact", usageText:"8 future planned Work Orders would use this revision. 19 active/historical Work Orders keep their bound revisions.",
+    history:"Revision history"
+  },
+  ar: {
+    product:"هيلتك · التحكم", synced:"الإعدادات مباشرة", title:"مركز الإعدادات", scope:"شركة HILTECH",
+    active:"مفعّل", draft:"مسودة", invalid:"مسودة غير صالحة", conflict:"تعارض إصدار",
+    families:["أنواع الشغل","سياسات التكليف","سياسات الجاهزية","سياسات الإثبات","سياسات المراجعة","سياسات التتبع","سياسات الموافقات","الفرق / الأدوار / التفويضات","المخازن / تخزين المواقع","الأصول / أصناف المخزون","سياسات الأكواد","صحة المشروع","القوالب / قوائم الفحص"],
+    selected:"نوع الشغل · DATA_RACK_INSTALL", revision:"الإصدار 4", activeRev:"الإصدار المفعّل 3",
+    summary:"تركيب وتجهيز وتوثيق راك شبكات/داتا.",
+    fields:[["سياسة التكليف","FIELD_CREW_V2"],["سياسة الجاهزية","SITE_READY_R3"],["سياسة الإثبات","RACK_EVIDENCE_R4"],["سياسة المراجعة","TECH_REVIEW_R2"],["وزن التقدم","3.000000"],["التتبع","NAVIGATION_ONLY"]],
+    save:"حفظ المسودة", validate:"تحقق", compare:"قارن بالمفعّل", activate:"تفعيل الإصدار",
+    invalidTitle:"التفعيل موقوف",
+    invalidText:"سياسة الإثبات RACK_EVIDENCE_R4 محتاجة صورة الليبل، لكن القالب المختار مش بيعمل البند ده.",
+    conflictTitle:"المسودة مبنية على إصدار أقدم",
+    conflictText:"الإصدار المفعّل الحالي هو 4. المسودة بدأت من الإصدار 3. مفيش حاجة اتكتبت فوق الأحدث.",
+    usage:"تأثير الاستخدام", usageText:"8 أوامر شغل مستقبلية هتستخدم الإصدار ده. 19 أمر شغل جاري/تاريخي هيفضلوا على الإصدارات المربوطين بيها.",
+    history:"سجل الإصدارات"
+  }
+};
+
+function renderConfig(){
+  const t=configCopy[state.lang];
+  const dir=state.lang==="ar"?"rtl":"ltr";
+  const invalid=state.mode==="invalid";
+  const conflict=state.mode==="conflict";
+  const isDraft=state.mode==="draft" || invalid || conflict;
+  let banner="";
+  if(invalid) banner='<div class="banner conflict"><strong>'+t.invalidTitle+'</strong><p>'+t.invalidText+'</p></div>';
+  if(conflict) banner='<div class="banner conflict"><strong>'+t.conflictTitle+'</strong><p>'+t.conflictText+'</p></div>';
+
+  const familyHtml=t.families.map((x,i)=>
+    '<button class="family-row '+(i===0?'selected':'')+'"><span>'+x+'</span><small>'+(i===0?'rev 4':'active')+'</small></button>'
+  ).join("");
+
+  const fields=t.fields.map(x=>
+    '<div class="config-field"><small>'+x[0]+'</small><b>'+x[1]+'</b><span>›</span></div>'
+  ).join("");
+
+  const statusText=isDraft?(invalid?t.invalid:(conflict?t.conflict:t.draft)):t.active;
+  const statusClass=invalid||conflict?"conflict":isDraft?"progress":"ready";
+
+  document.getElementById("screen").innerHTML =
+  '<div class="app admin-app" dir="'+dir+'">'+
+    '<header class="topbar"><div class="top-left"><button class="icon-btn">⌘</button><span class="product-word">'+t.product+'</span></div><span class="sync"><i></i>'+t.synced+'</span></header>'+
+    '<div class="admin-layout">'+
+      '<aside class="family-panel"><div class="family-head"><small>'+t.scope+'</small><b>'+t.title+'</b></div>'+familyHtml+'</aside>'+
+      '<main class="admin-workspace">'+
+        '<section class="hero">'+banner+
+          '<span class="kicker">'+t.selected+'</span>'+
+          '<div class="title-row"><div><h1>DATA_RACK_INSTALL</h1><span class="code">'+t.revision+' · '+t.activeRev+'</span></div><span class="status '+statusClass+'">'+statusText+'</span></div>'+
+          '<p class="workspace-summary">'+t.summary+'</p>'+
+        '</section>'+
+        '<section class="section"><div class="section-head"><strong>Policy bindings</strong><span class="code">schema v1</span></div><div class="section-body config-fields">'+fields+'</div></section>'+
+        '<section class="section"><div class="section-head"><strong>'+t.usage+'</strong><span class="code">live</span></div><div class="section-body"><p class="body-copy">'+t.usageText+'</p></div></section>'+
+      '</main>'+
+      '<aside class="inspector-panel">'+
+        '<div class="inspector-card"><small>'+t.history+'</small><b>Rev 4 · '+(isDraft?t.draft:t.active)+'</b><p>Rev 3 · ACTIVE<br>Rev 2 · SUPERSEDED<br>Rev 1 · SUPERSEDED</p></div>'+
+        '<div class="inspector-card"><small>Validation</small><b>'+(invalid?'1 blocking issue':'No blocking issue')+'</b><p>'+(invalid?t.invalidText:'Dependencies resolve. Historical bindings stay unchanged.')+'</p></div>'+
+      '</aside>'+
+    '</div>'+
+    '<footer class="actionbar admin-actions">'+
+      (isDraft?'<button class="secondary">'+t.save+'</button><button class="secondary">'+t.validate+'</button><button class="secondary">'+t.compare+'</button><button class="primary">'+t.activate+'</button>':'<button class="primary">CREATE NEW REVISION</button>')+
+    '</footer>'+
+  '</div>';
+}
+
+const reviewCopy = {
+  en:{
+    product:"HILTECH · REVIEW", synced:"AUTHORITATIVE", title:"Rack installation · WO-0042", project:"Bank HQ · Data Center · Rack Room A",
+    clean:"READY TO REVIEW", missing:"MISSING EVIDENCE", rework:"REWORK DECISION", stale:"STALE VERSION",
+    evidence:"Evidence", checks:"Acceptance checks", submit:"Submitted version", decision:"Review decision",
+    accept:"ACCEPT WORK", reworkAction:"REQUEST REWORK", reject:"REJECT", refresh:"REFRESH SUBMISSION",
+    missingTitle:"Acceptance cannot complete", missingText:"Label photo is required by Evidence Policy R4 and is missing.",
+    staleTitle:"This submission changed", staleText:"You opened submitted version 18. Server is now version 19. Refresh before deciding.",
+    reworkTitle:"Rework is about to be requested", reworkText:"Reason will become part of Work history and the technician will receive the exact required correction."
+  },
+  ar:{
+    product:"هيلتك · المراجعة", synced:"الحالة المعتمدة", title:"تركيب الراك · WO-0042", project:"المقر الرئيسي للبنك · مركز البيانات · غرفة الراك A",
+    clean:"جاهز للمراجعة", missing:"إثبات ناقص", rework:"قرار إعادة عمل", stale:"إصدار قديم",
+    evidence:"الإثباتات", checks:"فحوص القبول", submit:"الإصدار المرسل", decision:"قرار المراجعة",
+    accept:"قبول الشغل", reworkAction:"طلب إعادة عمل", reject:"رفض", refresh:"تحديث الإرسال",
+    missingTitle:"مينفعش نكمل القبول", missingText:"صورة الليبل مطلوبة حسب Evidence Policy R4 ومش موجودة.",
+    staleTitle:"الإرسال اتغير", staleText:"إنت فتحت submitted version 18. السيرفر دلوقتي version 19. حدّث قبل القرار.",
+    reworkTitle:"هيتم طلب إعادة عمل", reworkText:"السبب هيتسجل في الـWork history والفني هيوصله التصحيح المطلوب بالظبط."
+  }
+};
+
+function renderReview(){
+  const t=reviewCopy[state.lang];
+  const dir=state.lang==="ar"?"rtl":"ltr";
+  const missing=state.mode==="missing";
+  const rework=state.mode==="rework";
+  const stale=state.mode==="stale";
+  const status=missing?t.missing:rework?t.rework:stale?t.stale:t.clean;
+  const statusClass=missing||stale?"conflict":rework?"rework":"ready";
+  let banner="";
+  if(missing) banner='<div class="banner conflict"><strong>'+t.missingTitle+'</strong><p>'+t.missingText+'</p></div>';
+  if(stale) banner='<div class="banner conflict"><strong>'+t.staleTitle+'</strong><p>'+t.staleText+'</p></div>';
+  if(rework) banner='<div class="banner rework"><strong>'+t.reworkTitle+'</strong><p>'+t.reworkText+'</p></div>';
+
+  const evidence=[
+    ["Front rack photo","READY"],
+    ["Rear rack photo","READY"],
+    ["Label photo",missing?"MISSING":"READY"],
+    ["Cable test result","READY"]
+  ].map(x=>'<div class="evidence-card '+(x[1]==="MISSING"?'bad':'')+'"><div><b>'+x[0]+'</b><small>Captured by technician · 10:42</small></div><span>'+x[1]+'</span></div>').join("");
+
+  document.getElementById("screen").innerHTML =
+  '<div class="app admin-app" dir="'+dir+'">'+
+    '<header class="topbar"><div class="top-left"><button class="icon-btn">✓</button><span class="product-word">'+t.product+'</span></div><span class="sync"><i></i>'+t.synced+'</span></header>'+
+    '<div class="content review-content">'+
+      '<section class="hero">'+banner+'<span class="kicker">'+t.project+'</span>'+
+        '<div class="title-row"><div><h1>'+t.title+'</h1><span class="code">'+t.submit+' · v18 · Instruction Rev 04</span></div><span class="status '+statusClass+'">'+status+'</span></div>'+
+      '</section>'+
+      '<div class="review-grid">'+
+        '<section class="section"><div class="section-head"><strong>'+t.evidence+'</strong><span class="code">Policy R4</span></div><div class="section-body evidence-grid">'+evidence+'</div></section>'+
+        '<section class="section"><div class="section-head"><strong>'+t.checks+'</strong><span class="code">Review R2</span></div><div class="section-body">'+
+          '<div class="review-check"><span class="dot">✓</span><div><b>Rack aligned and anchored</b><small>Accepted requirement</small></div></div>'+
+          '<div class="review-check"><span class="dot">✓</span><div><b>Cable bend radius</b><small>Accepted requirement</small></div></div>'+
+          '<div class="review-check '+(missing?'review-bad':'')+'"><span class="dot">'+(missing?'!':'✓')+'</span><div><b>Labeling complete</b><small>'+(missing?'Evidence missing':'Evidence matched')+'</small></div></div>'+
+        '</div></section>'+
+      '</div>'+
+      '<section class="section"><div class="section-head"><strong>'+t.decision+'</strong><span class="code">'+(stale?'blocked':'exact v18')+'</span></div><div class="section-body"><textarea class="review-note" placeholder="Reason / reviewer note">'+(rework?'Keep power/data separation through lower bend.':'')+'</textarea></div></section>'+
+    '</div>'+
+    '<footer class="actionbar admin-actions">'+
+      (stale?'<button class="primary">'+t.refresh+'</button>':
+       missing?'<button class="secondary">'+t.reworkAction+'</button><button class="danger-btn">'+t.reject+'</button>':
+       '<button class="secondary">'+t.reworkAction+'</button><button class="danger-btn">'+t.reject+'</button><button class="primary">'+t.accept+'</button>')+
+    '</footer>'+
+  '</div>';
+}
+
+const projectCopy={
+  en:{
+    product:"HILTECH · PROJECTS", title:"Bank HQ · Data Center", code:"PRJ-026", synced:"LIVE PROJECT",
+    healthy:"HEALTHY", attention:"ATTENTION", critical:"CRITICAL", hold:"ON HOLD",
+    progress:"Accepted progress", waiting:"Waiting on", work:"Work pipeline", resources:"Resource readiness", activity:"Activity",
+    signals:{healthy:["No active critical signals"],attention:["2 overdue Work Orders","1 blocked by site access"],critical:["Rack delivery milestone +4 days","Fluke-03 unavailable","3 Work Orders blocked"],hold:["Project lifecycle is ON_HOLD"]},
+    pct:{healthy:68,attention:61,critical:54,hold:54}
+  },
+  ar:{
+    product:"هيلتك · المشاريع", title:"المقر الرئيسي للبنك · مركز البيانات", code:"PRJ-026", synced:"المشروع مباشر",
+    healthy:"مستقر", attention:"يحتاج انتباه", critical:"حرج", hold:"متوقف",
+    progress:"التقدم المقبول", waiting:"منتظر على", work:"خط الشغل", resources:"جاهزية الموارد", activity:"النشاط",
+    signals:{healthy:["مفيش إشارات حرجة نشطة"],attention:["2 أمر شغل متأخر","1 متوقف بسبب دخول الموقع"],critical:["Milestone الراك متأخر 4 أيام","Fluke-03 غير متاح","3 أوامر شغل متوقفة"],hold:["حالة المشروع ON_HOLD"]},
+    pct:{healthy:68,attention:61,critical:54,hold:54}
+  }
+};
+
+function renderProject(){
+  const t=projectCopy[state.lang];
+  const dir=state.lang==="ar"?"rtl":"ltr";
+  const mode=state.mode;
+  const label=t[mode]||t.healthy;
+  const statusClass=mode==="healthy"?"ready":mode==="attention"?"rework":mode==="critical"?"conflict":"progress";
+  const pct=t.pct[mode]||68;
+  const signals=t.signals[mode]||t.signals.healthy;
+
+  const waitingRows = mode==="healthy"
+    ? [["Client access approval","Today · 14:00"],["Rack kit delivery","Tomorrow · 09:00"]]
+    : mode==="critical"
+      ? [["Client shutdown window","Overdue · 2d"],["Fluke-03 replacement","Blocked"],["Rack kit delivery","Overdue · 1d"]]
+      : [["Site access confirmation","Overdue · 6h"],["Rack kit delivery","Tomorrow · 09:00"]];
+
+  document.getElementById("screen").innerHTML=
+  '<div class="app admin-app" dir="'+dir+'">'+
+    '<header class="topbar"><div class="top-left"><button class="icon-btn">⌂</button><span class="product-word">'+t.product+'</span></div><span class="sync"><i></i>'+t.synced+'</span></header>'+
+    '<div class="content project-content">'+
+      '<section class="hero"><span class="kicker">Project Command Center</span><div class="title-row"><div><h1>'+t.title+'</h1><span class="code">'+t.code+' · baseline v7</span></div><span class="status '+statusClass+'">'+label+'</span></div></section>'+
+      '<div class="project-top-grid">'+
+        '<section class="section progress-card"><div class="section-head"><strong>'+t.progress+'</strong><span class="code">accepted only</span></div><div class="section-body"><div class="big-progress"><b>'+pct+'%</b><div><span style="width:'+pct+'%"></span></div><small>Accepted weight 34 / baseline 50</small></div></div></section>'+
+        '<section class="section"><div class="section-head"><strong>Health signals</strong><span class="code">explainable</span></div><div class="section-body">'+signals.map(x=>'<div class="signal-row"><span class="'+(mode==="critical"?'signal-danger':mode==="attention"?'signal-warn':'signal-ok')+'"></span><b>'+x+'</b></div>').join("")+'</div></section>'+
+      '</div>'+
+      '<div class="project-main-grid">'+
+        '<section class="section"><div class="section-head"><strong>'+t.waiting+'</strong><span class="code">'+waitingRows.length+' items</span></div><div class="section-body">'+waitingRows.map(x=>'<div class="waiting-row"><div><b>'+x[0]+'</b><small>'+x[1]+'</small></div><span>›</span></div>').join("")+'</div></section>'+
+        '<section class="section"><div class="section-head"><strong>'+t.work+'</strong><span class="code">live</span></div><div class="section-body"><div class="pipeline"><div><b>12</b><small>Ready</small></div><div><b>7</b><small>In progress</small></div><div><b>3</b><small>Blocked</small></div><div><b>4</b><small>Review</small></div><div><b>28</b><small>Accepted</small></div></div></div></section>'+
+        '<section class="section"><div class="section-head"><strong>'+t.resources+'</strong><span class="code">derived</span></div><div class="section-body"><div class="resource-row"><b>People</b><span class="status ready">READY</span></div><div class="resource-row"><b>Material</b><span class="status '+(mode==="critical"?'conflict':'ready')+'">'+(mode==="critical"?'BLOCKED':'READY')+'</span></div><div class="resource-row"><b>Equipment</b><span class="status '+(mode==="critical"?'conflict':'ready')+'">'+(mode==="critical"?'BLOCKED':'READY')+'</span></div><div class="resource-row"><b>Access</b><span class="status '+(mode==="attention"?'rework':'ready')+'">'+(mode==="attention"?'ATTENTION':'READY')+'</span></div></div></section>'+
+      '</div>'+
+      '<section class="section"><div class="section-head"><strong>'+t.activity+'</strong><span class="code">audit-backed</span></div><div class="section-body activity-line"><span>10:42 · Technician submitted WO-0042</span><span>10:37 · Asset AS-0048 checked out</span><span>09:58 · PM changed site access blocker</span></div></section>'+
+    '</div>'+
+  '</div>';
+}
+
 const stateSets = {
   technician: [
     ["ready","Ready / Online"],
@@ -225,6 +422,24 @@ const stateSets = {
     ["calibration","Calibration blocked"],
     ["collision","Checkout collision"],
     ["success","Success"]
+  ],
+  config: [
+    ["active","Active revision"],
+    ["draft","Draft editor"],
+    ["invalid","Invalid draft"],
+    ["conflict","Version conflict"]
+  ],
+  review: [
+    ["clean","Clean submission"],
+    ["missing","Missing evidence"],
+    ["rework","Rework decision"],
+    ["stale","Stale version"]
+  ],
+  project: [
+    ["healthy","Healthy"],
+    ["attention","Attention"],
+    ["critical","Critical"],
+    ["hold","On hold"]
   ]
 };
 
@@ -245,6 +460,9 @@ function renderStateControls(){
 
 function render(){
   if(state.screen==="warehouse") renderWarehouse();
+  else if(state.screen==="config") renderConfig();
+  else if(state.screen==="review") renderReview();
+  else if(state.screen==="project") renderProject();
   else renderTechnician();
 }
 
@@ -253,7 +471,13 @@ document.querySelectorAll("[data-screen]").forEach(btn=>{
     document.querySelectorAll("[data-screen]").forEach(x=>x.classList.remove("active"));
     btn.classList.add("active");
     state.screen=btn.dataset.screen;
-    state.mode=state.screen==="warehouse"?"available":"ready";
+    const defaults={technician:"ready",warehouse:"available",config:"active",review:"clean",project:"healthy"};
+    state.mode=defaults[state.screen]||"ready";
+    if(["config","review","project"].includes(state.screen)){
+      state.view="desktop";
+      document.getElementById("device").className="device desktop";
+      document.querySelectorAll("[data-view]").forEach(x=>x.classList.toggle("active",x.dataset.view==="desktop"));
+    }
     renderStateControls();
     render();
   });
