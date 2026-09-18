@@ -174,10 +174,10 @@ BLOCKING: PARTIAL — only for included integrations.
 - [x] Desktop viability decision — 50k dense-data render proof passed.
 - [x] Auth decision — Keycloak native OIDC / ADR-008 accepted.
 - [x] Authz decision — OpenFGA / ADR-009 accepted.
-- [ ] SQL/persistence decision.
+- [x] SQL/persistence decision — PostgreSQL + jOOQ accepted; exact schemas/codegen freeze later.
 - [ ] Object storage/provider.
 - [ ] Infra provider.
-- [ ] CI/CD toolchain.
+- [x] CI/CD control plane — GitHub Actions accepted; final action pinning/version re-check remains.
 - [ ] FINAL_STACK.md.
 - [ ] VERSION_MATRIX.md frozen.
 
