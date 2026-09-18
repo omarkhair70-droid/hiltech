@@ -1,24 +1,25 @@
 package com.hiltech.spike.android.e2e
 
 import android.content.Context
-import androidx.work.CoroutineWorker
+import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.hiltech.spike.shared.local.buildHiltechLocalDatabase
 import com.hiltech.spike.shared.local.getAndroidDatabaseBuilder
 import com.hiltech.spike.shared.network.HiltechApiClient
 import com.hiltech.spike.shared.sync.OfflineCommandSyncEngine
 import com.hiltech.spike.shared.sync.SyncSendResult
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.security.MessageDigest
 
 class Spike15SyncWorker(
     appContext: Context,
     workerParams: WorkerParameters,
-) : CoroutineWorker(
+) : Worker(
     appContext,
     workerParams,
 ) {
-    override suspend fun doWork(): Result {
+    override fun doWork(): Result = runBlocking {
         val baseUrl = inputData.getString(KEY_BASE_URL)
             ?: return Result.failure()
         val token = inputData.getString(KEY_TOKEN)
