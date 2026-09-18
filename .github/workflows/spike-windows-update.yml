@@ -161,7 +161,7 @@ jobs:
           Assert-FileValue $stateFile "state-from-v1"
 
           Invoke-App $exeV1 @("--register-protocol")
-          $command = (Get-ItemProperty "HKCU:\Software\Classes\hiltech\shell\open\command")."(default)"
+          $command = (Get-Item "HKCU:\Software\Classes\hiltech\shell\open\command").GetValue("")
           if (-not $command -or $command -notmatch "HILTECHSpike\.exe") {
             throw "hiltech:// protocol registration did not target packaged app"
           }
