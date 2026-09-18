@@ -341,12 +341,15 @@ If implementation would still require choosing fundamental data ownership, permi
 
 **NOT READY.**
 
-The remaining first-slice pre-code gates are:
+The remaining first-slice pre-code gate is:
 1. Complete actual rendered low-fi / RTL / conflict / adaptive visual proof.
-2. Run the final explicit stack/version and CI-action pin review.
-3. Resolve any contradiction exposed by those reviews.
-4. Call First-Slice Freeze Review.
-5. Only then repository bootstrap / production implementation.
+
+Final stack/version/CI-pin review is already PASS.
+
+After the visual proof:
+2. resolve any contradiction exposed by the rendered review,
+3. call First-Slice Freeze Review,
+4. only after PASS → repository bootstrap / production implementation.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging and DR rehearsals are activation/cutover gates unless they reveal a contract contradiction.
 
