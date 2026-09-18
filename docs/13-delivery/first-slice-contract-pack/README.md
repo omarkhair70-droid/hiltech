@@ -71,6 +71,12 @@ This pack is therefore **not a spike plan**.
 12. `12_ASSET_WAREHOUSE_CONTRACT.md`
    - implementation-facing Asset/Stock/Storage/Custody contract.
 
+13. `13_OPENFGA_MODEL_CANDIDATE.md`
+   - first-slice relationship model + application-obligation boundary.
+
+14. `14_FREEZE_GAP_REGISTER.md`
+   - narrow remaining blockers required before FIRST_SLICE_FREEZE = PASS.
+
 ---
 
 # Editing Rule
