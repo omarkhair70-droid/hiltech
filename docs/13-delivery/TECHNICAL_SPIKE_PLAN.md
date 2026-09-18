@@ -41,7 +41,7 @@ Tested line:
 - JDK 17.
 
 Important:
-This accepts the Android + Windows KMP/Compose platform feasibility. It does **not** yet finalize the entire client stack; RTL/adaptive, dense desktop data, local DB/offline, auth, and update spikes remain.
+This accepts the Android + Windows KMP/Compose platform feasibility. RTL/adaptive, dense desktop, local DB/offline and native auth have since passed their own spikes. Windows deployment/update and Android field/background operational spikes remain active before full technical freeze.
 
 ---
 
@@ -188,6 +188,20 @@ smooth performance and credible finance/warehouse UX.
 
 This spike can determine whether Compose Desktop remains viable or whether specialized alternative is needed.
 
+**Result 2026-09-18: ACCEPT — COMPOSE DESKTOP DENSE-DATA FEASIBILITY PASSED.**
+
+Evidence:
+- 50,000 synthetic payroll rows.
+- sort/filter/group passed.
+- 10,000-row bulk selection passed.
+- Desktop compile passed.
+- real Compose Desktop process reached a rendered frame under Xvfb.
+- runtime marker: `HILTECH_DENSE_UI_RENDER_PASS rows=50000`.
+
+GitHub Actions run: 35305553872.
+
+This accepts platform feasibility, not final table design, office-hardware performance budgets or human UX review.
+
 ---
 
 # SPIKE-07 — Windows Packaging / Update
@@ -296,6 +310,29 @@ Prove:
 
 Pass:
 reliable module interaction without external broker.
+
+**Result 2026-09-18: ACCEPT — MODULAR MONOLITH + DURABLE MODULE EVENT RECOVERY PASSED.**
+
+Evidence:
+- Spring Modulith module verification passed.
+- transactional WorkCompleted publication passed.
+- audit listener intentionally failed.
+- failed publication remained durable.
+- application/database context restarted.
+- official explicit resubmission recovered the publication.
+- audit projection wrote once.
+- incomplete publication registry cleared.
+
+GitHub Actions run: 35304479330.
+
+Tested line:
+- Spring Boot 4.1.1,
+- Spring Modulith 2.1.1,
+- Kotlin 2.4.20,
+- Java 21.
+
+Operational direction:
+observe and explicitly resubmit incomplete publications; do not assume startup replay as an invisible reliability mechanism.
 
 ---
 
