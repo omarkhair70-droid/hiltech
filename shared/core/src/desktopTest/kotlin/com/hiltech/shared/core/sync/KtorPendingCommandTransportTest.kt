@@ -11,28 +11,50 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class KtorPendingCommandTransportTest {
     @Test
     fun frozenWorkCommandCarriesAuthIdempotencyCorrelationAndNativeMetadata() = runBlocking {
-        val engine = MockEngine { request ->
-            assertEquals("/v1/work-orders/work-42/start", request.url.encodedPath)
-            assertEquals("Bearer access-token", request.headers[HttpHeaders.Authorization])
-            assertEquals("op-42", request.headers["Idempotency-Key"])
-            assertEquals("corr-42", request.headers["X-Correlation-Id"])
-            assertEquals("android", request.headers["X-Client-Platform"])
-            assertEquals("0.1.0", request.headers["X-Client-Version"])
-            assertEquals("device-42", request.headers["X-Device-Installation-Id"])
-            assertEquals("00-trace-parent", request.headers["traceparent"])
+        data class CapturedRequest(
+            val path: String,
+            val authorization: String?,
+            val idempotencyKey: String?,
+            val correlationId: String?,
+            val platform: String?,
+            val clientVersion: String?,
+            val installationId: String?,
+            val traceParent: String?,
+            val body: String,
+        )
 
-            val body = request.body as TextContent
-            assertTrue(body.text.contains("\"operationId\":\"op-42\""))
-            assertTrue(body.text.contains("\"baseVersion\":7"))
-            assertTrue(body.text.contains("\"clientOccurredAt\":\"2023-11-14T22:13:20Z\""))
-            assertTrue(body.text.contains("\"localSiteSessionRef\":\"site-session\""))
+        var captured: CapturedRequest? = null
+
+        val engine = MockEngine { request ->
+            val body = (request.body as TextContent).text
+            captured = CapturedRequest(
+                path = request.url.encodedPath,
+                authorization = request.headers[HttpHeaders.Authorization],
+                idempotencyKey = request.headers["Idempotency-Key"],
+                correlationId = request.headers["X-Correlation-Id"],
+                platform = request.headers["X-Client-Platform"],
+                clientVersion = request.headers["X-Client-Version"],
+                installationId = request.headers["X-Device-Installation-Id"],
+                traceParent = request.headers["traceparent"],
+                body = body,
+            )
+
+            println(
+                "HILTECH_KTOR_CAPTURE path=${request.url.encodedPath} " +
+                    "headers=${request.headers.entries()} body=$body",
+            )
 
             respond(
                 content = """{"workOrderId":"work-42","version":8,"correlationId":"server-corr","duplicateReplay":false}""",
@@ -50,6 +72,22 @@ class KtorPendingCommandTransportTest {
                 payloadJson = """{"localSiteSessionRef":"site-session"}""",
             ),
         )
+
+        val request = assertNotNull(captured)
+        assertEquals("/v1/work-orders/work-42/start", request.path, "Frozen StartWork route drifted.")
+        assertEquals("Bearer access-token", request.authorization, "Bearer token header drifted.")
+        assertEquals("op-42", request.idempotencyKey, "Idempotency-Key must equal operationId.")
+        assertEquals("corr-42", request.correlationId, "Correlation header drifted.")
+        assertEquals("android", request.platform, "Native platform header drifted.")
+        assertEquals("0.1.0", request.clientVersion, "Native version header drifted.")
+        assertEquals("device-42", request.installationId, "Installation identity header drifted.")
+        assertEquals("00-trace-parent", request.traceParent, "W3C traceparent header drifted.")
+
+        val jsonBody = Json.parseToJsonElement(request.body).jsonObject
+        assertEquals("op-42", jsonBody["operationId"]?.jsonPrimitive?.content)
+        assertEquals(7L, jsonBody["baseVersion"]?.jsonPrimitive?.long)
+        assertEquals("2023-11-14T22:13:20Z", jsonBody["clientOccurredAt"]?.jsonPrimitive?.content)
+        assertEquals("site-session", jsonBody["localSiteSessionRef"]?.jsonPrimitive?.content)
 
         assertEquals(
             CommandTransportResult.Applied(
