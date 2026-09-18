@@ -113,12 +113,13 @@ Accepted:
 - SPIKE-12 binary evidence upload.
 - SPIKE-13 WorkManager background sync.
 - SPIKE-14 observability.
+- SPIKE-15 end-to-end architectural vertical + Ktor shared networking.
 
-Active / next technical gate:
-- SPIKE-15 end-to-end PM -> technician offline -> supervisor -> PM proof.
-- SPIKE-15 also acts as the final Ktor/shared-networking acceptance gate.
+**Gate status: CLOSED / ACCEPTED.**
 
-All isolated technical spikes required before SPIKE-15 are now accepted.
+All required technical spikes 01–15 are accepted.
+Ktor Client is accepted through ADR-007.
+The remaining pre-code work is no longer technical-feasibility discovery; it is reality validation, exact contracts, design freeze, provider/runtime decisions and Freeze Review.
 
 Every spike ends:
 ACCEPT / REJECT / MODIFY.
