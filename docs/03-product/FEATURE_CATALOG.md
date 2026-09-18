@@ -44,6 +44,24 @@ See `docs/13-delivery/DEFINITION_OF_COMPLETE.md`.
 - CORE-ACT-003 Audit history viewer
 - CORE-ACT-004 Mentions/contextual comments
 
+# CORE — Configuration / Policy
+
+- CORE-CFG-001 Configuration Center
+- CORE-CFG-002 Work Type definitions
+- CORE-CFG-003 Readiness policies
+- CORE-CFG-004 Evidence policies
+- CORE-CFG-005 Review / acceptance policies
+- CORE-CFG-006 Field tracking policies
+- CORE-CFG-007 Warehouse / project / site storage configuration
+- CORE-CFG-008 Asset / stock category configuration
+- CORE-CFG-009 Policy versioning / effective dates
+- CORE-CFG-010 Policy change audit
+- CORE-CFG-011 Role / team / relationship configuration
+- CORE-CFG-012 Delegation configuration
+- CORE-CFG-013 Notification / escalation policies
+- CORE-CFG-014 Templates / checklists
+- CORE-CFG-015 Configuration import/export / controlled seed
+
 # CTRL — Executive Control
 
 - CTRL-001 Company Pulse
