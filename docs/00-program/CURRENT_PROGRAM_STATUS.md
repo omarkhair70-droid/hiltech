@@ -1,11 +1,11 @@
 # HILTECH Program Status
 
-Updated: 2026-09-18
+Updated: 2026-09-19
 
 ## Overall Stage
-**FIRST-SLICE PRE-CODE FREEZE CLOSURE**
+**FIRST-SLICE FROZEN / REPOSITORY BOOTSTRAP NEXT**
 
-Freeze status: **NOT READY — SOLE CURRENT PRE-CODE BLOCKER IS ACTUAL RENDERED DESIGN PROOF**
+Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
 ## Meaning
 The first production slice has moved beyond broad product/architecture discovery.
@@ -19,13 +19,19 @@ Provider architecture is also selected:
 - DigiCert OV + KeyLocker,
 - HILTECH Update Service.
 
-The remaining pre-code work is a narrow Freeze closure:
-1. actual rendered design/RTL/conflict/adaptive proof,
-2. final stack/version + CI-action pin review,
-3. contradiction cleanup if either review exposes one,
-4. First-Slice Freeze Review.
+The first-slice Freeze Review is complete and PASS.
 
-Production code is still intentionally not started.
+Accepted:
+- contract consistency,
+- final stack/version review,
+- provider architecture,
+- rendered interactive design proof.
+
+Canonical decision:
+`docs/13-delivery/first-slice-contract-pack/24_FIRST_SLICE_FREEZE_DECISION_2026-09-19.md`
+
+Production feature implementation has not started yet.
+The next phase is repository/engineering bootstrap from the frozen contracts.
 
 ---
 
@@ -45,9 +51,9 @@ Production code is still intentionally not started.
 | Automation/notifications | FIRST PASS | Needs exact policy/trigger registry |
 | Information architecture | FIRST PASS | Final navigation not frozen |
 | UI reference research | PASS 01 + 02 | More visual/component research can continue |
-| Mobile surface | LOW-FI PARTIAL / SPECS COMPLETE | Existing M01–M05; M06/M07 exact build pack ready; actual canvas continuation Figma quota-blocked |
-| Desktop surface | LOW-FI PARTIAL / SPECS COMPLETE | D01/D02 existing; Configuration/Review and remaining proof specified; actual canvas continuation quota-blocked |
-| Design thesis/system | FIRST PASS / VISUAL FREEZE OPEN | Structural interaction contract strong; final rendered RTL/conflict/adaptive proof still blocks Freeze |
+| Mobile surface | FIRST-SLICE RENDERED PROOF PASS | Technician/Warehouse states + Arabic RTL + phone/tablet captured in interactive prototype |
+| Desktop surface | FIRST-SLICE RENDERED PROOF PASS | Configuration/Review/Project/Navigation rendered and reviewed |
+| Design thesis/system | LOW-FI FIRST-SLICE FREEZE PASS | 37/37 rendered captures; final brand/visual craft remains later non-blocking work |
 | Offline/sync | SPIKE-PROVEN CORE | Room queue, idempotent retry, stale conflict, WorkManager reconnect and real Ktor replay proven; final field UX/policy remains |
 | Integration/hardware | FIRST PASS | Real vendors/systems unknown |
 | API/read models | FIRST-SLICE CONTRACT v0.3 | /v1 routes, DTO/error/cursor/visibility/OpenAPI publication semantics closed for first slice |
@@ -55,9 +61,9 @@ Production code is still intentionally not started.
 | System architecture | FIRST-SLICE CONTRACT-READY | Core architecture proven; provider instantiation now OCI baseline |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted; remaining work is freeze closure, not technical feasibility |
-| Implementation order | PROPOSED v0.2 | Technical spikes closed; first-slice contract/provider/design Freeze closure remains |
-| Production code | NOT STARTED | Intentionally |
+| Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
+| Implementation order | FIRST-SLICE FROZEN / PHASE 0 NEXT | Repository Bootstrap is now authorized by the scoped Freeze decision |
+| Production code | NOT STARTED | Next step is bootstrap/foundation generation, then vertical implementation after Bootstrap Verification |
 
 ---
 
@@ -159,7 +165,7 @@ Still freeze-dependent:
 - production Flyway SQL/jOOQ generated code are post-Freeze bootstrap artifacts; their pre-code generation/constraint conventions are already contract-defined.
 - Keycloak 26.7.4 + native OIDC Authorization Code/PKCE — **SPIKE-08 accepted**.
 - WorkManager 2.11.2 background execution — **SPIKE-13 accepted**.
-- Windows MSI installer-swap operational baseline — **SPIKE-07 / ADR-012 accepted**; exact enterprise distribution/updater and production signing remain open.
+- Windows MSI installer-swap operational baseline — **SPIKE-07 / ADR-012 accepted**; DigiCert OV + KeyLocker + HILTECH Update Service selected via ADR-019.
 - OCI production infrastructure baseline — **ADR-014 accepted PRE-FREEZE**; Jeddah tenancy/quota/latency validation remains.
 - OCI Object Storage + KMS + Secret Management accepted provider baseline.
 - OpenTelemetry Collector → OCI observability baseline accepted while telemetry contract stays vendor-neutral.
@@ -196,8 +202,8 @@ Contract conversion status:
 - Evidence storage/security contract structurally closed.
 - OCI infrastructure/provider baseline accepted via ADR-014 and first-slice infrastructure contract.
 - Representative internal reality fixtures added.
-- remaining **pre-code** work is actual rendered visual/design proof only.
-- OCI cutover/ops and Windows signing certificate activation remain post-contract production-activation work.
+- **first-slice pre-code Freeze work is complete**.
+- OCI cutover/ops and Windows signing certificate activation remain post-Freeze production-activation work.
 
 Final stack/version review:
 - **PASS** on 2026-09-18,
@@ -208,10 +214,12 @@ Final stack/version review:
 - proven first-slice pins retained deliberately where newer versions would invalidate proof without required benefit,
 - production GitHub Actions immutable SHA baseline selected.
 
-Immediate pre-code continuation:
-1. Complete actual rendered first-slice low-fi / RTL / conflict / adaptive proof when Figma MCP quota permits.
-2. Perform First-Slice Freeze Review.
-3. After Freeze: repository bootstrap → generated DB/API/Room/Auth/IaC/test foundations → production vertical implementation.
+Immediate continuation:
+1. Create Repository Bootstrap branch from the frozen main state.
+2. Generate monorepo/Gradle/module foundation.
+3. Generate DB/API/Room/Auth/IaC/test skeletons from the frozen contracts.
+4. Run Bootstrap Verification gates.
+5. Begin the first production vertical only after those foundation gates are green.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 
@@ -236,12 +244,14 @@ Reality validation is now reduced to a finite External Facts Register and interv
 
 There is no general management-approval blocker recorded.
 
-Remaining freeze blockers are evidence-based:
-1. unresolved real-company facts for affected domains,
-2. final design/RTL pass,
-3. exact DB/API/local/auth/file contract freeze,
-4. production activation/cutover evidence where required after contract Freeze,
-5. final stack/ADR/schema lock derived from those results.
+First-slice Freeze blockers: **NONE**.
+
+Still open elsewhere in the program:
+1. later-domain reality/contracts when their implementation phase is reached,
+2. pilot seed/data/device setup,
+3. production activation/cutover evidence,
+4. final high-fidelity visual craft,
+5. broader whole-program completion gates.
 
 Work that does not depend on those facts may continue immediately.
 
