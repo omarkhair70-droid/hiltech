@@ -727,8 +727,6 @@ Commands/audit diagnostics:
 
 # Open local-schema items before final freeze
 
-- exact Room type converters/UUID representation.
-- payload_json vs typed binary serialization.
 - exact local encryption-at-rest implementation.
 - cache size/eviction numbers.
 - supported migration-version window.
@@ -737,3 +735,61 @@ Commands/audit diagnostics:
 
 Current:
 **Android first-slice Room schema is specific enough to create entities/DAOs/migration skeletons after Freeze.**
+
+
+---
+
+# Local representation conventions
+
+## UUID
+
+Room stores UUID domain IDs as canonical lowercase string/TEXT.
+
+Reasons:
+- KMP/platform portability.
+- stable wire/local representation.
+- avoids platform-specific binary UUID adapters.
+
+Domain layer may wrap IDs in typed value classes.
+
+## Time
+
+Instant is stored as epoch milliseconds or ISO string only through one shared converter contract.
+Candidate preference:
+- epoch milliseconds Long for indexed/sortable local fields.
+- wire remains ISO-8601 Instant.
+
+Do not mix representations per entity.
+
+## Command payload serialization
+
+PendingCommand payload:
+- UTF-8 JSON.
+- kotlinx.serialization.
+- explicit commandType discriminator stored outside payload.
+- payloadVersion integer required.
+- unknown persisted payload versions are never interpreted as current schema.
+
+The raw JSON is internal local persistence, not public API truth.
+
+## JSON network compatibility
+
+Client response decoder:
+- additive-response tolerant.
+- unknown response fields ignored.
+
+Command/request DTOs remain compile-time typed.
+Server domain validation rejects invalid semantic values.
+
+## Queue ordering
+
+localSequence is monotonically increasing per installation/database.
+operationId is global semantic retry identity.
+Ordering never substitutes for dependency edges.
+
+## Database write pattern
+
+- all local state + pending command writes happen transactionally.
+- WorkManager enqueue happens after successful DB transaction.
+- worker can be recreated entirely from Room state after process death.
+
