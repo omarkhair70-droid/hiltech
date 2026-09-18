@@ -85,3 +85,17 @@ Revisit if:
 - Windows deployment/update becomes operationally unsuitable,
 - critical native integration requires excessive divergence,
 - future supported versions break the tested architecture materially.
+
+
+## SPIKE-06 follow-up — 2026-09-18
+
+The dense-desktop revisit trigger has been tested and did **not** force a platform change.
+
+GitHub Actions run 35305553872 passed:
+- 50,000-row representative payroll data operations,
+- 10,000-row bulk selection,
+- desktop compile,
+- a real Compose Desktop first rendered frame under Xvfb.
+
+Result:
+Compose Desktop remains the accepted Windows UI baseline. Final table component design and real office-hardware performance budgets remain open.
