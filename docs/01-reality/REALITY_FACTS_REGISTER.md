@@ -113,6 +113,79 @@ Validation required with Ahmed:
 
 ---
 
+## RF-004 — HILTECH operates with a small flexible field organization
+Status: **INTERNAL_REPORTED**
+Date: 2026-09-18
+
+Reported reality:
+- company operations are handled by a small core management/engineering group,
+- Mohamed and Ahmed are central office/management figures,
+- there is another Mohamed in the company,
+- the engineering layer is small (reported approximately two engineers),
+- most execution capacity is field technicians rather than a large departmental hierarchy.
+
+Product consequence:
+- first-release organization model must support small-team reality without forcing enterprise department structure,
+- Team/Role structures should remain lightweight,
+- Work/Project assignment may target named people or small field crews directly,
+- authorization must model real authority, not assume many management layers.
+
+Validation note:
+Exact staff count/reporting lines can still be corrected later without changing the core product architecture.
+
+---
+
+## RF-005 — Main warehouse/storage is at the Maadi headquarters
+Status: **INTERNAL_REPORTED**
+Date: 2026-09-18
+
+Reported reality:
+- the company headquarters in Maadi contains the main tool/equipment storage area,
+- the storage area is neither tiny nor a large distribution warehouse,
+- the number of tools is not extremely large,
+- many tools are high-value and therefore custody/history matters more than inventory scale.
+
+Product consequence:
+- optimize first Warehouse experience for high-value custody and fast issue/return,
+- do not design the first release as a large multi-warehouse logistics ERP,
+- serialized Asset identity and custody are more important than massive SKU throughput.
+
+---
+
+## RF-006 — Remote projects can have temporary site stock/storage
+Status: **INTERNAL_REPORTED**
+Date: 2026-09-18
+
+Reported reality:
+For remote work such as Alamein, cable cartons/material may be stored temporarily inside/near the project buildings rather than returning to Maadi every day.
+
+Product consequence:
+- distinguish Main Warehouse from temporary Project/Site storage,
+- SiteStock/ProjectStorage must be representable without pretending every temporary location is a full Warehouse,
+- material location/custody must remain tied to Project/Site context,
+- direct project consumption/return must be possible.
+
+---
+
+## RF-007 — Field crews are small and work patterns vary by project type
+Status: **INTERNAL_REPORTED**
+Date: 2026-09-18
+
+Reported examples:
+- data-center work at a bank head-office site included rack installation with a small field team and a limited tool set,
+- Alamein work included cable pulling through residential/building areas with approximately two technicians working through multiple buildings per day,
+- another reported job involved a factory/site for an energy-drink manufacturer,
+- a common field shape can be one engineer plus two technicians, while some work can be handled by technicians directly.
+
+Product consequence:
+- WorkOrder must support single-user and small-crew assignment,
+- Project/Site/Area/Building context matters,
+- daily production can be expressed as repeated WorkOrders/units of work rather than one giant task,
+- offline/site navigation and lightweight field execution are first-class,
+- evidence/readiness rules must vary by work type rather than be universally heavy.
+
+---
+
 # High-Priority Unknowns
 
 ## RF-010 — Payroll source of truth
@@ -155,16 +228,20 @@ Owner for validation: Ahmed/Mohamed.
 ---
 
 ## RF-013 — Warehouse physical-control reality
-Status: **UNKNOWN / INTERNAL CONTEXT EXISTS**
-Need direct walkthrough:
-- doors/keys/access,
-- responsible people,
-- high-value assets,
-- current records,
-- issue/return process,
-- calibration,
-- cameras,
-- direct-to-site delivery.
+Status: **INTERNAL_REPORTED / PARTIALLY OPEN**
+Known:
+- main storage is at the Maadi headquarters,
+- inventory is not huge by count,
+- tools/equipment can be high-value,
+- remote projects may hold temporary project/site stock.
+
+Still useful to validate:
+- exact responsible people,
+- current issue/return practice,
+- calibration-required tool classes,
+- current records/labels,
+- physical access/cameras,
+- whether any final checkout needs offline capability.
 
 Owner for validation: Warehouse + Mohamed.
 
