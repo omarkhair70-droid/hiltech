@@ -1008,32 +1008,112 @@ Do not index every field speculatively.
 
 ---
 
-# Flyway candidate convention
+# Flyway convention — first-slice baseline
 
-Before bootstrap freeze:
-- module-owned migration directories.
-- globally deterministic ordering.
-- empty-database migration test.
-- upgrade-from-supported-version migration test.
-- no assumption that destructive DB rollback is safe.
-- release rollback must remain compatible with forward schema strategy.
+Canonical migration root:
+- database/migrations
 
-Exact filename convention/baseline number remain final-freeze choices.
+One global ordered stream is used for the modular monolith.
+
+Filename:
+- VNNNN__module__description.sql
+- four-digit global version, zero-padded.
+- example: V0005__work__create_work_order.sql
+
+Initial bootstrap ordering:
+- V0001 platform foundations
+- V0002 configuration
+- V0003 identity_organization
+- V0004 projects_sites
+- V0005 work
+- V0006 warehouse_assets
+- V0007 evidence_documents
+- V0008 authorization_projection
+- V0009 first_slice_indexes_projections
+
+Rules:
+- later migrations continue the next global version; no per-module duplicate version spaces.
+- module name in filename declares ownership.
+- a migration may reference an earlier module through FK only when the referenced table already exists.
+- table ownership does not permit cross-module business writes.
+- PostgreSQL transactional DDL is used where supported.
+- no baselineOnMigrate in normal production.
+- fresh supported database migrates from V0001.
+- importing/pre-existing legacy data uses a separate controlled baseline/import plan.
+- no destructive rollback assumption; use expand/contract or forward-fix migrations.
+- release rollback must remain compatible with the forward schema.
+- repeatable migrations are avoided for authoritative table structure; use them only for explicitly safe derived views/functions if later needed.
+
+CI:
+- start PostgreSQL 18.6.
+- migrate empty DB V0001 -> current.
+- migrate fixture of every supported prior release -> current.
+- fail on checksum drift.
 
 ---
 
-# jOOQ candidate convention
+# jOOQ convention — first-slice baseline
 
-- generated from authoritative PostgreSQL schema.
-- generated code isolated from domain/application layers.
-- repository/adapter layer uses jOOQ generated types.
-- domain objects do not become jOOQ records.
-- CI verifies schema/codegen consistency.
+- use jOOQ KotlinGenerator.
+- generated from a temporary PostgreSQL 18.6 database after Flyway migrations apply.
+- generated root: server/build/generated-src/jooq/main
+- generated base package: com.hiltech.server.generated.jooq
+- generated source is **not committed**.
+- Gradle/CI regenerates it deterministically.
+- server persistence adapters/repositories may import generated jOOQ types.
+- domain/application modules do not expose jOOQ records.
 
-Still to decide:
-- generated code committed vs CI-generated.
-- exact packages.
-- forced-type/enum mappings.
+Type mapping:
+- PostgreSQL uuid -> java.util.UUID at persistence boundary.
+- timestamptz -> OffsetDateTime at jOOQ boundary; adapter maps to domain Instant.
+- date -> LocalDate.
+- numeric -> BigDecimal.
+- jsonb -> jOOQ JSONB at persistence boundary; adapter maps to typed Kotlin structures.
+- status/state fields use varchar + CHECK constraints, not PostgreSQL enum types, to keep migrations additive/flexible.
+- domain adapters map checked strings to Kotlin enums/value classes.
+
+CI:
+- Flyway migrate.
+- jOOQ generate.
+- Kotlin compile.
+- schema/codegen consistency check.
+- no generated-source diff is expected in Git because generated sources are build output.
 
 Current:
-**table/constraint/ownership shapes are concrete enough for migration skeleton design; final DDL waits on narrow freeze items.**
+**PostgreSQL ownership, table shapes, Flyway convention and jOOQ generation are contract-defined. Exact DDL constraints/indexes are closed in the companion constraint contract; production SQL files are generated only after FIRST_SLICE_FREEZE.**
+
+
+---
+
+# Foreign-key / delete baseline
+
+Default:
+- ON DELETE RESTRICT for authoritative business parents/history.
+- ON DELETE CASCADE only for true owned child rows whose history cannot outlive parent and whose parent itself is legally deletable.
+- most production business aggregates are retired/closed, not physically deleted.
+- optional display/helper references may use SET NULL only when losing the reference does not destroy audit meaning.
+
+Cross-module foreign keys are allowed for stable identity/integrity references in this modular monolith.
+They do not permit cross-module table mutation.
+
+Polymorphic target fields such as assignment target type/id are application/OpenFGA validated because a single SQL FK cannot target multiple table types.
+
+---
+
+# State / enum persistence
+
+Use varchar + CHECK constraints for first-slice finite states.
+
+Reasons:
+- simpler additive Flyway evolution.
+- no PostgreSQL enum type migration coupling.
+- explicit DB constraint still rejects unknown values.
+
+Kotlin domain enums remain the application semantic type.
+
+---
+
+# Constraint contract reference
+
+Exact first-slice FK/unique/check/index contract:
+docs/13-delivery/first-slice-contract-pack/16_DATABASE_DDL_CONSTRAINT_CONTRACT.md
