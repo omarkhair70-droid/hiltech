@@ -353,6 +353,19 @@ Client:
 Pass:
 one failed workflow can be diagnosed end-to-end without sensitive-data leakage.
 
+**Result 2026-09-18: ACCEPT — END-TO-END TRACE/CORRELATION CONTRACT PASSED.**
+
+Evidence:
+- W3C traceparent propagated from client boundary to server.
+- client.sync → api.command → command.complete_work → db.transaction / event.listener.audit shared one trace ID.
+- parent/child relationships were verified.
+- failed listener exported ERROR status.
+- client diagnostic preserved correlationId/operationId/error code.
+- employee email/phone, salary, bearer token and payload secrets were excluded from telemetry attributes.
+
+GitHub Actions run: 35305996737.
+Tested OpenTelemetry Java: 1.66.0.
+
 ---
 
 # SPIKE-15 — End-to-End Vertical Proof
