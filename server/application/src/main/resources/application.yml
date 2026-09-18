@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: hiltech-server
+  datasource:
+    url: ${HILTECH_DB_URL:jdbc:postgresql://localhost:5432/hiltech}
+    username: ${HILTECH_DB_USER:hiltech}
+    password: ${HILTECH_DB_PASSWORD:hiltech}
+  flyway:
+    enabled: true
+    locations: filesystem:${HILTECH_MIGRATIONS_PATH:database/migrations}
+
+server:
+  port: ${HILTECH_SERVER_PORT:8080}
