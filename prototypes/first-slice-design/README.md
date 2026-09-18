@@ -10,14 +10,21 @@ Purpose:
 - expose bad interaction decisions while they are cheap to change,
 - provide a visual/interactive reference next to the written contracts.
 
-Current screen:
+Current screens:
 - Technician Job Detail
+- Warehouse Checkout
 
-Current simulated states:
+Technician simulated states:
 - READY / ONLINE
 - IN PROGRESS / OFFLINE
 - CONFLICT
 - REWORK REQUIRED
+
+Warehouse simulated states:
+- AVAILABLE
+- CALIBRATION BLOCKED
+- CHECKOUT COLLISION
+- SUCCESS
 
 Current viewport proofs:
 - Phone
