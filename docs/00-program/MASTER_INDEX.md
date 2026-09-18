@@ -80,6 +80,7 @@ Start here:
 10. `../13-delivery/FIRST_PRODUCTION_SLICE_CONTRACT_READINESS_2026-09-18.md` — post-spike readiness/blocker map for the first production vertical.
 11. `../01-reality/FIRST_PRODUCTION_SLICE_REALITY_CLOSURE.md` — minimum real-company evidence required to freeze the first vertical.
 12. `../13-delivery/first-slice-contract-pack/README.md` — fillable DB/API/local/auth/file/UI/test/freeze contract pack consumed by repository bootstrap.
+13. `../03-product/CONFIGURABLE_OPERATING_MODEL.md` — canonical rule separating configurable company policy from hard-coded product invariants.
 
 ## Current planning coverage
 
