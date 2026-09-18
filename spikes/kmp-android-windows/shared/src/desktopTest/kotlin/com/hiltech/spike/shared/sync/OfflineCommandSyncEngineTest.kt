@@ -52,6 +52,7 @@ class OfflineCommandSyncEngineTest {
 
         reopenedDatabase.close()
         dbFile.delete()
+        Unit
     }
 
     @Test
@@ -93,6 +94,7 @@ class OfflineCommandSyncEngineTest {
 
         database.close()
         dbFile.delete()
+        Unit
     }
 
     @Test
@@ -133,6 +135,7 @@ class OfflineCommandSyncEngineTest {
 
         database.close()
         dbFile.delete()
+        Unit
     }
 
     private fun workOrderCommands(): List<PendingCommandEntity> =
