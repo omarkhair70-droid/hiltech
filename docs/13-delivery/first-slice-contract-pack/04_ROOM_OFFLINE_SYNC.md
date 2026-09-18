@@ -1,6 +1,6 @@
 # 04 — Room / Offline / Sync Contract
 
-Status: **CONTRACT CANDIDATE v0.2 / LOCAL ENTITY SHAPES DEFINED**
+Status: **CONTRACT CANDIDATE v0.3 / LOCAL STORAGE + RETRY POLICY CLOSED**
 Date: 2026-09-18
 
 ## Accepted technical baseline
@@ -313,11 +313,11 @@ Candidate baseline:
 - object version remains available for targeted refresh.
 - realtime events are hints; local DB remains render source.
 
-Still to freeze:
-- exact cursor token format,
-- endpoint/resource grammar,
-- invalidation rules by read model,
-- retention of old bundle revisions.
+Closed baseline:
+- cursor token contract is the API opaque stateless cursor.
+- local cursor scope keys are defined below.
+- read-model invalidation is explicit per scope.
+- bundle retention/eviction follows OfflineStoragePolicy below.
 
 ---
 
@@ -336,14 +336,24 @@ Candidate work names:
 - periodic-refresh
 - explicit-user-retry
 
-Exact scheduling/backoff constants remain implementation freeze details.
+Retry contract:
+- ambiguous mutation failures are retried through the durable queue using the same operationId; no new semantic command is invented.
+- initial retry delay: 30 seconds.
+- exponential schedule: 30s -> 1m -> 2m -> 4m -> 8m -> 15m.
+- cap: 15 minutes while the app/device remains eligible to retry.
+- apply +/-20% jitter to avoid synchronized clients.
+- 401/token-expired pauses command retry until token refresh/re-auth completes.
+- 403/404/409/422 are typed deny/conflict/terminal outcomes, not generic network retries.
+- 429/503 and declared retryable 5xx use Retry-After when supplied, otherwise the schedule above.
+- evidence upload retries use the same schedule while preserving local bytes.
+- WorkManager constraints gate execution; nextRetryAt remains durable in Room.
 
 ---
 
 # 11. Local migration contract
 
 Must support:
-- forward Room migration from every supported app version.
+- forward Room migration from every schema version that can legally update directly to the current app release.
 - migration test fixtures.
 - pending command/evidence preservation.
 - policy-binding preservation.
@@ -351,8 +361,22 @@ Must support:
 - contractVersion/payloadVersion handling for queued commands.
 - app update with pending commands.
 
-Candidate rule:
+Rule:
 if a queued command payload version is no longer executable, it becomes FAILED_TERMINAL/REQUIRES_APP_UPDATE_MIGRATION with preserved raw intent/evidence, not silently discarded.
+
+## Migration support window
+
+Every release declares:
+- currentRoomSchemaVersion
+- minDirectMigratableRoomSchemaVersion
+- supportedPendingPayloadVersions
+
+CI contains migration fixtures from every schema version >= minDirectMigratableRoomSchemaVersion.
+
+A device older than that boundary:
+- is not destructively reset,
+- must use an intermediate update/support recovery path,
+- keeps unresolved evidence/command data until migrated or explicitly exported/recovered.
 
 ---
 
@@ -727,11 +751,13 @@ Commands/audit diagnostics:
 
 # Open local-schema items before final freeze
 
-- exact local encryption-at-rest implementation.
-- cache size/eviction numbers.
-- supported migration-version window.
-- exact pull/cursor scope keys.
-- whether Desktop uses same local schema abstraction or a platform-specific equivalent.
+No broad Android local/offline architecture decision remains.
+
+Final implementation checks:
+- exact Room converter code/options.
+- release-specific storage-policy seed after device testing.
+- actual schema migration files/tests.
+- contract tests for retry/error mappings.
 
 Current:
 **Android first-slice Room schema is specific enough to create entities/DAOs/migration skeletons after Freeze.**
@@ -793,3 +819,103 @@ Ordering never substitutes for dependency edges.
 - WorkManager enqueue happens after successful DB transaction.
 - worker can be recreated entirely from Room state after process death.
 
+
+
+---
+
+# 14. OfflineStoragePolicy
+
+Storage limits are runtime/company/device policy, not compile-time assumptions.
+
+Fields:
+- maxDocumentCacheBytes
+- maxServerBackedEvidenceCacheBytes
+- minFreeDeviceBytes
+- completedBundleRetentionDays
+- closedBundleRetentionDays
+- allowCellularLargeDownloads
+- warningThresholdPercent
+
+First-slice default seed:
+- completedBundleRetentionDays: 14
+- closedBundleRetentionDays: 14
+- minFreeDeviceBytes: 512 MiB
+- maxDocumentCacheBytes: 512 MiB
+- maxServerBackedEvidenceCacheBytes: 1 GiB
+
+Rules:
+- pending commands never evicted.
+- unresolved conflicts never evicted.
+- local evidence not READY/finalized server-side never evicted.
+- current assigned/in-progress Work bundles never evicted.
+- eviction order: old closed bundles/documents -> old server-backed evidence cache -> other re-downloadable cache.
+- if free storage falls below minFreeDeviceBytes, block new large capture/download before deleting authoritative-unsynced local work.
+- policy numbers are configurable and can be tuned after representative device testing without schema/code change.
+
+---
+
+# 15. Local encryption / sensitive cache baseline
+
+First production Android slice:
+- Room DB and local files live only in application-private storage.
+- rely on supported device OS/file-based/full-disk encryption and authenticated device access.
+- do not add SQLCipher/application-level whole-DB encryption in first slice.
+- tokens/refresh secrets stay in platform secure credential storage, never normal Room rows.
+- HIGHLY_RESTRICTED data is not offline-cached by default.
+- RESTRICTED fields are cached only when required for assigned work and are evicted with that context.
+- local evidence files use app-private storage and are not exported to shared media by default.
+
+Revisit trigger requiring stronger application-level encryption:
+- client/site contractual requirement,
+- device/BYOD policy that does not guarantee acceptable device encryption,
+- verified need to cache HIGHLY_RESTRICTED data,
+- threat-model/security review finding.
+
+---
+
+# 16. Cursor scope keys
+
+Internal stable scope-key forms:
+
+- field_today:user:{userId}
+- work_bundle:work:{workOrderId}
+- project_command_center:project:{projectId}
+- review_queue:user:{userId}
+- asset_passport:asset:{assetId}
+- storage_inventory:location:{storageLocationId}
+- config_family:{scopeType}:{scopeId}:{family}
+
+The server cursor itself remains opaque.
+Changing query/filter/order contract invalidates prior cursor and client restarts that scope.
+
+---
+
+# 17. Bundle invalidation / retention
+
+A bundle is immediately stale/invalidation-marked when the client learns of:
+- WorkOrder version advance.
+- reassignment/cancellation.
+- instruction revision advance.
+- required document/drawing revision advance.
+- relevant policy rebind.
+- permission revoke.
+
+Stale bundle may remain locally for evidence/conflict explanation but cannot authorize a new mutation.
+
+Terminal Work bundles are re-downloadable history and follow OfflineStoragePolicy retention unless pinned by unresolved local state.
+
+---
+
+# 18. Desktop parity boundary
+
+Android first-slice offline execution uses Room + WorkManager.
+
+Windows/Desktop may use the same domain/repository/sync contracts but is not required to reuse Android Room physical schema.
+
+Parity requirement is semantic:
+- same DTOs.
+- same operationId/baseVersion.
+- same conflict/error meanings.
+- same authoritative server truth.
+
+Desktop local persistence can be selected separately before a Desktop offline-capable production workflow requires it.
