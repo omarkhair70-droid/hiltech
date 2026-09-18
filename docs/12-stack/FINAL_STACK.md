@@ -566,12 +566,23 @@ A change requires:
 
 ---
 
-# 16. Remaining pre-code gate outside stack
+# 16. First-slice Freeze status
 
-The remaining first-slice pre-code blocker is:
+Rendered design proof:
+**PASS**
 
-**actual rendered design proof**
+Evidence:
+- run `35396169606`,
+- 37 / 37 captures,
+- artifact digest `sha256:6988eb2f01613a0e89c72a74f90e5304ddc349b1d8bc9e49819ec5f0056ac1b3`.
 
-because current Figma Starter/View MCP quota prevents completing/reviewing the required frames.
+First-slice Freeze:
+`PASS`
 
-The stack itself is no longer a Freeze blocker.
+Canonical decision:
+`docs/13-delivery/first-slice-contract-pack/24_FIRST_SLICE_FREEZE_DECISION_2026-09-19.md`
+
+Next:
+`REPOSITORY_BOOTSTRAP`
+
+No first-slice pre-code gate remains outside the stack.
