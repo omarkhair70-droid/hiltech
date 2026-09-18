@@ -86,12 +86,11 @@ Now includes:
 6. Android device fleet, camera/QR restrictions and site-security constraints.
 7. Android background execution/reconnect reliability — SPIKE-13 accepted; OEM/field-device reliability remains a reality/operations validation item.
 8. Windows install/update/rollback operations — SPIKE-07 active.
-9. Full cross-surface end-to-end vertical proof — SPIKE-15 pending after remaining isolated gates.
+9. Full cross-surface end-to-end vertical proof — SPIKE-15 pending after SPIKE-07.
 10. Offline conflict ergonomics in real field use.
 11. Legal/accounting/privacy/retention requirements.
 12. Final visual/navigation/component/Arabic typography system.
-13. Exact production DB/API/local schemas after reality validation.
-14. Full cross-surface end-to-end vertical proof — SPIKE-15 pending.
+13. Exact production DB/API/local schemas after reality validation and SPIKE-15.
 
 No longer architecture unknowns:
 - KMP Android + Windows platform feasibility,
@@ -149,12 +148,22 @@ Leading but still spike/freeze dependent:
 
 # Immediate Next Work
 
-1. Reality validation with Mohamed/Ahmed/project/warehouse/field.
-2. Exact approval-policy / automation-policy modeling.
-3. Representative wireflows and navigation candidates.
-4. Technical spikes after enough reality validation.
-5. Convert validated object specs into exact DB/API/local schemas.
-6. Final ADRs/stack only after proof.
+Current technical continuation:
+1. Close SPIKE-07 Windows packaging/update/rollback with full lifecycle evidence.
+2. Run SPIKE-15 end-to-end vertical proof and use it as the Ktor/shared-networking acceptance gate.
+3. Record ACCEPT / MODIFY / REJECT results and reconcile ADR/stack/control documents.
+
+Parallel pre-code lanes that do not need to wait for SPIKE-15:
+- reality validation with Mohamed/Ahmed/project/warehouse/field,
+- representative low-fi / RTL / conflict / adaptive validation,
+- approval/automation policy refinement,
+- contract templates and implementation-scope mapping.
+
+After SPIKE-15 + required reality/design evidence:
+- freeze exact DB/API/local/auth/file contracts for the starting slices,
+- finish provider/runtime/Windows distribution decisions,
+- create FINAL_STACK.md only when evidence supports it,
+- call Freeze Review.
 
 No production code yet by design.
 
