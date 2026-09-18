@@ -21,6 +21,7 @@ This does not replace the full Reality Validation Plan.
 It is the **minimum reality bridge** between the now-closed technical-spike phase and exact first-slice DB/API/local/auth/file contracts.
 
 Source material already exists in:
+- `FIRST_SLICE_REPRESENTATIVE_FIXTURES.md` — redacted internal model-validation fixtures from real-shape HILTECH work.
 - `REALITY_VALIDATION_PLAN.md`
 - `REALITY_VALIDATION_INTERVIEW_PACK.md`
 - `interview-packs/MOHAMED_OWNER_EXECUTIVE_SESSION.md`
@@ -373,8 +374,8 @@ INTERNAL_REPORTED can guide preparation but must not silently become frozen trut
 The first-slice reality pass is sufficient when all are true:
 
 - [ ] Work/Asset authority can be expressed by the typed policy/relationship model and one realistic seed is validated,
-- [ ] one real Project/Site is mapped to prove the structural model,
-- [ ] one representative field WorkOrder is mapped to prove WorkType/config coverage,
+- [x] representative Project/Site shapes are mapped through internal redacted fixtures,
+- [x] representative WorkOrder/crew/storage patterns are mapped through internal redacted fixtures,
 - [ ] readiness/evidence/acceptance configuration can express that work type without code changes,
 - [ ] field offline/device restrictions that materially affect architecture are known,
 - [ ] warehouse physical/custody flow is observed enough to prove the storage/custody model,
@@ -418,7 +419,16 @@ They still remain blockers for their own affected domains and for any broader co
 
 Technical feasibility: **CLOSED / PROVEN**.
 
-Reality closure: **PARTIALLY CLOSED BY INTERNAL REPORT**.
+Reality closure: **MODEL COVERAGE PARTIALLY VALIDATED BY INTERNAL REPORTED FIXTURES**.
+
+Representative model coverage already exercised:
+- bank HQ/data-center rack-installation shape,
+- Alamein remote multi-building cable-pulling shape,
+- temporary Project/Site cable/material storage,
+- technician-pair and engineer+technician crew variants,
+- factory/site infrastructure shape.
+
+These validate the current Project/Site/Work/Asset/Stock/Storage/offline/configuration structure without requiring a new domain model.
 
 Already known enough to stop treating as unknown:
 - HILTECH is a small field-oriented organization, not a deep enterprise hierarchy.
