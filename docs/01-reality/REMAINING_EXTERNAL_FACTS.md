@@ -67,10 +67,19 @@ These are the only major company-specific facts that cannot be honestly invented
 
 ## Important
 
-None of these require us to stop:
-- general architecture work,
-- low-fi UX,
-- technical spikes,
-- test/release planning.
+Technical feasibility work is complete; SPIKE-01 through SPIKE-15 are accepted.
 
-They only block FINAL FREEZE of the directly affected domain/integration.
+These facts now block only the directly affected reality/schema/policy/design freeze decisions.
+
+For the first production vertical, use:
+`FIRST_PRODUCTION_SLICE_REALITY_CLOSURE.md`
+
+The first-slice subset that is genuinely blocking is primarily:
+- authority/delegation for Work/Asset actions,
+- one real Project/Site lifecycle,
+- one representative field WorkOrder/evidence flow,
+- warehouse physical/custody reality,
+- field/warehouse device restrictions,
+- current Project/Asset data sources/import path.
+
+Finance/payroll/bank facts remain blocking for those later domains but should not be invented merely to make the first Project/Work/Warehouse slice look complete.
