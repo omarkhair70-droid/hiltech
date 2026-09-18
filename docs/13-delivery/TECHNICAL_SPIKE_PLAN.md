@@ -22,6 +22,27 @@ Prove:
 Pass:
 same object/workflow functions correctly on Android and Windows.
 
+**Result 2026-09-18: ACCEPT — PLATFORM FEASIBILITY PASSED.**
+
+Evidence:
+- shared common tests passed,
+- Android debug app compiled,
+- JVM Desktop compiled,
+- Windows EXE packaged,
+- Windows MSI packaged,
+- CI passed on Linux + Windows.
+
+Tested line:
+- Kotlin 2.4.20,
+- Compose Multiplatform 1.11.1,
+- AGP 9.3.1,
+- Android compile/target SDK 36,
+- Android min SDK 23,
+- JDK 17.
+
+Important:
+This accepts the Android + Windows KMP/Compose platform feasibility. It does **not** yet finalize the entire client stack; RTL/adaptive, dense desktop data, local DB/offline, auth, and update spikes remain.
+
 ---
 
 # SPIKE-02 — Arabic / RTL Adaptive Layout
