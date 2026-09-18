@@ -533,12 +533,114 @@ Uses the exact local contract in 04_ROOM_OFFLINE_SYNC.md.
 
 - exact string/max field constraints.
 - exact route normalization for configuration revisions.
-- exact cursor implementation.
-- exact client metadata headers.
-- exact REAUTH_REQUIRED response details.
-- object-hidden policy by API audience.
-- exact DTO representation for typed assignment target and requirement instances.
-- exact Project/Site create/update routes beyond first slice.
+- exact client metadata headers only if server behavior uses them.
+- exact Project/Site create/update routes beyond the first vertical where needed.
+
+Closed:
+- typed assignment target.
+- requirement-instance DTO semantics.
+- REAUTH_REQUIRED details.
+- object-hidden policy candidate.
+- stateless opaque cursor contract.
+- thin manual shared Ktor typed-client convention.
+- additive /v1 breaking-change policy.
 
 Current:
 **first-slice API has stable route/DTO/error candidates sufficient to drive server/client skeleton generation.**
+
+
+---
+
+# Typed shared DTO details v0.2
+
+## AssignmentTarget DTO
+
+- type: USER / CREW / TEAM / SUBCONTRACTOR_ORGANIZATION
+- id: UUID
+- lead: Boolean = false
+
+Rules:
+- list must be non-empty when assigning.
+- duplicate type+id targets rejected.
+- policy decides allowed target types/cardinality.
+- server validates eligibility/authorization.
+
+## RequirementInstance DTO
+
+- id
+- family
+- key
+- label
+- required
+- satisfactionState
+- sourceConfigId?
+- sourceConfigRevision?
+- satisfiedByRef?
+- waived
+- waiverRef?
+- sortOrder
+
+Clients render this; they do not recalculate authoritative readiness from hidden assumptions.
+
+## Re-auth error details
+
+For REAUTH_REQUIRED:
+
+- requiredAuthenticationStrength: String
+- maxAuthenticationAgeSeconds: Long?
+- reasonCode: String
+- retrySameOperationId: Boolean
+
+The native client performs Keycloak re-auth and retries the same semantic command only when retrySameOperationId is true.
+
+No password collection in HILTECH UI.
+
+## Object visibility policy
+
+First-slice candidate:
+
+External users:
+- unauthorized or out-of-scope object existence is hidden with HTTP 404 + OBJECT_NOT_VISIBLE.
+
+Internal authenticated HILTECH users:
+- 403 + PERMISSION_DENIED may be returned when object existence is already safe within their organization/context.
+- cross-organization or highly sensitive existence may still use OBJECT_NOT_VISIBLE.
+
+UI never infers object existence from timing/details.
+
+## Cursor contract
+
+Cursor is:
+- opaque to clients,
+- stateless server token candidate,
+- versioned internally,
+- bound to read-model/filter/order context,
+- tamper-protected,
+- contains/encodes stable seek keys + tie-breaker + asOf where required.
+
+Clients:
+- store/pass it only,
+- never decode it,
+- discard and restart pagination on CURSOR_INVALID/CURSOR_EXPIRED.
+
+No Redis/server cursor session is required for the baseline.
+
+## Typed client convention
+
+Baseline:
+- shared DTOs + thin manually maintained typed Ktor repository/client functions.
+- no generated network client is required for first production slice.
+- server OpenAPI/contract description may be generated for docs/testing, but generated client code is not the domain API source of truth.
+- compile + contract tests prevent Android/Desktop drift.
+
+## Breaking-change policy
+
+Within /v1:
+- prefer additive fields/endpoints.
+- clients tolerate unknown response fields.
+- do not repurpose field semantics.
+- commands/read models carry explicit payload/schema version only when persisted/offline compatibility needs it.
+
+Breaking incompatible public/native contract:
+- new major API boundary or explicit migration/version path.
+- old queued offline commands must be migrated/rejected explicitly, never misinterpreted.
