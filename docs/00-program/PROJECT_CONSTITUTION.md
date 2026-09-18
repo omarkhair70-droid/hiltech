@@ -134,3 +134,23 @@ Research, decisions, product maps, workflows, stack choices, and architecture mu
 No architecture or technology choice is frozen because it was previously suggested. It becomes frozen only after research and explicit validation.
 
 After freeze, foundational changes require evidence and an ADR/reopen decision rather than casual drift.
+
+
+## 15. Scale without redesign
+
+HILTECH OS is not designed around today's headcount, number of engineers, technicians, projects, warehouses, clients, partners, or branches.
+
+Current company size is operating data, not an architectural limit.
+
+The system must support growth through configuration and data:
+- new employees join through the same identity/onboarding/role/team model,
+- new teams and reporting structures can be created without code changes,
+- new projects/sites/work types/storage locations/assets can be added without schema redesign,
+- new branches/warehouses/project stores can be represented through the same location/storage model,
+- new clients/suppliers/subcontractors/partners use the same organization/relationship model,
+- increased volume should require capacity/operational scaling, not a product rewrite.
+
+Do not simplify a core domain merely because today's population is small.
+Do not over-engineer today's UX for hypothetical scale either.
+
+Design the model to scale; tune the initial experience to current reality.
