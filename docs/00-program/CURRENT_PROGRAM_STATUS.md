@@ -5,7 +5,7 @@ Updated: 2026-09-18
 ## Overall Stage
 **FIRST-SLICE PRE-CODE FREEZE CLOSURE**
 
-Freeze status: **NOT READY — PRIMARY BLOCKER IS ACTUAL RENDERED DESIGN PROOF**
+Freeze status: **NOT READY — SOLE CURRENT PRE-CODE BLOCKER IS ACTUAL RENDERED DESIGN PROOF**
 
 ## Meaning
 The first production slice has moved beyond broad product/architecture discovery.
@@ -199,16 +199,18 @@ Contract conversion status:
 - remaining work is primarily visual/design proof + OCI cutover/ops + Windows signing/distribution + final stack/version review.
 
 Final stack/version review:
-- reviewed on 2026-09-18 against current upstream stable releases,
+- **PASS** on 2026-09-18,
+- `docs/12-stack/FINAL_STACK.md` created,
+- AGP **9.3.3** final first-slice pin,
+- AGP 9.3.2 run 35388858253 PASS,
+- AGP 9.3.3 run 35389326629 PASS,
 - proven first-slice pins retained deliberately where newer versions would invalidate proof without required benefit,
-- production GitHub Actions immutable SHA baseline selected,
-- only exact AGP 9.3 patch remains under focused validation before `FINAL_STACK.md`.
+- production GitHub Actions immutable SHA baseline selected.
 
 Immediate pre-code continuation:
 1. Complete actual rendered first-slice low-fi / RTL / conflict / adaptive proof when Figma MCP quota permits.
-2. Run final explicit stack/version + CI-action pin review; create FINAL_STACK.md only when that review passes.
-3. Perform First-Slice Freeze Review.
-4. After Freeze: repository bootstrap → generated DB/API/Room/Auth/IaC/test foundations → production vertical implementation.
+2. Perform First-Slice Freeze Review.
+3. After Freeze: repository bootstrap → generated DB/API/Room/Auth/IaC/test foundations → production vertical implementation.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 
