@@ -8,12 +8,13 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.Dispatchers
 
 @Database(
-    entities = [PendingCommandEntity::class],
-    version = 1,
+    entities = [PendingCommandEntity::class, OfflineBundleEntity::class],
+    version = 2,
 )
 @ConstructedBy(HiltechLocalDatabaseConstructor::class)
 abstract class HiltechLocalDatabase : RoomDatabase() {
     abstract fun pendingCommandDao(): PendingCommandDao
+    abstract fun offlineBundleDao(): OfflineBundleDao
 }
 
 @Suppress("KotlinNoActualForExpect")
