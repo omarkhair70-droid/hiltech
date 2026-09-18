@@ -8,7 +8,7 @@ plugins {
 
 val hiltechVersion = providers
     .gradleProperty("hiltechVersion")
-    .orElse("0.1.0")
+    .orElse("1.0.0")
     .get()
 
 dependencies {
@@ -25,6 +25,10 @@ compose.desktop {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             packageName = "HILTECHSpike"
             packageVersion = hiltechVersion
+
+            windows {
+                upgradeUuid = "5f5197b5-728f-4e08-81af-228b0fef2be5"
+            }
         }
     }
 }
