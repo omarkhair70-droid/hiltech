@@ -26,5 +26,5 @@ fun buildHiltechLocalDatabase(
 ): HiltechLocalDatabase =
     builder
         .setDriver(BundledSQLiteDriver())
-        .setCoroutineContext(Dispatchers.IO)
+        .setQueryCoroutineContext(Dispatchers.IO)
         .build()
