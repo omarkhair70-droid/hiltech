@@ -16,7 +16,25 @@ The remaining pre-code phase is about:
 
 Risky technical feasibility has already been proven through SPIKE-01…15.
 
-Production coding does not begin until Freeze Review passes.
+Production coding does not begin until the relevant implementation-scope Freeze Review passes.
+
+## Scope note — First slice vs whole HILTECH
+
+This document also tracks future HILTECH domains, so some reality/design items are intentionally still open for later slices.
+
+The first production vertical does not wait for complete Finance/Payroll/Sales/Client Portal/Facilities contract freeze.
+
+First-slice canonical controls:
+- `first-slice-contract-pack/09_FREEZE_RECORD.md`
+- `first-slice-contract-pack/14_FREEZE_GAP_REGISTER.md`
+- `first-slice-contract-pack/21_FINAL_PRE_FREEZE_CONSISTENCY_REVIEW.md`
+
+Current first-slice status:
+- technical feasibility CLOSED,
+- domain/API/DB/local/auth/file contracts structurally CLOSED,
+- FINAL_STACK PASS,
+- provider architecture selected,
+- rendered design proof is the sole current pre-code blocker.
 
 ---
 
@@ -121,7 +139,11 @@ Accepted:
 
 All required technical spikes 01–15 are accepted.
 Ktor Client is accepted through ADR-007.
-The remaining pre-code work is no longer technical-feasibility discovery; it is reality validation, exact contracts, design freeze, provider/runtime decisions and Freeze Review.
+The first-slice technical-feasibility gate is closed.
+The first-slice exact contracts and provider/runtime architecture are also structurally closed.
+The remaining current pre-code gate for that slice is rendered design proof followed by Freeze Review.
+
+Reality/exact-contract/provider work remains open only for later domains or production activation where specifically documented.
 
 Every spike ends:
 ACCEPT / REJECT / MODIFY.
@@ -130,8 +152,9 @@ ACCEPT / REJECT / MODIFY.
 
 # Gate 4 — Final Technology Decisions
 
-Create accepted ADRs and freeze:
+First-slice status: **PASS**.
 
+Created/accepted:
 - FINAL_STACK.md
 - VERSION_MATRIX.md
 - auth choice.
@@ -144,6 +167,11 @@ Create accepted ADRs and freeze:
 - observability backend.
 
 No final stack based only on preference.
+
+First-slice final version review:
+- AGP 9.3.3 focused validation run 35389326629 PASS,
+- immutable production GitHub Action SHAs selected,
+- deliberate non-upgrades documented.
 
 ---
 
@@ -256,12 +284,11 @@ Can continue:
 
 Technical spike planning/execution is complete.
 
-Cannot honestly freeze without company input:
+Later-slice / activation items still need real input when their scope is reached:
 - payroll/accounting/bank exact schema,
-- real approval thresholds,
-- warehouse categories/hardware,
+- actual Finance/Payroll authority/thresholds,
 - physical security vendors,
-- real field restrictions,
-- exact authority map.
+- real integration hardware/provider inventory,
+- pilot seed/master data and site/device restrictions.
 
-Those remain validation gates, not documentation failures.
+Those do not reopen the already-closed first-slice architecture unless new evidence exposes a structural contradiction.
