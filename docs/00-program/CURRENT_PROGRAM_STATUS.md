@@ -151,6 +151,12 @@ Still freeze-dependent:
 
 Technical-spike continuation: **CLOSED.**
 
+Configurable operating model:
+- normal company policy/operating choices are configuration, not hard-coded freeze values,
+- freeze typed policy schemas + invariants + audit/version semantics,
+- reality sessions validate coverage and produce initial seed configuration,
+- canonical model: `docs/03-product/CONFIGURABLE_OPERATING_MODEL.md`.
+
 Canonical next-step artifacts:
 - `docs/01-reality/FIRST_PRODUCTION_SLICE_REALITY_CLOSURE.md` — minimum Project/Field/Warehouse/Authority reality evidence.
 - `docs/13-delivery/FIRST_PRODUCTION_SLICE_CONTRACT_READINESS_2026-09-18.md` — readiness/blocker map.
