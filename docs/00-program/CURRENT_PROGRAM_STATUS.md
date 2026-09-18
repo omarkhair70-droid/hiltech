@@ -51,7 +51,7 @@ Production code is still intentionally not started.
 | Offline/sync | SPIKE-PROVEN CORE | Room queue, idempotent retry, stale conflict, WorkManager reconnect and real Ktor replay proven; final field UX/policy remains |
 | Integration/hardware | FIRST PASS | Real vendors/systems unknown |
 | API/read models | FIRST-SLICE CONTRACT v0.3 | /v1 routes, DTO/error/cursor/visibility/OpenAPI publication semantics closed for first slice |
-| Stack | ADVANCED PRE-FREEZE | Technical stack proven; OCI provider baseline accepted via ADR-014; Windows/ops/cutover validation still blocks FINAL_STACK |
+| Stack | FINAL FIRST-SLICE BASELINE | FINAL_STACK.md created; AGP 9.3.3 validated; OCI/Windows/DR contracts selected; cutover activation remains post-contract |
 | System architecture | FIRST-SLICE CONTRACT-READY | Core architecture proven; provider instantiation now OCI baseline |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
@@ -196,7 +196,8 @@ Contract conversion status:
 - Evidence storage/security contract structurally closed.
 - OCI infrastructure/provider baseline accepted via ADR-014 and first-slice infrastructure contract.
 - Representative internal reality fixtures added.
-- remaining work is primarily visual/design proof + OCI cutover/ops + Windows signing/distribution + final stack/version review.
+- remaining **pre-code** work is actual rendered visual/design proof only.
+- OCI cutover/ops and Windows signing certificate activation remain post-contract production-activation work.
 
 Final stack/version review:
 - **PASS** on 2026-09-18,
@@ -239,7 +240,7 @@ Remaining freeze blockers are evidence-based:
 1. unresolved real-company facts for affected domains,
 2. final design/RTL pass,
 3. exact DB/API/local/auth/file contract freeze,
-4. remaining provider/runtime/signing/version decisions,
+4. production activation/cutover evidence where required after contract Freeze,
 5. final stack/ADR/schema lock derived from those results.
 
 Work that does not depend on those facts may continue immediately.
@@ -259,7 +260,7 @@ Proven in GitHub Actions:
 - Windows EXE,
 - Windows MSI.
 
-This does not mark the client stack FINAL. Remaining relevant spikes still gate final freeze.
+The first-slice client/server stack is now FINAL at contract level; no technical spike remains open.
 
 ## SPIKE-03 — Room KMP Local DB
 Decision: **ACCEPT — local database feasibility passed.**
@@ -288,7 +289,7 @@ GitHub Actions run 35296098137 proved:
 - Linux + Windows tests,
 - Android compile with shared sync code.
 
-Remaining: real HTTP/Ktor transport, WorkManager, binary upload and final conflict UX.
+Transport/Ktor, WorkManager and binary upload are proven/accepted. Remaining pre-code UX evidence is the actual rendered conflict/RTL/adaptive design proof.
 
 ## SPIKE-11 — PostgreSQL + jOOQ Ledger
 Decision: **ACCEPT — authoritative ledger/concurrency thesis passed.**
