@@ -37,4 +37,5 @@ dependencies {
     implementation(project(":shared:core"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.work.runtime)
+    implementation(libs.ktor.client.core)
 }
