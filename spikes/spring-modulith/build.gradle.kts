@@ -18,7 +18,11 @@ java {
 }
 
 dependencies {
+    implementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.1"))
     implementation(platform("org.springframework.modulith:spring-modulith-bom:2.1.1"))
+
+    testImplementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.1"))
+    testImplementation(platform("org.springframework.modulith:spring-modulith-bom:2.1.1"))
 
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.modulith:spring-modulith-starter-jdbc")
