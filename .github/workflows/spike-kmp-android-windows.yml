@@ -7,6 +7,12 @@ on:
     paths:
       - "spikes/kmp-android-windows/**"
       - ".github/workflows/spike-kmp-android-windows.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "spikes/kmp-android-windows/**"
+      - ".github/workflows/spike-kmp-android-windows.yml"
   workflow_dispatch:
 
 jobs:
