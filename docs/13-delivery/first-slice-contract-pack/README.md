@@ -134,3 +134,6 @@ Use, do not duplicate:
 
 16. `16_DATABASE_DDL_CONSTRAINT_CONTRACT.md`
    - exact first-slice PostgreSQL keys/FKs/checks/uniques/indexes and generation gate for Flyway/jOOQ.
+
+17. `17_FREEZE_TO_BOOTSTRAP_BOUNDARY.md`
+   - canonical line between pre-code contract Freeze and post-Freeze repository/bootstrap implementation verification.
