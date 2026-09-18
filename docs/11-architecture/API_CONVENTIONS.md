@@ -1,6 +1,6 @@
 # HILTECH API Conventions
 
-Status: ARCHITECTURE MODEL v0.1 / NOT API-FROZEN
+Status: ARCHITECTURE MODEL v0.2 / FIRST-SLICE CONTRACT CANDIDATE LINKED
 
 ## Objective
 Define consistent application/API behavior before endpoint implementation.
@@ -35,7 +35,10 @@ POST /assets/{id}/commands/checkout
 POST /payroll-runs/{id}/commands/request-approval
 POST /payments/{id}/commands/approve
 
-Final URL grammar may change, but command semantics remain explicit.
+First-slice production route candidates are now defined in:
+`docs/13-delivery/first-slice-contract-pack/02_API_AND_READ_MODELS.md`.
+
+The accepted pattern is `/v1` + plural resource/read-model routes + explicit action sub-routes for lifecycle-critical commands.
 
 ---
 
@@ -237,11 +240,12 @@ Client fetches/reconciles through normal data path.
 
 Prefer additive evolution and stable contracts.
 
-Breaking change policy to freeze later.
-
-Potential:
-- URL major version (/v1)
-- content versioning for events/contracts.
+Accepted first-slice policy:
+- URL major version `/v1`.
+- additive compatible evolution within v1.
+- never repurpose an existing field's meaning.
+- persisted/offline payloads carry explicit payloadVersion where compatibility requires.
+- incompatible native/public contract requires explicit major/migration path.
 
 Do not version internal module methods like public internet APIs unnecessarily.
 
@@ -275,7 +279,8 @@ Never float.
 # 19. IDs
 
 Opaque stable identifiers.
-Human codes separate.
+Physical domain/config IDs use UUID.
+Human codes remain separate/configurable.
 
 Example:
 id = UUID
@@ -340,15 +345,15 @@ Validated:
 - [x] offline replay / duplicate replay / stale conflict.
 
 Still required:
-- [ ] exact first-slice endpoint + request/response schemas.
-- [ ] exact Kotlinx Serialization production options.
-- [ ] API contract tooling / schema publication convention.
-- [ ] breaking-change/versioning policy beyond the /v1 major baseline.
-- [ ] cursor pagination/filter schemas on real read models.
-- [ ] generated vs manual typed-client convention.
-- [ ] REAUTH_REQUIRED representative command.
-- [ ] production-shaped retryable/safe 4xx/5xx mappings.
-- [ ] contract tests for the frozen first-slice schemas.
+- [x] first-slice endpoint + request/response candidates.
+- [ ] exact Kotlinx Serialization code option flags.
+- [ ] API schema publication/OpenAPI convention.
+- [x] additive /v1 compatibility policy.
+- [x] opaque stateless cursor contract.
+- [x] thin manual shared typed-client convention.
+- [ ] REAUTH_REQUIRED representative contract test.
+- [ ] production-shaped retryable/safe 4xx/5xx contract tests.
+- [ ] contract tests for final frozen first-slice schemas.
 
 Canonical implementation-facing detail:
 `CROSS_CUTTING_BUILD_CONTRACTS.md`.
