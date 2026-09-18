@@ -179,7 +179,7 @@ Resolved:
 ## A7 — OpenFGA exact model
 
 Pre-code Freeze blockers:
-- production OpenFGA deployment/runtime choice/settings.
+- final OCI OpenFGA runtime sizing/storage connection + model deployment settings after tenancy validation.
 
 Post-Freeze Bootstrap verification:
 - implement PostgreSQL projection/outbox processor and integration tests.
@@ -206,13 +206,15 @@ Resolved:
 
 ## A8 — Evidence/provider closure
 
-Still need:
-- exact production S3-compatible provider/KMS.
-- exact malware-scanner service for ARBITRARY_FILE.
-- provider backup/versioning/lifecycle settings.
-- future formal retention/legal-hold policy only if automated deletion/hold is required.
+Pre-code Freeze blockers:
+- exact malware-scanner service only if ARBITRARY_FILE is enabled in the first pilot.
+- final OCI Object Storage versioning/backup/lifecycle operational settings after tenancy validation.
+
+Deferred/non-blocking unless enabled by pilot:
+- formal retention/legal-hold policy for automated deletion/hold.
 
 Resolved:
+- OCI Object Storage + OCI KMS selected.
 - signed direct upload protocol.
 - checksum/finalize.
 - opaque private object-key layout.
@@ -251,20 +253,34 @@ Figma/tooling quota can delay rendering, but these remain actual design-freeze e
 
 # C. Operational/provider blockers
 
-Still need final production decisions for:
+Provider architecture now resolved:
+- OCI accepted as production provider baseline.
+- Jeddah `me-jeddah-1` primary-region candidate.
+- OCI Container Instances preferred / OCI Compute fallback.
+- OCI Database with PostgreSQL.
+- OCI Object Storage + KMS.
+- OCI Secret Management.
+- OCI Container Registry.
+- OpenTelemetry Collector → OCI observability baseline.
+- Terraform + OCI provider + Resource Manager.
+- GitHub Actions remains delivery control plane.
 
-- hosting/infrastructure provider and deployment shape.
-- production object-storage provider.
-- observability backend/collector.
-- production Windows signing certificate/provider.
+Still required before infrastructure Freeze:
+- OCI tenancy/region subscription.
+- quota/capacity checks.
+- representative Egypt latency smoke.
+- final runtime/database sizing + cost check.
+- staging IaC deploy proof.
+- PostgreSQL PITR restore rehearsal plan/acceptance.
+- final business RPO/RTO + DR region.
+- telemetry retention/sampling/alert settings.
+- exact malware scanner only if ARBITRARY_FILE enabled.
+- production domain/TLS ownership.
+- Windows signing certificate/provider.
 - Windows enterprise distribution/update channel.
-- backup/restore implementation.
-- RPO/RTO.
-- production secret-management path.
-- final server/container/runtime pin review.
 - final CI action pin review.
 
-These do not reopen application/domain architecture.
+These are operational instantiation/validation items and do not reopen application/domain architecture.
 
 ---
 
