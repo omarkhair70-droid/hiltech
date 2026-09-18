@@ -106,21 +106,23 @@ First-pass personas and role experiences exist for:
 - Subcontractor
 
 ### Master workflows
-First pass:
+Strong first pass:
 - Project Lifecycle
 - Employee Lifecycle
 - Warehouse / Asset Custody
 - Procurement
 - Payroll
 - Employee Advance / Financial Imprest
+- Finance / Payment Lifecycle
+- Client Support / Service Lifecycle
+- Maintenance / Managed Service Lifecycle
+- Document / Handover Lifecycle
+- Security / Facilities Lifecycle
 - Shared Approval System
 - Automation Map
 - Cross-Domain Event Map
 
-Still needs deeper dedicated workflow detail:
-- finance/payment lifecycle
-- client support/service lifecycle
-- maintenance/managed-service lifecycle
+Remaining work is reality validation and implementation-scope contract freezing, not discovery of those lifecycle families from zero.
 
 ### Data
 First pass:
@@ -193,7 +195,8 @@ Architecture model + core technical proof exist:
 - dependent-command blocking
 
 SPIKE-04 accepted the core offline command semantics.
-SPIKE-13 still gates Android OS/background execution behavior.
+SPIKE-13 accepted Android WorkManager reconnect/background scheduling behavior on the tested API 36 emulator path.
+OEM/field-device behavior remains reality/operations validation rather than an unresolved architecture choice.
 
 ### Integrations / Hardware
 First pass:
@@ -306,8 +309,11 @@ If implementation would still require choosing fundamental data ownership, permi
 
 **NOT READY.**
 
-The two major gates now are:
-1. Validate the model against actual HILTECH reality.
-2. Prove the highest-risk technical assumptions through the planned spikes.
+The remaining pre-code gates are:
+1. Close SPIKE-07, then SPIKE-15 and record the resulting final technical decisions.
+2. Validate affected workflows/policies against actual HILTECH reality.
+3. Complete representative low-fi/RTL/design validation for the core internal product.
+4. Convert validated models into exact DB/API/local/auth/file contracts and finish stack/provider decisions.
+5. Pass Freeze Review before repository bootstrap or production code.
 
 See `CURRENT_PROGRAM_STATUS.md` and `FREEZE_CHECKLIST.md`.
