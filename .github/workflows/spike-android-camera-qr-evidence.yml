@@ -47,6 +47,23 @@ jobs:
         working-directory: spikes/kmp-android-windows
         run: gradle :androidApp:assembleDebug --stacktrace
 
+      - name: Free hosted-runner disk before emulator
+        shell: bash
+        run: |
+          gradle --stop || true
+          echo "Disk before cleanup:"
+          df -h /
+          du -sh "$HOME/.gradle/caches" 2>/dev/null || true
+
+          # APK is already built. The emulator scenario only needs the APK + adb,
+          # so Gradle dependency/transforms caches are disposable at this point.
+          rm -rf "$HOME/.gradle/caches" || true
+          rm -rf "$HOME/.gradle/wrapper/dists" || true
+          rm -rf /tmp/.gradle* 2>/dev/null || true
+
+          echo "Disk after cleanup:"
+          df -h /
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
