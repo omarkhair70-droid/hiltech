@@ -110,6 +110,7 @@ First pass:
 - Warehouse / Asset Custody
 - Procurement
 - Payroll
+- Employee Advance / Financial Imprest
 - Shared Approval System
 - Automation Map
 - Cross-Domain Event Map
