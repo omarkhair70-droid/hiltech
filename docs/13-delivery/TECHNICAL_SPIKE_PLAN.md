@@ -227,6 +227,22 @@ model remains understandable/testable without explosive complexity.
 
 If not, reconsider simpler authorization architecture.
 
+**Result 2026-09-18: ACCEPT — OBJECT/ACTION AUTHORIZATION MODEL PASSED.**
+
+Evidence:
+- real OpenFGA server accepted the HILTECH model.
+- 27 representative allow/deny checks matched expectations.
+- client/supplier/internal boundaries stayed isolated.
+- payroll visibility remained owner/finance only.
+- asset checkout composed technician/project and warehouse/org relationships.
+- temporary delegation was granted and revoked by tuple lifecycle without model rewrite.
+
+GitHub Actions run: 35296729939.
+Tested OpenFGA: v1.20.0.
+
+Boundary:
+field-level sensitive-data redaction remains server/application policy rather than being forced into OpenFGA.
+
 ---
 
 # SPIKE-10 — Spring Modulith
