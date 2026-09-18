@@ -38,7 +38,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | ACTIVE — 01/03/04/09/10/11 PASSED | Client platform, local DB, offline queue, authorization, modular backend events and PostgreSQL concurrency proven; remaining spikes active |
+| Technical spikes | ACTIVE — 01/03/04/09/10/11/12 PASSED | Client platform, local DB, offline queue, authorization, modular backend events, PostgreSQL concurrency and binary evidence protocol proven; remaining spikes active |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -252,3 +252,18 @@ GitHub Actions run 35304479330 proved:
 
 Operational note:
 explicit controlled resubmission is preferred over assuming automatic startup replay.
+
+
+## SPIKE-12 — Binary Evidence Pipeline
+Decision: **ACCEPT — S3-protocol binary evidence path passed.**
+
+GitHub Actions run 35305216130 proved:
+- direct pre-signed binary upload,
+- signed expected SHA-256 contract,
+- provider-independent finalization integrity check,
+- corrupt/truncated body cannot become READY,
+- correct retry succeeds,
+- pre-signed download succeeds,
+- unsigned direct read is denied.
+
+Production object-storage provider remains intentionally unselected.
