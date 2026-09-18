@@ -38,7 +38,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | ACTIVE — 01/03/04/06/09/10/11/12/14 PASSED | Client platform, dense desktop, local DB, offline queue, authorization, modular backend events, PostgreSQL concurrency, binary evidence and observability proven; remaining spikes active |
+| Technical spikes | ACTIVE — 01/02/03/04/06/09/10/11/12/14 PASSED | Client platform, RTL/adaptive structure, dense desktop, local DB, offline queue, authorization, modular backend events, PostgreSQL concurrency, binary evidence and observability proven; remaining spikes active |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -294,3 +294,17 @@ GitHub Actions run 35305996737 proved:
 - no tested payroll/PII/auth/payload leakage into telemetry attributes.
 
 Collector/backend/vendor and production sampling remain open infrastructure decisions.
+
+
+## SPIKE-02 — Arabic / RTL Adaptive Layout
+Decision: **ACCEPT — RTL/adaptive structural feasibility passed.**
+
+GitHub Actions run 35305946228 proved:
+- deterministic phone/tablet/desktop layout modes,
+- explicit LTR isolation inside Arabic text for IDs/IPs/codes,
+- Android compile using the same shared UI,
+- Desktop compile,
+- real RTL renders at 360 / 800 / 1440 widths,
+- real desktop LTR render.
+
+Final Arabic font, exact pane ordering, navigation and visual system remain design decisions.
