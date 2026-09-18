@@ -140,6 +140,21 @@ def windows_browser_flow():
                 "Windows flow did not return refresh token",
             )
 
+            cookie_snapshot = [
+                {
+                    "name": cookie["name"],
+                    "domain": cookie["domain"],
+                    "path": cookie["path"],
+                    "secure": cookie["secure"],
+                    "sameSite": cookie["sameSite"],
+                }
+                for cookie in context.cookies()
+            ]
+            print(
+                "SPIKE-08 BROWSER COOKIES AFTER LOGIN " +
+                json.dumps(cookie_snapshot, sort_keys=True)
+            )
+
             # Second authorization in the SAME browser context must reuse SSO.
             verifier2, challenge2 = core.pkce_pair()
             state2 = secrets.token_urlsafe(24)
@@ -150,6 +165,20 @@ def windows_browser_flow():
             )
 
             page.goto(second_url, wait_until="domcontentloaded")
+
+            if not page.url.startswith(core.WINDOWS_REDIRECT):
+                print(
+                    "SPIKE-08 SECOND AUTH DEBUG " +
+                    "url=" + page.url +
+                    " title=" + page.title() +
+                    " usernameVisible=" +
+                    str(page.locator("#username").is_visible())
+                )
+                print(
+                    "SPIKE-08 SECOND AUTH COOKIES " +
+                    json.dumps(context.cookies(), sort_keys=True)
+                )
+
             second_code = expect_callback(callback, state2)
             sso_tokens = core.exchange_code(
                 second_code,
