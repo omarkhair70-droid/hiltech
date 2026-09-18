@@ -1,6 +1,6 @@
 # 14 — First-Slice Freeze Gap Register
 
-Status: **ACTIVE / NARROW CLOSURE LIST**
+Status: **CLOSED FOR FIRST-SLICE FREEZE / ACTIVATION ITEMS REMAIN**
 Date: 2026-09-18
 
 ## Purpose
@@ -25,7 +25,10 @@ Domain/configuration structure is now represented by contract candidates.
 ## A1 — Configuration finalization
 
 Pre-code Freeze blockers:
-- Configuration Center visual proof.
+- **NONE**.
+
+Resolved design evidence:
+- Configuration Center rendered and reviewed in final design run `35396169606`.
 
 Bounded/deferred:
 - persisted ARRIVAL_PROOF / ACTIVE_SITE_PRESENCE remains disabled until retention/notice seed values are approved.
@@ -49,7 +52,10 @@ Resolved:
 No broad structural domain decision remains.
 
 Pre-code Freeze blocker:
-- representative UI/RTL proof.
+- **NONE**.
+
+Resolved design evidence:
+- Project/Work UI + RTL rendered and reviewed in final design run `35396169606`.
 
 Resolved:
 - exact pre-code DDL/index/constraint contract.
@@ -76,7 +82,10 @@ Resolved:
 No broad structural domain decision remains.
 
 Pre-code Freeze blocker:
-- representative Warehouse/Asset UI proof.
+- **NONE**.
+
+Resolved design evidence:
+- Warehouse/Asset custody states rendered and reviewed in final design run `35396169606`.
 
 Pilot activation input:
 - asset/stock/storage seed can be loaded/configured before pilot and does not block schema Freeze.
@@ -188,7 +197,10 @@ Resolved:
 ## A7 — OpenFGA exact model
 
 Pre-code Freeze blockers:
-- final OCI OpenFGA runtime sizing/storage connection + model deployment settings after tenancy validation.
+- **NONE**.
+
+Production activation:
+- final OCI OpenFGA runtime sizing/storage connection/model deployment settings after tenancy validation.
 
 Post-Freeze Bootstrap verification:
 - implement PostgreSQL projection/outbox processor and integration tests.
@@ -216,8 +228,11 @@ Resolved:
 ## A8 — Evidence/provider closure
 
 Pre-code Freeze blockers:
-- exact malware-scanner service only if ARBITRARY_FILE is enabled in the first pilot.
-- final OCI Object Storage versioning/backup/lifecycle operational settings after tenancy validation.
+- **NONE**.
+
+Production/pilot activation:
+- exact malware-scanner service only if ARBITRARY_FILE is enabled.
+- final OCI Object Storage versioning/backup/lifecycle settings after tenancy validation.
 
 Deferred/non-blocking unless enabled by pilot:
 - formal retention/legal-hold policy for automated deletion/hold.
@@ -239,24 +254,27 @@ Resolved:
 
 ---
 
-# B. Visual/design blockers
+# B. Visual/design gate
 
-The interaction contract is defined.
+**PASS**
 
-Visual proof still required for:
+Final rendered proof:
+- run `35396169606` — PASS.
+- 37 / 37 browser-rendered screenshots.
+- Arabic RTL.
+- phone/tablet/desktop.
+- Technician Job.
+- Warehouse custody.
+- Configuration Center.
+- Supervisor Review.
+- Project Command Center.
+- required conflict classes.
+- one-product navigation comparison.
 
-- Configuration Center representative flow.
-- Technician Job Detail.
-- Warehouse Checkout.
-- Supervisor/Engineer Review.
-- offline Work conflict.
-- Asset checkout collision.
-- config revision conflict.
-- Arabic RTL stress.
-- field tablet adaptation.
-- final navigation comparison.
+Artifact digest:
+`sha256:6988eb2f01613a0e89c72a74f90e5304ddc349b1d8bc9e49819ec5f0056ac1b3`
 
-Figma/tooling quota can delay rendering, but these remain actual design-freeze evidence requirements.
+Figma is optional later visual-craft work and is not a first-slice Freeze dependency.
 
 ---
 
@@ -316,14 +334,14 @@ Representative internal fixtures already validate structural coverage for:
 - engineer + technician crew.
 - factory/site infrastructure pattern.
 
-Still useful before final Freeze:
+Still useful before pilot activation:
 - representative actual asset/stock master sample.
 - representative current device/site restrictions.
 - real current staff/team seed.
 - initial WorkType/evidence/review policy seed.
 - current Warehouse/SiteStorage seed.
 - Project/client/site code terminology.
-- any legal/security rule that materially changes tracking/retention.
+- any legal/security rule that materially changes a feature that is actually enabled.
 
 These are now primarily:
 - model confirmation,
@@ -392,19 +410,19 @@ Domain/configuration structural discovery:
 **LARGELY CLOSED**
 
 Contract conversion:
-**STRUCTURALLY CLOSED FOR FIRST SLICE**
+**PASS / FROZEN FOR FIRST SLICE**
 
 Design evidence:
-**OPEN — PRIMARY PRE-CODE BLOCKER / FIGMA MCP QUOTA EXTERNAL BLOCK**
+**PASS**
 
 Provider/ops architecture:
-**CLOSED AT CONTRACT LEVEL**
+**PASS AT CONTRACT LEVEL**
 
 Final stack/version:
 **PASS**
 
 Provider/ops activation:
-**POST-CONTRACT / PRE-CUTOVER VALIDATION REMAINS**
+**POST-FREEZE / PRE-CUTOVER VALIDATION REMAINS**
 
 Production code:
 **NOT STARTED BY DESIGN**
@@ -414,39 +432,25 @@ The remaining work is now a narrow closure exercise, not broad product discovery
 
 ---
 
-# Final pre-code blocker — current authoritative view
-
-As of the completed final stack review:
+# Final first-slice Freeze view
 
 - FIRST_SLICE_CONTRACT_CONSISTENCY = PASS.
 - FINAL_STACK_REVIEW = PASS.
-- FINAL_STACK.md exists.
-- AGP 9.3.3 focused compatibility run 35389326629 = PASS.
-- production CI action pin policy = defined.
+- DESIGN_PROOF = PASS.
+- PROVIDER_CONTRACT_REVIEW = PASS.
+- FIRST_SLICE_FREEZE = PASS.
 
-Therefore the **only remaining first-slice pre-code blocker** is:
+Canonical decision:
+`24_FIRST_SLICE_FREEZE_DECISION_2026-09-19.md`
 
-## Rendered Design Proof
+Remaining first-slice pre-code blockers:
+**NONE**
 
-Still required:
-- Technician Job.
-- Warehouse Checkout.
-- Configuration Center.
-- Supervisor Review.
-- Project Command updates where required.
-- Work offline conflict.
-- Asset custody conflict.
-- configuration revision conflict.
-- review stale-version conflict.
-- Arabic RTL.
-- tablet adaptation.
-- navigation comparison.
+Next:
+`REPOSITORY_BOOTSTRAP`
 
-Current external blocker:
-Figma Starter/View MCP quota.
-
-All other items in this register are:
-- resolved contracts,
+All other open items in this register are:
 - pilot seed/setup,
 - post-Freeze Bootstrap verification,
-- or production activation/cutover work.
+- production activation/cutover,
+- or later-domain closure.
