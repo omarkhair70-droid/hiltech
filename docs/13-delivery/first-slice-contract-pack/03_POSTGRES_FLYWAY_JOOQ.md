@@ -777,6 +777,57 @@ Binary remains outside PostgreSQL.
 
 ---
 
+# authorization projection tables
+
+## authorization_relation_projection
+
+- relation_key varchar primary key
+- subject_type varchar not null
+- subject_id varchar/uuid not null
+- relation varchar not null
+- object_type varchar not null
+- object_id varchar/uuid not null
+- desired_state varchar not null
+- source_type varchar not null
+- source_id varchar/uuid not null
+- source_version bigint not null
+- projection_state varchar not null
+- authorization_model_id varchar not null
+- last_attempt_at timestamptz null
+- applied_at timestamptz null
+- last_error_code varchar null
+- retry_count integer not null
+- created_at timestamptz not null
+- updated_at timestamptz not null
+
+Indexes:
+- projection_state + updated_at
+- source_type + source_id
+- subject_type + subject_id
+- object_type + object_id
+
+Rules:
+- latest source_version wins.
+- pending ABSENT/revoke state acts as fail-closed application guard.
+- pending PRESENT/grant does not become effective until APPLIED.
+
+## authorization_projection_outbox
+
+Durable outbox row written in the same PostgreSQL transaction as the source business relationship change.
+
+Candidate:
+- id uuid primary key
+- relation_key varchar not null
+- source_version bigint not null
+- event_type varchar not null
+- created_at timestamptz not null
+- claimed_at timestamptz null
+- completed_at timestamptz null
+- attempt_count integer not null
+- last_error_code varchar null
+
+A stale event loads latest projection row and is skipped if superseded.
+
 # platform tables
 
 ## idempotent_operation
