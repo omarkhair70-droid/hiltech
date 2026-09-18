@@ -6,6 +6,11 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
+val hiltechVersion = providers
+    .gradleProperty("hiltechVersion")
+    .orElse("1.0.0")
+    .get()
+
 dependencies {
     implementation(project(":shared"))
     implementation(compose.desktop.currentOs)
@@ -14,11 +19,16 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.hiltech.spike.desktop.MainKt"
+        jvmArgs += listOf("-Dhiltech.app.version=$hiltechVersion")
 
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             packageName = "HILTECHSpike"
-            packageVersion = "0.1.0"
+            packageVersion = hiltechVersion
+
+            windows {
+                upgradeUuid = "5f5197b5-728f-4e08-81af-228b0fef2be5"
+            }
         }
     }
 }

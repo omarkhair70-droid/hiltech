@@ -1,0 +1,71 @@
+name: Spike — Windows Packaging Update Rollback
+
+on:
+  push:
+    branches:
+      - "spike/windows-update-20260918"
+    paths:
+      - "spikes/kmp-android-windows/**"
+      - ".github/workflows/spike-windows-update.yml"
+      - ".github/scripts/spike-windows-lifecycle.ps1"
+  pull_request:
+    paths:
+      - "spikes/kmp-android-windows/**"
+      - ".github/workflows/spike-windows-update.yml"
+      - ".github/scripts/spike-windows-lifecycle.ps1"
+  workflow_dispatch:
+
+jobs:
+  windows-lifecycle:
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    defaults:
+      run:
+        working-directory: spikes/kmp-android-windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Build v1.0.0 MSI
+        shell: pwsh
+        run: gradle :desktopApp:packageMsi "-PhiltechVersion=1.0.0" --stacktrace
+
+      - name: Sign v1 and prepare lifecycle
+        shell: pwsh
+        working-directory: .
+        timeout-minutes: 6
+        run: ./.github/scripts/spike-windows-lifecycle.ps1 -Stage prepare-v1
+
+      - name: Install v1 + deep link + failed update safety
+        shell: pwsh
+        working-directory: .
+        timeout-minutes: 6
+        run: ./.github/scripts/spike-windows-lifecycle.ps1 -Stage verify-v1
+
+      - name: Uninstall v1 + build/sign v2
+        shell: pwsh
+        working-directory: .
+        timeout-minutes: 12
+        run: ./.github/scripts/spike-windows-lifecycle.ps1 -Stage prepare-v2
+
+      - name: Install and verify v2 state migration
+        shell: pwsh
+        working-directory: .
+        timeout-minutes: 5
+        run: ./.github/scripts/spike-windows-lifecycle.ps1 -Stage verify-v2
+
+      - name: Roll back to v1 + final uninstall
+        shell: pwsh
+        working-directory: .
+        timeout-minutes: 6
+        run: ./.github/scripts/spike-windows-lifecycle.ps1 -Stage rollback
