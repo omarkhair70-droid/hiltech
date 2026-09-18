@@ -7,7 +7,7 @@ import threading
 import requests
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from queue import Empty, Queue
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from playwright.sync_api import sync_playwright
 
@@ -16,6 +16,38 @@ CORE_PATH = pathlib.Path(__file__).with_name("test_native_oidc.py")
 SPEC = importlib.util.spec_from_file_location("hiltech_oidc_core", CORE_PATH)
 core = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(core)
+
+
+def native_authorization_url(
+    redirect_uri,
+    challenge,
+    state,
+    prompt=None,
+):
+    params = {
+        "client_id": core.CLIENT_ID,
+        "response_type": "code",
+        "scope": "openid",
+        "redirect_uri": redirect_uri,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "state": state,
+        "nonce": secrets.token_urlsafe(24),
+    }
+
+    if prompt:
+        params["prompt"] = prompt
+
+    return (
+        core.BASE
+        + f"/realms/{core.REALM}/protocol/openid-connect/auth?"
+        + urlencode(params)
+    )
+
+
+# This spike intentionally tests a normal native OIDC session. The application
+# does not request offline_access by default; standard refresh is sufficient.
+core.authorization_url = native_authorization_url
 
 
 class LoopbackCallback:
