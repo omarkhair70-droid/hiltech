@@ -1,6 +1,6 @@
 # 07 — First-Slice UI Flow Contracts
 
-Status: **CONTRACT CANDIDATE v0.1 / VISUAL VALIDATION PENDING**
+Status: **FIRST-SLICE UI FLOW CONTRACT v0.2 / RENDERED VALIDATION PASS**
 Date: 2026-09-18
 
 ## Rule
@@ -378,19 +378,51 @@ Configuration Center is a permissioned product area, not a separate admin applic
 
 ---
 
-# 14. Design work still required
+# 14. Rendered design validation
 
-Before final UI freeze:
-- render Configuration Center representative screens.
-- render Technician Job.
-- render Warehouse Checkout.
-- render Supervisor Review.
-- complete Arabic RTL stress.
-- complete conflict set.
-- complete tablet variants.
-- navigation comparison.
+First-slice rendered proof is complete.
 
-Figma quota/tooling limits do not reopen the product contract.
+Prototype:
+`prototypes/first-slice-design/`
+
+Final tested prototype commit:
+`c910901333f137e14edf5bb7d115f54cd287ec68`
+
+GitHub Actions:
+- workflow: Design Prototype Render
+- run: **35396169606**
+- result: **PASS**
+- captures: **37 / 37**
+
+Markers:
+- `HILTECH_DESIGN_RENDER_PASS captures=37`
+- `HILTECH_DESIGN_PROOF_COUNT_PASS captures=37`
+
+Artifact digest:
+`sha256:6988eb2f01613a0e89c72a74f90e5304ddc349b1d8bc9e49819ec5f0056ac1b3`
+
+Validated:
+- Technician READY / OFFLINE / BLOCKED / SUBMITTED / CONFLICT / REWORK.
+- Warehouse AVAILABLE / RESERVED / CALIBRATION BLOCKED / ALREADY CHECKED OUT / COLLISION / SUCCESS.
+- Configuration ACTIVE / DRAFT / INVALID / ACTIVATION / VERSION CONFLICT / HISTORY.
+- Supervisor Review CLEAN / MISSING EVIDENCE / REWORK / STALE VERSION.
+- Project HEALTHY / ATTENTION / CRITICAL / ON HOLD.
+- Arabic RTL representative states.
+- phone / tablet / desktop.
+- one-product navigation comparison.
+
+Visual review confirmed:
+- task hierarchy understandable.
+- local vs authoritative state visible.
+- no false authoritative success.
+- conflict recovery visible.
+- Arabic-first human labels with stable technical IDs/codes.
+- adaptive layouts coherent.
+- Configuration Center expresses the operating model.
+- Project progress and health remain distinct.
+- HILTECH remains one product across roles.
+
+Figma remains optional for later high-fidelity visual craft.
 
 Current:
-**interaction/state contract candidate is ready; visual proof remains pending.**
+**FIRST-SLICE UI FLOW / LOW-FI RENDERED VALIDATION = PASS.**
