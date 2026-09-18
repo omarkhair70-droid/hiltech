@@ -7,8 +7,8 @@ import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.jdbc.core.JdbcTemplate
 import java.nio.file.Files
 import java.time.Duration
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 
 class EventRecoveryAcrossRestartTest {
     @Test
