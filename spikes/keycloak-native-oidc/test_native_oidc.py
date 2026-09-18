@@ -214,7 +214,9 @@ def authorization_url(redirect_uri, challenge, state, prompt=None):
 
 
 def normalize_local_http_cookies(session):
-    normalize_local_http_cookies(session)
+    if BASE.startswith("http://127.0.0.1") or BASE.startswith("http://localhost"):
+        for cookie in session.cookies:
+            cookie.secure = False
 
 
 def parse_login_form(response):
