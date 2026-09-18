@@ -114,6 +114,63 @@ FINAL RULE.
 
 ---
 
+
+## LF-012 — Job Readiness Before Execution
+Decision direction:
+Technician Job Detail shows actionable readiness/prerequisites before START JOB.
+
+The job screen must explain blockers and Waiting On rather than presenting a generic unavailable action.
+
+Confidence:
+HIGH product/domain direction; **canvas validation pending**.
+
+---
+
+## LF-013 — Custody Collision Is First-Class
+Decision direction:
+Warehouse checkout must surface authoritative current custody/version on collision and never offer silent last-write-wins override.
+
+Confidence:
+VERY HIGH domain/security direction; **canvas validation pending**.
+
+---
+
+## LF-014 — Global Search Is Permission-Safe Object Search
+Decision direction:
+Desktop search groups results by authorized object type and exact identifiers.
+
+It is not a raw index of all database fields and not a hidden admin console.
+
+Confidence:
+HIGH architecture direction; **canvas validation pending**.
+
+---
+
+## LF-015 — Shared Work Queue Is Actionable Work, Not Generic Tasks
+Decision direction:
+Shared Work Queue aggregates role-authorized actionable items with Waiting On, due/urgency and contextual inspector.
+
+It does not flatten every domain into a fake universal Task object.
+
+Confidence:
+HIGH product architecture direction; **canvas validation pending**.
+
+---
+
+## LF-016 — Advance and Imprest Stay Distinct in Finance UX
+Decision direction:
+Ahmed Finance must expose Employee Advance and Financial Imprest/Cash Custody as distinct concepts.
+
+Advance = recoverable employee obligation.
+Imprest = accountable company cash in custodian custody with append-only ledger/settlement.
+
+Do not hide both inside generic Expenses.
+
+Confidence:
+VERY HIGH domain direction; **canvas validation pending**.
+
+---
+
 ## Decisions Still Open
 
 - shared mobile bottom navigation exact labels.
