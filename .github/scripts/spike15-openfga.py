@@ -57,6 +57,7 @@ def main():
     work_project, work_project_meta = direct("project")
     work_assignee, work_assignee_meta = direct("user")
     work_reviewer, work_reviewer_meta = direct("user")
+    work_viewer, work_viewer_meta = direct("user")
 
     model = {
         "schema_version": "1.1",
@@ -89,6 +90,7 @@ def main():
                     "assignee": work_assignee,
                     "reviewer": work_reviewer,
                     "viewer": union(
+                        work_viewer,
                         computed("assignee"),
                         computed("reviewer"),
                     ),
@@ -98,6 +100,7 @@ def main():
                         "project": work_project_meta,
                         "assignee": work_assignee_meta,
                         "reviewer": work_reviewer_meta,
+                        "viewer": work_viewer_meta,
                     }
                 },
             },
@@ -120,6 +123,7 @@ def main():
         {"user": "project:project-a", "relation": "project", "object": "work_order:wo-42"},
         {"user": "user:tech1", "relation": "assignee", "object": "work_order:wo-42"},
         {"user": "user:supervisor1", "relation": "reviewer", "object": "work_order:wo-42"},
+        {"user": "user:pm1", "relation": "viewer", "object": "work_order:wo-42"},
     ]
 
     request(
@@ -149,6 +153,8 @@ def main():
     assert check("pm1", "pm", "project:project-a")
     assert check("tech1", "assignee", "work_order:wo-42")
     assert check("supervisor1", "reviewer", "work_order:wo-42")
+    assert check("pm1", "viewer", "work_order:wo-42")
+    assert not check("pm1", "reviewer", "work_order:wo-42")
     assert not check("outsider1", "viewer", "work_order:wo-42")
 
     env_path = os.environ.get("GITHUB_ENV")
