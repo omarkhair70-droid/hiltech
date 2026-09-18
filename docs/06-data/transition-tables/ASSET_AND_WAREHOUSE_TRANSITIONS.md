@@ -6,6 +6,26 @@ Status: DOMAIN MODEL v0.1 / NOT FROZEN
 
 # Trackable Asset Lifecycle
 
+## Production-contract normalization
+
+Canonical first-slice contract:
+`docs/13-delivery/first-slice-contract-pack/12_ASSET_WAREHOUSE_CONTRACT.md`
+
+The original transition table below describes operational outcomes but historically represented several independent dimensions as one state machine.
+
+Production separates:
+- AssetLifecycleState: ACTIVE / RETIREMENT_REQUESTED / RETIRED,
+- AssetConditionState,
+- custody/location projection,
+- calibration/maintenance status,
+- Reservation,
+- AssetIncident for missing/lost,
+- derived AvailabilityState.
+
+Therefore labels such as AVAILABLE / RESERVED / CHECKED_OUT / DAMAGED / CALIBRATION_DUE / MISSING are interpreted as operational/read-model outcomes or changes to their owning dimension, **not all as values of one persisted lifecycle enum**.
+
+
+
 ## RECEIVED -> RegisterAsset -> AVAILABLE
 Preconditions:
 - identity/serial captured as required
