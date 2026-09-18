@@ -169,7 +169,7 @@ BLOCKING: PARTIAL — only for included integrations.
 - [x] Stack research pass 01.
 - [x] Candidate version matrix.
 - [x] Technical architecture candidates.
-- [ ] Technical spikes completed — isolated spikes 01–14 are accepted; SPIKE-15 remains.
+- [x] Technical spikes completed — SPIKE-01 through SPIKE-15 accepted; final vertical run 35323209954.
 - [x] KMP client decision — SPIKE-01/02/06 / ADR-001 accepted.
 - [x] Desktop viability decision — 50k dense-data render proof passed.
 - [x] Auth decision — Keycloak native OIDC / ADR-008 accepted.
@@ -179,6 +179,7 @@ BLOCKING: PARTIAL — only for included integrations.
 - [ ] Infra provider.
 - [x] CI/CD control plane — GitHub Actions accepted; final action pinning/version re-check remains.
 - [x] Windows packaging/update/rollback decision — SPIKE-07 / ADR-012 accepted; production signing/distribution provider still open.
+- [x] Ktor/shared networking decision — SPIKE-15 / ADR-007 accepted.
 - [ ] FINAL_STACK.md.
 - [ ] VERSION_MATRIX.md frozen.
 
@@ -201,7 +202,7 @@ BLOCKING: YES.
 - [ ] API conventions.
 - [ ] exact object/API schemas.
 - [ ] module public contracts.
-- [x] accepted spike evidence reflected in canonical plan/status/ADRs; SPIKE-15 remains the final technical spike.
+- [x] accepted spike evidence reflected in canonical plan/status/ADRs; technical-spike gate closed with SPIKE-15 / ADR-007.
 - [ ] final monorepo structure.
 
 BLOCKING: YES.
