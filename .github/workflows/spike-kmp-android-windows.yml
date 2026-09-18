@@ -1,0 +1,70 @@
+name: Spike — KMP Android + Windows
+
+on:
+  push:
+    branches:
+      - "spike/kmp-android-windows-20260918"
+    paths:
+      - "spikes/kmp-android-windows/**"
+      - ".github/workflows/spike-kmp-android-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  linux-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: spikes/kmp-android-windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-37" "build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Shared tests
+        run: gradle :shared:allTests --stacktrace
+
+      - name: Android debug build
+        run: gradle :androidApp:assembleDebug --stacktrace
+
+      - name: Desktop compile
+        run: gradle :desktopApp:compileKotlin --stacktrace
+
+  windows-build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: spikes/kmp-android-windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Desktop compile
+        run: gradle :desktopApp:compileKotlin --stacktrace
+
+      - name: Windows EXE package
+        run: gradle :desktopApp:packageExe --stacktrace
+
+      - name: Windows MSI package
+        run: gradle :desktopApp:packageMsi --stacktrace
