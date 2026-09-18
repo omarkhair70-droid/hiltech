@@ -203,7 +203,7 @@ def authorization_url(redirect_uri, challenge, state, prompt=None):
     params = {
         "client_id": CLIENT_ID,
         "response_type": "code",
-        "scope": "openid offline_access",
+        "scope": "openid",
         "redirect_uri": redirect_uri,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
