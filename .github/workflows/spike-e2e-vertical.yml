@@ -19,6 +19,10 @@ on:
       - ".github/fixtures/spike15-**"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   compile-shared-client:
     runs-on: ubuntu-latest
