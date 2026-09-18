@@ -87,7 +87,7 @@ Reported current pain:
 - asset custody can rely on memory/manual coordination,
 - equipment responsibility/history is not sufficiently visible.
 
-This makes warehouse/asset custody a core transformation area, but the first product should optimize for a small high-value tool inventory rather than imitate a large distribution-warehouse ERP.
+This makes warehouse/asset custody a core transformation area. The initial UX should fit today's reported inventory and high-value custody needs, while the underlying Warehouse / StorageLocation / Stock / Asset model remains capable of supporting more locations, inventory and operational volume as HILTECH grows.
 
 Remote projects may also create temporary Project/Site storage for material such as cable cartons. These locations should be modeled as project/site stock or temporary storage, not automatically as full warehouses.
 
@@ -107,17 +107,19 @@ HILTECH performs real on-site infrastructure work. Product design must therefore
 - customer approvals,
 - travel between sites/governorates.
 
-### Small field-crew operating model
+### Current field-crew operating snapshot
 
 `INTERNAL-UNVERIFIED`
 
 Reported current operating shape:
-- a small management/engineering core,
-- approximately two engineers,
-- technician-heavy execution capacity,
+- a compact management/engineering group,
+- approximately two engineers at the current snapshot,
+- technician-heavy field execution,
 - common crews such as one engineer plus two technicians,
 - some work performed directly by technician pairs,
 - daily field output can be repeated building/unit work rather than one large monolithic task.
+
+This is not a scale assumption. HILTECH is growing and the product must support additional people, teams, projects, partners, agencies/authorized relationships, warehouses/storage locations and clients without redesign.
 
 Reported examples include:
 - data-center rack installation,
@@ -125,7 +127,7 @@ Reported examples include:
 - factory/site infrastructure work.
 
 Product consequence:
-Work assignment, map/site context, offline execution, evidence, tools and temporary site material must work well for small crews without requiring enterprise hierarchy.
+Work assignment, map/site context, offline execution, evidence, tools and temporary site material must work well for today's crews while remaining data/configuration-driven for larger future teams and structures.
 
 ## Current digital gap
 
