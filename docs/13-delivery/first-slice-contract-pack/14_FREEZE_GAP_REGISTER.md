@@ -266,6 +266,7 @@ Provider architecture now resolved:
 - OpenTelemetry Collector → OCI observability baseline.
 - Terraform + OCI provider + Resource Manager.
 - GitHub Actions remains delivery control plane.
+- staged DR architecture: PILOT backup/PITR; STABLE Jeddah→Riyadh Warm Standby with 5-minute enforced RPO and <=60-minute recovery-drill target.
 
 Still required before infrastructure Freeze:
 - OCI tenancy/region subscription.
@@ -274,7 +275,7 @@ Still required before infrastructure Freeze:
 - final runtime/database sizing + cost check.
 - staging IaC deploy proof.
 - PostgreSQL PITR restore rehearsal plan/acceptance.
-- final business RPO/RTO + DR region.
+- execute/plan recovery rehearsal against the staged DR contract; business SLA stricter than engineering target remains separate.
 - telemetry retention/sampling/alert settings.
 - exact malware scanner only if ARBITRARY_FILE enabled.
 - production domain/TLS ownership.
