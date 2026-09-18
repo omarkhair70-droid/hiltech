@@ -14,7 +14,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -85,7 +84,7 @@ class KtorPendingCommandTransportTest {
 
         val jsonBody = Json.parseToJsonElement(request.body).jsonObject
         assertEquals("op-42", jsonBody["operationId"]?.jsonPrimitive?.content)
-        assertEquals(7L, jsonBody["baseVersion"]?.jsonPrimitive?.long)
+        assertEquals("7", jsonBody["baseVersion"]?.jsonPrimitive?.content)
         assertEquals("2023-11-14T22:13:20Z", jsonBody["clientOccurredAt"]?.jsonPrimitive?.content)
         assertEquals("site-session", jsonBody["localSiteSessionRef"]?.jsonPrimitive?.content)
 
