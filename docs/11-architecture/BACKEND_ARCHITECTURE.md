@@ -1,9 +1,17 @@
 # HILTECH Backend Architecture
 
-Status: ARCHITECTURE MODEL v0.1 / SPRING MODULAR MONOLITH LEADING
+Status: ARCHITECTURE MODEL v0.2 / SPRING MODULAR MONOLITH ACCEPTED / EXACT CONTRACTS NOT FROZEN
 
-## Target
-Kotlin/JVM + Spring Boot + Spring Modulith modular monolith.
+## ## Target
+Accepted baseline:
+- Kotlin/JVM,
+- Spring Boot,
+- Spring Modulith modular monolith,
+- PostgreSQL,
+- jOOQ.
+
+Evidence:
+SPIKE-10 + SPIKE-11; ADR-002/003/004/005.
 
 ---
 
@@ -126,10 +134,11 @@ Do not simulate distributed transactions when system is still one database/appli
 
 # 7. Events
 
-Spring Modulith candidate:
+Spring Modulith accepted:
 - module events,
 - persistent publication registry for reliable asynchronous reactions,
-- module boundary verification.
+- module boundary verification,
+- explicit observable resubmission of incomplete publications.
 
 Product event vocabulary remains separate from technical event schema.
 
@@ -180,8 +189,9 @@ Server is mandatory enforcement point.
 Flow:
 authenticated identity -> HILTECH subject context -> authorization check -> command/query.
 
-Potential OpenFGA handles relationship/policy questions.
-Spring Security handles authentication/security context integration.
+OpenFGA handles accepted object/action relationship authorization questions.
+Keycloak/OIDC provides identity/session; Spring Security integrates authenticated security context.
+HILTECH server remains the mandatory enforcement point.
 
 Sensitive fields may need field-level filtering after object-level allow.
 
