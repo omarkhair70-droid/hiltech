@@ -395,8 +395,24 @@ They still remain blockers for their own affected domains and for any broader co
 
 Technical feasibility: **CLOSED / PROVEN**.
 
-Reality closure: **OPEN**.
+Reality closure: **PARTIALLY CLOSED BY INTERNAL REPORT**.
 
-Exact first-slice contracts: **WAITING ON THE REALITY ITEMS ABOVE**.
+Already known enough to stop treating as unknown:
+- HILTECH is a small field-oriented organization, not a deep enterprise hierarchy.
+- main tool storage is at the Maadi HQ.
+- tool count is moderate/small relative to enterprise warehouse scale, but custody value is high.
+- remote projects can hold temporary Project/Site stock such as cable cartons.
+- field crews are small and may be engineer + technicians or technicians directly.
+- Work can repeat by building/unit/day.
+- first-slice design should support Main Warehouse + Project/Site temporary storage + Field Crew + WorkOrder.
+
+Still required for exact freeze:
+- exact authority/exception rules where they change permissions,
+- exact Project/WorkOrder fields from one representative real job,
+- exact evidence/acceptance rules by work type,
+- exact Asset/Stock categories/units/codes for pilot,
+- device/site restrictions that materially affect offline behavior.
+
+Exact first-slice contracts: **CAN ADVANCE NOW, WITH THE REMAINING ITEMS KEPT AS LABELED REALITY BLOCKERS**.
 
 Production code: **DO NOT START YET**.
