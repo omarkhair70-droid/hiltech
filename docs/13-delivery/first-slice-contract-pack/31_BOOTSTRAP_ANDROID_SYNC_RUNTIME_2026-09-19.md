@@ -1,7 +1,7 @@
 # 31 — Bootstrap Android Sync Runtime Wiring
 
 Date: 2026-09-19
-Status: **IMPLEMENTED / CI VERIFICATION PENDING**
+Status: **PASS / BOOTSTRAP VERIFIED**
 
 ## Purpose
 
@@ -76,6 +76,23 @@ This prevents an early WorkManager retry from observing zero currently-due comma
 Correlation IDs are generated per request now.
 
 W3C `traceparent` remains an explicit provider boundary and is currently null until the observability gate installs the production tracing context.
+
+## Bootstrap verification
+
+GitHub Actions run:
+`35406932286`
+
+PASS:
+- Shared tests,
+- committed Room schema check,
+- Android debug build with app-scoped Room/Ktor runtime,
+- Desktop compile,
+- Server tests,
+- PostgreSQL/Flyway/jOOQ regression suite.
+
+The Android app declares its Ktor core dependency directly because the application runtime owns an explicit `HttpClient` reference; shared-core implementation dependencies are not leaked transitively.
+
+This gate is closed.
 
 ## Next gate
 
