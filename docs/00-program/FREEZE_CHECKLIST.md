@@ -137,10 +137,10 @@ BLOCKING: YES before production UI.
 - [x] Conflict classes.
 - [x] Capability-level offline classification first pass.
 - [ ] Per-feature-ID offline classification for implementation scope.
-- [ ] Sync protocol frozen.
-- [ ] Local schema.
-- [ ] Upload strategy.
-- [ ] Security/encryption policy.
+- [x] Sync protocol semantic contract frozen for first slice.
+- [x] Local schema/entity contract defined for first slice.
+- [x] Upload/evidence strategy defined.
+- [x] Local cache/evidence security baseline defined; stronger encryption has explicit revisit triggers.
 - [x] Core offline/background spike path passed — SPIKE-03/04/13 accepted.
 
 BLOCKING: YES for field foundation.
@@ -175,8 +175,8 @@ BLOCKING: PARTIAL — only for included integrations.
 - [x] Auth decision — Keycloak native OIDC / ADR-008 accepted.
 - [x] Authz decision — OpenFGA / ADR-009 accepted.
 - [x] SQL/persistence decision — PostgreSQL + jOOQ accepted; exact schemas/codegen freeze later.
-- [ ] Object storage/provider.
-- [ ] Infra provider.
+- [x] Object storage/provider baseline — OCI Object Storage + KMS / ADR-014; cutover validation pending.
+- [x] Infra provider baseline — OCI / ADR-014; Jeddah candidate + Container Instances/Compute fallback; tenancy/quota/latency validation pending.
 - [x] CI/CD control plane — GitHub Actions accepted; final action pinning/version re-check remains.
 - [x] Windows packaging/update/rollback decision — SPIKE-07 / ADR-012 accepted; production signing/distribution provider still open.
 - [x] Ktor/shared networking decision — SPIKE-15 / ADR-007 accepted.
@@ -199,9 +199,9 @@ BLOCKING: YES.
 - [x] Dependency graph v0.1.
 - [x] Monorepo structure proposal.
 - [ ] ADRs accepted.
-- [ ] API conventions.
-- [ ] exact object/API schemas.
-- [ ] module public contracts.
+- [x] API conventions / first-slice HTTP semantics v0.3.
+- [x] first-slice exact object/API contract candidates defined in contract pack.
+- [x] first-slice module/public contract boundaries defined at pre-code level; production interfaces generated after Freeze.
 - [x] accepted spike evidence reflected in canonical plan/status/ADRs; technical-spike gate closed with SPIKE-15 / ADR-007.
 - [ ] final monorepo structure.
 
@@ -238,12 +238,13 @@ Freeze review can only be called when every blocking section is either:
 
 ## Configurable operating model
 
-- [ ] Typed/versioned configuration schemas are frozen for WorkType, readiness, evidence, review, tracking, storage, roles/teams/delegation and other first-slice policy.
-- [ ] Normal operating-policy changes can be made from authorized product configuration without code/database edits.
-- [ ] Configuration changes are versioned, permissioned and audited.
-- [ ] Hard invariants remain non-configurable.
-- [ ] At least one realistic HILTECH seed configuration proves the model can express current operations.
-- [ ] Current names/thresholds/work-type lists are not mistaken for compile-time architecture.
+- [x] Typed/versioned configuration schemas structurally defined for WorkType, readiness, evidence, review, tracking, storage, roles/teams/delegation and first-slice policy.
+- [x] Normal operating-policy changes are modeled through authorized product configuration without code/database edits.
+- [x] Configuration changes are versioned, permissioned and audited by contract.
+- [x] Hard invariants remain non-configurable.
+- [x] Representative internal HILTECH fixtures prove current Project/Field/Storage patterns fit the configuration/domain model.
+- [x] Current names/thresholds/work-type lists are treated as seed data, not compile-time architecture.
+- [ ] Configuration Center representative visual proof.
 
 Canonical model:
 `docs/03-product/CONFIGURABLE_OPERATING_MODEL.md`
@@ -262,3 +263,15 @@ Canonical bridge to repository bootstrap:
 - final slice freeze record: `docs/13-delivery/first-slice-contract-pack/09_FREEZE_RECORD.md`
 
 The first production slice is not BUILD-READY until that freeze record can be marked PASS without inventing HILTECH-specific facts.
+
+
+---
+
+## Freeze / Bootstrap interpretation
+
+Canonical:
+`docs/13-delivery/first-slice-contract-pack/17_FREEZE_TO_BOOTSTRAP_BOUNDARY.md`
+
+Pre-code Freeze requires exact contracts/generation rules/test specifications.
+
+Final Flyway SQL, Spring/Ktor/Room production code, generated jOOQ, and implementation integration tests are post-Freeze Bootstrap artifacts and must not be circular pre-code blockers.
