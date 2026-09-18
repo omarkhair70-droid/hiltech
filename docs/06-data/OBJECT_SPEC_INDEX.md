@@ -108,6 +108,9 @@ File:
 - Allocation
 - Reconciliation
 - BankTransaction
+- FinancialImprest / CashCustody
+- ImprestLedgerEntry
+- ImprestSettlement
 
 File:
 `object-specs/PROCUREMENT_FINANCE_OBJECTS.md`
