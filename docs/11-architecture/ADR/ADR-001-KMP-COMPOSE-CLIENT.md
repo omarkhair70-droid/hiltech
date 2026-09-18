@@ -99,3 +99,17 @@ GitHub Actions run 35305553872 passed:
 
 Result:
 Compose Desktop remains the accepted Windows UI baseline. Final table component design and real office-hardware performance budgets remain open.
+
+
+## SPIKE-02 follow-up — 2026-09-18
+
+Arabic/RTL/adaptive feasibility has now been tested.
+
+GitHub Actions run 35305946228 passed:
+- shared bidi/adaptive policy tests,
+- Android compile,
+- Desktop compile,
+- real RTL renders at phone/tablet/desktop widths,
+- real LTR desktop render.
+
+This removes RTL/adaptive structure as a platform-change trigger. Final Arabic typography and human visual review remain design freeze work.
