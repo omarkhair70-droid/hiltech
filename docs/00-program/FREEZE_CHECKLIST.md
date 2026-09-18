@@ -95,7 +95,7 @@ BLOCKING: YES
 - [ ] External org boundaries validated.
 - [ ] Critical re-auth rules.
 - [ ] Device trust rules.
-- [ ] OpenFGA/application policy spike decision.
+- [x] OpenFGA/application policy spike decision — SPIKE-09 / ADR-009 accepted.
 - [ ] Permission test matrix.
 
 BLOCKING: YES
@@ -170,10 +170,10 @@ BLOCKING: PARTIAL — only for included integrations.
 - [x] Candidate version matrix.
 - [x] Technical architecture candidates.
 - [ ] Technical spikes completed.
-- [ ] KMP client decision.
-- [ ] Desktop viability decision.
-- [ ] Auth decision.
-- [ ] Authz decision.
+- [x] KMP client decision — SPIKE-01/02/06 / ADR-001 accepted.
+- [x] Desktop viability decision — 50k dense-data render proof passed.
+- [x] Auth decision — Keycloak native OIDC / ADR-008 accepted.
+- [x] Authz decision — OpenFGA / ADR-009 accepted.
 - [ ] SQL/persistence decision.
 - [ ] Object storage/provider.
 - [ ] Infra provider.
@@ -200,7 +200,7 @@ BLOCKING: YES.
 - [ ] API conventions.
 - [ ] exact object/API schemas.
 - [ ] module public contracts.
-- [ ] technical spikes reflected.
+- [x] accepted spike evidence reflected in canonical plan/status/ADRs; remaining spikes still open.
 - [ ] final monorepo structure.
 
 BLOCKING: YES.
@@ -213,11 +213,11 @@ BLOCKING: YES.
 - [x] Dependency graph v0.1.
 - [x] Technical spike plan.
 - [ ] Implementation order.
-- [ ] Test strategy.
-- [ ] CI gates.
-- [ ] Release strategy.
-- [ ] migration/rollback policy.
-- [ ] operational runbooks.
+- [x] Test strategy artifact exists.
+- [x] CI gates artifact exists.
+- [x] Release strategy artifact exists.
+- [x] migration/rollback policy artifact exists.
+- [x] operational runbooks index/artifacts exist.
 
 BLOCKING: YES before production build sprint.
 
