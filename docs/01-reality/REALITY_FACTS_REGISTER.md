@@ -113,25 +113,27 @@ Validation required with Ahmed:
 
 ---
 
-## RF-004 — HILTECH operates with a small flexible field organization
+## RF-004 — Current HILTECH staffing is a compact field-oriented operating snapshot
 Status: **INTERNAL_REPORTED**
 Date: 2026-09-18
 
-Reported reality:
-- company operations are handled by a small core management/engineering group,
+Reported current snapshot:
 - Mohamed and Ahmed are central office/management figures,
 - there is another Mohamed in the company,
-- the engineering layer is small (reported approximately two engineers),
-- most execution capacity is field technicians rather than a large departmental hierarchy.
+- the engineering layer is currently reported at approximately two engineers,
+- field execution includes technicians and small crews.
+
+Important interpretation:
+This is **current operating data, not a product-size constraint**.
 
 Product consequence:
-- first-release organization model must support small-team reality without forcing enterprise department structure,
-- Team/Role structures should remain lightweight,
-- Work/Project assignment may target named people or small field crews directly,
-- authorization must model real authority, not assume many management layers.
+- the system must work cleanly for today's compact team,
+- but Organization / Team / Role / Project / Work / Warehouse models must scale without redesign as HILTECH hires, wins more projects, adds partners/agencies, creates more teams/locations, or changes reporting structure,
+- Work/Project assignment supports individuals, crews, teams, subcontractors and future structures through data/configuration,
+- authorization models relationships and authority rather than assuming either a tiny flat company or a deep enterprise hierarchy.
 
 Validation note:
-Exact staff count/reporting lines can still be corrected later without changing the core product architecture.
+Exact current staff count/reporting lines are seed/configuration data and may change without changing the core architecture.
 
 ---
 
@@ -146,9 +148,9 @@ Reported reality:
 - many tools are high-value and therefore custody/history matters more than inventory scale.
 
 Product consequence:
-- optimize first Warehouse experience for high-value custody and fast issue/return,
-- do not design the first release as a large multi-warehouse logistics ERP,
-- serialized Asset identity and custody are more important than massive SKU throughput.
+- the initial Warehouse experience should make high-value custody and fast issue/return excellent for current operations,
+- the domain model must still support additional warehouses, project/site stores, locations, stock classes and higher volume without redesign,
+- serialized Asset identity and custody are first-class; larger stock/logistics scale remains supported by the same warehouse/location/stock model.
 
 ---
 
@@ -167,7 +169,7 @@ Product consequence:
 
 ---
 
-## RF-007 — Field crews are small and work patterns vary by project type
+## RF-007 — Current field work uses compact crews; assignment model must scale
 Status: **INTERNAL_REPORTED**
 Date: 2026-09-18
 
@@ -178,11 +180,13 @@ Reported examples:
 - a common field shape can be one engineer plus two technicians, while some work can be handled by technicians directly.
 
 Product consequence:
-- WorkOrder must support single-user and small-crew assignment,
+- WorkOrder supports individual, crew, team and subcontractor assignment rather than assuming one permanent crew size,
+- current compact crews are initial operating data,
 - Project/Site/Area/Building context matters,
 - daily production can be expressed as repeated WorkOrders/units of work rather than one giant task,
-- offline/site navigation and lightweight field execution are first-class,
-- evidence/readiness rules must vary by work type rather than be universally heavy.
+- offline/site navigation and field execution are first-class,
+- evidence/readiness rules vary by WorkType,
+- future growth in crew count, project count or organizational structure must not require domain redesign.
 
 ---
 
