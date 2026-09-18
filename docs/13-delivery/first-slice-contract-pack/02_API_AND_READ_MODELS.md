@@ -1,6 +1,6 @@
 # 02 — First-Slice API / Command / Read-Model Contracts
 
-Status: **CONTRACT CANDIDATE v0.2 / ROUTE + DTO SHAPES DEFINED**
+Status: **CONTRACT CANDIDATE v0.3 / FIRST-SLICE HTTP SEMANTICS CLOSED**
 
 ## Accepted Cross-Cutting Wire Rules
 
@@ -177,31 +177,72 @@ Principles:
 
 ## Configuration
 
-Typed route families:
+Allowed family path values:
+- work-types
+- assignment-policies
+- readiness-policies
+- evidence-policies
+- review-policies
+- tracking-policies
+- asset-types
+- stock-categories
+- storage-locations
+- code-policies
+- project-health-policies
+- templates
 
-- /v1/config/work-types
-- /v1/config/assignment-policies
-- /v1/config/readiness-policies
-- /v1/config/evidence-policies
-- /v1/config/review-policies
-- /v1/config/tracking-policies
-- /v1/config/asset-types
-- /v1/config/stock-categories
-- /v1/config/storage-locations
+Canonical route grammar:
 
-Each family supports command semantics equivalent to:
-- POST .../drafts
-- PUT .../drafts/{configRevisionId}
-- POST .../{configRevisionId}/validate
-- POST .../{configRevisionId}/activate
-- POST .../{configRevisionId}/supersede
-- POST .../{configRevisionId}/retire
-- POST .../{configRevisionId}/clone
-- GET .../{configRevisionId}
-- GET .../{configRevisionId}/history
-- GET .../{configRevisionId}/usage-impact
+- GET /v1/config/{family}
+- POST /v1/config/{family}/drafts
+- PUT /v1/config/{family}/drafts/{revisionId}
+- POST /v1/config/{family}/drafts/{revisionId}/validate
+- POST /v1/config/{family}/drafts/{revisionId}/activate
+- GET /v1/config/{family}/revisions/{revisionId}
+- POST /v1/config/{family}/revisions/{revisionId}/retire
+- POST /v1/config/{family}/revisions/{revisionId}/clone
+- GET /v1/config/{family}/revisions/{revisionId}/usage-impact
+- GET /v1/config/{family}/codes/{code}/history
 
-Exact wording can still be normalized once during final API review, but semantic route separation is accepted.
+Rules:
+- {family} is allow-listed by server, not arbitrary reflection/table routing.
+- only DRAFT revision is editable.
+- activation/supersession semantics follow configuration contract.
+- activating a new revision supersedes the prior active revision for the same scope/code in the same command transaction/projection flow.
+
+## Project / Site administration
+
+These routes support the wider Project domain but are not required to be implemented before the first vertical's core Work execution if pilot data is seeded.
+
+Canonical candidates:
+
+- POST /v1/projects
+- GET /v1/projects/{projectId}
+- PUT /v1/projects/{projectId}/details
+- POST /v1/projects/{projectId}/change-manager
+- POST /v1/projects/{projectId}/start-kickoff
+- POST /v1/projects/{projectId}/mark-ready
+- POST /v1/projects/{projectId}/activate
+- POST /v1/projects/{projectId}/put-on-hold
+- POST /v1/projects/{projectId}/resume
+- POST /v1/projects/{projectId}/start-handover
+- POST /v1/projects/{projectId}/close
+
+- POST /v1/sites
+- GET /v1/sites/{siteId}
+- PUT /v1/sites/{siteId}/details
+
+- POST /v1/projects/{projectId}/sites
+- GET /v1/projects/{projectId}/sites
+- GET /v1/project-sites/{projectSiteId}
+- POST /v1/project-sites/{projectSiteId}/activate
+- POST /v1/project-sites/{projectSiteId}/put-on-hold
+- POST /v1/project-sites/{projectSiteId}/resume
+- POST /v1/project-sites/{projectSiteId}/complete
+- POST /v1/project-sites/{projectSiteId}/close
+
+Metadata PUT requests still carry baseVersion and do not bypass lifecycle commands.
+
 
 ---
 
@@ -219,7 +260,16 @@ Headers:
 - X-Correlation-Id
 - traceparent
 
-Optional client metadata may later include app version, platform and installation ID only if server behavior needs it.
+Native authenticated requests include:
+- X-Client-Platform: android | windows
+- X-Client-Version: semantic/build version
+- X-Device-Installation-Id: opaque installation UUID
+
+Rules:
+- these headers support compatibility, diagnostics, rollout and offline/device correlation.
+- they are not trusted authorization identity.
+- server authentication/authorization still derives from token + HILTECH identity/device records.
+- web/server-to-server clients use their own explicit client identity/metadata contract.
 
 ---
 
@@ -567,19 +617,15 @@ Uses the exact local contract in 04_ROOM_OFFLINE_SYNC.md.
 
 # API freeze items still open
 
-- exact string/max field constraints.
-- exact route normalization for configuration revisions.
-- exact client metadata headers only if server behavior uses them.
-- exact Project/Site create/update routes beyond the first vertical where needed.
+No first-slice HTTP semantic decision remains open.
 
-Closed:
-- typed assignment target.
-- requirement-instance DTO semantics.
-- REAUTH_REQUIRED details.
-- object-hidden policy candidate.
-- stateless opaque cursor contract.
-- thin manual shared Ktor typed-client convention.
-- additive /v1 breaking-change policy.
+Post-Freeze Bootstrap verification:
+- serialization option flags in production code.
+- generated OpenAPI snapshot.
+- REAUTH_REQUIRED integration test.
+- cursor integration test.
+- representative safe 4xx/5xx mappings.
+- Android/Desktop DTO compatibility tests.
 
 Current:
 **first-slice API has stable route/DTO/error candidates sufficient to drive server/client skeleton generation.**
@@ -680,3 +726,46 @@ Within /v1:
 Breaking incompatible public/native contract:
 - new major API boundary or explicit migration/version path.
 - old queued offline commands must be migrated/rejected explicitly, never misinterpreted.
+
+
+---
+
+# OpenAPI publication contract
+
+After repository bootstrap:
+
+- server emits OpenAPI 3.1 for /v1 HTTP routes.
+- generated review snapshot path: contracts/http/hiltech-v1.openapi.yaml.
+- snapshot is generated from production server DTO/controller contract and checked in CI for drift.
+- manual edits to generated snapshot are forbidden.
+- CI regenerates and fails if committed snapshot differs.
+- breaking-change check runs against previous accepted /v1 snapshot.
+
+The shared Ktor client remains manually typed/shared and is not generated from OpenAPI in first slice.
+
+OpenAPI is:
+- documentation,
+- compatibility review artifact,
+- test/tool input.
+
+It is not a replacement for domain/configuration contracts.
+
+---
+
+# First-slice HTTP freeze decision
+
+Pre-code semantics CLOSED for:
+- route naming/prefix/action pattern.
+- auth/idempotency/concurrency/correlation headers.
+- native client metadata.
+- Work/Asset/Evidence command DTOs.
+- typed assignment/requirement DTOs.
+- error/conflict/reauth envelopes.
+- object visibility policy.
+- cursor contract.
+- Project progress/health read models.
+- Configuration routes.
+- Project/Site administration route pattern.
+- additive /v1 compatibility.
+
+Post-Freeze Bootstrap verification must implement and test these contracts.
