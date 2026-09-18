@@ -1,6 +1,6 @@
 # HILTECH OS — Master Index
 
-Status: `RESEARCHING / PRE-FREEZE`
+Status: `FIRST-SLICE CONTRACT CLOSURE / PRE-FREEZE`
 Last major planning update: 2026-09-18
 
 This is the navigation and control document for the entire pre-code phase.
@@ -81,6 +81,8 @@ Start here:
 11. `../01-reality/FIRST_PRODUCTION_SLICE_REALITY_CLOSURE.md` — minimum real-company evidence required to freeze the first vertical.
 12. `../13-delivery/first-slice-contract-pack/README.md` — fillable DB/API/local/auth/file/UI/test/freeze contract pack consumed by repository bootstrap.
 13. `../03-product/CONFIGURABLE_OPERATING_MODEL.md` — canonical rule separating configurable company policy from hard-coded product invariants.
+14. `../10-design/FIRST_SLICE_DESIGN_FREEZE_EXECUTION_PACK_2026-09-18.md` — canvas-ready visual proof queue; actual Figma render currently quota-blocked.
+15. `../13-delivery/first-slice-contract-pack/14_FREEZE_GAP_REGISTER.md` — narrow authoritative blocker list before First-Slice Freeze.
 
 ## Current planning coverage
 
@@ -139,12 +141,14 @@ Strong pre-freeze model:
 - module ownership
 - data classification / retention model
 
-Still required:
-- reality-validated first-slice field definitions,
-- exact production DB/API/local schemas,
-- final invariants/policies where company reality still matters,
-- migration/import mappings,
-- legal retention confirmation.
+First-slice implementation contracts now define:
+- domain/configuration fields and invariants,
+- DB table/constraint/index generation contract,
+- HTTP routes/DTO/errors/read models,
+- Room/offline queue/cache semantics,
+- evidence/file metadata and storage protocol.
+
+Remaining data work is mainly pilot seed/import mapping and any legal retention rule for an actually enabled feature.
 
 ### Security
 Strong pre-freeze model:
@@ -156,11 +160,14 @@ Strong pre-freeze model:
 - external organization boundaries
 - OpenFGA authorization proof / ADR-009
 
-Still required:
-- real authority/delegation validation,
-- exact re-auth/device-trust obligations,
-- frozen authorization tuples/policies for starting slices,
-- permission/field-level test matrix.
+First-slice security now includes:
+- executable OpenFGA model + CI fixtures,
+- fail-closed PostgreSQL→OpenFGA projection contract,
+- re-auth/offline replay obligations,
+- field-level projection rules,
+- negative authorization test families.
+
+Current authority names/relationships are seed/configuration unless they reveal a missing relationship type.
 
 ### Product surfaces
 First pass:
@@ -233,10 +240,16 @@ Accepted / spike-proven directions:
 Accepted / proven additional direction:
 - Ktor Client 3.5.2 shared networking — SPIKE-15 / ADR-007.
 
-Leading but not yet frozen:
-- Flyway
-- production object-storage provider
-- infrastructure/provider/runtime packaging
+Accepted pre-freeze provider/runtime directions:
+- Flyway global migration convention with Spring Boot managed version line
+- OCI / ADR-014
+- OCI Database with PostgreSQL
+- OCI Object Storage + KMS + Secret Management
+- OCI Container Instances preferred / Compute fallback
+- Terraform + OCI Provider / Resource Manager
+- DigiCert OV + KeyLocker / ADR-019
+- HILTECH Update Service
+- staged OCI backup/DR contract
 
 Explicitly not baseline unless evidence requires:
 - Temporal
@@ -325,11 +338,13 @@ If implementation would still require choosing fundamental data ownership, permi
 
 **NOT READY.**
 
-The remaining pre-code gates are:
-1. Validate affected workflows/policies against actual HILTECH reality.
-2. Complete representative low-fi/RTL/design validation for the core internal product.
-3. Convert validated models into exact DB/API/local/auth/file contracts for the starting slices.
-4. Finish remaining provider/runtime/production-signing decisions and final version re-check.
-5. Pass Freeze Review before repository bootstrap or production code.
+The remaining first-slice pre-code gates are:
+1. Complete actual rendered low-fi / RTL / conflict / adaptive visual proof.
+2. Run the final explicit stack/version and CI-action pin review.
+3. Resolve any contradiction exposed by those reviews.
+4. Call First-Slice Freeze Review.
+5. Only then repository bootstrap / production implementation.
+
+OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging and DR rehearsals are activation/cutover gates unless they reveal a contract contradiction.
 
 See `CURRENT_PROGRAM_STATUS.md` and `FREEZE_CHECKLIST.md`.
