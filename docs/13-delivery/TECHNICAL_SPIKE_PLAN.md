@@ -219,6 +219,25 @@ Prove:
 Pass:
 no embedded-password anti-pattern; clean native app auth.
 
+**Result 2026-09-18: ACCEPT — NATIVE OIDC IDENTITY/SESSION ARCHITECTURE PASSED.**
+
+Evidence on real Keycloak 26.7.4:
+- public native client with Authorization Code + PKCE S256.
+- Android private-use redirect passed.
+- Windows loopback redirect passed through real Chromium.
+- same browser context reused SSO session.
+- `prompt=login` required interactive credential re-auth and completed a second PKCE exchange.
+- refresh passed.
+- logout invalidated refresh.
+- remote admin session revoke invalidated refresh.
+- WebAuthn registration and passwordless registration actions exist.
+- Direct Access Grant/password grant is disabled for the HILTECH native client.
+
+GitHub Actions run: 35307236838.
+
+Architecture finding:
+HILTECH offline business work remains the Room/local command queue. Native identity uses normal OIDC session/refresh semantics; Keycloak `offline_access` tokens are not the baseline.
+
 ---
 
 # SPIKE-09 — OpenFGA HILTECH Model
