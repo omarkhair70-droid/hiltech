@@ -1,6 +1,6 @@
 # Exact Object Specs — Project, Site, Work
 
-Status: DOMAIN DATA MODEL v0.1 / NOT SCHEMA-FROZEN
+Status: DOMAIN DATA MODEL v0.2 / PRE-FREEZE / CONTRACT PACK CANONICAL
 
 Field notation:
 - R = required
@@ -72,39 +72,59 @@ Lifecycle/baseline authoritative changes online.
 # Site
 
 ## Purpose
-Physical/client location where project/service work occurs.
+Canonical durable physical/client location that can survive across multiple projects, support cases, warranty, maintenance, and managed-service relationships.
+
+## Fields
+- id: UUID — R
+- clientOrganizationId: UUID — R
+- siteCode: String — R, human-facing unique within client organization candidate
+- name: String — R
+- addressText: String — O — RESTRICTED
+- latitude: Decimal — O — RESTRICTED
+- longitude: Decimal — O — RESTRICTED
+- timezone: IANA TZ — O
+- status: ACTIVE/INACTIVE candidate — R
+- createdAt/by
+- updatedAt
+- version: Long — R
+
+## Invariants
+- Site identity is not recreated merely because a new Project starts at the same physical/client location.
+- geolocation visibility is permission-scoped.
+- support/maintenance can reference Site after Project closure.
+
+## Offline
+Assigned field users may cache the safe Site subset required by active work.
+
+---
+
+# ProjectSite
+
+## Purpose
+Project-specific association between Project and canonical Site.
 
 ## Fields
 - id: UUID — R
 - projectId: UUID — R
-- siteCode: String — R unique within project
-- name: String — R
-- clientSiteRef: String — O
-- addressText: String — O — RESTRICTED
-- latitude: Decimal — O — RESTRICTED
-- longitude: Decimal — O — RESTRICTED
+- siteId: UUID — R
+- projectSiteCode: String — O
+- lifecycleState: PLANNED/ACTIVE/ON_HOLD/COMPLETED/CLOSED candidate
 - accessInstructions: Text — O — RESTRICTED
-- contactIds: [UUID] — O
-- lifecycleState: SiteState — R
-- timezone: IANA TZ — O
-- notes: Text — O — INTERNAL/RESTRICTED
+- projectSpecificNotes: Text — O — INTERNAL/RESTRICTED
+- activeFrom: Instant — O
+- activeUntil: Instant — O
 - version: Long — R
 
 ## Relationships
-- areas/zones
+- project-specific contacts
 - work
-- assets
 - documents
-- support tickets
-- maintenance visits
+- project/site storage context
 
 ## Invariants
-- site belongs to exactly one project/client context in delivery model unless later generalized into reusable client sites.
-- geolocation visibility permission-scoped.
-- access instructions never exposed to unauthorized external users.
-
-## Offline
-Assigned field users may cache site/access context.
+- unique Project + Site association by default.
+- access instructions never exposed to unauthorized users.
+- closing ProjectSite does not delete canonical Site history.
 
 ---
 
@@ -171,51 +191,76 @@ Progress derived/controlled; avoid arbitrary manual percentage if source work ex
 # WorkOrder
 
 ## Purpose
-Executable unit assigned to field/internal/external worker(s).
+Executable unit assigned to internal/external worker target(s), bound to versioned WorkType/policy configuration.
 
-## Fields
+## State dimensions
+- lifecycleState: DRAFT / PLANNED / ASSIGNED / IN_PROGRESS / BLOCKED / SUBMITTED_FOR_REVIEW / REWORK_REQUIRED / ACCEPTED / CLOSED / CANCELLED
+- readinessState: NOT_EVALUATED / READY / BLOCKED — derived from bound ReadinessPolicy
+
+Lifecycle and readiness are independent.
+
+## Core fields
 - id: UUID — R
 - workOrderCode: String — R
 - projectId: UUID — R
 - siteId: UUID — R
+- projectSiteId: UUID — O
 - areaId: UUID — O
 - workPackageId: UUID — O
 - title: String — R
 - description: Text — O
-- lifecycleState: WorkOrderState — R
-- readinessState: ReadinessState — C
-- assignedUserIds: [UUID] — O
-- assignedTeamId: UUID — O
-- assignedSubcontractorOrgId: UUID — O
-- supervisorId: UUID — O
-- engineerId: UUID — O
-- plannedStart: Instant — O
-- plannedEnd: Instant — O
-- actualStart: Instant — O
-- submittedAt: Instant — O
-- acceptedAt: Instant — O
-- priority: Priority — R
-- requiredEvidencePolicyId: UUID/ObjectRef — O
-- drawingRevisionRefs: [Ref] — O
-- requiredMaterialRefs: [Requirement] — O
-- requiredAssetRefs: [Requirement] — O
-- accessRequirement: String/ObjectRef — O
-- baseInstructionVersion: Int — R
+- lifecycleState — R
+- readinessState — C
+- plannedStart/end — O
+- actualStart — O
+- submittedAt — O
+- acceptedAt — O
+- closedAt — O
+- priorityCode — R
+- instructionRevision — R
+- instructionRef/payload
 - version: Long — R
+- createdAt/by
+- updatedAt
+
+## Policy binding
+WorkOrder binds revisions for:
+- WorkTypeDefinition
+- AssignmentPolicy
+- ReadinessPolicy
+- EvidencePolicy
+- ReviewPolicy
+- FieldTrackingPolicy — O
+- checklist/instruction templates — O
+
+Exact binding contract:
+`docs/13-delivery/first-slice-contract-pack/11_PROJECT_SITE_WORK_CONTRACT.md`.
+
+## Assignment
+Assignments are first-class WorkAssignment history records targeting:
+- USER
+- CREW
+- TEAM
+- SUBCONTRACTOR_ORGANIZATION
+
+Do not use assignedUserIds/assignedTeamId columns as the authoritative long-term assignment model.
 
 ## Invariants
-- must belong to active/non-terminal project.
-- at least one executor before ASSIGNED.
-- cannot ACCEPT without required evidence/technical checks.
-- stale offline completion cannot overwrite cancelled/reassigned state.
-- acceptedAt only set through AcceptWork transition.
+- belongs to a valid non-terminal Project/ProjectSite context.
+- at least one eligible active executor before ASSIGNED.
+- readiness READY required before normal assignment/start unless an explicit authorized waiver path exists.
+- cannot ACCEPT without bound Evidence/Review requirements.
+- stale offline completion cannot overwrite cancellation/reassignment/newer version.
+- acceptedAt only set through exact-version AcceptWork.
+- policy/history needed to explain completed work is preserved.
 
 ## Audit
-Assignment, state changes, evidence acceptance/rework, instruction revision changes.
+Assignment/reassignment, lifecycle transitions, policy binding, evidence acceptance/rework, instruction revision, conflict resolution.
 
 ## Offline
-Assigned field users cache full job bundle.
-Start/block/evidence/submit may queue offline.
+Assigned field users cache full authorized Job Bundle.
+Start/Block/Resume/Evidence/Submit may queue offline.
+Assign/Accept/Cancel remain online-authoritative by default.
 
 ---
 
@@ -297,10 +342,13 @@ Internal cost/commercial: RESTRICTED
 Field instruction/evidence: INTERNAL/RESTRICTED
 Client-visible subset explicitly marked.
 
-## Next
-Translate these specs into:
-- API contracts,
-- DB schema,
-- local cache schema,
-- permission rules,
-after reality validation.
+## Canonical implementation bridge
+
+First-slice implementation contracts now exist in:
+- `docs/13-delivery/first-slice-contract-pack/11_PROJECT_SITE_WORK_CONTRACT.md`
+- `02_API_AND_READ_MODELS.md`
+- `03_POSTGRES_FLYWAY_JOOQ.md`
+- `04_ROOM_OFFLINE_SYNC.md`
+- `05_AUTHORIZATION_POLICY_TESTS.md`
+
+Reality validation now checks structural coverage and seeds configuration; it no longer blocks by requiring today's mutable operating choices to be hard-coded.
