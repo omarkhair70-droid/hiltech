@@ -529,7 +529,44 @@ Includes:
 Pass:
 core architectural thesis proven across surfaces without bypassing accepted boundaries.
 
-Ktor/ADR-007 is accepted only if its explicit criteria in the detailed spec pass.
+**Result 2026-09-18: ACCEPT — CORE ARCHITECTURAL THESIS PASSED END TO END.**
+
+Primary GitHub Actions run: **35323209954**.
+
+Companion regressions on the same head:
+- Room3 KMP Offline: 35323209973 — PASS.
+- Offline Command Queue: 35323209948 — PASS.
+- Android Background Sync: 35323209949 — PASS.
+
+Proven in one HILTECH-shaped vertical:
+- PM Desktop authenticated create/assign.
+- outsider denied server-side.
+- Android durable bundle download.
+- Room-backed offline typed-command queue.
+- offline evidence preserved.
+- process death.
+- WorkManager reconnect/replay.
+- S3-compatible direct evidence upload + SHA-256 finalization.
+- idempotent duplicate replay.
+- supervisor exact-version acceptance.
+- PM authoritative read + audit reconstruction.
+- Spring Modulith projections.
+- deterministic stale-version conflict.
+- dependent command blocked after conflict.
+- authoritative state not overwritten.
+- Ktor shared client contract on Android + JVM Desktop.
+
+Final marker:
+`HILTECH_SPIKE15_PASS desktop_create=PASS android_bundle=PASS offline=PASS evidence=PASS workmanager=PASS idempotency=PASS conflict=PASS authz=PASS supervisor=PASS desktop_read=PASS trace=PASS ktor=PASS`
+
+Ktor Client 3.5.2 / ADR-007 is accepted as the shared networking boundary:
+- common DTO/header/result/sync contract,
+- Android OkHttp engine,
+- JVM Desktop CIO engine,
+- no engine-specific leakage into UI/domain.
+
+Boundary:
+this closes technical feasibility, not final production schemas/providers/design. Exact API payloads, DB/local schemas, provider choices and real-company policy validation remain freeze work.
 
 ---
 
