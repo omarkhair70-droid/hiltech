@@ -22,7 +22,7 @@ Two disposable versions are built:
 4. silently install v1.0.0,
 5. run installed app lifecycle probes,
 6. write local HILTECH state under LocalAppData,
-7. register `hiltech://` URL protocol under HKCU,
+7. register `hiltech://` URL protocol under HKCU from the Windows install/update lifecycle harness, targeting the installed packaged executable,
 8. invoke `hiltech://work/WO-42` and verify the installed app receives it,
 9. submit an intentionally corrupt update MSI and require installer failure,
 10. verify v1.0.0 still starts and LocalAppData state is intact,
@@ -51,13 +51,9 @@ It does not claim in-place MSI major-upgrade semantics are already frozen.
 
 ## Deep Link
 
-The application registers:
+The spike registers `hiltech://` at the Windows installation/update lifecycle boundary and routes the URI to the packaged executable. The application owns URI handling after launch; it does not need to mutate registry state from inside the running GUI process.
 
-`hiltech://`
-
-in the current-user registry and routes the URI to the packaged executable.
-
-The production product will use this capability for safe navigation from notifications/browser/auth flows where appropriate.
+The production product may realize the association through the installer, enterprise deployment tooling, or an updater/bootstrapper. Exact production registration mechanics remain a release decision.
 
 ## Pass
 
