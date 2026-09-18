@@ -594,6 +594,10 @@ Cycle prevention required.
 - correction_of_movement_id uuid null
 - correlation_id varchar not null
 
+Availability is derived; there is no authoritative editable asset.available_state column.
+
+Calibration/maintenance/incident state is resolved from their owned records plus optional cached due fields.
+
 ## asset_custody_projection
 
 - asset_id uuid primary key
