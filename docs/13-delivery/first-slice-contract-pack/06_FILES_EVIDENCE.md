@@ -1,6 +1,6 @@
 # 06 — Files / Evidence Contract
 
-Status: **CONTRACT CANDIDATE v0.1**
+Status: **CONTRACT CANDIDATE v0.2 / STORAGE SECURITY CONTRACT CLOSED**
 Date: 2026-09-18
 
 ## Locked Technical Protocol
@@ -90,18 +90,44 @@ Every field needs a retention/security justification.
 
 Object-storage key is infrastructure identity, not business meaning exposed to client.
 
-Freeze:
-- bucket/container separation policy,
-- opaque key generation,
-- tenant/org partition if required,
-- lifecycle/versioning,
-- encryption,
-- quarantine/scanning if required,
-- retention/legal hold if applicable.
+First-slice provider-neutral contract:
+- one private evidence bucket/container per environment is sufficient; tenant isolation uses an opaque organization prefix + server authorization.
+- object key form: org/{organizationId}/evidence/{evidenceId}/objects/{objectVersionId}.
+- no client filename, person name, project name or sensitive business text in object key.
+- bucket/container is private; public ACL/access is disabled.
+- server-side encryption at rest is required; exact KMS/provider mode is selected with the provider.
+- object versioning is enabled where the provider supports it without breaking retention/deletion policy.
+- lifecycle deletion is disabled by default until a formal RetentionPolicy is activated.
 
 Provider remains open until provider/ops freeze.
 
 ---
+
+## First-slice size / upload rule
+
+- system maximum individual evidence object: 16 MiB.
+- EvidencePolicy may set a lower limit.
+- first production slice uses one signed PUT/upload request; no multipart upload.
+- if a verified WorkType later needs files >16 MiB, multipart becomes an explicit extension with its own contract tests.
+
+## Security scan rule
+
+Evidence requirement carries a security scan class:
+
+- GENERATED_TRUSTED_FORMAT — app-generated form/measurement or server-generated artifact; signature/schema validation, no malware scanner required.
+- NATIVE_MEDIA — camera/native media; content-signature/MIME validation required; scanner may be enabled by deployment policy.
+- ARBITRARY_FILE — user-selected/imported file; security scan/quarantine required before READY.
+
+Server-authoritative state can include:
+- RESERVED
+- UPLOADED_UNVERIFIED
+- QUARANTINED
+- READY
+- REJECTED
+
+ARBITRARY_FILE cannot become READY until security scan result PASS.
+
+Executable/script/archive content is denied in first-slice EvidencePolicy unless an explicit typed use case is added.
 
 # Upload State Machine
 
@@ -119,6 +145,7 @@ Provider remains open until provider/ops freeze.
 ## Server-authoritative
 - RESERVED
 - UPLOADED_UNVERIFIED
+- QUARANTINED
 - READY
 - REJECTED
 
@@ -188,10 +215,28 @@ Output:
 
 ## Download
 
-Authorized short-lived download target or proxied stream.
 Never a permanent public restricted URL.
 
+## Download contract by classification
+
+- INTERNAL / RESTRICTED: after server authorization, return a signed private download target with maximum 5-minute expiry.
+- HIGHLY_RESTRICTED: stream/proxy through the authenticated HILTECH API; do not issue a reusable direct object URL.
+- CLIENT_VISIBLE_IF_AUTHORIZED: same signed-target rule after explicit client object/field authorization.
+- every download decision re-checks current authorization/classification.
+
+Signed URL expiry is a delivery mechanism, not authorization persistence.
+
 ---
+
+## Retention baseline
+
+First production slice:
+- authoritative READY evidence has no automatic deletion by default.
+- RetentionPolicy must be explicitly activated before automated expiry/deletion is enabled.
+- legal/contractual hold, when later introduced, overrides normal deletion.
+- superseded evidence remains historically linked until retention policy permits disposal.
+
+This avoids inventing a legal retention period.
 
 # Persistence contract
 
@@ -208,13 +253,19 @@ DB never stores large binary evidence payload as normal OLTP row.
 
 # Open items before final freeze
 
-- exact object-storage provider.
-- exact object-key partitioning.
-- virus/malware scanning requirement for uploaded files.
-- maximum file sizes per evidence type.
-- retention/legal hold implementation.
-- multipart threshold.
-- exact download proxy vs signed URL policy by classification.
+- exact production S3-compatible provider/KMS.
+- exact malware-scanner product/service for ARBITRARY_FILE.
+- provider lifecycle/versioning/backup settings.
+- future formal retention/legal-hold policy if HILTECH/client contracts require automated deletion/hold.
+
+Closed:
+- opaque object-key partitioning.
+- 16 MiB first-slice system max.
+- no multipart in first slice.
+- quarantine/security-scan classes.
+- private encryption-at-rest requirement.
+- classification-based download delivery.
+- no automatic evidence deletion by default.
 
 Current:
-**evidence protocol and metadata are contract-ready; provider/retention closure remains.**
+**evidence application/storage contract is structurally closed; only provider/security-service operations remain.**
