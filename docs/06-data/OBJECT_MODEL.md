@@ -123,6 +123,9 @@ This is not yet a SQL schema.
 - Payment
 - Receivable
 - Payable
+- Financial Imprest / Cash Custody
+- Imprest Ledger Entry
+- Imprest Settlement
 
 ## Shared System Objects
 - Approval Request
