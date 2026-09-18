@@ -1,0 +1,54 @@
+name: Spike — Keycloak Native OIDC
+
+on:
+  push:
+    branches:
+      - "spike/keycloak-native-oidc-20260918"
+    paths:
+      - "spikes/keycloak-native-oidc/**"
+      - ".github/workflows/spike-keycloak-native-oidc.yml"
+  pull_request:
+    paths:
+      - "spikes/keycloak-native-oidc/**"
+      - ".github/workflows/spike-keycloak-native-oidc.yml"
+  workflow_dispatch:
+
+jobs:
+  native-oidc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4
+
+      - name: Start Keycloak 26.7.4
+        run: |
+          docker run -d --name keycloak             -p 8080:8080             -e KC_BOOTSTRAP_ADMIN_USERNAME=admin             -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin             quay.io/keycloak/keycloak:26.7.4             start-dev
+
+      - name: Wait for Keycloak
+        run: |
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8080/realms/master/.well-known/openid-configuration >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs keycloak
+          exit 1
+
+      - name: Run HILTECH native OIDC proof
+        env:
+          KEYCLOAK_URL: http://127.0.0.1:8080
+          KEYCLOAK_ADMIN: admin
+          KEYCLOAK_ADMIN_PASSWORD: admin
+        run: python spikes/keycloak-native-oidc/test_native_oidc.py
+
+      - name: Keycloak logs on failure
+        if: failure()
+        run: docker logs keycloak
