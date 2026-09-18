@@ -1,0 +1,160 @@
+model
+  schema 1.1
+
+type user
+
+type organization
+  relations
+    define member: [user]
+    define admin: [user]
+    define config_viewer: [user]
+    define config_editor: [user]
+    define config_activator: [user]
+
+    define can_view_config: config_viewer or config_editor or config_activator or admin
+    define can_edit_config: config_editor or admin
+    define can_activate_config: config_activator or admin
+
+type team
+  relations
+    define organization: [organization]
+    define manager: [user]
+    define member: [user]
+
+    define can_view: member or manager
+    define can_manage_membership: manager
+
+type project
+  relations
+    define organization: [organization]
+    define project_manager: [user, team#member]
+    define engineer: [user, team#member]
+    define supervisor: [user, team#member]
+    define technician: [user, team#member]
+    define warehouse_context: [user, team#member]
+    define explicit_viewer: [user, team#member]
+
+    define can_view: project_manager or engineer or supervisor or technician or warehouse_context or explicit_viewer
+    define can_create_work: project_manager or supervisor
+    define can_assign_work: project_manager or supervisor
+    define can_review_work: project_manager or engineer or supervisor
+    define can_cancel_work: project_manager or supervisor
+    define can_request_resource: project_manager or engineer or supervisor
+    define can_view_resources: can_view
+
+type site
+  relations
+    define project: [project]
+    define explicit_member: [user, team#member]
+    define site_supervisor: [user, team#member]
+    define site_technician: [user, team#member]
+
+    define can_view: explicit_member or site_supervisor or site_technician or can_view from project
+    define can_access_field_context: explicit_member or site_supervisor or site_technician or project_manager from project or engineer from project or supervisor from project
+
+type work_order
+  relations
+    define project: [project]
+    define site: [site]
+    define assigned_user: [user]
+    define assigned_team: [team#member]
+    define reviewer: [user, team#member]
+    define explicit_viewer: [user, team#member]
+
+    define can_view: assigned_user or assigned_team or reviewer or explicit_viewer or can_view from project
+    define can_start: assigned_user or assigned_team
+    define can_block: assigned_user or assigned_team
+    define can_resume: assigned_user or assigned_team
+    define can_submit_completion: assigned_user or assigned_team
+    define can_review: reviewer or can_review_work from project
+    define can_request_rework: can_review
+    define can_cancel: can_cancel_work from project
+    define can_view_evidence: can_view
+
+type warehouse
+  relations
+    define organization: [organization]
+    define operator: [user, team#member]
+    define manager: [user, team#member]
+    define viewer: [user, team#member]
+
+    define can_view_inventory: operator or manager or viewer
+    define can_receive: operator or manager
+    define can_checkout: operator or manager
+    define can_return: operator or manager
+    define can_transfer: operator or manager
+    define can_count: operator or manager
+    define can_manage: manager
+
+type storage_location
+  relations
+    define warehouse: [warehouse]
+    define project: [project]
+    define site: [site]
+    define responsible: [user, team#member]
+    define operator: [user, team#member]
+    define viewer: [user, team#member]
+
+    define can_view: responsible or operator or viewer or can_view_inventory from warehouse or can_view_resources from project or can_view from site
+    define can_move_in: responsible or operator or can_receive from warehouse
+    define can_move_out: responsible or operator or can_checkout from warehouse
+    define can_count: responsible or operator or can_count from warehouse
+
+type asset
+  relations
+    define warehouse: [warehouse]
+    define storage_location: [storage_location]
+    define current_custodian: [user, team#member]
+    define project: [project]
+    define site: [site]
+    define work_order: [work_order]
+    define explicit_viewer: [user, team#member]
+    define checkout_delegate: [user, team#member]
+
+    define can_view: current_custodian or explicit_viewer or can_view_inventory from warehouse or can_view from storage_location or can_view_resources from project or can_view from work_order
+    define can_reserve: can_request_resource from project or can_checkout from warehouse
+    define can_checkout: checkout_delegate or can_checkout from warehouse
+    define can_return: current_custodian or can_return from warehouse
+    define can_transfer: current_custodian or can_transfer from warehouse
+    define can_report_damage: current_custodian or can_view from work_order or can_view_inventory from warehouse
+    define can_report_missing: current_custodian or can_view_inventory from warehouse
+    define can_view_history: can_view_inventory from warehouse or can_view_resources from project
+
+type stock_item
+  relations
+    define warehouse: [warehouse]
+    define viewer: [user, team#member]
+
+    define can_view: viewer or can_view_inventory from warehouse
+    define can_reserve: can_checkout from warehouse
+    define can_issue: can_checkout from warehouse
+    define can_return: can_return from warehouse
+    define can_count: can_count from warehouse
+
+type evidence
+  relations
+    define work_order: [work_order]
+    define creator: [user]
+    define reviewer: [user, team#member]
+    define client_visible_to: [organization#member]
+
+    define can_view: creator or reviewer or client_visible_to or can_view_evidence from work_order
+    define can_reserve_upload: creator or can_submit_completion from work_order
+    define can_finalize: creator or can_submit_completion from work_order
+    define can_review: reviewer or can_review from work_order
+    define can_download: can_view
+
+type configuration_revision
+  relations
+    define organization: [organization]
+    define viewer: [user, team#member]
+    define editor: [user, team#member]
+    define activator: [user, team#member]
+
+    define can_view: viewer or editor or activator or can_view_config from organization
+    define can_edit_draft: editor or can_edit_config from organization
+    define can_validate: can_edit_draft
+    define can_activate: activator or can_activate_config from organization
+    define can_supersede: can_activate
+    define can_retire: can_activate
+    define can_view_history: can_view
