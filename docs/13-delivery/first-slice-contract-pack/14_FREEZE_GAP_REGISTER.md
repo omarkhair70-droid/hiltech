@@ -254,6 +254,8 @@ Figma/tooling quota can delay rendering, but these remain actual design-freeze e
 # C. Operational/provider blockers
 
 Provider architecture now resolved:
+- DigiCert OV Code Signing + KeyLocker selected for production Authenticode.
+- HILTECH Update Service selected as baseline Windows distribution; MDM remains optional adapter.
 - OCI accepted as production provider baseline.
 - Jeddah `me-jeddah-1` primary-region candidate.
 - OCI Container Instances preferred / OCI Compute fallback.
