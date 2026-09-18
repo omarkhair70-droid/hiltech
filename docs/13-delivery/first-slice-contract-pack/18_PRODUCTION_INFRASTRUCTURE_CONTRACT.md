@@ -209,8 +209,14 @@ Cross-region backup:
 - design enabled/available as DR option.
 - exact secondary OCI region chosen during DR runbook closure.
 
-Business RPO/RTO remains a management/operations target to approve.
-The infrastructure must expose measured restore time and achievable recovery point so HILTECH can set the final target from evidence.
+Canonical staged recovery contract:
+`20_BACKUP_DR_RECOVERY_CONTRACT.md`
+
+Engineering targets:
+- PILOT: PITR + cross-region backup copy; restore drill RTO <=4h.
+- STABLE: Jeddah -> Riyadh PostgreSQL Warm Standby, RPO enforcement 5 minutes, rehearsed service RTO <=60 minutes.
+
+These are engineering acceptance objectives, not a client/business SLA.
 
 ---
 
@@ -463,7 +469,7 @@ A future provider change reimplements adapters/IaC, not HILTECH business modules
 - exact OpenFGA/Keycloak/Postgres managed sizing.
 - exact malware scanner product if ARBITRARY_FILE enabled.
 - final telemetry retention/sampling/backend cost settings.
-- final business RPO/RTO target.
+- prove staged recovery targets in drill; stricter business/client SLA only if management/contracts require it.
 - production domain/TLS certificate ownership.
 - Windows signing/distribution remains a separate client-operations decision.
 
