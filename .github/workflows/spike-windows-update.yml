@@ -32,9 +32,9 @@ jobs:
         with:
           gradle-version: "9.5.0"
 
-      - name: Build v0.1.0 MSI
+      - name: Build v1.0.0 MSI
         shell: pwsh
-        run: gradle :desktopApp:packageMsi -PhiltechVersion=0.1.0 --stacktrace
+        run: gradle :desktopApp:packageMsi "-PhiltechVersion=1.0.0" --stacktrace
 
       - name: Real Windows install update rollback lifecycle
         shell: pwsh
@@ -148,14 +148,14 @@ jobs:
 
           # ---- v0.1 install ----
           $v1Built = Get-Msi
-          $v1 = Join-Path $env:RUNNER_TEMP "HILTECHSpike-0.1.0.msi"
+          $v1 = Join-Path $env:RUNNER_TEMP "HILTECHSpike-1.0.0.msi"
           Copy-Item $v1Built $v1 -Force
           Sign-Msi $v1
           Invoke-MsiInstall $v1
 
           $exeV1 = Get-InstalledExe
           Invoke-App $exeV1 @("--probe-version")
-          Assert-FileValue $versionFile "0.1.0"
+          Assert-FileValue $versionFile "1.0.0"
 
           Invoke-App $exeV1 @("--probe-write", "state-from-v1")
           Assert-FileValue $stateFile "state-from-v1"
@@ -178,20 +178,20 @@ jobs:
           Assert-FileValue $stateFile "state-from-v1"
 
           # ---- v0.2 update target ----
-          gradle clean :desktopApp:packageMsi -PhiltechVersion=0.2.0 --stacktrace
+          gradle clean :desktopApp:packageMsi "-PhiltechVersion=2.0.0" --stacktrace
           if ($LASTEXITCODE -ne 0) {
             throw "v0.2 Gradle package failed"
           }
 
           $v2Built = Get-Msi
-          $v2 = Join-Path $env:RUNNER_TEMP "HILTECHSpike-0.2.0.msi"
+          $v2 = Join-Path $env:RUNNER_TEMP "HILTECHSpike-2.0.0.msi"
           Copy-Item $v2Built $v2 -Force
           Sign-Msi $v2
           Invoke-MsiInstall $v2
 
           $exeV2 = Get-InstalledExe
           Invoke-App $exeV2 @("--probe-version")
-          Assert-FileValue $versionFile "0.2.0"
+          Assert-FileValue $versionFile "2.0.0"
           Assert-FileValue $stateFile "state-from-v1"
 
           # ---- rollback to v0.1 ----
@@ -201,14 +201,14 @@ jobs:
           Invoke-MsiInstall $v1
           $exeRollback = Get-InstalledExe
           Invoke-App $exeRollback @("--probe-version")
-          Assert-FileValue $versionFile "0.1.0"
+          Assert-FileValue $versionFile "1.0.0"
           Assert-FileValue $stateFile "state-from-v1"
 
           # ---- final uninstall must not silently destroy user data ----
           Invoke-MsiUninstall $v1
           Assert-FileValue $stateFile "state-from-v1"
 
-          Write-Host "HILTECH_WINDOWS_LIFECYCLE_PASS install=PASS signature=PASS deep_link=PASS update=PASS rollback=PASS state_preserved=PASS"
+          Write-Host "HILTECH_WINDOWS_LIFECYCLE_PASS install=PASS signature=PASS deep_link=PASS failed_update=PASS update=PASS rollback=PASS state_preserved=PASS"
 
           # CI cleanup.
           if (Test-Path "HKCU:\Software\Classes\hiltech") {
