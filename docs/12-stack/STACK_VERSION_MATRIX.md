@@ -23,7 +23,7 @@ Rules:
 |---|---:|---|---|
 | Kotlin | 2.4.20 | PROVEN | SPIKE-01/02/03/04/06 |
 | Compose Multiplatform | 1.11.1 | FINAL FIRST-SLICE PIN | 1.12.0 exists but intentionally deferred; 1.11.1 is HILTECH-proven across Android + Windows |
-| Android Gradle Plugin | 9.3.1 | PROVEN | SPIKE-01 client build line |
+| Android Gradle Plugin | 9.3.3 | FINAL FIRST-SLICE PIN | 9.3.1 original proof; 9.3.2 run 35388858253 PASS; 9.3.3 run 35389326629 PASS across shared tests, Android, Desktop, EXE, MSI |
 | Android compile SDK | 36 | PROVEN | Android spike builds |
 | Android min SDK | 23 | PROVEN | SPIKE-01 candidate line |
 | JDK for client builds | 17 | PROVEN | Android/Windows KMP spikes |
@@ -157,10 +157,12 @@ Rules:
 
 ---
 
-# Still Required Before FINAL_STACK.md
+# Final-stack review status
 
-Pre-code version gate:
-1. final focused AGP 9.3.3 compatibility validation.
+**PASS for first-slice pre-code Freeze.**
+
+Focused AGP 9.3.3 validation:
+- run 35389326629 — PASS.
 
 Already reviewed/closed at contract level:
 - current application/server dependency pins,
@@ -178,4 +180,4 @@ Bootstrap/cutover activation items do not block creating FINAL_STACK.md:
 - recovery rehearsals.
 - exact Flyway transitive resolved lock after Gradle bootstrap.
 
-Once AGP validation passes, FINAL_STACK.md may be created and the remaining pre-code blocker is design proof.
+FINAL_STACK.md may now be created. The remaining first-slice pre-code blocker is rendered design proof.
