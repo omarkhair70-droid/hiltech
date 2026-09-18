@@ -31,14 +31,14 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | Mobile surface | FIRST PASS | Not wireframed |
 | Desktop surface | FIRST PASS | Not wireframed |
 | Design thesis/system | FIRST PASS | Visual tokens/font/colors not frozen |
-| Offline/sync | SPIKE-PROVEN CORE | Restart-safe queue, idempotent retry and stale conflict semantics passed; HTTP/background/UX spikes remain |
+| Offline/sync | SPIKE-PROVEN CORE | Room queue, idempotent retry, stale conflict, WorkManager reconnect and real Ktor replay proven; final field UX/policy remains |
 | Integration/hardware | FIRST PASS | Real vendors/systems unknown |
 | API/read models | FIRST PASS | Conventions/error/versioning/read architecture defined |
 | Stack | EVIDENCE-BASED PRE-FREEZE | Accepted/proven vs leading/TBD tracked in `docs/12-stack/STACK_VERSION_MATRIX.md`; no final stack yet |
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | ACTIVE — 01/02/03/04/05/06/07/08/09/10/11/12/13/14 PASSED | All isolated technical gates are accepted; SPIKE-15 is the remaining end-to-end architectural/networking proof |
+| Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted; remaining work is freeze closure, not technical feasibility |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -86,11 +86,11 @@ Now includes:
 6. Android device fleet, camera/QR restrictions and site-security constraints.
 7. Android background execution/reconnect reliability — SPIKE-13 accepted; OEM/field-device reliability remains a reality/operations validation item.
 8. Windows install/update/rollback operations — SPIKE-07 / ADR-012 accepted; production certificate/distribution channel remains an operations decision.
-9. Full cross-surface end-to-end vertical proof — SPIKE-15 is now the next technical gate.
+9. Full cross-surface end-to-end vertical proof — SPIKE-15 accepted; no longer an architecture unknown.
 10. Offline conflict ergonomics in real field use.
 11. Legal/accounting/privacy/retention requirements.
 12. Final visual/navigation/component/Arabic typography system.
-13. Exact production DB/API/local schemas after reality validation and SPIKE-15.
+13. Exact production DB/API/local schemas after reality validation.
 
 No longer architecture unknowns:
 - KMP Android + Windows platform feasibility,
@@ -135,10 +135,11 @@ Proven / accepted directions:
 - OpenFGA object/action relationship authorization — SPIKE-09 accepted.
 - S3-compatible binary-evidence protocol — SPIKE-12 accepted.
 - OpenTelemetry correlation/safe-telemetry contract — SPIKE-14 accepted.
+- Ktor Client 3.5.2 shared networking — **SPIKE-15 / ADR-007 accepted**.
+- Full PM Desktop → Android offline/process-death/reconnect → Supervisor → PM authoritative vertical — **SPIKE-15 accepted**.
 
-Leading but still spike/freeze dependent:
-- Ktor Client / exact HTTP client integration.
-- jOOQ — **ADR-005 accepted** as the PostgreSQL SQL/persistence access layer; generated-schema/codegen conventions still freeze with exact schemas.
+Still freeze-dependent:
+- jOOQ generated-schema/codegen conventions freeze with exact production schemas.
 - Keycloak 26.7.4 + native OIDC Authorization Code/PKCE — **SPIKE-08 accepted**.
 - WorkManager 2.11.2 background execution — **SPIKE-13 accepted**.
 - Windows MSI installer-swap operational baseline — **SPIKE-07 / ADR-012 accepted**; exact enterprise distribution/updater and production signing remain open.
@@ -148,22 +149,15 @@ Leading but still spike/freeze dependent:
 
 # Immediate Next Work
 
-Current technical continuation:
-1. Run SPIKE-15 end-to-end vertical proof and use it as the Ktor/shared-networking acceptance gate.
-2. Record ACCEPT / MODIFY / REJECT results and reconcile ADR/stack/control documents.
-3. Close the technical-spike gate if SPIKE-15 passes without bypassing accepted boundaries.
+Technical-spike continuation: **CLOSED.**
 
-Parallel pre-code lanes that do not need to wait for SPIKE-15:
-- reality validation with Mohamed/Ahmed/project/warehouse/field,
-- representative low-fi / RTL / conflict / adaptive validation,
-- approval/automation policy refinement,
-- contract templates and implementation-scope mapping.
-
-After SPIKE-15 + required reality/design evidence:
-- freeze exact DB/API/local/auth/file contracts for the starting slices,
-- finish provider/runtime/Windows distribution decisions,
-- create FINAL_STACK.md only when evidence supports it,
-- call Freeze Review.
+Immediate pre-code continuation:
+1. Reality validation with Mohamed/Ahmed/project/warehouse/field.
+2. Freeze exact DB/API/local/auth/file contracts for the starting implementation slices.
+3. Complete representative low-fi / RTL / conflict / adaptive validation.
+4. Finish provider/runtime/Windows distribution/signing decisions and final version re-check.
+5. Create FINAL_STACK.md only when evidence supports it.
+6. Call Freeze Review.
 
 No production code yet by design.
 
@@ -188,9 +182,10 @@ There is no general management-approval blocker recorded.
 
 Remaining freeze blockers are evidence-based:
 1. unresolved real-company facts for affected domains,
-2. technical spike results,
-3. final design/RTL pass,
-4. final stack/ADR/schema lock derived from those results.
+2. final design/RTL pass,
+3. exact DB/API/local/auth/file contract freeze,
+4. remaining provider/runtime/signing/version decisions,
+5. final stack/ADR/schema lock derived from those results.
 
 Work that does not depend on those facts may continue immediately.
 
@@ -406,3 +401,39 @@ GitHub Actions run 35317815398 proved:
 - state preservation through final uninstall.
 
 ADR-012 accepts Compose Desktop/jpackage MSI + controlled installer-swap as the pre-freeze Windows operational baseline. Production certificate/provider and enterprise distribution/updater remain open operations decisions.
+
+
+## SPIKE-15 — End-to-End Architectural Vertical
+Decision: **ACCEPT — core architectural thesis passed end to end.**
+
+GitHub Actions run **35323209954** proved:
+- PM Desktop create/assign,
+- server-side outsider denial,
+- Keycloak-authenticated actors,
+- OpenFGA authorization,
+- PostgreSQL/jOOQ authoritative state,
+- Android durable bundle,
+- Room offline command queue,
+- local evidence preservation,
+- process death,
+- WorkManager reconnect/replay,
+- S3-compatible evidence upload + SHA-256 finalization,
+- idempotent duplicate replay,
+- supervisor exact-version acceptance,
+- PM authoritative read + audit trace,
+- Spring Modulith projections,
+- stale-version conflict,
+- dependent-command blocking,
+- authoritative state not overwritten.
+
+Companion regressions on the same head:
+- Room3 35323209973 — PASS,
+- Offline Queue 35323209948 — PASS,
+- Android Background Sync 35323209949 — PASS.
+
+Final marker:
+`HILTECH_SPIKE15_PASS desktop_create=PASS android_bundle=PASS offline=PASS evidence=PASS workmanager=PASS idempotency=PASS conflict=PASS authz=PASS supervisor=PASS desktop_read=PASS trace=PASS ktor=PASS`
+
+ADR-007 accepts Ktor Client 3.5.2 as the shared Android/Desktop networking boundary.
+
+**Technical-spike gate 01–15 is closed.**
