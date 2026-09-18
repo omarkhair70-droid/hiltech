@@ -250,7 +250,7 @@ Current prototype coverage:
 
 Automated proof:
 - Playwright,
-- 36 expected screenshots,
+- 37 expected screenshots,
 - workflow `.github/workflows/design-prototype-render.yml`,
 - manifest `INTERACTIVE_FIRST_SLICE_RENDERED_PROOF_MANIFEST_2026-09-18.md`.
 
