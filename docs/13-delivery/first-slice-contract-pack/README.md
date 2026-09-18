@@ -131,3 +131,6 @@ Use, do not duplicate:
 
 15. `15_AUTHORIZATION_CONSISTENCY_CONTRACT.md`
    - fail-closed PostgreSQL business-truth → OpenFGA projection consistency, pinned model/versioning and recovery contract.
+
+16. `16_DATABASE_DDL_CONSTRAINT_CONTRACT.md`
+   - exact first-slice PostgreSQL keys/FKs/checks/uniques/indexes and generation gate for Flyway/jOOQ.
