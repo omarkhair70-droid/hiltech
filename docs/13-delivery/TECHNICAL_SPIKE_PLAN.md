@@ -117,6 +117,25 @@ PM reassigns/cancels while offline.
 Pass:
 no loss, duplicate action or false success; conflict surfaced.
 
+**Result 2026-09-18: ACCEPT — CORE OFFLINE QUEUE SEMANTICS PASSED.**
+
+Evidence:
+- real SQLite queue survives close/reopen.
+- local command order is preserved.
+- successfully applied commands are not sent again.
+- ambiguous network outcome retries with the same operationId.
+- duplicate authoritative application is prevented.
+- stale server version becomes CONFLICT.
+- later local commands for the same object become BLOCKED_BY_CONFLICT.
+- local evidence/payload remains available for resolution.
+- tests passed on Linux and Windows.
+- Android app compiled with the shared offline sync code.
+
+GitHub Actions run: 35296098137.
+
+Not yet covered:
+real HTTP/Ktor transport, final conflict UX, WorkManager/background execution, binary evidence upload.
+
 ---
 
 # SPIKE-05 — Android Camera / QR / Evidence
@@ -239,6 +258,21 @@ Implement:
 
 Pass:
 database constraints + transaction logic prevent impossible states.
+
+**Result 2026-09-18: ACCEPT — AUTHORITATIVE LEDGER / CONCURRENCY THESIS PASSED.**
+
+Evidence on real PostgreSQL:
+- concurrent checkout: exactly one APPLIED and one CONFLICT.
+- exactly one authoritative custodian.
+- exactly one asset movement.
+- retry with same operationId returns already-applied semantics without duplicate movement.
+- stale version is rejected.
+- concurrent stock issue cannot make stock negative.
+- final stock/version/ledger remain correct under collision.
+
+GitHub Actions run: 35296301835.
+
+This accepts PostgreSQL constraints + transactional compare-and-update + idempotency as the authoritative-state pattern. Final production schema and jOOQ code-generation conventions remain separate freeze work.
 
 ---
 
