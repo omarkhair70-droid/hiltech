@@ -38,7 +38,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | PLANNED | Not executed |
+| Technical spikes | ACTIVE — SPIKE-01 PASSED | Android + Windows KMP feasibility proven; remaining spikes active |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -114,8 +114,8 @@ High confidence:
 - Business version and optimistic technical version are separate concepts.
 
 Leading but still spike-dependent:
-- Kotlin Multiplatform + Compose Multiplatform.
-- Room/SQLite.
+- Kotlin Multiplatform + Compose Multiplatform — **SPIKE-01 feasibility ACCEPTED**; final stack still depends on RTL/dense-data/offline/auth evidence.
+- Room/SQLite — active spike; not yet accepted.
 - Ktor Client.
 - Spring Boot + Spring Modulith.
 - jOOQ.
@@ -161,3 +161,24 @@ Remaining freeze blockers are evidence-based:
 4. final stack/ADR/schema lock derived from those results.
 
 Work that does not depend on those facts may continue immediately.
+
+
+---
+
+# Technical Spike Evidence — 2026-09-18
+
+## SPIKE-01 — KMP Android + Windows
+Decision: **ACCEPT — platform feasibility passed.**
+
+Proven in GitHub Actions:
+- shared KMP tests,
+- Android debug build,
+- JVM Desktop compile,
+- Windows EXE,
+- Windows MSI.
+
+This does not mark the client stack FINAL. Remaining relevant spikes still gate final freeze.
+
+## SPIKE-03 — Room KMP Local DB
+Status: RUNNING on isolated branch/PR.
+Uses a HILTECH-shaped PendingCommand local queue with Room3 + BundledSQLiteDriver.
