@@ -1,6 +1,6 @@
 # 03 — PostgreSQL / Flyway / jOOQ Contract
 
-Status: **PRE-FREEZE TEMPLATE**
+Status: **CONTRACT CANDIDATE v0.1 / CONFIGURATION-INTEGRATED**
 
 ## Locked Technical Direction
 
@@ -15,9 +15,33 @@ Status: **PRE-FREEZE TEMPLATE**
 
 # Required First-Slice Table Families
 
-Exact tables are NOT yet frozen.
+Exact table names/columns are still pre-freeze, but ownership families are now explicit.
 
 Candidate ownership families:
+
+## configuration / policy
+- work_type_definition
+- assignment_policy
+- readiness_policy
+- readiness_policy_requirement
+- evidence_policy
+- evidence_policy_requirement
+- review_policy
+- review_policy_step
+- field_tracking_policy
+- asset_type_definition
+- stock_item_category_definition
+- notification/escalation policy tables as first-slice scope requires
+- typed template tables or versioned configuration document representation
+- configuration revision/audit/dependency metadata where not embedded per aggregate
+
+Rules:
+- config revisions are versioned and auditable,
+- ACTIVE revisions are not materially mutated in-place,
+- historical WorkOrders bind required config revisions,
+- no arbitrary executable policy scripts.
+
+
 
 ## identity / organizations
 - user_identity
@@ -33,10 +57,12 @@ Candidate ownership families:
 
 ## work
 - work_order
-- work_assignment or normalized assignment structure if needed
+- work_policy_binding or equivalent immutable revision-reference structure
+- work_assignment / assignment target
 - blocker
 - work_review/rework history if not event-only
-- work requirement structures as verified
+- work requirement realization/satisfaction records
+- evidence requirement satisfaction/projection where useful
 
 ## assets / warehouse
 - asset
@@ -87,6 +113,14 @@ For every table:
 # Mandatory Constraint Tests
 
 Before freeze, database tests must prove at minimum:
+
+- configuration code/revision uniqueness.
+- no invalid effective interval.
+- no cyclic configuration supersession.
+- no overlapping ACTIVE/effective revision for a code/scope where exclusivity is required.
+- WorkOrder historical policy binding survives later config supersession.
+- retired config cannot be selected for new WorkOrder creation/assignment.
+- storage-location hierarchy has no cycle.
 
 - stale WorkOrder transition cannot update current version.
 - same idempotency operation cannot repeat business side effect.
