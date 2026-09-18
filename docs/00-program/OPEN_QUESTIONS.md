@@ -80,11 +80,29 @@ These questions must be answered before relevant areas are frozen.
 
 ## Architecture / stack
 
-- Validate Kotlin Multiplatform/Compose Multiplatform against required Windows desktop, Android hardware, offline, camera/QR, background sync, printing/export, and future iOS needs.
-- Validate whether desktop should be Compose native, browser-based, or hybrid for specific heavy finance/operations surfaces.
-- Validate backend framework choice and current supported versions.
-- Select local database, sync model, conflict-resolution model, API protocol, realtime transport, authentication, authorization, workflow engine, object storage, observability, CI/CD, hosting, backup and disaster-recovery model.
-- Determine whether OpenFGA/Keycloak/Temporal-level infrastructure is justified at HILTECH scale or introduces unnecessary operational weight.
+Accepted/proven questions are no longer open:
+- Kotlin Multiplatform + Compose Multiplatform is the accepted Android/Windows client direction.
+- Room3/SQLite and typed offline command semantics are accepted.
+- Compose Desktop dense-data feasibility is accepted.
+- Kotlin/JVM + Spring Boot + Spring Modulith modular monolith is accepted.
+- PostgreSQL + jOOQ is accepted for authoritative persistence/SQL access.
+- Keycloak native OIDC and OpenFGA object/action authorization are accepted.
+- S3-compatible binary evidence semantics and OpenTelemetry correlation contract are accepted.
+- GitHub Actions is accepted as the CI/delivery control plane.
+- Temporal, Redis, dedicated broker and dedicated search cluster are not baseline without a concrete trigger.
+
+Still open before technical/final freeze:
+- SPIKE-07 Windows install/update/rollback operational proof.
+- SPIKE-15 full cross-surface architectural proof and Ktor Client acceptance.
+- exact HTTP wire conventions that SPIKE-15 is intended to lock.
+- final Flyway baseline/version after exact schemas exist.
+- production object-storage provider.
+- infrastructure/hosting/runtime packaging.
+- observability backend/collector/provider.
+- Windows enterprise distribution/update operational choice and production signing.
+- backup/disaster-recovery provider details and RPO/RTO.
+- final CI action pinning/version re-check.
+- future iOS timing and any iOS-specific spike when it becomes implementation scope.
 
 ## Delivery
 
