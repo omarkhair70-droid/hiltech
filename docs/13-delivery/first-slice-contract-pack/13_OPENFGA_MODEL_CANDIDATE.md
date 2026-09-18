@@ -364,6 +364,7 @@ Critical actions may reject delegated authority even when relation exists.
 | SubmitCompletion | can user submit WorkOrder | EvidencePolicy; tests/material declarations; version |
 | AcceptWork | can user review WorkOrder | bound ReviewPolicy; exact submitted version; evidence/technical obligations |
 | CancelWork | can user cancel WorkOrder | lifecycle; cancel policy; reason; version |
+| ReserveAsset/ReserveStock for Project | can user request_resource on Project + can user view/request relevant Warehouse resource context | availability; reservation collision; quantity/calibration; target Project/Site/Work |
 | CheckoutAsset | can user checkout Asset/Warehouse | asset state; version; custody; reservation; calibration; recipient/context |
 | ReturnAsset | can user return Asset | current custody; condition/inspection; destination; version |
 | ConsumeStock | can user consume Stock/Work context | issued/available quantity; unit; Work context |
@@ -372,6 +373,19 @@ Critical actions may reject delegated authority even when relation exists.
 | DownloadEvidence | can user download Evidence | classification; signed URL policy; retention |
 
 ---
+
+## Resource request composition rule
+
+Resource reservation is contextual.
+
+A Project PM/Engineer/Supervisor can request a resource for Project X even before the selected Asset is related to Project X.
+
+Therefore authorization composes checks:
+1. actor can_request_resource on Project X,
+2. actor has sufficient resource/warehouse visibility or request path for the selected item,
+3. application policy validates availability/reservation/calibration/quantity and creates the Project reservation.
+
+Do not require a pre-existing Asset→Project tuple merely to request the Asset.
 
 # 15. Field-level obligations outside OpenFGA
 
