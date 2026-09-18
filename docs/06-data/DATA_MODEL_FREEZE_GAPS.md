@@ -56,19 +56,31 @@ Also exists:
 - tax/e-invoice fields.
 
 ## Technical
-- UUID creation strategy.
-- server/local schema split.
-- exact serialization.
-- jOOQ/Flyway decision.
-- OpenFGA model.
-- sync command persistence.
-- object storage metadata.
+Still open:
+- UUID creation strategy / exact ID representation.
+- exact server/local schema split.
+- exact serialization schemas.
+- Flyway baseline/versioning and migration conventions after exact schemas.
+- final jOOQ generated-schema/codegen/package conventions.
+- exact object-storage metadata/table schema.
+- exact Ktor/API transport contracts after SPIKE-15.
+- production object-storage provider.
+
+Already decided/proven:
+- PostgreSQL authoritative transactional store — ADR-004.
+- jOOQ persistence access layer — ADR-005.
+- Room3/SQLite local DB — ADR-006.
+- OpenFGA object/action authorization — ADR-009.
+- offline command persistence/replay semantics — ADR-011.
+- S3-compatible binary evidence protocol — ADR-010.
 
 ## Performance
 - high-volume telemetry separated from OLTP.
 - audit/event volume strategy.
-- search/index strategy.
-- portfolio/read projections.
+- exact PostgreSQL indexes/read projections after real query shapes.
+- portfolio/read projection schemas.
+
+Search architecture itself is decided PostgreSQL/read-model first via ADR-018; a dedicated search engine is not baseline.
 
 ---
 
