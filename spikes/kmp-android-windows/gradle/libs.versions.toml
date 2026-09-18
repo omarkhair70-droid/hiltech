@@ -2,9 +2,9 @@
 kotlin = "2.4.20"
 compose = "1.12.0"
 agp = "9.3.1"
-androidCompileSdk = "37"
+androidCompileSdk = "36"
 androidMinSdk = "21"
-androidTargetSdk = "37"
+androidTargetSdk = "36"
 androidxActivity = "1.13.0"
 
 [libraries]
