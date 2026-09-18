@@ -14,10 +14,36 @@ interface PendingCommandDao {
         """
         SELECT * FROM pending_command
         WHERE state = :state
-        ORDER BY createdAtEpochMs ASC
+        ORDER BY localSequence ASC
         """,
     )
     suspend fun listByState(state: String): List<PendingCommandEntity>
+
+    @Query(
+        """
+        SELECT * FROM pending_command
+        WHERE state IN ('PENDING', 'RETRYABLE')
+        ORDER BY localSequence ASC
+        """,
+    )
+    suspend fun listSyncable(): List<PendingCommandEntity>
+
+    @Query(
+        """
+        SELECT * FROM pending_command
+        ORDER BY localSequence ASC
+        """,
+    )
+    suspend fun listAll(): List<PendingCommandEntity>
+
+    @Query(
+        """
+        SELECT * FROM pending_command
+        WHERE operationId = :operationId
+        LIMIT 1
+        """,
+    )
+    suspend fun get(operationId: String): PendingCommandEntity?
 
     @Query(
         """
@@ -33,6 +59,46 @@ interface PendingCommandDao {
         state: String,
         attemptCount: Int,
         lastAttemptAtEpochMs: Long?,
+    )
+
+    @Query(
+        """
+        UPDATE pending_command
+        SET state = :state,
+            attemptCount = :attemptCount,
+            lastAttemptAtEpochMs = :lastAttemptAtEpochMs,
+            lastResultCode = :lastResultCode,
+            serverVersion = :serverVersion
+        WHERE operationId = :operationId
+        """,
+    )
+    suspend fun updateSyncResult(
+        operationId: String,
+        state: String,
+        attemptCount: Int,
+        lastAttemptAtEpochMs: Long?,
+        lastResultCode: String?,
+        serverVersion: Long?,
+    )
+
+    @Query(
+        """
+        UPDATE pending_command
+        SET state = 'BLOCKED_BY_CONFLICT',
+            lastResultCode = :resultCode,
+            serverVersion = :serverVersion
+        WHERE objectType = :objectType
+          AND objectId = :objectId
+          AND localSequence > :afterSequence
+          AND state IN ('PENDING', 'RETRYABLE')
+        """,
+    )
+    suspend fun blockLaterCommandsForObject(
+        objectType: String,
+        objectId: String,
+        afterSequence: Long,
+        resultCode: String,
+        serverVersion: Long?,
     )
 
     @Query("SELECT COUNT(*) FROM pending_command")
