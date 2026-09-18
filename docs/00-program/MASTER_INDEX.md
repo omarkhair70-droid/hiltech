@@ -257,6 +257,7 @@ Accepted so far:
 - SPIKE-04 offline command queue
 - SPIKE-05 Android Camera / QR / Evidence
 - SPIKE-06 dense Desktop
+- SPIKE-07 Windows packaging/update/rollback
 - SPIKE-08 Keycloak native OIDC
 - SPIKE-09 OpenFGA authorization
 - SPIKE-10 Spring Modulith
@@ -265,10 +266,7 @@ Accepted so far:
 - SPIKE-13 Android background sync
 - SPIKE-14 observability
 
-Active:
-- SPIKE-07 Windows packaging/update/rollback
-
-Pending after that:
+Next technical gate:
 - SPIKE-15 end-to-end vertical proof
 
 No production code has started intentionally.
@@ -310,7 +308,7 @@ If implementation would still require choosing fundamental data ownership, permi
 **NOT READY.**
 
 The remaining pre-code gates are:
-1. Close SPIKE-07, then SPIKE-15 and record the resulting final technical decisions.
+1. Run SPIKE-15 and record the resulting final technical/networking decisions.
 2. Validate affected workflows/policies against actual HILTECH reality.
 3. Complete representative low-fi/RTL/design validation for the core internal product.
 4. Convert validated models into exact DB/API/local/auth/file contracts and finish stack/provider decisions.
