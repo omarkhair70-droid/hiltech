@@ -113,8 +113,8 @@ Rules:
 | Compose Desktop EXE | current client line | PROVEN | SPIKE-01 |
 | Compose Desktop MSI | current client line | PROVEN | SPIKE-01 |
 | Install/update/rollback policy | controlled installer-swap baseline | PROVEN / ACCEPTED | SPIKE-07 / ADR-012 |
-| Code-signing production certificate/provider | TBD | OPEN | Production operations/security |
-| Auto-update/MDM strategy | TBD | OPEN | HILTECH IT reality / production operations choice |
+| Code-signing production certificate/provider | DigiCert OV Code Signing + KeyLocker cloud HSM | ACCEPTED / PRE-FREEZE | ADR-019; organization validation/issuance and protected CI setup pending |
+| Auto-update/MDM strategy | HILTECH Update Service + ADR-012 signed MSI swap; MDM optional adapter | ACCEPTED / PRE-FREEZE | Authenticated release manifest + private OCI artifact + Authenticode verification; no Intune dependency |
 
 ---
 
@@ -158,10 +158,10 @@ Rules:
 # Still Required Before FINAL_STACK.md
 
 1. OCI tenancy/Jeddah quota/service/latency cutover validation.
-2. Windows enterprise distribution/updater and production signing choice.
+2. DigiCert organization validation/KeyLocker operational activation and signed-MSI staging proof.
 3. Final OCI runtime shape/sizing/cost + OpenFGA/Keycloak deployment settings.
 4. Final observability retention/sampling/alert settings.
-5. Final business RPO/RTO target and DR region/runbook.
+5. Final technical recovery target/DR runbook validation.
 6. Final CI action pinning strategy.
 7. Capture exact resolved Flyway/transitive dependency lock at repository bootstrap and re-check all explicit current versions immediately before Freeze.
 
