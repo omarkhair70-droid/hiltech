@@ -22,61 +22,73 @@ Domain/configuration structure is now represented by contract candidates.
 
 # A. Contract closure blockers
 
-## A1 — Configuration metadata details
+## A1 — Configuration finalization
 
-Still need exact final decisions for:
-- max lengths for code/name/description.
-- organization/global scope mechanism.
-- policy-binding physical persistence representation.
-- custom typed extension registry.
-- exact configuration import/export/seed format.
-- which configuration families require formal ApprovalPolicy before activation.
+Still need:
+- Configuration Center visual proof.
+- active-location tracking retention/legal policy before ACTIVE_SITE_PRESENCE can be enabled.
+- final DDL/API contract tests for configuration revisions.
 
-Impact:
-DB/API/admin UI.
-
-Does not reopen:
-configurable operating model.
+Resolved:
+- string bounds baseline.
+- SYSTEM/ORGANIZATION scope.
+- versioned WorkPolicyBinding history.
+- no arbitrary custom requirement scripts in first slice.
+- JSON v1 draft-only import/export/seed.
+- activation sensitivity classes: STANDARD / REAUTH / APPROVAL / REAUTH_AND_APPROVAL.
+- CodePolicy.
+- ProjectHealthPolicy.
+- typed TemplateDefinition.
 
 ---
 
-## A2 — Project / Work narrow closure
+## A2 — Project / Work finalization
+
+No broad structural domain decision remains.
 
 Still need:
-- exact projectCode/workOrderCode generation rules.
-- exact ProjectHealth derivation.
-- exact progress weighting/aggregation model.
-- exact typed instruction/checklist persistence.
-- final policy-binding DB representation.
-- exact ProjectSite lifecycle naming if current candidate changes.
+- final physical DDL/indexes/constraints.
+- final route/DTO normalization and contract tests.
+- representative UI/RTL proof.
 
 Resolved:
-- Site is durable physical/client identity.
-- ProjectSite owns project-specific site context.
-- Work lifecycle and readiness are separate.
-- assignment is typed history, not arrays.
-- WorkType/policies are version-bound configuration.
+- durable Site + ProjectSite association.
+- frozen ProjectSite lifecycle.
+- Work lifecycle/readiness separation.
+- typed assignment history.
+- CodePolicy-driven Project/WorkOrder human codes.
+- explainable ProjectHealth signal model.
+- accepted-weight progress formula.
+- typed append-only instruction revisions.
+- materialized checklist instances.
+- versioned normalized WorkPolicyBinding history.
+- representative model coverage through internal fixtures.
 
 ---
 
-## A3 — Asset / Warehouse narrow closure
+## A3 — Asset / Warehouse finalization
+
+No broad structural domain decision remains.
 
 Still need:
-- exact Warehouse vs StorageLocation implementation split where both exist.
-- exact Asset vs Stock reservation persistence split/unification.
-- Decimal precision/scale strategy for quantities.
-- serial-number uniqueness scope.
-- expected-accessory / return-inspection exact object shape.
-- calibration exception policy.
-- stock valuation/accounting boundary.
-- exact offline return finalization behavior.
+- final physical DDL/indexes/constraints.
+- final route/DTO normalization and contract tests.
+- representative Warehouse/Asset UI proof.
+- pilot asset/stock master seed.
 
 Resolved:
-- Asset identity/state dimensions separated.
-- availability is derived.
+- Asset lifecycle/custody/condition/calibration dimensions.
+- derived availability.
 - one custody invariant.
-- Main Warehouse + Project/Site temporary storage.
-- Asset/Stock master categories are configuration, not code enums.
+- Warehouse vs StorageLocation semantic split.
+- Main Warehouse + Project/Site storage.
+- typed AssetReservation / StockReservation persistence.
+- numeric(20,6) quantities.
+- assetCode hard identity + serial duplicate-warning strategy.
+- AssetReturnInspection.
+- online-authoritative final Return.
+- no first-slice expired-calibration override.
+- physical inventory vs Finance valuation boundary.
 - checkout collision semantics.
 
 ---
@@ -84,22 +96,23 @@ Resolved:
 ## A4 — API final normalization
 
 Still need:
-- exact route wording for configuration revision resources.
-- exact DTO shape for typed assignment targets.
-- exact requirement-instance DTO.
-- exact REAUTH_REQUIRED error details.
-- object-hidden vs permission-denied policy by API audience.
-- exact cursor encoding/expiry contract.
-- exact max/string constraints.
+- final route wording normalization for configuration/project admin surfaces.
+- exact optional client-metadata headers only where server behavior consumes them.
+- Project/Site admin create/update DTOs outside the core vertical where needed.
+- executable contract tests for REAUTH_REQUIRED, cursor and representative safe 4xx/5xx mappings.
 
 Resolved:
-- /v1 baseline.
-- Ktor.
+- /v1 baseline and additive compatibility.
+- Ktor + thin shared manual typed client.
 - command action routes.
-- standard command fields.
-- error envelope candidate.
+- UUID and string/text bounds.
+- typed assignment target.
+- requirement-instance DTO.
+- REAUTH_REQUIRED envelope.
+- external object-hidden/internal permission-denied policy.
+- stateless tamper-protected opaque cursor contract.
 - Work/Asset/Evidence DTO candidates.
-- list/read-model shape.
+- Project progress/health summaries.
 
 ---
 
@@ -127,16 +140,17 @@ Resolved:
 ## A6 — Room/local finalization
 
 Still need:
-- UUID representation/type converters.
-- serialized command payload format.
-- encryption-at-rest implementation for restricted cache.
-- cache/evidence size budgets.
-- migration support window.
+- restricted-cache encryption-at-rest decision/revisit trigger.
+- storage-budget/eviction policy.
+- migration support-window rule.
 - retry/backoff constants.
 - exact cursor scope keys.
-- old bundle retention/eviction rules.
+- old bundle retention/eviction rule.
 
 Resolved:
+- UUID as canonical lowercase TEXT.
+- Instant local representation contract.
+- kotlinx.serialization UTF-8 JSON pending-command payload with payloadVersion.
 - entity candidates.
 - queue/dependency/evidence/conflict schema.
 - local transactions.
