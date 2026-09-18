@@ -5,6 +5,11 @@ Status: ARCHITECTURE MODEL v0.1 / NOT API-FROZEN
 ## Objective
 Define consistent application/API behavior before endpoint implementation.
 
+Exact cross-cutting pre-freeze contract candidate:
+`CROSS_CUTTING_BUILD_CONTRACTS.md`
+
+This file remains the architectural rationale; the linked contract file is the implementation-facing consolidation.
+
 The API is not generic CRUD over database tables.
 It exposes:
 - queries for authorized views,
