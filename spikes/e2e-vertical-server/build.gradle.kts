@@ -1,18 +1,30 @@
 plugins {
+    id("org.springframework.boot") version "4.1.1"
     kotlin("jvm") version "2.4.20"
-    application
+    kotlin("plugin.spring") version "2.4.20"
 }
+
+group = "com.hiltech"
+version = "0.1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
 }
 
-dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-reflect:2.4.20")
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    }
+}
 
-    implementation("org.springframework.boot:spring-boot-starter-web:4.1.1")
-    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server:4.1.1")
-    implementation("org.springframework.modulith:spring-modulith-starter-core:2.1.1")
+dependencies {
+    implementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.1"))
+    implementation(platform("org.springframework.modulith:spring-modulith-bom:2.1.1"))
+
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
+    implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    implementation("org.springframework.modulith:spring-modulith-starter-jdbc")
 
     implementation("org.jooq:jooq:3.21.8")
     runtimeOnly("org.postgresql:postgresql:42.7.13")
@@ -22,17 +34,17 @@ dependencies {
 
     implementation("io.opentelemetry:opentelemetry-api:1.66.0")
 
-    testImplementation(kotlin("test"))
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.modulith:spring-modulith-starter-test")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 kotlin {
-    jvmToolchain(21)
+    compilerOptions {
+        freeCompilerArgs.add("-Xjsr305=strict")
+    }
 }
 
-application {
-    mainClass.set("com.hiltech.spike15.Spike15ServerKt")
-}
-
-tasks.test {
+tasks.withType<Test>().configureEach {
     useJUnitPlatform()
 }
