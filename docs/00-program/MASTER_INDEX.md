@@ -83,6 +83,8 @@ Start here:
 13. `../03-product/CONFIGURABLE_OPERATING_MODEL.md` — canonical rule separating configurable company policy from hard-coded product invariants.
 14. `../10-design/FIRST_SLICE_DESIGN_FREEZE_EXECUTION_PACK_2026-09-18.md` — canvas-ready visual proof queue; actual Figma render currently quota-blocked.
 15. `../13-delivery/first-slice-contract-pack/14_FREEZE_GAP_REGISTER.md` — narrow authoritative blocker list before First-Slice Freeze.
+16. `../13-delivery/first-slice-contract-pack/21_FINAL_PRE_FREEZE_CONSISTENCY_REVIEW.md` — cross-contract review: consistency PASS, Freeze still gated.
+17. `../12-stack/FINAL_STACK_VERSION_REVIEW_2026-09-18.md` — final version review; only AGP 9.3 patch validation remains before FINAL_STACK.md.
 
 ## Current planning coverage
 
