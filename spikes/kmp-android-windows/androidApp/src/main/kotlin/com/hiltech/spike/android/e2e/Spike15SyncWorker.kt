@@ -21,13 +21,13 @@ class Spike15SyncWorker(
 ) {
     override fun doWork(): Result = runBlocking {
         val baseUrl = inputData.getString(KEY_BASE_URL)
-            ?: return Result.failure()
+            ?: return@runBlocking Result.failure()
         val token = inputData.getString(KEY_TOKEN)
-            ?: return Result.failure()
+            ?: return@runBlocking Result.failure()
         val scenario = inputData.getString(KEY_SCENARIO)
-            ?: return Result.failure()
+            ?: return@runBlocking Result.failure()
         val workOrderId = inputData.getString(KEY_WORK_ORDER_ID)
-            ?: return Result.failure()
+            ?: return@runBlocking Result.failure()
 
         val database = buildHiltechLocalDatabase(
             getAndroidDatabaseBuilder(
@@ -125,7 +125,7 @@ class Spike15SyncWorker(
                 )
             }
 
-            return Result.success()
+            return@runBlocking Result.success()
         } catch (throwable: Throwable) {
             Spike15State.write(
                 applicationContext,
@@ -135,7 +135,7 @@ class Spike15SyncWorker(
                     "error" to (throwable.message ?: throwable::class.simpleName.orEmpty()),
                 ),
             )
-            return Result.failure()
+            return@runBlocking Result.failure()
         } finally {
             database.close()
         }
