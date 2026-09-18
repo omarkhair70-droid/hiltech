@@ -32,6 +32,9 @@ This pack is therefore **not a spike plan**.
 
 # Contract Pack
 
+0. `00_CONFIGURATION_POLICY_SCHEMAS.md`
+   - typed/versioned WorkType, readiness, evidence, review, tracking, storage, role/team and other configurable policy schemas.
+
 1. `01_DATA_DICTIONARY.md`
    - exact fields/types/nullability/ownership/classification.
 
