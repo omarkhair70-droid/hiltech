@@ -149,13 +149,12 @@ Resolved:
 ## A7 — OpenFGA exact model
 
 Still need:
-- exact DSL relation/permission expressions/model file.
-- exact team subject-set expressions.
 - exact projector retry/backoff constants.
 - exact synchronous projection wait timeout.
 - production OpenFGA cache/deployment settings.
 
 Resolved:
+- first-slice FGA DSL + team userset semantics validated in GitHub Actions run 35331537375.
 - object relationship vocabulary.
 - action→FGA→application obligation map.
 - configuration permissions.
