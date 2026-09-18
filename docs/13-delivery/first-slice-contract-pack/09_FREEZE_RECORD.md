@@ -1,6 +1,6 @@
 # 09 — First Production Slice Freeze Record
 
-Status: **NOT READY / TEMPLATE**
+Status: **NOT READY / ACTIVE CLOSURE RECORD**
 
 Freeze date: TBD
 Freeze owner/reviewers: TBD
@@ -15,12 +15,12 @@ Project / Site / Work / Warehouse Asset Custody / Technician Offline / Evidence 
 # Evidence Checklist
 
 ## Reality
-- [ ] Authority map verified.
-- [ ] One real Project/Site mapped.
-- [ ] One representative field WorkOrder mapped.
-- [ ] Warehouse walkthrough complete.
-- [ ] field device/site restrictions recorded.
-- [ ] pilot source/import path known.
+- [x] Representative internal reality fixtures cover Data Center / remote cable pulling / temporary site storage / variable crew shapes.
+- [x] Generic Project/Site/Work structural model coverage is no longer an open blocker.
+- [ ] Initial real staff/team/authority seed reviewed for pilot.
+- [ ] Representative asset/stock/storage seed reviewed for pilot.
+- [ ] field device/site restrictions that materially affect security/offline behavior recorded.
+- [ ] pilot data source/import path known or clean-seed pilot explicitly chosen.
 
 ## Domain
 - [ ] Configuration/policy schemas frozen.
@@ -103,6 +103,8 @@ These are not reopened without a concrete contradiction/revisit trigger.
 - `10_CROSS_CONTRACT_CONSISTENCY.md`
 - `11_PROJECT_SITE_WORK_CONTRACT.md`
 - `12_ASSET_WAREHOUSE_CONTRACT.md`
+- `13_OPENFGA_MODEL_CANDIDATE.md`
+- `14_FREEZE_GAP_REGISTER.md`
 
 ---
 
