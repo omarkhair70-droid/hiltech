@@ -1,6 +1,6 @@
 # HILTECH Final Stack / Version Review — 2026-09-18
 
-Status: **IN PROGRESS — AGP 9.3 PATCH VALIDATION REMAINS**
+Status: **PASS — FINAL FIRST-SLICE VERSION REVIEW COMPLETE**
 Purpose: final explicit pin review before FIRST_SLICE_FREEZE.
 
 ## Review rule
@@ -70,26 +70,34 @@ Official patch line now contains:
 - 9.3.3 additional D8/R8/Windows/build correctness fixes.
 
 Decision:
-**final exact patch pending focused HILTECH validation.**
+**PIN 9.3.3 for the first production slice.**
 
-Validation branch:
-`validation/agp-9.3.2-20260918`
+Focused validation evidence:
 
-Run:
-`35388858253`
+AGP 9.3.2:
+- branch: `validation/agp-9.3.2-20260918`
+- run: `35388858253`
+- result: PASS
+- shared tests: PASS
+- Android debug build: PASS
+- Desktop compile: PASS
+- Windows EXE: PASS
+- Windows MSI: PASS
 
-9.3.2 is currently being checked with:
-- shared tests,
-- Android debug build,
-- Desktop compile,
-- Windows EXE,
-- Windows MSI.
+AGP 9.3.3:
+- same isolated validation branch
+- head: `b5f6db88cfd22ab8ddaa7d2fff6b7453caf55312`
+- run: `35389326629`
+- result: PASS
+- shared tests: PASS
+- Android debug build: PASS
+- Desktop compile: PASS
+- Windows EXE: PASS
+- Windows MSI: PASS
 
-After 9.3.2 passes, validate 9.3.3 on the same harness.
-If 9.3.3 passes, freeze 9.3.3.
-If it fails for a real compatibility reason, retain the newest passing 9.3 patch and document the failure.
+Therefore 9.3.3 is the newest focused-validated patch in the accepted 9.3 line.
 
-Do not jump to AGP 9.4.0 for first slice merely because it was just released.
+Do not jump to AGP 9.4.0 for first slice merely because it is newer.
 
 ## Gradle
 
@@ -441,19 +449,18 @@ First slice values proof over novelty.
 
 ---
 
-# Remaining review item
+# Final review result
 
-Only one version-selection item remains:
+All first-slice application/server dependency and production CI-action decisions required for pre-code Freeze have been reviewed.
 
-**exact AGP 9.3 patch**.
+Final AGP pin:
+**9.3.3**
 
-Target:
-9.3.3 if focused accepted harness passes.
+Evidence:
+- 9.3.2 focused run `35388858253` PASS,
+- 9.3.3 focused run `35389326629` PASS.
 
-Once that validation is green:
-- update STACK_VERSION_MATRIX,
-- create FINAL_STACK.md,
-- mark Final Stack / Version / CI Pin Review PASS.
+Result:
+`FINAL_STACK_REVIEW = PASS`
 
-Until then:
-`FINAL_STACK_REVIEW = PENDING_AGP_PATCH_VALIDATION`
+The remaining actual first-slice pre-code blocker is rendered design proof.
