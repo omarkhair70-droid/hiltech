@@ -63,7 +63,6 @@ Still open:
 - Flyway baseline/versioning and migration conventions after exact schemas.
 - final jOOQ generated-schema/codegen/package conventions.
 - exact object-storage metadata/table schema.
-- exact Ktor/API transport contracts after SPIKE-15.
 - production object-storage provider.
 
 Already decided/proven:
@@ -73,6 +72,7 @@ Already decided/proven:
 - OpenFGA object/action authorization — ADR-009.
 - offline command persistence/replay semantics — ADR-011.
 - S3-compatible binary evidence protocol — ADR-010.
+- Ktor Client shared networking boundary — SPIKE-15 / ADR-007; Android OkHttp + JVM Desktop CIO.
 
 ## Performance
 - high-volume telemetry separated from OLTP.
@@ -99,3 +99,5 @@ Search architecture itself is decided PostgreSQL/read-model first via ADR-018; a
 
 Current state:
 Strong DOMAIN DATA MODEL, not schema-frozen.
+
+Technical feasibility is no longer the blocker. The remaining data-freeze work is exact production schema/contract definition plus real-company validation.
