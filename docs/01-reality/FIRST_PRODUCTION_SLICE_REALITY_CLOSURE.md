@@ -30,6 +30,29 @@ Source material already exists in:
 Do not turn this into a form.
 Walk real examples and record evidence status.
 
+# Configuration Rule — Important
+
+Most answers in this document are **not code-freeze values**.
+
+Where a real answer is legitimate operating policy, HILTECH OS must expose it as versioned configuration:
+- approver/reviewer relationships,
+- assignment modes,
+- WorkTypes,
+- readiness requirements,
+- evidence requirements,
+- tracking policy,
+- warehouse/site storage locations,
+- asset/stock categories,
+- notification/escalation rules,
+- delegation.
+
+Reality validation is used to prove our configuration model can represent HILTECH and to create sensible initial seed data.
+
+It must not hard-code today's organization into production code.
+
+See:
+`../03-product/CONFIGURABLE_OPERATING_MODEL.md`.
+
 ---
 
 # Closure Group A — Authority / Organization
@@ -406,13 +429,15 @@ Already known enough to stop treating as unknown:
 - Work can repeat by building/unit/day.
 - first-slice design should support Main Warehouse + Project/Site temporary storage + Field Crew + WorkOrder.
 
-Still required for exact freeze:
-- exact authority/exception rules where they change permissions,
-- exact Project/WorkOrder fields from one representative real job,
-- exact evidence/acceptance rules by work type,
-- exact Asset/Stock categories/units/codes for pilot,
-- device/site restrictions that materially affect offline behavior.
+Still required before first-slice freeze:
+- the **configuration schemas** must be able to express authority/exception rules safely,
+- one representative real job must prove the Project/WorkOrder model is not missing structural data,
+- WorkType/Readiness/Evidence/Review policies must be typed/versioned/configurable,
+- Asset/Stock/Storage configuration must support the pilot without hard-coded categories,
+- device/site restrictions that materially change offline/security architecture must be known.
 
-Exact first-slice contracts: **CAN ADVANCE NOW, WITH THE REMAINING ITEMS KEPT AS LABELED REALITY BLOCKERS**.
+Initial values such as who currently approves, which evidence is required for a particular WorkType, current staff count, and current storage locations are seed/configuration data unless they expose a missing structural capability.
+
+Exact first-slice contracts: **CAN ADVANCE NOW. REALITY IS A MODEL-VALIDATION + SEEDING INPUT, NOT A REQUIREMENT TO HARD-CODE TODAY'S COMPANY.**
 
 Production code: **DO NOT START YET**.
