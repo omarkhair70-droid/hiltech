@@ -1,7 +1,7 @@
 # HILTECH First Production Slice — Build Contract Freeze Pack
 
-Status: **TEMPLATE PACK / PRE-FREEZE**
-Date: 2026-09-18
+Status: **FROZEN FIRST-SLICE BUILD CONTRACT PACK / BOOTSTRAP SOURCE**
+Freeze decision date: 2026-09-19
 
 ## Purpose
 
@@ -75,7 +75,7 @@ This pack is therefore **not a spike plan**.
    - first-slice relationship model + application-obligation boundary.
 
 14. `14_FREEZE_GAP_REGISTER.md`
-   - narrow remaining blockers required before FIRST_SLICE_FREEZE = PASS.
+   - closed first-slice gap ledger; remaining items are activation/later-slice work, not pre-code blockers.
 
 ---
 
@@ -97,7 +97,7 @@ Never leave a production-significant field as an unlabeled guess.
 
 # Freeze Rule
 
-This pack is FROZEN only when:
+This pack is now **FROZEN for the first production slice** because:
 
 - no starting-slice table/command/read model depends on an unknown company fact,
 - authority rules are verified,
@@ -107,9 +107,13 @@ This pack is FROZEN only when:
 - tests can be generated directly from the contracts,
 - the monorepo/module plan can consume the contracts without redesign.
 
-Then:
+Decision:
 
-`FREEZE PASSED → REPOSITORY BOOTSTRAP → PRODUCTION CODE`
+`FIRST_SLICE_FREEZE = PASS`
+
+Next:
+
+`REPOSITORY BOOTSTRAP → BOOTSTRAP VERIFICATION → FIRST PRODUCTION VERTICAL`
 
 ---
 
@@ -152,3 +156,10 @@ Use, do not duplicate:
 
 22. `22_CI_SUPPLY_CHAIN_PINNING_CONTRACT.md`
    - immutable GitHub Actions SHA pins, permissions and Dependabot production policy.
+
+
+23. `23_FIRST_SLICE_FREEZE_REVIEW_PROCEDURE.md`
+   - deterministic A–L Freeze Review procedure; executed PASS for this slice.
+
+24. `24_FIRST_SLICE_FREEZE_DECISION_2026-09-19.md`
+   - canonical evidence-backed `FIRST_SLICE_FREEZE = PASS` decision and handoff to Repository Bootstrap.
