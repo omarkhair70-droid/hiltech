@@ -128,3 +128,6 @@ Use, do not duplicate:
 - `../../07-security/FIELD_LEVEL_ACCESS_MATRIX.md`
 - `../../11-architecture/CROSS_CUTTING_BUILD_CONTRACTS.md`
 - ADR-007 / 008 / 009 / 010 / 011.
+
+15. `15_AUTHORIZATION_CONSISTENCY_CONTRACT.md`
+   - fail-closed PostgreSQL business-truth → OpenFGA projection consistency, pinned model/versioning and recovery contract.
