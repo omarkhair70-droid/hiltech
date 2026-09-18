@@ -178,7 +178,8 @@ BLOCKING: PARTIAL — only for included integrations.
 - [x] Object storage/provider baseline — OCI Object Storage + KMS / ADR-014; cutover validation pending.
 - [x] Infra provider baseline — OCI / ADR-014; Jeddah candidate + Container Instances/Compute fallback; tenancy/quota/latency validation pending.
 - [x] CI/CD control plane — GitHub Actions accepted; final action pinning/version re-check remains.
-- [x] Windows packaging/update/rollback decision — SPIKE-07 / ADR-012 accepted; production signing/distribution provider still open.
+- [x] Windows packaging/update/rollback decision — SPIKE-07 / ADR-012 accepted.
+- [x] Windows production signing/distribution architecture — DigiCert OV + KeyLocker + HILTECH Update Service / ADR-019; certificate issuance/staging proof remains operational activation.
 - [x] Ktor/shared networking decision — SPIKE-15 / ADR-007 accepted.
 - [ ] FINAL_STACK.md.
 - [ ] VERSION_MATRIX.md frozen.
