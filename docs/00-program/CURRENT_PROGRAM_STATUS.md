@@ -38,7 +38,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | ACTIVE — 01/03/04/09/11 PASSED | Client platform, local DB, offline queue, authorization model and PostgreSQL concurrency proven; remaining spikes active |
+| Technical spikes | ACTIVE — 01/03/04/09/10/11 PASSED | Client platform, local DB, offline queue, authorization, modular backend events and PostgreSQL concurrency proven; remaining spikes active |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -236,3 +236,19 @@ GitHub Actions run 35296729939:
 - temporary delegation grant and revoke.
 
 Field-level sensitive-data filtering remains server-side policy.
+
+
+## SPIKE-10 — Spring Modulith
+Decision: **ACCEPT — modular monolith + durable module event recovery passed.**
+
+GitHub Actions run 35304479330 proved:
+- module-boundary verification,
+- transactional internal event publication,
+- listener failure leaves publication incomplete/durable,
+- process/context restart preserves failed publication,
+- explicit official resubmission recovers the event,
+- audit projection writes once,
+- incomplete publication registry clears.
+
+Operational note:
+explicit controlled resubmission is preferred over assuming automatic startup replay.
