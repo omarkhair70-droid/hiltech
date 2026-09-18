@@ -5,6 +5,9 @@ Date: 2026-09-18
 
 ## Locked architecture
 
+Cross-system relationship consistency:
+`15_AUTHORIZATION_CONSISTENCY_CONTRACT.md`
+
 - Keycloak authenticates subject/session — ADR-008.
 - HILTECH resolves product identity/context.
 - OpenFGA answers relationship/object-action authorization — ADR-009.
@@ -306,3 +309,26 @@ Still open:
 - final field-projection DTOs.
 
 These are freeze-closure items, not reasons to redesign identity/authorization.
+
+
+---
+
+## Projection consistency
+
+Relationship-changing business commands do not dual-write PostgreSQL + OpenFGA blindly.
+
+Contract:
+- PostgreSQL source relationship + authorization projection intent/outbox commit together.
+- OpenFGA projection uses pinned authorization model ID.
+- pending grants fail closed until FGA APPLIED.
+- pending revokes deny immediately even if stale FGA tuple still exists.
+- stale projector revisions cannot re-grant superseded authority.
+- security-sensitive immediate post-write checks may use HIGHER_CONSISTENCY.
+- projection failures remain visible/repairable.
+
+Required authorization tests include:
+- FGA unavailable during grant.
+- FGA unavailable during revoke.
+- stale tuple after offboarding.
+- stale projector grant after newer revoke.
+- offline queued command after relationship revoke.
