@@ -239,6 +239,8 @@ Not all tabs necessarily visible at once; final IA research determines presentat
 # 8. Site Mobile Surface
 
 - Site identity/location/access context
+- Map / navigation to the site
+- Active site-visit presence/location tracking when the work/policy requires it
 - Today's work
 - people/crew
 - areas/rooms/zones
@@ -426,6 +428,18 @@ Never label server-authoritative action complete before confirmation.
 - feature unavailable for role
 
 ---
+
+## Site tracking boundary
+
+Site presence/location tracking is a field-work capability, not a generic always-on employee surveillance feature.
+
+Before production freeze define:
+- when tracking starts/stops,
+- who can see live/history,
+- required accuracy/frequency,
+- offline behavior,
+- retention,
+- whether tracking proves arrival/presence or is only operational context.
 
 # 19. Mobile Design Research Still Required
 
