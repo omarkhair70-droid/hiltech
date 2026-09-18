@@ -1,9 +1,15 @@
 # HILTECH Reality Validation Plan
 
-Status: REQUIRED / NOT STARTED
+Status: REQUIRED / ACTIVE — INTERNAL REPORTS RECORDED / DIRECT VALIDATION PENDING
 
 ## Goal
 Replace design hypotheses with verified HILTECH reality before product/domain/stack freeze.
+
+Canonical fact status register:
+`REALITY_FACTS_REGISTER.md`
+
+Ready interview pack:
+`interview-packs/AHMED_FINANCE_ADMIN_SESSION.md`
 
 We do not need perfect corporate documentation.
 We need enough real evidence to understand how work actually happens.
