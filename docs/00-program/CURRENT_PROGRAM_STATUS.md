@@ -38,7 +38,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | ACTIVE — 01/03/04/11 PASSED | Client platform, local DB, core offline queue and PostgreSQL concurrency proven; remaining spikes active |
+| Technical spikes | ACTIVE — 01/03/04/09/11 PASSED | Client platform, local DB, offline queue, authorization model and PostgreSQL concurrency proven; remaining spikes active |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -120,7 +120,7 @@ Leading but still spike-dependent:
 - Spring Boot + Spring Modulith.
 - jOOQ — SPIKE-11 runtime/transaction use passed; final code-generation conventions still to freeze.
 - Keycloak.
-- OpenFGA.
+- OpenFGA — **SPIKE-09 authorization model ACCEPTED** for object/action authorization; field-level redaction stays server-side.
 
 ---
 
@@ -220,3 +220,19 @@ GitHub Actions run 35296301835 proved on real PostgreSQL:
 - final quantity/version/movement count remain correct.
 
 Production schema/codegen remains future freeze work.
+
+
+## SPIKE-09 — OpenFGA HILTECH Authorization
+Decision: **ACCEPT — object/action authorization model passed.**
+
+GitHub Actions run 35296729939:
+- real OpenFGA server,
+- 8 HILTECH-shaped object types,
+- 31 base relationship tuples,
+- 27 representative allow/deny checks,
+- internal/client/supplier isolation,
+- payroll/finance boundaries,
+- project/work/asset authorization,
+- temporary delegation grant and revoke.
+
+Field-level sensitive-data filtering remains server-side policy.
