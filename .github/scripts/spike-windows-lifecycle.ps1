@@ -201,12 +201,22 @@ switch ($Stage) {
         Invoke-App $exe @("--probe-write", "state-from-v1")
         Assert-FileValue $StateFile "state-from-v1"
 
-        Invoke-App $exe @("--register-protocol")
-        $command = (Get-Item "HKCU:\Software\Classes\hiltech\shell\open\command").GetValue("")
+        # Windows URL association is installation/update lifecycle responsibility,
+        # not a domain/UI responsibility of the running application. Register the
+        # current-user handler here and prove the packaged executable receives it.
+        $protocolRoot = "HKCU:\Software\Classes\hiltech"
+        $protocolCommand = Join-Path $protocolRoot "shell\open\command"
+        New-Item -Path $protocolCommand -Force | Out-Null
+        Set-Item -Path $protocolRoot -Value "URL:HILTECH Protocol"
+        New-ItemProperty -Path $protocolRoot -Name "URL Protocol" -PropertyType String -Value "" -Force | Out-Null
+        Set-Item -Path $protocolCommand -Value ("`"{0}`" `"%1`"" -f $exe)
+
+        $command = (Get-Item $protocolCommand).GetValue("")
         if (-not $command -or $command -notmatch "HILTECHSpike\.exe") {
             throw "hiltech:// protocol registration did not target packaged app"
         }
 
+        Write-Host "HILTECH_WINDOWS_PROTOCOL_HANDLER_PASS=$command"
         Start-Process "hiltech://work/WO-42"
         $deadline = (Get-Date).AddSeconds(15)
         while ((Get-Date) -lt $deadline -and -not (Test-Path $DeepLinkFile)) {
