@@ -43,4 +43,8 @@ kotlin {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    testLogging {
+        showStandardStreams = true
+        events("failed", "skipped")
+    }
 }
