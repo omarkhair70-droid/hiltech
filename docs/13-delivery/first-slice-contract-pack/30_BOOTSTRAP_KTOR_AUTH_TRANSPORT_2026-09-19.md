@@ -1,7 +1,7 @@
 # 30 — Bootstrap Ktor Authenticated Command Transport
 
 Date: 2026-09-19
-Status: **IMPLEMENTED / CI VERIFICATION PENDING**
+Status: **PASS / BOOTSTRAP VERIFIED**
 
 ## Purpose
 
@@ -85,13 +85,32 @@ Bootstrap contract tests verify:
 - reauth does not auto-retry,
 - unknown command never reaches network.
 
-## Deliberately not wired yet
+## Bootstrap verification
 
-The Android worker still does not construct production auth/runtime dependencies.
+GitHub Actions run:
+`35406136688`
 
-Next gate:
-- Android runtime composition,
-- token/session provider backed by Keycloak/OIDC integration boundary,
-- installation-id/correlation/trace providers,
-- replay result → WorkManager result mapping,
-- explicit reauth notification/recovery hook.
+PASS:
+- frozen offline route allow-list,
+- bearer/idempotency/correlation/native metadata headers,
+- operationId/baseVersion/clientOccurredAt body merge,
+- applied/duplicate mapping,
+- typed conflict mapping,
+- Retry-After mapping,
+- REAUTH_REQUIRED mapping,
+- unknown-command network denial,
+- Shared tests,
+- Room schema drift,
+- Android build,
+- Desktop compile,
+- Server tests,
+- PostgreSQL/Flyway/jOOQ regression suite.
+
+The gate caught and fixed a real serialization defect before runtime wiring:
+a Kotlin Elvis expression around `JsonObjectBuilder.put` overwrote a non-null `baseVersion` with JSON null because `put` returns the previous value.
+
+This gate is closed.
+
+## Next gate
+
+Android runtime composition and WorkManager wiring.

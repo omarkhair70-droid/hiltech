@@ -50,11 +50,6 @@ class KtorPendingCommandTransportTest {
                 body = body,
             )
 
-            println(
-                "HILTECH_KTOR_CAPTURE path=${request.url.encodedPath} " +
-                    "headers=${request.headers.entries()} body=$body",
-            )
-
             respond(
                 content = """{"workOrderId":"work-42","version":8,"correlationId":"server-corr","duplicateReplay":false}""",
                 status = HttpStatusCode.OK,
@@ -215,6 +210,46 @@ class KtorPendingCommandTransportTest {
             ),
             reauth,
         )
+    }
+
+    @Test
+    fun missingAccessTokenFailsClosedBeforeNetwork() = runBlocking {
+        var networkCalled = false
+        val engine = MockEngine {
+            networkCalled = true
+            error("Network must not be called without a usable access token.")
+        }
+
+        val transport = KtorPendingCommandTransport(
+            client = HttpClient(engine),
+            baseUrl = "https://hiltech.example",
+            tokenProvider = AccessTokenProvider { null },
+            correlationIdProvider = CorrelationIdProvider { "corr-no-token" },
+            traceParentProvider = TraceParentProvider { null },
+            clientMetadata = NativeClientMetadata(
+                platform = "android",
+                version = "0.1.0",
+                installationId = "device-42",
+            ),
+        )
+
+        val result = transport.execute(
+            command(
+                operationId = "op-no-token",
+                commandType = "StartWork",
+                targetType = "WorkOrder",
+                targetId = "work-42",
+            ),
+        )
+
+        assertEquals(
+            CommandTransportResult.Terminal(
+                code = "REAUTH_REQUIRED",
+                correlationId = "corr-no-token",
+            ),
+            result,
+        )
+        assertEquals(false, networkCalled)
     }
 
     @Test

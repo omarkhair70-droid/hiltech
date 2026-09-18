@@ -1,3 +1,9 @@
+fun String.asBuildConfigString(): String =
+    "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+val hiltechApiBaseUrl = providers.gradleProperty("hiltech.apiBaseUrl")
+    .getOrElse("")
+
 plugins {
     id("com.hiltech.base")
     alias(libs.plugins.androidApplication)
@@ -14,10 +20,16 @@ android {
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField(
+            "String",
+            "HILTECH_API_BASE_URL",
+            hiltechApiBaseUrl.asBuildConfigString(),
+        )
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

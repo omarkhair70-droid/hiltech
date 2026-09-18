@@ -110,6 +110,26 @@ interface PendingCommandDao {
         """,
     )
     suspend fun unresolvedCount(): Int
+
+    @Query(
+        """
+        SELECT MIN(next_retry_at_epoch_ms)
+        FROM pending_command
+        WHERE state = 'RETRYABLE'
+          AND next_retry_at_epoch_ms IS NOT NULL
+        """,
+    )
+    suspend fun earliestRetryAtEpochMs(): Long?
+
+    @Query(
+        """
+        SELECT COUNT(*)
+        FROM pending_command
+        WHERE state = 'FAILED_TERMINAL'
+          AND last_result_code = :resultCode
+        """,
+    )
+    suspend fun terminalCountByResultCode(resultCode: String): Int
 }
 
 @Dao

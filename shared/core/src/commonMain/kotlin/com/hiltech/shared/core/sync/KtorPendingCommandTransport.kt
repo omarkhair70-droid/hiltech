@@ -26,7 +26,7 @@ import kotlinx.serialization.json.longOrNull
 import kotlin.time.Instant
 
 fun interface AccessTokenProvider {
-    suspend fun accessToken(): String
+    suspend fun accessToken(): String?
 }
 
 fun interface CorrelationIdProvider {
@@ -78,6 +78,11 @@ class KtorPendingCommandTransport(
 
         val correlationId = correlationIdProvider.correlationId()
         val accessToken = tokenProvider.accessToken()
+            ?.takeIf { it.isNotBlank() }
+            ?: return CommandTransportResult.Terminal(
+                code = "REAUTH_REQUIRED",
+                correlationId = correlationId,
+            )
 
         val response = client.request(normalizedBaseUrl + route) {
             method = HttpMethod.Post
