@@ -1,6 +1,6 @@
 # 01 — First-Slice Data Dictionary
 
-Status: **PRE-FREEZE TEMPLATE**
+Status: **CONTRACT CANDIDATE v0.1 / CONFIGURATION-INTEGRATED**
 
 ## Rule
 
@@ -19,11 +19,45 @@ Do not copy every v0.1 object-spec field automatically into production.
 
 ---
 
+# Configuration Core
+
+Canonical schema:
+`00_CONFIGURATION_POLICY_SCHEMAS.md`
+
+Configuration aggregates referenced by first-slice domain data:
+- WorkTypeDefinition
+- AssignmentPolicy
+- ReadinessPolicy
+- EvidencePolicy
+- ReviewPolicy
+- FieldTrackingPolicy
+- StorageLocationConfiguration
+- AssetTypeDefinition
+- StockItemCategoryDefinition
+- ApprovalPolicy
+- Role/Team/Delegation configuration
+- typed templates
+
+Common configuration identity:
+- id: UUID
+- organizationId: UUID
+- code: String
+- lifecycleState: DRAFT / ACTIVE / SUPERSEDED / RETIRED
+- revisionNumber: Int
+- effectiveFrom/effectiveTo: Instant?
+- supersedesId: UUID?
+- version: Long
+- audit/activation metadata
+
+Current HILTECH values are seed data; the schemas are production contracts.
+
+---
+
 # Identity / Organization Subset
 
 | Field | Exact type | Null | Owner | Classification | Source of truth | Offline/cache | Evidence | Status |
 |---|---|---:|---|---|---|---|---|---|
-| UserIdentity.id | TBD ID strategy | NO | Identity | INTERNAL | HILTECH | minimal | technical model | PROPOSED_FOR_REVIEW |
+| UserIdentity.id | UUID | NO | Identity | INTERNAL | HILTECH | minimal | technical model | PROPOSED_FOR_REVIEW |
 | UserIdentity.authSubject | String | NO | Identity | HIGHLY_RESTRICTED | Keycloak link | no UI cache | SPIKE-08 | LOCKED_TECHNICAL |
 | UserIdentity.status | enum TBD exact | NO | Identity | INTERNAL | HILTECH | session bootstrap | reality + policy | REALITY_REQUIRED |
 | Organization subset | TBD | TBD | Organizations | TBD | HILTECH/current source | context only | org reality | REALITY_REQUIRED |
@@ -37,11 +71,11 @@ Required decisions before freeze:
 
 | Field | Exact type | Null | Owner | Classification | Source | Local cache | Evidence | Status |
 |---|---|---:|---|---|---|---|---|---|
-| id | TBD ID strategy | NO | Projects | INTERNAL | HILTECH | YES | technical | PROPOSED_FOR_REVIEW |
+| id | UUID | NO | Projects | INTERNAL | HILTECH | YES | technical | CONTRACT_CANDIDATE |
 | projectCode | TBD max/pattern | NO | Projects | INTERNAL | existing/new convention | YES | real project | REALITY_REQUIRED |
 | name | TBD | NO | Projects | INTERNAL | current project source | YES | real project | REALITY_REQUIRED |
 | clientOrganizationId | ID | NO | Projects | RESTRICTED | commercial/project handoff | YES-safe subset | real project | REALITY_REQUIRED |
-| lifecycleState | exact enum | NO | Projects | INTERNAL | Projects | YES | real lifecycle | REALITY_REQUIRED |
+| lifecycleState | exact Project lifecycle enum | NO | Projects | INTERNAL | Projects | YES | lifecycle contract | PROPOSED_FOR_REVIEW |
 | projectManagerId | ID | TBD | Projects | INTERNAL | authority/assignment | YES | real project | REALITY_REQUIRED |
 | planned dates | LocalDate | TBD | Projects | INTERNAL | project planning | YES | real project | REALITY_REQUIRED |
 | version | Long | NO | Projects | INTERNAL | server | YES | SPIKE-15 pattern | LOCKED_TECHNICAL |
@@ -76,18 +110,24 @@ Exact production fields to freeze:
 
 | Field group | Decision needed | Evidence | Status |
 |---|---|---|---|
-| identity/code | exact code convention | field/project reality | REALITY_REQUIRED |
-| project/site/area refs | exact required cardinality | real job | REALITY_REQUIRED |
-| title/instruction | exact minimum instruction fields | real assignment | REALITY_REQUIRED |
-| lifecycleState | exact production enum | transition review | PROPOSED_FOR_REVIEW |
-| readinessState | exact checks + override semantics | field/PM reality | REALITY_REQUIRED |
-| assignee/team | user/team/subcontractor cardinality | real assignment | REALITY_REQUIRED |
-| supervisor/engineer | exact reviewer model | authority reality | REALITY_REQUIRED |
-| planned/actual timestamps | exact meanings | field reality | REALITY_REQUIRED |
-| priority | exact values | PM reality | REALITY_REQUIRED |
-| evidencePolicyRef | exact policy model | work-type evidence | REALITY_REQUIRED |
-| drawing/material/asset requirements | exact structures | real job | REALITY_REQUIRED |
-| instructionVersion | exact type/meaning | field revision flow | REALITY_REQUIRED |
+| identity/code | UUID + configurable human code/string | field/project seed | PROPOSED_FOR_REVIEW |
+| project/site/area refs | UUID refs; required subset by work context/template | real job validates coverage | PROPOSED_FOR_REVIEW |
+| workTypeDefinitionRef | config id + revision | configuration contract | CONTRACT_CANDIDATE |
+| assignmentPolicyRef | config id + revision | configuration contract | CONTRACT_CANDIDATE |
+| readinessPolicyRef | config id + revision | configuration contract | CONTRACT_CANDIDATE |
+| evidencePolicyRef | config id + revision | configuration contract | CONTRACT_CANDIDATE |
+| reviewPolicyRef | config id + revision | configuration contract | CONTRACT_CANDIDATE |
+| trackingPolicyRef | config id + revision, optional | configuration contract | CONTRACT_CANDIDATE |
+| title/instruction | typed/string fields + optional template revision | real job validates terminology | PROPOSED_FOR_REVIEW |
+| lifecycleState | exact production enum from transition contract | transition review | PROPOSED_FOR_REVIEW |
+| readinessState | derived state from bound readiness policy | configuration contract | CONTRACT_CANDIDATE |
+| assignee target | typed USER/CREW/TEAM/SUBCONTRACTOR assignment | assignment policy | CONTRACT_CANDIDATE |
+| reviewer relation | derived from bound ReviewPolicy | configuration contract | CONTRACT_CANDIDATE |
+| planned/actual timestamps | exact meanings | field workflow | PROPOSED_FOR_REVIEW |
+| priorityCode | configurable/master code | PM seed/config | CONTRACT_CANDIDATE |
+| drawing/material/asset requirements | typed requirement refs/templates | work-type config | CONTRACT_CANDIDATE |
+| instructionRevision | Long/typed revision ref | field revision flow | PROPOSED_FOR_REVIEW |
+| policyBindingSnapshot | immutable config revision references | historical reproducibility | CONTRACT_CANDIDATE |
 | version | Long optimistic lock | SPIKE-15 | LOCKED_TECHNICAL |
 
 ---
@@ -102,17 +142,21 @@ Technically fixed:
 - no destructive movement history,
 - calibration can block availability by policy.
 
-Reality-required:
-- asset classes,
-- codes/serial rules,
-- warehouse/storage hierarchy,
-- checkout proof,
-- return inspection,
-- calibration classes,
-- stock vs serialized split,
-- units of measure.
+Configuration-driven:
+- AssetTypeDefinition,
+- StockItemCategoryDefinition,
+- units of measure,
+- calibration requirement,
+- storage locations,
+- high-value/restricted handling policy.
 
-Do not freeze exact enums/columns before walkthrough.
+Domain invariants remain fixed:
+- unique physical identity for serialized assets,
+- append-only movement/custody history,
+- one active authoritative custody,
+- no silent negative stock.
+
+A walkthrough validates coverage and supplies initial seed/master data; it does not define permanent code enums.
 
 ---
 
