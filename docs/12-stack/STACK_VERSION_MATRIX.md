@@ -33,7 +33,7 @@ Rules:
 | Kotlin Coroutines | 1.11.0 | PROVEN | Room/offline spike line |
 | Android WorkManager | 2.11.2 | PROVEN / ACCEPTED | SPIKE-13 |
 | CameraX | 1.6.2 spike line | PROVEN | SPIKE-05; exact freeze version re-check before final freeze |
-| Ktor Client | 3.5.2 observed candidate | LEADING | Must be proven/frozen through network/E2E path |
+| Ktor Client | 3.5.2 | PROVEN / ACCEPTED | SPIKE-15 / ADR-007; Android OkHttp + JVM Desktop CIO |
 
 ---
 
@@ -49,7 +49,7 @@ Rules:
 | jOOQ | 3.21.8 | PROVEN / ACCEPTED | SPIKE-11 / ADR-005 |
 | pgJDBC | 42.7.13 | PROVEN | SPIKE-11 |
 | Flyway | exact version TBD | LEADING | Migration strategy freezes after exact schemas |
-| Spring Security / OIDC integration | exact version inherited from Spring Boot line | LEADING | Final backend integration in SPIKE-15 / bootstrap |
+| Spring Security / OIDC integration | exact version inherited from Spring Boot 4.1.1 line | PROVEN | SPIKE-15 authenticated server integration; final production pin re-check at freeze |
 
 ---
 
@@ -140,14 +140,12 @@ Rules:
 
 # Still Required Before FINAL_STACK.md
 
-1. SPIKE-15 end-to-end vertical proof.
-2. Ktor/network client proof through the real HILTECH API path (part of SPIKE-15).
-3. Exact Flyway/version/migration baseline after schemas are frozen.
-4. Infrastructure/provider decision.
-5. Production object-storage provider.
-6. Windows enterprise distribution/updater and production signing choice.
-7. Final server/runtime/container versions.
-8. Final CI action pinning strategy.
-9. One last current-version verification immediately before freeze.
+1. Exact Flyway/version/migration baseline after schemas are frozen.
+2. Infrastructure/provider decision.
+3. Production object-storage provider.
+4. Windows enterprise distribution/updater and production signing choice.
+5. Final server/runtime/container versions.
+6. Final CI action pinning strategy.
+7. One last current-version verification immediately before freeze.
 
 Only after those gates may FINAL_STACK.md be created.
