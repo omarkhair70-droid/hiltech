@@ -204,5 +204,25 @@ Contacts: RESTRICTED
 Role/team names: INTERNAL
 Delegation: RESTRICTED
 
-## Next
-Authentication/authorization spikes decide final IdP/session/device boundaries.
+## Accepted Technical Boundary
+
+Authentication/authorization architecture is no longer open:
+- Keycloak native OIDC Authorization Code + PKCE — SPIKE-08 / ADR-008.
+- OpenFGA object/action authorization — SPIKE-09 / ADR-009.
+- Ktor authenticated client/server path — SPIKE-15 / ADR-007.
+
+Tokens remain IdP/session concerns rather than normal business-domain persistence.
+
+## Still Required Before Auth-Schema Freeze
+
+Reality/schema decisions still required:
+- actual HILTECH user/employee source of truth,
+- exact organization/team/role combinations,
+- delegation policy,
+- device ownership/trust/revocation policy,
+- whether HILTECH persists a product-side Session record beyond IdP/session references,
+- exact Device fields required for security/push/offline operations,
+- retention/privacy rules for device/session telemetry,
+- real authority relationships to materialize as OpenFGA tuples/policy.
+
+Those are company-policy/schema questions, not unresolved IdP/authz technology choices.
