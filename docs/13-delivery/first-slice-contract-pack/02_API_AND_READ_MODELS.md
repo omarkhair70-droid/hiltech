@@ -56,36 +56,32 @@ Exact resource grammar is still to be frozen, but the capability boundary is now
 
 # Command Freeze Table
 
-| Command | Route | Actor relation | Online/offline | baseVersion | Idempotency | Request schema | Success schema | Error set | Status |
-|---|---|---|---|---:|---:|---|---|---|---|
-| CreateWorkOrder | TBD | configured relationship/policy | online | policy | YES | WorkType + context + policy-resolvable refs | authoritative work + policy bindings | validation/permission/state | CONTRACT_CANDIDATE |
-| AssignWork | TBD | AssignmentPolicy + authorization | online | YES | YES | typed assignment target | authoritative assignment/version | conflict/eligibility/permission/state | CONTRACT_CANDIDATE |
-| StartWork | TBD | assigned executor | offline replay | YES | YES | TBD | TBD | conflict/permission/state | REALITY_REQUIRED |
-| BlockWork | TBD | assigned executor/supervisor | offline replay | YES | YES | TBD | TBD | TBD | REALITY_REQUIRED |
-| ResumeWork | TBD | assigned executor/supervisor | offline replay | YES | YES | TBD | TBD | TBD | REALITY_REQUIRED |
-| SubmitWorkCompletion | TBD | assigned executor | offline replay | YES | YES | evidence refs + completion payload derived from WorkType | authoritative submitted state/version | evidence/conflict/state | CONTRACT_CANDIDATE |
-| AcceptWork | TBD | ReviewPolicy + authorization | online | YES | YES | exact submitted version + decision context | accepted version/state | conflict/permission/state/policy | CONTRACT_CANDIDATE |
-| RequestRework | TBD | reviewer relation | online | YES | YES | reason/evidence TBD | TBD | TBD | REALITY_REQUIRED |
-| CancelWork | TBD | cancel authority | online | YES | YES | reason TBD | TBD | conflict/state | REALITY_REQUIRED |
-| ReserveAsset | TBD | warehouse/policy | online | YES | YES | TBD | TBD | allocation conflict | REALITY_REQUIRED |
-| CheckoutAsset | TBD | warehouse authority | online default | YES | YES | custody context TBD | TBD | custody/version conflict | REALITY_REQUIRED |
-| ReturnAsset | TBD | warehouse receipt | online final | YES | YES | condition/accessories TBD | TBD | TBD | REALITY_REQUIRED |
-| ReserveEvidenceUpload | TBD | assigned/evidence permission | online | context version | YES | file metadata | signed upload target | validation/permission | PROPOSED_FOR_REVIEW |
-| FinalizeEvidence | TBD | evidence owner/context | online/replay | context | YES | uploadSessionId | READY metadata | checksum/storage errors | PROPOSED_FOR_REVIEW |
+The earlier placeholder command table has been superseded by the v0.2 route/DTO section below.
+
+Current command families are now structurally defined for:
+- WorkOrder lifecycle,
+- Asset custody,
+- Evidence upload/finalize,
+- Stock movement,
+- typed Configuration revisions.
+
+Remaining work is exact field/route normalization and error-code closure, not reality discovery.
 
 ---
 
 # Query / Read Model Freeze Table
 
-| Read model | Consumer | Required fields | Sensitive filters | Pagination | Offline cache | Status |
-|---|---|---|---|---|---|---|
-| PMProjectCommandCenter | PM Desktop | reality/design freeze | field-level policy | TBD | no/limited | DESIGN_REQUIRED |
-| TechnicianTodayItem | Technician Android | work identity/readiness/time | assigned only | cursor TBD | YES | DESIGN_REQUIRED |
-| TechnicianJobBundle | Technician Android | Project/Site/Work/evidence/assets | least required field subset | n/a | YES durable | REALITY_REQUIRED |
-| WarehouseAssetPassport | Warehouse | asset/custody/condition/calibration | cost restricted | n/a | maybe | REALITY_REQUIRED |
-| WarehouseCheckoutContext | Warehouse | asset + recipient + project/work | restricted fields | n/a | online-first | REALITY_REQUIRED |
-| SupervisorReviewView | Supervisor/Engineer | submitted version/evidence/tests | assigned/reviewer | cursor if queue | limited | REALITY_REQUIRED |
-| PMWorkProgressItem | PM Desktop | authoritative state/version/exception | PM context | cursor | hint/cache | REALITY_REQUIRED |
+Read-model structural shapes are defined in the v0.2 section below:
+
+- PMProjectCommandCenter
+- TechnicianTodayItem
+- TechnicianJobBundle
+- WarehouseAssetPassport
+- WarehouseCheckoutContext
+- SupervisorReviewView
+- PMWorkProgressItem
+
+Remaining design work affects presentation/navigation and exact optional fields; authorization/redaction and core semantics are already contract-bound.
 
 ---
 
