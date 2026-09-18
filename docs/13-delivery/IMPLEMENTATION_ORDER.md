@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: PROPOSED v0.1 / TO BE FROZEN AFTER REALITY + SPIKES
+Status: PROPOSED v0.2 / TECHNICAL SPIKES CLOSED / REALITY + FREEZE PENDING
 
 ## Core Rule
 
@@ -383,7 +383,7 @@ Never build the whole backend before seeing real client behavior.
 
 # First Production Proof Candidate
 
-After foundation, one strong end-to-end proof:
+After foundation, one strong end-to-end production slice:
 
 PM Desktop
 -> creates/assigns Work Order
@@ -396,7 +396,13 @@ PM Desktop
 -> PM Desktop updates
 -> audit/activity exists
 
-If this works correctly, the hardest HILTECH architecture assumptions are proven together.
+Technical feasibility for the core path is already proven by SPIKE-15:
+PM Desktop -> Android durable bundle/offline/process death/reconnect/evidence -> Supervisor -> PM authoritative state/audit, with Keycloak, OpenFGA, PostgreSQL/jOOQ, Room, WorkManager, S3-compatible storage, Spring Modulith and Ktor all participating.
+
+Therefore the production slice is **not** another architecture experiment.
+Its purpose is to implement frozen real HILTECH contracts, add the warehouse/custody branch, and prove operability on production-shaped code/data/devices.
+
+The slice must not start until the relevant Project/Work/Warehouse/Field reality and exact contracts pass Freeze Review.
 
 ---
 
@@ -409,3 +415,21 @@ External Client UI:
 LAST.
 
 Do not spend implementation time polishing Client Portal while Ahmed/warehouse/field/company core is incomplete.
+
+
+---
+
+## Technical Gate Closure — 2026-09-18
+
+All required technical spikes 01–15 are accepted.
+
+This implementation order no longer depends on an unresolved platform/networking/offline architecture experiment.
+
+Remaining reasons it is still PROPOSED rather than FROZEN:
+- real HILTECH authority/workflow validation,
+- exact first-slice object/API/local/file contracts,
+- representative low-fi/RTL/conflict validation,
+- production provider/runtime/signing choices,
+- final dependency/monorepo freeze.
+
+No production code starts merely because the technical spike gate is green.
