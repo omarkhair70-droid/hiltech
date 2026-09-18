@@ -63,6 +63,23 @@ Test:
 Pass:
 no structural left/right assumptions or bidi corruption.
 
+**Result 2026-09-18: ACCEPT — RTL/ADAPTIVE STRUCTURAL FEASIBILITY PASSED.**
+
+Evidence:
+- shared adaptive/bidi policy tests passed.
+- mixed Arabic strings explicitly isolate LTR IDs/IPs/codes.
+- Android compiled with the shared RTL/adaptive UI.
+- Desktop compiled.
+- real Compose renders passed for:
+  - 360×800 RTL → STACKED,
+  - 800×1000 RTL → SPLIT,
+  - 1440×900 RTL → WIDE,
+  - 1440×900 LTR → WIDE.
+
+GitHub Actions run: 35305946228.
+
+This accepts structural feasibility, not final Arabic typography, pane ordering, navigation or visual design.
+
 ---
 
 # SPIKE-03 — Room KMP Local DB
