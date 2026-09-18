@@ -34,7 +34,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | Offline/sync | SPIKE-PROVEN CORE | Restart-safe queue, idempotent retry and stale conflict semantics passed; HTTP/background/UX spikes remain |
 | Integration/hardware | FIRST PASS | Real vendors/systems unknown |
 | API/read models | FIRST PASS | Conventions/error/versioning/read architecture defined |
-| Stack | RESEARCH PASS 01 | Leading candidates, no final stack |
+| Stack | EVIDENCE-BASED PRE-FREEZE | Accepted/proven vs leading/TBD tracked in `docs/12-stack/STACK_VERSION_MATRIX.md`; no final stack yet |
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
@@ -139,7 +139,7 @@ Proven / accepted directions:
 
 Leading but still spike/freeze dependent:
 - Ktor Client / exact HTTP client integration.
-- jOOQ — runtime/transaction use passed; final code-generation conventions still to freeze.
+- jOOQ — **ADR-005 accepted** as the PostgreSQL SQL/persistence access layer; generated-schema/codegen conventions still freeze with exact schemas.
 - Keycloak 26.7.4 + native OIDC Authorization Code/PKCE — **SPIKE-08 accepted**.
 - WorkManager background execution — SPIKE-13 pending.
 - exact Windows update/distribution strategy — SPIKE-07 active.
