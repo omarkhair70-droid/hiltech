@@ -1,4 +1,4 @@
-const state = { mode: "ready", view: "phone", lang: "en" };
+const state = { screen: "technician", mode: "ready", view: "phone", lang: "en" };
 
 const copy = {
   en: {
@@ -46,7 +46,7 @@ const copy = {
 };
 
 function esc(s){return String(s)}
-function render(){
+function renderTechnician(){
   const t = copy[state.lang];
   const dir = state.lang === "ar" ? "rtl" : "ltr";
   const isReady = state.mode==="ready";
@@ -120,27 +120,163 @@ function render(){
     </div>`;
 }
 
-function wire(selector,key){
-  document.querySelectorAll(selector).forEach(btn=>{
+
+const warehouseCopy = {
+  en: {
+    product:"HILTECH · WAREHOUSE", synced:"LIVE INVENTORY", title:"Fluke 289 True-RMS Multimeter",
+    assetCode:"AS-0048", serial:"SN · FLK289-88421", location:"Maadi Main Warehouse", slot:"Cabinet B-04",
+    available:"AVAILABLE", calibration:"CALIBRATION BLOCKED", collision:"CHECKOUT NOT APPLIED", success:"CHECKED OUT",
+    passport:"Asset passport", checkout:"Checkout context", history:"Movement",
+    condition:"Condition", conditionValue:"Good", calibrationLabel:"Calibration", calibrationValue:"Valid · 42 days left",
+    custodian:"Current custody", custodianValue:"Stored · Maadi", type:"Asset type", typeValue:"Test instrument",
+    recipient:"Recipient", recipientValue:"Crew A · Omar", project:"Project", projectValue:"Bank HQ · Data Center",
+    work:"Work Order", workValue:"WO-0042", returnLabel:"Expected return", returnValue:"Tomorrow · 17:00",
+    action:"CHECK OUT ASSET", blockedAction:"VIEW CALIBRATION", next:"NEXT SCAN",
+    calibrationTitle:"Checkout blocked by calibration policy",
+    calibrationText:"This asset requires valid calibration for this WorkType. The current calibration is expired. First slice has no generic override.",
+    collisionTitle:"Another device checked out this asset first",
+    collisionText:"Your screen was based on version 12. Server version 14 says AS-0048 is now with Crew B.",
+    localState:"Your request was not applied. Nothing was overwritten.",
+    authoritative:"Authoritative custody", authoritativeValue:"Crew B · Factory Site · WO-0191",
+    successTitle:"Custody transferred",
+    successText:"Movement MVT-00812 recorded. AS-0048 is now assigned to Crew A for WO-0042."
+  },
+  ar: {
+    product:"هيلتك · المخزن", synced:"المخزون مباشر", title:"Fluke 289 True-RMS Multimeter",
+    assetCode:"AS-0048", serial:"SN · FLK289-88421", location:"مخزن المعادي الرئيسي", slot:"الدولاب B-04",
+    available:"متاح", calibration:"موقوف بسبب المعايرة", collision:"لم يتم التسليم", success:"تم التسليم",
+    passport:"بطاقة الأصل", checkout:"سياق التسليم", history:"الحركة",
+    condition:"الحالة", conditionValue:"جيدة", calibrationLabel:"المعايرة", calibrationValue:"صالحة · متبقي 42 يوم",
+    custodian:"العهدة الحالية", custodianValue:"في المخزن · المعادي", type:"نوع الأصل", typeValue:"جهاز اختبار",
+    recipient:"المستلم", recipientValue:"Crew A · عمر", project:"المشروع", projectValue:"المقر الرئيسي للبنك · مركز البيانات",
+    work:"أمر الشغل", workValue:"WO-0042", returnLabel:"الرجوع المتوقع", returnValue:"غدًا · 17:00",
+    action:"تسليم الأصل", blockedAction:"عرض المعايرة", next:"المسح التالي",
+    calibrationTitle:"التسليم موقوف بسبب سياسة المعايرة",
+    calibrationText:"نوع الشغل ده محتاج معايرة سارية. معايرة الجهاز منتهية، ومفيش Override عام في أول Slice.",
+    collisionTitle:"جهاز آخر سلّم الأصل قبلك",
+    collisionText:"الشاشة عندك كانت على version 12. السيرفر على version 14 وبيقول إن AS-0048 بقى مع Crew B.",
+    localState:"طلبك ما اتطبقش، ومفيش أي حالة معتمدة اتكتبت فوق حالة أحدث.",
+    authoritative:"العهدة المعتمدة", authoritativeValue:"Crew B · موقع المصنع · WO-0191",
+    successTitle:"تم نقل العهدة",
+    successText:"تم تسجيل الحركة MVT-00812. الأصل AS-0048 بقى مع Crew A علشان WO-0042."
+  }
+};
+
+function renderWarehouse(){
+  const t=warehouseCopy[state.lang];
+  const dir=state.lang==="ar"?"rtl":"ltr";
+  const blocked=state.mode==="calibration";
+  const collision=state.mode==="collision";
+  const success=state.mode==="success";
+  const statusClass=blocked?"rework":collision?"conflict":success?"ready":"ready";
+  const statusText=blocked?t.calibration:collision?t.collision:success?t.success:t.available;
+
+  let banner="";
+  if(blocked) banner='<div class="banner rework"><strong>'+t.calibrationTitle+'</strong><p>'+t.calibrationText+'</p></div>';
+  if(collision) banner='<div class="banner conflict"><strong>'+t.collisionTitle+'</strong><p>'+t.collisionText+'</p></div><div class="local-card"><strong>'+t.localState+'</strong><p>Cached v12 · Server v14</p></div>';
+  if(success) banner='<div class="banner offline" style="background:var(--ok-bg);color:var(--ok)"><strong>'+t.successTitle+'</strong><p>'+t.successText+'</p></div>';
+
+  const currentCustody=collision?t.authoritativeValue:(success?t.recipientValue:t.custodianValue);
+  const calibrationValue=blocked?"Expired · action blocked":t.calibrationValue;
+
+  document.getElementById("screen").innerHTML =
+    '<div class="app" dir="'+dir+'">'+
+      '<header class="topbar"><div class="top-left"><button class="icon-btn">⌁</button><span class="product-word">'+t.product+'</span></div><span class="sync"><i></i>'+t.synced+'</span></header>'+
+      '<div class="content">'+
+        '<section class="hero">'+banner+
+          '<span class="kicker">'+t.location+' · '+t.slot+'</span>'+
+          '<div class="title-row"><div><h1>'+t.title+'</h1><span class="code">'+t.assetCode+' · '+t.serial+'</span></div><span class="status '+statusClass+'">'+statusText+'</span></div>'+
+          '<div class="scan-code"><span>QR</span><b>'+t.assetCode+'</b><small>Tap / scan identity</small></div>'+
+        '</section>'+
+        '<div class="split">'+
+          '<section class="section"><div class="section-head"><strong>'+t.passport+'</strong><span class="code">Asset v14</span></div><div class="section-body"><div class="passport-grid">'+
+            metric(t.condition,t.conditionValue)+metric(t.calibrationLabel,calibrationValue)+metric(t.custodian,currentCustody)+metric(t.type,t.typeValue)+
+          '</div></div></section>'+
+          '<div style="display:grid;align-content:start;gap:16px">'+
+            (collision?'<section class="section"><div class="section-head"><strong>'+t.authoritative+'</strong><span class="code">v14</span></div><div class="section-body"><div class="movement"><b>'+t.authoritativeValue+'</b><small>Authoritative server custody</small></div></div></section>':'')+
+            '<section class="section"><div class="section-head"><strong>'+t.checkout+'</strong><span class="code">Policy C2</span></div><div class="section-body"><div class="passport-grid">'+
+              metric(t.recipient,t.recipientValue)+metric(t.project,t.projectValue)+metric(t.work,t.workValue)+metric(t.returnLabel,t.returnValue)+
+            '</div></div></section>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+      '<footer class="actionbar">'+
+        (blocked?'<button class="primary">'+t.blockedAction+'</button>':
+         collision?'<button class="primary">'+t.next+'</button>':
+         success?'<button class="primary">'+t.next+'</button>':
+         '<button class="primary">'+t.action+'</button>')+
+      '</footer>'+
+    '</div>';
+}
+
+function metric(label,value){
+  return '<div class="metric"><small>'+label+'</small><b>'+value+'</b></div>';
+}
+
+const stateSets = {
+  technician: [
+    ["ready","Ready / Online"],
+    ["offline","In progress / Offline"],
+    ["conflict","Conflict"],
+    ["rework","Rework"]
+  ],
+  warehouse: [
+    ["available","Available"],
+    ["calibration","Calibration blocked"],
+    ["collision","Checkout collision"],
+    ["success","Success"]
+  ]
+};
+
+function renderStateControls(){
+  const host=document.getElementById("state-controls");
+  host.innerHTML=stateSets[state.screen].map((item,i)=>
+    '<button data-runtime-state="'+item[0]+'" class="control '+(state.mode===item[0]?'active':'')+'">'+item[1]+'</button>'
+  ).join("");
+  host.querySelectorAll("[data-runtime-state]").forEach(btn=>{
     btn.addEventListener("click",()=>{
-      document.querySelectorAll(selector).forEach(x=>x.classList.remove("active"));
+      host.querySelectorAll("[data-runtime-state]").forEach(x=>x.classList.remove("active"));
       btn.classList.add("active");
-      state[key]=btn.dataset[key];
-      if(key==="view") document.getElementById("device").className=`device ${state.view}`;
+      state.mode=btn.dataset.runtimeState;
       render();
     });
   });
 }
-wire("[data-state]","state");
-wire("[data-view]","view");
-wire("[data-lang]","lang");
 
-document.querySelectorAll("[data-state]").forEach(btn=>{
-  btn.onclick=()=>{
-    document.querySelectorAll("[data-state]").forEach(x=>x.classList.remove("active"));
+function render(){
+  if(state.screen==="warehouse") renderWarehouse();
+  else renderTechnician();
+}
+
+document.querySelectorAll("[data-screen]").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll("[data-screen]").forEach(x=>x.classList.remove("active"));
     btn.classList.add("active");
-    state.mode=btn.dataset.state;
+    state.screen=btn.dataset.screen;
+    state.mode=state.screen==="warehouse"?"available":"ready";
+    renderStateControls();
     render();
-  }
+  });
 });
+
+document.querySelectorAll("[data-view]").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll("[data-view]").forEach(x=>x.classList.remove("active"));
+    btn.classList.add("active");
+    state.view=btn.dataset.view;
+    document.getElementById("device").className="device "+state.view;
+    render();
+  });
+});
+
+document.querySelectorAll("[data-lang]").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll("[data-lang]").forEach(x=>x.classList.remove("active"));
+    btn.classList.add("active");
+    state.lang=btn.dataset.lang;
+    render();
+  });
+});
+
+renderStateControls();
 render();
