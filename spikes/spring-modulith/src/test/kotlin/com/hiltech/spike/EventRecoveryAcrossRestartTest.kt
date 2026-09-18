@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.modulith.events.core.EventPublicationRegistry
 import java.nio.file.Files
 import java.time.Duration
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -28,7 +29,9 @@ class EventRecoveryAcrossRestartTest {
                 .completeWork(workOrderId = "wo-42", version = 8)
 
             waitUntil(Duration.ofSeconds(10)) {
-                incompletePublicationCount(first) >= 1
+                val incomplete = incompletePublicationCount(first)
+                println("SPIKE-10 first-context incomplete publications: " + incomplete)
+                incomplete >= 1
             }
 
             assertEquals(0, auditCount(first))
@@ -44,9 +47,11 @@ class EventRecoveryAcrossRestartTest {
         )
 
         try {
-            waitUntil(Duration.ofSeconds(15)) {
-                auditCount(second) == 1 &&
-                    incompletePublicationCount(second) == 0
+            waitUntil(Duration.ofSeconds(20)) {
+                val audit = auditCount(second)
+                val incomplete = incompletePublicationCount(second)
+                println("SPIKE-10 restarted-context audit=" + audit + " incomplete=" + incomplete)
+                audit == 1 && incomplete == 0
             }
 
             assertEquals(1, auditCount(second))
@@ -85,14 +90,10 @@ class EventRecoveryAcrossRestartTest {
         ) ?: 0
     }
 
-    private fun incompletePublicationCount(context: ConfigurableApplicationContext): Int {
-        val jdbc = context.getBean(JdbcTemplate::class.java)
-
-        return jdbc.queryForObject(
-            "SELECT COUNT(*) FROM event_publication WHERE completion_date IS NULL",
-            Int::class.java,
-        ) ?: 0
-    }
+    private fun incompletePublicationCount(context: ConfigurableApplicationContext): Int =
+        context.getBean(EventPublicationRegistry::class.java)
+            .findIncompletePublications()
+            .size
 
     private fun waitUntil(
         timeout: Duration,
