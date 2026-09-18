@@ -1,0 +1,47 @@
+name: Spike — Desktop Dense Data
+
+on:
+  push:
+    branches:
+      - "spike/desktop-dense-data-20260918"
+    paths:
+      - "spikes/desktop-dense-data/**"
+      - ".github/workflows/spike-desktop-dense-data.yml"
+  pull_request:
+    paths:
+      - "spikes/desktop-dense-data/**"
+      - ".github/workflows/spike-desktop-dense-data.yml"
+  workflow_dispatch:
+
+jobs:
+  dense-desktop:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: spikes/desktop-dense-data
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: 50k data and bulk-selection tests
+        run: gradle test --stacktrace
+
+      - name: Desktop compile
+        run: gradle compileKotlin --stacktrace
+
+      - name: Real Compose Desktop first-frame render
+        env:
+          HILTECH_SPIKE_AUTOCLOSE: "1"
+        run: |
+          set -o pipefail
+          xvfb-run -a gradle run --stacktrace | tee /tmp/hiltech-dense-ui.log
+          grep -q "HILTECH_DENSE_UI_RENDER_PASS rows=50000" /tmp/hiltech-dense-ui.log
