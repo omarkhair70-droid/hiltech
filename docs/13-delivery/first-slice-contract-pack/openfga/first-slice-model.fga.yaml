@@ -1,0 +1,272 @@
+name: HILTECH First Slice Authorization Contract
+model_file: ./first-slice-model.fga
+
+tuples:
+  - user: user:pm1
+    relation: member
+    object: organization:hiltech
+  - user: user:tech1
+    relation: member
+    object: organization:hiltech
+  - user: user:supervisor1
+    relation: member
+    object: organization:hiltech
+  - user: user:warehouse1
+    relation: member
+    object: organization:hiltech
+  - user: user:config-editor
+    relation: member
+    object: organization:hiltech
+  - user: user:config-activator
+    relation: member
+    object: organization:hiltech
+
+  - user: user:config-editor
+    relation: config_editor
+    object: organization:hiltech
+  - user: user:config-activator
+    relation: config_activator
+    object: organization:hiltech
+
+  - user: user:tech1
+    relation: member
+    object: team:crew-a
+  - user: user:crew-lead
+    relation: manager
+    object: team:crew-a
+  - user: organization:hiltech
+    relation: organization
+    object: team:crew-a
+
+  - user: organization:hiltech
+    relation: organization
+    object: project:p1
+  - user: user:pm1
+    relation: project_manager
+    object: project:p1
+  - user: user:supervisor1
+    relation: supervisor
+    object: project:p1
+  - user: team:crew-a#member
+    relation: technician
+    object: project:p1
+
+  - user: project:p1
+    relation: project
+    object: site:s1
+  - user: team:crew-a#member
+    relation: site_technician
+    object: site:s1
+
+  - user: project:p1
+    relation: project
+    object: work_order:w1
+  - user: site:s1
+    relation: site
+    object: work_order:w1
+  - user: team:crew-a#member
+    relation: assigned_team
+    object: work_order:w1
+  - user: user:supervisor1
+    relation: reviewer
+    object: work_order:w1
+
+  - user: organization:hiltech
+    relation: organization
+    object: warehouse:maadi
+  - user: user:warehouse1
+    relation: operator
+    object: warehouse:maadi
+
+  - user: warehouse:maadi
+    relation: warehouse
+    object: storage_location:maadi-main
+  - user: project:p1
+    relation: project
+    object: storage_location:site-store-p1
+
+  - user: warehouse:maadi
+    relation: warehouse
+    object: asset:fluke-03
+  - user: storage_location:maadi-main
+    relation: storage_location
+    object: asset:fluke-03
+  - user: project:p1
+    relation: project
+    object: asset:fluke-03
+  - user: user:tech1
+    relation: current_custodian
+    object: asset:field-tool-1
+
+  - user: warehouse:maadi
+    relation: warehouse
+    object: stock_item:cable-cat6
+
+  - user: work_order:w1
+    relation: work_order
+    object: evidence:e1
+  - user: user:tech1
+    relation: creator
+    object: evidence:e1
+
+  - user: user:client1
+    relation: member
+    object: organization:client-a
+  - user: organization:client-a#member
+    relation: client_visible_to
+    object: evidence:e-client
+
+  - user: organization:hiltech
+    relation: organization
+    object: configuration_revision:worktype-r2
+
+tests:
+  - name: project manager project permissions
+    check:
+      - user: user:pm1
+        object: project:p1
+        assertions:
+          can_view: true
+          can_create_work: true
+          can_assign_work: true
+          can_review_work: true
+          can_cancel_work: true
+          can_request_resource: true
+
+  - name: team member inherits project technician relationship
+    check:
+      - user: user:tech1
+        object: project:p1
+        assertions:
+          can_view: true
+          can_create_work: false
+          can_request_resource: false
+
+  - name: technician gets site field context through assignment
+    check:
+      - user: user:tech1
+        object: site:s1
+        assertions:
+          can_view: true
+          can_access_field_context: true
+
+  - name: assigned team member executes work but does not review
+    check:
+      - user: user:tech1
+        object: work_order:w1
+        assertions:
+          can_view: true
+          can_start: true
+          can_block: true
+          can_resume: true
+          can_submit_completion: true
+          can_review: false
+
+  - name: supervisor can review work
+    check:
+      - user: user:supervisor1
+        object: work_order:w1
+        assertions:
+          can_view: true
+          can_review: true
+          can_request_rework: true
+
+  - name: unrelated user denied project and work
+    check:
+      - user: user:outsider1
+        object: project:p1
+        assertions:
+          can_view: false
+          can_assign_work: false
+      - user: user:outsider1
+        object: work_order:w1
+        assertions:
+          can_view: false
+          can_start: false
+          can_review: false
+
+  - name: warehouse operator can operate linked asset
+    check:
+      - user: user:warehouse1
+        object: asset:fluke-03
+        assertions:
+          can_view: true
+          can_checkout: true
+          can_view_history: true
+
+  - name: current custodian can return and report damage
+    check:
+      - user: user:tech1
+        object: asset:field-tool-1
+        assertions:
+          can_return: true
+          can_report_damage: true
+
+  - name: project manager can see project-linked asset but technician cannot checkout it
+    check:
+      - user: user:pm1
+        object: asset:fluke-03
+        assertions:
+          can_view: true
+          can_checkout: false
+      - user: user:tech1
+        object: asset:fluke-03
+        assertions:
+          can_view: true
+          can_checkout: false
+
+  - name: project manager can view project site storage
+    check:
+      - user: user:pm1
+        object: storage_location:site-store-p1
+        assertions:
+          can_view: true
+          can_move_out: false
+
+  - name: config editor and activator are separated
+    check:
+      - user: user:config-editor
+        object: configuration_revision:worktype-r2
+        assertions:
+          can_view: true
+          can_edit_draft: true
+          can_validate: true
+          can_activate: false
+      - user: user:config-activator
+        object: configuration_revision:worktype-r2
+        assertions:
+          can_view: true
+          can_edit_draft: false
+          can_activate: true
+          can_supersede: true
+
+  - name: work evidence inherits work permissions
+    check:
+      - user: user:tech1
+        object: evidence:e1
+        assertions:
+          can_view: true
+          can_reserve_upload: true
+          can_finalize: true
+      - user: user:outsider1
+        object: evidence:e1
+        assertions:
+          can_view: false
+          can_finalize: false
+
+  - name: client visibility uses organization member userset
+    check:
+      - user: user:client1
+        object: evidence:e-client
+        assertions:
+          can_view: true
+          can_download: true
+          can_finalize: false
+
+  - name: team manager can manage membership
+    check:
+      - user: user:crew-lead
+        object: team:crew-a
+        assertions:
+          can_view: true
+          can_manage_membership: true
