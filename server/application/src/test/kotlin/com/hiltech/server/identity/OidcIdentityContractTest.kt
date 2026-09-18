@@ -2,7 +2,7 @@ package com.hiltech.server.identity
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import kotlin.test.assertEquals
+import org.junit.jupiter.api.Assertions.assertEquals
 
 class OidcIdentityContractTest {
     @Test
