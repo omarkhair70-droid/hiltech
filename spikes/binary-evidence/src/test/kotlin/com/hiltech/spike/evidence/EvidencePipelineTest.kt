@@ -9,6 +9,7 @@ import java.security.MessageDigest
 import java.util.Base64
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -85,10 +86,17 @@ class EvidencePipelineTest {
         val truncated = bytes.copyOf(bytes.size / 3)
         val firstStatus = storage.upload(ticket, truncated)
 
-        assertTrue(
-            firstStatus >= 400,
-            "S3-compatible endpoint accepted bytes that did not match signed SHA-256",
-        )
+        if (firstStatus in 200..299) {
+            // Some S3-compatible emulators/providers may accept the PUT even
+            // when they do not enforce x-amz-checksum-sha256 on ingest.
+            // HILTECH finalization must still reject the stored object after
+            // recomputing the real bytes.
+            assertFailsWith<IllegalArgumentException> {
+                storage.finalizeEvidence(ticket)
+            }
+        } else {
+            assertTrue(firstStatus >= 400)
+        }
 
         val retryStatus = storage.upload(ticket, bytes)
         assertTrue(retryStatus in 200..299)
