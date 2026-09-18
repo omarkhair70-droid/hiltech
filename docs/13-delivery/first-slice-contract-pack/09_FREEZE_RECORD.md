@@ -42,11 +42,11 @@ Project / Site / Work / Warehouse Asset Custody / Technician Offline / Evidence 
 ## API / Data
 - [ ] routes/DTOs/errors frozen.
 - [ ] read models frozen.
-- [ ] PostgreSQL tables/constraints/indexes frozen.
-- [ ] Flyway convention frozen.
-- [ ] jOOQ convention frozen.
-- [ ] Room/local schema frozen.
-- [ ] sync/conflict contracts frozen.
+- [x] PostgreSQL table/constraint/index contract defined; production SQL generation waits for Freeze.
+- [x] Flyway convention frozen.
+- [x] jOOQ convention frozen.
+- [x] Room/local schema + retry/storage policy contract defined.
+- [x] sync/conflict contracts frozen at semantic level.
 - [ ] file/evidence metadata frozen.
 
 ## Design
@@ -105,6 +105,8 @@ These are not reopened without a concrete contradiction/revisit trigger.
 - `12_ASSET_WAREHOUSE_CONTRACT.md`
 - `13_OPENFGA_MODEL_CANDIDATE.md`
 - `14_FREEZE_GAP_REGISTER.md`
+- `15_AUTHORIZATION_CONSISTENCY_CONTRACT.md`
+- `16_DATABASE_DDL_CONSTRAINT_CONTRACT.md`
 
 ---
 
