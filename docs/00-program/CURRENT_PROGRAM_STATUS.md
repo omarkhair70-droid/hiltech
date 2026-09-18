@@ -38,7 +38,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | ACTIVE — 01/02/03/04/05/06/08/09/10/11/12/14 PASSED | Client platform, RTL/adaptive structure, dense desktop, local DB, offline queue, authorization, modular backend events, PostgreSQL concurrency, binary evidence and observability proven; remaining spikes active |
+| Technical spikes | ACTIVE — 01/02/03/04/05/06/08/09/10/11/12/13/14 PASSED | Client platform, RTL/adaptive structure, dense desktop, local DB, offline queue, Android camera/evidence, background scheduling, authorization, modular backend events, PostgreSQL concurrency, binary evidence and observability proven; SPIKE-07 remains active before SPIKE-15 |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -84,7 +84,7 @@ Now includes:
 4. Existing CCTV/access-control systems and vendors.
 5. Exact organization/authority structure and delegation reality.
 6. Android device fleet, camera/QR restrictions and site-security constraints.
-7. Android background execution/reconnect reliability — SPIKE-13 active.
+7. Android background execution/reconnect reliability — SPIKE-13 accepted; OEM/field-device reliability remains a reality/operations validation item.
 8. Windows install/update/rollback operations — SPIKE-07 active.
 9. Full cross-surface end-to-end vertical proof — SPIKE-15 pending after remaining isolated gates.
 10. Offline conflict ergonomics in real field use.
@@ -141,7 +141,7 @@ Leading but still spike/freeze dependent:
 - Ktor Client / exact HTTP client integration.
 - jOOQ — **ADR-005 accepted** as the PostgreSQL SQL/persistence access layer; generated-schema/codegen conventions still freeze with exact schemas.
 - Keycloak 26.7.4 + native OIDC Authorization Code/PKCE — **SPIKE-08 accepted**.
-- WorkManager background execution — SPIKE-13 pending.
+- WorkManager 2.11.2 background execution — **SPIKE-13 accepted**.
 - exact Windows update/distribution strategy — SPIKE-07 active.
 - exact production object-storage provider remains intentionally open.
 
@@ -365,3 +365,17 @@ GitHub Actions run 35313483156 proved on a real API 36 emulator:
 - LOCAL_READY / PENDING_UPLOAD handoff to the accepted binary-evidence pipeline.
 
 Room and offline regressions passed on the same branch.
+
+
+## SPIKE-13 — Android Background Sync
+Decision: **ACCEPT — WorkManager background execution path passed.**
+
+GitHub Actions run 35315342936 proved on a real API 36 emulator:
+- CONNECTED-constrained work survives process death,
+- reconnect resumes without a foreground Activity,
+- retry/backoff reaches a later successful attempt,
+- battery-not-low constraints delay work until recovery,
+- durable QUEUED / RETRYABLE / SYNCED user-observable state,
+- Room/offline regressions remain green.
+
+WorkManager is accepted as the Android scheduling layer; Room/local command state remains authoritative for business work.
