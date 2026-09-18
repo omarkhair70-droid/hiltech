@@ -142,19 +142,37 @@ switch ($Stage) {
             Remove-Item "HKCU:\Software\Classes\hiltech" -Recurse -Force
         }
 
-        Write-Host "Creating disposable code-signing certificate"
-        $certificate = New-SelfSignedCertificate `
-            -Type CodeSigningCert `
-            -Subject "CN=HILTECH Spike Test Signing" `
+        Write-Host "Creating disposable code-signing certificate with OpenSSL"
+
+        $openssl = (Get-Command openssl.exe -ErrorAction Stop).Source
+        $certDir = Join-Path $TempRoot "hiltech-signing"
+        New-Item -ItemType Directory -Force -Path $certDir | Out-Null
+
+        $keyPem = Join-Path $certDir "key.pem"
+        $certPem = Join-Path $certDir "cert.pem"
+        $pfx = Join-Path $certDir "signing.pfx"
+        $pfxPasswordPlain = "hiltech-spike-test"
+        $pfxPassword = ConvertTo-SecureString $pfxPasswordPlain -AsPlainText -Force
+
+        Invoke-ProcessChecked $openssl "req -x509 -newkey rsa:2048 -sha256 -nodes -keyout `"$keyPem`" -out `"$certPem`" -days 2 -subj /CN=HILTECH-Spike-Test-Signing -addext keyUsage=digitalSignature -addext extendedKeyUsage=codeSigning" 60
+        Invoke-ProcessChecked $openssl "pkcs12 -export -out `"$pfx`" -inkey `"$keyPem`" -in `"$certPem`" -passout pass:$pfxPasswordPlain" 60
+
+        $certificate = Import-PfxCertificate `
+            -FilePath $pfx `
             -CertStoreLocation "Cert:\CurrentUser\My" `
-            -KeyExportPolicy Exportable `
-            -NotAfter (Get-Date).AddDays(2)
+            -Password $pfxPassword `
+            -Exportable
+
+        if (-not $certificate) {
+            throw "Failed to import disposable code-signing certificate"
+        }
 
         $root = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "CurrentUser")
         $root.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
         $root.Add($certificate)
         $root.Close()
-        Write-Host "Disposable certificate created and trusted"
+
+        Write-Host "Disposable certificate created and trusted via OpenSSL/PFX"
 
         Set-Content -Path $ThumbFile -Value $certificate.Thumbprint
 
@@ -262,7 +280,14 @@ switch ($Stage) {
         }
 
         $certificate = Get-Certificate
-        Remove-Item "Cert:\CurrentUser\My\$($certificate.Thumbprint)" -Force
+        $thumb = $certificate.Thumbprint
+
+        if (Test-Path "Cert:\CurrentUser\My\$thumb") {
+            Remove-Item "Cert:\CurrentUser\My\$thumb" -Force
+        }
+        if (Test-Path "Cert:\CurrentUser\Root\$thumb") {
+            Remove-Item "Cert:\CurrentUser\Root\$thumb" -Force
+        }
 
         if (Test-Path $DataDir) {
             Remove-Item $DataDir -Recurse -Force
