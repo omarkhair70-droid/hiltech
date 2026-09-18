@@ -232,3 +232,16 @@ Current: NOT READY.
 Freeze review can only be called when every blocking section is either:
 - complete as a planning/architecture artifact, or
 - explicitly deferred with no hidden dependency.
+
+
+---
+
+## First Production Slice Closure Pack
+
+Canonical bridge to repository bootstrap:
+- reality gate: `docs/01-reality/FIRST_PRODUCTION_SLICE_REALITY_CLOSURE.md`
+- readiness map: `docs/13-delivery/FIRST_PRODUCTION_SLICE_CONTRACT_READINESS_2026-09-18.md`
+- contract pack: `docs/13-delivery/first-slice-contract-pack/README.md`
+- final slice freeze record: `docs/13-delivery/first-slice-contract-pack/09_FREEZE_RECORD.md`
+
+The first production slice is not BUILD-READY until that freeze record can be marked PASS without inventing HILTECH-specific facts.
