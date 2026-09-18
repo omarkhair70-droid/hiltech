@@ -23,11 +23,14 @@ Project / Site / Work / Warehouse Asset Custody / Technician Offline / Evidence 
 - [ ] pilot source/import path known.
 
 ## Domain
+- [ ] Configuration/policy schemas frozen.
 - [ ] Data dictionary frozen.
-- [ ] Project/Site subset frozen.
-- [ ] WorkOrder states/commands/invariants frozen.
-- [ ] Asset/Warehouse custody subset frozen.
-- [ ] evidence policy frozen.
+- [ ] Project/Site/Work contract frozen.
+- [ ] WorkOrder lifecycle and readiness are explicitly separated.
+- [ ] Work policy-binding/version semantics frozen.
+- [ ] Asset/Warehouse/Stock/Custody contract frozen.
+- [ ] evidence policy/file contract frozen.
+- [ ] cross-contract consistency review has no unresolved contradiction.
 
 ## Security
 - [ ] OpenFGA first-slice model frozen.
@@ -83,6 +86,23 @@ Already accepted before this freeze:
 - GitHub Actions.
 
 These are not reopened without a concrete contradiction/revisit trigger.
+
+---
+
+# Contract Candidate Inputs
+
+- `00_CONFIGURATION_POLICY_SCHEMAS.md`
+- `01_DATA_DICTIONARY.md`
+- `02_API_AND_READ_MODELS.md`
+- `03_POSTGRES_FLYWAY_JOOQ.md`
+- `04_ROOM_OFFLINE_SYNC.md`
+- `05_AUTHORIZATION_POLICY_TESTS.md`
+- `06_FILES_EVIDENCE.md`
+- `07_UI_FLOW_CONTRACTS.md`
+- `08_FIRST_SLICE_TEST_MATRIX.md`
+- `10_CROSS_CONTRACT_CONSISTENCY.md`
+- `11_PROJECT_SITE_WORK_CONTRACT.md`
+- `12_ASSET_WAREHOUSE_CONTRACT.md`
 
 ---
 
