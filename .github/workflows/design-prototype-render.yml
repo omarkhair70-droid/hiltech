@@ -50,8 +50,8 @@ jobs:
 
       - name: Verify capture count
         run: |
-          test "$(find prototypes/first-slice-design/rendered-proof -name '*.png' | wc -l)" -eq 36
-          echo "HILTECH_DESIGN_PROOF_COUNT_PASS captures=36"
+          test "$(find prototypes/first-slice-design/rendered-proof -name '*.png' | wc -l)" -eq 37
+          echo "HILTECH_DESIGN_PROOF_COUNT_PASS captures=37"
 
       - name: Upload rendered proof
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
