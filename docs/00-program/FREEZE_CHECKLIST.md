@@ -1,6 +1,6 @@
 # HILTECH Freeze Checklist
 
-Status: ACTIVE / NOT READY TO FREEZE
+Status: **WHOLE-PROGRAM ACTIVE / FIRST-SLICE FREEZE PASS**
 
 ## Rule
 Freeze does not mean "never change".
@@ -17,12 +17,14 @@ For the first production slice, the authoritative Freeze controls are:
 - `docs/13-delivery/first-slice-contract-pack/14_FREEZE_GAP_REGISTER.md`
 - `docs/13-delivery/first-slice-contract-pack/21_FINAL_PRE_FREEZE_CONSISTENCY_REVIEW.md`
 - `docs/13-delivery/first-slice-contract-pack/23_FIRST_SLICE_FREEZE_REVIEW_PROCEDURE.md`
+- `docs/13-delivery/first-slice-contract-pack/24_FIRST_SLICE_FREEZE_DECISION_2026-09-19.md`
 
 Current first-slice state:
 - contracts: PASS,
 - final stack: PASS,
 - provider architecture: PASS at contract level,
-- rendered design proof: OPEN / sole current pre-code blocker.
+- rendered design proof: PASS,
+- **FIRST_SLICE_FREEZE: PASS**.
 
 Whole-program checklist remains valuable for later slices and eventual company-wide maturity.
 
@@ -307,10 +309,16 @@ Final Flyway SQL, Spring/Ktor/Room production code, generated jOOQ, and implemen
 
 `FINAL_STACK_REVIEW = PASS`
 
-`FIRST_SLICE_FREEZE = NOT YET PASS`
+`FIRST_SLICE_FREEZE = PASS`
 
-Only current pre-code blocker:
-- actual rendered first-slice design proof in Figma.
+Rendered design proof:
+- run `35396169606` PASS,
+- 37 / 37 captures,
+- interactive browser proof accepted,
+- Figma optional for later visual craft.
+
+Current first-slice pre-code blockers:
+- **NONE**.
 
 The following are not current first-slice pre-code blockers:
 - exact Finance/payroll schemas,

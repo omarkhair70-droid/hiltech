@@ -1,18 +1,20 @@
 # HILTECH Pre-Code Endgame
 
-Status: ACTIVE
+Status: **FIRST-SLICE COMPLETE / LATER-DOMAIN PRE-CODE WORK REMAINS**
 Purpose: Define exactly what remains before production coding starts.
 
 ## Principle
 
 We are no longer discovering HILTECH from zero.
 
-The remaining pre-code phase is about:
-1. validating the model against the real company,
-2. finishing representative UX/design,
-3. freezing exact contracts/schemas/versions,
-4. locking remaining provider/operations decisions,
-5. passing Freeze Review.
+For the first production slice, the pre-code phase is complete.
+
+For later HILTECH domains, this document still governs:
+1. scoped reality validation,
+2. representative UX/design,
+3. exact contracts/schemas/versions,
+4. provider/operations decisions when new capabilities require them,
+5. scoped Freeze Review before implementation.
 
 Risky technical feasibility has already been proven through SPIKE-01…15.
 
@@ -31,10 +33,12 @@ First-slice canonical controls:
 
 Current first-slice status:
 - technical feasibility CLOSED,
-- domain/API/DB/local/auth/file contracts structurally CLOSED,
+- domain/API/DB/local/auth/file contracts FROZEN,
 - FINAL_STACK PASS,
 - provider architecture selected,
-- rendered design proof is the sole current pre-code blocker.
+- rendered design proof PASS,
+- `FIRST_SLICE_FREEZE = PASS`,
+- next phase: `REPOSITORY_BOOTSTRAP`.
 
 ---
 
@@ -114,6 +118,19 @@ Then:
 
 External Client experience remains documented but is intentionally last in implementation priority.
 
+## First-slice Gate 2 status
+
+**PASS**
+
+Accepted interactive rendered proof:
+- run `35396169606`,
+- 37 / 37 captures,
+- Arabic RTL,
+- phone/tablet/desktop,
+- conflict/state coverage.
+
+Higher-fidelity brand/visual-system work is non-blocking for the low-fi first-slice Freeze.
+
 ---
 
 # Gate 3 — Technical Spikes
@@ -141,7 +158,7 @@ All required technical spikes 01–15 are accepted.
 Ktor Client is accepted through ADR-007.
 The first-slice technical-feasibility gate is closed.
 The first-slice exact contracts and provider/runtime architecture are also structurally closed.
-The remaining current pre-code gate for that slice is rendered design proof followed by Freeze Review.
+The rendered design proof and Freeze Review are complete for the first slice.
 
 Reality/exact-contract/provider work remains open only for later domains or production activation where specifically documented.
 
