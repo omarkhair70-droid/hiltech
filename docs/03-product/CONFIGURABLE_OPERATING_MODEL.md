@@ -204,12 +204,15 @@ Temporary Site/Project storage can be created/configured without adding a full w
 
 Supports:
 - named user,
-- small crew/team,
+- crew/team of arbitrary supported size,
 - engineer + technicians,
 - technician pair,
-- subcontractor assignment where applicable.
+- department/team-based assignment where useful,
+- subcontractor/external organization assignment where applicable.
 
-Current HILTECH staff shape is seed/operating data, not a schema constraint.
+Current HILTECH staff shape is seed/operating data, not a schema or scale constraint.
+
+The same model must support future hiring, new teams, more supervisors/engineers, additional projects and organizational growth without code changes.
 
 ---
 
