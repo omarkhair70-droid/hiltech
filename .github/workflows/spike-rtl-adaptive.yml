@@ -1,0 +1,82 @@
+name: Spike — Arabic RTL Adaptive Layout
+
+on:
+  push:
+    branches:
+      - "spike/rtl-adaptive-20260918"
+    paths:
+      - "spikes/kmp-android-windows/**"
+      - ".github/workflows/spike-rtl-adaptive.yml"
+  pull_request:
+    paths:
+      - "spikes/kmp-android-windows/**"
+      - ".github/workflows/spike-rtl-adaptive.yml"
+  workflow_dispatch:
+
+jobs:
+  rtl-adaptive:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: spikes/kmp-android-windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Prepare Android SDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort | tail -n 1)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "sdkmanager not found under $SDK_ROOT"
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Shared adaptive / bidi tests
+        run: gradle :shared:allTests --stacktrace
+
+      - name: Android compile with shared RTL UI
+        run: gradle :androidApp:assembleDebug --stacktrace
+
+      - name: Desktop compile
+        run: gradle :desktopApp:compileKotlin --stacktrace
+
+      - name: Real adaptive RTL/LTR renders
+        shell: bash
+        run: |
+          set -o pipefail
+
+          run_case () {
+            W="$1"
+            H="$2"
+            RTL="$3"
+            MODE="$4"
+            LOG="/tmp/rtl-$W-$H-$RTL.log"
+
+            HILTECH_SPIKE_WIDTH="$W" \
+            HILTECH_SPIKE_HEIGHT="$H" \
+            HILTECH_SPIKE_RTL="$RTL" \
+            HILTECH_SPIKE_AUTOCLOSE=1 \
+              xvfb-run -a gradle :desktopApp:run --stacktrace | tee "$LOG"
+
+            grep -q "HILTECH_RTL_RENDER_PASS width=$W height=$H rtl=$RTL mode=$MODE" "$LOG"
+          }
+
+          run_case 360 800 true STACKED
+          run_case 800 1000 true SPLIT
+          run_case 1440 900 true WIDE
+          run_case 1440 900 false WIDE
