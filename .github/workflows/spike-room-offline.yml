@@ -9,9 +9,19 @@ on:
       - ".github/workflows/spike-room-offline.yml"
   pull_request:
     paths:
-      - "spikes/kmp-android-windows/**"
+      - "spikes/kmp-android-windows/shared/src/commonMain/kotlin/com/hiltech/spike/shared/local/**"
+      - "spikes/kmp-android-windows/shared/src/androidMain/kotlin/com/hiltech/spike/shared/local/**"
+      - "spikes/kmp-android-windows/shared/src/desktopMain/kotlin/com/hiltech/spike/shared/local/**"
+      - "spikes/kmp-android-windows/shared/src/commonTest/**"
+      - "spikes/kmp-android-windows/shared/build.gradle.kts"
+      - "spikes/kmp-android-windows/androidApp/build.gradle.kts"
+      - "spikes/kmp-android-windows/gradle/libs.versions.toml"
       - ".github/workflows/spike-room-offline.yml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   linux-room:
