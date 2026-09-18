@@ -1,7 +1,7 @@
 # HILTECH Interactive First-Slice Rendered Proof Manifest
 
 Date: 2026-09-18  
-Status: **AWAITING FINAL CI RENDER RUN**
+Status: **REVISION 2 RENDER IN PROGRESS / REVISION 1 REVIEWED**
 
 Prototype:
 `prototypes/first-slice-design/`
@@ -178,3 +178,44 @@ After CI is green:
 6. then First-Slice Freeze Review can mark the rendered-design gate PASS.
 
 Figma may still be used later for visual-system craft, but it is not required as the proof engine if this interactive rendered review passes.
+
+
+---
+
+## Revision history
+
+### Revision 1
+
+CI:
+- run `35395335435`
+- result: PASS
+- marker: `HILTECH_DESIGN_RENDER_PASS captures=36`
+- marker: `HILTECH_DESIGN_PROOF_COUNT_PASS captures=36`
+- artifact: `hiltech-first-slice-rendered-design-proof`
+- artifact digest: `sha256:37f581793fffed83896620df0b51eb23b147cdbf2bed3a3db5b76e2b52b08a9c`
+
+Actual image review:
+- mobile English state hierarchy: good.
+- phone Arabic direction/layout: structurally good.
+- tablet layouts: stable and usable.
+- desktop Configuration/Review/Project/Navigation density: good.
+- conflict states: clearly distinct from normal success.
+- authoritative/local distinction: visible.
+
+Issue found:
+- Arabic desktop renders still contained too many human-facing English labels.
+- technical IDs/codes should remain LTR, but human UI labels should be Arabic-first.
+
+### Revision 2
+
+Correction commit:
+`1bdde55d0dcffd707340979cb94b8db7870f4d06`
+
+Changes:
+- localized Configuration Center human labels.
+- localized Supervisor Review evidence/check labels.
+- localized Project Command health/resource/pipeline/activity labels.
+- localized Navigation comparison rail, states and supporting labels.
+- preserved technical IDs/codes in their stable Latin form.
+
+Final design decision must use Revision 2 rendered artifact, not Revision 1.
