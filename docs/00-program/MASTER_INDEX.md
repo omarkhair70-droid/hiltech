@@ -1,6 +1,6 @@
 # HILTECH OS — Master Index
 
-Status: `FIRST-SLICE CONTRACT CLOSURE / PRE-FREEZE`
+Status: `FIRST-SLICE FROZEN / REPOSITORY BOOTSTRAP NEXT`
 Last major planning update: 2026-09-18
 
 This is the navigation and control document for the entire pre-code phase.
@@ -86,6 +86,7 @@ Start here:
 16. `../13-delivery/first-slice-contract-pack/21_FINAL_PRE_FREEZE_CONSISTENCY_REVIEW.md` — cross-contract review: consistency PASS, Freeze still gated.
 17. `../12-stack/FINAL_STACK_VERSION_REVIEW_2026-09-18.md` — final version review PASS; AGP 9.3.3 focused validation green.
 18. `../12-stack/FINAL_STACK.md` — frozen first-slice technology baseline.
+19. `../13-delivery/first-slice-contract-pack/24_FIRST_SLICE_FREEZE_DECISION_2026-09-19.md` — canonical First-Slice Freeze PASS decision.
 
 ## Current planning coverage
 
@@ -339,18 +340,20 @@ If implementation would still require choosing fundamental data ownership, permi
 
 ## Current freeze status
 
-**NOT READY.**
+**FIRST_SLICE_FREEZE = PASS**
 
-The remaining first-slice pre-code gate is:
-1. Complete actual rendered low-fi / RTL / conflict / adaptive visual proof.
+Canonical decision:
+`../13-delivery/first-slice-contract-pack/24_FIRST_SLICE_FREEZE_DECISION_2026-09-19.md`
 
-Final stack/version/CI-pin review is already PASS.
+Passed:
+- contract consistency,
+- rendered interactive design proof,
+- final stack/version review,
+- provider architecture.
 
-After the visual proof:
-2. resolve any contradiction exposed by the rendered review,
-3. call First-Slice Freeze Review,
-4. only after PASS → repository bootstrap / production implementation.
+Next:
+`REPOSITORY_BOOTSTRAP`
 
-OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging and DR rehearsals are activation/cutover gates unless they reveal a contract contradiction.
+OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging and DR rehearsals remain activation/cutover gates unless they reveal a contract contradiction.
 
 See `CURRENT_PROGRAM_STATUS.md` and `FREEZE_CHECKLIST.md`.
