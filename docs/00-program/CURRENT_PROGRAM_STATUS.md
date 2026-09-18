@@ -38,7 +38,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | ACTIVE — 01/02/03/04/06/08/09/10/11/12/14 PASSED | Client platform, RTL/adaptive structure, dense desktop, local DB, offline queue, authorization, modular backend events, PostgreSQL concurrency, binary evidence and observability proven; remaining spikes active |
+| Technical spikes | ACTIVE — 01/02/03/04/05/06/08/09/10/11/12/14 PASSED | Client platform, RTL/adaptive structure, dense desktop, local DB, offline queue, authorization, modular backend events, PostgreSQL concurrency, binary evidence and observability proven; remaining spikes active |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -86,7 +86,7 @@ Now includes:
 6. Android device fleet, camera/QR restrictions and site-security constraints.
 7. Android background execution/reconnect reliability — SPIKE-13 active.
 8. Windows install/update/rollback operations — SPIKE-07 active.
-9. Android camera/QR/secure-site field evidence — SPIKE-05 active.
+9. Full cross-surface end-to-end vertical proof — SPIKE-15 pending after remaining isolated gates.
 10. Offline conflict ergonomics in real field use.
 11. Legal/accounting/privacy/retention requirements.
 12. Final visual/navigation/component/Arabic typography system.
@@ -349,3 +349,19 @@ GitHub Actions run 35307236838 proved:
 - Direct Access Grant disabled for the native client.
 
 Offline business work remains the local command queue; long-lived Keycloak offline tokens are not the default architecture.
+
+
+## SPIKE-05 — Android Camera / QR / Evidence
+Decision: **ACCEPT — Android camera/QR/local-evidence path passed.**
+
+GitHub Actions run 35313483156 proved on a real API 36 emulator:
+- QR asset lookup path,
+- permission-denied fallback,
+- camera-prohibited-site fallback with manual asset ID,
+- no forbidden image creation in prohibited mode,
+- real CameraX capture,
+- durable local JPEG,
+- SHA-256 metadata,
+- LOCAL_READY / PENDING_UPLOAD handoff to the accepted binary-evidence pipeline.
+
+Room and offline regressions passed on the same branch.
