@@ -8,6 +8,8 @@ import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.modulith.events.EventPublication
+import org.springframework.modulith.events.IncompleteEventPublications
+import org.springframework.modulith.events.ResubmissionOptions
 import org.springframework.modulith.events.core.EventPublicationRegistry
 import java.nio.file.Files
 import java.time.Duration
@@ -48,10 +50,15 @@ class EventRecoveryAcrossRestartTest {
         val second = startContext(
             databaseUrl = databaseUrl,
             listenerFails = false,
-            republishOnRestart = true,
+            republishOnRestart = false,
         )
 
         try {
+            // Explicit resubmission is preferred for controlled/multi-instance
+            // operation. The durable failed publication survived the restart.
+            second.getBean(IncompleteEventPublications::class.java)
+                .resubmitIncompletePublications(ResubmissionOptions.defaults())
+
             waitUntil(Duration.ofSeconds(25)) {
                 val audit = auditCount(second)
                 val incomplete = incomplete(second)
