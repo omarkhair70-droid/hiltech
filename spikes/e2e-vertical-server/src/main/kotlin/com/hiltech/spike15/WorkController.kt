@@ -55,14 +55,16 @@ class WorkController(
         requireAllowed(actor, "pm", "project:project-a")
 
         val payload = body.string("payloadJson")
-        val assignee = Regex("\\"assignee\\"\\s*:\\s*\\"([^\\"]+)\\"")
-            .find(payload)
-            ?.groupValues
-            ?.get(1)
-            ?: throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "assignee missing from payloadJson",
-            )
+        val marker = "\"assignee\":\""
+        val assignee =
+            if (marker in payload) {
+                payload.substringAfter(marker).substringBefore("\"")
+            } else {
+                throw ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "assignee missing from payloadJson",
+                )
+            }
 
         val outcome = service.assign(
             operationId = body.string("operationId"),
