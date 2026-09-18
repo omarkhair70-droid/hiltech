@@ -238,12 +238,14 @@ function metric(label,value){
 const configCopy = {
   en: {
     product:"HILTECH · CONTROL", synced:"CONFIG LIVE", title:"Configuration Center", scope:"HILTECH Organization",
-    active:"ACTIVE", draft:"DRAFT", invalid:"INVALID DRAFT", conflict:"VERSION CONFLICT",
+    active:"ACTIVE", draft:"DRAFT", invalid:"INVALID DRAFT", activation:"ACTIVATION REVIEW", historyState:"HISTORY", conflict:"VERSION CONFLICT",
     families:["Work Types","Assignment Policies","Readiness Policies","Evidence Policies","Review Policies","Tracking Policies","Approval Policies","Teams / Roles / Delegations","Warehouses / Site Storage","Asset / Stock Master Data","Code Policies","Project Health Policies","Templates / Checklists"],
     selected:"Work Type · DATA_RACK_INSTALL", revision:"Revision 4", activeRev:"Active revision 3",
     summary:"Install, dress and evidence a network/data rack delivery task.",
     fields:[["Assignment Policy","FIELD_CREW_V2"],["Readiness Policy","SITE_READY_R3"],["Evidence Policy","RACK_EVIDENCE_R4"],["Review Policy","TECH_REVIEW_R2"],["Progress Weight","3.000000"],["Tracking","NAVIGATION_ONLY"]],
     save:"SAVE DRAFT", validate:"VALIDATE", compare:"COMPARE ACTIVE", activate:"ACTIVATE REVISION",
+    activationTitle:"Activate revision 4?",
+    activationText:"This changes the default configuration for future matching Work Orders only. Existing bound Work Orders keep their historical policy revisions.",
     invalidTitle:"Activation blocked",
     invalidText:"Evidence Policy RACK_EVIDENCE_R4 requires Label Photo but the selected template does not materialize that item.",
     conflictTitle:"Draft was based on an older revision",
@@ -253,12 +255,14 @@ const configCopy = {
   },
   ar: {
     product:"هيلتك · التحكم", synced:"الإعدادات مباشرة", title:"مركز الإعدادات", scope:"شركة HILTECH",
-    active:"مفعّل", draft:"مسودة", invalid:"مسودة غير صالحة", conflict:"تعارض إصدار",
+    active:"مفعّل", draft:"مسودة", invalid:"مسودة غير صالحة", activation:"مراجعة التفعيل", historyState:"السجل", conflict:"تعارض إصدار",
     families:["أنواع الشغل","سياسات التكليف","سياسات الجاهزية","سياسات الإثبات","سياسات المراجعة","سياسات التتبع","سياسات الموافقات","الفرق / الأدوار / التفويضات","المخازن / تخزين المواقع","الأصول / أصناف المخزون","سياسات الأكواد","صحة المشروع","القوالب / قوائم الفحص"],
     selected:"نوع الشغل · DATA_RACK_INSTALL", revision:"الإصدار 4", activeRev:"الإصدار المفعّل 3",
     summary:"تركيب وتجهيز وتوثيق راك شبكات/داتا.",
     fields:[["سياسة التكليف","FIELD_CREW_V2"],["سياسة الجاهزية","SITE_READY_R3"],["سياسة الإثبات","RACK_EVIDENCE_R4"],["سياسة المراجعة","TECH_REVIEW_R2"],["وزن التقدم","3.000000"],["التتبع","NAVIGATION_ONLY"]],
     save:"حفظ المسودة", validate:"تحقق", compare:"قارن بالمفعّل", activate:"تفعيل الإصدار",
+    activationTitle:"تفعيل الإصدار 4؟",
+    activationText:"ده هيغير الإعداد الافتراضي لأوامر الشغل المستقبلية المطابقة فقط. أوامر الشغل المربوطة بالفعل هتفضل على إصدارات السياسات التاريخية.",
     invalidTitle:"التفعيل موقوف",
     invalidText:"سياسة الإثبات RACK_EVIDENCE_R4 محتاجة صورة الليبل، لكن القالب المختار مش بيعمل البند ده.",
     conflictTitle:"المسودة مبنية على إصدار أقدم",
@@ -272,9 +276,12 @@ function renderConfig(){
   const t=configCopy[state.lang];
   const dir=state.lang==="ar"?"rtl":"ltr";
   const invalid=state.mode==="invalid";
+  const activation=state.mode==="activation";
+  const historyMode=state.mode==="history";
   const conflict=state.mode==="conflict";
-  const isDraft=state.mode==="draft" || invalid || conflict;
+  const isDraft=state.mode==="draft" || invalid || activation || conflict;
   let banner="";
+  if(activation) banner='<div class="banner offline" style="background:var(--ok-bg);color:var(--ok)"><strong>'+t.activationTitle+'</strong><p>'+t.activationText+'</p></div>';
   if(invalid) banner='<div class="banner conflict"><strong>'+t.invalidTitle+'</strong><p>'+t.invalidText+'</p></div>';
   if(conflict) banner='<div class="banner conflict"><strong>'+t.conflictTitle+'</strong><p>'+t.conflictText+'</p></div>';
 
@@ -286,8 +293,8 @@ function renderConfig(){
     '<div class="config-field"><small>'+x[0]+'</small><b>'+x[1]+'</b><span>›</span></div>'
   ).join("");
 
-  const statusText=isDraft?(invalid?t.invalid:(conflict?t.conflict:t.draft)):t.active;
-  const statusClass=invalid||conflict?"conflict":isDraft?"progress":"ready";
+  const statusText=historyMode?t.historyState:isDraft?(activation?t.activation:(invalid?t.invalid:(conflict?t.conflict:t.draft))):t.active;
+  const statusClass=invalid||conflict?"conflict":activation?"ready":isDraft?"progress":"ready";
 
   document.getElementById("screen").innerHTML =
   '<div class="app admin-app" dir="'+dir+'">'+
@@ -300,8 +307,15 @@ function renderConfig(){
           '<div class="title-row"><div><h1>DATA_RACK_INSTALL</h1><span class="code">'+t.revision+' · '+t.activeRev+'</span></div><span class="status '+statusClass+'">'+statusText+'</span></div>'+
           '<p class="workspace-summary">'+t.summary+'</p>'+
         '</section>'+
-        '<section class="section"><div class="section-head"><strong>Policy bindings</strong><span class="code">schema v1</span></div><div class="section-body config-fields">'+fields+'</div></section>'+
-        '<section class="section"><div class="section-head"><strong>'+t.usage+'</strong><span class="code">live</span></div><div class="section-body"><p class="body-copy">'+t.usageText+'</p></div></section>'+
+        (historyMode
+          ? '<section class="section"><div class="section-head"><strong>'+t.history+'</strong><span class="code">append-only</span></div><div class="section-body revision-list">'+
+              '<div><b>Revision 4</b><span>DRAFT · current</span><small>Omar · Today 13:40</small></div>'+
+              '<div><b>Revision 3</b><span>ACTIVE</span><small>Mohamed · 12 Sep</small></div>'+
+              '<div><b>Revision 2</b><span>SUPERSEDED</span><small>Ahmed · 03 Sep</small></div>'+
+              '<div><b>Revision 1</b><span>SUPERSEDED</span><small>System seed</small></div>'+
+            '</div></section>'
+          : '<section class="section"><div class="section-head"><strong>Policy bindings</strong><span class="code">schema v1</span></div><div class="section-body config-fields">'+fields+'</div></section>'+
+            '<section class="section"><div class="section-head"><strong>'+t.usage+'</strong><span class="code">live</span></div><div class="section-body"><p class="body-copy">'+t.usageText+'</p></div></section>')+
       '</main>'+
       '<aside class="inspector-panel">'+
         '<div class="inspector-card"><small>'+t.history+'</small><b>Rev 4 · '+(isDraft?t.draft:t.active)+'</b><p>Rev 3 · ACTIVE<br>Rev 2 · SUPERSEDED<br>Rev 1 · SUPERSEDED</p></div>'+
@@ -309,7 +323,10 @@ function renderConfig(){
       '</aside>'+
     '</div>'+
     '<footer class="actionbar admin-actions">'+
-      (isDraft?'<button class="secondary">'+t.save+'</button><button class="secondary">'+t.validate+'</button><button class="secondary">'+t.compare+'</button><button class="primary">'+t.activate+'</button>':'<button class="primary">CREATE NEW REVISION</button>')+
+      (historyMode?'<button class="primary">CLONE REVISION 3</button>':
+       activation?'<button class="secondary">'+t.compare+'</button><button class="primary">'+t.activate+'</button>':
+       isDraft?'<button class="secondary">'+t.save+'</button><button class="secondary">'+t.validate+'</button><button class="secondary">'+t.compare+'</button><button class="primary">'+t.activate+'</button>':
+       '<button class="primary">CREATE NEW REVISION</button>')+
     '</footer>'+
   '</div>';
 }
@@ -451,7 +468,9 @@ const stateSets = {
     ["active","Active revision"],
     ["draft","Draft editor"],
     ["invalid","Invalid draft"],
-    ["conflict","Version conflict"]
+    ["activation","Activation review"],
+    ["conflict","Version conflict"],
+    ["history","Superseded history"]
   ],
   review: [
     ["clean","Clean submission"],
