@@ -15,39 +15,45 @@ class HiltechLocalDatabaseTest {
         val secondOperation = "00000000-0000-0000-0000-000000000102"
 
         try {
-            buildHiltechLocalDatabase(getDesktopDatabaseBuilder(dbFile.absolutePath)).use { db ->
-                db.pendingCommandDao().insert(
+            val firstDatabase = buildHiltechLocalDatabase(getDesktopDatabaseBuilder(dbFile.absolutePath))
+            try {
+                firstDatabase.pendingCommandDao().insert(
                     pendingCommand(
                         operationId = firstOperation,
                         commandType = "FinalizeEvidence",
                         localSequence = 1,
                     ),
                 )
-                db.pendingCommandDao().insert(
+                firstDatabase.pendingCommandDao().insert(
                     pendingCommand(
                         operationId = secondOperation,
                         commandType = "SubmitWorkCompletion",
                         localSequence = 2,
                     ),
                 )
-                db.pendingCommandDependencyDao().insert(
+                firstDatabase.pendingCommandDependencyDao().insert(
                     PendingCommandDependencyEntity(
                         operationId = secondOperation,
                         dependsOnOperationId = firstOperation,
                     ),
                 )
+            } finally {
+                firstDatabase.close()
             }
 
-            buildHiltechLocalDatabase(getDesktopDatabaseBuilder(dbFile.absolutePath)).use { reopened ->
-                val restored = reopened.pendingCommandDao().get(secondOperation)
+            val reopenedDatabase = buildHiltechLocalDatabase(getDesktopDatabaseBuilder(dbFile.absolutePath))
+            try {
+                val restored = reopenedDatabase.pendingCommandDao().get(secondOperation)
                 assertNotNull(restored)
                 assertEquals(PendingCommandStates.PENDING, restored.state)
                 assertEquals(2, restored.localSequence)
                 assertEquals(
                     listOf(firstOperation),
-                    reopened.pendingCommandDependencyDao().listDependencies(secondOperation),
+                    reopenedDatabase.pendingCommandDependencyDao().listDependencies(secondOperation),
                 )
-                assertEquals(2, reopened.pendingCommandDao().unresolvedCount())
+                assertEquals(2, reopenedDatabase.pendingCommandDao().unresolvedCount())
+            } finally {
+                reopenedDatabase.close()
             }
 
             assertEquals(1, OfflineSchemaContract.ROOM_SCHEMA_VERSION)
