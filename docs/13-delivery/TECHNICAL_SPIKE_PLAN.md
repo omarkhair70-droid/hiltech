@@ -234,6 +234,31 @@ Prove:
 Pass:
 office deployment can be safely operated.
 
+**Result 2026-09-18: ACCEPT — WINDOWS MSI OPERATIONAL LIFECYCLE PASSED.**
+
+Evidence:
+- real Compose Desktop/jpackage MSI v1.0.0 and v2.0.0.
+- disposable Authenticode signer identity matched the embedded MSI signer.
+- silent install/uninstall passed.
+- packaged executable launched and reported the correct version.
+- `hiltech://work/WO-42` reached the installed packaged app.
+- deliberately corrupt MSI update failed without destroying installed v1 or LocalAppData.
+- controlled v1 -> v2 installer swap preserved local state.
+- rollback v2 -> retained v1 preserved local state.
+- final uninstall left LocalAppData intact.
+
+GitHub Actions run: **35317815398**.
+ADR: **ADR-012**.
+
+Final marker:
+`HILTECH_WINDOWS_LIFECYCLE_PASS install=PASS signature=PASS deep_link=PASS failed_update=PASS update=PASS rollback=PASS state_preserved=PASS`
+
+Accepted direction:
+Compose Desktop/jpackage MSI + controlled signed-installer swap with durable local data outside the install directory and retained rollback artifact.
+
+Boundary:
+production certificate/provider, MDM/updater choice, release UX and real schema-migration policy remain production/freeze decisions.
+
 ---
 
 # SPIKE-08 — Keycloak Native OIDC
