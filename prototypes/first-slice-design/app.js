@@ -139,13 +139,15 @@ const warehouseCopy = {
   en: {
     product:"HILTECH · WAREHOUSE", synced:"LIVE INVENTORY", title:"Fluke 289 True-RMS Multimeter",
     assetCode:"AS-0048", serial:"SN · FLK289-88421", location:"Maadi Main Warehouse", slot:"Cabinet B-04",
-    available:"AVAILABLE", calibration:"CALIBRATION BLOCKED", collision:"CHECKOUT NOT APPLIED", success:"CHECKED OUT",
+    available:"AVAILABLE", reserved:"RESERVED · SAME WORK", calibration:"CALIBRATION BLOCKED", collision:"CHECKOUT NOT APPLIED", success:"CHECKED OUT",
     passport:"Asset passport", checkout:"Checkout context", history:"Movement",
     condition:"Condition", conditionValue:"Good", calibrationLabel:"Calibration", calibrationValue:"Valid · 42 days left",
     custodian:"Current custody", custodianValue:"Stored · Maadi", type:"Asset type", typeValue:"Test instrument",
     recipient:"Recipient", recipientValue:"Crew A · Omar", project:"Project", projectValue:"Bank HQ · Data Center",
     work:"Work Order", workValue:"WO-0042", returnLabel:"Expected return", returnValue:"Tomorrow · 17:00",
-    action:"CHECK OUT ASSET", blockedAction:"VIEW CALIBRATION", next:"NEXT SCAN",
+    action:"CHECK OUT ASSET", reservedAction:"CHECK OUT RESERVED ASSET", blockedAction:"VIEW CALIBRATION", next:"NEXT SCAN",
+    reservedTitle:"Reservation matches this Work Order",
+    reservedText:"AS-0048 is reserved for WO-0042 / Crew A. Checkout is allowed and will consume the active reservation.",
     calibrationTitle:"Checkout blocked by calibration policy",
     calibrationText:"This asset requires valid calibration for this WorkType. The current calibration is expired. First slice has no generic override.",
     collisionTitle:"Another device checked out this asset first",
@@ -158,13 +160,15 @@ const warehouseCopy = {
   ar: {
     product:"هيلتك · المخزن", synced:"المخزون مباشر", title:"Fluke 289 True-RMS Multimeter",
     assetCode:"AS-0048", serial:"SN · FLK289-88421", location:"مخزن المعادي الرئيسي", slot:"الدولاب B-04",
-    available:"متاح", calibration:"موقوف بسبب المعايرة", collision:"لم يتم التسليم", success:"تم التسليم",
+    available:"متاح", reserved:"محجوز لنفس أمر الشغل", calibration:"موقوف بسبب المعايرة", collision:"لم يتم التسليم", success:"تم التسليم",
     passport:"بطاقة الأصل", checkout:"سياق التسليم", history:"الحركة",
     condition:"الحالة", conditionValue:"جيدة", calibrationLabel:"المعايرة", calibrationValue:"صالحة · متبقي 42 يوم",
     custodian:"العهدة الحالية", custodianValue:"في المخزن · المعادي", type:"نوع الأصل", typeValue:"جهاز اختبار",
     recipient:"المستلم", recipientValue:"Crew A · عمر", project:"المشروع", projectValue:"المقر الرئيسي للبنك · مركز البيانات",
     work:"أمر الشغل", workValue:"WO-0042", returnLabel:"الرجوع المتوقع", returnValue:"غدًا · 17:00",
-    action:"تسليم الأصل", blockedAction:"عرض المعايرة", next:"المسح التالي",
+    action:"تسليم الأصل", reservedAction:"تسليم الأصل المحجوز", blockedAction:"عرض المعايرة", next:"المسح التالي",
+    reservedTitle:"الحجز مطابق لأمر الشغل ده",
+    reservedText:"AS-0048 محجوز لـ WO-0042 / Crew A. التسليم مسموح وهيقفل الحجز النشط.",
     calibrationTitle:"التسليم موقوف بسبب سياسة المعايرة",
     calibrationText:"نوع الشغل ده محتاج معايرة سارية. معايرة الجهاز منتهية، ومفيش Override عام في أول Slice.",
     collisionTitle:"جهاز آخر سلّم الأصل قبلك",
@@ -179,13 +183,15 @@ const warehouseCopy = {
 function renderWarehouse(){
   const t=warehouseCopy[state.lang];
   const dir=state.lang==="ar"?"rtl":"ltr";
+  const reserved=state.mode==="reserved";
   const blocked=state.mode==="calibration";
   const collision=state.mode==="collision";
   const success=state.mode==="success";
-  const statusClass=blocked?"rework":collision?"conflict":success?"ready":"ready";
-  const statusText=blocked?t.calibration:collision?t.collision:success?t.success:t.available;
+  const statusClass=blocked?"rework":collision?"conflict":"ready";
+  const statusText=reserved?t.reserved:blocked?t.calibration:collision?t.collision:success?t.success:t.available;
 
   let banner="";
+  if(reserved) banner='<div class="banner offline" style="background:var(--ok-bg);color:var(--ok)"><strong>'+t.reservedTitle+'</strong><p>'+t.reservedText+'</p></div>';
   if(blocked) banner='<div class="banner rework"><strong>'+t.calibrationTitle+'</strong><p>'+t.calibrationText+'</p></div>';
   if(collision) banner='<div class="banner conflict"><strong>'+t.collisionTitle+'</strong><p>'+t.collisionText+'</p></div><div class="local-card"><strong>'+t.localState+'</strong><p>Cached v12 · Server v14</p></div>';
   if(success) banner='<div class="banner offline" style="background:var(--ok-bg);color:var(--ok)"><strong>'+t.successTitle+'</strong><p>'+t.successText+'</p></div>';
@@ -218,6 +224,7 @@ function renderWarehouse(){
         (blocked?'<button class="primary">'+t.blockedAction+'</button>':
          collision?'<button class="primary">'+t.next+'</button>':
          success?'<button class="primary">'+t.next+'</button>':
+         reserved?'<button class="primary">'+t.reservedAction+'</button>':
          '<button class="primary">'+t.action+'</button>')+
       '</footer>'+
     '</div>';
@@ -435,6 +442,7 @@ const stateSets = {
   ],
   warehouse: [
     ["available","Available"],
+    ["reserved","Reserved same work"],
     ["calibration","Calibration blocked"],
     ["collision","Checkout collision"],
     ["success","Success"]
