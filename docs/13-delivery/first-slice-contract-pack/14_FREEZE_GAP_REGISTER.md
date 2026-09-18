@@ -149,13 +149,11 @@ Resolved:
 ## A7 — OpenFGA exact model
 
 Still need:
-- exact DSL relation/permission names.
-- exact inheritance expressions.
-- team subject-set mapping.
-- configuration-family scope strategy.
-- tuple lifecycle update strategy.
-- permission-cache policy if any.
-- final external OBJECT_NOT_VISIBLE policy.
+- exact DSL relation/permission expressions/model file.
+- exact team subject-set expressions.
+- exact projector retry/backoff constants.
+- exact synchronous projection wait timeout.
+- production OpenFGA cache/deployment settings.
 
 Resolved:
 - object relationship vocabulary.
@@ -164,6 +162,12 @@ Resolved:
 - delegation semantics.
 - offline re-authorization.
 - negative-test families.
+- PostgreSQL source-of-truth vs OpenFGA projection boundary.
+- transactional projection intent/outbox.
+- fail-closed grant/revoke behavior.
+- pinned authorization model ID.
+- selective HIGHER_CONSISTENCY policy.
+- external OBJECT_NOT_VISIBLE policy.
 
 ---
 
