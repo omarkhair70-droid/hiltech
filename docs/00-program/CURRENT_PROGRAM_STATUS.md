@@ -198,6 +198,12 @@ Contract conversion status:
 - Representative internal reality fixtures added.
 - remaining work is primarily visual/design proof + OCI cutover/ops + Windows signing/distribution + final stack/version review.
 
+Final stack/version review:
+- reviewed on 2026-09-18 against current upstream stable releases,
+- proven first-slice pins retained deliberately where newer versions would invalidate proof without required benefit,
+- production GitHub Actions immutable SHA baseline selected,
+- only exact AGP 9.3 patch remains under focused validation before `FINAL_STACK.md`.
+
 Immediate pre-code continuation:
 1. Complete actual rendered first-slice low-fi / RTL / conflict / adaptive proof when Figma MCP quota permits.
 2. Run final explicit stack/version + CI-action pin review; create FINAL_STACK.md only when that review passes.
