@@ -1,7 +1,7 @@
 # 29 — Bootstrap Durable Command Replay Core
 
 Date: 2026-09-19
-Status: **IMPLEMENTED / CI VERIFICATION PENDING**
+Status: **PASS / BOOTSTRAP VERIFIED**
 
 ## Purpose
 
@@ -82,6 +82,25 @@ Bootstrap tests cover:
 - KEEP semantics to avoid duplicate scheduler work.
 
 The worker is still intentionally fail-closed until the Ktor transport/runtime composition is wired.
+
+## Bootstrap verification
+
+GitHub Actions run:
+`35402970361`
+
+PASS:
+- applied-result persistence,
+- retryable-result persistence,
+- deterministic 30-second first backoff under zero jitter,
+- typed conflict persistence,
+- dependent-command blocking,
+- local payload/operationId preservation,
+- Room schema drift check,
+- Android build,
+- Desktop compile,
+- Server/DB/jOOQ regression suite.
+
+This gate is closed.
 
 ## Next gate
 
