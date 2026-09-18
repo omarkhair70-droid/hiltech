@@ -95,9 +95,9 @@ Rules:
 |---|---:|---|---|
 | Compose Desktop EXE | current client line | PROVEN | SPIKE-01 |
 | Compose Desktop MSI | current client line | PROVEN | SPIKE-01 |
-| Install/update/rollback policy | active proof | ACTIVE SPIKE | SPIKE-07 |
+| Install/update/rollback policy | controlled installer-swap baseline | PROVEN / ACCEPTED | SPIKE-07 / ADR-012 |
 | Code-signing production certificate/provider | TBD | OPEN | Production operations/security |
-| Auto-update/MDM strategy | TBD | OPEN | Close after SPIKE-07 + HILTECH IT reality |
+| Auto-update/MDM strategy | TBD | OPEN | HILTECH IT reality / production operations choice |
 
 ---
 
@@ -140,15 +140,14 @@ Rules:
 
 # Still Required Before FINAL_STACK.md
 
-1. SPIKE-07 Windows install / update / rollback.
-2. SPIKE-15 end-to-end vertical proof.
-3. Ktor/network client proof through real HILTECH API path.
-4. Exact Flyway/version/migration baseline after schemas are frozen.
-5. Infrastructure/provider decision.
-6. Production object-storage provider.
-7. Windows distribution/update operational choice.
-8. Final server/runtime/container versions.
-9. Final CI action pinning strategy.
-10. One last current-version verification immediately before freeze.
+1. SPIKE-15 end-to-end vertical proof.
+2. Ktor/network client proof through the real HILTECH API path (part of SPIKE-15).
+3. Exact Flyway/version/migration baseline after schemas are frozen.
+4. Infrastructure/provider decision.
+5. Production object-storage provider.
+6. Windows enterprise distribution/updater and production signing choice.
+7. Final server/runtime/container versions.
+8. Final CI action pinning strategy.
+9. One last current-version verification immediately before freeze.
 
 Only after those gates may FINAL_STACK.md be created.
