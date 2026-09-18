@@ -9,12 +9,14 @@ on:
       - "spikes/e2e-vertical-server/**"
       - ".github/workflows/spike-e2e-vertical.yml"
       - ".github/scripts/spike15-**"
+      - ".github/fixtures/spike15-**"
   pull_request:
     paths:
       - "spikes/kmp-android-windows/**"
       - "spikes/e2e-vertical-server/**"
       - ".github/workflows/spike-e2e-vertical.yml"
       - ".github/scripts/spike15-**"
+      - ".github/fixtures/spike15-**"
   workflow_dispatch:
 
 jobs:
@@ -68,3 +70,248 @@ jobs:
         run: |
           gradle classes --stacktrace
           echo "HILTECH_SPIKE15_SERVER_COMPILE_PASS"
+
+  integration-runtime:
+    needs:
+      - compile-shared-client
+      - compile-server
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Prepare Android SDK
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort | tail -n 1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Start PostgreSQL Keycloak OpenFGA and S3 fixture
+        run: |
+          set -euo pipefail
+
+          docker run -d --name spike15-postgres             -e POSTGRES_PASSWORD=postgres             -e POSTGRES_DB=hiltech_spike15             -p 5432:5432             postgres:18.6
+
+          docker run -d --name spike15-keycloak             -p 8081:8080             -v "$PWD/.github/fixtures/spike15-keycloak-realm.json:/opt/keycloak/data/import/hiltech-realm.json:ro"             quay.io/keycloak/keycloak:26.7.4             start-dev --http-port=8080 --hostname-strict=false --import-realm
+
+          docker run -d --name spike15-openfga             -p 8082:8080             -e OPENFGA_DATASTORE_ENGINE=memory             -e OPENFGA_PLAYGROUND_ENABLED=false             openfga/openfga:v1.20.0 run
+
+          python -m pip install --disable-pip-version-check "moto[server]==5.2.3"
+          nohup moto_server -H 0.0.0.0 -p 5000 >/tmp/spike15-moto.log 2>&1 &
+
+          for i in $(seq 1 90); do
+            PG_OK=0
+            KC_OK=0
+            FGA_OK=0
+            S3_OK=0
+
+            docker exec spike15-postgres pg_isready -U postgres -d hiltech_spike15 >/dev/null 2>&1 && PG_OK=1 || true
+            curl -fsS http://127.0.0.1:8081/realms/hiltech/.well-known/openid-configuration >/dev/null 2>&1 && KC_OK=1 || true
+            curl -fsS http://127.0.0.1:8082/healthz >/dev/null 2>&1 && FGA_OK=1 || true
+            curl -fsS http://127.0.0.1:5000/ >/dev/null 2>&1 && S3_OK=1 || true
+
+            if [ "$PG_OK$KC_OK$FGA_OK$S3_OK" = "1111" ]; then
+              echo "HILTECH_SPIKE15_SERVICES_PASS postgres=PASS keycloak=PASS openfga=PASS s3=PASS"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs spike15-postgres || true
+          docker logs spike15-keycloak || true
+          docker logs spike15-openfga || true
+          cat /tmp/spike15-moto.log || true
+          exit 1
+
+      - name: Issue disposable Keycloak CI actor JWTs
+        run: |
+          set -euo pipefail
+
+          jq -e '
+            .clients[]
+            | select(.clientId == "hiltech-native")
+            | .publicClient == true
+              and .standardFlowEnabled == true
+              and .directAccessGrantsEnabled == false
+              and .attributes["pkce.code.challenge.method"] == "S256"
+          ' .github/fixtures/spike15-keycloak-realm.json >/dev/null
+
+          issue_token () {
+            client="$1"
+            output="$2"
+            secret="$(jq -r --arg client "$client" '.clients[] | select(.clientId == $client) | .secret' .github/fixtures/spike15-keycloak-realm.json)"
+
+            curl -fsS               -X POST               http://127.0.0.1:8081/realms/hiltech/protocol/openid-connect/token               -H 'content-type: application/x-www-form-urlencoded'               --data-urlencode grant_type=client_credentials               --data-urlencode "client_id=$client"               --data-urlencode "client_secret=$secret"               | jq -er .access_token > "$output"
+
+            chmod 600 "$output"
+            test -s "$output"
+          }
+
+          issue_token pm1 "$RUNNER_TEMP/pm.token"
+          issue_token tech1 "$RUNNER_TEMP/tech.token"
+          issue_token supervisor1 "$RUNNER_TEMP/supervisor.token"
+          issue_token outsider1 "$RUNNER_TEMP/outsider.token"
+
+          echo "HILTECH_SPIKE15_KEYCLOAK_PASS jwt=PASS native_model=PKCE_S256 native_direct_grant=DISABLED"
+
+      - name: Bootstrap OpenFGA model
+        env:
+          FGA_API_URL: http://127.0.0.1:8082
+        run: python .github/scripts/spike15-openfga.py
+
+      - name: Build runtime clients and authoritative server
+        run: |
+          gradle -p spikes/kmp-android-windows             :androidApp:assembleDebug             :desktopApp:classes             --stacktrace
+
+          gradle -p spikes/e2e-vertical-server classes --stacktrace
+
+      - name: Start authoritative server
+        env:
+          DB_URL: jdbc:postgresql://127.0.0.1:5432/hiltech_spike15
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          KEYCLOAK_ISSUER: http://127.0.0.1:8081/realms/hiltech
+          S3_BACKEND_ENDPOINT: http://127.0.0.1:5000
+          S3_PRESIGN_ENDPOINT: http://10.0.2.2:5000
+          S3_ACCESS_KEY: test
+          S3_SECRET_KEY: test
+          S3_BUCKET: hiltech-spike15
+        run: |
+          set -euo pipefail
+
+          nohup gradle -p spikes/e2e-vertical-server bootRun             >/tmp/spike15-server.log 2>&1 &
+
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:8090/health >/dev/null; then
+              echo "HILTECH_SPIKE15_SERVER_READY_PASS"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat /tmp/spike15-server.log
+          exit 1
+
+      - name: PM Desktop creates and assigns authoritative work
+        run: |
+          set -euo pipefail
+          PM_TOKEN="$(cat "$RUNNER_TEMP/pm.token")"
+
+          gradle -p spikes/kmp-android-windows :desktopApp:run             --args="--spike15-pm-create http://127.0.0.1:8090 $PM_TOKEN"             --stacktrace
+
+      - name: Unrelated actor is denied server-side
+        run: |
+          set -euo pipefail
+          OUTSIDER_TOKEN="$(cat "$RUNNER_TEMP/outsider.token")"
+
+          status="$(
+            curl -sS -o /tmp/spike15-outsider.json -w '%{http_code}'               -H "Authorization: Bearer $OUTSIDER_TOKEN"               http://127.0.0.1:8090/v1/work-orders/wo-42
+          )"
+
+          test "$status" = "403"
+          echo "HILTECH_SPIKE15_AUTHZ_DENY_PASS actor=outsider1"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Android happy path — bundle offline process death reconnect
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SPIKE15_SCENARIO: happy
+          TECH_TOKEN_FILE: ${{ runner.temp }}/tech.token
+          SPIKE15_ANDROID_BASE_URL: http://10.0.2.2:8090
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disk-size: 4096M
+          emulator-boot-timeout: 300
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash .github/scripts/spike15-android-e2e.sh
+
+      - name: Supervisor accepts exact submitted version
+        run: |
+          set -euo pipefail
+          SUPERVISOR_TOKEN="$(cat "$RUNNER_TEMP/supervisor.token")"
+
+          gradle -p spikes/kmp-android-windows :desktopApp:run             --args="--spike15-supervisor-accept http://127.0.0.1:8090 $SUPERVISOR_TOKEN 4"             --stacktrace
+
+      - name: PM Desktop sees authoritative state and audit trace
+        run: |
+          set -euo pipefail
+          PM_TOKEN="$(cat "$RUNNER_TEMP/pm.token")"
+
+          gradle -p spikes/kmp-android-windows :desktopApp:run             --args="--spike15-pm-read http://127.0.0.1:8090 $PM_TOKEN ACCEPTED"             --stacktrace
+
+          gradle -p spikes/kmp-android-windows :desktopApp:run             --args="--spike15-pm-audit http://127.0.0.1:8090 $PM_TOKEN"             --stacktrace
+
+      - name: Reset and seed deterministic conflict scenario
+        run: |
+          set -euo pipefail
+          PM_TOKEN="$(cat "$RUNNER_TEMP/pm.token")"
+
+          gradle -p spikes/kmp-android-windows :desktopApp:run             --args="--spike15-reset http://127.0.0.1:8090 $PM_TOKEN"             --stacktrace
+
+          gradle -p spikes/kmp-android-windows :desktopApp:run             --args="--spike15-pm-create http://127.0.0.1:8090 $PM_TOKEN"             --stacktrace
+
+      - name: Android conflict path — stale version blocks dependent command
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SPIKE15_SCENARIO: conflict
+          TECH_TOKEN_FILE: ${{ runner.temp }}/tech.token
+          PM_TOKEN_FILE: ${{ runner.temp }}/pm.token
+          SPIKE15_ANDROID_BASE_URL: http://10.0.2.2:8090
+          SPIKE15_HOST_BASE_URL: http://127.0.0.1:8090
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disk-size: 4096M
+          emulator-boot-timeout: 300
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash .github/scripts/spike15-android-e2e.sh
+
+      - name: Verify conflict left authoritative state un-overwritten
+        run: |
+          set -euo pipefail
+          PM_TOKEN="$(cat "$RUNNER_TEMP/pm.token")"
+
+          gradle -p spikes/kmp-android-windows :desktopApp:run             --args="--spike15-pm-read http://127.0.0.1:8090 $PM_TOKEN ASSIGNED"             --stacktrace
+
+          echo "HILTECH_SPIKE15_PASS desktop_create=PASS android_bundle=PASS offline=PASS evidence=PASS workmanager=PASS idempotency=PASS conflict=PASS authz=PASS supervisor=PASS desktop_read=PASS trace=PASS ktor=PASS"
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          echo "===== HILTECH SERVER ====="
+          cat /tmp/spike15-server.log || true
+          echo "===== KEYCLOAK ====="
+          docker logs spike15-keycloak || true
+          echo "===== OPENFGA ====="
+          docker logs spike15-openfga || true
+          echo "===== POSTGRES ====="
+          docker logs spike15-postgres || true
+          echo "===== S3 ====="
+          cat /tmp/spike15-moto.log || true
