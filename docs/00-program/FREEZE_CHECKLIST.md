@@ -6,6 +6,26 @@ Status: ACTIVE / NOT READY TO FREEZE
 Freeze does not mean "never change".
 It means implementation should no longer require discovering fundamental product/architecture decisions.
 
+## Scope distinction — Whole Program vs First Production Slice
+
+This document contains whole-program readiness items across all HILTECH domains.
+
+Unchecked Finance / Payroll / Sales / Security / Client Portal / later-integration items do not automatically block the first production vertical when those domains are outside that slice.
+
+For the first production slice, the authoritative Freeze controls are:
+- `docs/13-delivery/first-slice-contract-pack/09_FREEZE_RECORD.md`
+- `docs/13-delivery/first-slice-contract-pack/14_FREEZE_GAP_REGISTER.md`
+- `docs/13-delivery/first-slice-contract-pack/21_FINAL_PRE_FREEZE_CONSISTENCY_REVIEW.md`
+- `docs/13-delivery/first-slice-contract-pack/23_FIRST_SLICE_FREEZE_REVIEW_PROCEDURE.md`
+
+Current first-slice state:
+- contracts: PASS,
+- final stack: PASS,
+- provider architecture: PASS at contract level,
+- rendered design proof: OPEN / sole current pre-code blocker.
+
+Whole-program checklist remains valuable for later slices and eventual company-wide maturity.
+
 Any intentional unknown at freeze must be documented as:
 - deferred,
 - bounded,
@@ -181,8 +201,9 @@ BLOCKING: PARTIAL — only for included integrations.
 - [x] Windows packaging/update/rollback decision — SPIKE-07 / ADR-012 accepted.
 - [x] Windows production signing/distribution architecture — DigiCert OV + KeyLocker + HILTECH Update Service / ADR-019; certificate issuance/staging proof remains operational activation.
 - [x] Ktor/shared networking decision — SPIKE-15 / ADR-007 accepted.
-- [ ] FINAL_STACK.md.
-- [ ] VERSION_MATRIX.md frozen.
+- [x] FINAL_STACK.md created for the first production slice.
+- [x] First-slice version review completed — AGP 9.3.3 final pin; run 35389326629 PASS.
+- [x] Production CI action immutable-SHA policy defined.
 
 BLOCKING: YES.
 
@@ -276,3 +297,30 @@ Canonical:
 Pre-code Freeze requires exact contracts/generation rules/test specifications.
 
 Final Flyway SQL, Spring/Ktor/Room production code, generated jOOQ, and implementation integration tests are post-Freeze Bootstrap artifacts and must not be circular pre-code blockers.
+
+
+---
+
+## Current First-Slice Freeze Status
+
+`FIRST_SLICE_CONTRACT_CONSISTENCY = PASS`
+
+`FINAL_STACK_REVIEW = PASS`
+
+`FIRST_SLICE_FREEZE = NOT YET PASS`
+
+Only current pre-code blocker:
+- actual rendered first-slice design proof in Figma.
+
+The following are not current first-slice pre-code blockers:
+- exact Finance/payroll schemas,
+- bank integration,
+- full Procurement/HR/Sales reality,
+- Client Portal,
+- NOC/managed service,
+- OCI tenancy/quota/latency activation,
+- DigiCert certificate issuance,
+- production DR rehearsal,
+- actual pilot seed data.
+
+They are later-domain or activation gates unless they reveal a contradiction in the frozen first-slice contracts.
