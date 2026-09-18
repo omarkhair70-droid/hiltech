@@ -1,15 +1,6 @@
 name: Spike — End-to-End Vertical
 
 on:
-  push:
-    branches:
-      - "spike/e2e-vertical-20260918"
-    paths:
-      - "spikes/kmp-android-windows/**"
-      - "spikes/e2e-vertical-server/**"
-      - ".github/workflows/spike-e2e-vertical.yml"
-      - ".github/scripts/spike15-**"
-      - ".github/fixtures/spike15-**"
   pull_request:
     paths:
       - "spikes/kmp-android-windows/**"
