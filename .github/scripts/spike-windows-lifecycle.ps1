@@ -157,9 +157,14 @@ switch ($Stage) {
         $publicCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($CertDer)
         Set-Content -Path $ThumbFile -Value $publicCertificate.Thumbprint
 
-        Invoke-ProcessChecked "certutil.exe" "-user -addstore -f Root `"$CertDer`"" 60
+        Import-Certificate -FilePath $CertDer -CertStoreLocation "Cert:\\CurrentUser\\Root" | Out-Null
 
-        Write-Host "Disposable public certificate trusted; private key remains PFX-only"
+        $trusted = Get-Item "Cert:\\CurrentUser\\Root\\$($publicCertificate.Thumbprint)" -ErrorAction Stop
+        if (-not $trusted) {
+            throw "Disposable signing certificate was not imported into CurrentUser Root"
+        }
+
+        Write-Host "Disposable public certificate trusted in CurrentUser Root; private key remains PFX-only"
 
         Copy-Item (Get-BuiltMsi) $V1 -Force
         Write-Host "MSI copied to $V1"
@@ -265,7 +270,10 @@ switch ($Stage) {
         }
 
         $thumb = Get-SigningThumbprint
-        Invoke-ProcessChecked "certutil.exe" "-user -delstore Root $thumb" 60 -AllowFailure
+        $trustedCertPath = "Cert:\\CurrentUser\\Root\\$thumb"
+        if (Test-Path $trustedCertPath) {
+            Remove-Item $trustedCertPath -Force
+        }
 
         if (Test-Path $DataDir) {
             Remove-Item $DataDir -Recurse -Force
