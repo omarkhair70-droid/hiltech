@@ -119,43 +119,50 @@ Resolved:
 ## A5 — PostgreSQL / Flyway / jOOQ finalization
 
 Still need:
-- final physical DDL.
-- exact FK/check/unique constraints.
-- index set from final read-model queries.
-- migration module ordering.
-- baseline/file naming.
-- generated jOOQ package/forced types.
-- generated-code commit vs CI generation.
+- generated production Flyway SQL files after FIRST_SLICE_FREEZE.
+- executable DB integration tests against those migrations.
 
 Resolved:
 - module ownership.
-- table families.
-- concrete first-slice table-shape candidates.
+- concrete table-shape candidates.
+- exact FK/check/unique/index contract in 16_DATABASE_DDL_CONSTRAINT_CONTRACT.md.
 - optimistic update pattern.
 - transaction boundaries.
 - append/custody/idempotency semantics.
+- single global Flyway stream under database/migrations.
+- VNNNN__module__description.sql naming.
+- initial V0001..V0009 bootstrap order.
+- no production baselineOnMigrate.
+- expand/contract forward migration policy.
+- jOOQ KotlinGenerator.
+- generated source path/package.
+- generated jOOQ source not committed.
+- PostgreSQL/JVM type mapping.
+- varchar + CHECK state persistence instead of PostgreSQL enum types.
 
 ---
 
 ## A6 — Room/local finalization
 
 Still need:
-- restricted-cache encryption-at-rest decision/revisit trigger.
-- storage-budget/eviction policy.
-- migration support-window rule.
-- retry/backoff constants.
-- exact cursor scope keys.
-- old bundle retention/eviction rule.
+- exact Room converter implementation.
+- real migration files/tests.
+- release-specific storage-policy tuning after representative device testing.
+- executable retry/error mapping tests.
 
 Resolved:
 - UUID as canonical lowercase TEXT.
 - Instant local representation contract.
 - kotlinx.serialization UTF-8 JSON pending-command payload with payloadVersion.
-- entity candidates.
-- queue/dependency/evidence/conflict schema.
-- local transactions.
-- WorkManager behavior.
-- conflict semantics.
+- app-private/OS-encrypted storage baseline; no SQLCipher in first slice.
+- HIGHLY_RESTRICTED excluded from offline cache by default.
+- configurable OfflineStoragePolicy with safe default seed.
+- eviction pinning for pending/conflict/unsynced evidence.
+- release-declared migration support window.
+- retry/backoff schedule.
+- cursor scope keys.
+- bundle invalidation/retention.
+- semantic Desktop parity boundary.
 - process-death/reconnect proof.
 
 ---
@@ -163,9 +170,8 @@ Resolved:
 ## A7 — OpenFGA exact model
 
 Still need:
-- exact projector retry/backoff constants.
-- exact synchronous projection wait timeout.
-- production OpenFGA cache/deployment settings.
+- production OpenFGA deployment/runtime configuration.
+- executable PostgreSQL projection/outbox integration tests.
 
 Resolved:
 - first-slice FGA DSL + team userset semantics validated in GitHub Actions run 35331537375.
@@ -181,26 +187,31 @@ Resolved:
 - pinned authorization model ID.
 - selective HIGHER_CONSISTENCY policy.
 - external OBJECT_NOT_VISIBLE policy.
+- 2-second synchronous projection fast path.
+- fixed projector retry schedule.
+- no first-slice application positive/allow cache.
 
 ---
 
 ## A8 — Evidence/provider closure
 
 Still need:
-- production object-storage provider.
-- object-key/bucket/container layout.
-- file-size limits.
-- malware/quarantine requirement.
-- retention/legal hold rules.
-- multipart threshold.
-- exact download delivery policy by classification.
+- exact production S3-compatible provider/KMS.
+- exact malware-scanner service for ARBITRARY_FILE.
+- provider backup/versioning/lifecycle settings.
+- future formal retention/legal-hold policy only if automated deletion/hold is required.
 
 Resolved:
 - signed direct upload protocol.
 - checksum/finalize.
-- server metadata.
-- local evidence.
-- upload/finalize DTOs.
+- opaque private object-key layout.
+- one private environment bucket/container baseline.
+- encryption-at-rest requirement.
+- 16 MiB system max per evidence object.
+- no multipart in first slice.
+- scan/quarantine classes.
+- classification-based download policy.
+- no automatic authoritative evidence deletion by default.
 - authorization boundary.
 - no permanent public restricted URL.
 
