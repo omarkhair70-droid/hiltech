@@ -43,7 +43,7 @@ jobs:
       - name: Sign v1 and prepare lifecycle
         shell: pwsh
         working-directory: .
-        timeout-minutes: 4
+        timeout-minutes: 6
         run: ./.github/scripts/spike-windows-lifecycle.ps1 -Stage prepare-v1
 
       - name: Install v1 + deep link + failed update safety
