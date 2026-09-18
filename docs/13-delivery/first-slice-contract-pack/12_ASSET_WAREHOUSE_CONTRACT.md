@@ -483,6 +483,16 @@ UI:
 
 # 10. Calibration / maintenance
 
+## Calibration exception — first-slice decision
+
+If AssetTypeDefinition requires calibration and current calibration is EXPIRED/invalid:
+- ReserveAsset/CheckoutAsset for normal operational use is denied.
+- first production slice has **no generic override button**.
+- an emergency calibration exception is deferred until HILTECH provides a real use case and an explicit ApprovalPolicy/audit contract is added.
+
+This is safer than inventing a bypass before reality requires one.
+
+
 AssetTypeDefinition determines whether calibration is required.
 
 CalibrationRecord:
@@ -533,6 +543,20 @@ Types are configurable/master codes where possible.
 Telemetry/access/camera correlation may create context, never automatic guilt/responsibility.
 
 ---
+
+## Stock valuation boundary
+
+Warehouse first-slice truth is **physical quantity/movement/custody**.
+
+It does not become accounting source of truth for:
+- weighted-average/FIFO costing,
+- general ledger,
+- tax valuation,
+- financial inventory journal.
+
+`valuationClassRef` may carry restricted classification/reference metadata for later Finance integration.
+
+Finance/accounting consumes authoritative physical movements later through defined events/adapters.
 
 # 12. StockItem
 
