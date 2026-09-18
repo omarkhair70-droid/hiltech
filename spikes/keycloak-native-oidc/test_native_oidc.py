@@ -149,6 +149,7 @@ def setup_realm():
             {
                 "username": USERNAME,
                 "enabled": True,
+                "email": "tech1@hiltech.example",
                 "emailVerified": True,
                 "firstName": "HILTECH",
                 "lastName": "Technician",
