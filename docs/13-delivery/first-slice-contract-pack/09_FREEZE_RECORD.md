@@ -23,31 +23,32 @@ Project / Site / Work / Warehouse Asset Custody / Technician Offline / Evidence 
 - [ ] pilot data source/import path known or clean-seed pilot explicitly chosen.
 
 ## Domain
-- [ ] Configuration/policy schemas frozen.
-- [ ] Data dictionary frozen.
-- [ ] Project/Site/Work contract frozen.
-- [ ] WorkOrder lifecycle and readiness are explicitly separated.
-- [ ] Work policy-binding/version semantics frozen.
-- [ ] Asset/Warehouse/Stock/Custody contract frozen.
-- [ ] evidence policy/file contract frozen.
-- [ ] cross-contract consistency review has no unresolved contradiction.
+- [x] Configuration/policy structural contract defined for first slice.
+- [x] Data dictionary first-slice structure defined.
+- [x] Project/Site/Work core contract structurally closed.
+- [x] WorkOrder lifecycle and readiness explicitly separated.
+- [x] Work policy-binding/version semantics frozen at contract level.
+- [x] Asset/Warehouse/Stock/Custody core contract structurally closed.
+- [x] Evidence/file application contract structurally closed.
+- [x] Cross-contract consistency review has no known structural contradiction.
 
 ## Security
-- [x] OpenFGA first-slice model candidate is executable/tested — run 35331537375; final freeze awaits ops consistency constants/model pin deployment config.
-- [ ] application obligations frozen.
-- [ ] field-level access frozen.
-- [ ] re-auth/device obligations frozen.
-- [ ] negative authorization tests defined.
+- [x] OpenFGA first-slice model executable/tested — run 35331537375.
+- [x] application-obligation boundary defined.
+- [x] field-level access/projection contract defined.
+- [x] re-auth/offline replay/device/client metadata obligations defined for first slice.
+- [x] negative authorization test families defined.
+- [x] PostgreSQL→OpenFGA fail-closed projection/consistency contract defined.
 
 ## API / Data
-- [ ] routes/DTOs/errors frozen.
-- [ ] read models frozen.
+- [x] first-slice routes/DTO/error semantics closed at pre-code contract level.
+- [x] first-slice read-model semantics defined.
 - [x] PostgreSQL table/constraint/index contract defined; production SQL generation waits for Freeze.
 - [x] Flyway convention frozen.
 - [x] jOOQ convention frozen.
 - [x] Room/local schema + retry/storage policy contract defined.
 - [x] sync/conflict contracts frozen at semantic level.
-- [ ] file/evidence metadata frozen.
+- [x] file/evidence metadata/storage/security contract defined.
 
 ## Design
 - [ ] PM flow validated.
@@ -59,12 +60,14 @@ Project / Site / Work / Warehouse Asset Custody / Technician Offline / Evidence 
 - [ ] adaptive device states validated.
 
 ## Ops
-- [ ] infrastructure decision sufficient for bootstrap.
-- [ ] object-storage provider selected or bounded non-blocking plan accepted.
-- [ ] Windows signing/distribution decision sufficient for first release.
-- [ ] backup/RPO/RTO baseline.
-- [ ] version matrix re-checked.
-- [ ] CI action pins reviewed.
+- [x] infrastructure provider/topology decision sufficient for bootstrap — OCI / ADR-014.
+- [x] object-storage provider selected — OCI Object Storage + KMS.
+- [x] Windows signing/distribution architecture selected — DigiCert OV + KeyLocker + HILTECH Update Service / ADR-019.
+- [x] staged backup/DR engineering baseline defined — PILOT PITR/copy, STABLE Jeddah→Riyadh Warm Standby.
+- [ ] final explicit version re-check immediately before Freeze.
+- [ ] final production CI action pin review.
+
+Operational account/certificate/quota/latency/rehearsal items are production activation gates unless they expose a contract contradiction.
 
 ---
 
@@ -108,6 +111,9 @@ These are not reopened without a concrete contradiction/revisit trigger.
 - `15_AUTHORIZATION_CONSISTENCY_CONTRACT.md`
 - `16_DATABASE_DDL_CONSTRAINT_CONTRACT.md`
 - `17_FREEZE_TO_BOOTSTRAP_BOUNDARY.md`
+- `18_PRODUCTION_INFRASTRUCTURE_CONTRACT.md`
+- `19_WINDOWS_RELEASE_UPDATE_CONTRACT.md`
+- `20_BACKUP_DR_RECOVERY_CONTRACT.md`
 
 ---
 
