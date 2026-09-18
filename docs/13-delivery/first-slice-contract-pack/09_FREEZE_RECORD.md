@@ -33,7 +33,7 @@ Project / Site / Work / Warehouse Asset Custody / Technician Offline / Evidence 
 - [ ] cross-contract consistency review has no unresolved contradiction.
 
 ## Security
-- [ ] OpenFGA first-slice model frozen.
+- [x] OpenFGA first-slice model candidate is executable/tested — run 35331537375; final freeze awaits ops consistency constants/model pin deployment config.
 - [ ] application obligations frozen.
 - [ ] field-level access frozen.
 - [ ] re-auth/device obligations frozen.
