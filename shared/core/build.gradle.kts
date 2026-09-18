@@ -47,12 +47,16 @@ kotlin {
             implementation(libs.ktor.serialization.json)
         }
 
-        androidMain.dependencies {
-            implementation(libs.ktor.client.okhttp)
+        val androidMain by getting {
+            dependencies {
+                implementation(libs.ktor.client.okhttp)
+            }
         }
 
-        desktopMain.dependencies {
-            implementation(libs.ktor.client.cio)
+        val desktopMain by getting {
+            dependencies {
+                implementation(libs.ktor.client.cio)
+            }
         }
 
         commonTest.dependencies {

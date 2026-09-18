@@ -48,7 +48,19 @@ jobs:
         shell: bash
         run: |
           if [[ ! -f gradle/wrapper/gradle-wrapper.jar ]]; then
+            WRAPPER_TMP="$(mktemp -d)"
+            pushd "$WRAPPER_TMP"
+            printf 'rootProject.name = "hiltech-wrapper-bootstrap"\n' > settings.gradle.kts
             gradle wrapper --gradle-version 9.5.0 --distribution-type bin
+            popd
+
+            cp "$WRAPPER_TMP/gradlew" ./gradlew
+            cp "$WRAPPER_TMP/gradlew.bat" ./gradlew.bat
+            mkdir -p gradle/wrapper
+            cp "$WRAPPER_TMP/gradle/wrapper/gradle-wrapper.jar" gradle/wrapper/
+            cp "$WRAPPER_TMP/gradle/wrapper/gradle-wrapper.properties" gradle/wrapper/
+            chmod +x gradlew
+
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add gradlew gradlew.bat gradle/wrapper
