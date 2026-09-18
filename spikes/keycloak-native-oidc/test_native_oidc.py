@@ -365,6 +365,25 @@ def test_reauth(browser_session, redirect_uri):
         allow_redirects=False,
         timeout=15,
     )
+    if normal.status_code not in (302, 303):
+        cookie_debug = [
+            {
+                "name": cookie.name,
+                "domain": cookie.domain,
+                "path": cookie.path,
+                "secure": cookie.secure,
+            }
+            for cookie in browser_session.cookies
+        ]
+        soup = BeautifulSoup(normal.text, "html.parser")
+        title = soup.title.string.strip() if soup.title and soup.title.string else None
+        print(
+            "SPIKE-08 SSO DEBUG cookies=" +
+            json.dumps(cookie_debug, sort_keys=True) +
+            " title=" + repr(title) +
+            " url=" + normal.url
+        )
+
     require(
         normal.status_code in (302, 303),
         f"Expected existing SSO session to redirect without login; got {normal.status_code}",
