@@ -311,6 +311,72 @@ Online.
 ## ApproveWriteOff
 Online + critical approval.
 
+## RequestFinancialImprest
+Owner: Finance
+Online/offline request queue candidate.
+Creates requested cash-custody purpose/amount/custodian context.
+
+## ApproveFinancialImprest
+Owner: Finance + Approval
+Online: YES.
+Binds exact custodian, amount, currency, purpose and version.
+
+## FundFinancialImprest
+Owner: Finance
+Online: YES.
+Requires approved imprest + authoritative payment/funding reference.
+
+## RecordImprestSpend
+Owner: Finance
+Offline-capable capture: YES.
+Records append-only spend/evidence line; acceptance/reconciliation remains authoritative.
+
+## RecordImprestCashReturn
+Owner: Finance
+Online final authority; local evidence capture may be queued.
+
+## RequestImprestReplenishment
+Owner: Finance
+Online: YES.
+
+## ApproveImprestReplenishment
+Owner: Finance + Approval
+Online: YES.
+
+## FundImprestReplenishment
+Owner: Finance
+Online: YES.
+Creates append-only replenishment entry.
+
+## SubmitImprestSettlement
+Owner: Finance
+Online/offline queue candidate after local evidence completeness checks.
+Binds an exact settlement version + ledger entry set.
+
+## ReviewImprestSettlement
+Owner: Finance
+Online: YES.
+Accepts/rejects lines and computes shortage/overage explicitly.
+
+## ResolveImprestShortage
+Owner: Finance
+Online + reason/approval as policy requires.
+Never silently creates payroll deduction.
+
+## ResolveImprestOverage
+Owner: Finance
+Online + explicit return/correction path.
+
+## ClearFinancialImprest
+Owner: Finance
+Online: YES.
+Requires reconciled custody balance according approved policy.
+
+## CloseFinancialImprest
+Owner: Finance
+Online: YES.
+Requires CLEARED state or explicit approved exception.
+
 ---
 
 # Payroll Commands
@@ -374,7 +440,37 @@ Offline-capable capture/submission queue.
 Online.
 
 ## RequestAdvance
-Online/offline queue candidate.
+Owner: People/Finance
+Offline-capable request queue: YES.
+Creates/updates DRAFT/SUBMITTED Advance only.
+
+## ApproveAdvance
+Owner: People/Finance + Approval
+Online: YES.
+Binds exact employee/amount/currency/settlement terms/version.
+
+## RejectAdvance
+Online: YES.
+
+## IssueAdvance
+Owner: Finance
+Online: YES.
+Requires approved Advance + authoritative payment reference/idempotency.
+
+## RecordAdvanceSettlement
+Owner: Finance
+Online final authority; evidence capture may be queued offline.
+Settlement may be payroll deduction, cash return, expense offset, or approved mixed mode.
+
+## ApplyAdvancePayrollDeduction
+Owner: Payroll
+Online/server authoritative.
+Requires explicit approved deduction input; never inferred silently.
+
+## CloseAdvance
+Owner: Finance
+Online: YES.
+Requires zero unresolved outstanding balance unless explicit approved exception/write-off exists.
 
 ## StartOffboarding
 Online.
