@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: PROPOSED v0.2 / TECHNICAL SPIKES CLOSED / REALITY + FREEZE PENDING
+Status: PROPOSED v0.3 / FIRST-SLICE CONTRACTS + FINAL STACK CLOSED / DESIGN FREEZE PENDING
 
 ## Core Rule
 
@@ -402,7 +402,9 @@ PM Desktop -> Android durable bundle/offline/process death/reconnect/evidence ->
 Therefore the production slice is **not** another architecture experiment.
 Its purpose is to implement frozen real HILTECH contracts, add the warehouse/custody branch, and prove operability on production-shaped code/data/devices.
 
-The slice must not start until the relevant Project/Work/Warehouse/Field reality and exact contracts pass Freeze Review.
+The Project/Work/Warehouse/Field structural contracts and representative reality coverage are now closed at pre-code level.
+
+The slice must not start until the remaining rendered design proof passes and the formal First-Slice Freeze Review records PASS.
 
 ---
 
@@ -425,11 +427,39 @@ All required technical spikes 01–15 are accepted.
 
 This implementation order no longer depends on an unresolved platform/networking/offline architecture experiment.
 
-Remaining reasons it is still PROPOSED rather than FROZEN:
-- real HILTECH authority/workflow validation,
-- exact first-slice object/API/local/file contracts,
-- representative low-fi/RTL/conflict validation,
-- production provider/runtime/signing choices,
-- final dependency/monorepo freeze.
+Remaining reason it is still PROPOSED rather than FROZEN:
+- actual rendered low-fi / RTL / conflict / adaptive design validation.
+
+Already closed:
+- technical spikes,
+- first-slice domain/configuration contracts,
+- API/local/file/auth contracts,
+- DB generation/constraint contract,
+- FINAL_STACK,
+- OCI provider architecture,
+- Windows signing/distribution architecture,
+- DR engineering architecture.
+
+Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
 
 No production code starts merely because the technical spike gate is green.
+
+
+---
+
+## First-Slice vs Later-Phase Freeze
+
+The implementation order deliberately spans the whole future HILTECH OS.
+
+Only the domains included in the starting vertical must be BUILD_READY before the first production bootstrap.
+
+Therefore:
+- Payroll does not block Project/Work/Warehouse bootstrap.
+- Bank integration does not block field execution.
+- Client Portal does not block internal OS foundation.
+- NOC does not block first production slice.
+- CCTV/access-control integration does not block first slice.
+
+Each later phase gets its own contract/reality/design closure before implementation reaches that phase.
+
+The shared foundation may be bootstrapped once the first-slice Freeze passes because the cross-cutting architecture contracts are already accepted.
