@@ -103,20 +103,20 @@ Accepted:
 - SPIKE-02 Arabic/RTL adaptive structure.
 - SPIKE-03 Room shared local DB.
 - SPIKE-04 offline command queue/conflict.
+- SPIKE-05 Android Camera/QR/evidence.
 - SPIKE-06 desktop dense data.
 - SPIKE-08 Keycloak native OIDC.
 - SPIKE-09 authorization model/OpenFGA.
 - SPIKE-10 Spring Modulith recovery.
 - SPIKE-11 PostgreSQL + jOOQ concurrency/ledger.
 - SPIKE-12 binary evidence upload.
+- SPIKE-13 WorkManager background sync.
 - SPIKE-14 observability.
 
 Active:
-- SPIKE-05 Android Camera/QR/evidence.
 - SPIKE-07 Windows packaging/update/rollback.
-- SPIKE-13 WorkManager background sync.
 
-Ready after active isolated gates:
+Ready after the remaining isolated gate:
 - SPIKE-15 end-to-end PM -> technician offline -> supervisor -> PM proof.
 - SPIKE-15 also acts as the final Ktor/shared-networking acceptance gate.
 
