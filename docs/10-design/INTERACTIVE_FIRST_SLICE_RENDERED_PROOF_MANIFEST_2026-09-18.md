@@ -33,7 +33,7 @@ Workflow:
 `.github/workflows/design-prototype-render.yml`
 
 Expected proof count:
-**36**
+**37**
 
 ---
 
@@ -42,8 +42,8 @@ Expected proof count:
 - `M06-A-tech-ready-en-phone.png`
 - `M06-B-tech-offline-en-phone.png`
 - `M06-C-tech-blocked-en-phone.png`
-- `M06-D-tech-submitted-en-phone.png`
-- `M06-E-tech-conflict-en-phone.png`
+- `M06-D-tech-conflict-en-phone.png`
+- `M06-E-tech-submitted-en-phone.png`
 - `M06-F-tech-rework-en-phone.png`
 - `R02-tech-ready-ar-phone.png`
 - `R02-tech-conflict-ar-phone.png`
@@ -65,6 +65,7 @@ Review questions:
 - `M07-A-warehouse-available-en-phone.png`
 - `M07-B-warehouse-reserved-en-phone.png`
 - `M07-C-warehouse-calibration-en-phone.png`
+- `M07-D-warehouse-already-checked-out-en-phone.png`
 - `M07-E-warehouse-collision-en-phone.png`
 - `M07-F-warehouse-success-en-phone.png`
 - `R06-warehouse-available-ar-phone.png`
@@ -156,9 +157,9 @@ Review questions:
 
 Expected log markers:
 
-`HILTECH_DESIGN_RENDER_PASS captures=36`
+`HILTECH_DESIGN_RENDER_PASS captures=37`
 
-`HILTECH_DESIGN_PROOF_COUNT_PASS captures=36`
+`HILTECH_DESIGN_PROOF_COUNT_PASS captures=37`
 
 Both are required before artifact review.
 
