@@ -234,6 +234,14 @@ def submit_browser_login(session, auth_url, redirect_uri):
     response = session.get(auth_url, allow_redirects=False, timeout=15)
     require(response.status_code == 200, f"Expected login page, got {response.status_code}")
 
+    # Keycloak 26.x marks auth cookies Secure even in local dev HTTP.
+    # Real native apps use an HTTPS system browser. Python requests correctly
+    # refuses to send Secure cookies over HTTP, so for this localhost-only
+    # protocol spike we downgrade the cookie flag after receipt.
+    if BASE.startswith("http://127.0.0.1") or BASE.startswith("http://localhost"):
+        for cookie in session.cookies:
+            cookie.secure = False
+
     action, payload = parse_login_form(response)
     require(action, "Keycloak login form not found")
 
