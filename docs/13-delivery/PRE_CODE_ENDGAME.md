@@ -152,6 +152,12 @@ No final stack based only on preference.
 First-slice readiness/blocker map:
 `FIRST_PRODUCTION_SLICE_CONTRACT_READINESS_2026-09-18.md`
 
+Reality closure gate:
+`../01-reality/FIRST_PRODUCTION_SLICE_REALITY_CLOSURE.md`
+
+Fillable freeze artifacts:
+`first-slice-contract-pack/README.md`
+
 Convert validated domain specs into exact implementation contracts:
 
 ## Database
