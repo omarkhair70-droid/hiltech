@@ -143,7 +143,6 @@ Do not store a second editable availability truth.
 - ownershipTypeCode: String/config/master data
 - lifecycleState: AssetLifecycleState
 - conditionState: AssetConditionState
-- tagId: UUID?
 - purchaseDate: LocalDate? RESTRICTED
 - acquisitionCost: Decimal? RESTRICTED
 - currencyCode: ISO-4217 String?
@@ -206,6 +205,7 @@ Fields:
 - publicOpaqueCode: String
 - providerExternalId: String?
 - active: Boolean
+- isPrimary: Boolean
 - issuedAt: Instant
 - replacedTagId: UUID?
 - version: Long?
