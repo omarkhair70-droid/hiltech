@@ -1,0 +1,62 @@
+name: Design Prototype Render
+
+on:
+  push:
+    branches:
+      - "design/interactive-first-slice-20260918"
+    paths:
+      - "prototypes/first-slice-design/**"
+      - ".github/workflows/design-prototype-render.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  render-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate JavaScript syntax
+        run: node --check prototypes/first-slice-design/app.js
+
+      - name: Install pinned Playwright
+        run: |
+          npm install --no-save --package-lock=false playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: Start static prototype server
+        run: |
+          python3 -m http.server 4173 --directory prototypes/first-slice-design >/tmp/hiltech-design-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/hiltech-design-http.log
+          exit 1
+
+      - name: Capture rendered design proof
+        run: node prototypes/first-slice-design/capture.mjs
+
+      - name: Verify capture count
+        run: |
+          test "$(find prototypes/first-slice-design/rendered-proof -name '*.png' | wc -l)" -eq 29
+          echo "HILTECH_DESIGN_PROOF_COUNT_PASS captures=29"
+
+      - name: Upload rendered proof
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hiltech-first-slice-rendered-design-proof
+          path: prototypes/first-slice-design/rendered-proof/*.png
+          if-no-files-found: error
+          retention-days: 30
