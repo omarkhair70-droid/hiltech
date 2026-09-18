@@ -24,10 +24,12 @@ Domain/configuration structure is now represented by contract candidates.
 
 ## A1 — Configuration finalization
 
-Still need:
+Pre-code Freeze blockers:
 - Configuration Center visual proof.
-- active-location tracking retention/legal policy before ACTIVE_SITE_PRESENCE can be enabled.
-- final DDL/API contract tests for configuration revisions.
+
+Bounded/deferred:
+- persisted ARRIVAL_PROOF / ACTIVE_SITE_PRESENCE remains disabled until retention/notice seed values are approved.
+- executable DDL/API tests are post-Freeze Bootstrap verification per 17_FREEZE_TO_BOOTSTRAP_BOUNDARY.md.
 
 Resolved:
 - string bounds baseline.
@@ -46,10 +48,13 @@ Resolved:
 
 No broad structural domain decision remains.
 
-Still need:
-- final physical DDL/indexes/constraints.
-- final route/DTO normalization and contract tests.
+Pre-code Freeze blocker:
 - representative UI/RTL proof.
+
+Resolved:
+- exact pre-code DDL/index/constraint contract.
+- exact first-slice HTTP route/DTO semantic contract.
+- executable DB/API tests are post-Freeze Bootstrap verification.
 
 Resolved:
 - durable Site + ProjectSite association.
@@ -70,11 +75,15 @@ Resolved:
 
 No broad structural domain decision remains.
 
-Still need:
-- final physical DDL/indexes/constraints.
-- final route/DTO normalization and contract tests.
+Pre-code Freeze blocker:
 - representative Warehouse/Asset UI proof.
-- pilot asset/stock master seed.
+
+Pilot activation input:
+- asset/stock/storage seed can be loaded/configured before pilot and does not block schema Freeze.
+
+Resolved:
+- exact pre-code DDL/index/constraint contract.
+- exact first-slice HTTP semantic contract.
 
 Resolved:
 - Asset lifecycle/custody/condition/calibration dimensions.
@@ -268,19 +277,29 @@ Provider architecture now resolved:
 - GitHub Actions remains delivery control plane.
 - staged DR architecture: PILOT backup/PITR; STABLE Jeddah→Riyadh Warm Standby with 5-minute enforced RPO and <=60-minute recovery-drill target.
 
-Still required before infrastructure Freeze:
+Pre-code provider/ops decisions resolved:
+- OCI provider/topology.
+- Jeddah primary candidate + Riyadh DR candidate.
+- PostgreSQL/Object Storage/KMS/Secrets/Registry.
+- Container Instances preferred / Compute fallback.
+- Terraform/Resource Manager.
+- OpenTelemetry Collector → OCI observability baseline.
+- DigiCert OV + KeyLocker signing.
+- HILTECH Update Service distribution.
+- staged PILOT/STABLE DR contract.
+
+Operational activation evidence still required before real production cutover, not before contract Freeze:
 - OCI tenancy/region subscription.
 - quota/capacity checks.
 - representative Egypt latency smoke.
 - final runtime/database sizing + cost check.
 - staging IaC deploy proof.
-- PostgreSQL PITR restore rehearsal plan/acceptance.
-- execute/plan recovery rehearsal against the staged DR contract; business SLA stricter than engineering target remains separate.
+- PITR/DR rehearsals.
 - telemetry retention/sampling/alert settings.
-- exact malware scanner only if ARBITRARY_FILE enabled.
+- malware scanner only if ARBITRARY_FILE is enabled.
 - production domain/TLS ownership.
-- Windows signing certificate/provider.
-- Windows enterprise distribution/update channel.
+- DigiCert certificate issuance/KeyLocker credential setup.
+- signed-MSI staging proof.
 - final CI action pin review.
 
 These are operational instantiation/validation items and do not reopen application/domain architecture.
@@ -373,13 +392,16 @@ Domain/configuration structural discovery:
 **LARGELY CLOSED**
 
 Contract conversion:
-**ADVANCED / ACTIVE**
+**STRUCTURALLY CLOSED FOR FIRST SLICE**
 
 Design evidence:
-**OPEN**
+**OPEN — PRIMARY PRE-CODE BLOCKER / FIGMA MCP QUOTA EXTERNAL BLOCK**
 
-Provider/ops closure:
-**OPEN**
+Provider/ops architecture:
+**CLOSED AT CONTRACT LEVEL**
+
+Provider/ops activation:
+**POST-CONTRACT / PRE-CUTOVER VALIDATION REMAINS**
 
 Production code:
 **NOT STARTED BY DESIGN**
