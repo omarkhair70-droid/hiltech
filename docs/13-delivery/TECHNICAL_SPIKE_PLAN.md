@@ -412,6 +412,23 @@ Using WorkManager candidate:
 Pass:
 reliable enough for field reality.
 
+**Result 2026-09-18: ACCEPT — WORKMANAGER BACKGROUND EXECUTION PATH PASSED.**
+
+Evidence:
+- real API 36 Android emulator.
+- CONNECTED-constrained work survived process death and resumed after reconnect.
+- no foreground Activity was required for completion.
+- retry produced RETRYABLE state and later succeeded after exponential backoff.
+- battery-not-low constraint held work QUEUED until recovery.
+- durable user-visible QUEUED / RETRYABLE / SYNCED state and attempt count were proven.
+- Room3 and offline-command queue regressions passed on the same head.
+
+GitHub Actions run: 35315342936.
+Tested WorkManager: 2.11.2.
+
+Boundary:
+WorkManager schedules constrained replay; Room/local command state, idempotency and conflict semantics remain the accepted source of truth from SPIKE-03/04.
+
 ---
 
 # SPIKE-14 — Observability
