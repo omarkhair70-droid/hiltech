@@ -48,7 +48,7 @@ Rules:
 | PostgreSQL | 18.6 | PROVEN / ACCEPTED | SPIKE-11 / ADR-004 |
 | jOOQ | 3.21.8 | PROVEN / ACCEPTED | SPIKE-11 / ADR-005 |
 | pgJDBC | 42.7.13 | PROVEN | SPIKE-11 |
-| Flyway | exact version TBD | LEADING | Migration strategy freezes after exact schemas |
+| Flyway | Spring Boot 4.1.1 managed line; exact resolved dependency locked at bootstrap | ACCEPTED LINE | Flyway conventions/DDL contract frozen; capture resolved version in Gradle dependency lock during repository bootstrap |
 | Spring Security / OIDC integration | exact version inherited from Spring Boot 4.1.1 line | PROVEN | SPIKE-15 authenticated server integration; final production pin re-check at freeze |
 
 ---
@@ -71,9 +71,9 @@ Rules:
 |---|---:|---|---|
 | S3-compatible protocol | current standard S3 semantics | PROVEN / ACCEPTED | SPIKE-12 / ADR-010 |
 | AWS SDK for Java | 2.55.0 | PROVEN IN SPIKE | Protocol proof only; not a provider decision |
-| Production object-storage provider | TBD | OPEN | Provider comparison required |
-| Multipart threshold | TBD | OPEN | Freeze with evidence-size reality |
-| Retention/versioning/legal hold | TBD | OPEN | Policy/reality dependent |
+| Production object-storage provider | OCI Object Storage | ACCEPTED / PRE-FREEZE | ADR-014; private bucket, S3 Compatibility API, OCI KMS; tenancy/region cutover validation pending |
+| Multipart threshold | no multipart in first slice; 16 MiB max/object | ACCEPTED | Evidence contract v0.2 |
+| Retention/versioning/legal hold | no automatic deletion baseline; versioning/provider settings at ops freeze | ACCEPTED BASELINE | Explicit RetentionPolicy required before automated deletion |
 
 ---
 
@@ -83,9 +83,26 @@ Rules:
 |---|---:|---|---|
 | OpenTelemetry Java | 1.66.0 | PROVEN / ACCEPTED CONTRACT | SPIKE-14 / ADR-013 |
 | W3C Trace Context | standard | ACCEPTED | End-to-end correlation proof |
-| OTLP collector | TBD | OPEN | Infrastructure freeze |
-| Metrics/log backend | TBD | OPEN | Provider/ops choice |
-| Crash reporting provider | TBD | OPEN | Client operations decision |
+| OTLP collector | OpenTelemetry Collector | ACCEPTED BASELINE | ADR-013 + ADR-014; private OCI runtime |
+| Metrics/log backend | OCI APM + Logging/Logging Analytics + Monitoring baseline | ACCEPTED / PRE-FREEZE | Exporter/backend choice remains behind OTel contract; retention/sampling/cost settings pending |
+| Crash reporting provider | no separate vendor frozen | DEFERRED NON-BLOCKING | Native crash capture can be added behind client telemetry abstraction when operations require it |
+
+---
+
+# Infrastructure / Provider
+
+| Component | Version / Line | Status | Evidence / Note |
+|---|---:|---|---|
+| Cloud provider | Oracle Cloud Infrastructure | ACCEPTED / PRE-FREEZE | ADR-014 |
+| Primary region | me-jeddah-1 candidate | ACCEPTED CANDIDATE | OCI PostgreSQL endpoint exists; tenancy/quota/service + Egypt latency smoke required before cutover |
+| Server runtime | OCI Container Instances preferred; OCI Compute container fallback | ACCEPTED BASELINE | No Kubernetes baseline |
+| Container registry | OCI Container Registry | ACCEPTED | Immutable digest deployment |
+| Managed PostgreSQL provider | OCI Database with PostgreSQL | ACCEPTED / PRE-FREEZE | Private network + backups/PITR; tenancy/capacity validation pending |
+| Secrets | OCI Secret Management | ACCEPTED / PRE-FREEZE | ADR-014 |
+| KMS | OCI Key Management Service | ACCEPTED / PRE-FREEZE | Evidence bucket customer-managed key baseline |
+| IaC | Terraform + OCI Terraform Provider; OCI Resource Manager state/locking | ACCEPTED / PRE-FREEZE | Git repo remains source; provider/tool version pinned at bootstrap |
+| Public ingress | OCI Load Balancer | ACCEPTED BASELINE | Private application/data tiers |
+| Kubernetes / OKE | NOT baseline | CONDITIONAL | Add only on verified scale/ops trigger |
 
 ---
 
@@ -140,12 +157,12 @@ Rules:
 
 # Still Required Before FINAL_STACK.md
 
-1. Exact Flyway/version/migration baseline after schemas are frozen.
-2. Infrastructure/provider decision.
-3. Production object-storage provider.
-4. Windows enterprise distribution/updater and production signing choice.
-5. Final server/runtime/container versions.
+1. OCI tenancy/Jeddah quota/service/latency cutover validation.
+2. Windows enterprise distribution/updater and production signing choice.
+3. Final OCI runtime shape/sizing/cost + OpenFGA/Keycloak deployment settings.
+4. Final observability retention/sampling/alert settings.
+5. Final business RPO/RTO target and DR region/runbook.
 6. Final CI action pinning strategy.
-7. One last current-version verification immediately before freeze.
+7. Capture exact resolved Flyway/transitive dependency lock at repository bootstrap and re-check all explicit current versions immediately before Freeze.
 
 Only after those gates may FINAL_STACK.md be created.
