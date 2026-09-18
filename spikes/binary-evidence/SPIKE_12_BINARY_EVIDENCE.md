@@ -28,7 +28,8 @@ Representative evidence:
 A truncated/corrupt body is sent using a URL signed for the full expected SHA-256.
 
 Required:
-- storage rejects it,
+- the corrupt/truncated upload is rejected either by storage **or by HILTECH finalization**,
+- finalization recomputes the stored bytes and never trusts metadata alone,
 - the same evidence can be retried with the correct bytes,
 - final object passes checksum and size validation.
 
@@ -47,7 +48,7 @@ ACCEPT if:
 - presigned PUT works,
 - checksum header is signed,
 - correct upload finalizes,
-- corrupt/truncated upload is rejected,
+- corrupt/truncated upload cannot finalize successfully,
 - retry succeeds,
 - final bytes match expected SHA-256,
 - presigned GET works,
@@ -65,3 +66,14 @@ ACCEPT if:
 ## Production status
 
 Disposable protocol evidence only.
+
+
+## Moto checksum note
+
+Moto 5.2.3 correctly exercises the S3 signing/private-object protocol but does not enforce the signed SHA-256 checksum on every PUT the way a production provider may.
+
+Therefore the accepted HILTECH invariant is stronger than provider-only validation:
+
+**Evidence is not READY until server-side finalization reads/verifies the stored bytes against the expected SHA-256 and size.**
+
+Provider checksum enforcement is defense-in-depth, not the sole integrity boundary.
