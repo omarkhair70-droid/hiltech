@@ -38,6 +38,7 @@ Built:
 Pending creation/build when Figma MCP calls are available:
 - D03 — Global Search / Command
 - D04 — Shared Work Queue
+- D05 — Ahmed Finance — Advances & Imprest
 
 ## Important
 These are grayscale low-fidelity structural prototypes only.
@@ -147,3 +148,35 @@ Low-fidelity visual prototype phase is NOT complete until:
 - mobile and desktop navigation hypotheses are compared against the resulting canvas.
 
 The Figma MCP rate limit is an external tooling constraint only; it is not treated as a product decision.
+
+
+## Pending Screen Specifications
+
+The remaining low-fi screens are now fully specified in:
+
+`docs/10-design/LOW_FI_PENDING_SCREEN_SPECS_2026-09-18.md`
+
+Spec-ready:
+- M06 Technician Job Detail
+- M07 Warehouse Checkout
+- D03 Global Search / Command
+- D04 Shared Work Queue
+- D05 Ahmed Finance — Advances & Imprest
+- Arabic RTL stress variants
+- stale/conflict/exception variants
+- technician/warehouse tablet variants
+- final navigation comparison gate
+
+This removes product/interaction ambiguity while the canvas tooling is unavailable.
+
+It does **not** replace visual validation.
+
+## Current Figma Tooling State
+
+Latest account/tool check on 2026-09-18:
+- plan tier reported by Figma MCP: Starter
+- seat reported: View
+- MCP call quota: exhausted
+- direct file metadata call returned the Starter MCP rate-limit error
+
+Therefore no further Figma mutations should be attempted until the plan/seat/quota changes or resets.
