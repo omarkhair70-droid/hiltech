@@ -59,9 +59,15 @@ Current HILTECH values are seed data; the schemas are production contracts.
 |---|---|---:|---|---|---|---|---|---|
 | UserIdentity.id | UUID | NO | Identity | INTERNAL | HILTECH | minimal | technical model | PROPOSED_FOR_REVIEW |
 | UserIdentity.authSubject | String | NO | Identity | HIGHLY_RESTRICTED | Keycloak link | no UI cache | SPIKE-08 | LOCKED_TECHNICAL |
-| UserIdentity.status | ACTIVE / LOCKED / REVOKED / PENDING candidate | NO | Identity | INTERNAL | HILTECH | session bootstrap | identity contract | CONTRACT_CANDIDATE |
+| UserIdentity.status | ACTIVE / LOCKED / REVOKED / PENDING | NO | Identity | INTERNAL | HILTECH | session bootstrap | identity contract + Bootstrap closure 26 | FROZEN_FIRST_SLICE |
 | Organization | typed object: HILTECH / CLIENT / SUPPLIER / SUBCONTRACTOR / PARTNER / OTHER | NO | Organizations | INTERNAL/RESTRICTED by field | HILTECH | context subset only | organization object spec | CONTRACT_CANDIDATE |
 | OrganizationMembership | typed membership with validity/state | NO | Organizations | INTERNAL | HILTECH | assigned context | identity/org contract | CONTRACT_CANDIDATE |
+
+First-slice physical lifecycle closure (Bootstrap 2026-09-19):
+- Organization.status = ACTIVE / INACTIVE.
+- OrganizationMembership.state = PENDING / ACTIVE / SUSPENDED / ENDED.
+- membershipType remains a bounded business relationship code/string; it is not authorization truth.
+- ACTIVE membership still does not grant object/action permission without the required OpenFGA/application-policy relationship.
 | Team | UUID/code/name/parent/manager/active/version | NO | People/Organizations | INTERNAL | HILTECH | assigned context | configurable operating model | CONTRACT_CANDIDATE |
 | TeamMembership | team/employee/roleInTeam/validity | NO | People/Organizations | INTERNAL | HILTECH | assigned context | configurable operating model | CONTRACT_CANDIDATE |
 
