@@ -236,6 +236,23 @@ Freeze review can only be called when every blocking section is either:
 
 ---
 
+## Configurable operating model
+
+- [ ] Typed/versioned configuration schemas are frozen for WorkType, readiness, evidence, review, tracking, storage, roles/teams/delegation and other first-slice policy.
+- [ ] Normal operating-policy changes can be made from authorized product configuration without code/database edits.
+- [ ] Configuration changes are versioned, permissioned and audited.
+- [ ] Hard invariants remain non-configurable.
+- [ ] At least one realistic HILTECH seed configuration proves the model can express current operations.
+- [ ] Current names/thresholds/work-type lists are not mistaken for compile-time architecture.
+
+Canonical model:
+`docs/03-product/CONFIGURABLE_OPERATING_MODEL.md`
+
+Freeze artifact:
+`docs/13-delivery/first-slice-contract-pack/00_CONFIGURATION_POLICY_SCHEMAS.md`
+
+---
+
 ## First Production Slice Closure Pack
 
 Canonical bridge to repository bootstrap:
