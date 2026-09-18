@@ -252,20 +252,20 @@ Accepted so far:
 - SPIKE-02 Arabic / RTL adaptive layout
 - SPIKE-03 Room KMP local DB
 - SPIKE-04 offline command queue
+- SPIKE-05 Android Camera / QR / Evidence
 - SPIKE-06 dense Desktop
 - SPIKE-08 Keycloak native OIDC
 - SPIKE-09 OpenFGA authorization
 - SPIKE-10 Spring Modulith
 - SPIKE-11 PostgreSQL + jOOQ ledger/concurrency
 - SPIKE-12 binary evidence pipeline
+- SPIKE-13 Android background sync
 - SPIKE-14 observability
 
 Active:
-- SPIKE-05 Android Camera / QR / Evidence
 - SPIKE-07 Windows packaging/update/rollback
-- SPIKE-13 Android background sync
 
-Pending after those:
+Pending after that:
 - SPIKE-15 end-to-end vertical proof
 
 No production code has started intentionally.
