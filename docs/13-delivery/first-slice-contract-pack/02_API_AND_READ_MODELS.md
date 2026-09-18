@@ -1,6 +1,6 @@
 # 02 — First-Slice API / Command / Read-Model Contracts
 
-Status: **PRE-FREEZE TEMPLATE**
+Status: **CONTRACT CANDIDATE v0.1 / CONFIGURATION-INTEGRATED**
 
 ## Accepted Cross-Cutting Wire Rules
 
@@ -22,17 +22,49 @@ Exact resource grammar is frozen here before bootstrap.
 
 ---
 
+# Configuration API
+
+Normal operating-policy changes use explicit configuration commands, not developer/database edits.
+
+Command families:
+- CreateDraftConfiguration
+- UpdateDraftConfiguration
+- ValidateDraftConfiguration
+- ActivateConfigurationRevision
+- SupersedeConfigurationRevision
+- RetireConfiguration
+- CloneConfigurationRevision
+
+Required query/read models:
+- ActiveConfigurationByCode
+- ConfigurationRevisionHistory
+- ConfigurationDependencyGraph
+- ConfigurationUsageImpact
+- DraftValidationResult
+- ConfigurationCenterList
+- WorkTypeConfigurationDetail
+
+All config mutations:
+- server-authorized,
+- audited,
+- baseVersion protected,
+- idempotent where retry-sensitive.
+
+Exact resource grammar is still to be frozen, but the capability boundary is now part of first production scope.
+
+---
+
 # Command Freeze Table
 
 | Command | Route | Actor relation | Online/offline | baseVersion | Idempotency | Request schema | Success schema | Error set | Status |
 |---|---|---|---|---:|---:|---|---|---|---|
-| CreateWorkOrder | TBD | PM/create authority | online | policy | YES | TBD | TBD | TBD | REALITY_REQUIRED |
-| AssignWork | TBD | PM/assign authority | online | YES | YES | TBD | TBD | conflict/permission/state | REALITY_REQUIRED |
+| CreateWorkOrder | TBD | configured relationship/policy | online | policy | YES | WorkType + context + policy-resolvable refs | authoritative work + policy bindings | validation/permission/state | CONTRACT_CANDIDATE |
+| AssignWork | TBD | AssignmentPolicy + authorization | online | YES | YES | typed assignment target | authoritative assignment/version | conflict/eligibility/permission/state | CONTRACT_CANDIDATE |
 | StartWork | TBD | assigned executor | offline replay | YES | YES | TBD | TBD | conflict/permission/state | REALITY_REQUIRED |
 | BlockWork | TBD | assigned executor/supervisor | offline replay | YES | YES | TBD | TBD | TBD | REALITY_REQUIRED |
 | ResumeWork | TBD | assigned executor/supervisor | offline replay | YES | YES | TBD | TBD | TBD | REALITY_REQUIRED |
-| SubmitWorkCompletion | TBD | assigned executor | offline replay | YES | YES | evidence refs TBD | TBD | evidence/conflict/state | REALITY_REQUIRED |
-| AcceptWork | TBD | reviewer relation | online | YES | YES | TBD | TBD | conflict/permission/state | REALITY_REQUIRED |
+| SubmitWorkCompletion | TBD | assigned executor | offline replay | YES | YES | evidence refs + completion payload derived from WorkType | authoritative submitted state/version | evidence/conflict/state | CONTRACT_CANDIDATE |
+| AcceptWork | TBD | ReviewPolicy + authorization | online | YES | YES | exact submitted version + decision context | accepted version/state | conflict/permission/state/policy | CONTRACT_CANDIDATE |
 | RequestRework | TBD | reviewer relation | online | YES | YES | reason/evidence TBD | TBD | TBD | REALITY_REQUIRED |
 | CancelWork | TBD | cancel authority | online | YES | YES | reason TBD | TBD | conflict/state | REALITY_REQUIRED |
 | ReserveAsset | TBD | warehouse/policy | online | YES | YES | TBD | TBD | allocation conflict | REALITY_REQUIRED |
