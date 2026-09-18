@@ -23,7 +23,7 @@ Primary active proof engine:
 
 Automated rendered proof:
 - browser-executed with Playwright,
-- 36 required screenshots,
+- 37 required screenshots,
 - English + Arabic RTL,
 - phone + tablet + desktop,
 - conflict/error/authoritative/local states.
@@ -454,7 +454,7 @@ Interactive prototype implementation now covers:
 9. navigation comparison.
 
 Automated next steps:
-10. render 36 screenshots in Chromium.
+10. render 37 screenshots in Chromium.
 11. inspect the actual images.
 12. correct visual/interaction issues.
 13. rerun proof until accepted.
