@@ -108,6 +108,51 @@ PM/Supervisor should normally know availability, not private reason.
 
 ---
 
+# Employee Advance
+
+HIGHLY_RESTRICTED.
+
+| Field group | Owner | Finance | HR/Admin | Employee | PM/Supervisor |
+|---|---|---|---|---|---|
+| advanceCode/state | POLICY | YES | CONTEXT | OWN | NO |
+| employee identity | POLICY | YES | POLICY | OWN | NO |
+| purpose/reason | POLICY | YES | POLICY where legitimate need | OWN | NO |
+| requested/approved amount | POLICY | YES | POLICY | OWN | NO |
+| settlement mode/due date | POLICY | YES | CONTEXT | OWN | NO |
+| issued payment reference | POLICY | YES | REDACTED/NO | own status only | NO |
+| payroll deduction plan | POLICY | YES | POLICY context | OWN approved schedule/result | NO |
+| settled/outstanding amount | POLICY | YES | CONTEXT | OWN | NO |
+| finance reconciliation notes | POLICY | YES | NO | REDACTED/decision only | NO |
+| approval/audit history | POLICY | YES | CONTEXT | OWN safe history | NO |
+
+---
+
+# Financial Imprest / Cash Custody
+
+HIGHLY_RESTRICTED.
+
+| Field group | Owner | Finance | Custodian | PM/Procurement | HR/Admin |
+|---|---|---|---|---|---|
+| imprestCode/state/custodian | POLICY | YES | OWN | CONTEXT | NO |
+| purpose/project/site context | POLICY | YES | OWN | CONTEXT | NO |
+| approved/funded amount | POLICY | YES | OWN | CONTEXT only if authorized | NO |
+| current custody balance | POLICY | YES | OWN | REDACTED by default | NO |
+| accepted spend ledger | POLICY | YES | OWN | authorized project-cost projection only | NO |
+| receipt evidence | POLICY | YES | OWN | NO unless separate expense permission | NO |
+| replenishment history | POLICY | YES | OWN | NO | NO |
+| cash returns | POLICY | YES | OWN | NO | NO |
+| shortage/overage | POLICY | YES | OWN decision/context | NO | NO |
+| bank/payment external refs | POLICY | YES | REDACTED/status only | NO | NO |
+| finance review/reconciliation notes | POLICY | YES | decision-safe subset | NO | NO |
+| full export/audit | POLICY | YES/POLICY | OWN statement only | NO | NO |
+
+Rules:
+- project membership alone never exposes the financial custody ledger.
+- receipt/evidence access follows both imprest permission and document classification.
+- API must return purpose-built authorized views; never return the full finance record and hide fields only in UI.
+
+---
+
 # Invoice / Payment
 
 | Field group | Owner | Finance | PM | Procurement | Client | Supplier |
