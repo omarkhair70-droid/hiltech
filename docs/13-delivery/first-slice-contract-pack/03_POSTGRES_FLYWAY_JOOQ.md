@@ -579,7 +579,6 @@ Exact split into separate readiness/evidence/material/asset tables remains a que
 - ownership_type_code varchar not null
 - lifecycle_state varchar not null
 - condition_state varchar not null
-- tag_id uuid null
 - purchase_date date null
 - acquisition_cost numeric null
 - currency_code char(3) null
@@ -607,11 +606,15 @@ Serial uniqueness scope remains a freeze item.
 - public_opaque_code varchar not null
 - provider_external_id varchar null
 - active boolean not null
+- is_primary boolean not null default false
 - issued_at timestamptz not null
 - replaced_tag_id uuid null
 
 Unique:
 - public_opaque_code.
+
+Partial unique:
+- one active primary tag per asset.
 
 ## warehouse
 
