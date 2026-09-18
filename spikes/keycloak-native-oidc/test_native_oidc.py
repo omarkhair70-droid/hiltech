@@ -213,6 +213,10 @@ def authorization_url(redirect_uri, challenge, state, prompt=None):
     )
 
 
+def normalize_local_http_cookies(session):
+    normalize_local_http_cookies(session)
+
+
 def parse_login_form(response):
     soup = BeautifulSoup(response.text, "html.parser")
     form = soup.find("form", id="kc-form-login") or soup.find("form")
@@ -256,6 +260,7 @@ def submit_browser_login(session, auth_url, redirect_uri):
         allow_redirects=False,
         timeout=15,
     )
+    normalize_local_http_cookies(session)
 
     location = response.headers.get("location")
     require(
@@ -338,6 +343,7 @@ def jwt_payload(token):
 
 
 def test_reauth(browser_session, redirect_uri):
+    normalize_local_http_cookies(browser_session)
     verifier, challenge = pkce_pair()
     state = secrets.token_urlsafe(24)
 
