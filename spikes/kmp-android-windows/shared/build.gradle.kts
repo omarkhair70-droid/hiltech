@@ -39,7 +39,7 @@ kotlin {
                 implementation(compose.material3)
                 implementation(compose.ui)
 
-                implementation(libs.androidx.room3.runtime)
+                api(libs.androidx.room3.runtime)
                 implementation(libs.androidx.sqlite.bundled)
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
