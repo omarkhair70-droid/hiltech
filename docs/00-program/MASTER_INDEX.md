@@ -180,12 +180,17 @@ Not frozen:
 - motion timings
 
 ### Offline / Sync
-Architecture model exists:
+Architecture model + core technical proof exist:
 - Offline-First Model
 - Sync Engine
 - Conflict Policy
+- restart-safe Room/SQLite command queue
+- idempotent replay
+- stale-version conflicts
+- dependent-command blocking
 
-Still requires technical proof.
+SPIKE-04 accepted the core offline command semantics.
+SPIKE-13 still gates Android OS/background execution behavior.
 
 ### Integrations / Hardware
 First pass:
@@ -195,25 +200,33 @@ First pass:
 Real vendor/system inventory still required.
 
 ### Stack / Architecture
-Current leading direction:
+
+Accepted / spike-proven directions:
 - Kotlin Multiplatform + Compose Multiplatform
-- Room/SQLite
-- Ktor Client
+- Room3 + SQLite/BundledSQLiteDriver
 - Kotlin/JVM + Spring Boot
 - Spring Modulith modular monolith
 - PostgreSQL
-- jOOQ candidate
-- Flyway
-- Keycloak candidate
-- OpenFGA candidate
-- OpenTelemetry server
-- S3-compatible object storage
+- jOOQ
+- Keycloak native OIDC / PKCE
+- OpenFGA object/action authorization
+- OpenTelemetry-compatible correlation contract
+- S3-compatible binary evidence protocol
 
-Conditional only when evidence requires:
+Leading but not yet frozen:
+- Ktor Client
+- Flyway
+- production object-storage provider
+- infrastructure/provider/runtime packaging
+
+Explicitly not baseline unless evidence requires:
 - Temporal
 - Redis
 - dedicated broker
 - OpenSearch
+
+Canonical pre-freeze version ledger:
+- `../12-stack/STACK_VERSION_MATRIX.md`
 
 No `FINAL_STACK.md` exists yet by design.
 
@@ -230,6 +243,27 @@ Architecture models now exist for:
 
 ### Technical proof
 `TECHNICAL_SPIKE_PLAN.md` defines 15 required spikes before final stack freeze.
+
+Accepted so far:
+- SPIKE-01 KMP Android + Windows
+- SPIKE-02 Arabic / RTL adaptive layout
+- SPIKE-03 Room KMP local DB
+- SPIKE-04 offline command queue
+- SPIKE-06 dense Desktop
+- SPIKE-08 Keycloak native OIDC
+- SPIKE-09 OpenFGA authorization
+- SPIKE-10 Spring Modulith
+- SPIKE-11 PostgreSQL + jOOQ ledger/concurrency
+- SPIKE-12 binary evidence pipeline
+- SPIKE-14 observability
+
+Active:
+- SPIKE-05 Android Camera / QR / Evidence
+- SPIKE-07 Windows packaging/update/rollback
+- SPIKE-13 Android background sync
+
+Pending after those:
+- SPIKE-15 end-to-end vertical proof
 
 No production code has started intentionally.
 
