@@ -400,6 +400,9 @@ Design evidence:
 Provider/ops architecture:
 **CLOSED AT CONTRACT LEVEL**
 
+Final stack/version:
+**PASS**
+
 Provider/ops activation:
 **POST-CONTRACT / PRE-CUTOVER VALIDATION REMAINS**
 
@@ -407,3 +410,43 @@ Production code:
 **NOT STARTED BY DESIGN**
 
 The remaining work is now a narrow closure exercise, not broad product discovery.
+
+
+---
+
+# Final pre-code blocker — current authoritative view
+
+As of the completed final stack review:
+
+- FIRST_SLICE_CONTRACT_CONSISTENCY = PASS.
+- FINAL_STACK_REVIEW = PASS.
+- FINAL_STACK.md exists.
+- AGP 9.3.3 focused compatibility run 35389326629 = PASS.
+- production CI action pin policy = defined.
+
+Therefore the **only remaining first-slice pre-code blocker** is:
+
+## Rendered Design Proof
+
+Still required:
+- Technician Job.
+- Warehouse Checkout.
+- Configuration Center.
+- Supervisor Review.
+- Project Command updates where required.
+- Work offline conflict.
+- Asset custody conflict.
+- configuration revision conflict.
+- review stale-version conflict.
+- Arabic RTL.
+- tablet adaptation.
+- navigation comparison.
+
+Current external blocker:
+Figma Starter/View MCP quota.
+
+All other items in this register are:
+- resolved contracts,
+- pilot seed/setup,
+- post-Freeze Bootstrap verification,
+- or production activation/cutover work.
