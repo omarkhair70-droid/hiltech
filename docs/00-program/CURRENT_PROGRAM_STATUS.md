@@ -38,7 +38,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | ACTIVE — 01/02/03/04/05/06/08/09/10/11/12/13/14 PASSED | Client platform, RTL/adaptive structure, dense desktop, local DB, offline queue, Android camera/evidence, background scheduling, authorization, modular backend events, PostgreSQL concurrency, binary evidence and observability proven; SPIKE-07 remains active before SPIKE-15 |
+| Technical spikes | ACTIVE — 01/02/03/04/05/06/07/08/09/10/11/12/13/14 PASSED | All isolated technical gates are accepted; SPIKE-15 is the remaining end-to-end architectural/networking proof |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -85,8 +85,8 @@ Now includes:
 5. Exact organization/authority structure and delegation reality.
 6. Android device fleet, camera/QR restrictions and site-security constraints.
 7. Android background execution/reconnect reliability — SPIKE-13 accepted; OEM/field-device reliability remains a reality/operations validation item.
-8. Windows install/update/rollback operations — SPIKE-07 active.
-9. Full cross-surface end-to-end vertical proof — SPIKE-15 pending after SPIKE-07.
+8. Windows install/update/rollback operations — SPIKE-07 / ADR-012 accepted; production certificate/distribution channel remains an operations decision.
+9. Full cross-surface end-to-end vertical proof — SPIKE-15 is now the next technical gate.
 10. Offline conflict ergonomics in real field use.
 11. Legal/accounting/privacy/retention requirements.
 12. Final visual/navigation/component/Arabic typography system.
@@ -141,7 +141,7 @@ Leading but still spike/freeze dependent:
 - jOOQ — **ADR-005 accepted** as the PostgreSQL SQL/persistence access layer; generated-schema/codegen conventions still freeze with exact schemas.
 - Keycloak 26.7.4 + native OIDC Authorization Code/PKCE — **SPIKE-08 accepted**.
 - WorkManager 2.11.2 background execution — **SPIKE-13 accepted**.
-- exact Windows update/distribution strategy — SPIKE-07 active.
+- Windows MSI installer-swap operational baseline — **SPIKE-07 / ADR-012 accepted**; exact enterprise distribution/updater and production signing remain open.
 - exact production object-storage provider remains intentionally open.
 
 ---
@@ -149,9 +149,9 @@ Leading but still spike/freeze dependent:
 # Immediate Next Work
 
 Current technical continuation:
-1. Close SPIKE-07 Windows packaging/update/rollback with full lifecycle evidence.
-2. Run SPIKE-15 end-to-end vertical proof and use it as the Ktor/shared-networking acceptance gate.
-3. Record ACCEPT / MODIFY / REJECT results and reconcile ADR/stack/control documents.
+1. Run SPIKE-15 end-to-end vertical proof and use it as the Ktor/shared-networking acceptance gate.
+2. Record ACCEPT / MODIFY / REJECT results and reconcile ADR/stack/control documents.
+3. Close the technical-spike gate if SPIKE-15 passes without bypassing accepted boundaries.
 
 Parallel pre-code lanes that do not need to wait for SPIKE-15:
 - reality validation with Mohamed/Ahmed/project/warehouse/field,
@@ -388,3 +388,21 @@ GitHub Actions run 35315342936 proved on a real API 36 emulator:
 - Room/offline regressions remain green.
 
 WorkManager is accepted as the Android scheduling layer; Room/local command state remains authoritative for business work.
+
+
+## SPIKE-07 — Windows Packaging / Update / Rollback
+Decision: **ACCEPT — Windows MSI operational lifecycle passed.**
+
+GitHub Actions run 35317815398 proved:
+- v1/v2 MSI packaging,
+- disposable Authenticode signer identity verification,
+- silent install/uninstall,
+- packaged-app launch,
+- `hiltech://` deep-link delivery,
+- corrupt-update safety,
+- LocalAppData preservation,
+- controlled v1 -> v2 installer swap,
+- rollback to retained v1,
+- state preservation through final uninstall.
+
+ADR-012 accepts Compose Desktop/jpackage MSI + controlled installer-swap as the pre-freeze Windows operational baseline. Production certificate/provider and enterprise distribution/updater remain open operations decisions.
