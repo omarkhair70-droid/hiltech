@@ -8,6 +8,9 @@ Model how financial obligations and incoming money move through HILTECH from sou
 This workflow connects:
 Projects, Sales, Procurement, Payroll, Expenses, Clients, Suppliers, Banking, Approvals, Audit, Notifications.
 
+Dedicated employee-advance / financial-imprest behavior is defined in:
+`ADVANCE_IMPREST_LIFECYCLE.md`.
+
 ---
 
 # 1. Financial Sources
