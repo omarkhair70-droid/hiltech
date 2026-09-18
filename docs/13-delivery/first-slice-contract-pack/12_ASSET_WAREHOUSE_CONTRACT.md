@@ -169,6 +169,14 @@ Current location/custodian/project/site/work are projections from accepted movem
 - no command directly edits a fake currentCustodian/currentLocation truth.
 - acquisition cost remains separately permissioned.
 
+## Serial-number policy
+
+- assetCode is the hard unique HILTECH identity.
+- serialNumber is searchable and normalized where possible.
+- no blanket global UNIQUE(serialNumber) constraint in first slice because manufacturer/vendor serial quality cannot be assumed.
+- duplicate serial detection produces validation warning/review context.
+- a future AssetType/manufacturer policy may enforce stricter uniqueness where proven safe.
+
 # 3. Asset type configuration
 
 Canonical:
@@ -210,6 +218,15 @@ Rules:
 ---
 
 # 5. Storage model
+
+## Warehouse vs StorageLocation — frozen semantic split
+
+- Warehouse is an optional operational/facility aggregate used when HILTECH needs warehouse-level ownership/management.
+- StorageLocation is the authoritative physical/logical inventory location dimension used by movements/balances.
+- a Warehouse has one or more StorageLocations.
+- Project/Site temporary storage uses StorageLocation directly and does not require a Warehouse row.
+- inventory/movement commands target StorageLocation, not a free-text warehouse name.
+
 
 ## StorageLocation
 
@@ -338,6 +355,26 @@ one active authoritative physical custody/context.
 DB/transaction strategy must make two successful simultaneous Checkouts impossible.
 
 ---
+
+# AssetReturnInspection
+
+Return inspection is a first-class record, not free-text mutation.
+
+Candidate fields:
+- id
+- assetId
+- returnMovementId
+- inspectedBy
+- inspectedAt
+- conditionObserved
+- accessoryChecklistTemplateId/revision?
+- accessoryResults
+- damageIncidentId?
+- notes?
+- resultingAvailabilitySummary
+- version
+
+Expected accessories/checklist are typed templates/configuration.
 
 # 8. Asset commands
 
@@ -517,6 +554,14 @@ Reorder policy/master configuration remains configurable.
 
 ---
 
+## Quantity precision
+
+Production candidate:
+- quantity DB type: numeric(20,6).
+- wire uses exact decimal string/Decimal, never float.
+- UnitOfMeasure defines display/allowed operational precision; DB precision remains capable of cable-length and fractional units.
+- negative quantity is never accepted merely because numeric supports it.
+
 # 13. StockBalance
 
 Materialized/derived per item + location + status.
@@ -579,7 +624,39 @@ Reservation may be a separate object rather than a stock movement if quantity re
 
 # 15. Reservation
 
-Unified logical reservation object:
+Production persistence uses separate typed reservation tables for FK/integrity clarity:
+
+## AssetReservation
+- id
+- assetId
+- projectId
+- siteId?
+- workOrderId?
+- requestedBy
+- reservedForTargetType/id?
+- start/end?
+- state
+- priorityCode?
+- version
+
+## StockReservation
+- id
+- stockItemId
+- quantity
+- unitCode
+- projectId
+- siteId?
+- workOrderId?
+- requestedBy
+- reservedForTargetType/id?
+- start/end?
+- state
+- priorityCode?
+- version
+
+They may share domain interfaces/read models, but physical persistence is typed rather than polymorphic resource_id.
+
+Legacy unified logical shape:
 
 - id
 - resourceType: ASSET / STOCK
@@ -697,6 +774,13 @@ Adjustment requires:
 - audit.
 
 ---
+
+## Offline return decision
+
+First production slice:
+- technician/custodian may capture Return intent/condition/evidence locally where UX needs it.
+- authoritative ReturnAsset receipt/custody close occurs online when an authorized receiver/warehouse confirms physical receipt.
+- no offline device can independently finalize physical return/custody transfer.
 
 # 20. Offline classification
 
