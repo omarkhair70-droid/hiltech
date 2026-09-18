@@ -38,7 +38,7 @@ function Invoke-ProcessChecked {
     Write-Host "EXIT: $exit"
 
     if (-not $AllowFailure -and $exit -ne 0) {
-        throw "Process failed with exit code $exit: $FilePath $Arguments"
+        throw "Process failed with exit code ${exit}: $FilePath $Arguments"
     }
 
     return $exit
