@@ -1,6 +1,6 @@
 # 13 — OpenFGA First-Slice Model Candidate
 
-Status: **CONTRACT CANDIDATE v0.1**
+Status: **CONTRACT CANDIDATE v0.2 / CONSISTENCY MODEL LINKED**
 Date: 2026-09-18
 
 ## Purpose
@@ -14,6 +14,17 @@ Canonical boundary:
 
 Canonical ADR:
 `docs/11-architecture/ADR/ADR-009-OPENFGA-AUTHORIZATION.md`
+
+Cross-system projection consistency:
+`15_AUTHORIZATION_CONSISTENCY_CONTRACT.md`
+
+Production rules:
+- PostgreSQL owns business relationship truth.
+- OpenFGA is the relationship authorization projection.
+- every Check/Write pins authorizationModelId.
+- grant/revoke synchronization fails closed.
+- relationship mutation intent is transactionally recorded with business state.
+- selective HIGHER_CONSISTENCY is used after security-sensitive tuple changes, not globally.
 
 ---
 
