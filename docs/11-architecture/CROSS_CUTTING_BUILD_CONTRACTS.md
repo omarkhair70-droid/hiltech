@@ -1,25 +1,30 @@
 # HILTECH Cross-Cutting Build Contracts
 
-Status: **BUILD-CONTRACT CANDIDATE / PRE-FREEZE**
+Status: **SPIKE-VALIDATED BUILD-CONTRACT CANDIDATE / PRE-FREEZE**
 Date: 2026-09-18
 
 Purpose:
 Turn already-proven cross-cutting architecture into exact implementation-facing contracts without pretending domain schemas are frozen.
 
-This document may be promoted to FROZEN only after SPIKE-15 validates the real HTTP/Ktor path and the first exact domain schemas exist.
+SPIKE-15 has validated the real HTTP/Ktor path. This document may be promoted to FROZEN only after the first exact production domain schemas/contracts exist and remaining contract-test gaps are closed.
 
 ---
 
 # 1. Transport Boundary
 
-Baseline:
+Accepted baseline:
+- Ktor Client 3.5.2 is the shared client HTTP boundary — ADR-007.
+- Android engine: OkHttp.
+- JVM Desktop engine: CIO.
+- shared code owns DTOs, serialization, request headers, result mapping and sync transport.
+- engine-specific APIs do not leak into UI/domain layers.
 - HTTPS only outside local development.
 - authenticated requests use OIDC access token.
 - server derives actor/roles/organization context; client claims are never trusted authority.
 - business commands are explicit actions, not generic table CRUD.
 - queries return task-specific authorized read models.
 
-Exact base URL/version prefix remains to be locked during SPIKE-15/API freeze.
+SPIKE-15 used `/v1` successfully. Exact production route/resource grammar remains an API-freeze decision.
 
 ---
 
@@ -33,16 +38,21 @@ Every authenticated application request may carry:
 - X-Client-Version: application build/version
 - X-Device-Id: opaque registered device identity where applicable
 
-Retry-sensitive command requests additionally carry:
+Retry-sensitive command requests carry:
 
-- Idempotency-Key: stable operationId generated before first submission
+- `Idempotency-Key`: stable operationId generated before first submission.
 
-Concurrency-sensitive commands additionally carry one accepted representation of:
+Concurrency-sensitive commands carry:
 
-- baseVersion in command body, or
-- If-Match equivalent
+- `baseVersion` in the command body.
 
-SPIKE-15 chooses the exact final wire representation; the semantics are already accepted.
+SPIKE-15 validated this representation end to end.
+
+Trace/correlation representation validated by SPIKE-15:
+- `X-Correlation-Id`
+- W3C `traceparent`
+
+The optional `X-Client-Platform`, `X-Client-Version`, and `X-Device-Id` headers remain production-contract candidates and must only be required where the server actually uses them.
 
 ---
 
@@ -373,34 +383,51 @@ Client reconciles/fetches through normal permission-safe query/sync path.
 
 # 19. Contract Tests Required Before Freeze
 
-SPIKE-15 / final API contract tests must prove:
-- Android + Windows shared Ktor contract.
-- auth token attachment.
-- correlation propagation.
-- operationId/idempotency propagation.
-- command success.
-- duplicate replay.
-- stale version conflict.
-- permission denied/object hidden.
-- REAUTH_REQUIRED path.
-- retryable network failure mapping.
-- safe server error mapping.
-- cursor query.
-- binary upload reservation/finalization.
-- offline replay.
+## Validated by SPIKE-15
+
+- [x] Android + Windows shared Ktor contract.
+- [x] auth token attachment.
+- [x] correlation + W3C trace propagation.
+- [x] operationId/idempotency propagation.
+- [x] command success.
+- [x] duplicate replay.
+- [x] stale version conflict.
+- [x] server-side permission deny.
+- [x] binary upload reservation/upload/finalization.
+- [x] offline replay after process death/reconnect.
+- [x] dependent command blocking after conflict.
+- [x] authoritative state preserved after stale conflict.
+
+Evidence:
+- E2E run 35323209954.
+- Room regression 35323209973.
+- Offline queue regression 35323209948.
+- WorkManager regression 35323209949.
+
+## Still Required Before Contract Freeze
+
+- [ ] REAUTH_REQUIRED end-to-end command retry path.
+- [ ] retryable network failure mapping through production-shaped HTTP error envelope.
+- [ ] safe server error mapping across representative 4xx/5xx families.
+- [ ] cursor query contract on a production-shaped read model.
+- [ ] object-hidden vs permission-denied policy for external callers.
+- [ ] per-domain request/response schemas for the first production slices.
 
 ---
 
 # What Remains Unfrozen
 
-- exact URL grammar/base prefix.
-- exact serialization library/options.
-- exact Ktor engine choices per platform.
-- exact generated/manual API client convention.
+- exact production URL/resource grammar beyond the accepted /v1 major-version pattern.
+- exact Kotlinx Serialization production options/tolerance policy.
+- exact generated-vs-manual API client convention.
 - UUID representation.
 - exact pagination cursor encoding.
 - per-domain request/response schemas.
 - migration/schema persistence.
 - API breaking-change policy.
+- production retry/backoff policy by command/query class.
+- device/client metadata header obligations.
 
-Those are intentionally resolved by SPIKE-15 + exact schema/domain freeze, not guessed here.
+Ktor Client 3.5.2 and Android OkHttp / JVM Desktop CIO engine choices are no longer open.
+
+The remaining items are resolved by exact schema/domain contract freeze, not guessed from spike code.
