@@ -112,7 +112,7 @@ type asset
     define checkout_delegate: [user, team#member]
 
     define can_view: current_custodian or explicit_viewer or can_view_inventory from warehouse or can_view from storage_location or can_view_resources from project or can_view from work_order
-    define can_reserve: can_request_resource from project or can_checkout from warehouse
+    define can_reserve_as_warehouse: can_checkout from warehouse
     define can_checkout: checkout_delegate or can_checkout from warehouse
     define can_return: current_custodian or can_return from warehouse
     define can_transfer: current_custodian or can_transfer from warehouse
@@ -126,7 +126,7 @@ type stock_item
     define viewer: [user, team#member]
 
     define can_view: viewer or can_view_inventory from warehouse
-    define can_reserve: can_checkout from warehouse
+    define can_reserve_as_warehouse: can_checkout from warehouse
     define can_issue: can_checkout from warehouse
     define can_return: can_return from warehouse
     define can_count: can_count from warehouse
