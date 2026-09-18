@@ -372,14 +372,14 @@ INTERNAL_REPORTED can guide preparation but must not silently become frozen trut
 
 The first-slice reality pass is sufficient when all are true:
 
-- [ ] authority for Work/Asset actions is known,
-- [ ] one real Project/Site is mapped,
-- [ ] one representative field WorkOrder is mapped,
-- [ ] readiness/evidence/acceptance rules for that work type are known,
-- [ ] field offline/device restrictions are known,
-- [ ] warehouse physical/custody process is observed,
-- [ ] real asset/stock categories needed by pilot are known,
-- [ ] first pilot data source/import path is known,
+- [ ] Work/Asset authority can be expressed by the typed policy/relationship model and one realistic seed is validated,
+- [ ] one real Project/Site is mapped to prove the structural model,
+- [ ] one representative field WorkOrder is mapped to prove WorkType/config coverage,
+- [ ] readiness/evidence/acceptance configuration can express that work type without code changes,
+- [ ] field offline/device restrictions that materially affect architecture are known,
+- [ ] warehouse physical/custody flow is observed enough to prove the storage/custody model,
+- [ ] pilot asset/stock master data can be seeded through configuration,
+- [ ] first pilot data source/import path is known or clean-seed pilot is explicitly chosen,
 - [ ] contradictions against current docs are recorded,
 - [ ] affected object/transition/permission specs are updated.
 
