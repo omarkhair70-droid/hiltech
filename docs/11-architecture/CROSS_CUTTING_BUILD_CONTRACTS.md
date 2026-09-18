@@ -24,7 +24,7 @@ Accepted baseline:
 - business commands are explicit actions, not generic table CRUD.
 - queries return task-specific authorized read models.
 
-SPIKE-15 used `/v1` successfully. Exact production route/resource grammar remains an API-freeze decision.
+First-slice API freeze now accepts `/v1` with explicit resource/action routes documented in `docs/13-delivery/first-slice-contract-pack/02_API_AND_READ_MODELS.md`.
 
 ---
 
@@ -222,6 +222,16 @@ Rules:
 - no raw SQL-like query language exposed to clients.
 - field-level authorization is enforced server-side.
 
+## Cursor implementation
+First-slice baseline is a stateless, tamper-protected opaque seek cursor bound to:
+- read-model identity,
+- normalized filter/order contract,
+- stable seek values + tie-breaker,
+- asOf/version context where needed.
+
+No Redis/server cursor session is required.
+Invalid/expired cursor returns a typed restart-pagination result.
+
 ---
 
 # 10. IDs
@@ -230,7 +240,10 @@ Rules:
 - domain IDs are opaque stable identifiers.
 - human codes are separate fields.
 - clients never infer authorization or ordering from ID value.
-- exact UUID strategy remains data-freeze decision.
+- physical domain/config identifiers use UUID.
+- server-created business IDs are server-generated UUIDs.
+- client-generated retry operation IDs are UUIDs.
+- Room stores UUIDs as canonical lowercase TEXT for KMP portability.
 
 Examples:
 - opaque id
@@ -409,25 +422,68 @@ Evidence:
 - [ ] REAUTH_REQUIRED end-to-end command retry path.
 - [ ] retryable network failure mapping through production-shaped HTTP error envelope.
 - [ ] safe server error mapping across representative 4xx/5xx families.
-- [ ] cursor query contract on a production-shaped read model.
-- [ ] object-hidden vs permission-denied policy for external callers.
-- [ ] per-domain request/response schemas for the first production slices.
+- [ ] cursor query contract implementation test on a production-shaped read model.
+- [x] object-hidden vs permission-denied policy defined.
+- [x] first-slice Work/Asset/Evidence request/response contract candidates defined.
 
 ---
 
 # What Remains Unfrozen
 
-- exact production URL/resource grammar beyond the accepted /v1 major-version pattern.
-- exact Kotlinx Serialization production options/tolerance policy.
-- exact generated-vs-manual API client convention.
-- UUID representation.
-- exact pagination cursor encoding.
-- per-domain request/response schemas.
-- migration/schema persistence.
-- API breaking-change policy.
-- production retry/backoff policy by command/query class.
-- device/client metadata header obligations.
+- final route wording normalization for a few configuration/project admin endpoints.
+- exact Kotlinx Serialization option flags in code.
+- final physical migration/schema DDL.
+- production retry/backoff constants by command/query class.
+- optional device/client metadata headers only where server logic consumes them.
 
 Ktor Client 3.5.2 and Android OkHttp / JVM Desktop CIO engine choices are no longer open.
 
 The remaining items are resolved by exact schema/domain contract freeze, not guessed from spike code.
+
+---
+
+# 20. Serialization / Typed Client
+
+First-slice baseline:
+- kotlinx.serialization for shared wire DTOs.
+- JSON transport.
+- response decoding tolerates unknown additive fields.
+- request/command DTOs remain strongly typed.
+- persisted offline command payload has explicit payloadVersion.
+- Android/Desktop use thin manually maintained shared Ktor repository/client functions.
+- generated network client is not required for first slice.
+- OpenAPI/contract output may be generated for docs/testing, but it is not domain source of truth.
+
+---
+
+# 21. API Visibility / Versioning
+
+External unauthorized/out-of-scope object:
+- HTTP 404 + OBJECT_NOT_VISIBLE.
+
+Internal HILTECH user where object existence is already safe:
+- HTTP 403 + PERMISSION_DENIED may be used.
+
+Within /v1:
+- additive evolution preferred.
+- unknown response fields tolerated.
+- field semantic repurpose is forbidden.
+- persisted/offline payload compatibility uses explicit payloadVersion/migration.
+
+---
+
+# 22. String / Text Bounds — First-Slice Baseline
+
+Unless a domain contract specifies stricter:
+
+- machine/business code: max 64 Unicode characters; expected canonical ASCII-safe form for generated codes.
+- short display name: max 200.
+- UI title/label: max 240.
+- description/reason/note submitted through normal command fields: max 4000.
+- external/provider opaque ID: max 255.
+- correlation/idempotency textual representation: max 128.
+- MIME/content type: max 127.
+
+Large documents/evidence are file/document objects, not giant text fields.
+
+Exact database column types may use TEXT while server validation enforces these product bounds where appropriate.
