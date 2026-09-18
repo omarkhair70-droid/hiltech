@@ -141,7 +141,7 @@ BLOCKING: YES before production UI.
 - [ ] Local schema.
 - [ ] Upload strategy.
 - [ ] Security/encryption policy.
-- [ ] Spike passed.
+- [x] Core offline/background spike path passed — SPIKE-03/04/13 accepted.
 
 BLOCKING: YES for field foundation.
 
