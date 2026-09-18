@@ -149,6 +149,8 @@ Typical:
 - payment preparation: yes
 - payment approval/execution: depends on bank/legal authority
 - employee compensation: yes where required
+- employee advances: prepare/review/issue/settle according to approval and bank authority
+- financial imprest/cash custody: funding, ledger review, replenishment, settlement and reconciliation
 - project operational details: enough for financial context
 - warehouse: financial/valuation context as authorized
 - cameras/security: no by default
@@ -209,6 +211,8 @@ Typical:
 - own tool/asset custody
 - submit evidence/issues/material usage
 - own employee self-service
+- own Advance request/status/settlement view
+- own FinancialImprest/cash-custody actions only when explicitly assigned as custodian
 - peer payroll: never
 - unrelated project/client data: no
 
@@ -409,6 +413,11 @@ Sensitive VIEW events may require audit for selected objects such as payroll/sec
 - Temporary delegation rules.
 - Device trust requirements.
 - Re-authentication rules for critical actions.
+- Who approves employee advances and at what thresholds.
+- Legal/payroll deduction limits and who authorizes an Advance payroll-deduction plan.
+- Who may receive FinancialImprest/cash custody and whether concurrent imprests are allowed.
+- Receipt/evidence requirements for imprest spend/replenishment.
+- Shortage/overage authority and recovery policy.
 
 ## Completion gate
 This map is not complete until:
