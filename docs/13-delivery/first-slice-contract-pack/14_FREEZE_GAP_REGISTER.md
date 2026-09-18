@@ -118,9 +118,12 @@ Resolved:
 
 ## A5 — PostgreSQL / Flyway / jOOQ finalization
 
-Still need:
-- generated production Flyway SQL files after FIRST_SLICE_FREEZE.
-- executable DB integration tests against those migrations.
+Pre-code Freeze blockers:
+- none beyond keeping the DDL/constraint contract internally consistent with other contracts.
+
+Post-Freeze Bootstrap verification:
+- generate production Flyway SQL.
+- run DB integration/migration tests.
 
 Resolved:
 - module ownership.
@@ -144,11 +147,12 @@ Resolved:
 
 ## A6 — Room/local finalization
 
-Still need:
-- exact Room converter implementation.
-- real migration files/tests.
-- release-specific storage-policy tuning after representative device testing.
-- executable retry/error mapping tests.
+Pre-code Freeze blockers:
+- representative device check may tune OfflineStoragePolicy seed, but schema/semantics do not change.
+
+Post-Freeze Bootstrap verification:
+- implement Room converters/entities/migrations.
+- run migration/retry/error mapping tests.
 
 Resolved:
 - UUID as canonical lowercase TEXT.
@@ -169,9 +173,11 @@ Resolved:
 
 ## A7 — OpenFGA exact model
 
-Still need:
-- production OpenFGA deployment/runtime configuration.
-- executable PostgreSQL projection/outbox integration tests.
+Pre-code Freeze blockers:
+- production OpenFGA deployment/runtime choice/settings.
+
+Post-Freeze Bootstrap verification:
+- implement PostgreSQL projection/outbox processor and integration tests.
 
 Resolved:
 - first-slice FGA DSL + team userset semantics validated in GitHub Actions run 35331537375.
@@ -302,6 +308,15 @@ Unless directly pulled into the first production vertical:
 - exact future number of projects/warehouses/branches.
 
 The platform/domain model is scale-neutral.
+
+---
+
+# Freeze vs Bootstrap interpretation
+
+Canonical boundary:
+`17_FREEZE_TO_BOOTSTRAP_BOUNDARY.md`
+
+Production executable artifacts that can only exist after implementation are **not** pre-code Freeze blockers when their contracts/generation/test specifications are frozen.
 
 ---
 
