@@ -75,3 +75,17 @@ Keycloak 26.x marks authentication cookies Secure. A real HILTECH native login m
 The CI harness now runs Keycloak over local HTTPS using a disposable self-signed certificate. This means Secure authentication cookies are exercised without weakening or rewriting them in the active test path.
 
 TLS verification is disabled only for that disposable self-signed localhost certificate. Production must use a trusted HTTPS certificate.
+
+
+## Offline business work vs OIDC offline access
+
+HILTECH offline field work does **not** require Keycloak `offline_access` tokens.
+
+The accepted architecture separates concerns:
+
+- Room/local command queue keeps field work durable while disconnected.
+- normal OIDC browser session + refresh token handles authentication lifetime.
+- reconnect revalidates identity/authorization before authoritative replay.
+- long-lived Keycloak offline tokens are not the default baseline.
+
+The spike therefore tests standard `openid` authorization-code + PKCE with normal refresh/session behavior.
