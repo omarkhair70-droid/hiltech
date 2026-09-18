@@ -143,3 +143,6 @@ Use, do not duplicate:
 
 19. `19_WINDOWS_RELEASE_UPDATE_CONTRACT.md`
    - signed MSI release objects/API, private artifact distribution, client verification, rollout and rollback contract.
+
+20. `20_BACKUP_DR_RECOVERY_CONTRACT.md`
+   - staged PILOT/STABLE PostgreSQL backup, cross-region DR, recovery/failover/failback and engineering RPO/RTO contract.
