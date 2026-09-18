@@ -16,4 +16,7 @@ data class PendingCommandEntity(
     val attemptCount: Int,
     val createdAtEpochMs: Long,
     val lastAttemptAtEpochMs: Long?,
+    val localSequence: Long = createdAtEpochMs,
+    val lastResultCode: String? = null,
+    val serverVersion: Long? = null,
 )
