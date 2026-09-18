@@ -49,3 +49,71 @@ Every BUILD_READY feature ID must eventually link to:
 - permissions,
 - offline classification,
 - tests.
+
+
+# Cross-Module Financial Ownership Clarifications
+
+These rules prevent employee-facing/self-service features from creating split financial truth.
+
+## Employee Advance
+
+Authoritative object/lifecycle owner:
+**finance**
+
+Finance owns:
+- Advance monetary obligation,
+- approved amount/settlement terms,
+- issue/payment reference,
+- authoritative outstanding amount,
+- accepted settlements/returns,
+- close/reconciliation.
+
+People owns:
+- employee identity/eligibility/context,
+- employee self-service request surface,
+- HR context where policy permits.
+
+Payroll owns:
+- an approved payroll-deduction input/plan,
+- applying the approved deduction in an exact PayrollRun version.
+
+Payroll must never derive a deduction merely because an Advance exists.
+
+Dependencies:
+`people -> finance context/query`,
+`payroll -> finance approved deduction contract`.
+
+No direct cross-module table writes.
+
+## Financial Imprest / Cash Custody
+
+Authoritative owner:
+**finance**
+
+Finance owns:
+- FinancialImprest,
+- ImprestLedgerEntry,
+- ImprestSettlement,
+- custody balance,
+- funding/replenishment,
+- spend acceptance,
+- cash return,
+- shortage/overage resolution,
+- reconciliation/clearance/closure.
+
+People owns:
+- custodian employee identity/status.
+
+Projects/Procurement may provide:
+- project/site/work/cost context,
+- requesting context.
+
+They do not own or edit the financial custody ledger.
+
+## Rule
+
+Feature prefix does not override authoritative object ownership.
+
+Examples:
+- `PEOPLE-022/023` are employee/custodian experience capabilities, while finance owns the monetary custody state.
+- `PAY-009` consumes an approved Advance deduction contract; it does not own the Advance balance.
