@@ -38,7 +38,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | System architecture | v0.1 | Spike/reality dependent |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
-| Technical spikes | ACTIVE — 01/03/04/09/10/11/12 PASSED | Client platform, local DB, offline queue, authorization, modular backend events, PostgreSQL concurrency and binary evidence protocol proven; remaining spikes active |
+| Technical spikes | ACTIVE — 01/03/04/06/09/10/11/12 PASSED | Client platform, dense desktop, local DB, offline queue, authorization, modular backend events, PostgreSQL concurrency and binary evidence protocol proven; remaining spikes active |
 | Implementation order | NOT FINAL | Depends on spikes/reality |
 | Production code | NOT STARTED | Intentionally |
 
@@ -267,3 +267,16 @@ GitHub Actions run 35305216130 proved:
 - unsigned direct read is denied.
 
 Production object-storage provider remains intentionally unselected.
+
+
+## SPIKE-06 — Desktop Dense Data
+Decision: **ACCEPT — Compose Desktop dense-data feasibility passed.**
+
+GitHub Actions run 35305553872 proved:
+- 50k synthetic payroll data handling,
+- sort/filter/group,
+- 10k-row bulk selection,
+- desktop compile,
+- real Compose Desktop first-frame render under Xvfb.
+
+This removes the main current feasibility trigger for abandoning Compose Desktop, while final dense UX/performance budgets remain design/freeze work.
