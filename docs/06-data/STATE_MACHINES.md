@@ -185,6 +185,57 @@ Approved request may be CANCELLED according to policy.
 
 ---
 
+# Employee Advance
+DRAFT
+-> SUBMITTED
+-> APPROVED
+-> ISSUED
+-> PARTIALLY_SETTLED
+-> SETTLED
+-> CLOSED
+
+Branches:
+SUBMITTED -> REJECTED
+DRAFT | SUBMITTED -> CANCELLED
+APPROVED -> CANCELLED only before funding according policy
+ISSUED | PARTIALLY_SETTLED -> REVIEW_REQUIRED / DISPUTED
+REVIEW_REQUIRED -> PARTIALLY_SETTLED | SETTLED
+
+Rules:
+- settlement may combine payroll deduction, cash return and approved expense offset.
+- outstanding balance is derived, not manually set.
+- payroll deduction is a separate authorized payroll input.
+- closure requires reconciled outstanding balance unless explicit approved exception.
+
+---
+
+# Financial Imprest / Cash Custody
+DRAFT
+-> REQUESTED
+-> APPROVED
+-> FUNDED
+-> ACTIVE
+-> SETTLEMENT_SUBMITTED
+-> UNDER_REVIEW
+-> CLEARED
+-> CLOSED
+
+Branches:
+REQUESTED -> REJECTED
+DRAFT | REQUESTED -> CANCELLED
+ACTIVE -> REPLENISHMENT_PENDING -> ACTIVE
+SETTLEMENT_SUBMITTED -> CHANGES_REQUIRED -> ACTIVE
+UNDER_REVIEW -> SHORTAGE_REVIEW -> CLEARED
+UNDER_REVIEW -> OVERAGE_REVIEW -> CLEARED
+
+Rules:
+- custody balance derives from append-only funding/replenishment/spend/return/correction entries.
+- shortage/overage is explicit and auditable.
+- no automatic payroll deduction from shortage.
+- closed imprest cannot retain unresolved custody balance without explicit approved exception.
+
+---
+
 # Payroll Run
 OPEN
 -> COLLECTING_INPUTS
