@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: PROPOSED v0.3 / FIRST-SLICE CONTRACTS + FINAL STACK CLOSED / DESIGN FREEZE PENDING
+Status: **FROZEN v1.0 FOR FIRST PRODUCTION SLICE / REPOSITORY BOOTSTRAP NEXT**
 
 ## Core Rule
 
@@ -404,7 +404,9 @@ Its purpose is to implement frozen real HILTECH contracts, add the warehouse/cus
 
 The Project/Work/Warehouse/Field structural contracts and representative reality coverage are now closed at pre-code level.
 
-The slice must not start until the remaining rendered design proof passes and the formal First-Slice Freeze Review records PASS.
+The rendered design proof and formal First-Slice Freeze Review now PASS.
+
+The first-slice implementation order is authorized to enter Repository Bootstrap.
 
 ---
 
@@ -427,10 +429,9 @@ All required technical spikes 01–15 are accepted.
 
 This implementation order no longer depends on an unresolved platform/networking/offline architecture experiment.
 
-Remaining reason it is still PROPOSED rather than FROZEN:
-- actual rendered low-fi / RTL / conflict / adaptive design validation.
+First-slice Freeze is now PASS.
 
-Already closed:
+Closed:
 - technical spikes,
 - first-slice domain/configuration contracts,
 - API/local/file/auth contracts,
@@ -441,6 +442,9 @@ Already closed:
 - DR engineering architecture.
 
 Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
+
+Immediate next execution:
+**PHASE 0 — Repository / Engineering Foundation**.
 
 No production code starts merely because the technical spike gate is green.
 
