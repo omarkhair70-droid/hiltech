@@ -140,3 +140,6 @@ Use, do not duplicate:
 
 18. `18_PRODUCTION_INFRASTRUCTURE_CONTRACT.md`
    - OCI production topology, environments, network, PostgreSQL/Object Storage/KMS/Secrets, IaC, deployment and cutover validation contract.
+
+19. `19_WINDOWS_RELEASE_UPDATE_CONTRACT.md`
+   - signed MSI release objects/API, private artifact distribution, client verification, rollout and rollback contract.
