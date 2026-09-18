@@ -115,7 +115,7 @@ High confidence:
 
 Leading but still spike-dependent:
 - Kotlin Multiplatform + Compose Multiplatform — **SPIKE-01 feasibility ACCEPTED**; final stack still depends on RTL/dense-data/offline/auth evidence.
-- Room/SQLite — active spike; not yet accepted.
+- Room/SQLite — **SPIKE-03 feasibility ACCEPTED** with real SQLite tests on Linux/Windows and Android generated-code compile.
 - Ktor Client.
 - Spring Boot + Spring Modulith.
 - jOOQ.
@@ -182,3 +182,16 @@ This does not mark the client stack FINAL. Remaining relevant spikes still gate 
 ## SPIKE-03 — Room KMP Local DB
 Status: RUNNING on isolated branch/PR.
 Uses a HILTECH-shaped PendingCommand local queue with Room3 + BundledSQLiteDriver.
+
+
+## SPIKE-03 — Room KMP Local DB
+Decision: **ACCEPT — local database feasibility passed.**
+
+GitHub Actions run 35295195896 proved:
+- Room3 KMP code generation,
+- real SQLite persistence on Linux JVM Desktop,
+- real SQLite persistence on Windows JVM Desktop,
+- Android compile using generated Room code,
+- shared PendingCommand schema/DAO with BundledSQLiteDriver.
+
+Full offline business lifecycle remains SPIKE-04.
