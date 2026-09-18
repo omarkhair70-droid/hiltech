@@ -151,6 +151,11 @@ Still freeze-dependent:
 
 Technical-spike continuation: **CLOSED.**
 
+Canonical next-step artifacts:
+- `docs/01-reality/FIRST_PRODUCTION_SLICE_REALITY_CLOSURE.md` — minimum Project/Field/Warehouse/Authority reality evidence.
+- `docs/13-delivery/FIRST_PRODUCTION_SLICE_CONTRACT_READINESS_2026-09-18.md` — readiness/blocker map.
+- `docs/13-delivery/first-slice-contract-pack/README.md` — exact freeze artifacts that feed repository bootstrap.
+
 Immediate pre-code continuation:
 1. Reality validation with Mohamed/Ahmed/project/warehouse/field.
 2. Freeze exact DB/API/local/auth/file contracts for the starting implementation slices.
