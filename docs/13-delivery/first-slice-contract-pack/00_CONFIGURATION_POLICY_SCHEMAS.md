@@ -469,6 +469,19 @@ Controls site navigation/arrival/presence behavior without hard-coding permanent
 - location data classification is RESTRICTED/HIGHLY_RESTRICTED according to exact usage.
 - tracking configuration cannot silently become permanent all-day surveillance.
 
+## Tracking activation safety
+
+A FieldTrackingPolicy using ARRIVAL_PROOF or ACTIVE_SITE_PRESENCE cannot activate unless:
+- viewer relationships are explicit.
+- stop condition is explicit.
+- retentionDays is non-null.
+- user-notice requirement is resolved.
+- maximum continuous duration is bounded for ACTIVE_SITE_PRESENCE.
+
+If HILTECH/client/legal policy has not selected acceptable retention/notice values, that tracking mode remains disabled.
+
+NAVIGATION_ONLY can operate without persisting employee location history.
+
 ---
 
 # 8. StorageLocationConfiguration
@@ -814,8 +827,8 @@ Must pass before FIRST_SLICE_FREEZE:
 This candidate is structurally strong enough to drive DB/API design.
 
 Still to settle before final freeze:
-- exact retention/legal rules for active location tracking before enabling that mode.
 - exact Configuration Center visual design.
+- seed retention/notice values only if HILTECH chooses to enable persisted ARRIVAL_PROOF/ACTIVE_SITE_PRESENCE in the pilot; otherwise those modes remain disabled by validation.
 
 Closed:
 - code/name/description bounds inherit cross-cutting baseline unless stricter.
