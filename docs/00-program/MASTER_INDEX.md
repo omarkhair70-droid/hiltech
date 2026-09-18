@@ -75,6 +75,8 @@ Start here:
 5. `OPEN_QUESTIONS.md` — unresolved questions.
 6. `../13-delivery/DEFINITION_OF_COMPLETE.md` — what COMPLETE actually means.
 7. `../01-reality/REALITY_VALIDATION_PLAN.md` — how assumptions become verified reality.
+8. `../11-architecture/CROSS_CUTTING_BUILD_CONTRACTS.md` — implementation-facing API/sync/security/file contract candidate.
+9. `../12-stack/STACK_VERSION_MATRIX.md` — evidence-based pre-freeze version ledger.
 
 ## Current planning coverage
 
