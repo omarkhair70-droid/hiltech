@@ -77,7 +77,7 @@ Research questions:
 
 `INTERNAL-UNVERIFIED`
 
-HILTECH has an internal warehouse containing tools/equipment whose total value may reach millions of EGP, including many high-value individual items.
+HILTECH has a main tool/equipment storage area at the Maadi headquarters. Reported inventory is not extremely large by item count, but individual tools/equipment can be expensive enough that custody and history matter materially.
 
 Reported current pain:
 
@@ -87,7 +87,9 @@ Reported current pain:
 - asset custody can rely on memory/manual coordination,
 - equipment responsibility/history is not sufficiently visible.
 
-This makes warehouse/asset control a core transformation area, not a secondary feature.
+This makes warehouse/asset custody a core transformation area, but the first product should optimize for a small high-value tool inventory rather than imitate a large distribution-warehouse ERP.
+
+Remote projects may also create temporary Project/Site storage for material such as cable cartons. These locations should be modeled as project/site stock or temporary storage, not automatically as full warehouses.
 
 ### Field operations
 
@@ -104,6 +106,26 @@ HILTECH performs real on-site infrastructure work. Product design must therefore
 - handover,
 - customer approvals,
 - travel between sites/governorates.
+
+### Small field-crew operating model
+
+`INTERNAL-UNVERIFIED`
+
+Reported current operating shape:
+- a small management/engineering core,
+- approximately two engineers,
+- technician-heavy execution capacity,
+- common crews such as one engineer plus two technicians,
+- some work performed directly by technician pairs,
+- daily field output can be repeated building/unit work rather than one large monolithic task.
+
+Reported examples include:
+- data-center rack installation,
+- cable pulling across buildings in Alamein,
+- factory/site infrastructure work.
+
+Product consequence:
+Work assignment, map/site context, offline execution, evidence, tools and temporary site material must work well for small crews without requiring enterprise hierarchy.
 
 ## Current digital gap
 
