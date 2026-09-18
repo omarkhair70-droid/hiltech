@@ -89,7 +89,7 @@ All first-slice configuration aggregates use equivalent metadata:
 - version: Long
 
 Invariants:
-- `organizationId + code + revisionNumber` unique.
+- `scopeType + scopeOrganizationId + family + code + revisionNumber` unique.
 - at most one ACTIVE/effective revision for the same config code at one instant.
 - `effectiveTo > effectiveFrom` when both exist.
 - supersession graph is acyclic.
@@ -821,8 +821,6 @@ Closed:
 - code/name/description bounds inherit cross-cutting baseline unless stricter.
 - JSON v1 draft-only import/export/seed contract.
 - activation sensitivity model.
-
-Closed:
 - SYSTEM/ORGANIZATION scope mechanism.
 - WorkOrder policy-binding lifecycle.
 - no arbitrary/custom requirement extension in first slice.
