@@ -443,17 +443,34 @@ Tested OpenTelemetry Java: 1.66.0.
 
 # SPIKE-15 — End-to-End Vertical Proof
 
+Detailed execution contract:
+SPIKE_15_END_TO_END_VERTICAL_SPEC.md
+
 Scenario:
 PM Desktop creates/assigns work.
-Technician Android goes offline.
-Technician executes/scans/evidence/completes.
-Reconnect sync.
-Supervisor accepts.
-PM Desktop receives progress.
-Audit/activity visible.
+Technician Android receives durable bundle and goes offline.
+Technician executes/scans/evidence/completes locally.
+WorkManager reconnects and replays typed commands.
+Server re-authenticates/re-authorizes and applies idempotently.
+Supervisor accepts exact submitted version.
+PM Desktop receives authoritative progress/read-model update.
+Audit/activity/trace reconstruct the workflow.
+
+Includes:
+- real Ktor Client shared-contract proof,
+- Keycloak identity,
+- OpenFGA authorization,
+- PostgreSQL/jOOQ,
+- Room/offline queue,
+- WorkManager,
+- S3 evidence,
+- Spring Modulith,
+- observability.
 
 Pass:
-core architectural thesis proven across surfaces.
+core architectural thesis proven across surfaces without bypassing accepted boundaries.
+
+Ktor/ADR-007 is accepted only if its explicit criteria in the detailed spec pass.
 
 ---
 
