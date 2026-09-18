@@ -170,6 +170,23 @@ Prove:
 Pass:
 field flow is usable and recoverable.
 
+**Result 2026-09-18: ACCEPT — ANDROID CAMERA / QR / LOCAL EVIDENCE PATH PASSED.**
+
+Evidence:
+- QR asset lookup path passed.
+- permission-denied fallback remained recoverable.
+- camera-prohibited site mode preserved manual asset identification and created no forbidden image.
+- real CameraX capture passed on an API 36 emulator.
+- captured JPEG was durably stored.
+- SHA-256 metadata and LOCAL_READY / PENDING_UPLOAD handoff passed.
+- Room/offline regressions passed on the same branch.
+
+GitHub Actions run: 35313483156.
+Tested CameraX: 1.6.2.
+
+Boundary:
+production upload scheduling is covered separately by SPIKE-13; production scanner/UX/device matrix remains freeze/reality work.
+
 ---
 
 # SPIKE-06 — Desktop Dense Data
