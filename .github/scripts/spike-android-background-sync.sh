@@ -104,11 +104,16 @@ if [ -z "$RETRY_ATTEMPTS" ] || [ "$RETRY_ATTEMPTS" -lt 2 ]; then
 fi
 
 # ---- Battery-not-low OS constraint ----
-adb shell dumpsys battery unplug >/dev/null
-adb shell dumpsys battery set status 3 >/dev/null
-adb shell dumpsys battery set level 5 >/dev/null
-adb shell am broadcast -a android.intent.action.BATTERY_LOW >/dev/null || true
-sleep 2
+# BatteryService's -f option forces the real system battery-change broadcast.
+# Do not try to send BATTERY_LOW/BATTERY_OKAY directly from shell: Android
+# protects those broadcasts.
+adb shell dumpsys battery unplug -f >/dev/null
+adb shell dumpsys battery set -f status 3 >/dev/null
+adb shell dumpsys battery set -f level 5 >/dev/null
+
+echo "Battery state before constrained enqueue:"
+adb shell dumpsys battery | sed -n '1,30p'
+sleep 3
 
 adb shell am broadcast   -n "$RECEIVER"   -a "$ACTION"   --es probeId "battery-gate"   --ez retryOnce false   --ez batteryNotLow true >/dev/null
 
@@ -116,11 +121,13 @@ wait_state "battery-gate" "QUEUED" 15
 sleep 5
 assert_not_state "battery-gate" "SYNCED"
 
-adb shell dumpsys battery set level 80 >/dev/null
-adb shell dumpsys battery set status 2 >/dev/null
-adb shell am broadcast -a android.intent.action.BATTERY_OKAY >/dev/null || true
+adb shell dumpsys battery set -f level 80 >/dev/null
+adb shell dumpsys battery set -f status 2 >/dev/null
+
+echo "Battery state after recovery:"
+adb shell dumpsys battery | sed -n '1,30p'
 wait_state "battery-gate" "SYNCED" 60
 
-adb shell dumpsys battery reset >/dev/null || true
+adb shell dumpsys battery reset -f >/dev/null || true
 
 echo "HILTECH_WORKMANAGER_PASS reconnect_after_process_death=PASS retry_backoff=PASS battery_constraint=PASS user_state=PASS"
