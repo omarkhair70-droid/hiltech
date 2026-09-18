@@ -1,7 +1,7 @@
 # 21 — First-Slice Final Pre-Freeze Consistency Review
 
 Date: 2026-09-18
-Status: **PASS WITH TWO REMAINING PRE-CODE GATES**
+Status: **PASS WITH ONE REMAINING PRE-CODE GATE — RENDERED DESIGN PROOF**
 Review scope: first production vertical only.
 
 ## Executive result
@@ -22,19 +22,16 @@ No known contradiction currently requires reopening:
 - Windows packaging/signing/distribution,
 - backup/DR topology.
 
-Two pre-code gates remain before FIRST_SLICE_FREEZE can be called:
+One pre-code gate remains before FIRST_SLICE_FREEZE can be called:
 
-1. **actual rendered design proof**
-   - mobile/desktop first-slice surfaces,
-   - conflict states,
-   - Arabic RTL,
-   - adaptive tablet,
-   - navigation comparison.
+**actual rendered design proof**
+- mobile/desktop first-slice surfaces,
+- conflict states,
+- Arabic RTL,
+- adaptive tablet,
+- navigation comparison.
 
-2. **final explicit stack/version + CI-action pin review**
-   - current explicit dependency pins,
-   - provider/tool pins where required,
-   - production CI action pin policy.
+The final stack/version/CI-action review is now PASS and `docs/12-stack/FINAL_STACK.md` exists.
 
 Everything else below is either:
 - structurally closed,
@@ -595,19 +592,22 @@ This is the primary remaining pre-code blocker.
 # 19. Final stack/version review
 
 Decision:
-**OPEN / BLOCKING FINAL FREEZE**
+**PASS**
 
-Architecture/provider choices are mostly selected.
+Canonical:
+- `docs/12-stack/FINAL_STACK_VERSION_REVIEW_2026-09-18.md`
+- `docs/12-stack/FINAL_STACK.md`
 
-Still required immediately before Freeze:
-- re-check explicit current versions.
-- confirm no tested pin became invalid/incompatible.
-- choose/pin production CI actions.
-- record final stack ledger / FINAL_STACK.md if review passes.
+Final focused version evidence:
+- AGP 9.3.2 run 35388858253 PASS.
+- AGP 9.3.3 run 35389326629 PASS.
+- AGP 9.3.3 frozen for first slice.
+- immutable production GitHub Actions SHAs selected.
+- deliberate non-upgrades documented.
 
-Flyway exact resolved transitive version is captured via build dependency lock at Bootstrap under the accepted Spring Boot managed line.
+Flyway exact resolved transitive version is captured through dependency lock at Bootstrap under the accepted Spring Boot-managed line.
 
-This is a version-control/reproducibility gate, not architecture discovery.
+The stack is no longer a pre-code blocker.
 
 ---
 
@@ -646,9 +646,7 @@ No circular "need production code to allow production code" blocker remains.
 1. **Rendered Design Proof**
    - currently Figma MCP quota-blocked.
 
-2. **Final Stack / Version / CI Pin Review**
-   - can proceed independently of Figma.
-   - FINAL_STACK.md can be prepared once this passes.
+No other pre-code blocker is currently open.
 
 ## Not blocking contract Freeze, but blocking production activation/cutover
 
@@ -674,13 +672,11 @@ No circular "need production code to allow production code" blocker remains.
 **FIRST_SLICE_FREEZE = NOT YET PASS**
 
 Reason:
-- rendered design evidence is missing,
-- final stack/version/CI-pin review is not yet recorded.
+- rendered design evidence is missing.
 
 No other broad architecture/domain/reality discovery gate is justified at this point.
 
 Next:
-1. complete final stack/version/CI-pin review,
-2. complete Figma design proof when quota permits,
-3. run Freeze Review,
-4. then bootstrap production repository.
+1. complete Figma design proof when quota permits,
+2. run Freeze Review,
+3. then bootstrap production repository.
