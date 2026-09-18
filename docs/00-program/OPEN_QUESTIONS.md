@@ -92,7 +92,6 @@ Accepted/proven questions are no longer open:
 - Temporal, Redis, dedicated broker and dedicated search cluster are not baseline without a concrete trigger.
 
 Still open before technical/final freeze:
-- SPIKE-07 Windows install/update/rollback operational proof.
 - SPIKE-15 full cross-surface architectural proof and Ktor Client acceptance.
 - exact HTTP wire conventions that SPIKE-15 is intended to lock.
 - final Flyway baseline/version after exact schemas exist.
