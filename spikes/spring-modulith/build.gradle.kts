@@ -32,6 +32,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.modulith:spring-modulith-starter-test")
     testImplementation("org.springframework.modulith:spring-modulith-events-core")
+    testImplementation("org.springframework.modulith:spring-modulith-events-api")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
