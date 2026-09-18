@@ -1,14 +1,20 @@
 package com.hiltech.spike.audit
 
-import org.springframework.beans.factory.annotation.Value
+import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Component
 class AuditFailureSwitch(
-    @Value("${hiltech.spike.audit.fail:false}") failInitially: Boolean,
+    environment: Environment,
 ) {
-    private val failing = AtomicBoolean(failInitially)
+    private val failing = AtomicBoolean(
+        environment.getProperty(
+            "hiltech.spike.audit.fail",
+            Boolean::class.java,
+            false,
+        ),
+    )
 
     fun shouldFail(): Boolean = failing.get()
 
