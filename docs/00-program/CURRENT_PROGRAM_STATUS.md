@@ -17,7 +17,7 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | Layer | State | Notes |
 |---|---|---|
 | Program governance | STRONG FIRST PASS | Constitution, completeness, freeze/status controls exist |
-| Company reality | EARLY | Internal validation remains the biggest business blocker |
+| Company reality | REPRESENTATIVE FIRST-SLICE COVERAGE | Internal redacted fixtures validate Project/Field/Warehouse structure; remaining reality is seed/terminology/legal/device validation for affected scope |
 | Human map | FIRST PASS | Main personas covered |
 | Role experiences | FIRST PASS | Main personas covered |
 | Product map | FIRST PASS | Domains/surfaces mapped |
@@ -33,13 +33,13 @@ HILTECH is now specified deeply enough that most major business objects, transit
 | Design thesis/system | FIRST PASS | Visual tokens/font/colors not frozen |
 | Offline/sync | SPIKE-PROVEN CORE | Room queue, idempotent retry, stale conflict, WorkManager reconnect and real Ktor replay proven; final field UX/policy remains |
 | Integration/hardware | FIRST PASS | Real vendors/systems unknown |
-| API/read models | FIRST PASS | Conventions/error/versioning/read architecture defined |
-| Stack | EVIDENCE-BASED PRE-FREEZE | Accepted/proven vs leading/TBD tracked in `docs/12-stack/STACK_VERSION_MATRIX.md`; no final stack yet |
-| System architecture | v0.1 | Spike/reality dependent |
+| API/read models | FIRST-SLICE CONTRACT v0.3 | /v1 routes, DTO/error/cursor/visibility/OpenAPI publication semantics closed for first slice |
+| Stack | ADVANCED PRE-FREEZE | Technical stack proven; OCI provider baseline accepted via ADR-014; Windows/ops/cutover validation still blocks FINAL_STACK |
+| System architecture | FIRST-SLICE CONTRACT-READY | Core architecture proven; provider instantiation now OCI baseline |
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | PROPOSED | Not bootstrapped |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted; remaining work is freeze closure, not technical feasibility |
-| Implementation order | NOT FINAL | Depends on spikes/reality |
+| Implementation order | PROPOSED v0.2 | Technical spikes closed; first-slice contract/provider/design Freeze closure remains |
 | Production code | NOT STARTED | Intentionally |
 
 ---
@@ -139,11 +139,13 @@ Proven / accepted directions:
 - Full PM Desktop → Android offline/process-death/reconnect → Supervisor → PM authoritative vertical — **SPIKE-15 accepted**.
 
 Still freeze-dependent:
-- jOOQ generated-schema/codegen conventions freeze with exact production schemas.
+- production Flyway SQL/jOOQ generated code are post-Freeze bootstrap artifacts; their pre-code generation/constraint conventions are already contract-defined.
 - Keycloak 26.7.4 + native OIDC Authorization Code/PKCE — **SPIKE-08 accepted**.
 - WorkManager 2.11.2 background execution — **SPIKE-13 accepted**.
 - Windows MSI installer-swap operational baseline — **SPIKE-07 / ADR-012 accepted**; exact enterprise distribution/updater and production signing remain open.
-- exact production object-storage provider remains intentionally open.
+- OCI production infrastructure baseline — **ADR-014 accepted PRE-FREEZE**; Jeddah tenancy/quota/latency validation remains.
+- OCI Object Storage + KMS + Secret Management accepted provider baseline.
+- OpenTelemetry Collector → OCI observability baseline accepted while telemetry contract stays vendor-neutral.
 
 ---
 
@@ -164,24 +166,25 @@ Canonical next-step artifacts:
 - `docs/13-delivery/first-slice-contract-pack/14_FREEZE_GAP_REGISTER.md` — current narrow remaining blockers; use this instead of broad old “reality/technical unknown” language.
 
 Contract conversion status:
-- Configuration contract candidate complete.
-- Project/Site/Work contract candidate complete.
-- Asset/Warehouse/Stock contract candidate complete.
-- API route/DTO candidate v0.2 complete.
-- PostgreSQL table-shape candidate v0.2 complete.
-- Room local entity candidate v0.2 complete.
-- Authorization/OpenFGA candidate complete.
-- Evidence and test matrix candidates complete.
+- Configuration structural contract v0.3 complete.
+- Project/Site/Work core contract v0.3 structurally closed.
+- Asset/Warehouse/Stock core contract structurally closed.
+- API HTTP semantic contract v0.3 closed.
+- PostgreSQL table + DDL/constraint + Flyway/jOOQ generation contracts defined.
+- Room/offline local storage/retry/migration contract v0.3 defined.
+- OpenFGA model executable and CI-green; Postgres↔FGA fail-closed consistency contract defined.
+- Evidence storage/security contract structurally closed.
+- OCI infrastructure/provider baseline accepted via ADR-014 and first-slice infrastructure contract.
 - Representative internal reality fixtures added.
-- remaining work is narrow finalization + visual/provider/ops closure.
+- remaining work is primarily visual/design proof + OCI cutover/ops + Windows signing/distribution + final stack/version review.
 
 Immediate pre-code continuation:
-1. Reality validation with Mohamed/Ahmed/project/warehouse/field.
-2. Freeze exact DB/API/local/auth/file contracts for the starting implementation slices.
-3. Complete representative low-fi / RTL / conflict / adaptive validation.
-4. Finish provider/runtime/Windows distribution/signing decisions and final version re-check.
-5. Create FINAL_STACK.md only when evidence supports it.
-6. Call Freeze Review.
+1. Complete representative low-fi / RTL / conflict / adaptive design validation for the first production slice.
+2. Validate OCI tenancy/Jeddah quota/service/latency and close runtime sizing/DR/observability operations.
+3. Close Windows production signing + enterprise distribution/update choice.
+4. Review initial seed data/device constraints only where the pilot needs them.
+5. Re-check version pins and create FINAL_STACK.md when the remaining operational/design evidence supports it.
+6. Call first-slice Freeze Review.
 
 No production code yet by design.
 
