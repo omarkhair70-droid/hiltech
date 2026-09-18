@@ -1,7 +1,7 @@
 # HILTECH Low-Fidelity Figma Prototype Status
 
 Date: 2026-09-18
-Status: **CANVAS SPECS COMPLETE / ACTUAL VISUAL FREEZE BLOCKED BY FIGMA STARTER MCP QUOTA**
+Status: **FIGMA PAUSED / FIRST-SLICE VISUAL GATE PASSED VIA INTERACTIVE RENDERED PROOF**
 
 Figma file:
 HILTECH OS — Low Fidelity Product Prototypes
@@ -200,9 +200,10 @@ Observed:
 
 Conclusion:
 - file access exists,
-- the current blocker is MCP quota/seat-plan tooling availability,
+- Figma MCP is quota-limited,
 - do not repeatedly burn MCP calls,
-- actual rendered design validation remains open.
+- actual rendered design validation remains open,
+- but the validation is now proceeding through the interactive browser prototype rather than waiting for Figma.
 
 Exact canvas execution queue:
 `FIRST_SLICE_DESIGN_FREEZE_EXECUTION_PACK_2026-09-18.md`
@@ -219,3 +220,51 @@ That pack now covers:
 - navigation comparison.
 
 No additional product interaction discovery is required before those frames can be built.
+
+
+---
+
+## Interactive Prototype Replacement Path
+
+The Figma file remains useful historical low-fi evidence, but Figma is no longer required to close the first-slice visual gate.
+
+Approved replacement:
+`prototypes/first-slice-design/`
+
+Why:
+- same written contracts,
+- real rendered browser layout,
+- real responsive dimensions,
+- real RTL direction,
+- interactive state switching,
+- explicit offline/conflict/authoritative states,
+- automated screenshot evidence.
+
+Current prototype coverage:
+- Technician Job,
+- Warehouse Checkout,
+- Configuration Center,
+- Supervisor / Engineer Review,
+- Project Command Center,
+- one-product navigation comparison.
+
+Automated proof:
+- Playwright,
+- 37 expected screenshots,
+- workflow `.github/workflows/design-prototype-render.yml`,
+- manifest `INTERACTIVE_FIRST_SLICE_RENDERED_PROOF_MANIFEST_2026-09-18.md`.
+
+Figma can resume later for higher-fidelity visual identity, component craft and design collaboration.
+
+It is not a first-slice architecture dependency.
+
+
+Design gate result: **PASS**
+
+Accepted alternative proof:
+- interactive browser prototype,
+- run `35396169606`,
+- 37 rendered screenshots,
+- artifact digest `sha256:6988eb2f01613a0e89c72a74f90e5304ddc349b1d8bc9e49819ec5f0056ac1b3`.
+
+The Figma quota is no longer a first-slice blocker.
