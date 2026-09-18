@@ -105,6 +105,7 @@ Accepted:
 - SPIKE-04 offline command queue/conflict.
 - SPIKE-05 Android Camera/QR/evidence.
 - SPIKE-06 desktop dense data.
+- SPIKE-07 Windows packaging/update/rollback.
 - SPIKE-08 Keycloak native OIDC.
 - SPIKE-09 authorization model/OpenFGA.
 - SPIKE-10 Spring Modulith recovery.
@@ -113,12 +114,11 @@ Accepted:
 - SPIKE-13 WorkManager background sync.
 - SPIKE-14 observability.
 
-Active:
-- SPIKE-07 Windows packaging/update/rollback.
-
-Ready after the remaining isolated gate:
+Active / next technical gate:
 - SPIKE-15 end-to-end PM -> technician offline -> supervisor -> PM proof.
 - SPIKE-15 also acts as the final Ktor/shared-networking acceptance gate.
+
+All isolated technical spikes required before SPIKE-15 are now accepted.
 
 Every spike ends:
 ACCEPT / REJECT / MODIFY.
