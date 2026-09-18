@@ -177,6 +177,8 @@ See `docs/13-delivery/DEFINITION_OF_COMPLETE.md`.
 - PEOPLE-019 Access clearance
 - PEOPLE-020 Asset clearance
 - PEOPLE-021 Former employee retention/history
+- PEOPLE-022 Financial imprest/cash custody assignment
+- PEOPLE-023 Financial imprest settlement/clearance
 
 # ONB — New Hire
 
@@ -288,6 +290,11 @@ See `docs/13-delivery/DEFINITION_OF_COMPLETE.md`.
 - FIN-018 Audit/history
 - FIN-019 Export/reporting
 - FIN-020 Bank integration adapter
+- FIN-021 Financial imprest issue
+- FIN-022 Imprest spending/receipt capture
+- FIN-023 Imprest replenishment
+- FIN-024 Imprest settlement/reconciliation
+- FIN-025 Imprest shortage/overage handling
 
 # PAY — Payroll
 
