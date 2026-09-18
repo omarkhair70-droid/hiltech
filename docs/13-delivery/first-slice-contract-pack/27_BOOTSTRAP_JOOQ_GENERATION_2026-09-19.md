@@ -1,7 +1,7 @@
 # 27 — Bootstrap jOOQ Generation Gate
 
 Date: 2026-09-19
-Status: **IMPLEMENTED / CI VERIFICATION PENDING**
+Status: **PASS / BOOTSTRAP VERIFIED**
 
 ## Purpose
 
@@ -57,4 +57,12 @@ Excluded technical table:
 This change does not add business tables or revise state models.
 It mechanically consumes the already-generated and contract-tested first-slice schema.
 
-CI PASS is required before this gate can be marked closed.
+Bootstrap verification:
+- GitHub Actions run `35401655574`
+- empty PostgreSQL migration: PASS
+- first-slice constraint test: PASS
+- jOOQ Kotlin generation: PASS
+- required generated table-source verification: PASS
+- server compile against generated jOOQ sources: PASS
+
+This gate is closed.
