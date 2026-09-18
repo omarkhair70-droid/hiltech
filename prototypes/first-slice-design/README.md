@@ -53,13 +53,52 @@ The prototype visualizes contracts under:
 
 If prototype behavior contradicts a frozen contract, fix/review the design; do not silently redefine production semantics in this lab.
 
-## Next screens
+## Current proof coverage
 
-1. Warehouse Checkout
-2. Configuration Center
-3. Supervisor / Engineer Review
-4. Project Command Center contract update
-5. Conflict board
-6. RTL comparison
-7. Tablet/adaptive comparison
-8. Navigation comparison
+### Technician Job
+- READY
+- OFFLINE / IN PROGRESS
+- BLOCKED
+- SUBMITTED
+- CONFLICT
+- REWORK
+
+### Warehouse Checkout
+- AVAILABLE
+- RESERVED SAME WORK
+- CALIBRATION BLOCKED
+- CHECKOUT COLLISION
+- SUCCESS
+
+### Configuration Center
+- ACTIVE
+- DRAFT
+- INVALID
+- ACTIVATION REVIEW
+- VERSION CONFLICT
+- SUPERSEDED HISTORY
+
+### Supervisor / Engineer Review
+- CLEAN SUBMISSION
+- MISSING EVIDENCE
+- REWORK DECISION
+- STALE VERSION
+
+### Project Command Center
+- HEALTHY
+- ATTENTION
+- CRITICAL
+- ON HOLD
+
+### Navigation
+- one-product mobile/desktop role comparison
+
+### Cross-cutting proof
+- English
+- Arabic RTL
+- Phone
+- Tablet
+- Desktop
+- authoritative vs local/conflict states
+
+Automated Playwright capture produces 36 rendered proof images in CI.
