@@ -1,6 +1,6 @@
 # Exact Object Specs — Asset, Stock & Warehouse
 
-Status: DOMAIN DATA MODEL v0.1 / NOT SCHEMA-FROZEN
+Status: DOMAIN DATA MODEL v0.2 / PRE-FREEZE / CONTRACT PACK CANONICAL
 
 ---
 
@@ -9,46 +9,74 @@ Status: DOMAIN DATA MODEL v0.1 / NOT SCHEMA-FROZEN
 ## Purpose
 Canonical identity for an individually tracked physical company/client asset.
 
+## State dimensions
+
+### AssetLifecycleState
+- ACTIVE
+- RETIREMENT_REQUESTED
+- RETIRED
+
+### AssetConditionState
+- UNKNOWN
+- GOOD
+- FAIR
+- DAMAGED
+- UNFIT
+
+### Custody
+Derived from accepted AssetMovement/custody projection:
+- STORED
+- CHECKED_OUT
+- IN_TRANSFER
+- UNKNOWN
+
+### Calibration / maintenance
+Derived from AssetTypeDefinition + records:
+- calibration: NOT_REQUIRED / VALID / DUE / EXPIRED / IN_PROGRESS
+- maintenance: NONE / DUE / IN_PROGRESS
+
+### Missing/lost
+Modeled as AssetIncident + availability blocker, not destructive identity replacement.
+
+### Availability
+Derived read-model result from lifecycle + custody + reservation + condition + calibration + maintenance + incidents.
+No editable duplicate availability truth.
+
 ## Fields
 - id: UUID — R
 - assetCode: String — R unique human ID
-- assetTypeId: UUID/String — R
+- assetTypeDefinitionId: UUID — R
+- assetTypeRevision: Int — R
 - manufacturer: String — O
 - model: String — O
-- serialNumber: String — O, unique where manufacturer context supports
-- ownershipType: COMPANY / CLIENT / RENTED / OTHER — R
-- lifecycleState: AssetState — R
-- conditionState: AssetCondition — R
-- currentWarehouseId: UUID — O
-- currentLocationRef: ObjectRef — O
-- currentCustodianUserId: UUID — O
-- currentProjectId: UUID — O
-- currentSiteId: UUID — O
+- serialNumber: String — O
+- ownershipTypeCode: String — R
+- lifecycleState: AssetLifecycleState — R
+- conditionState: AssetConditionState — R
 - purchaseDate: LocalDate — O — RESTRICTED
 - acquisitionCost: Decimal — O — RESTRICTED
 - currency: ISO4217 — O
 - warrantyStart/end: LocalDate — O
-- calibrationRequired: Boolean — R
-- calibrationDueAt: Instant/Date — O
+- calibrationDueAt: Instant — O — derived/cache optimization
 - maintenancePlanRef: UUID — O
 - tagId: UUID — O
 - lastObservedAt: Instant — O
-- lastObservedSource: enum — O
+- lastObservedSource: String — O
 - version: Long — R
 - createdAt/by
 - retiredAt — O
 
 ## Invariants
-- one assetCode per asset.
-- one active custody at a time.
-- currentCustodian/currentLocation are projections from movement/lifecycle, not free-form authoritative edits.
-- calibration-required + expired blocks AVAILABLE-for-use where policy.
-- retired/disposed asset cannot be checked out.
-- acquisitionCost field restricted.
+- one Asset identity survives tags/transfers/projects/damage/repair.
+- one active authoritative physical custody.
+- current custodian/location/project/site are projections, not free-form authoritative edits.
+- RETIRED cannot be normally reserved/checked out.
+- condition/calibration/maintenance/incident facts can block derived availability.
+- acquisitionCost restricted.
 
 ## Offline
 Passport cached.
-Damage report local-first.
+Damage/missing report local-first where allowed.
 Checkout final authority online by default.
 
 ---
@@ -138,31 +166,57 @@ Telemetry/access/camera correlation cannot automatically set blame.
 
 # Warehouse
 
+## Purpose
+Business/facility grouping for warehouse operations when a full warehouse concept is needed.
+
 ## Fields
-- id
-- code
-- name
-- facilityId
-- address/location ref
-- active
-- managerUserId — O
-- version
+- id: UUID
+- organizationId: UUID
+- code: String
+- name: String
+- facilityRef — O
+- active: Boolean
+- version: Long
+
+Current Maadi warehouse is seed/master data, not schema limit.
 
 ---
 
 # StorageLocation
 
+## Purpose
+Scalable physical/logical storage identity supporting both warehouses and temporary Project/Site storage.
+
+## kind
+- MAIN_WAREHOUSE
+- WAREHOUSE
+- PROJECT_STORAGE
+- SITE_STORAGE
+- OTHER_TYPED
+
 ## Fields
-- id
-- warehouseId
-- parentLocationId — O
+- id: UUID
+- organizationId: UUID
 - code
 - name
-- type: ZONE/AISLE/RACK/SHELF/BIN
-- restrictedAccess
+- kind
+- parentStorageLocationId — O
+- warehouseId — O
+- projectId — O
+- siteId — O
+- temporary: Boolean
+- activeFrom/activeUntil — O
+- responsibleRelationshipCode — O
+- restrictedAccess: Boolean
+- address/location ref — O
+- notes — O
 - version
 
-No cyclic hierarchy.
+## Invariants
+- no cyclic hierarchy.
+- Project/Site storage references valid context.
+- retiring location preserves movement/history.
+- new movements cannot target invalid retired location.
 
 ---
 
@@ -308,5 +362,12 @@ Security-linked location history: RESTRICTED/HIGHLY_RESTRICTED if correlated wit
 Stock quantity: INTERNAL
 Supplier-linked cost/value: RESTRICTED
 
-## Next
-Reality walkthrough determines actual categories, units, serialized rules, calibration data, and storage hierarchy.
+## Canonical implementation bridge
+
+First-slice implementation contracts now exist in:
+- `docs/13-delivery/first-slice-contract-pack/12_ASSET_WAREHOUSE_CONTRACT.md`
+- `00_CONFIGURATION_POLICY_SCHEMAS.md`
+- `03_POSTGRES_FLYWAY_JOOQ.md`
+- `05_AUTHORIZATION_POLICY_TESTS.md`
+
+Warehouse reality supplies seed/master data and validates structural coverage; it does not define permanent code enums or cap future scale.
