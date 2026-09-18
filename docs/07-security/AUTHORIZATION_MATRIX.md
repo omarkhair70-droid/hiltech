@@ -18,6 +18,8 @@ Legend:
 | Internal project cost | FULL | FULL | POLICY | NO | NO | NO | POLICY | CONTEXT | NO | POLICY | NO | NO | NO |
 | Payroll run | POLICY | FULL | NO | NO | NO | OWN payslip | NO | NO | CONTEXT | NO | OWN payslip only | NO | NO |
 | Payment execution | POLICY | POLICY | NO | NO | NO | NO | NO | NO | NO | NO | NO | NO | NO |
+| Employee advance | POLICY | FULL | OWN self-service | OWN self-service | OWN self-service | OWN self-service | OWN self-service | OWN self-service | CONTEXT/FULL if delegated | OWN self-service | NO | NO | NO |
+| Financial imprest / cash custody | POLICY | FULL | REQUEST/CONTEXT | OWN if custodian | OWN if custodian | OWN if custodian | OWN if custodian | REQUEST/CONTEXT | NO by default | OWN if custodian | NO | NO | NO |
 | Employee HR record | POLICY | CONTEXT | CONTEXT | OWN | OWN | OWN | NO | NO | FULL | NO | NO | NO | NO |
 | Warehouse inventory | FULL | CONTEXT | CONTEXT | CONTEXT | CONTEXT | OWN custody | FULL | CONTEXT | CONTEXT | NO | CLIENT assets only | PO context only | ASSIGNED |
 | Asset checkout/return | POLICY | NO | REQUEST | REQUEST | POLICY | OWN/REQUEST | FULL | NO | NO | NO | NO | NO | POLICY |
