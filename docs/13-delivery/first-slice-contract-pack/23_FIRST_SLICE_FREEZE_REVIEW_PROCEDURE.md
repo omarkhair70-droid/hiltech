@@ -446,10 +446,12 @@ Provider contract:
 PASS.
 
 Stack/version:
-pending final AGP patch validation.
+**PASS** — FINAL_STACK.md created; AGP 9.3.3 focused run 35389326629 PASS.
 
 Rendered design:
-FAIL / external Figma quota blocker.
+**FAIL / external Figma quota blocker.**
 
 Therefore:
 **do not run final PASS decision yet.**
+
+The only current pre-code failure is rendered design proof.
