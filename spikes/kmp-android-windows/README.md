@@ -19,7 +19,7 @@ HILTECH can use Kotlin Multiplatform + Compose Multiplatform with:
 - Gradle 9.5.0 in CI
 - JDK 17
 - Android compile/target SDK 36
-- min SDK 21
+- min SDK 23
 - Activity Compose 1.13.0
 
 AGP 9.4 is intentionally not used because Kotlin 2.4.20's official compatibility table lists AGP support through 9.3.1.
@@ -58,3 +58,8 @@ It is NOT production bootstrap.
 ## Android SDK note
 
 Android 17 / API 37 is currently a preview SDK line. The spike intentionally uses stable Android 16 / API 36 so the architecture decision is not coupled to preview SDK availability on CI runners.
+
+
+## Minimum Android note
+
+The spike uses minSdk 23 because the current Android dependency line includes androidx.navigationevent 1.0.2, whose manifest requires API 23+. Final HILTECH minimum SDK remains subject to the real company device inventory, but API 23 is the minimum viable value for this tested dependency line.
