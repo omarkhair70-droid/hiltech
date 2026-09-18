@@ -146,6 +146,9 @@ Still freeze-dependent:
 - OCI production infrastructure baseline — **ADR-014 accepted PRE-FREEZE**; Jeddah tenancy/quota/latency validation remains.
 - OCI Object Storage + KMS + Secret Management accepted provider baseline.
 - OpenTelemetry Collector → OCI observability baseline accepted while telemetry contract stays vendor-neutral.
+- DigiCert OV + KeyLocker production Windows signing accepted via ADR-019.
+- HILTECH Update Service + private OCI artifact distribution accepted; MDM remains optional adapter.
+- staged recovery: PILOT PITR/cross-region backup; STABLE Jeddah→Riyadh Warm Standby with 5-minute enforced RPO target.
 
 ---
 
