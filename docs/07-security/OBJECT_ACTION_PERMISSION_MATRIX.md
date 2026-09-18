@@ -107,6 +107,64 @@ This matrix refines the coarse role matrix. Final rules may be relationship-base
 
 ---
 
+# Employee Advance
+
+Classification: **HIGHLY_RESTRICTED**.
+
+| Action | Owner | Finance | HR/Admin | Employee | PM/Supervisor |
+|---|---|---|---|---|---|
+| View | POLICY | YES | CONTEXT/POLICY | OWN | NO |
+| Create/request | NO | POLICY on behalf | POLICY on behalf | OWN | NO |
+| Edit draft | NO | POLICY | POLICY | OWN before submit | NO |
+| Submit | NO | POLICY on behalf | POLICY on behalf | OWN | NO |
+| Approve exact version | POLICY | POLICY | NO unless explicitly delegated | NO | NO |
+| Reject/request change | POLICY | POLICY | NO unless delegated | NO | NO |
+| Issue/fund | POLICY if execution authority | POLICY | NO | NO | NO |
+| Submit settlement/cash-return evidence | NO | YES | CONTEXT | OWN | NO |
+| Accept settlement | POLICY | YES/POLICY | NO | NO | NO |
+| Create payroll-deduction instruction | POLICY | POLICY | CONTEXT only if policy requires | NO | NO |
+| Apply deduction to payroll run | POLICY | POLICY through payroll authority | POLICY input only | NO | NO |
+| Close | VIEW/POLICY | YES/POLICY | NO | NO | NO |
+| Export/history | POLICY | YES/POLICY | CONTEXT | OWN history | NO |
+
+Rules:
+- Employee sees own Advance only.
+- PM/Supervisor does not gain visibility because an Advance references a project/site.
+- issue requires authoritative finance/payment reference.
+- payroll deduction is a separate approved input; existence of an Advance never auto-deducts salary.
+- close requires reconciled zero outstanding balance unless an explicit approved correction/write-off policy exists.
+
+---
+
+# Financial Imprest / Cash Custody
+
+Classification: **HIGHLY_RESTRICTED**.
+
+| Action | Owner | Finance | Custodian Employee | PM | Procurement | HR/Admin |
+|---|---|---|---|---|---|---|
+| View | POLICY | YES | OWN | CONTEXT only | CONTEXT only | NO by default |
+| Request | NO | POLICY/on behalf | OWN/POLICY | REQUEST | REQUEST | NO |
+| Approve exact version | POLICY | POLICY | NO | NO | NO | NO |
+| Fund initial custody | POLICY if execution authority | POLICY | NO | NO | NO | NO |
+| Record spend/receipt | NO | YES/on behalf | OWN | NO | NO | NO |
+| Record cash return | NO | YES | OWN submit/confirm | NO | NO | NO |
+| Request replenishment | NO | POLICY | OWN/POLICY | CONTEXT | CONTEXT | NO |
+| Approve/fund replenishment | POLICY | POLICY | NO | NO | NO | NO |
+| Submit settlement | NO | CONTEXT | OWN | NO | NO | NO |
+| Review settlement | VIEW/POLICY | YES | VIEW own outcome | NO | NO | NO |
+| Resolve shortage/overage | POLICY | POLICY | ACKNOWLEDGE/CONTEXT | NO | NO | NO |
+| Clear/close | VIEW/POLICY | YES/POLICY | VIEW | NO | NO | NO |
+| Export full ledger | POLICY | YES/POLICY | OWN statement only | NO | NO | NO |
+
+Rules:
+- custody balance is derived from append-only ledger entries.
+- project/procurement context never grants financial-ledger edit rights.
+- shortage is explicit and cannot silently become a payroll deduction.
+- overage cannot disappear through balance editing.
+- settlement review cannot silently mutate submitted spend; it records explicit review outcomes.
+
+---
+
 # Payment
 
 | Action | Owner | Finance | HR | PM | Supplier/Employee/Client |
