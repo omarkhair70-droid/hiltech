@@ -22,17 +22,17 @@ Rules:
 | Component | Version / Line | Status | Evidence / Note |
 |---|---:|---|---|
 | Kotlin | 2.4.20 | PROVEN | SPIKE-01/02/03/04/06 |
-| Compose Multiplatform | 1.11.1 | PROVEN | Android + Windows build, dense desktop, RTL renders |
+| Compose Multiplatform | 1.11.1 | FINAL FIRST-SLICE PIN | 1.12.0 exists but intentionally deferred; 1.11.1 is HILTECH-proven across Android + Windows |
 | Android Gradle Plugin | 9.3.1 | PROVEN | SPIKE-01 client build line |
 | Android compile SDK | 36 | PROVEN | Android spike builds |
 | Android min SDK | 23 | PROVEN | SPIKE-01 candidate line |
 | JDK for client builds | 17 | PROVEN | Android/Windows KMP spikes |
 | Room3 | 3.0.3 | PROVEN / ACCEPTED | SPIKE-03 / ADR-006 |
 | SQLite bundled driver | 2.7.1 | PROVEN / ACCEPTED | SPIKE-03 |
-| KSP | 2.3.10 | PROVEN | SPIKE-03 |
+| KSP | 2.3.10 | FINAL FIRST-SLICE PIN | 2.3.12 exists but intentionally deferred; accepted Room/KMP proof remains on 2.3.10 |
 | Kotlin Coroutines | 1.11.0 | PROVEN | Room/offline spike line |
 | Android WorkManager | 2.11.2 | PROVEN / ACCEPTED | SPIKE-13 |
-| CameraX | 1.6.2 spike line | PROVEN | SPIKE-05; exact freeze version re-check before final freeze |
+| CameraX | 1.6.2 | FINAL FIRST-SLICE PIN | Current reviewed stable; SPIKE-05 proven |
 | Ktor Client | 3.5.2 | PROVEN / ACCEPTED | SPIKE-15 / ADR-007; Android OkHttp + JVM Desktop CIO |
 
 ---
@@ -135,10 +135,12 @@ Rules:
 | Component | Version / Line | Status | Evidence / Note |
 |---|---:|---|---|
 | GitHub Actions | hosted Linux + Windows | ACCEPTED | ADR-015; all spikes |
-| actions/checkout | v4 in current spike workflows | PROVEN | Re-check at production bootstrap |
-| actions/setup-java | v5 | PROVEN | Current spike workflows |
-| gradle/actions/setup-gradle | v4 | PROVEN | Current spike workflows |
-| Python setup action | v6 where used | PROVEN | Keycloak/evidence spikes |
+| actions/checkout | v7.0.1 @ `3d3c42e5aac5ba805825da76410c181273ba90b1` | FINAL PRODUCTION PIN | Full-SHA policy |
+| actions/setup-java | v6.0.1 @ `de7274f081f381c8f8158605e0321c36c376e2e6` | FINAL PRODUCTION PIN | Full-SHA policy |
+| gradle/actions/setup-gradle | v6.3.0 @ `9c971963bec38e04b3d30dcc455b5382be2fdbfb` | FINAL PRODUCTION PIN | Full-SHA policy |
+| OpenFGA contract action | v0.1.2 @ `e89aa8259796cd5ee5c1b1ae7d72c401029cb947` | FINAL CONTRACT PIN | Green run 35331537375 |
+| Action update policy | Dependabot weekly + reviewed SHA PRs | ACCEPTED | CI supply-chain contract |
+| Python setup action | exact production pin only if production workflow needs it | DEFERRED | Spike usage does not force production dependency |
 | Android emulator runner | ReactiveCircus v2 | SPIKE HARNESS | Not production dependency |
 
 ---
@@ -157,12 +159,23 @@ Rules:
 
 # Still Required Before FINAL_STACK.md
 
-1. OCI tenancy/Jeddah quota/service/latency cutover validation.
-2. DigiCert organization validation/KeyLocker operational activation and signed-MSI staging proof.
-3. Final OCI runtime shape/sizing/cost + OpenFGA/Keycloak deployment settings.
-4. Final observability retention/sampling/alert settings.
-5. Final technical recovery target/DR runbook validation.
-6. Final CI action pinning strategy.
-7. Capture exact resolved Flyway/transitive dependency lock at repository bootstrap and re-check all explicit current versions immediately before Freeze.
+Pre-code version gate:
+1. final focused AGP 9.3.3 compatibility validation.
 
-Only after those gates may FINAL_STACK.md be created.
+Already reviewed/closed at contract level:
+- current application/server dependency pins,
+- deliberate Compose/KSP non-upgrades,
+- immutable production GitHub Action SHAs,
+- OCI provider/runtime architecture,
+- DigiCert/Windows update architecture,
+- staged DR architecture.
+
+Bootstrap/cutover activation items do not block creating FINAL_STACK.md:
+- OCI tenancy/quota/latency/sizing/cost.
+- DigiCert certificate issuance/KeyLocker credential setup.
+- exact OCI/Terraform/Collector deployment pins after tenancy validation.
+- telemetry operational retention/sampling.
+- recovery rehearsals.
+- exact Flyway transitive resolved lock after Gradle bootstrap.
+
+Once AGP validation passes, FINAL_STACK.md may be created and the remaining pre-code blocker is design proof.
