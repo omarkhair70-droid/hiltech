@@ -31,8 +31,8 @@ Rules:
 | SQLite bundled driver | 2.7.1 | PROVEN / ACCEPTED | SPIKE-03 |
 | KSP | 2.3.10 | PROVEN | SPIKE-03 |
 | Kotlin Coroutines | 1.11.0 | PROVEN | Room/offline spike line |
-| Android WorkManager | 2.11.2 | ACTIVE SPIKE | SPIKE-13 |
-| CameraX | branch-pinned spike line | ACTIVE SPIKE | SPIKE-05; exact freeze version after pass |
+| Android WorkManager | 2.11.2 | PROVEN / ACCEPTED | SPIKE-13 |
+| CameraX | 1.6.2 spike line | PROVEN | SPIKE-05; exact freeze version re-check before final freeze |
 | Ktor Client | 3.5.2 observed candidate | LEADING | Must be proven/frozen through network/E2E path |
 
 ---
@@ -107,8 +107,8 @@ Rules:
 |---|---:|---|---|
 | Room durable command queue | accepted local pattern | PROVEN | SPIKE-03/04 |
 | Offline sync semantics | operationId + baseVersion + conflicts | PROVEN / ACCEPTED | SPIKE-04 / ADR-011 |
-| WorkManager reconnect/background execution | 2.11.2 | ACTIVE SPIKE | SPIKE-13 |
-| Camera/QR/evidence capture | current CameraX/QR spike line | ACTIVE SPIKE | SPIKE-05 |
+| WorkManager reconnect/background execution | 2.11.2 | PROVEN / ACCEPTED | SPIKE-13 |
+| Camera/QR/evidence capture | CameraX 1.6.2 + QR spike line | PROVEN | SPIKE-05 |
 | Binary evidence handoff | S3 protocol | PROVEN | SPIKE-12 |
 
 ---
@@ -140,17 +140,15 @@ Rules:
 
 # Still Required Before FINAL_STACK.md
 
-1. SPIKE-05 Android Camera / QR / Evidence.
-2. SPIKE-07 Windows install / update / rollback.
-3. SPIKE-13 Android background sync.
-4. SPIKE-15 end-to-end vertical proof.
-5. Ktor/network client proof through real HILTECH API path.
-6. Exact Flyway/version/migration baseline after schemas are frozen.
-7. Infrastructure/provider decision.
-8. Production object-storage provider.
-9. Windows distribution/update operational choice.
-10. Final server/runtime/container versions.
-11. Final CI action pinning strategy.
-12. One last current-version verification immediately before freeze.
+1. SPIKE-07 Windows install / update / rollback.
+2. SPIKE-15 end-to-end vertical proof.
+3. Ktor/network client proof through real HILTECH API path.
+4. Exact Flyway/version/migration baseline after schemas are frozen.
+5. Infrastructure/provider decision.
+6. Production object-storage provider.
+7. Windows distribution/update operational choice.
+8. Final server/runtime/container versions.
+9. Final CI action pinning strategy.
+10. One last current-version verification immediately before freeze.
 
 Only after those gates may FINAL_STACK.md be created.
