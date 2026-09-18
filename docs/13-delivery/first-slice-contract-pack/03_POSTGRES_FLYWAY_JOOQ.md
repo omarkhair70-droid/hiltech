@@ -279,6 +279,28 @@ Indexes:
 - project_manager_id + lifecycle_state.
 - client_organization_id + lifecycle_state.
 
+## project_health_projection
+
+Derived/read-model table or materialized projection candidate:
+- project_id uuid primary key
+- health_state varchar not null
+- signal_summary_json jsonb not null
+- baseline_version integer not null
+- as_of timestamptz not null
+
+Not authoritative editable business input.
+
+## project_progress_projection
+
+- project_id uuid primary key
+- baseline_version integer not null
+- accepted_weight numeric(20,6) not null
+- total_weight numeric(20,6) not null
+- progress_percent numeric(7,4) null
+- as_of timestamptz not null
+
+If total_weight = 0, progress_percent is null/UNKNOWN rather than divide-by-zero fake 0/100.
+
 ## site
 
 - id uuid primary key
@@ -371,8 +393,10 @@ Cycle prevention requires application + DB-safe validation strategy.
 - accepted_at timestamptz null
 - closed_at timestamptz null
 - priority_code varchar not null
-- instruction_revision bigint not null
-- instruction_ref uuid/varchar null
+- current_instruction_revision_id uuid null
+- current_policy_binding_id uuid null
+- progress_weight numeric(20,6) not null default 1.0
+- counts_toward_project_progress boolean not null default true
 - created_at timestamptz not null
 - created_by uuid not null
 - updated_at timestamptz not null
@@ -390,9 +414,11 @@ Indexes:
 
 ## work_policy_binding
 
-One row per WorkOrder binding snapshot:
+Versioned binding history:
 
-- work_order_id uuid primary key
+- id uuid primary key
+- work_order_id uuid not null
+- binding_revision integer not null
 - work_type_definition_id uuid not null
 - work_type_revision integer not null
 - assignment_policy_id uuid not null
@@ -410,8 +436,57 @@ One row per WorkOrder binding snapshot:
 - instruction_template_id uuid null
 - instruction_template_revision integer null
 - binding_created_at timestamptz not null
+- binding_created_by uuid not null
+- superseded_at timestamptz null
+- superseded_by_binding_id uuid null
+- rebind_reason text null
 
-If controlled rebind is allowed later, preserve prior binding history rather than overwrite in-place.
+Unique:
+- work_order_id + binding_revision.
+
+Constraint/index:
+- at most one unsuperseded/current binding per WorkOrder.
+
+WorkOrder.current_policy_binding_id references the current binding.
+
+## work_instruction_revision
+
+- id uuid primary key
+- work_order_id uuid not null
+- instruction_revision integer not null
+- source_instruction_template_id uuid null
+- source_instruction_template_revision integer null
+- payload_schema_version integer not null
+- structured_payload_json jsonb not null
+- summary_text text null
+- created_at timestamptz not null
+- created_by uuid not null
+- supersedes_instruction_revision_id uuid null
+- change_reason text null
+- correlation_id varchar not null
+
+Unique:
+- work_order_id + instruction_revision.
+
+## work_checklist_item_instance
+
+- id uuid primary key
+- work_order_id uuid not null
+- source_template_id uuid null
+- source_template_revision integer null
+- item_key varchar not null
+- label varchar not null
+- required boolean not null
+- sort_order integer not null
+- completion_state varchar not null
+- completed_at timestamptz null
+- completed_by uuid null
+- evidence_requirement_key varchar null
+- notes text null
+- version bigint not null
+
+Unique candidate:
+- work_order_id + item_key.
 
 ## work_assignment
 
@@ -827,6 +902,27 @@ Candidate:
 - last_error_code varchar null
 
 A stale event loads latest projection row and is skipped if superseded.
+
+# code allocation
+
+## code_sequence
+
+Server-authoritative human-code allocator.
+
+- scope_type varchar not null
+- scope_id uuid null
+- target_object_type varchar not null
+- policy_code varchar not null
+- sequence_period varchar not null
+- next_value bigint not null
+- version bigint not null
+- updated_at timestamptz not null
+
+Primary key:
+- scope_type + scope_id + target_object_type + policy_code + sequence_period.
+
+Allocation uses transaction/row locking or equivalent atomic update.
+UUID identity never depends on code allocation.
 
 # platform tables
 
