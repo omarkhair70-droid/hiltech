@@ -1,0 +1,45 @@
+name: Spike — OpenFGA Authorization
+
+on:
+  push:
+    branches:
+      - "spike/openfga-authorization-20260918"
+    paths:
+      - "spikes/openfga-authorization/**"
+      - ".github/workflows/spike-openfga-authorization.yml"
+  pull_request:
+    paths:
+      - "spikes/openfga-authorization/**"
+      - ".github/workflows/spike-openfga-authorization.yml"
+  workflow_dispatch:
+
+jobs:
+  authorization:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start OpenFGA 1.20.0
+        run: |
+          docker run -d --name openfga             -p 8080:8080             -e OPENFGA_DATASTORE_ENGINE=memory             -e OPENFGA_PLAYGROUND_ENABLED=false             openfga/openfga:v1.20.0 run
+
+      - name: Wait for OpenFGA health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs openfga
+          exit 1
+
+      - name: Run HILTECH authorization checks
+        env:
+          FGA_API_URL: http://127.0.0.1:8080
+        run: python3 spikes/openfga-authorization/test_hiltech_model.py
+
+      - name: OpenFGA logs on failure
+        if: failure()
+        run: docker logs openfga
