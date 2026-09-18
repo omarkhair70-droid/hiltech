@@ -134,3 +134,30 @@ Leading but still spike-dependent:
 6. Final ADRs/stack only after proof.
 
 No production code yet by design.
+
+
+---
+
+# 2026-09-18 Delivery / Validation Update
+
+Completed pre-code delivery artifacts:
+- PRE_CODE_ENDGAME.md
+- IMPLEMENTATION_ORDER.md
+- TEST_STRATEGY.md
+- CI_GATES.md
+- RELEASE_STRATEGY.md
+- MIGRATION_ROLLBACK_STRATEGY.md
+- OPERATIONAL_RUNBOOKS_INDEX.md
+- ADR control index
+
+Reality validation is now reduced to a finite External Facts Register and interview pack.
+
+There is no general management-approval blocker recorded.
+
+Remaining freeze blockers are evidence-based:
+1. unresolved real-company facts for affected domains,
+2. technical spike results,
+3. final design/RTL pass,
+4. final stack/ADR/schema lock derived from those results.
+
+Work that does not depend on those facts may continue immediately.
