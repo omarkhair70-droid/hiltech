@@ -22,7 +22,7 @@ on:
       - ".github/workflows/bootstrap-phase0.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   foundation:
@@ -43,30 +43,14 @@ jobs:
         with:
           gradle-version: "9.5.0"
 
-      - name: Generate and commit Gradle Wrapper
-        if: github.event_name == 'push'
+      - name: Verify committed Gradle Wrapper
         shell: bash
         run: |
-          if [[ ! -f gradle/wrapper/gradle-wrapper.jar ]]; then
-            WRAPPER_TMP="$(mktemp -d)"
-            pushd "$WRAPPER_TMP"
-            printf 'rootProject.name = "hiltech-wrapper-bootstrap"\n' > settings.gradle.kts
-            gradle wrapper --gradle-version 9.5.0 --distribution-type bin
-            popd
-
-            cp "$WRAPPER_TMP/gradlew" ./gradlew
-            cp "$WRAPPER_TMP/gradlew.bat" ./gradlew.bat
-            mkdir -p gradle/wrapper
-            cp "$WRAPPER_TMP/gradle/wrapper/gradle-wrapper.jar" gradle/wrapper/
-            cp "$WRAPPER_TMP/gradle/wrapper/gradle-wrapper.properties" gradle/wrapper/
-            chmod +x gradlew
-
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add gradlew gradlew.bat gradle/wrapper
-            git commit -m "bootstrap: commit Gradle 9.5.0 wrapper"
-            git push
-          fi
+          test -f gradlew
+          test -f gradlew.bat
+          test -f gradle/wrapper/gradle-wrapper.jar
+          test -f gradle/wrapper/gradle-wrapper.properties
+          grep -q 'gradle-9.5.0-bin.zip' gradle/wrapper/gradle-wrapper.properties
 
       - name: Verify wrapper version
         run: ./gradlew --version
@@ -74,26 +58,19 @@ jobs:
       - name: Shared tests
         run: ./gradlew :shared:core:allTests
 
-      - name: Preserve exported Room schema
+      - name: Verify committed Room schema
         shell: bash
         run: |
           SCHEMA_DIR="shared/core/schemas"
           SCHEMA_FILE="$SCHEMA_DIR/com.hiltech.shared.core.local.HiltechLocalDatabase/1.json"
 
           test -f "$SCHEMA_FILE"
+          git diff --exit-code -- "$SCHEMA_DIR"
 
-          if [[ -n "$(git status --porcelain -- "$SCHEMA_DIR")" ]]; then
-            if [[ "$GITHUB_EVENT_NAME" != "push" || "$GITHUB_REF_NAME" != bootstrap/* ]]; then
-              echo "Room schema export differs from the committed schema."
-              git status --short -- "$SCHEMA_DIR"
-              exit 1
-            fi
-
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add "$SCHEMA_DIR"
-            git commit -m "bootstrap: commit Room schema v1 export"
-            git push
+          if [[ -n "$(git status --porcelain --untracked-files=all -- "$SCHEMA_DIR")" ]]; then
+            echo "Room schema export differs from committed schema history."
+            git status --short --untracked-files=all -- "$SCHEMA_DIR"
+            exit 1
           fi
 
       - name: Android debug build
