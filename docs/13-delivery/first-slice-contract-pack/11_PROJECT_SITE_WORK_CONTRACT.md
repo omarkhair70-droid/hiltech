@@ -1,6 +1,6 @@
 # 11 — Project / Site / Work Contract
 
-Status: **CONTRACT CANDIDATE v0.2**
+Status: **CONTRACT CANDIDATE v0.3 / CORE PROJECT-WORK DECISIONS CLOSED**
 Date: 2026-09-18
 
 ## Purpose
@@ -167,12 +167,12 @@ This preserves one physical/site truth while allowing many project/service relat
 - latitude: Decimal? RESTRICTED
 - longitude: Decimal? RESTRICTED
 - timezone: IANA timezone?
-- status: ACTIVE / INACTIVE candidate
+- status: ACTIVE / INACTIVE
 - createdAt/by
 - updatedAt
 - version: Long
 
-Unique candidate:
+Unique:
 - clientOrganizationId + siteCode.
 
 Site itself does not carry project-specific access instructions that may change by contract/project.
@@ -194,8 +194,9 @@ Site itself does not carry project-specific access instructions that may change 
 Unique:
 - projectId + siteId unless a rare explicit multi-association case is justified.
 
-## ProjectSiteState candidate
+## ProjectSiteState
 
+Frozen first-slice enum:
 - PLANNED
 - ACTIVE
 - ON_HOLD
@@ -239,7 +240,7 @@ Every WorkOrder binds a versioned configuration context.
 
 ## WorkPolicyBinding
 
-Candidate immutable value/object:
+Versioned binding-history aggregate:
 
 - workTypeDefinitionId: UUID
 - workTypeRevision: Int
@@ -257,9 +258,19 @@ Candidate immutable value/object:
 - checklistTemplateRevision: Int?
 - instructionTemplateId: UUID?
 - instructionTemplateRevision: Int?
+- bindingRevision: Int
 - bindingCreatedAt: Instant
+- bindingCreatedBy: UUID
+- supersededAt: Instant?
+- supersededByBindingId: UUID?
+- rebindReason: String?
 
-The exact persistence may be normalized rows or columns/JSON hybrid, but these semantics are required.
+Persistence decision:
+- normalized `work_policy_binding` history table.
+- one current unsuperseded binding per WorkOrder.
+- WorkOrder stores `currentPolicyBindingId`.
+- unique (workOrderId, bindingRevision).
+- prior bindings are never overwritten.
 
 ---
 
@@ -286,7 +297,7 @@ The exact persistence may be normalized rows or columns/JSON hybrid, but these s
 - closedAt: Instant?
 - priorityCode: String/config value
 - instructionRevision: Int/Long
-- currentInstructionRef/payload
+- currentInstructionRevisionId: UUID
 - version: Long
 - createdAt/by
 - updatedAt
@@ -294,6 +305,76 @@ The exact persistence may be normalized rows or columns/JSON hybrid, but these s
 Assignments are not represented only by `assignedUserIds` + `assignedTeamId` columns.
 
 Use typed assignment records.
+
+---
+
+# 5A. Human code generation
+
+Project and WorkOrder UUIDs are identity.
+
+Human codes are allocated by active `CodePolicy`.
+
+First-slice rules:
+- Project code sequence default scope: ORGANIZATION.
+- WorkOrder code sequence default scope: PROJECT.
+- actual prefix/year/padding/reset behavior comes from active CodePolicy.
+- server allocates generated sequences transactionally.
+- CreateProject/CreateWorkOrder may accept an explicit human code only when CodePolicy.manualOverrideAllowed = true.
+- code collision returns validation/conflict; server never silently renames historical codes.
+- changing CodePolicy affects future allocations only.
+
+No fixed HILTECH prefix is compiled into code.
+
+---
+
+# 5B. Work instruction revisions
+
+`WorkInstructionRevision` is append-only/versioned.
+
+Fields:
+- id: UUID
+- workOrderId: UUID
+- instructionRevision: Int
+- sourceInstructionTemplateId: UUID?
+- sourceInstructionTemplateRevision: Int?
+- payloadSchemaVersion: Int
+- structuredPayloadJson: schema-validated JSON
+- summaryText: String?
+- createdAt
+- createdBy
+- supersedesInstructionRevisionId: UUID?
+- changeReason: String?
+- correlationId
+
+Rules:
+- unique (workOrderId, instructionRevision).
+- WorkOrder.currentInstructionRevisionId points to latest authoritative revision.
+- after ASSIGNED, material instruction revision is an explicit online-authoritative command that increments WorkOrder version and makes old offline bundles stale.
+- stale offline Start/Submit cannot apply against a newer material instruction/WorkOrder version.
+- prior instruction revisions remain readable in audit/history.
+
+---
+
+# 5C. Checklist materialization
+
+ChecklistTemplate activation does not make runtime completion live only in config JSON.
+
+When a WorkOrder binds/materializes a checklist, create `WorkChecklistItemInstance` rows:
+
+- id
+- workOrderId
+- sourceTemplateId/revision
+- itemKey
+- label
+- required
+- sortOrder
+- completionState: PENDING / COMPLETE / NOT_APPLICABLE
+- completedAt/by?
+- evidenceRequirementKey?
+- notes?
+- version
+
+This enables offline completion, query, audit and review without parsing an opaque template blob.
 
 ---
 
@@ -560,17 +641,52 @@ It must exclude unrelated finance/commercial/security/private data.
 
 # 12. Project progress
 
-Candidate principle:
+## First-slice progress contract
 
-Project/milestone progress derives from accepted WorkOrders where a configured progress model exists.
+Numeric operational progress derives from **ACCEPTED WorkOrders only**.
 
-Do not let manual percentage silently override structured accepted truth.
+Each WorkOrder stores:
+- countsTowardProjectProgress: Boolean
+- progressWeight: Decimal(20,6), defaulted from bound WorkTypeDefinition but snapshotted on the WorkOrder/baseline.
 
-Still to freeze:
-- work weighting.
-- milestone aggregation.
-- treatment of rework/reopen.
-- non-WorkOrder milestones.
+For a baseline scope:
+
+`progress = acceptedIncludedWeight / totalIncludedBaselineWeight × 100`
+
+Rules:
+- CANCELLED or explicitly baseline-excluded work contributes neither numerator nor denominator.
+- scope addition/removal that changes denominator must occur through controlled baseline/variation change and increments baselineVersion.
+- IN_PROGRESS/SUBMITTED/REWORK work contributes 0 to accepted progress in the first slice; no subjective partial-completion percentage.
+- ACCEPTED contributes full snapshotted weight.
+- an already ACCEPTED WorkOrder is not casually reopened in first slice; correction/new scope uses controlled rework/change/new WorkOrder path.
+- Milestone progress uses the same weight rule over its included WorkOrders when a WorkOrder→Milestone relation exists.
+- non-WorkOrder milestone/status items are shown as state/checkpoints and do not silently alter numeric work progress.
+
+The UI may show additional operational indicators, but manual percent is not authoritative truth.
+
+## ProjectHealth
+
+Derived projection:
+- UNKNOWN
+- HEALTHY
+- ATTENTION
+- CRITICAL
+- ON_HOLD
+
+Rules:
+- ON_HOLD project lifecycle overrides to ON_HOLD.
+- otherwise active typed health signals are evaluated under bound/active ProjectHealthPolicy.
+- every non-HEALTHY result exposes contributing signal codes/objects.
+- ProjectHealth is not a stored editable manager opinion.
+- finance/commercial risk may later contribute only through separately permissioned signals.
+
+First-slice signals can derive from:
+- overdue included WorkOrders,
+- BLOCKED WorkOrders,
+- rework backlog,
+- resource-readiness failures,
+- milestone delay,
+- explicit client-action-required blockers.
 
 ---
 
@@ -688,14 +804,23 @@ Work:
 
 # 17. Open items before final freeze
 
-- exact SiteState enum.
-- exact projectCode/workOrderCode generation rules.
-- exact string lengths.
-- exact ProjectHealth model.
-- exact progress weighting model.
-- exact typed instruction/checklist persistence.
-- exact Project/Site field subset from representative real project.
-- exact policy binding DB representation.
+No broad Project/Site/Work structural decision remains.
+
+Closed in v0.3:
+- Site status and ProjectSite lifecycle.
+- CodePolicy-driven Project/WorkOrder codes.
+- ProjectHealth explainable signal model.
+- accepted-weight progress formula.
+- typed instruction revision persistence.
+- materialized checklist item instances.
+- representative field subset structurally validated by internal fixtures.
+- versioned normalized WorkPolicyBinding history representation.
+
+Still required outside domain structure:
+- final physical DDL/indexes.
+- final API route/schema normalization.
+- visual/RTL proof.
+- provider/ops and contract-test closure.
 
 Current decision:
-**Project/Site/Work domain is structurally contract-ready; remaining items are narrow freeze-closure decisions, not domain rediscovery.**
+**Project/Site/Work core domain contract is structurally closed for first-slice freeze.**
