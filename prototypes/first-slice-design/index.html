@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HILTECH First-Slice Design Lab</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="lab-shell">
+    <aside class="lab-panel">
+      <div class="lab-brand">
+        <div class="brand-mark">H</div>
+        <div>
+          <strong>HILTECH</strong>
+          <span>First-Slice Design Lab</span>
+        </div>
+      </div>
+
+      <section>
+        <p class="eyebrow">SCREEN</p>
+        <h2>Technician Job</h2>
+        <p class="muted">Interactive design proof — not production code.</p>
+      </section>
+
+      <section class="control-group">
+        <p class="eyebrow">STATE</p>
+        <button data-state="ready" class="control active">Ready / Online</button>
+        <button data-state="offline" class="control">In progress / Offline</button>
+        <button data-state="conflict" class="control">Conflict</button>
+        <button data-state="rework" class="control">Rework</button>
+      </section>
+
+      <section class="control-group">
+        <p class="eyebrow">VIEWPORT</p>
+        <button data-view="phone" class="control active">Phone</button>
+        <button data-view="tablet" class="control">Tablet</button>
+        <button data-view="desktop" class="control">Desktop</button>
+      </section>
+
+      <section class="control-group">
+        <p class="eyebrow">LANGUAGE</p>
+        <button data-lang="en" class="control active">English</button>
+        <button data-lang="ar" class="control">العربية RTL</button>
+      </section>
+
+      <section class="lab-note">
+        <strong>Design contract</strong>
+        <p>Local vs authoritative truth must always be visible. No fake success. No silent overwrite.</p>
+      </section>
+    </aside>
+
+    <section class="stage">
+      <div id="device" class="device phone">
+        <div id="screen" class="app-screen"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
