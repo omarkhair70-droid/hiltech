@@ -4,6 +4,7 @@ import json
 import pathlib
 import secrets
 import threading
+import requests
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from queue import Empty, Queue
 from urllib.parse import parse_qs, urlparse
@@ -62,6 +63,23 @@ class LoopbackCallback:
     def start(self):
         self.thread.start()
 
+        smoke_state = "loopback-smoke-" + secrets.token_urlsafe(8)
+        smoke = requests.get(
+            "http://127.0.0.1:53682/callback",
+            params={"state": smoke_state, "code": "smoke"},
+            timeout=5,
+        )
+        core.require(
+            smoke.status_code == 200,
+            "Loopback callback listener smoke request failed",
+        )
+        smoke_query = self.next_query(timeout=5)
+        core.require(
+            smoke_query.get("state", [None])[0] == smoke_state,
+            "Loopback callback listener smoke state mismatch",
+        )
+        print("SPIKE-08 LOOPBACK LISTENER PASS")
+
     def next_query(self, timeout=20):
         try:
             return self.events.get(timeout=timeout)
@@ -114,10 +132,41 @@ def windows_browser_flow():
                 state,
             )
 
+            page.on(
+                "framenavigated",
+                lambda frame: print("SPIKE-08 NAV " + frame.url)
+                if frame == page.main_frame else None,
+            )
+            page.on(
+                "request",
+                lambda request: print("SPIKE-08 REQUEST " + request.method + " " + request.url)
+                if (
+                    "protocol/openid-connect" in request.url or
+                    request.url.startswith(core.WINDOWS_REDIRECT)
+                ) else None,
+            )
+
             page.goto(first_url, wait_until="domcontentloaded")
             page.locator("#username").fill(core.USERNAME)
             page.locator("#password").fill(core.PASSWORD)
-            page.locator("#kc-login").click()
+
+            try:
+                page.locator("#kc-login").click()
+                page.wait_for_url(
+                    core.WINDOWS_REDIRECT + "*",
+                    timeout=15_000,
+                    wait_until="domcontentloaded",
+                )
+            except Exception as exc:
+                print(
+                    "SPIKE-08 WINDOWS CALLBACK DEBUG " +
+                    "url=" + page.url +
+                    " title=" + repr(page.title()) +
+                    " usernameVisible=" + str(page.locator("#username").is_visible()) +
+                    " passwordVisible=" + str(page.locator("#password").is_visible()) +
+                    " error=" + repr(exc)
+                )
+                raise
 
             first_code = expect_callback(callback, state)
             windows_tokens = core.exchange_code(
