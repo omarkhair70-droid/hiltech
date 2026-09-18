@@ -1,0 +1,225 @@
+name: Spike — Android Background Sync
+
+on:
+  push:
+    branches:
+      - "spike/android-background-sync-20260918"
+    paths:
+      - "spikes/kmp-android-windows/**"
+      - ".github/workflows/spike-android-background-sync.yml"
+  pull_request:
+    paths:
+      - "spikes/kmp-android-windows/**"
+      - ".github/workflows/spike-android-background-sync.yml"
+  workflow_dispatch:
+
+jobs:
+  android-background-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    defaults:
+      run:
+        working-directory: spikes/kmp-android-windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Prepare Android SDK and emulator image
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/emulator" >> "$GITHUB_PATH"
+
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort | tail -n 1)"
+          AVDMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name avdmanager 2>/dev/null | sort | tail -n 1)"
+
+          if [ -z "$SDKMANAGER" ] || [ -z "$AVDMANAGER" ]; then
+            echo "Android command-line tools not found"
+            exit 1
+          fi
+
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER"             "platform-tools"             "emulator"             "platforms;android-36"             "build-tools;36.0.0"             "system-images;android-36;google_apis;x86_64"
+
+          echo no | "$AVDMANAGER" create avd             --force             --name hiltech-api36             --package "system-images;android-36;google_apis;x86_64"             --device "pixel_6"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Build Android debug APK
+        run: gradle :androidApp:assembleDebug --stacktrace
+
+      - name: Start API 36 emulator
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          sudo chmod 666 /dev/kvm || true
+
+          nohup "$ANDROID_HOME/emulator/emulator"             -avd hiltech-api36             -no-window             -no-audio             -no-boot-anim             -no-snapshot             -gpu swiftshader_indirect             > /tmp/hiltech-emulator.log 2>&1 &
+
+          adb wait-for-device
+
+          for i in $(seq 1 180); do
+            BOOT="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+            if [ "$BOOT" = "1" ]; then
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" != "1" ]; then
+            cat /tmp/hiltech-emulator.log
+            exit 1
+          fi
+
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+
+      - name: Install spike APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APK="$(find androidApp/build/outputs/apk/debug -name '*-debug.apk' | head -n 1)"
+          test -n "$APK"
+          adb install -r "$APK"
+
+      - name: Real WorkManager reconnect retry battery lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PKG="com.hiltech.spike.android"
+          RECEIVER="$PKG/.sync.SyncSpikeReceiver"
+          ACTION="com.hiltech.spike.ENQUEUE_SYNC"
+
+          read_probe () {
+            local ID="$1"
+            adb shell run-as "$PKG" cat "files/sync-$ID.txt" 2>/dev/null | tr -d '\r' || true
+          }
+
+          wait_state () {
+            local ID="$1"
+            local EXPECTED="$2"
+            local LIMIT="$3"
+            local START
+            START="$(date +%s)"
+
+            while true; do
+              VALUE="$(read_probe "$ID")"
+              echo "probe=$ID value=[$VALUE]"
+
+              if echo "$VALUE" | grep -q "state=$EXPECTED"; then
+                return 0
+              fi
+
+              NOW="$(date +%s)"
+              if [ $((NOW - START)) -ge "$LIMIT" ]; then
+                echo "Timed out waiting for $ID -> $EXPECTED"
+                adb shell dumpsys jobscheduler | grep -i -A8 -B3 hiltech || true
+                return 1
+              fi
+
+              sleep 1
+            done
+          }
+
+          assert_not_state () {
+            local ID="$1"
+            local FORBIDDEN="$2"
+            VALUE="$(read_probe "$ID")"
+            if echo "$VALUE" | grep -q "state=$FORBIDDEN"; then
+              echo "Unexpected state for $ID: $VALUE"
+              exit 1
+            fi
+          }
+
+          go_offline () {
+            adb shell svc wifi disable || true
+            adb shell svc data disable || true
+            adb shell settings put global airplane_mode_on 1 || true
+            adb shell am broadcast               -a android.intent.action.AIRPLANE_MODE               --ez state true >/dev/null || true
+            adb shell cmd connectivity airplane-mode enable >/dev/null 2>&1 || true
+            sleep 3
+          }
+
+          go_online () {
+            adb shell cmd connectivity airplane-mode disable >/dev/null 2>&1 || true
+            adb shell settings put global airplane_mode_on 0 || true
+            adb shell am broadcast               -a android.intent.action.AIRPLANE_MODE               --ez state false >/dev/null || true
+            adb shell svc data enable || true
+            adb shell svc wifi enable || true
+            sleep 5
+          }
+
+          # ---- Network constraint + process death + reconnect ----
+          go_offline
+
+          adb shell am broadcast             -n "$RECEIVER"             -a "$ACTION"             --es probeId "network-restart"             --ez retryOnce false             --ez batteryNotLow false >/dev/null
+
+          wait_state "network-restart" "QUEUED" 15
+          sleep 5
+          assert_not_state "network-restart" "SYNCED"
+
+          adb shell am kill "$PKG" || true
+          sleep 2
+          assert_not_state "network-restart" "SYNCED"
+
+          go_online
+          wait_state "network-restart" "SYNCED" 90
+
+          # ---- Retry + exponential backoff ----
+          adb shell am broadcast             -n "$RECEIVER"             -a "$ACTION"             --es probeId "retry-once"             --ez retryOnce true             --ez batteryNotLow false >/dev/null
+
+          wait_state "retry-once" "RETRYABLE" 30
+          wait_state "retry-once" "SYNCED" 90
+
+          RETRY_VALUE="$(read_probe "retry-once")"
+          RETRY_ATTEMPTS="$(echo "$RETRY_VALUE" | awk -F= '/attempts=/{print $2}')"
+          if [ -z "$RETRY_ATTEMPTS" ] || [ "$RETRY_ATTEMPTS" -lt 2 ]; then
+            echo "Expected retry attempts >= 2, got: $RETRY_VALUE"
+            exit 1
+          fi
+
+          # ---- Battery-not-low OS constraint ----
+          adb shell dumpsys battery unplug >/dev/null
+          adb shell dumpsys battery set status 3 >/dev/null
+          adb shell dumpsys battery set level 5 >/dev/null
+          adb shell am broadcast -a android.intent.action.BATTERY_LOW >/dev/null || true
+          sleep 2
+
+          adb shell am broadcast             -n "$RECEIVER"             -a "$ACTION"             --es probeId "battery-gate"             --ez retryOnce false             --ez batteryNotLow true >/dev/null
+
+          wait_state "battery-gate" "QUEUED" 15
+          sleep 5
+          assert_not_state "battery-gate" "SYNCED"
+
+          adb shell dumpsys battery set level 80 >/dev/null
+          adb shell dumpsys battery set status 2 >/dev/null
+          adb shell am broadcast -a android.intent.action.BATTERY_OKAY >/dev/null || true
+          wait_state "battery-gate" "SYNCED" 60
+
+          adb shell dumpsys battery reset >/dev/null || true
+
+          echo "HILTECH_WORKMANAGER_PASS reconnect_after_process_death=PASS retry_backoff=PASS battery_constraint=PASS user_state=PASS"
+
+      - name: Emulator diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          adb shell dumpsys jobscheduler | grep -i -A15 -B5 hiltech || true
+          adb logcat -d -t 1000 | grep -i -E 'WorkManager|hiltech|SyncProbe' || true
+          cat /tmp/hiltech-emulator.log || true
