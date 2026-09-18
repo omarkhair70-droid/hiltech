@@ -45,11 +45,15 @@ class FgaClient(
             "OpenFGA check failed: ${response.statusCode()} ${response.body()}"
         }
 
-        return Regex("\\"allowed\\"\\s*:\\s*(true|false)")
-            .find(response.body())
-            ?.groupValues
-            ?.get(1)
-            ?.toBooleanStrict()
-            ?: error("OpenFGA response missing allowed: ${response.body()}")
+        val normalized = response.body()
+            .replace(" ", "")
+            .replace("\n", "")
+            .replace("\r", "")
+
+        return when {
+            "\"allowed\":true" in normalized -> true
+            "\"allowed\":false" in normalized -> false
+            else -> error("OpenFGA response missing allowed: ${response.body()}")
+        }
     }
 }
