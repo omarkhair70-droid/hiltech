@@ -1,0 +1,70 @@
+name: Spike — End-to-End Vertical
+
+on:
+  push:
+    branches:
+      - "spike/e2e-vertical-20260918"
+    paths:
+      - "spikes/kmp-android-windows/**"
+      - "spikes/e2e-vertical-server/**"
+      - ".github/workflows/spike-e2e-vertical.yml"
+      - ".github/scripts/spike15-**"
+  pull_request:
+    paths:
+      - "spikes/kmp-android-windows/**"
+      - "spikes/e2e-vertical-server/**"
+      - ".github/workflows/spike-e2e-vertical.yml"
+      - ".github/scripts/spike15-**"
+  workflow_dispatch:
+
+jobs:
+  compile-shared-client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Prepare Android SDK
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort | tail -n 1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Compile Android + Desktop shared Ktor contract
+        working-directory: spikes/kmp-android-windows
+        run: |
+          gradle :androidApp:assembleDebug :desktopApp:classes --stacktrace
+          echo "HILTECH_SPIKE15_KTOR_COMPILE_PASS android=PASS desktop=PASS"
+
+  compile-server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Compile Spring authoritative server
+        working-directory: spikes/e2e-vertical-server
+        run: |
+          gradle classes --stacktrace
+          echo "HILTECH_SPIKE15_SERVER_COMPILE_PASS"
