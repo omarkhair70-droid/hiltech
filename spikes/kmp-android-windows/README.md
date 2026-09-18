@@ -8,7 +8,7 @@ HILTECH can use Kotlin Multiplatform + Compose Multiplatform with:
 - a shared UI/domain module,
 - a separate Android application entrypoint,
 - a separate Windows/JVM desktop entrypoint,
-- current stable Kotlin/Compose versions,
+- current stable Kotlin/Compose versions and stable Android SDK,
 - AGP 9 KMP-compatible project structure.
 
 ## Versions
@@ -18,7 +18,7 @@ HILTECH can use Kotlin Multiplatform + Compose Multiplatform with:
 - Android Gradle Plugin 9.3.1
 - Gradle 9.5.0 in CI
 - JDK 17
-- Android compile/target SDK 37
+- Android compile/target SDK 36
 - min SDK 21
 - Activity Compose 1.13.0
 
@@ -53,3 +53,8 @@ REJECT if:
 
 This directory is disposable spike evidence.
 It is NOT production bootstrap.
+
+
+## Android SDK note
+
+Android 17 / API 37 is currently a preview SDK line. The spike intentionally uses stable Android 16 / API 36 so the architecture decision is not coupled to preview SDK availability on CI runners.
