@@ -219,8 +219,10 @@ Accepted / spike-proven directions:
 - OpenTelemetry-compatible correlation contract
 - S3-compatible binary evidence protocol
 
+Accepted / proven additional direction:
+- Ktor Client 3.5.2 shared networking — SPIKE-15 / ADR-007.
+
 Leading but not yet frozen:
-- Ktor Client
 - Flyway
 - production object-storage provider
 - infrastructure/provider/runtime packaging
@@ -250,7 +252,7 @@ Architecture models now exist for:
 ### Technical proof
 `TECHNICAL_SPIKE_PLAN.md` defines 15 required spikes before final stack freeze.
 
-Accepted so far:
+Accepted:
 - SPIKE-01 KMP Android + Windows
 - SPIKE-02 Arabic / RTL adaptive layout
 - SPIKE-03 Room KMP local DB
@@ -265,9 +267,14 @@ Accepted so far:
 - SPIKE-12 binary evidence pipeline
 - SPIKE-13 Android background sync
 - SPIKE-14 observability
+- SPIKE-15 end-to-end architectural vertical + Ktor networking
 
-Next technical gate:
-- SPIKE-15 end-to-end vertical proof
+**Technical-spike gate: CLOSED / ACCEPTED.**
+
+Final vertical evidence:
+- GitHub Actions run 35323209954,
+- companion Room/offline/WorkManager regressions all green,
+- ADR-007 accepted.
 
 No production code has started intentionally.
 
@@ -308,10 +315,10 @@ If implementation would still require choosing fundamental data ownership, permi
 **NOT READY.**
 
 The remaining pre-code gates are:
-1. Run SPIKE-15 and record the resulting final technical/networking decisions.
-2. Validate affected workflows/policies against actual HILTECH reality.
-3. Complete representative low-fi/RTL/design validation for the core internal product.
-4. Convert validated models into exact DB/API/local/auth/file contracts and finish stack/provider decisions.
+1. Validate affected workflows/policies against actual HILTECH reality.
+2. Complete representative low-fi/RTL/design validation for the core internal product.
+3. Convert validated models into exact DB/API/local/auth/file contracts for the starting slices.
+4. Finish remaining provider/runtime/production-signing decisions and final version re-check.
 5. Pass Freeze Review before repository bootstrap or production code.
 
 See `CURRENT_PROGRAM_STATUS.md` and `FREEZE_CHECKLIST.md`.
