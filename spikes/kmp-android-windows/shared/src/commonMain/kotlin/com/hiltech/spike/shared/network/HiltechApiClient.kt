@@ -9,6 +9,7 @@ import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
@@ -61,6 +62,24 @@ data class EvidenceReservation(
     val contentType: String,
 )
 
+@Serializable
+data class AuditEventView(
+    val correlationId: String,
+    val traceparent: String,
+    val operationId: String,
+    val actor: String,
+    val commandType: String,
+    val objectId: String,
+    val resultingState: String? = null,
+    val objectVersion: Long? = null,
+)
+
+@Serializable
+data class AuditResponse(
+    val events: List<AuditEventView>,
+    val projectionCount: Int,
+)
+
 class HiltechApiClient(
     baseUrl: String,
     private val tokenProvider: suspend () -> String,
@@ -105,13 +124,31 @@ class HiltechApiClient(
             ),
         )
 
+    suspend fun touchWork(
+        operationId: String,
+        correlationId: String,
+        workOrderId: String,
+        baseVersion: Long,
+    ): CommandResponse =
+        postCommand(
+            path = "/v1/work-orders/$workOrderId/touch",
+            request = WorkCommandRequest(
+                operationId = operationId,
+                correlationId = correlationId,
+                commandType = "PMUpdateWork",
+                objectType = "work_order",
+                objectId = workOrderId,
+                baseVersion = baseVersion,
+            ),
+        )
+
     suspend fun getOfflineBundle(
         workOrderId: String,
         correlationId: String,
     ): OfflineBundle =
         client.get("$root/v1/work-orders/$workOrderId/offline-bundle") {
             bearerAuth(tokenProvider())
-            header("X-Correlation-Id", correlationId)
+            correlationHeaders(correlationId)
         }.body()
 
     suspend fun getWorkOrder(
@@ -120,7 +157,7 @@ class HiltechApiClient(
     ): WorkOrderView =
         client.get("$root/v1/work-orders/$workOrderId") {
             bearerAuth(tokenProvider())
-            header("X-Correlation-Id", correlationId)
+            correlationHeaders(correlationId)
         }.body()
 
     suspend fun acceptWork(
@@ -150,7 +187,7 @@ class HiltechApiClient(
     ): EvidenceReservation =
         client.post("$root/v1/work-orders/$workOrderId/evidence/reserve") {
             bearerAuth(tokenProvider())
-            header("X-Correlation-Id", correlationId)
+            correlationHeaders(correlationId)
             header("Idempotency-Key", evidenceId)
             contentType(ContentType.Application.Json)
             setBody(
@@ -162,6 +199,17 @@ class HiltechApiClient(
             )
         }.body()
 
+    suspend fun uploadEvidenceBytes(
+        reservation: EvidenceReservation,
+        bytes: ByteArray,
+    ): Int {
+        val response = client.put(reservation.uploadUrl) {
+            contentType(ContentType.parse(reservation.contentType))
+            setBody(bytes)
+        }
+        return response.status.value
+    }
+
     suspend fun finalizeEvidence(
         workOrderId: String,
         evidenceId: String,
@@ -169,15 +217,28 @@ class HiltechApiClient(
     ): CommandResponse =
         client.post("$root/v1/work-orders/$workOrderId/evidence/$evidenceId/finalize") {
             bearerAuth(tokenProvider())
-            header("X-Correlation-Id", correlationId)
+            correlationHeaders(correlationId)
             header("Idempotency-Key", "finalize-$evidenceId")
         }.body()
+
+    suspend fun audit(correlationId: String): AuditResponse =
+        client.get("$root/v1/audit") {
+            bearerAuth(tokenProvider())
+            correlationHeaders(correlationId)
+        }.body()
+
+    suspend fun reset(correlationId: String) {
+        client.post("$root/v1/test/reset") {
+            bearerAuth(tokenProvider())
+            correlationHeaders(correlationId)
+        }
+    }
 
     suspend fun replay(command: PendingCommandEntity): SyncSendResult {
         val correlationId = "sync-" + command.operationId
         val response = client.post("$root/v1/sync/commands") {
             bearerAuth(tokenProvider())
-            header("X-Correlation-Id", correlationId)
+            correlationHeaders(correlationId)
             header("Idempotency-Key", command.operationId)
             contentType(ContentType.Application.Json)
             setBody(
@@ -236,11 +297,26 @@ class HiltechApiClient(
     ): CommandResponse =
         client.post(root + path) {
             bearerAuth(tokenProvider())
-            header("X-Correlation-Id", request.correlationId)
+            correlationHeaders(request.correlationId)
             header("Idempotency-Key", request.operationId)
             contentType(ContentType.Application.Json)
             setBody(request)
         }.body()
+
+    private fun io.ktor.client.request.HttpRequestBuilder.correlationHeaders(
+        correlationId: String,
+    ) {
+        header("X-Correlation-Id", correlationId)
+        header("traceparent", traceparentFor(correlationId))
+    }
+
+    private fun traceparentFor(correlationId: String): String {
+        val left = correlationId.hashCode().toUInt().toString(16).padStart(8, '0')
+        val right = correlationId.reversed().hashCode().toUInt().toString(16).padStart(8, '0')
+        val traceId = (left + right + left + right).take(32)
+        val spanId = (right + left).take(16)
+        return "00-$traceId-$spanId-01"
+    }
 }
 
 expect fun createPlatformHiltechHttpClient(): HttpClient
