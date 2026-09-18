@@ -5,6 +5,7 @@ import com.hiltech.shared.core.local.PendingCommandStates
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
@@ -30,6 +31,7 @@ class KtorPendingCommandTransportTest {
             val body = request.body as TextContent
             assertTrue(body.text.contains("\"operationId\":\"op-42\""))
             assertTrue(body.text.contains("\"baseVersion\":7"))
+            assertTrue(body.text.contains("\"clientOccurredAt\":\"2023-11-14T22:13:20Z\""))
             assertTrue(body.text.contains("\"localSiteSessionRef\":\"site-session\""))
 
             respond(
@@ -113,10 +115,10 @@ class KtorPendingCommandTransportTest {
                 respond(
                     content = """{"code":"FAILED_RETRYABLE","message":"Unavailable","correlationId":"retry-corr","retryable":true}""",
                     status = HttpStatusCode.ServiceUnavailable,
-                    headers = headersOf(
-                        HttpHeaders.ContentType, "application/json",
-                        HttpHeaders.RetryAfter, "7",
-                    ),
+                    headers = Headers.build {
+                        append(HttpHeaders.ContentType, "application/json")
+                        append(HttpHeaders.RetryAfter, "7")
+                    },
                 )
             } else {
                 respond(

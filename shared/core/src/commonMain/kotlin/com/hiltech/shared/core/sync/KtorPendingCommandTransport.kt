@@ -12,6 +12,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -22,6 +23,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kotlin.time.Instant
 
 fun interface AccessTokenProvider {
     suspend fun accessToken(): String
@@ -75,10 +77,12 @@ class KtorPendingCommandTransport(
             )
 
         val correlationId = correlationIdProvider.correlationId()
+        val accessToken = tokenProvider.accessToken()
+
         val response = client.request(normalizedBaseUrl + route) {
             method = HttpMethod.Post
             contentType(ContentType.Application.Json)
-            header(HttpHeaders.Authorization, "Bearer ${tokenProvider.accessToken()}")
+            header(HttpHeaders.Authorization, "Bearer $accessToken")
             header("Idempotency-Key", command.operationId)
             header("X-Correlation-Id", correlationId)
             header("X-Client-Platform", clientMetadata.platform)
@@ -128,7 +132,12 @@ class KtorPendingCommandTransport(
             put("operationId", JsonPrimitive(command.operationId))
             command.baseVersion?.let { put("baseVersion", JsonPrimitive(it)) }
                 ?: put("baseVersion", JsonNull)
-            put("clientOccurredAt", JsonPrimitive(command.clientOccurredAtEpochMs))
+            put(
+                "clientOccurredAt",
+                JsonPrimitive(
+                    Instant.fromEpochMilliseconds(command.clientOccurredAtEpochMs).toString(),
+                ),
+            )
         }
 
         return merged.toString()
