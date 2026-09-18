@@ -137,3 +137,6 @@ Use, do not duplicate:
 
 17. `17_FREEZE_TO_BOOTSTRAP_BOUNDARY.md`
    - canonical line between pre-code contract Freeze and post-Freeze repository/bootstrap implementation verification.
+
+18. `18_PRODUCTION_INFRASTRUCTURE_CONTRACT.md`
+   - OCI production topology, environments, network, PostgreSQL/Object Storage/KMS/Secrets, IaC, deployment and cutover validation contract.
