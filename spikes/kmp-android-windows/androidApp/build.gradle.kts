@@ -23,4 +23,5 @@ android {
 dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.activity.compose)
+    implementation("androidx.work:work-runtime:2.11.2")
 }
