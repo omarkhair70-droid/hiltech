@@ -449,8 +449,57 @@ PostgreSQL truth
 This closes the generic "how do Postgres and OpenFGA stay safe?" architecture gap.
 
 Remaining authorization work:
-- exact OpenFGA DSL relations/permissions,
-- exact table DDL/indexes,
-- exact projector retry/backoff constants,
-- exact synchronous-wait timeout for immediate-authority UX,
+- exact production table DDL/indexes.
 - production OpenFGA deployment/provider operational details.
+
+Closed:
+- OpenFGA DSL/fixtures validated.
+- projector retry/backoff constants.
+- 2-second synchronous fast-path budget.
+- no first-slice application allow-cache.
+
+
+---
+
+# 23. Retry / fast-path / cache constants
+
+## Synchronous authority-change fast path
+
+After PostgreSQL commit:
+- attempt immediate OpenFGA projection within a 2-second server budget.
+- if APPLIED inside budget, return AUTHORIZATION_APPLIED.
+- if not, return BUSINESS_COMMITTED_AUTH_PENDING and let durable projector continue.
+- a pending grant stays denied.
+- a pending revoke stays locally denied.
+
+The business request does not hold a distributed transaction open.
+
+## Projector retry schedule
+
+- 1s
+- 2s
+- 5s
+- 10s
+- 30s
+- 1m
+- 2m
+- 5m cap with +/-20% jitter thereafter
+
+Permanent/model/validation error:
+- mark FAILED.
+- fail closed.
+- surface operations exception.
+- do not infinite-loop a non-retryable write.
+
+## Authorization decision cache
+
+First production slice:
+- no application-level positive/allow decision cache in front of OpenFGA for critical actions.
+- server may reuse connection pools/transport and OpenFGA may use its own supported internals.
+- deny/fail-closed guards remain local PostgreSQL truth.
+
+A future application-level authorization cache requires:
+- bounded TTL,
+- relation/model-aware key,
+- invalidation on projection change,
+- proof that revoke/offboarding cannot be bypassed.
