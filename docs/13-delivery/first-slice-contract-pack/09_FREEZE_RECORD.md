@@ -64,8 +64,8 @@ Project / Site / Work / Warehouse Asset Custody / Technician Offline / Evidence 
 - [x] object-storage provider selected — OCI Object Storage + KMS.
 - [x] Windows signing/distribution architecture selected — DigiCert OV + KeyLocker + HILTECH Update Service / ADR-019.
 - [x] staged backup/DR engineering baseline defined — PILOT PITR/copy, STABLE Jeddah→Riyadh Warm Standby.
-- [ ] final explicit version re-check immediately before Freeze.
-- [ ] final production CI action pin review.
+- [x] final explicit first-slice version review completed — FINAL_STACK.md.
+- [x] production CI action pin policy/review completed — immutable full-SHA baseline.
 
 Operational account/certificate/quota/latency/rehearsal items are production activation gates unless they expose a contract contradiction.
 
@@ -159,3 +159,25 @@ Pre-code Freeze requires exact contracts + test specifications.
 It does not require production Flyway SQL, Spring/Ktor/Room implementation, production UI code, or implementation tests that only exist after repository bootstrap.
 
 Those become immediate Bootstrap Verification gates.
+
+
+---
+
+## Current blocking summary
+
+Contract consistency: **PASS**.
+
+Final stack/version review: **PASS**.
+
+Provider architecture: **PASS at contract level**.
+
+Remaining hard pre-code gate:
+- **actual rendered design proof**.
+
+Current blocker source:
+- Figma Starter/View MCP quota.
+
+Therefore:
+`FIRST_SLICE_FREEZE = NOT YET PASS`
+
+for design evidence only.
