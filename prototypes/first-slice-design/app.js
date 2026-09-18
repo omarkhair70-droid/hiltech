@@ -418,7 +418,7 @@ const projectCopy={
     healthy:"HEALTHY", attention:"ATTENTION", critical:"CRITICAL", hold:"ON HOLD",
     progress:"Accepted progress", waiting:"Waiting on", work:"Work pipeline", resources:"Resource readiness", activity:"Activity",
     signals:{healthy:["No active critical signals"],attention:["2 overdue Work Orders","1 blocked by site access"],critical:["Rack delivery milestone +4 days","Fluke-03 unavailable","3 Work Orders blocked"],hold:["Project lifecycle is ON_HOLD"]},
-    healthSignals:"Health signals", people:"People", material:"Material", equipment:"Equipment", access:"Access",
+    healthSignals:"Health signals", commandCenter:"Project Command Center", acceptedOnly:"accepted only", acceptedWeight:"Accepted weight 34 / baseline 50", explainable:"explainable", itemsLabel:"items", liveLabel:"live", derivedLabel:"derived", auditLabel:"audit-backed", people:"People", material:"Material", equipment:"Equipment", access:"Access",
     readyState:"READY", blockedState:"BLOCKED", pipeline:["Ready","In progress","Blocked","Review","Accepted"],
     waitingRows:{normal:[["Client access approval","Today · 14:00"],["Rack kit delivery","Tomorrow · 09:00"]],attention:[["Site access confirmation","Overdue · 6h"],["Rack kit delivery","Tomorrow · 09:00"]],critical:[["Client shutdown window","Overdue · 2d"],["Fluke-03 replacement","Blocked"],["Rack kit delivery","Overdue · 1d"]]},
     activityRows:["10:42 · Technician submitted WO-0042","10:37 · Asset AS-0048 checked out","09:58 · PM changed site access blocker"],
@@ -429,7 +429,7 @@ const projectCopy={
     healthy:"مستقر", attention:"يحتاج انتباه", critical:"حرج", hold:"متوقف",
     progress:"التقدم المقبول", waiting:"منتظر على", work:"خط الشغل", resources:"جاهزية الموارد", activity:"النشاط",
     signals:{healthy:["مفيش إشارات حرجة نشطة"],attention:["2 أمر شغل متأخر","1 متوقف بسبب دخول الموقع"],critical:["Milestone الراك متأخر 4 أيام","Fluke-03 غير متاح","3 أوامر شغل متوقفة"],hold:["حالة المشروع ON_HOLD"]},
-    healthSignals:"إشارات صحة المشروع", people:"الأفراد", material:"الخامات", equipment:"المعدات", access:"الدخول",
+    healthSignals:"إشارات صحة المشروع", commandCenter:"مركز قيادة المشروع", acceptedOnly:"المقبول فقط", acceptedWeight:"وزن مقبول 34 / خط أساس 50", explainable:"قابل للتفسير", itemsLabel:"عناصر", liveLabel:"مباشر", derivedLabel:"مُشتق", auditLabel:"مدعوم بالسجل", people:"الأفراد", material:"الخامات", equipment:"المعدات", access:"الدخول",
     readyState:"جاهز", blockedState:"متوقف", pipeline:["جاهز","قيد التنفيذ","متوقف","مراجعة","مقبول"],
     waitingRows:{normal:[["موافقة دخول العميل","اليوم · 14:00"],["وصول Rack kit","غدًا · 09:00"]],attention:[["تأكيد دخول الموقع","متأخر · 6 ساعات"],["وصول Rack kit","غدًا · 09:00"]],critical:[["نافذة إيقاف العميل","متأخر · يومين"],["بديل Fluke-03","متوقف"],["وصول Rack kit","متأخر · يوم"]]},
     activityRows:["10:42 · الفني أرسل WO-0042 للمراجعة","10:37 · تم تسليم الأصل AS-0048","09:58 · مدير المشروع عدّل عائق دخول الموقع"],
@@ -452,17 +452,17 @@ function renderProject(){
   '<div class="app admin-app" dir="'+dir+'">'+
     '<header class="topbar"><div class="top-left"><button class="icon-btn">⌂</button><span class="product-word">'+t.product+'</span></div><span class="sync"><i></i>'+t.synced+'</span></header>'+
     '<div class="content project-content">'+
-      '<section class="hero"><span class="kicker">Project Command Center</span><div class="title-row"><div><h1>'+t.title+'</h1><span class="code">'+t.code+' · baseline v7</span></div><span class="status '+statusClass+'">'+label+'</span></div></section>'+
+      '<section class="hero"><span class="kicker">'+t.commandCenter+'</span><div class="title-row"><div><h1>'+t.title+'</h1><span class="code">'+t.code+' · baseline v7</span></div><span class="status '+statusClass+'">'+label+'</span></div></section>'+
       '<div class="project-top-grid">'+
-        '<section class="section progress-card"><div class="section-head"><strong>'+t.progress+'</strong><span class="code">accepted only</span></div><div class="section-body"><div class="big-progress"><b>'+pct+'%</b><div><span style="width:'+pct+'%"></span></div><small>Accepted weight 34 / baseline 50</small></div></div></section>'+
-        '<section class="section"><div class="section-head"><strong>'+t.healthSignals+'</strong><span class="code">explainable</span></div><div class="section-body">'+signals.map(x=>'<div class="signal-row"><span class="'+(mode==="critical"?'signal-danger':mode==="attention"?'signal-warn':'signal-ok')+'"></span><b>'+x+'</b></div>').join("")+'</div></section>'+
+        '<section class="section progress-card"><div class="section-head"><strong>'+t.progress+'</strong><span class="code">'+t.acceptedOnly+'</span></div><div class="section-body"><div class="big-progress"><b>'+pct+'%</b><div><span style="width:'+pct+'%"></span></div><small>'+t.acceptedWeight+'</small></div></div></section>'+
+        '<section class="section"><div class="section-head"><strong>'+t.healthSignals+'</strong><span class="code">'+t.explainable+'</span></div><div class="section-body">'+signals.map(x=>'<div class="signal-row"><span class="'+(mode==="critical"?'signal-danger':mode==="attention"?'signal-warn':'signal-ok')+'"></span><b>'+x+'</b></div>').join("")+'</div></section>'+
       '</div>'+
       '<div class="project-main-grid">'+
-        '<section class="section"><div class="section-head"><strong>'+t.waiting+'</strong><span class="code">'+waitingRows.length+' items</span></div><div class="section-body">'+waitingRows.map(x=>'<div class="waiting-row"><div><b>'+x[0]+'</b><small>'+x[1]+'</small></div><span>›</span></div>').join("")+'</div></section>'+
-        '<section class="section"><div class="section-head"><strong>'+t.work+'</strong><span class="code">live</span></div><div class="section-body"><div class="pipeline"><div><b>12</b><small>'+t.pipeline[0]+'</small></div><div><b>7</b><small>'+t.pipeline[1]+'</small></div><div><b>3</b><small>'+t.pipeline[2]+'</small></div><div><b>4</b><small>'+t.pipeline[3]+'</small></div><div><b>28</b><small>'+t.pipeline[4]+'</small></div></div></div></section>'+
-        '<section class="section"><div class="section-head"><strong>'+t.resources+'</strong><span class="code">derived</span></div><div class="section-body"><div class="resource-row"><b>'+t.people+'</b><span class="status ready">'+t.readyState+'</span></div><div class="resource-row"><b>'+t.material+'</b><span class="status '+(mode==="critical"?'conflict':'ready')+'">'+(mode==="critical"?t.blockedState:t.readyState)+'</span></div><div class="resource-row"><b>'+t.equipment+'</b><span class="status '+(mode==="critical"?'conflict':'ready')+'">'+(mode==="critical"?t.blockedState:t.readyState)+'</span></div><div class="resource-row"><b>'+t.access+'</b><span class="status '+(mode==="attention"?'rework':'ready')+'">'+(mode==="attention"?t.attention:t.readyState)+'</span></div></div></section>'+
+        '<section class="section"><div class="section-head"><strong>'+t.waiting+'</strong><span class="code">'+waitingRows.length+' '+t.itemsLabel+'</span></div><div class="section-body">'+waitingRows.map(x=>'<div class="waiting-row"><div><b>'+x[0]+'</b><small>'+x[1]+'</small></div><span>›</span></div>').join("")+'</div></section>'+
+        '<section class="section"><div class="section-head"><strong>'+t.work+'</strong><span class="code">'+t.liveLabel+'</span></div><div class="section-body"><div class="pipeline"><div><b>12</b><small>'+t.pipeline[0]+'</small></div><div><b>7</b><small>'+t.pipeline[1]+'</small></div><div><b>3</b><small>'+t.pipeline[2]+'</small></div><div><b>4</b><small>'+t.pipeline[3]+'</small></div><div><b>28</b><small>'+t.pipeline[4]+'</small></div></div></div></section>'+
+        '<section class="section"><div class="section-head"><strong>'+t.resources+'</strong><span class="code">'+t.derivedLabel+'</span></div><div class="section-body"><div class="resource-row"><b>'+t.people+'</b><span class="status ready">'+t.readyState+'</span></div><div class="resource-row"><b>'+t.material+'</b><span class="status '+(mode==="critical"?'conflict':'ready')+'">'+(mode==="critical"?t.blockedState:t.readyState)+'</span></div><div class="resource-row"><b>'+t.equipment+'</b><span class="status '+(mode==="critical"?'conflict':'ready')+'">'+(mode==="critical"?t.blockedState:t.readyState)+'</span></div><div class="resource-row"><b>'+t.access+'</b><span class="status '+(mode==="attention"?'rework':'ready')+'">'+(mode==="attention"?t.attention:t.readyState)+'</span></div></div></section>'+
       '</div>'+
-      '<section class="section"><div class="section-head"><strong>'+t.activity+'</strong><span class="code">audit-backed</span></div><div class="section-body activity-line">'+t.activityRows.map(x=>'<span>'+x+'</span>').join("")+'</div></section>'+
+      '<section class="section"><div class="section-head"><strong>'+t.activity+'</strong><span class="code">'+t.auditLabel+'</span></div><div class="section-body activity-line">'+t.activityRows.map(x=>'<span>'+x+'</span>').join("")+'</div></section>'+
     '</div>'+
   '</div>';
 }
@@ -472,7 +472,8 @@ const navigationCopy={
   en:{
     product:"HILTECH · NAVIGATION", title:"One product · different role emphasis", subtitle:"Same truth, different entry points. Roles change emphasis — not separate apps.",
     mobile:"Mobile navigation", desktop:"Desktop navigation", principle:"Navigation rules", comparison:"Navigation comparison", oneProduct:"ONE PRODUCT", designRule:"DESIGN RULE",
-    rail:["Home","Work","Projects","People","Warehouse","Finance","Search","Inbox","Configuration"], workspace:"Context workspace", inspector:"Inspector", search:"⌘K · Search / Command", internal:"INTERNAL", external:"EXTERNAL",
+    mobileMeta:"role emphasis", desktopMeta:"global + context + inspector", ruleMeta:"frozen interaction rule", permissioned:"permissioned",
+    rail:["Home","Work","Projects","People","Warehouse","Finance","Search","Inbox","Configuration"], workspace:"Context workspace", workspaceDetail:"Project / Site / Work / Object", inspector:"Inspector", inspectorDetail:"Selected object, state, history, actions", search:"⌘K · Search / Command", internal:"INTERNAL", external:"EXTERNAL",
     rules:[
       "Home is role/context aware, not a generic dashboard.",
       "Work is the primary execution surface for internal users.",
@@ -494,7 +495,8 @@ const navigationCopy={
   ar:{
     product:"هيلتك · التنقل", title:"منتج واحد · تركيز مختلف حسب الدور", subtitle:"نفس الحقيقة ونفس النظام؛ الاختلاف في نقطة الدخول والتركيز، مش تطبيقات منفصلة.",
     mobile:"تنقل الموبايل", desktop:"تنقل الديسكتوب", principle:"قواعد التنقل", comparison:"مقارنة التنقل", oneProduct:"منتج واحد", designRule:"قاعدة تصميم",
-    rail:["الرئيسية","الشغل","المشاريع","الأفراد","المخزن","المالية","البحث","الوارد","الإعدادات"], workspace:"مساحة السياق", inspector:"المعاين", search:"⌘K · بحث / أمر", internal:"داخلي", external:"عميل",
+    mobileMeta:"تركيز حسب الدور", desktopMeta:"عام + سياق + معاين", ruleMeta:"قاعدة تفاعل ثابتة", permissioned:"حسب الصلاحية",
+    rail:["الرئيسية","الشغل","المشاريع","الأفراد","المخزن","المالية","البحث","الوارد","الإعدادات"], workspace:"مساحة السياق", workspaceDetail:"مشروع / موقع / شغل / عنصر", inspector:"المعاين", inspectorDetail:"العنصر المختار / الحالة / السجل / الإجراءات", search:"⌘K · بحث / أمر", internal:"داخلي", external:"عميل",
     rules:[
       "Home بتتغير حسب الدور والسياق، مش Dashboard عامة.",
       "Work هي مساحة التنفيذ الأساسية للمستخدم الداخلي.",
@@ -527,7 +529,7 @@ function renderNavigation(){
   ).join("");
 
   const rail=t.rail.map((x,i)=>
-    '<div class="rail-item '+(i===1?'selected':'')+'"><span>'+x+'</span><small>'+(x==="Configuration"?"permissioned":"")+'</small></div>'
+    '<div class="rail-item '+(i===1?'selected':'')+'"><span>'+x+'</span><small>'+(i===8?t.permissioned:"")+'</small></div>'
   ).join("");
 
   document.getElementById("screen").innerHTML=
@@ -536,10 +538,10 @@ function renderNavigation(){
     '<div class="content nav-content">'+
       '<section class="hero"><span class="kicker">'+t.comparison+'</span><div class="title-row"><div><h1>'+t.title+'</h1><p class="workspace-summary">'+t.subtitle+'</p></div><span class="status ready">'+t.oneProduct+'</span></div></section>'+
       '<div class="nav-proof-grid">'+
-        '<section class="section"><div class="section-head"><strong>'+t.mobile+'</strong><span class="code">role emphasis</span></div><div class="section-body nav-role-list">'+roleRows+'</div></section>'+
-        '<section class="section"><div class="section-head"><strong>'+t.desktop+'</strong><span class="code">global + context + inspector</span></div><div class="section-body desktop-nav-demo"><aside>'+rail+'</aside><main><div class="fake-command">⌘K · Search / Command</div><div class="fake-workspace"><b>Context workspace</b><small>Project / Site / Work / Object</small></div><div class="fake-inspector"><b>Inspector</b><small>Selected object, state, history, actions</small></div></main></div></section>'+
+        '<section class="section"><div class="section-head"><strong>'+t.mobile+'</strong><span class="code">'+t.mobileMeta+'</span></div><div class="section-body nav-role-list">'+roleRows+'</div></section>'+
+        '<section class="section"><div class="section-head"><strong>'+t.desktop+'</strong><span class="code">'+t.desktopMeta+'</span></div><div class="section-body desktop-nav-demo"><aside>'+rail+'</aside><main><div class="fake-command">'+t.search+'</div><div class="fake-workspace"><b>'+t.workspace+'</b><small>'+t.workspaceDetail+'</small></div><div class="fake-inspector"><b>'+t.inspector+'</b><small>'+t.inspectorDetail+'</small></div></main></div></section>'+
       '</div>'+
-      '<section class="section"><div class="section-head"><strong>'+t.principle+'</strong><span class="code">frozen interaction rule</span></div><div class="section-body rule-grid">'+t.rules.map((x,i)=>'<div class="rule-card"><span>'+(i+1)+'</span><b>'+x+'</b></div>').join("")+'</div></section>'+
+      '<section class="section"><div class="section-head"><strong>'+t.principle+'</strong><span class="code">'+t.ruleMeta+'</span></div><div class="section-body rule-grid">'+t.rules.map((x,i)=>'<div class="rule-card"><span>'+(i+1)+'</span><b>'+x+'</b></div>').join("")+'</div></section>'+
     '</div>'+
   '</div>';
 }
