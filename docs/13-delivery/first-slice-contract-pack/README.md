@@ -146,3 +146,9 @@ Use, do not duplicate:
 
 20. `20_BACKUP_DR_RECOVERY_CONTRACT.md`
    - staged PILOT/STABLE PostgreSQL backup, cross-region DR, recovery/failover/failback and engineering RPO/RTO contract.
+
+21. `21_FINAL_PRE_FREEZE_CONSISTENCY_REVIEW.md`
+   - final cross-domain review; contract consistency PASS, remaining pre-code gates isolated.
+
+22. `22_CI_SUPPLY_CHAIN_PINNING_CONTRACT.md`
+   - immutable GitHub Actions SHA pins, permissions and Dependabot production policy.
