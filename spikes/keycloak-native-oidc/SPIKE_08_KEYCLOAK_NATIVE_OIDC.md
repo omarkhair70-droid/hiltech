@@ -66,3 +66,12 @@ Those remain implementation/integration work after auth architecture is accepted
 
 Disposable identity proof only.
 Not production identity infrastructure.
+
+
+## Secure-cookie CI note
+
+Keycloak 26.x marks authentication cookies Secure. A real HILTECH native login must use the system browser over HTTPS.
+
+The disposable CI harness runs Keycloak on local HTTP and uses Python requests instead of a browser. The harness therefore clears the Secure flag **only on its local in-memory test cookie jar** after receiving the login page so that it can emulate localhost browser behavior.
+
+This is not a production configuration recommendation and no Keycloak server cookie policy is weakened.
