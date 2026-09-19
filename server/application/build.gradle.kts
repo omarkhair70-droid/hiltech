@@ -44,6 +44,7 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation(libs.jooq)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.springdoc.openapi.webmvc.api)
     implementation(libs.aws.s3)
     implementation(libs.aws.urlconnection)
     implementation(libs.opentelemetry.api)
