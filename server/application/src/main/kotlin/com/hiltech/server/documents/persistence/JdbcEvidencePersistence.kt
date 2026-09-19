@@ -82,10 +82,10 @@ class JdbcEvidencePersistence(
                             "lifecycle_state",
                         ),
                     instructionRevision =
-                        rs.getObject(
+                        (rs.getObject(
                             "instruction_revision",
-                            java.lang.Long::class.java,
-                        )?.toLong(),
+                        ) as? Number)
+                            ?.toLong(),
                     evidencePolicyId =
                         rs.getObject(
                             "evidence_policy_id",
