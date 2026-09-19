@@ -18,6 +18,7 @@ on:
       - "shared/**"
       - "apps/**"
       - "server/**"
+      - "contracts/**"
       - "database/**"
       - "infrastructure/**"
       - "scripts/ci/**"
@@ -84,6 +85,24 @@ jobs:
 
       - name: Server tests
         run: ./gradlew :server:application:test
+
+      - name: Generate OpenAPI 3.1 review snapshot
+        env:
+          HILTECH_OPENAPI_CONTRACT_TEST: "1"
+          HILTECH_OPENAPI_COMPARE: "0"
+          HILTECH_OPENAPI_OUTPUT: ${{ github.workspace }}/build/reports/openapi/hiltech-v1.openapi.json
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.openapi.OpenApiSnapshotContractTest \
+            --rerun-tasks
+
+      - name: Upload generated OpenAPI review snapshot
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hiltech-v1-openapi-generated
+          path: build/reports/openapi/hiltech-v1.openapi.json
+          if-no-files-found: error
+          retention-days: 7
 
 
   database-contract:
