@@ -282,6 +282,8 @@ jobs:
           HILTECH_AUDIT_CONTRACT_TEST: "1"
           HILTECH_COMMAND_RUNTIME_CONTRACT_TEST: "1"
           HILTECH_EVIDENCE_LIFECYCLE_CONTRACT_TEST: "1"
+          HILTECH_ACTIVITY_CONTRACT_TEST: "1"
+          HILTECH_ACTIVITY_CURSOR_SIGNING_KEY: "activity-contract-signing-key-20260919-strong"
           HILTECH_FGA_ENABLED: "1"
           HILTECH_FGA_API_URL: http://127.0.0.1:8082
           AWS_ACCESS_KEY_ID: test
@@ -296,6 +298,8 @@ jobs:
             --tests com.hiltech.server.audit.AuditEventWriterPostgresContractTest \
             --tests com.hiltech.server.platform.command.IdempotentCommandPostgresContractTest \
             --tests com.hiltech.server.documents.EvidenceLifecyclePostgresOpenFgaS3ContractTest \
+            --tests com.hiltech.server.activity.ActivityProjectionPostgresOpenFgaContractTest \
+            --tests com.hiltech.server.activity.ActivityModulithRecoveryContractTest \
             --rerun-tasks
 
           if PGPASSWORD=hiltech-keycloak-local \
