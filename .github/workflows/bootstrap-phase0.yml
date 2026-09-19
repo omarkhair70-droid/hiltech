@@ -3,6 +3,7 @@ name: Bootstrap Phase 0
 on:
   push:
     branches:
+      - main
       - "bootstrap/**"
   pull_request:
     branches:
