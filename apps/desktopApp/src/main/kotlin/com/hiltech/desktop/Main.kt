@@ -6,6 +6,7 @@ import androidx.compose.ui.window.application
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.identity.IdentityApiException
+import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +76,14 @@ fun main() {
                     )
                 }
 
+                failure is IdentityApiException ->
+                    HiltechShellState.Failure(
+                        code = failure.code,
+                        message =
+                            failure.message
+                                ?: "HILTECH security request failed.",
+                    )
+
                 failure is NativeOidcException ->
                     HiltechShellState.Failure(
                         code = failure.code,
@@ -94,7 +103,48 @@ fun main() {
         setState(state)
     }
 
-    fun signIn() {
+    fun refreshSecurity() {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+
+        scope.launch {
+            runCatching {
+                runtime.loadSecuritySnapshot()
+            }.onSuccess { security ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                if (
+                    current != null &&
+                    current.identity.identityId ==
+                    signed.identity.identityId
+                ) {
+                    setState(
+                        current.copy(
+                            security = security,
+                        ),
+                    )
+                }
+            }.onFailure(::showFailure)
+        }
+    }
+
+    fun showSignedIn(
+        identity: IdentityBootstrapDto,
+    ) {
+        setState(
+            HiltechShellState.SignedIn(
+                identity = identity,
+            ),
+        )
+        refreshSecurity()
+    }
+
+    fun signIn(
+        forceReauthentication: Boolean = false,
+    ) {
         if (!runtime.configured) {
             setState(
                 HiltechShellState.ConfigurationRequired(
@@ -106,16 +156,63 @@ fun main() {
 
         setState(
             HiltechShellState.Working(
-                "Complete secure HILTECH sign-in in your browser…",
+                if (forceReauthentication) {
+                    "Confirm your HILTECH identity in the browser…"
+                } else {
+                    "Complete secure HILTECH sign-in in your browser…"
+                },
             ),
         )
         scope.launch {
             runCatching {
-                runtime.signIn()
+                runtime.signIn(
+                    forceReauthentication =
+                        forceReauthentication,
+                )
             }.onSuccess { identity ->
+                showSignedIn(identity)
+            }.onFailure(::showFailure)
+        }
+    }
+
+    fun revokeSession(
+        sessionId: String,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+
+        scope.launch {
+            runCatching {
+                runtime.revokeSession(sessionId)
+                runtime.loadSecuritySnapshot()
+            }.onSuccess { security ->
                 setState(
-                    HiltechShellState.SignedIn(
-                        identity,
+                    signed.copy(
+                        security = security,
+                    ),
+                )
+            }.onFailure(::showFailure)
+        }
+    }
+
+    fun revokeDevice(
+        deviceId: String,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+
+        scope.launch {
+            runCatching {
+                runtime.revokeDevice(deviceId)
+                runtime.loadSecuritySnapshot()
+            }.onSuccess { security ->
+                setState(
+                    signed.copy(
+                        security = security,
                     ),
                 )
             }.onFailure(::showFailure)
@@ -149,9 +246,13 @@ fun main() {
         ) {
             HiltechShell(
                 state = shellState.value,
-                onSignIn = ::signIn,
+                onSignIn = { signIn(false) },
                 onSignOut = ::signOut,
-                onRetry = ::signIn,
+                onRetry = { signIn(false) },
+                onRefreshSecurity = ::refreshSecurity,
+                onReauthenticate = { signIn(true) },
+                onRevokeSession = ::revokeSession,
+                onRevokeDevice = ::revokeDevice,
             )
         }
     }
