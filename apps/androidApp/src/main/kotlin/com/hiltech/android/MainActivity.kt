@@ -8,11 +8,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hiltech.android.identity.AndroidIdentityRuntime
+import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
+import com.hiltech.shared.core.network.HiltechApiException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,11 +28,15 @@ class MainActivity : ComponentActivity() {
                 Dispatchers.Main.immediate,
         )
 
+    private val hiltechApplication:
+        HiltechApplication
+        get() =
+            application as HiltechApplication
+
     private val identityRuntime:
         AndroidIdentityRuntime
         get() =
-            (application as HiltechApplication)
-                .identityRuntime
+            hiltechApplication.identityRuntime
 
     private var shellState:
         HiltechShellState by mutableStateOf(
@@ -54,6 +60,7 @@ class MainActivity : ComponentActivity() {
                 onReauthenticate = ::startReauthentication,
                 onRevokeSession = ::revokeSession,
                 onRevokeDevice = ::revokeDevice,
+                onRefreshPeople = ::refreshPeople,
             )
         }
 
@@ -163,8 +170,13 @@ class MainActivity : ComponentActivity() {
         shellState =
             HiltechShellState.SignedIn(
                 identity = identity,
+                people =
+                    HiltechPeopleState(
+                        loading = true,
+                    ),
             )
         refreshSecurity()
+        refreshPeople()
     }
 
     private fun refreshSecurity() {
@@ -189,6 +201,96 @@ class MainActivity : ComponentActivity() {
                         )
                 }
             }.onFailure(::showFailure)
+        }
+    }
+
+    private fun refreshPeople() {
+        val signed =
+            shellState as?
+                HiltechShellState.SignedIn
+                ?: return
+        val organizationId =
+            signed.identity.organizations
+                .firstOrNull {
+                    it.primary
+                }
+                ?.organizationId
+                ?: signed.identity
+                    .organizations
+                    .firstOrNull()
+                    ?.organizationId
+                ?: return
+
+        shellState =
+            signed.copy(
+                people =
+                    (signed.people
+                        ?: HiltechPeopleState())
+                        .copy(
+                            loading = true,
+                            errorMessage = null,
+                        ),
+            )
+
+        scope.launch {
+            runCatching {
+                hiltechApplication.peopleApi
+                    .own(
+                        organizationId =
+                            organizationId,
+                        installationId =
+                            hiltechApplication
+                                .installationId,
+                    )
+            }.onSuccess { own ->
+                val current =
+                    shellState as?
+                        HiltechShellState.SignedIn
+                if (
+                    current != null &&
+                    current.identity.identityId ==
+                    signed.identity.identityId
+                ) {
+                    shellState =
+                        current.copy(
+                            people =
+                                HiltechPeopleState(
+                                    ownProfile =
+                                        own,
+                                ),
+                        )
+                }
+            }.onFailure { failure ->
+                val current =
+                    shellState as?
+                        HiltechShellState.SignedIn
+                if (
+                    current != null &&
+                    current.identity.identityId ==
+                    signed.identity.identityId
+                ) {
+                    val message =
+                        if (
+                            failure is HiltechApiException &&
+                            failure.code ==
+                            "EMPLOYEE_PROFILE_NOT_FOUND"
+                        ) {
+                            "No employee profile is linked to this identity yet."
+                        } else {
+                            failure.message
+                                ?: "People profile could not be loaded."
+                        }
+
+                    shellState =
+                        current.copy(
+                            people =
+                                HiltechPeopleState(
+                                    errorMessage =
+                                        message,
+                                ),
+                        )
+                }
+            }
         }
     }
 
