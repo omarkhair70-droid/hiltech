@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 ACTIVE — SLICES 01–05 VERIFIED / MERGED / SLICE 06 NOTIFICATION ABSTRACTION VERIFIED / READY TO MERGE**
+Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 ACTIVE — SLICES 01–06 VERIFIED / MERGED / SLICE 07 FINAL SHARED CONTRACT CLOSURE ACTIVE**
 
 ## Core Rule
 
@@ -455,7 +455,7 @@ Pilot seed values and production activation steps occur after contract Freeze un
 Immediate next execution:
 **PHASE 2 — Shared Product Infrastructure**.
 
-Phase 0 engineering foundation is verified and merged. Phase 1 Identity / Organization / Permissions is verified and complete. Phase 2 is active with Slices 01–05 verified and merged. Slice 06 Notification Abstraction is VERIFIED / READY TO MERGE on exact tested code head `df72b296181890b3f4a680800f924c8bde3ec5b8`. The immediate execution target is closure: merge the exact verified Slice 06 branch, run post-merge Bootstrap on `main`, then execute the Phase 2 shared-infrastructure gap review before deciding whether another small shared slice remains or Phase 3 may begin.
+Phase 0 engineering foundation is verified and merged. Phase 1 Identity / Organization / Permissions is verified and complete. Phase 2 Slices 01–06 are verified and merged. The post-Slice-06 gap review found the Error Model, API conventions, IDs/versioning and read-model/query foundations materially satisfied by existing production slices. The immediate execution target is the deliberately narrow **Slice 07 — Final Shared Contract Closure**: generated OpenAPI publication/drift protection plus explicit one-time REAUTH_REQUIRED retry that preserves the same operation/idempotency identity. After exact-head and post-merge verification, rerun the Phase 2 master checklist; if green, mark Phase 2 complete and begin Phase 3 contract closure.
 
 
 ---
