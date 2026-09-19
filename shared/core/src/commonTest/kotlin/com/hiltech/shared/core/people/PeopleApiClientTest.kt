@@ -99,6 +99,7 @@ class PeopleApiClientTest {
                                           "version":2
                                         }
                                       ],
+                                      "canManagePeople":true,
                                       "correlationId":"corr-directory"
                                     }
                                     """.trimIndent()
@@ -231,6 +232,10 @@ class PeopleApiClientTest {
                 directory.items
                     .single()
                     .employeeId,
+            )
+            assertEquals(
+                true,
+                directory.canManagePeople,
             )
             assertEquals(
                 "Restricted Name",
