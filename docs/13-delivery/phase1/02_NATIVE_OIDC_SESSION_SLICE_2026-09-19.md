@@ -54,3 +54,21 @@ The baseline scopes include `openid` and explicitly reject `offline_access`.
 6. register/touch device + call `/v1/me/bootstrap`,
 7. replace the Phase 0 placeholder shell with signed-out / signing-in / loading / access-denied / signed-in states,
 8. rendered/CI verification.
+
+
+## Android production wiring
+
+Android now:
+- launches Authorization Code + PKCE through the system browser,
+- receives only `com.hiltech.app:/oauth2redirect`,
+- stores refresh/session data and pending PKCE attempt encrypted through Android Keystore AES-GCM,
+- registers/touches the installation before identity bootstrap,
+- feeds the same refreshed access token into WorkManager offline replay,
+- renders signed-out / working / access-denied / signed-in identity-aware shell states.
+
+Runtime configuration:
+- `hiltech.apiBaseUrl`
+- `hiltech.oidcIssuerUri`
+- `hiltech.oidcClientId` (default `hiltech-native`)
+
+Blank API/OIDC configuration fails closed in the shell.
