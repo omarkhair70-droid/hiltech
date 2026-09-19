@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 ACTIVE — SLICES 01–03 VERIFIED**
+Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 ACTIVE — SLICES 01–03 VERIFIED / MERGED / SLICE 04 REALITY GATE ACTIVE**
 
 ## Core Rule
 
@@ -415,7 +415,7 @@ The Project/Work/Warehouse/Field structural contracts and representative reality
 
 The rendered design proof and formal First-Slice Freeze Review now PASS.
 
-The implementation order has completed Repository Bootstrap and Phase 1 Identity / Organization / Permissions. Phase 2 Shared Product Infrastructure is active: Slice 01 Shared HTTP / Command Runtime and Slice 02 Evidence Metadata + Upload/Finalize are VERIFIED and merged, and Slice 03 Activity Events Foundation is VERIFIED with durable WorkOrder Activity projection/recovery evidence. The next unresolved shared capability is Approval Engine Foundation. Approval implementation remains blocked until the explicit HILTECH authority reality gate freezes real approval lines, threshold semantics, delegation/absence and decision authority without hard-coded people.
+The implementation order has completed Repository Bootstrap and Phase 1 Identity / Organization / Permissions. Phase 2 Shared Product Infrastructure is active: Slices 01–03 are VERIFIED and merged. Slice 03 Activity Events merged at `9eaf7a2a18ac7138a08c6fcab43ab282b2449ce9` with post-merge Bootstrap run `35438086181` PASS. The next unresolved shared capability is Approval Engine Foundation. Slice 04 therefore begins with an explicit Authority Reality Closure; implementation remains blocked until real HILTECH approval lines, threshold semantics, delegation/absence, self-approval and decision-vs-execution authority are frozen without hard-coded people.
 
 ---
 
@@ -455,7 +455,7 @@ Pilot seed values and production activation steps occur after contract Freeze un
 Immediate next execution:
 **PHASE 2 — Shared Product Infrastructure**.
 
-Phase 0 engineering foundation is verified and merged. Phase 1 Identity / Organization / Permissions is verified and complete. Phase 2 is active with Slices 01–03 verified. The next execution target is Slice 04 Approval Engine Authority Reality Closure; implementation begins only after that reality/freeze gate explicitly authorizes it.
+Phase 0 engineering foundation is verified and merged. Phase 1 Identity / Organization / Permissions is verified and complete. Phase 2 is active with Slices 01–03 verified and merged. Slice 04 Approval Engine Authority Reality Closure is the current execution target; implementation begins only after that reality/freeze gate explicitly authorizes it.
 
 
 ---

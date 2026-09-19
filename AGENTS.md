@@ -16,12 +16,13 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
 - Slice 02 verification runs: Phase 2 `35433246103` / Bootstrap `35433246124` / Phase 1 OIDC `35433246188` — **PASS**
 - Phase 2 Slice 02 merge commit: `21a04718414ab20ecf8deeffccfd63961e45099a`; post-merge Bootstrap run `35434157140` — **PASS**
-- Phase 2 Slice 03: **Activity Events Foundation — VERIFIED**
-- Slice 03 canonical implementation code head: `e1244da23a0889bab33b249bf4ef96488aef1699`
-- Slice 03 verification-closure head: `1ddf37da97eb626101777f0b1ae2833bfa8baa89`
-- Slice 03 verification runs: Phase 2 `35437488895` / Bootstrap `35437488932` / Phase 1 OIDC `35437489102` — **PASS**
+- Phase 2 Slice 03: **Activity Events Foundation — VERIFIED / MERGED**
+- Slice 03 merge commit: `9eaf7a2a18ac7138a08c6fcab43ab282b2449ce9`
+- Slice 03 post-merge Bootstrap run: `35438086181` — **PASS**
 - Slice 03 contract: `docs/13-delivery/phase2/03_ACTIVITY_EVENTS_FOUNDATION_SLICE_2026-09-19.md`
-- Next vertical after Slice 03 merge: **Phase 2 / Slice 04 — Approval Engine Authority Reality Closure**
+- Current vertical: **Phase 2 / Slice 04 — Approval Engine Authority Reality Closure**
+- Slice 04 branch: `phase2/approval-authority-reality-20260919`
+- Slice 04 gate: `docs/13-delivery/phase2/04_APPROVAL_ENGINE_AUTHORITY_REALITY_CLOSURE_2026-09-19.md`
 - Slice 04 implementation is **NOT AUTHORIZED** until real HILTECH approval lines, threshold semantics, delegation/absence rules, self-approval policy and execution-vs-approval authority are validated.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
