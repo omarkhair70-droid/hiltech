@@ -18,6 +18,10 @@ hiltech:
       enabled: ${HILTECH_OIDC_ENABLED:false}
       issuer-uri: ${HILTECH_OIDC_ISSUER_URI:}
       audience: ${HILTECH_OIDC_AUDIENCE:}
+    session:
+      ttl-seconds: ${HILTECH_SESSION_TTL_SECONDS:43200}
+      reauth-max-age-seconds: ${HILTECH_REAUTH_MAX_AGE_SECONDS:300}
+      reauth-window-seconds: ${HILTECH_REAUTH_WINDOW_SECONDS:900}
 
 
   authorization:
