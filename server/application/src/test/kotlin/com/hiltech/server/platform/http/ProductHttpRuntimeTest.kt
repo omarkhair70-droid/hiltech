@@ -1,6 +1,5 @@
 package com.hiltech.server.platform.http
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
@@ -19,14 +18,8 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 class ProductHttpRuntimeTest {
-    private val objectMapper =
-        ObjectMapper()
-            .findAndRegisterModules()
-
     private val errorWriter =
-        ProductApiErrorWriter(
-            objectMapper,
-        )
+        ProductApiErrorWriter()
 
     private val mvc: MockMvc =
         MockMvcBuilders
