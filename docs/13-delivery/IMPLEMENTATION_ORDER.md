@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 ACTIVE — SLICES 01–03 VERIFIED / MERGED / SLICE 04 VERIFIED / READY TO MERGE**
+Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 ACTIVE — SLICES 01–04 VERIFIED / MERGED / SLICE 05 IMPLEMENTATION AUTHORIZED**
 
 ## Core Rule
 
@@ -415,7 +415,7 @@ The Project/Work/Warehouse/Field structural contracts and representative reality
 
 The rendered design proof and formal First-Slice Freeze Review now PASS.
 
-The implementation order has completed Repository Bootstrap and Phase 1 Identity / Organization / Permissions. Phase 2 Shared Product Infrastructure is active: Slices 01–03 are VERIFIED and merged. Slice 03 Activity Events merged at `9eaf7a2a18ac7138a08c6fcab43ab282b2449ce9` with post-merge Bootstrap run `35438086181` PASS. Slice 04 Minimal Approval Engine Foundation is **VERIFIED / READY TO MERGE** on exact tested head `5daaf57509f2f3a4013a16717531a77325c59d98`; Bootstrap `35463223977`, Phase 2 `35463223971`, OpenFGA `35463223968`, and Phase 1 OIDC `35463223979` all PASS. The implementation keeps routine authority outside the approval queue, escalates only explicit exceptions to configurable current authority, invents no general numeric threshold, and never makes a named person code authority. Richer supplier/payment/bank/delegation/emergency policy remains phase-local and deferred. The next unresolved shared capability in the frozen Phase 2 order is **Inbox / Work Queue Foundation**; it requires its own contract/reality closure before implementation.
+The implementation order has completed Repository Bootstrap and Phase 1 Identity / Organization / Permissions. Phase 2 Shared Product Infrastructure is active: Slices 01–04 are VERIFIED and merged. Slice 04 Minimal Approval Engine Foundation merged at `b6aad197bb4a9e8200717ad9801092dc2cabbb5b`; post-merge Bootstrap `35464733404` and OpenFGA `35464733333` PASS. Slice 05 **Inbox / Work Queue Foundation** has completed its minimal reality/contract closure and is implementation-authorized. The source-authoritative rule is frozen: actionable queue entries are projections of current source-domain work; Inbox adds durable attention/read state; neither grants source authority; Notification delivery is a separate later capability. Approval is the first verified producer.
 
 ---
 
@@ -455,7 +455,7 @@ Pilot seed values and production activation steps occur after contract Freeze un
 Immediate next execution:
 **PHASE 2 — Shared Product Infrastructure**.
 
-Phase 0 engineering foundation is verified and merged. Phase 1 Identity / Organization / Permissions is verified and complete. Phase 2 is active with Slices 01–03 verified and merged. Slice 04 Minimal Approval Engine Foundation is verified and ready to merge from its exact tested closure head. After merge verification, the next execution target is the Inbox / Work Queue Foundation contract/reality closure; implementation is not authorized until that next slice is frozen.
+Phase 0 engineering foundation is verified and merged. Phase 1 Identity / Organization / Permissions is verified and complete. Phase 2 is active with Slices 01–04 verified and merged. Slice 05 Inbox / Work Queue Foundation is the current execution target and is implementation-authorized against its frozen minimal reality contract.
 
 
 ---
