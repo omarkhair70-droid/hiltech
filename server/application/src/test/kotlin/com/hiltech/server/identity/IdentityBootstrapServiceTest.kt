@@ -93,7 +93,7 @@ class IdentityBootstrapServiceTest {
     fun revokedOrForeignDeviceCannotContinueBootstrap() {
         val revokedRepository = FakeIdentityRepository(
             identity = activeIdentity(),
-            device = device(
+            currentDevice = device(
                 userIdentityId = identityId,
                 revokedAt = now.minusSeconds(1),
             ),
@@ -111,7 +111,7 @@ class IdentityBootstrapServiceTest {
 
         val foreignRepository = FakeIdentityRepository(
             identity = activeIdentity(),
-            device = device(
+            currentDevice = device(
                 userIdentityId = UUID.randomUUID(),
                 revokedAt = null,
             ),
@@ -200,7 +200,7 @@ class IdentityBootstrapServiceTest {
 
     private inner class FakeIdentityRepository(
         private val identity: UserIdentityRuntime?,
-        private val device: DeviceRuntime? = null,
+        private val currentDevice: DeviceRuntime? = null,
         private val registrationOutcome:
             DeviceRegistrationOutcome =
                 DeviceRegistrationOutcome.Active(
@@ -227,7 +227,7 @@ class IdentityBootstrapServiceTest {
 
         override fun findDevice(
             installationId: UUID,
-        ): DeviceRuntime? = device
+        ): DeviceRuntime? = currentDevice
 
         override fun registerOrTouchDevice(
             identityId: UUID,
