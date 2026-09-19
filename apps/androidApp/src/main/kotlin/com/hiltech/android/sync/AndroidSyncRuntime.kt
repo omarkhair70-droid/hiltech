@@ -15,10 +15,6 @@ fun interface AndroidSessionTokenProvider {
     suspend fun currentAccessToken(): String?
 }
 
-class BootstrapSessionTokenProvider : AndroidSessionTokenProvider {
-    override suspend fun currentAccessToken(): String? = null
-}
-
 sealed interface AndroidSyncRunResult {
     data class Completed(
         val summary: ReplaySummary,
