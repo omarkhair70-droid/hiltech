@@ -20,10 +20,11 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 03 merge commit: `9eaf7a2a18ac7138a08c6fcab43ab282b2449ce9`
 - Slice 03 post-merge Bootstrap run: `35438086181` — **PASS**
 - Slice 03 contract: `docs/13-delivery/phase2/03_ACTIVITY_EVENTS_FOUNDATION_SLICE_2026-09-19.md`
-- Current vertical: **Phase 2 / Slice 04 — Approval Engine Authority Reality Closure**
+- Current vertical: **Phase 2 / Slice 04 — Minimal Approval Engine Foundation (IMPLEMENTATION AUTHORIZED)**
 - Slice 04 branch: `phase2/approval-authority-reality-20260919`
-- Slice 04 gate: `docs/13-delivery/phase2/04_APPROVAL_ENGINE_AUTHORITY_REALITY_CLOSURE_2026-09-19.md`
-- Slice 04 implementation is **NOT AUTHORIZED** until real HILTECH approval lines, threshold semantics, delegation/absence rules, self-approval policy and execution-vs-approval authority are validated.
+- Slice 04 reality gate: `docs/13-delivery/phase2/04_APPROVAL_ENGINE_AUTHORITY_REALITY_CLOSURE_2026-09-19.md` — **MINIMAL FOUNDATION AUTHORIZED**
+- Slice 04 implementation contract: `docs/13-delivery/phase2/04_APPROVAL_ENGINE_FOUNDATION_SLICE_2026-09-19.md`
+- Reality rule: routine authority remains low-friction; only explicit exception/escalation enters Approval. No general numeric threshold table is assumed.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**

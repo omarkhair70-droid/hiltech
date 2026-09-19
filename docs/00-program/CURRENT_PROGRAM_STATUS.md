@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 2 ACTIVE — SLICES 01–03 VERIFIED / MERGED / SLICE 04 APPROVAL AUTHORITY REALITY GATE OPEN**
+**PHASE 2 ACTIVE — SLICES 01–03 VERIFIED / MERGED / SLICE 04 MINIMAL APPROVAL FOUNDATION AUTHORIZED**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -50,7 +50,7 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–03 are VERIFIED and merged. Slice 03 merged at `9eaf7a2a18ac7138a08c6fcab43ab282b2449ce9`; post-merge Bootstrap run `35438086181` PASS. Slice 04 — Approval Engine Foundation — is now at its explicit **Authority Reality Closure** gate. The shared Approval structural model is already mature enough to guide reality capture, but executable authority is not frozen: real approval categories, routing/sequence, threshold semantics, delegation/absence, self-approval restrictions, decision actions, version invalidation, re-auth requirements and approval-vs-payment-execution authority must be validated before implementation is authorized. Named people in current research documents are evidence examples only, never hard-coded product authority.
+Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–03 are VERIFIED and merged. Slice 03 merged at `9eaf7a2a18ac7138a08c6fcab43ab282b2449ce9`; post-merge Bootstrap run `35438086181` PASS. Slice 04 — Approval Engine Foundation — has completed the minimum authority reality gate required for a **small shared foundation**. HILTECH is founder-led, flexible and exception-driven: routine Finance/Admin work should not be forced through owner approvals; explicit unusual/non-routine cases escalate to configurable owner/final authority. General numeric thresholds are not currently a company-wide rule and are therefore frozen as `NONE` for the first foundation. Supplier/payment/bank-specific routing, broad delegation, emergency mode and richer domain policy remain deferred. Named people are evidence examples only; executable authority is resolved through configurable authority bindings and current relationships.
 
 ---
 
@@ -81,7 +81,7 @@ Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–03 are VERI
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 2 ACTIVE | Slices 01–03 verified/merged; Slice 04 Approval authority reality closure is active |
+| Implementation order | PHASE 2 ACTIVE | Slices 01–03 verified/merged; Slice 04 minimal Approval foundation implementation authorized |
 | Production code | PHASE 2 SLICE 03 VERIFIED | Evidence lifecycle plus WorkOrder Activity projection, current authorization, deterministic cursor, shared client and durable Spring Modulith recovery verified |
 
 ---
@@ -235,7 +235,7 @@ Final stack/version review:
 
 Immediate continuation:
 1. Slices 01–03 are VERIFIED and merged; do not reopen them without a genuine contradiction.
-2. Execute Phase 2 Slice 04 **Approval Engine Authority Reality Closure** against `docs/13-delivery/phase2/04_APPROVAL_ENGINE_AUTHORITY_REALITY_CLOSURE_2026-09-19.md`.
+2. Execute Phase 2 Slice 04 **Minimal Approval Engine Foundation** against `docs/13-delivery/phase2/04_APPROVAL_ENGINE_FOUNDATION_SLICE_2026-09-19.md`; the reality gate is closed for this minimal scope.
 3. Reuse the accepted shared Approval structural model: version-bound subject, policy evaluation, explicit steps/assignments/decisions, delegation where allowed, online-authoritative high-risk decisions, immutable decision evidence and Activity/Audit integration.
 4. Do not hard-code Mohamed, Ahmed or any named person as product authority. Real people may be evidence examples; executable authority must resolve through configuration/relationships/policy.
 5. Freeze actual HILTECH approval categories, decision chains, threshold semantics (including explicit “no threshold” where true), self-approval rules, delegation/absence, reject/request-change/cancel semantics, emergency handling, re-auth requirements, and approval-vs-payment-execution authority before implementation authorization.
