@@ -6,7 +6,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 class IdentityApiClientTest {
     @Test
     fun bootstrapCarriesBearerCorrelationAndInstallationId() =
-        runTest {
+        runBlocking {
             lateinit var captured:
                 io.ktor.client.request.HttpRequestData
 
@@ -88,7 +88,7 @@ class IdentityApiClientTest {
 
     @Test
     fun noTokenFailsLocallyWithoutNetworkRequest() =
-        runTest {
+        runBlocking {
             var networkCalled = false
             val client = HttpClient(
                 MockEngine {
@@ -114,7 +114,7 @@ class IdentityApiClientTest {
 
     @Test
     fun serverIdentityErrorIsPreserved() =
-        runTest {
+        runBlocking {
             val client = HttpClient(
                 MockEngine {
                     respond(
