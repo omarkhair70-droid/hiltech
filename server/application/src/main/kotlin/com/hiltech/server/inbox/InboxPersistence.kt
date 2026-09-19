@@ -205,6 +205,8 @@ class JdbcInboxProjection(
                         inbox_item.resolved_at,
                         EXCLUDED.resolved_at
                     ),
+                source_event_id =
+                    EXCLUDED.source_event_id,
                 correlation_id =
                     COALESCE(
                         EXCLUDED.correlation_id,
@@ -213,12 +215,16 @@ class JdbcInboxProjection(
                 version =
                     inbox_item.version + 1
             WHERE
-                EXCLUDED.source_version >=
-                    inbox_item.source_version
-                OR (
-                    inbox_item.state = 'OPEN'
-                    AND EXCLUDED.state =
-                        'RESOLVED'
+                inbox_item.source_event_id <>
+                    EXCLUDED.source_event_id
+                AND (
+                    EXCLUDED.source_version >=
+                        inbox_item.source_version
+                    OR (
+                        inbox_item.state = 'OPEN'
+                        AND EXCLUDED.state =
+                            'RESOLVED'
+                    )
                 )
             """.trimIndent(),
             itemId,
