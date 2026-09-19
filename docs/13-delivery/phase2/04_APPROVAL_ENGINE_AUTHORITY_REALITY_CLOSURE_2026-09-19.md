@@ -229,6 +229,65 @@ At decision time:
 - superseded subject version must fail,
 - completed/reassigned request must not accept a stale decision.
 
+## Minimal authority conclusion from current HILTECH reality
+
+The current company does **not** need a large enterprise approval matrix before the shared Approval foundation can be built.
+
+Reality now supports a deliberately small first policy model:
+
+### Routine Finance/Admin envelope
+
+Configured Finance/Admin authority may complete normal recurring operational work without owner approval for every item.
+
+Examples currently reported:
+- routine payroll administration,
+- maintaining who is included in payroll operations,
+- ordinary employee/technician advance / custody / expense administration,
+- normal settlement/review work.
+
+This is an authority **envelope**, not a hard-coded Ahmed rule. Today Ahmed is the main holder of that envelope.
+
+### Owner exception authority
+
+Owner authority is required for non-routine or materially exceptional decisions.
+
+Examples currently reported:
+- special incentives / extra compensation,
+- material or exceptional deductions,
+- unusual requests that Finance/Admin does not consider routine,
+- decisions outside the normal operational pattern.
+
+Today Mohamed holds this authority. Production policy must resolve an owner/final-authority relationship, not a named user.
+
+### Escalation is judgment-driven
+
+There is no confirmed general numeric amount threshold table today.
+
+Therefore:
+- general threshold semantics = `NONE` for the first foundation,
+- no arbitrary EGP bands will be invented,
+- Finance/Admin may explicitly escalate an unusual case to Owner with a reason,
+- later domains may add real subject-specific thresholds if HILTECH actually adopts/uses them.
+
+### Supporting/secondary actors
+
+Dr. Mohamed and other staff may participate in financial/admin or operational work, but current reality does not justify making them mandatory approval steps.
+
+They remain assignable supporting actors/relationships until a specific workflow proves otherwise.
+
+### First implementation scope consequence
+
+The first production Approval vertical should prove the engine using:
+1. a routine Finance/Admin decision path that requires no Owner step;
+2. an exception path escalated by Finance/Admin to Owner;
+3. an owner decision over an exact subject version;
+4. stale/superseded version rejection;
+5. current-authority re-check;
+6. idempotent approve/reject/request-change;
+7. Activity + Audit evidence.
+
+Supplier/payment/procurement chain details are **not required** to authorize this minimal foundation and remain later-domain reality work.
+
 ## Minimum real scenario set
 
 The gate should be proven with a compact set of real or directly validated HILTECH examples, not a theoretical catalog.
@@ -289,22 +348,34 @@ Each validated decision family becomes a table entry containing:
 
 ## Freeze gate for implementation authorization
 
-Slice 04 implementation becomes authorized only when all of the following are explicit:
+Current HILTECH reality is sufficient to authorize a **minimal shared Approval foundation** provided the implementation keeps later-domain uncertainty out of scope.
 
-1. at least the minimum real scenario set has been validated or deliberately marked not currently applicable;
-2. real approver relationships are known without relying on display names;
-3. threshold semantics are known or explicitly `NONE`;
-4. self-approval rules are explicit;
-5. delegation/absence behavior is explicit;
-6. approve/reject/request-change/cancel/expiry semantics are explicit;
-7. subject-version invalidation semantics are explicit;
-8. high-risk re-auth requirements are explicit;
-9. approval-vs-execution authority is explicit;
-10. current-authority re-evaluation is required;
-11. OpenFGA/application policy responsibility is clear;
-12. sanitized fixtures can cover normal, stale, delegated/revoked and concurrent decisions.
+Frozen for the first foundation:
+1. authority is relationship/configuration-driven, never named-person-driven;
+2. Finance/Admin has a configurable routine authority envelope;
+3. Owner/final-authority is the escalation authority for non-routine/exceptional cases;
+4. general numeric threshold semantics are `NONE` today;
+5. escalation may be explicitly requested with a reason rather than inferred from a fake threshold;
+6. exact subject-version binding is mandatory;
+7. stale/superseded decisions fail closed;
+8. current authority is re-evaluated at decision time;
+9. APPROVE / REJECT / REQUEST_CHANGE are supported initial decisions;
+10. decision idempotency/concurrency is mandatory;
+11. Audit and Activity remain separate evidence/projection boundaries;
+12. Approval remains separate from payment/bank execution truth.
 
-Until then: **NO production Approval migration/API/policy evaluator.**
+Not required for this first foundation and therefore explicitly deferred:
+- supplier/payment/procurement routing details,
+- bank maker/checker authority,
+- numeric EGP threshold bands,
+- broad delegation/absence policy,
+- emergency approval mode,
+- auto-expiry policy,
+- full Payroll/Finance business logic,
+- Inbox/Notifications.
+
+**IMPLEMENTATION AUTHORIZED for the minimal Approval foundation only.**
+Any later subject-specific approval policy must pass its own reality check before activation.
 
 ## Expected implementation slice after reality freeze
 
@@ -341,6 +412,6 @@ Do not:
 
 ## Gate conclusion
 
-**REALITY COLLECTION AUTHORIZED. PRODUCTION APPROVAL IMPLEMENTATION NOT YET AUTHORIZED.**
+**MINIMAL APPROVAL FOUNDATION IMPLEMENTATION AUTHORIZED.**
 
 The next valid action is to collect/confirm the minimum authority facts above, promote the resulting policy table to an authority-frozen contract, then implement the smallest complete Approval vertical against that frozen reality.
