@@ -24,6 +24,9 @@ hiltech:
   approval:
     cursor-signing-key: ${HILTECH_APPROVAL_CURSOR_SIGNING_KEY:}
 
+  inbox:
+    cursor-signing-key: ${HILTECH_INBOX_CURSOR_SIGNING_KEY:}
+
   identity:
     oidc:
       enabled: ${HILTECH_OIDC_ENABLED:false}
