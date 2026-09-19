@@ -539,64 +539,62 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
             bytes,
         )
 
-        fixture.jdbc.update(
-            """
-            UPDATE evidence_upload_session
-            SET expires_at = ?
-            WHERE id = ?
-            """.trimIndent(),
-            fixture.now
-                .minusSeconds(1)
-                .atOffset(
-                    ZoneOffset.UTC,
-                ),
-            UUID.fromString(
+        val originalNow =
+            fixture.clock.instant()
+        fixture.clock.set(
+            Instant.parse(
                 reserve.response
-                    .evidence
-                    .uploadSessionId,
-            ),
+                    .upload
+                    .expiresAt,
+            ).plusSeconds(1),
         )
 
-        val operationId =
-            UUID.randomUUID()
-        val failure =
-            assertThrows<
-                ProductApiException
-            > {
-                fixture.service.finalize(
-                    actorIdentityId =
-                        fixture.actorId,
-                    evidenceId =
-                        UUID.fromString(
-                            reserve.response
-                                .evidence
-                                .evidenceId,
-                        ),
-                    idempotencyHeader =
-                        operationId.toString(),
-                    correlationId =
-                        "corr-expired",
-                    request =
-                        FinalizeEvidenceRequest(
-                            operationId =
-                                operationId.toString(),
-                            uploadSessionId =
+        try {
+            val operationId =
+                UUID.randomUUID()
+            val failure =
+                assertThrows<
+                    ProductApiException
+                > {
+                    fixture.service.finalize(
+                        actorIdentityId =
+                            fixture.actorId,
+                        evidenceId =
+                            UUID.fromString(
                                 reserve.response
                                     .evidence
-                                    .uploadSessionId,
-                            expectedSha256 =
-                                reserve.response
-                                    .evidence.sha256,
-                            expectedSizeBytes =
-                                reserve.response
-                                    .evidence.sizeBytes,
-                        ),
-                )
-            }
-        assertEquals(
-            "EVIDENCE_UPLOAD_SESSION_EXPIRED",
-            failure.code,
-        )
+                                    .evidenceId,
+                            ),
+                        idempotencyHeader =
+                            operationId.toString(),
+                        correlationId =
+                            "corr-expired",
+                        request =
+                            FinalizeEvidenceRequest(
+                                operationId =
+                                    operationId.toString(),
+                                uploadSessionId =
+                                    reserve.response
+                                        .evidence
+                                        .uploadSessionId,
+                                expectedSha256 =
+                                    reserve.response
+                                        .evidence.sha256,
+                                expectedSizeBytes =
+                                    reserve.response
+                                        .evidence.sizeBytes,
+                            ),
+                    )
+                }
+            assertEquals(
+                "EVIDENCE_UPLOAD_SESSION_EXPIRED",
+                failure.code,
+            )
+        } finally {
+            fixture.clock.set(
+                originalNow,
+            )
+        }
     }
 
     private fun proveReassignmentReevaluatesSourceTruth(
@@ -946,9 +944,8 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                 transactionManager,
             )
         val clock =
-            Clock.fixed(
-                now,
-                ZoneOffset.UTC,
+            MutableTestClock(
+                current = now,
             )
 
         val fgaProperties =
@@ -1151,6 +1148,7 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
             storage = storage,
             bucketClient =
                 bucketClient,
+            clock = clock,
             actorId = ids.actorId,
             unassignedActorId =
                 ids.unassignedActorId,
@@ -1810,6 +1808,34 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
         val assignmentId: UUID,
     )
 
+    private class MutableTestClock(
+        private var current: Instant,
+        private val zone: java.time.ZoneId =
+            ZoneOffset.UTC,
+    ) : Clock() {
+        override fun getZone():
+            java.time.ZoneId =
+            zone
+
+        override fun withZone(
+            zone: java.time.ZoneId,
+        ): Clock =
+            MutableTestClock(
+                current = current,
+                zone = zone,
+            )
+
+        override fun instant():
+            Instant =
+            current
+
+        fun set(
+            value: Instant,
+        ) {
+            current = value
+        }
+    }
+
     private data class Fixture(
         val jdbc: JdbcTemplate,
         val processor:
@@ -1821,6 +1847,7 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
         val storage:
             S3CompatibleEvidenceObjectStorage,
         val bucketClient: S3Client,
+        val clock: MutableTestClock,
         val actorId: UUID,
         val unassignedActorId: UUID,
         val assignmentId: UUID,
