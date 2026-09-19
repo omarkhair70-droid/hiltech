@@ -138,6 +138,17 @@ class InboxCursorCodec(
             }
 
         if (
+            encoder.encodeToString(
+                payload,
+            ) != parts[0] ||
+            encoder.encodeToString(
+                signature,
+            ) != parts[1]
+        ) {
+            invalid()
+        }
+
+        if (
             !MessageDigest.isEqual(
                 sign(payload),
                 signature,
