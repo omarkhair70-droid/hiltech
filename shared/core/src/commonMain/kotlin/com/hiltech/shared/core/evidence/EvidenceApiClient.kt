@@ -72,6 +72,48 @@ class EvidenceApiClient(
             },
         )
 
+    suspend fun metadata(
+        evidenceId: String,
+        installationId: String,
+    ): EvidenceMetadataDto =
+        api.request(
+            method = HttpMethod.Get,
+            path =
+                "/v1/evidence/$evidenceId",
+            options =
+                HiltechRequestOptions(
+                    installationId =
+                        installationId,
+                ),
+            decode = {
+                json.decodeFromString(
+                    EvidenceMetadataDto.serializer(),
+                    it,
+                )
+            },
+        )
+
+    suspend fun downloadTarget(
+        evidenceId: String,
+        installationId: String,
+    ): EvidenceDownloadTargetDto =
+        api.request(
+            method = HttpMethod.Post,
+            path =
+                "/v1/evidence/$evidenceId/download-target",
+            options =
+                HiltechRequestOptions(
+                    installationId =
+                        installationId,
+                ),
+            decode = {
+                json.decodeFromString(
+                    EvidenceDownloadTargetDto.serializer(),
+                    it,
+                )
+            },
+        )
+
     suspend fun uploadBytes(
         target: EvidenceUploadTargetDto,
         contentType: String,

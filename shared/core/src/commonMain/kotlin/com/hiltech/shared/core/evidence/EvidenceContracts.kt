@@ -70,6 +70,13 @@ data class FinalizeEvidenceResponseDto(
     val replayed: Boolean,
 )
 
+@Serializable
+data class EvidenceDownloadTargetDto(
+    val downloadUrl: String,
+    val expiresAt: String,
+    val correlationId: String,
+)
+
 class EvidenceBinaryUploadException(
     val httpStatus: Int?,
     val retryable: Boolean,
