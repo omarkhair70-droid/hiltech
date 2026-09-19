@@ -1,20 +1,25 @@
 package com.hiltech.server.activity
 
-import com.hiltech.server.HiltechServerApplication
 import com.hiltech.server.documents.EvidenceTerminalStateChanged
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.springframework.boot.SpringBootConfiguration
 import org.springframework.boot.WebApplicationType
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.builder.SpringApplicationBuilder
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Import
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.modulith.events.FailedEventPublications
 import org.springframework.modulith.events.ResubmissionOptions
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
+import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
@@ -69,7 +74,7 @@ class ActivityModulithRecoveryContractTest {
 
         val context =
             SpringApplicationBuilder(
-                HiltechServerApplication::class.java,
+                ActivityRecoveryTestApplication::class.java,
             )
                 .web(
                     WebApplicationType.NONE,
@@ -544,4 +549,21 @@ class ActivityModulithRecoveryContractTest {
         val workOrderId: UUID,
         val evidenceId: UUID,
     )
+}
+
+
+@SpringBootConfiguration
+@EnableAutoConfiguration
+@Import(
+    JdbcActivityProjection::class,
+    ActivityProjectionListener::class,
+    ActivityRecoveryClockConfiguration::class,
+)
+class ActivityRecoveryTestApplication
+
+@Configuration(proxyBeanMethods = false)
+class ActivityRecoveryClockConfiguration {
+    @Bean
+    fun clock(): Clock =
+        Clock.systemUTC()
 }
