@@ -12,7 +12,10 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
 - Current execution phase: **Phase 2 — Shared Product Infrastructure**
 - Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
-- Next vertical contract check: **Slice 02 — Evidence Metadata + Upload/Finalize**
+- Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
+- Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
+- Slice 02 verification runs: Phase 2 `35433246103` / Bootstrap `35433246124` / Phase 1 OIDC `35433246188` — **PASS**
+- Next execution: **merge exact tested docs-closure head, then contract-check the next Phase 2 vertical from canonical repo order**
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**

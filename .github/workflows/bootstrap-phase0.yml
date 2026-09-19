@@ -281,8 +281,13 @@ jobs:
           HILTECH_IDENTITY_SESSION_CONTRACT_TEST: "1"
           HILTECH_AUDIT_CONTRACT_TEST: "1"
           HILTECH_COMMAND_RUNTIME_CONTRACT_TEST: "1"
+          HILTECH_EVIDENCE_LIFECYCLE_CONTRACT_TEST: "1"
           HILTECH_FGA_ENABLED: "1"
           HILTECH_FGA_API_URL: http://127.0.0.1:8082
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: us-east-1
+          S3_ENDPOINT: http://127.0.0.1:5000
         run: |
           ./gradlew :server:application:test \
             --tests com.hiltech.server.DatabaseMigrationContractTest \
@@ -290,6 +295,7 @@ jobs:
             --tests com.hiltech.server.identity.IdentitySessionPostgresContractTest \
             --tests com.hiltech.server.audit.AuditEventWriterPostgresContractTest \
             --tests com.hiltech.server.platform.command.IdempotentCommandPostgresContractTest \
+            --tests com.hiltech.server.documents.EvidenceLifecyclePostgresOpenFgaS3ContractTest \
             --rerun-tasks
 
           if PGPASSWORD=hiltech-keycloak-local \
@@ -307,6 +313,14 @@ jobs:
             cat /tmp/openfga-cross-db.out
             exit 1
           fi
+
+      - name: Local platform test report on failure
+        if: failure()
+        shell: bash
+        run: |
+          find server/application/build/test-results/test \
+            -type f -name '*.xml' -print -exec cat {} \; \
+            || true
 
       - name: Local platform logs on failure
         if: failure()

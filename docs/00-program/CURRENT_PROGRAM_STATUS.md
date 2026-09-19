@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 2 ACTIVE — SLICE 01 VERIFIED / SLICE 02 CONTRACT CHECK NEXT**
+**PHASE 2 ACTIVE — SLICE 02 VERIFIED / NEXT CONTRACT CHECK AFTER MERGE**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -50,7 +50,7 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTTP / Command Runtime — is VERIFIED on head `8983b673880d2a27331291f132edd4c3688d8597` with real PostgreSQL idempotency, shared Android/Windows HTTP contracts, Spring Modulith boundaries, Bootstrap regressions, and Phase 1 native OIDC regressions green. Evidence Metadata + Upload/Finalize is the next contract check; target-specific authorization must fail closed rather than borrowing broad organization membership.
+Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTTP / Command Runtime — is VERIFIED and merged. Slice 02 — Evidence Metadata + Upload/Finalize — is **VERIFIED** on canonical code head `563875c0421df713b52e6661bf3d46b8c5ec5878`. Exact-head evidence: Phase 2 — Shared Command Runtime run `35433246103` PASS; Bootstrap Phase 0 run `35433246124` PASS (including local-platform Evidence lifecycle, database, evidence-storage, Spring Modulith foundation, dependency/supply-chain/Terraform gates); Phase 1 — Native OIDC Production Smoke run `35433246188` PASS (Android, Desktop, provider/browser). WorkOrder-targeted authorization remains authoritative and unsupported Evidence targets remain fail-closed.
 
 ---
 
@@ -81,8 +81,8 @@ Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTT
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 2 ACTIVE | Slice 01 Shared HTTP / Command Runtime verified; Slice 02 Evidence contract check next with target authority fail-closed |
-| Production code | PHASE 2 SLICE 01 VERIFIED | Shared HTTP/error/idempotency/client runtime verified; Phase 1 regressions remain green |
+| Implementation order | PHASE 2 ACTIVE | Slices 01–02 verified; next Phase 2 vertical requires repo-grounded contract check after Slice 02 merge |
+| Production code | PHASE 2 SLICE 02 VERIFIED | Evidence reserve/upload/finalize/read/download verified on PostgreSQL + OpenFGA + S3-compatible storage with shared Android/Windows client contracts |
 
 ---
 
@@ -234,12 +234,12 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Slice 01 is closed; do not reopen it without a genuine cross-cutting contradiction.
-2. Contract Phase 2 Slice 02 — Evidence Metadata + Upload/Finalize — against the existing V0007 schema and verified storage adapter.
-3. Do not weaken target authorization to make Evidence callable; unsupported target authority must fail closed.
-4. Use the Reality Evidence/Facts registers during every later business slice to confirm who performs the work today, what the system replaces, terminology, configuration and conditional capability status.
-5. Keep Phase 1 and Slice 01 regression gates mandatory on shared-foundation changes.
-6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
+1. Slice 02 is VERIFIED on code head `563875c0421df713b52e6661bf3d46b8c5ec5878`; do not reopen it without a genuine contradiction.
+2. Close this PR only on the exact docs-closure head after inherited Actions remain green.
+3. After merge, inspect current `main` and contract-check the next Phase 2 shared capability from the canonical implementation order; do not reset Phase 1 or re-plan Phase 2.
+4. Preserve WorkOrder-targeted Evidence authority and keep unsupported target types fail-closed until their owning domain phase provides authoritative relations.
+5. Continue consuming Reality Evidence/Facts by phase; reported people/process/integration facts remain evidence/configuration inputs, not hard-coded product roles.
+6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 

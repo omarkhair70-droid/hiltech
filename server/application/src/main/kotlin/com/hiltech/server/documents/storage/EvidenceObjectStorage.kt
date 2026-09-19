@@ -111,6 +111,7 @@ sealed interface EvidenceFinalizeVerification {
         val sizeBytes: Long,
         val sha256Hex: String,
         val providerChecksumSha256: String?,
+        val detectedContentType: String? = null,
     ) : EvidenceFinalizeVerification
 
     data class Rejected(
@@ -265,6 +266,8 @@ class S3CompatibleEvidenceObjectStorage(
                 sizeBytes = bytes.size.toLong(),
                 sha256Hex = actualSha256,
                 providerChecksumSha256 = head.checksumSHA256(),
+                detectedContentType =
+                    detectContentType(bytes),
             )
         } catch (failure: S3Exception) {
             when {
@@ -320,6 +323,51 @@ class S3CompatibleEvidenceObjectStorage(
     override fun close() {
         presigner.close()
         s3.close()
+    }
+
+    private fun detectContentType(
+        bytes: ByteArray,
+    ): String? {
+        if (
+            bytes.size >= 3 &&
+            bytes[0] == 0xff.toByte() &&
+            bytes[1] == 0xd8.toByte() &&
+            bytes[2] == 0xff.toByte()
+        ) {
+            return "image/jpeg"
+        }
+
+        val png =
+            byteArrayOf(
+                0x89.toByte(),
+                0x50,
+                0x4e,
+                0x47,
+                0x0d,
+                0x0a,
+                0x1a,
+                0x0a,
+            )
+        if (
+            bytes.size >= png.size &&
+            png.indices.all {
+                bytes[it] == png[it]
+            }
+        ) {
+            return "image/png"
+        }
+
+        if (
+            bytes.size >= 12 &&
+            bytes.copyOfRange(0, 4)
+                .decodeToString() == "RIFF" &&
+            bytes.copyOfRange(8, 12)
+                .decodeToString() == "WEBP"
+        ) {
+            return "image/webp"
+        }
+
+        return null
     }
 
     private fun sha256Hex(bytes: ByteArray): String =
