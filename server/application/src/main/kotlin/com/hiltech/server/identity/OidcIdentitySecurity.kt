@@ -15,12 +15,15 @@ import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtValidators
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
+import java.time.Clock
 
 @ConfigurationProperties(prefix = "hiltech.identity.oidc")
 data class HiltechOidcProperties(
     var enabled: Boolean = false,
     var issuerUri: String = "",
     var audience: String = "",
+    var nativeClientId: String = "hiltech-native",
 ) {
     fun validateEnabledConfiguration() {
         if (!enabled) {
@@ -29,6 +32,9 @@ data class HiltechOidcProperties(
 
         require(issuerUri.isNotBlank()) {
             "hiltech.identity.oidc.issuer-uri must be configured when OIDC is enabled."
+        }
+        require(nativeClientId.isNotBlank()) {
+            "hiltech.identity.oidc.native-client-id must be configured when OIDC is enabled."
         }
     }
 }
@@ -67,13 +73,21 @@ object OidcSubjectResolver {
 }
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(HiltechOidcProperties::class)
+@EnableConfigurationProperties(
+    HiltechOidcProperties::class,
+    HiltechIdentitySessionProperties::class,
+)
 class IdentitySecurityConfiguration {
+    @Bean
+    fun hiltechClock(): Clock =
+        Clock.systemUTC()
+
     @Bean
     fun hiltechSecurityFilterChain(
         http: HttpSecurity,
         properties: HiltechOidcProperties,
         jwtDecoderProvider: ObjectProvider<JwtDecoder>,
+        identityAccessFilter: IdentityAccessEnforcementFilter,
     ): SecurityFilterChain {
         properties.validateEnabledConfiguration()
 
@@ -108,6 +122,10 @@ class IdentitySecurityConfiguration {
                     jwt.decoder(decoder)
                 }
             }
+            http.addFilterAfter(
+                identityAccessFilter,
+                BearerTokenAuthenticationFilter::class.java,
+            )
         }
 
         return http.build()

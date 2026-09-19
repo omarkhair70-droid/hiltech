@@ -22,7 +22,7 @@ on:
       - "infrastructure/**"
       - "scripts/ci/**"
       - ".github/dependabot.yml"
-      - ".github/workflows/bootstrap-phase0.yml"
+      - ".github/workflows/**"
 
 permissions:
   contents: read
@@ -117,14 +117,18 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
-      - name: Migrate empty PostgreSQL and verify first-slice constraints
+      - name: Migrate empty PostgreSQL and verify database contracts
         env:
           HILTECH_DB_CONTRACT_TEST: "1"
           HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
           HILTECH_DB_USER: hiltech
           HILTECH_DB_PASSWORD: hiltech
           HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
-        run: ./gradlew :server:application:test --tests com.hiltech.server.DatabaseMigrationContractTest --rerun-tasks
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --tests com.hiltech.server.identity.IdentityRuntimePostgresContractTest \
+            --rerun-tasks
 
       - name: Generate and verify jOOQ Kotlin sources
         env:
@@ -248,6 +252,21 @@ jobs:
 
           grep -q 'authorization_model_id' /tmp/hiltech-openfga-create.json
 
+          python3 - <<'PY'
+          import json
+          import os
+
+          with open("/tmp/hiltech-openfga-create.json", encoding="utf-8") as source:
+              payload = json.load(source)
+
+          store_id = payload["store"]["id"]
+          model_id = payload["model"]["authorization_model_id"]
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as target:
+              target.write(f"HILTECH_FGA_STORE_ID={store_id}\n")
+              target.write(f"HILTECH_FGA_MODEL_ID={model_id}\n")
+          PY
+
       - name: Migrate local HILTECH database and prove service-user isolation
         shell: bash
         env:
@@ -256,8 +275,18 @@ jobs:
           HILTECH_DB_USER: hiltech_app
           HILTECH_DB_PASSWORD: hiltech-app-local
           HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+          HILTECH_ROLE_TEAM_AUTH_CONTRACT_TEST: "1"
+          HILTECH_IDENTITY_SESSION_CONTRACT_TEST: "1"
+          HILTECH_AUDIT_CONTRACT_TEST: "1"
+          HILTECH_FGA_ENABLED: "1"
+          HILTECH_FGA_API_URL: http://127.0.0.1:8082
         run: |
-          ./gradlew :server:application:test --tests com.hiltech.server.DatabaseMigrationContractTest --rerun-tasks
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --tests com.hiltech.server.security.RoleTeamAuthorizationPostgresOpenFgaContractTest \
+            --tests com.hiltech.server.identity.IdentitySessionPostgresContractTest \
+            --tests com.hiltech.server.audit.AuditEventWriterPostgresContractTest \
+            --rerun-tasks
 
           if PGPASSWORD=hiltech-keycloak-local \
             psql -h 127.0.0.1 -U hiltech_keycloak -d hiltech \

@@ -3,6 +3,10 @@ fun String.asBuildConfigString(): String =
 
 val hiltechApiBaseUrl = providers.gradleProperty("hiltech.apiBaseUrl")
     .getOrElse("")
+val hiltechOidcIssuerUri = providers.gradleProperty("hiltech.oidcIssuerUri")
+    .getOrElse("")
+val hiltechOidcClientId = providers.gradleProperty("hiltech.oidcClientId")
+    .getOrElse("hiltech-native")
 
 plugins {
     id("com.hiltech.base")
@@ -25,6 +29,16 @@ android {
             "HILTECH_API_BASE_URL",
             hiltechApiBaseUrl.asBuildConfigString(),
         )
+        buildConfigField(
+            "String",
+            "HILTECH_OIDC_ISSUER_URI",
+            hiltechOidcIssuerUri.asBuildConfigString(),
+        )
+        buildConfigField(
+            "String",
+            "HILTECH_OIDC_CLIENT_ID",
+            hiltechOidcClientId.asBuildConfigString(),
+        )
     }
 
     buildFeatures {
@@ -37,5 +51,7 @@ dependencies {
     implementation(project(":shared:core"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.work.runtime)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.ktor.client.core)
 }

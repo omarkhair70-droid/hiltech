@@ -2,8 +2,9 @@ package com.hiltech.android
 
 import android.app.Application
 import android.content.Context
+import com.hiltech.android.identity.AndroidIdentityRuntime
+import com.hiltech.android.sync.AndroidSessionTokenProvider
 import com.hiltech.android.sync.AndroidSyncRuntime
-import com.hiltech.android.sync.BootstrapSessionTokenProvider
 import com.hiltech.shared.core.local.buildHiltechLocalDatabase
 import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
 import com.hiltech.shared.core.network.createPlatformHttpClient
@@ -20,8 +21,20 @@ class HiltechApplication : Application() {
         createPlatformHttpClient()
     }
 
-    private val installationId by lazy {
+    val installationId by lazy {
         AndroidInstallationIdStore(this).getOrCreate()
+    }
+
+    val identityRuntime: AndroidIdentityRuntime by lazy {
+        AndroidIdentityRuntime(
+            context = this,
+            httpClient = httpClient,
+            apiBaseUrl = BuildConfig.HILTECH_API_BASE_URL,
+            oidcIssuer = BuildConfig.HILTECH_OIDC_ISSUER_URI,
+            oidcClientId = BuildConfig.HILTECH_OIDC_CLIENT_ID,
+            installationId = installationId,
+            clientVersion = BuildConfig.VERSION_NAME,
+        )
     }
 
     val syncRuntime: AndroidSyncRuntime by lazy {
@@ -29,7 +42,9 @@ class HiltechApplication : Application() {
             database = localDatabase,
             httpClient = httpClient,
             apiBaseUrl = BuildConfig.HILTECH_API_BASE_URL,
-            sessionTokenProvider = BootstrapSessionTokenProvider(),
+            sessionTokenProvider = AndroidSessionTokenProvider {
+                identityRuntime.currentAccessToken()
+            },
             installationId = installationId,
             clientVersion = BuildConfig.VERSION_NAME,
         )

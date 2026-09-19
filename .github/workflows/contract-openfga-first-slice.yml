@@ -17,6 +17,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   model-contract:
     name: Validate model + authorization fixtures
@@ -25,10 +28,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Test OpenFGA model
-        uses: openfga/action-openfga-test@v0.1.2
+        uses: openfga/action-openfga-test@e89aa8259796cd5ee5c1b1ae7d72c401029cb947 # v0.1.2
         with:
           test_path: docs/13-delivery/first-slice-contract-pack/openfga/first-slice-model.fga.yaml
           fga_cli_version: v0.7.20

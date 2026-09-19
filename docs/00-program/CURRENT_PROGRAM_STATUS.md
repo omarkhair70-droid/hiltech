@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**REPOSITORY BOOTSTRAP VERIFIED / PHASE 1 NEXT**
+**PHASE 1 VERIFIED / COMPLETE — PHASE 2 NEXT**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -32,8 +32,25 @@ Canonical decision:
 
 Repository / engineering foundation implementation is now complete and Bootstrap Verification is PASS.
 
-Business vertical implementation has not started yet.
-The next phase is Phase 1 — Identity, Organization, Permissions Foundation, followed by complete production vertical slices under the frozen contracts.
+Business production implementation is active.
+
+Phase 1 — Identity, Organization, Permissions Foundation — is **VERIFIED / COMPLETE**.
+
+All five Phase 1 slices are VERIFIED:
+1. Authenticated Identity Bootstrap.
+2. Native OIDC Session Runtime.
+3. Role / Team Authorization Integration.
+4. Re-auth + Access Revocation.
+5. Audit Baseline + Me / Sessions Minimal.
+
+Final Phase 1 code head: `5fee08baecf5bab9ace5ee52081609205ff6a2d1`.
+
+Final full regression evidence on that code head:
+- Bootstrap Phase 0 run `35424990001` — PASS.
+- Contract — OpenFGA First Slice run `35424990060` — PASS.
+- Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
+
+Phase 2 — Shared Product Infrastructure — is next and has not started.
 
 ---
 
@@ -64,8 +81,8 @@ The next phase is Phase 1 — Identity, Organization, Permissions Foundation, fo
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 0 VERIFIED / PHASE 1 NEXT | Repository engineering foundation is verified; Identity / Organization / Permissions Foundation is next |
-| Production code | FOUNDATION IMPLEMENTED / BUSINESS VERTICAL NOT STARTED | Engineering foundation is production-shaped and verified; business capabilities now proceed by vertical slice |
+| Implementation order | PHASE 1 VERIFIED / COMPLETE | All five Phase 1 slices verified; Phase 2 Shared Product Infrastructure is next |
+| Production code | PHASE 1 VERIFIED / COMPLETE | Identity/bootstrap, native OIDC, Role/Team authority, re-auth/revocation, audit baseline, and Me/Sessions minimal are verified on production-shaped code |
 
 ---
 
@@ -217,11 +234,12 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Begin Phase 1 — Identity, Organization, Permissions Foundation from the frozen contracts.
-2. Implement Phase 1 as complete vertical slices with DB/server/auth/client/UI/tests/observability as applicable.
-3. Keep Bootstrap Verification gates mandatory on foundation-affecting changes.
-4. Record later-domain discoveries in the Reality Evidence Register and consume them only when their phase arrives.
-5. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
+1. Phase 1 is closed; do not reopen it without a genuine cross-cutting contradiction.
+2. Before Phase 2 code, read the Phase 2 scope/contracts and close any Phase 2-specific reality or contract gaps.
+3. Begin Phase 2 — Shared Product Infrastructure — as complete vertical slices.
+4. Keep Bootstrap Verification gates mandatory on foundation-affecting changes.
+5. Record later-domain discoveries in the Reality Evidence Register and consume them only when their phase arrives.
+6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 

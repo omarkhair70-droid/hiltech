@@ -1,0 +1,140 @@
+# Phase 1 / Slice 01 — Authenticated Identity Bootstrap
+
+Date: 2026-09-19
+Status: **PASS / VERIFIED**
+
+## Goal
+
+Turn a valid OIDC subject into the minimum permission-safe HILTECH runtime context required by Android/Desktop.
+
+Flow:
+
+\`OIDC token → UserIdentity → active OrganizationMembership → active Team context → Device → /v1/me/bootstrap\`
+
+## Why first
+
+Every later Phase 1 capability depends on an authenticated subject resolving to an explicit HILTECH identity and current organization context.
+
+Authentication alone must never imply HILTECH access.
+
+## Existing schema reused
+
+No migration is required for this slice.
+
+It intentionally uses the verified Phase 0 V0001 tables:
+- \`user_identity\`,
+- \`organization\`,
+- \`organization_membership\`,
+- \`team\`,
+- \`team_membership\`,
+- \`device\`.
+
+Session/delegation/role-definition persistence remains later Phase 1 work and is not invented in this slice.
+
+## Server contract
+
+### GET /v1/me/bootstrap
+
+Input:
+- validated Bearer JWT,
+- optional \`X-Device-Installation-Id\`.
+
+Rules:
+- issuer + subject must resolve to an existing \`UserIdentity\`,
+- identity must be ACTIVE,
+- at least one ACTIVE/in-window membership in an ACTIVE organization is required,
+- revoked device denies continuation,
+- an installation already owned by another identity is a conflict,
+- bootstrap returns only active organization/team context.
+
+### PUT /v1/me/device
+
+Registers or touches the current installation for the authenticated HILTECH identity.
+
+Rules:
+- installation ID is stable UUID,
+- platform is ANDROID/WINDOWS/IOS,
+- revoked installation is never silently resurrected,
+- installation cannot move between identities,
+- metadata refresh increments device version.
+
+## Deny-by-default errors
+
+- \`IDENTITY_NOT_PROVISIONED\`
+- \`IDENTITY_NOT_ACTIVE\`
+- \`NO_ACTIVE_ORGANIZATION_MEMBERSHIP\`
+- \`DEVICE_REVOKED\`
+- \`DEVICE_INSTALLATION_CONFLICT\`
+
+## Client contract
+
+Shared KMP client exposes:
+- bootstrap context,
+- active organizations,
+- active teams,
+- current device,
+- typed identity API failures.
+
+Bearer token and correlation headers are mandatory.
+
+## Deliberate non-scope
+
+This slice does not yet:
+- implement native Authorization Code/PKCE UI,
+- invent HILTECH role codes,
+- persist product-side Session records,
+- implement delegation,
+- implement access administration UI,
+- grant OpenFGA permissions from role labels.
+
+Those close in later Phase 1 slices.
+
+## Verification target
+
+Before slice acceptance:
+- server unit tests,
+- shared KMP client tests,
+- database contract remains green,
+- Android/Desktop builds remain green,
+- architecture test remains green,
+- real PostgreSQL identity/membership/team/device lifecycle exercise PASS.
+
+
+## PostgreSQL contract exercise
+
+`IdentityRuntimePostgresContractTest` uses the real migrated PostgreSQL schema and proves:
+- issuer + subject resolves the intended HILTECH identity,
+- ended membership is excluded,
+- active in-window membership is returned,
+- active team context is returned,
+- bootstrap marks `last_authenticated_at`,
+- first device registration starts at version 1,
+- metadata touch increments device version,
+- one installation cannot move to another identity,
+- revoked installation cannot be resurrected.
+
+
+## Verification
+
+Canonical run:
+`35415954086` (#60) — **SUCCESS**
+
+Passed:
+- shared KMP tests,
+- Android debug build,
+- Desktop compile,
+- Server tests,
+- real PostgreSQL database contracts including IdentityRuntimePostgresContractTest,
+- jOOQ generation / server compile,
+- local platform contract,
+- Evidence storage contract,
+- OCI Terraform contract,
+- supply-chain contract,
+- shipped-runtime OSV dependency review.
+
+## Slice decision
+
+`PHASE1_IDENTITY_BOOTSTRAP = PASS`
+
+The next Phase 1 slice is native OIDC client/session runtime:
+Authorization Code + PKCE through the system browser, Android private-use callback, Windows loopback callback, refresh/logout/re-auth boundaries, then the permission-safe identity-aware client shell.
