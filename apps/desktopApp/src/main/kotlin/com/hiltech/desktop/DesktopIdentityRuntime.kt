@@ -11,7 +11,13 @@ import com.hiltech.shared.core.identity.auth.InMemoryOidcTokenStore
 import com.hiltech.shared.core.identity.auth.NativeOidcConfig
 import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.identity.auth.NativeOidcSessionManager
+import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
+import com.hiltech.shared.core.people.CreateEmployeeRequestDto
+import com.hiltech.shared.core.people.EmployeeCommandResponseDto
+import com.hiltech.shared.core.people.EmployeeDetailDto
+import com.hiltech.shared.core.people.EmployeeDirectoryDto
+import com.hiltech.shared.core.people.PeopleApiClient
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.Dispatchers
@@ -67,6 +73,20 @@ class DesktopIdentityRuntime(
             UUID.randomUUID().toString()
         },
     )
+
+    private val peopleApi =
+        PeopleApiClient(
+            HiltechApiClient(
+                client = httpClient,
+                baseUrl = apiBaseUrl,
+                accessTokenProvider = {
+                    session?.currentAccessToken()
+                },
+                correlationIdProvider = {
+                    UUID.randomUUID().toString()
+                },
+            ),
+        )
 
     suspend fun signIn(
         forceReauthentication: Boolean = false,
@@ -187,6 +207,72 @@ class DesktopIdentityRuntime(
         return identityApi.revokeDevice(
             deviceId = deviceId,
             installationId = installationId,
+        )
+    }
+
+    suspend fun peopleDirectory(
+        organizationId: String,
+    ): EmployeeDirectoryDto {
+        ensureConfigured()
+        return peopleApi.directory(
+            organizationId =
+                organizationId,
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun ownEmployee(
+        organizationId: String,
+    ): EmployeeDetailDto {
+        ensureConfigured()
+        return peopleApi.own(
+            organizationId =
+                organizationId,
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun employeeDetail(
+        employeeId: String,
+    ): EmployeeDetailDto {
+        ensureConfigured()
+        return peopleApi.detail(
+            employeeId =
+                employeeId,
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun createEmployee(
+        organizationId: String,
+        displayName: String,
+        employeeCode: String,
+        startDate: String,
+        employmentTypeCode: String?,
+    ): EmployeeCommandResponseDto {
+        ensureConfigured()
+        return peopleApi.create(
+            request =
+                CreateEmployeeRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    organizationId =
+                        organizationId,
+                    displayName =
+                        displayName,
+                    employeeCode =
+                        employeeCode,
+                    startDate =
+                        startDate,
+                    employmentTypeCode =
+                        employmentTypeCode,
+                ),
+            installationId =
+                installationId,
         )
     }
 
