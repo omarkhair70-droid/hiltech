@@ -1,6 +1,6 @@
 package com.hiltech.server.platform.command
 
-import com.hiltech.server.platform.http.ProductApiException
+import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.telemetry.HiltechTelemetryRuntime
 import io.opentelemetry.api.OpenTelemetry
 import org.flywaydb.core.Flyway
