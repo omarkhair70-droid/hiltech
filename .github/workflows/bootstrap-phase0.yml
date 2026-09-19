@@ -120,6 +120,7 @@ jobs:
       - name: Migrate empty PostgreSQL and verify database contracts
         env:
           HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_COMMAND_RUNTIME_CONTRACT_TEST: "1"
           HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
           HILTECH_DB_USER: hiltech
           HILTECH_DB_PASSWORD: hiltech
@@ -128,6 +129,7 @@ jobs:
           ./gradlew :server:application:test \
             --tests com.hiltech.server.DatabaseMigrationContractTest \
             --tests com.hiltech.server.identity.IdentityRuntimePostgresContractTest \
+            --tests com.hiltech.server.platform.command.IdempotentCommandPostgresContractTest \
             --rerun-tasks
 
       - name: Generate and verify jOOQ Kotlin sources
@@ -278,6 +280,7 @@ jobs:
           HILTECH_ROLE_TEAM_AUTH_CONTRACT_TEST: "1"
           HILTECH_IDENTITY_SESSION_CONTRACT_TEST: "1"
           HILTECH_AUDIT_CONTRACT_TEST: "1"
+          HILTECH_COMMAND_RUNTIME_CONTRACT_TEST: "1"
           HILTECH_FGA_ENABLED: "1"
           HILTECH_FGA_API_URL: http://127.0.0.1:8082
         run: |
@@ -286,6 +289,7 @@ jobs:
             --tests com.hiltech.server.security.RoleTeamAuthorizationPostgresOpenFgaContractTest \
             --tests com.hiltech.server.identity.IdentitySessionPostgresContractTest \
             --tests com.hiltech.server.audit.AuditEventWriterPostgresContractTest \
+            --tests com.hiltech.server.platform.command.IdempotentCommandPostgresContractTest \
             --rerun-tasks
 
           if PGPASSWORD=hiltech-keycloak-local \
