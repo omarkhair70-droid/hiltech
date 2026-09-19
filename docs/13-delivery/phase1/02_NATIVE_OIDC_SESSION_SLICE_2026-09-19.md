@@ -1,7 +1,7 @@
 # Phase 1 / Slice 02 — Native OIDC Session Runtime
 
 Date: 2026-09-19
-Status: **IMPLEMENTATION COMPLETE / CI PASS — PROVIDER + RENDER SMOKE PENDING**
+Status: **VERIFIED**
 
 ## Goal
 
@@ -64,10 +64,17 @@ CI evidence:
 - Server tests: PASS,
 - database / local-platform / evidence / dependency / Terraform / supply-chain contracts: PASS.
 
-Remaining before this slice may be marked VERIFIED:
-1. configured Keycloak/browser callback smoke on Android,
-2. configured Windows loopback/browser callback smoke,
-3. rendered shell-state evidence on the production client surfaces.
+Verification closure:
+- GitHub Actions run `35420251296` — **PASS** on head `9985065b633ff86bd1f8f9c831c1c2ef1609f3aa`.
+- Keycloak 26.7.4 HTTPS provider smoke: PASS.
+- Android private-use redirect through the production OIDC session core: PASS.
+- Windows loopback redirect through real Chromium and the production OIDC session core: PASS.
+- production Android APK callback routing + fail-closed callback state: PASS on API 36 emulator.
+- production Android shell rendered evidence: PASS.
+- production Desktop shell rendered evidence: PASS.
+- rendered evidence artifacts were uploaded by the workflow.
+
+Slice 02 is therefore VERIFIED.
 
 
 ## Android production wiring
