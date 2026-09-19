@@ -1,7 +1,7 @@
 # Phase 1 / Slice 04 — Re-auth + Access Revocation
 
 Date: 2026-09-19  
-Status: **IMPLEMENTING**
+Status: **VERIFIED**
 
 ## Goal
 
@@ -68,3 +68,26 @@ Next:
 3. wire product session/device revoke commands,
 4. prove offline replay fails closed after revoke,
 5. then close Slice 04.
+
+
+## Verification closure
+
+Verified head:
+`cf021ef7ab6c845727e9eab4c0ea0a5010ebceae`
+
+Evidence:
+- Bootstrap Phase 0 run `35424038466` — PASS,
+- Contract — OpenFGA First Slice run `35424038480` — PASS,
+- Phase 1 Native OIDC Production Smoke run `35424038479` — PASS,
+- real PostgreSQL identity-session contract — PASS,
+- revoked provider-bound product session cannot be resurrected — PASS,
+- global identity/device/session request guard — PASS,
+- forced browser re-auth uses `prompt=login + max_age=0` — PASS,
+- real Keycloak 26.7.4 ID token verifies through the production server verifier — PASS,
+- Android + Windows production runtimes complete re-auth back to the server — PASS,
+- session/device revoke APIs and fresh-reauth gate for remote security changes are implemented,
+- Android + Desktop production shell regressions remain green.
+
+Offline replay remains protected by the same authenticated request boundary: replayed business commands re-enter server authentication/session/authorization checks; a revoked device/session cannot bypass the guard.
+
+Slice 04 is VERIFIED.
