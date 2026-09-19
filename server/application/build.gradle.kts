@@ -175,6 +175,8 @@ tasks.register("verifyJooqGeneration") {
             "ApprovalDecision.kt",
             "InboxItem.kt",
             "InboxUserState.kt",
+            "NotificationIntent.kt",
+            "NotificationDeliveryAttempt.kt",
         ).forEach { expected ->
             check(expected in generatedFileNames) {
                 "Generated jOOQ schema is missing required first-slice table source: $expected"
