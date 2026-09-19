@@ -1,6 +1,8 @@
 package com.hiltech.server.platform.command
 
 import com.hiltech.server.platform.http.ProductApiException
+import com.hiltech.server.telemetry.HiltechTelemetryRuntime
+import com.hiltech.server.telemetry.SafeTelemetry
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -138,6 +140,7 @@ class JdbcIdempotentCommandExecutor(
     private val jdbc: JdbcTemplate,
     transactionManager: PlatformTransactionManager,
     private val clock: Clock,
+    private val telemetry: HiltechTelemetryRuntime,
 ) : IdempotentCommandExecutor {
     private val transaction =
         TransactionTemplate(
@@ -147,15 +150,68 @@ class JdbcIdempotentCommandExecutor(
     override fun execute(
         spec: IdempotentCommandSpec,
         action: () -> IdempotentCommandOutcome,
-    ): IdempotentCommandExecution =
-        requireNotNull(
-            transaction.execute {
-                executeInTransaction(
-                    spec = spec,
-                    action = action,
+    ): IdempotentCommandExecution {
+        val span =
+            telemetry.tracer
+                .spanBuilder(
+                    "hiltech.command",
                 )
-            },
-        )
+                .setAllAttributes(
+                    SafeTelemetry.attributes(
+                        mapOf(
+                            "hiltech.correlation_id" to
+                                spec.correlationId,
+                            "hiltech.operation_id" to
+                                spec.operationId.toString(),
+                            "hiltech.command_type" to
+                                spec.commandType,
+                            "hiltech.object_type" to
+                                spec.targetType,
+                            "hiltech.module" to
+                                "platform.command",
+                        ),
+                    ),
+                )
+                .startSpan()
+
+        try {
+            val execution =
+                requireNotNull(
+                    transaction.execute {
+                        executeInTransaction(
+                            spec = spec,
+                            action = action,
+                        )
+                    },
+                )
+
+            span.setAllAttributes(
+                SafeTelemetry.attributes(
+                    mapOf(
+                        "hiltech.result_code" to
+                            execution.outcome
+                                .resultCode,
+                    ),
+                ),
+            )
+
+            return execution
+        } catch (
+            failure: ProductApiException,
+        ) {
+            span.setAllAttributes(
+                SafeTelemetry.attributes(
+                    mapOf(
+                        "hiltech.error_code" to
+                            failure.code,
+                    ),
+                ),
+            )
+            throw failure
+        } finally {
+            span.end()
+        }
+    }
 
     private fun executeInTransaction(
         spec: IdempotentCommandSpec,
