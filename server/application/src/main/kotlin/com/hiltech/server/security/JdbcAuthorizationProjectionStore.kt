@@ -19,6 +19,9 @@ class JdbcAuthorizationProjectionIntentWriter(
 ) : AuthorizationProjectionIntentWriter {
     @Transactional(propagation = Propagation.MANDATORY)
     override fun write(intent: AuthorizationProjectionIntent) {
+        require(properties.enabled) {
+            "OpenFGA must be enabled before authorization projection intents can be written."
+        }
         properties.validateEnabledConfiguration()
 
         val now = intent.occurredAt.atOffset(ZoneOffset.UTC)

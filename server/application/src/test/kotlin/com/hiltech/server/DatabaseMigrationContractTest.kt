@@ -1,12 +1,26 @@
 package com.hiltech.server
 
+import com.hiltech.server.security.AuthorizationDesiredState
+import com.hiltech.server.security.AuthorizationProjectionIntent
+import com.hiltech.server.security.AuthorizationProjectionRetryPolicy
+import com.hiltech.server.security.HiltechOpenFgaProperties
+import com.hiltech.server.security.JdbcAuthorizationProjectionGuard
+import com.hiltech.server.security.JdbcAuthorizationProjectionIntentWriter
+import com.hiltech.server.security.JdbcAuthorizationProjectionStore
+import com.hiltech.server.security.OpenFgaTuple
+import com.hiltech.server.security.ProjectionGuardDecision
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.datasource.DataSourceTransactionManager
+import org.springframework.jdbc.datasource.DriverManagerDataSource
+import org.springframework.transaction.support.TransactionTemplate
 import java.sql.DriverManager
 import java.sql.SQLException
+import java.time.Instant
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -154,6 +168,142 @@ class DatabaseMigrationContractTest {
                 }
             }
         }
+
+        val dataSource = DriverManagerDataSource(url, user, password)
+        val jdbc = JdbcTemplate(dataSource)
+        val transactionManager = DataSourceTransactionManager(dataSource)
+        val transaction = TransactionTemplate(transactionManager)
+        val openFgaProperties = HiltechOpenFgaProperties(
+            enabled = true,
+            apiUrl = "http://openfga-contract",
+            storeId = "store-contract",
+            authorizationModelId = "model-contract",
+        )
+        val intentWriter = JdbcAuthorizationProjectionIntentWriter(
+            jdbc = jdbc,
+            properties = openFgaProperties,
+        )
+        val retryPolicy = AuthorizationProjectionRetryPolicy()
+        val projectionStore = JdbcAuthorizationProjectionStore(
+            jdbc = jdbc,
+            transactionManager = transactionManager,
+            properties = openFgaProperties,
+            retryPolicy = retryPolicy,
+        )
+        val guard = JdbcAuthorizationProjectionGuard(jdbc)
+
+        val tuple = OpenFgaTuple(
+            subjectType = "user",
+            subjectId = "contract-user",
+            relation = "assigned_user",
+            objectType = "work_order",
+            objectId = "contract-work",
+        )
+        val projectionStartedAt = Instant.parse("2026-09-19T00:00:00Z")
+
+        transaction.executeWithoutResult {
+            intentWriter.write(
+                AuthorizationProjectionIntent(
+                    eventId = UUID.randomUUID(),
+                    tuple = tuple,
+                    desiredState = AuthorizationDesiredState.PRESENT,
+                    sourceType = "WorkAssignment",
+                    sourceId = "contract-assignment",
+                    sourceVersion = 1,
+                    occurredAt = projectionStartedAt,
+                ),
+            )
+        }
+
+        assertEquals(
+            ProjectionGuardDecision.DENY_FAIL_CLOSED,
+            guard.evaluate(tuple),
+            "Pending grants must fail closed before OpenFGA projection is APPLIED.",
+        )
+
+        val grantWork = projectionStore.claimNext(
+            projectionStartedAt.plusSeconds(1),
+        )
+        assertTrue(grantWork != null, "Expected pending grant outbox work.")
+        assertEquals(
+            AuthorizationDesiredState.PRESENT,
+            grantWork!!.projection.desiredState,
+        )
+
+        projectionStore.markApplied(
+            work = grantWork,
+            now = projectionStartedAt.plusSeconds(1),
+        )
+
+        assertEquals(
+            ProjectionGuardDecision.PROCEED_TO_OPENFGA,
+            guard.evaluate(tuple),
+            "Applied grants may proceed to the pinned OpenFGA decision.",
+        )
+
+        transaction.executeWithoutResult {
+            intentWriter.write(
+                AuthorizationProjectionIntent(
+                    eventId = UUID.randomUUID(),
+                    tuple = tuple,
+                    desiredState = AuthorizationDesiredState.ABSENT,
+                    sourceType = "WorkAssignment",
+                    sourceId = "contract-assignment",
+                    sourceVersion = 2,
+                    occurredAt = projectionStartedAt.plusSeconds(2),
+                ),
+            )
+        }
+
+        assertEquals(
+            ProjectionGuardDecision.DENY_FAIL_CLOSED,
+            guard.evaluate(tuple),
+            "Pending revokes must deny immediately while stale OpenFGA tuples may still exist.",
+        )
+
+        val revokeWork = projectionStore.claimNext(
+            projectionStartedAt.plusSeconds(3),
+        )
+        assertTrue(revokeWork != null, "Expected pending revoke outbox work.")
+        assertEquals(
+            AuthorizationDesiredState.ABSENT,
+            revokeWork!!.projection.desiredState,
+        )
+
+        projectionStore.markApplied(
+            work = revokeWork,
+            now = projectionStartedAt.plusSeconds(3),
+        )
+
+        assertEquals(
+            ProjectionGuardDecision.PROCEED_TO_OPENFGA,
+            guard.evaluate(tuple),
+            "Once revoke projection is APPLIED, normal OpenFGA evaluation may resume.",
+        )
+
+        val projectionState = jdbc.queryForMap(
+            """
+            SELECT desired_state, projection_state, authorization_model_id
+            FROM authorization_relation_projection
+            WHERE relation_key = ?
+            """.trimIndent(),
+            tuple.relationKey,
+        )
+        assertEquals("ABSENT", projectionState["desired_state"])
+        assertEquals("APPLIED", projectionState["projection_state"])
+        assertEquals("model-contract", projectionState["authorization_model_id"])
+
+        val completedOutbox = jdbc.queryForObject(
+            """
+            SELECT count(*)
+            FROM authorization_projection_outbox
+            WHERE relation_key = ?
+              AND completed_at IS NOT NULL
+            """.trimIndent(),
+            Int::class.java,
+            tuple.relationKey,
+        )
+        assertEquals(2, completedOutbox)
     }
 
     private fun assertConstraintRejects(
