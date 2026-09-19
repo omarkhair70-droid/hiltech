@@ -854,8 +854,7 @@ class InboxWorkQueuePostgresOpenFgaContractTest {
                     "TEAM",
                 newPrincipalId =
                     team.teamId,
-                at =
-                    now.plusSeconds(5),
+                at = now,
             )
 
             assertApplied(
@@ -883,7 +882,8 @@ class InboxWorkQueuePostgresOpenFgaContractTest {
                     principalId =
                         team.teamId,
                     createdAt =
-                        now.plusSeconds(6),
+                        now.minusSeconds(1)
+                            .plusNanos(555),
                 )
             applyApprovalApproverTuple(
                 gateway = gateway,
@@ -922,7 +922,7 @@ class InboxWorkQueuePostgresOpenFgaContractTest {
                     version = version + 1
                 WHERE id = ?
                 """.trimIndent(),
-                now.plusSeconds(6)
+                now.minusSeconds(1)
                     .atOffset(
                         ZoneOffset.UTC,
                     ),
