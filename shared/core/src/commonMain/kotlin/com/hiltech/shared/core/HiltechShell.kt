@@ -14,11 +14,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
+import com.hiltech.shared.core.identity.IdentitySecuritySnapshot
 
 sealed interface HiltechShellState {
     data object SignedOut : HiltechShellState
     data class Working(val message: String) : HiltechShellState
-    data class SignedIn(val identity: IdentityBootstrapDto) : HiltechShellState
+    data class SignedIn(
+        val identity: IdentityBootstrapDto,
+        val security: IdentitySecuritySnapshot? = null,
+    ) : HiltechShellState
     data class AccessDenied(
         val code: String,
         val message: String,
@@ -38,6 +42,10 @@ fun HiltechShell(
     onSignIn: () -> Unit = {},
     onSignOut: () -> Unit = {},
     onRetry: () -> Unit = {},
+    onRefreshSecurity: () -> Unit = {},
+    onReauthenticate: () -> Unit = {},
+    onRevokeSession: (String) -> Unit = {},
+    onRevokeDevice: (String) -> Unit = {},
 ) {
     MaterialTheme {
         Column(
@@ -91,6 +99,111 @@ fun HiltechShell(
                         "Your workspace only exposes actions authorized " +
                             "for this identity and context.",
                     )
+
+                    Text(
+                        "Me / Sessions",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+
+                    val security = state.security
+                    if (security == null) {
+                        Text(
+                            "Session and device security context is loading.",
+                        )
+                    } else {
+                        val activeSessions =
+                            security.sessions.count {
+                                it.revokedAt == null
+                            }
+                        val activeDevices =
+                            security.devices.count {
+                                it.revokedAt == null
+                            }
+                        val currentSession =
+                            security.sessions.firstOrNull {
+                                it.current
+                            }
+                        val currentDevice =
+                            security.devices.firstOrNull {
+                                it.current
+                            }
+                        val remoteSession =
+                            security.sessions.firstOrNull {
+                                !it.current &&
+                                    it.revokedAt == null
+                            }
+                        val remoteDevice =
+                            security.devices.firstOrNull {
+                                !it.current &&
+                                    it.revokedAt == null
+                            }
+
+                        Text(
+                            "Active sessions: $activeSessions · " +
+                                "devices: $activeDevices",
+                        )
+                        currentSession?.let {
+                            Text(
+                                "Current session: " +
+                                    it.sessionId.take(8),
+                            )
+                        }
+                        currentDevice?.let {
+                            Text(
+                                "Current device: " +
+                                    (it.deviceName
+                                        ?: it.platform),
+                            )
+                        }
+
+                        Row(
+                            horizontalArrangement =
+                                Arrangement.spacedBy(8.dp),
+                        ) {
+                            OutlinedButton(
+                                onClick = onRefreshSecurity,
+                            ) {
+                                Text("Refresh")
+                            }
+                            OutlinedButton(
+                                onClick = onReauthenticate,
+                            ) {
+                                Text("Re-authenticate")
+                            }
+                        }
+
+                        remoteSession?.let {
+                            OutlinedButton(
+                                onClick = {
+                                    onRevokeSession(
+                                        it.sessionId,
+                                    )
+                                },
+                            ) {
+                                Text(
+                                    "Revoke other session " +
+                                        it.sessionId.take(8),
+                                )
+                            }
+                        }
+
+                        remoteDevice?.let {
+                            OutlinedButton(
+                                onClick = {
+                                    onRevokeDevice(
+                                        it.deviceId,
+                                    )
+                                },
+                            ) {
+                                Text(
+                                    "Revoke other device " +
+                                        (it.deviceName
+                                            ?: it.platform),
+                                )
+                            }
+                        }
+                    }
+
                     OutlinedButton(onClick = onSignOut) {
                         Text("Sign out")
                     }
