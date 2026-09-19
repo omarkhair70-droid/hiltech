@@ -314,6 +314,14 @@ jobs:
             exit 1
           fi
 
+      - name: Local platform test report on failure
+        if: failure()
+        shell: bash
+        run: |
+          find server/application/build/test-results/test \
+            -type f -name '*.xml' -print -exec cat {} \; \
+            || true
+
       - name: Local platform logs on failure
         if: failure()
         shell: bash
