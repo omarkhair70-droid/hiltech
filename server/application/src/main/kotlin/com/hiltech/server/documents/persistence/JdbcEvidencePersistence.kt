@@ -282,6 +282,55 @@ class JdbcEvidencePersistence(
             operationId,
         ).singleOrNull()
 
+    override fun loadEvidenceRecord(
+        evidenceId: UUID,
+    ): EvidenceFinalizeRecord? =
+        jdbc.query(
+            """
+            SELECT
+                e.id AS evidence_id,
+                us.id AS upload_session_id,
+                e.organization_id,
+                e.work_order_id,
+                wo.lifecycle_state
+                    AS work_order_lifecycle_state,
+                e.captured_by_user_id,
+                e.evidence_requirement_key,
+                e.evidence_policy_id,
+                e.evidence_policy_revision,
+                e.evidence_type_code,
+                e.content_type,
+                us.expected_size_bytes,
+                us.expected_sha256,
+                e.storage_state,
+                us.state AS upload_state,
+                e.object_key_ref,
+                us.expires_at,
+                e.classification_code,
+                e.client_visibility_mode,
+                epr.security_scan_class,
+                e.version AS evidence_version,
+                us.version AS upload_session_version
+            FROM evidence e
+            JOIN evidence_upload_session us
+              ON us.evidence_id = e.id
+            JOIN work_order wo
+              ON wo.id = e.work_order_id
+            JOIN evidence_policy_requirement epr
+              ON epr.config_revision_id =
+                 e.evidence_policy_id
+             AND epr.requirement_key =
+                 e.evidence_requirement_key
+            WHERE e.id = ?
+              AND e.target_type = 'WORK_ORDER'
+              AND e.target_id = e.work_order_id
+            ORDER BY us.created_at DESC, us.id DESC
+            LIMIT 1
+            """.trimIndent(),
+            finalizeRecordMapper,
+            evidenceId,
+        ).singleOrNull()
+
     override fun loadFinalizeRecord(
         evidenceId: UUID,
         uploadSessionId: UUID,
@@ -327,113 +376,7 @@ class JdbcEvidencePersistence(
               AND e.target_type = 'WORK_ORDER'
               AND e.target_id = e.work_order_id
             """.trimIndent(),
-            { rs, _ ->
-                EvidenceFinalizeRecord(
-                    evidenceId =
-                        rs.getObject(
-                            "evidence_id",
-                            UUID::class.java,
-                        ),
-                    uploadSessionId =
-                        rs.getObject(
-                            "upload_session_id",
-                            UUID::class.java,
-                        ),
-                    organizationId =
-                        rs.getObject(
-                            "organization_id",
-                            UUID::class.java,
-                        ),
-                    workOrderId =
-                        requireNotNull(
-                            rs.getObject(
-                                "work_order_id",
-                                UUID::class.java,
-                            ),
-                        ),
-                    workOrderLifecycleState =
-                        rs.getString(
-                            "work_order_lifecycle_state",
-                        ),
-                    capturedByUserId =
-                        rs.getObject(
-                            "captured_by_user_id",
-                            UUID::class.java,
-                        ),
-                    evidenceRequirementKey =
-                        requireNotNull(
-                            rs.getString(
-                                "evidence_requirement_key",
-                            ),
-                        ),
-                    evidencePolicyId =
-                        requireNotNull(
-                            rs.getObject(
-                                "evidence_policy_id",
-                                UUID::class.java,
-                            ),
-                        ),
-                    evidencePolicyRevision =
-                        rs.getInt(
-                            "evidence_policy_revision",
-                        ),
-                    evidenceTypeCode =
-                        rs.getString(
-                            "evidence_type_code",
-                        ),
-                    contentType =
-                        rs.getString(
-                            "content_type",
-                        ),
-                    expectedSizeBytes =
-                        rs.getLong(
-                            "expected_size_bytes",
-                        ),
-                    expectedSha256 =
-                        rs.getString(
-                            "expected_sha256",
-                        ),
-                    storageState =
-                        rs.getString(
-                            "storage_state",
-                        ),
-                    uploadState =
-                        rs.getString(
-                            "upload_state",
-                        ),
-                    objectKey =
-                        requireNotNull(
-                            rs.getString(
-                                "object_key_ref",
-                            ),
-                        ),
-                    uploadExpiresAt =
-                        rs.getObject(
-                            "expires_at",
-                            OffsetDateTime::class.java,
-                        ).toInstant(),
-                    classificationCode =
-                        rs.getString(
-                            "classification_code",
-                        ),
-                    clientVisibilityMode =
-                        rs.getString(
-                            "client_visibility_mode",
-                        ),
-                    securityScanClass =
-                        rs.getString(
-                            "security_scan_class",
-                        ),
-                    evidenceVersion =
-                        rs.getLong(
-                            "evidence_version",
-                        ),
-                    uploadSessionVersion =
-                        rs.getLong(
-                            "upload_session_version",
-                        ),
-                )
-            },
+            finalizeRecordMapper,
             evidenceId,
             uploadSessionId,
         ).singleOrNull()
@@ -522,6 +465,115 @@ class JdbcEvidencePersistence(
         return counts?.first == 1 &&
             counts.second == 1
     }
+
+    private val finalizeRecordMapper =
+        { rs: java.sql.ResultSet, _: Int ->
+            EvidenceFinalizeRecord(
+                evidenceId =
+                    rs.getObject(
+                        "evidence_id",
+                        UUID::class.java,
+                    ),
+                uploadSessionId =
+                    rs.getObject(
+                        "upload_session_id",
+                        UUID::class.java,
+                    ),
+                organizationId =
+                    rs.getObject(
+                        "organization_id",
+                        UUID::class.java,
+                    ),
+                workOrderId =
+                    requireNotNull(
+                        rs.getObject(
+                            "work_order_id",
+                            UUID::class.java,
+                        ),
+                    ),
+                workOrderLifecycleState =
+                    rs.getString(
+                        "work_order_lifecycle_state",
+                    ),
+                capturedByUserId =
+                    rs.getObject(
+                        "captured_by_user_id",
+                        UUID::class.java,
+                    ),
+                evidenceRequirementKey =
+                    requireNotNull(
+                        rs.getString(
+                            "evidence_requirement_key",
+                        ),
+                    ),
+                evidencePolicyId =
+                    requireNotNull(
+                        rs.getObject(
+                            "evidence_policy_id",
+                            UUID::class.java,
+                        ),
+                    ),
+                evidencePolicyRevision =
+                    rs.getInt(
+                        "evidence_policy_revision",
+                    ),
+                evidenceTypeCode =
+                    rs.getString(
+                        "evidence_type_code",
+                    ),
+                contentType =
+                    rs.getString(
+                        "content_type",
+                    ),
+                expectedSizeBytes =
+                    rs.getLong(
+                        "expected_size_bytes",
+                    ),
+                expectedSha256 =
+                    rs.getString(
+                        "expected_sha256",
+                    ),
+                storageState =
+                    rs.getString(
+                        "storage_state",
+                    ),
+                uploadState =
+                    rs.getString(
+                        "upload_state",
+                    ),
+                objectKey =
+                    requireNotNull(
+                        rs.getString(
+                            "object_key_ref",
+                        ),
+                    ),
+                uploadExpiresAt =
+                    rs.getObject(
+                        "expires_at",
+                        OffsetDateTime::class.java,
+                    ).toInstant(),
+                classificationCode =
+                    rs.getString(
+                        "classification_code",
+                    ),
+                clientVisibilityMode =
+                    rs.getString(
+                        "client_visibility_mode",
+                    ),
+                securityScanClass =
+                    rs.getString(
+                        "security_scan_class",
+                    ),
+                evidenceVersion =
+                    rs.getLong(
+                        "evidence_version",
+                    ),
+                uploadSessionVersion =
+                    rs.getLong(
+                        "upload_session_version",
+                    ),
+            )
+        }
 
     private val reservationMapper =
         { rs: java.sql.ResultSet, _: Int ->
