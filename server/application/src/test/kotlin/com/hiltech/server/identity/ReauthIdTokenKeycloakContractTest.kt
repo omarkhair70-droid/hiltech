@@ -49,7 +49,7 @@ class ReauthIdTokenKeycloakContractTest {
             jwt.issuer?.toString()?.trimEnd('/'),
         )
         assertTrue(
-            "hiltech-native" in jwt.audience,
+            "hiltech-native" in jwt.audience.orEmpty(),
         )
         assertNotNull(jwt.subject)
         assertNotNull(jwt.claims["sid"])
