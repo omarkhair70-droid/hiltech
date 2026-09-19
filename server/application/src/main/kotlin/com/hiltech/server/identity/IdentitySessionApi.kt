@@ -572,6 +572,13 @@ class IdentitySessionSecurityController(
         )
     }
 
+    private fun String?.safeCorrelationId(): String =
+        this
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.take(128)
+            ?: UUID.randomUUID().toString()
+
     private fun String.toUuid(
         code: String,
     ): UUID =
