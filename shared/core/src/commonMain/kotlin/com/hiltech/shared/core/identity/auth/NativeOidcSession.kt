@@ -80,6 +80,7 @@ data class NativeAuthorizationAttempt(
     val nonce: String,
     val codeVerifier: String,
     val authorizationUrl: String,
+    val forceReauthentication: Boolean = false,
 )
 
 class NativeOidcException(
@@ -179,6 +180,7 @@ class NativeOidcSessionManager(
             parameters.append("nonce", nonce)
             if (forceReauthentication) {
                 parameters.append("prompt", "login")
+                parameters.append("max_age", "0")
             }
         }.buildString()
 
@@ -188,6 +190,7 @@ class NativeOidcSessionManager(
             nonce = nonce,
             codeVerifier = verifier,
             authorizationUrl = authorizationUrl,
+            forceReauthentication = forceReauthentication,
         )
     }
 
