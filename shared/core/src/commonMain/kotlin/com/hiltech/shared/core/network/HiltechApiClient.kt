@@ -47,6 +47,55 @@ class HiltechApiClient(
     private val baseUrl =
         baseUrl.trimEnd('/')
 
+
+    suspend fun <T> requestWithReauthentication(
+        method: HttpMethod,
+        path: String,
+        options: HiltechRequestOptions =
+            HiltechRequestOptions(),
+        requestBody: String? = null,
+        reauthenticate: suspend () -> Unit,
+        decode: (String) -> T,
+    ): T {
+        val replaySafe =
+            method == HttpMethod.Get ||
+                method == HttpMethod.Head ||
+                options.idempotencyKey
+                    ?.takeIf {
+                        it.isNotBlank()
+                    } != null
+
+        try {
+            return request(
+                method = method,
+                path = path,
+                options = options,
+                requestBody = requestBody,
+                decode = decode,
+            )
+        } catch (
+            failure: HiltechApiException,
+        ) {
+            if (
+                failure.code !=
+                    "REAUTH_REQUIRED" ||
+                !replaySafe
+            ) {
+                throw failure
+            }
+
+            reauthenticate()
+
+            return request(
+                method = method,
+                path = path,
+                options = options,
+                requestBody = requestBody,
+                decode = decode,
+            )
+        }
+    }
+
     suspend fun <T> request(
         method: HttpMethod,
         path: String,
@@ -219,6 +268,8 @@ class HiltechApiClient(
                 "STATE_CONFLICT"
             422 ->
                 "REJECTED_VALIDATION"
+            428 ->
+                "REAUTH_REQUIRED"
             429 ->
                 "RATE_LIMITED"
             503 ->
