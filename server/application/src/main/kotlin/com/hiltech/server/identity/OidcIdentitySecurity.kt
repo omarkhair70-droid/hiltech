@@ -1,5 +1,7 @@
 package com.hiltech.server.identity
 
+import com.hiltech.server.platform.http.HiltechRequestContextFilter
+import com.hiltech.server.platform.http.ProductApiErrorWriter
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -87,7 +89,9 @@ class IdentitySecurityConfiguration {
         http: HttpSecurity,
         properties: HiltechOidcProperties,
         jwtDecoderProvider: ObjectProvider<JwtDecoder>,
+        requestContextFilter: HiltechRequestContextFilter,
         identityAccessFilter: IdentityAccessEnforcementFilter,
+        errorWriter: ProductApiErrorWriter,
     ): SecurityFilterChain {
         properties.validateEnabledConfiguration()
 
@@ -112,6 +116,43 @@ class IdentitySecurityConfiguration {
                     authorization.anyRequest().denyAll()
                 }
             }
+            .exceptionHandling { failures ->
+                failures.authenticationEntryPoint {
+                        request,
+                        response,
+                        _,
+                    ->
+                    errorWriter.write(
+                        request = request,
+                        response = response,
+                        status =
+                            org.springframework.http.HttpStatus.UNAUTHORIZED,
+                        code = "UNAUTHENTICATED",
+                        message =
+                            "Authentication is required.",
+                    )
+                }
+                failures.accessDeniedHandler {
+                        request,
+                        response,
+                        _,
+                    ->
+                    errorWriter.write(
+                        request = request,
+                        response = response,
+                        status =
+                            org.springframework.http.HttpStatus.FORBIDDEN,
+                        code = "PERMISSION_DENIED",
+                        message =
+                            "This action is not permitted.",
+                    )
+                }
+            }
+
+        http.addFilterBefore(
+            requestContextFilter,
+            BearerTokenAuthenticationFilter::class.java,
+        )
 
         if (properties.enabled) {
             val decoder = jwtDecoderProvider.getIfAvailable()
