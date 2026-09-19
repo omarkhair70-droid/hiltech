@@ -743,8 +743,7 @@ class ApprovalEngineService(
                         ),
                     )
 
-                    return@execute
-                        IdempotentCommandOutcome(
+                    return@execute IdempotentCommandOutcome(
                             resultCode =
                                 "APPROVAL_SUPERSEDED",
                             resultPayloadJson =
