@@ -668,8 +668,7 @@ class JdbcApprovalPersistence(
 
         return jdbc.query(
             baseSql +
-                "
-" +
+                "\n" +
                 pagePredicate +
                 """
                 
