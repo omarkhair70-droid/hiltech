@@ -8,11 +8,19 @@ spring:
   flyway:
     enabled: true
     locations: filesystem:${HILTECH_MIGRATIONS_PATH:database/migrations}
+  modulith:
+    events:
+      jdbc:
+        schema-initialization:
+          enabled: false
 
 server:
   port: ${HILTECH_SERVER_PORT:8080}
 
 hiltech:
+  activity:
+    cursor-signing-key: ${HILTECH_ACTIVITY_CURSOR_SIGNING_KEY:}
+
   identity:
     oidc:
       enabled: ${HILTECH_OIDC_ENABLED:false}
