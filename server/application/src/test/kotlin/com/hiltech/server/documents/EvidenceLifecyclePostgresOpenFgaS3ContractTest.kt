@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
 import org.springframework.jdbc.datasource.DriverManagerDataSource
@@ -813,16 +814,26 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                 capturedAt = capturedAt,
             )
         val response =
-            fixture.service.reserve(
-                actorIdentityId =
-                    fixture.actorId,
-                idempotencyHeader =
-                    operationId.toString(),
-                correlationId =
-                    "corr-reserve-" +
-                        operationId,
-                request = request,
-            )
+            try {
+                fixture.service.reserve(
+                    actorIdentityId =
+                        fixture.actorId,
+                    idempotencyHeader =
+                        operationId.toString(),
+                    correlationId =
+                        "corr-reserve-" +
+                            operationId,
+                    request = request,
+                )
+            } catch (
+                failure: DataIntegrityViolationException,
+            ) {
+                throw AssertionError(
+                    "Evidence reserve DB contract failed: " +
+                        failure.mostSpecificCause.message,
+                    failure,
+                )
+            }
         return Reserved(
             operationId =
                 operationId.toString(),
