@@ -132,3 +132,48 @@ jobs:
 
       - name: Compile server against generated jOOQ sources
         run: ./gradlew :server:application:compileKotlin
+
+  evidence-storage-contract:
+    runs-on: ubuntu-latest
+
+    env:
+      HILTECH_EVIDENCE_STORAGE_CONTRACT_TEST: "1"
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      S3_ENDPOINT: http://127.0.0.1:5000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Start disposable S3-compatible contract endpoint
+        shell: bash
+        run: |
+          python3 -m venv /tmp/hiltech-moto
+          /tmp/hiltech-moto/bin/pip install --disable-pip-version-check "moto[server]==5.2.3"
+          nohup /tmp/hiltech-moto/bin/moto_server -H 127.0.0.1 -p 5000 >/tmp/hiltech-moto.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5000/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/hiltech-moto.log
+          exit 1
+
+      - name: Verify signed evidence storage contract
+        run: ./gradlew :server:application:test --tests com.hiltech.server.documents.storage.EvidenceObjectStorageContractTest
+
+      - name: Moto logs on failure
+        if: failure()
+        run: cat /tmp/hiltech-moto.log

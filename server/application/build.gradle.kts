@@ -32,6 +32,8 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation(libs.jooq)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.aws.s3)
+    implementation(libs.aws.urlconnection)
     runtimeOnly(libs.postgresql)
 
     add(jooqCodegen.name, libs.jooq.codegen)

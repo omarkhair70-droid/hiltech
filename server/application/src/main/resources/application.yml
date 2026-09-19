@@ -29,3 +29,15 @@ hiltech:
       request-timeout-ms: ${HILTECH_FGA_REQUEST_TIMEOUT_MS:2000}
       projector-poll-delay-ms: ${HILTECH_FGA_PROJECTOR_POLL_DELAY_MS:1000}
       claim-lease-seconds: ${HILTECH_FGA_CLAIM_LEASE_SECONDS:60}
+
+
+  evidence:
+    storage:
+      enabled: ${HILTECH_EVIDENCE_STORAGE_ENABLED:false}
+      endpoint: ${HILTECH_EVIDENCE_STORAGE_ENDPOINT:}
+      region: ${HILTECH_EVIDENCE_STORAGE_REGION:}
+      access-key: ${HILTECH_EVIDENCE_STORAGE_ACCESS_KEY:}
+      secret-key: ${HILTECH_EVIDENCE_STORAGE_SECRET_KEY:}
+      bucket: ${HILTECH_EVIDENCE_STORAGE_BUCKET:}
+      upload-expiry-seconds: ${HILTECH_EVIDENCE_UPLOAD_EXPIRY_SECONDS:600}
+      download-expiry-seconds: ${HILTECH_EVIDENCE_DOWNLOAD_EXPIRY_SECONDS:300}
