@@ -247,6 +247,48 @@ class ApprovalEnginePostgresOpenFgaContractTest {
                     events = publisher,
                     clock = clock,
                 )
+            val readService =
+                ApprovalReadService(
+                    persistence =
+                        JdbcApprovalPersistence(
+                            jdbc,
+                        ),
+                    authorization =
+                        approvalAuthorization,
+                    cursorCodec =
+                        ApprovalCursorCodec(
+                            "approval-contract-signing-key-20260919-strong",
+                        ),
+                    clock = clock,
+                )
+            val preciseCursor =
+                ApprovalCursor(
+                    actorUserId =
+                        ids.ownerTwoUserId,
+                    asOf =
+                        Instant.parse(
+                            "2026-09-19T18:30:00.123456789Z",
+                        ),
+                    afterCreatedAt =
+                        Instant.parse(
+                            "2026-09-19T18:29:59.987654321Z",
+                        ),
+                    afterRequestId =
+                        UUID.randomUUID(),
+                )
+            assertEquals(
+                preciseCursor,
+                ApprovalCursorCodec(
+                    "approval-contract-signing-key-20260919-strong",
+                ).decode(
+                    ApprovalCursorCodec(
+                        "approval-contract-signing-key-20260919-strong",
+                    ).encode(
+                        preciseCursor,
+                    ),
+                ),
+                "Approval cursor must preserve full Instant precision.",
+            )
 
             val routineEvaluation =
                 service.evaluate(
@@ -419,6 +461,24 @@ class ApprovalEnginePostgresOpenFgaContractTest {
                 staleAuthority.code,
                 "Current PostgreSQL authority must defeat a stale OpenFGA approver tuple.",
             )
+            val staleRead =
+                assertThrows<
+                    ProductApiException
+                > {
+                    readService.one(
+                        actorUserId =
+                            ids.ownerOneUserId,
+                        approvalRequestId =
+                            requireNotNull(
+                                first.approvalRequestId,
+                            ),
+                    )
+                }
+            assertEquals(
+                "OBJECT_NOT_VISIBLE",
+                staleRead.code,
+                "Changed authority must disappear from assigned Approval reads immediately.",
+            )
 
             val selfDecision =
                 service.requestException(
@@ -465,9 +525,127 @@ class ApprovalEnginePostgresOpenFgaContractTest {
                     correlationId =
                         "corr-create-second",
                 )
+            val pageSubject =
+                subject(
+                    ids.organizationId,
+                )
+            val pageRequest =
+                service.requestException(
+                    actorUserId =
+                        ids.financeUserId,
+                    operationId =
+                        UUID.randomUUID(),
+                    subject =
+                        pageSubject,
+                    policyKey =
+                        "EXCEPTION_OWNER_FINAL",
+                    reasonCode =
+                        "NON_ROUTINE_EXCEPTION",
+                    safeReasonSummary =
+                        "Second pending item for cursor proof.",
+                    correlationId =
+                        "corr-create-page",
+                )
             drainProjector(
                 projector = projector,
                 now = clock.instant(),
+            )
+
+            val visibleOne =
+                readService.one(
+                    actorUserId =
+                        ids.ownerTwoUserId,
+                    approvalRequestId =
+                        requireNotNull(
+                            second.approvalRequestId,
+                        ),
+                )
+            assertEquals(
+                "PENDING",
+                visibleOne.state,
+            )
+
+            val firstPage =
+                readService.assigned(
+                    actorUserId =
+                        ids.ownerTwoUserId,
+                    rawCursor = null,
+                    requestedLimit = 1,
+                    correlationId =
+                        "corr-page-1",
+                )
+            assertEquals(
+                1,
+                firstPage.items.size,
+            )
+            assertNotNull(
+                firstPage.nextCursor,
+            )
+            val secondPage =
+                readService.assigned(
+                    actorUserId =
+                        ids.ownerTwoUserId,
+                    rawCursor =
+                        firstPage.nextCursor,
+                    requestedLimit = 1,
+                    correlationId =
+                        "corr-page-2",
+                )
+            assertEquals(
+                1,
+                secondPage.items.size,
+            )
+            assertEquals(
+                firstPage.asOf,
+                secondPage.asOf,
+            )
+            assertEquals(
+                setOf(
+                    requireNotNull(
+                        second.approvalRequestId,
+                    ).toString(),
+                    requireNotNull(
+                        pageRequest.approvalRequestId,
+                    ).toString(),
+                ),
+                (
+                    firstPage.items +
+                        secondPage.items
+                ).map {
+                    it.approvalRequestId
+                }.toSet(),
+                "Assigned pagination must not duplicate, skip or leak the stale old-authority request.",
+            )
+
+            val tamperedCursor =
+                requireNotNull(
+                    firstPage.nextCursor,
+                ).dropLast(1) +
+                    if (
+                        firstPage.nextCursor
+                            .last() == 'A'
+                    ) {
+                        "B"
+                    } else {
+                        "A"
+                    }
+            val invalidCursor =
+                assertThrows<
+                    ProductApiException
+                > {
+                    readService.assigned(
+                        actorUserId =
+                            ids.ownerTwoUserId,
+                        rawCursor =
+                            tamperedCursor,
+                        requestedLimit = 1,
+                        correlationId =
+                            "corr-page-tampered",
+                    )
+                }
+            assertEquals(
+                "CURSOR_INVALID",
+                invalidCursor.code,
             )
 
             val decideOperationId =
