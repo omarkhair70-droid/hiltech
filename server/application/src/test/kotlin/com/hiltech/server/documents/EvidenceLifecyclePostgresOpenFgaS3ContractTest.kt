@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
@@ -292,6 +293,33 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
             assertTrue(
                 downloadAuditCount >= 1,
                 "Private Evidence download issuance must be audited.",
+            )
+
+            val terminalEvents =
+                fixture.publishedEvents
+                    .filterIsInstance<
+                        EvidenceTerminalStateChanged
+                    >()
+            assertTrue(
+                terminalEvents
+                    .map { it.storageState }
+                    .toSet()
+                    .containsAll(
+                        setOf(
+                            "READY",
+                            "QUARANTINED",
+                            "REJECTED",
+                        ),
+                    ),
+                "Evidence must publish each material terminal state.",
+            )
+            assertEquals(
+                terminalEvents.size,
+                terminalEvents
+                    .map { it.eventId }
+                    .distinct()
+                    .size,
+                "Each terminal fact must have a stable unique source event ID.",
             )
 
             val leaked =
@@ -1332,6 +1360,8 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                         closeAction = {},
                     ),
             )
+        val publishedEvents =
+            mutableListOf<Any>()
         val service =
             EvidenceLifecycleService(
                 persistence =
@@ -1350,6 +1380,11 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                     },
                 storageProperties =
                     storageProperties,
+                events =
+                    ApplicationEventPublisher {
+                        event ->
+                        publishedEvents += event
+                    },
                 clock = clock,
             )
 
@@ -1372,6 +1407,8 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
             workOrderId =
                 ids.workOrderId,
             now = now,
+            publishedEvents =
+                publishedEvents,
         )
     }
 
@@ -2122,6 +2159,8 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
         val projectId: UUID,
         val workOrderId: UUID,
         val now: Instant,
+        val publishedEvents:
+            MutableList<Any>,
     ) : AutoCloseable {
         override fun close() {
             storage.close()

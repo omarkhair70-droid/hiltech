@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 2 ACTIVE — SLICE 02 VERIFIED / NEXT CONTRACT CHECK AFTER MERGE**
+**PHASE 2 ACTIVE — SLICES 01–03 VERIFIED / SLICE 03 MERGE PENDING**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -50,7 +50,7 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTTP / Command Runtime — is VERIFIED and merged. Slice 02 — Evidence Metadata + Upload/Finalize — is **VERIFIED** on canonical code head `563875c0421df713b52e6661bf3d46b8c5ec5878`. Exact-head evidence: Phase 2 — Shared Command Runtime run `35433246103` PASS; Bootstrap Phase 0 run `35433246124` PASS (including local-platform Evidence lifecycle, database, evidence-storage, Spring Modulith foundation, dependency/supply-chain/Terraform gates); Phase 1 — Native OIDC Production Smoke run `35433246188` PASS (Android, Desktop, provider/browser). WorkOrder-targeted authorization remains authoritative and unsupported Evidence targets remain fail-closed.
+Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTTP / Command Runtime — is VERIFIED and merged. Slice 02 — Evidence Metadata + Upload/Finalize — is VERIFIED and merged at `21a04718414ab20ecf8deeffccfd63961e45099a`; post-merge Bootstrap run `35434157140` PASS. Slice 03 — Activity Events Foundation — is VERIFIED. Canonical implementation code head: `e1244da23a0889bab33b249bf4ef96488aef1699`. Verification closure head: `1ddf37da97eb626101777f0b1ae2833bfa8baa89`. Closure runs: Phase 2 `35437488895`, Bootstrap `35437488932`, Phase 1 OIDC `35437489102` — all PASS. Slice 03 provides a permission-safe WorkOrder Activity projection from authoritative Evidence terminal facts, keeps Audit separate, re-evaluates current WorkOrder authority on read, and proves durable Spring Modulith recovery without duplicate projection. The next Phase 2 capability is Approval Engine, but its implementation remains gated on explicit HILTECH approval-authority reality rather than inferred people or thresholds.
 
 ---
 
@@ -81,8 +81,8 @@ Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTT
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 2 ACTIVE | Slices 01–02 verified; next Phase 2 vertical requires repo-grounded contract check after Slice 02 merge |
-| Production code | PHASE 2 SLICE 02 VERIFIED | Evidence reserve/upload/finalize/read/download verified on PostgreSQL + OpenFGA + S3-compatible storage with shared Android/Windows client contracts |
+| Implementation order | PHASE 2 ACTIVE | Slices 01–03 verified; Slice 03 merge pending; Slice 04 Approval authority reality closure is next |
+| Production code | PHASE 2 SLICE 03 VERIFIED | Evidence lifecycle plus WorkOrder Activity projection, current authorization, deterministic cursor, shared client and durable Spring Modulith recovery verified |
 
 ---
 
@@ -234,12 +234,14 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Slice 02 is VERIFIED on code head `563875c0421df713b52e6661bf3d46b8c5ec5878`; do not reopen it without a genuine contradiction.
-2. Close this PR only on the exact docs-closure head after inherited Actions remain green.
-3. After merge, inspect current `main` and contract-check the next Phase 2 shared capability from the canonical implementation order; do not reset Phase 1 or re-plan Phase 2.
-4. Preserve WorkOrder-targeted Evidence authority and keep unsupported target types fail-closed until their owning domain phase provides authoritative relations.
-5. Continue consuming Reality Evidence/Facts by phase; reported people/process/integration facts remain evidence/configuration inputs, not hard-coded product roles.
-6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
+1. Slices 01–03 are VERIFIED; merge Slice 03 exact tested/closure head before any Slice 04 code.
+2. Open Phase 2 Slice 04 as an Approval Engine **authority reality closure**, not as speculative implementation.
+3. Reuse the accepted shared Approval structural model: version-bound subject, policy evaluation, explicit steps/assignments/decisions, delegation where allowed, online-authoritative high-risk decisions, immutable decision evidence and Activity/Audit integration.
+4. Do not hard-code Mohamed, Ahmed or any named person as product authority. Real people may be evidence examples; executable authority must resolve through configuration/relationships/policy.
+5. Freeze actual HILTECH approval categories, decision chains, threshold semantics (including explicit “no threshold” where true), self-approval rules, delegation/absence, reject/request-change/cancel semantics, emergency handling, re-auth requirements, and approval-vs-payment-execution authority before implementation authorization.
+6. Keep Inbox and Notifications out of Slice 04 authority; they remain later consumers after Approval is authoritative.
+7. Continue consuming Reality Evidence/Facts by phase; people/process/integration facts remain evidence/configuration inputs, not hard-coded product roles.
+8. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 
