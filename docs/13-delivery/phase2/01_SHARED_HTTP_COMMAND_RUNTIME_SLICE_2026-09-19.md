@@ -1,7 +1,7 @@
 # Phase 2 / Slice 01 — Shared HTTP / Command Runtime
 
 Date: 2026-09-19  
-Status: **CONTRACTED / IMPLEMENTATION AUTHORIZED**
+Status: **VERIFIED**
 
 ## Why this is first
 
@@ -196,3 +196,46 @@ Mark Slice 01 VERIFIED only when:
 6. status/evidence docs identify the exact canonical run/head.
 
 Do not merge the final Phase 2 PR merely because this first slice is verified unless the intended PR scope is explicitly closed.
+
+
+## Verification closure
+
+Canonical verified code head:
+`8983b673880d2a27331291f132edd4c3688d8597`
+
+Evidence:
+- Phase 2 — Shared Command Runtime run `35428805998` — PASS,
+  - shared Android/Windows HTTP client contract — PASS,
+  - real PostgreSQL concurrent idempotency contract — PASS.
+- Bootstrap Phase 0 run `35428806001` — PASS,
+  - foundation/server tests — PASS,
+  - Spring Modulith module-boundary verification — PASS,
+  - database contract — PASS,
+  - local-platform contract — PASS,
+  - evidence-storage contract — PASS,
+  - dependency / Terraform / supply-chain gates — PASS.
+- Phase 1 — Native OIDC Production Smoke run `35428805990` — PASS,
+  - provider/browser re-auth regression — PASS,
+  - Android shell/callback regression — PASS,
+  - Desktop shell regression — PASS.
+
+Verified behavior:
+- canonical correlation/request context,
+- one product error envelope across server and shared client,
+- safe retryable/terminal classification,
+- PostgreSQL-backed idempotent command execution,
+- concurrent duplicate command executes one side effect,
+- exact duplicate returns the prior semantic result,
+- changed fingerprint and cross-actor operation reuse fail closed,
+- ambiguous in-progress operation never blindly re-runs,
+- safe command telemetry dimensions without payload/token leakage,
+- Phase 1 identity/session/OIDC behavior remains green,
+- the public platform HTTP contract is exposed through the Spring Modulith module boundary rather than leaking an internal subpackage.
+
+Slice 01 is VERIFIED.
+
+## Next contract check
+
+The next likely Phase 2 vertical is Evidence Metadata + Upload/Finalize lifecycle using the existing V0007 schema and verified object-storage adapter.
+
+Do not implement target-object authority by broadening organization membership. Unsupported target types/authority must fail closed until the real Project/Work/Asset authorization boundary for that target is available.
