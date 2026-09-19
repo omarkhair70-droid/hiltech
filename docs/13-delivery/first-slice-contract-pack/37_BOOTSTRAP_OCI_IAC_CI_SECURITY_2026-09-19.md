@@ -59,10 +59,9 @@ Implemented:
 - mutable `:latest` marker denial,
 - tracked real `.tfvars` denial,
 - weekly Dependabot for GitHub Actions + Gradle,
-- PR-only dependency vulnerability review.
+- PR-only resolved Gradle dependency vulnerability review against the official OSV API.
 
-Dependency Review pin:
-`actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0`
+The initial native GitHub Dependency Review Action attempt correctly failed because this repository does not have GitHub Dependency Graph enabled. The gate was not disabled: it was replaced with a repository-owned OSV review that resolves all Gradle module dependency reports and fails closed on HIGH/CRITICAL known vulnerabilities or API/parser failure.
 
 ## Verification
 
@@ -77,7 +76,7 @@ Passed jobs:
 - terraform-contract,
 - supply-chain-contract.
 
-`dependency-review` is intentionally skipped on branch push and is required to execute on the Bootstrap pull request.
+`dependency-review` is intentionally skipped on branch push and executes the resolved-dependency OSV gate on the Bootstrap pull request.
 
 ## Production boundary
 

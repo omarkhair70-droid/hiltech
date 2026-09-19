@@ -354,6 +354,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Verify CI scripts compile
+        run: python3 -m py_compile scripts/ci/*.py
+
       - name: Verify immutable actions and repository secret hygiene
         run: python3 scripts/ci/verify_supply_chain.py
 
@@ -362,13 +365,31 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Dependency vulnerability review
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
-          fail-on-severity: high
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Resolve Gradle dependency inventory
+        shell: bash
+        run: |
+          mkdir -p build/reports
+          ./gradlew \
+            :server:application:dependencies \
+            :shared:core:dependencies \
+            :apps:androidApp:dependencies \
+            :apps:desktopApp:dependencies \
+            --console=plain \
+            > build/reports/hiltech-dependencies.txt
+
+      - name: Review resolved dependencies against OSV
+        run: python3 scripts/ci/osv_gradle_review.py build/reports/hiltech-dependencies.txt

@@ -54,15 +54,19 @@ Release:
 Production/contract reference:
 `openfga/action-openfga-test@e89aa8259796cd5ee5c1b1ae7d72c401029cb947 # v0.1.2`
 
-## Dependency review
+## Dependency vulnerability review
 
-Release:
-`actions/dependency-review-action v5.0.0`
+The Bootstrap PR gate resolves the actual Gradle dependency graph for:
+- server,
+- shared KMP core,
+- Android app,
+- Desktop app.
 
-Production/PR reference:
-`actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0`
+A repository-owned Python gate queries the official OSV API by Maven coordinate/version and fails closed on query/parse errors or HIGH/CRITICAL known vulnerabilities.
 
-It runs on pull requests only and fails on newly introduced HIGH-or-higher dependency vulnerabilities.
+This gate is PR-only.
+
+The native GitHub Dependency Review Action was evaluated but requires the repository Dependency Graph feature. Rather than weaken or skip vulnerability review when that repository setting is unavailable, HILTECH uses the source-controlled OSV gate.
 
 ---
 
@@ -209,7 +213,6 @@ Baseline immutable pins:
 - setup-java v6.0.1
 - gradle/actions v6.3.0
 - OpenFGA test action v0.1.2
-- dependency-review-action v5.0.0
 
 Bootstrap enforcement is active:
 - external actions in the production Bootstrap workflow must use full 40-character SHAs,
@@ -219,7 +222,7 @@ Bootstrap enforcement is active:
 - dynamic Gradle versions are rejected,
 - tracked real `.tfvars` files are rejected,
 - Dependabot monitors GitHub Actions and Gradle,
-- PR dependency review is required by workflow behavior before Bootstrap merge.
+- PR resolved-dependency OSV vulnerability review is required by workflow behavior before Bootstrap merge.
 
 Remaining:
 - enforce equivalent repository/organization Actions policy where account settings permit,

@@ -75,7 +75,7 @@ Green jobs:
 - supply-chain-contract.
 
 The PR-only dependency-review job is intentionally skipped on branch push.
-It must pass on the Bootstrap PR before merge.
+On the Bootstrap PR it must resolve the Gradle dependency inventory and pass the OSV HIGH/CRITICAL vulnerability gate before merge.
 
 ## Change-control result
 
@@ -93,7 +93,7 @@ No silent redesign was accepted.
 Repository Bootstrap may be merged to `main` only after:
 1. final decision/status commit regression is green,
 2. Bootstrap PR is open against the unchanged frozen main,
-3. PR-specific dependency review executes and passes,
+3. PR-specific resolved-dependency OSV review executes and passes,
 4. all other PR jobs remain green,
 5. PR head has not moved at merge time.
 
