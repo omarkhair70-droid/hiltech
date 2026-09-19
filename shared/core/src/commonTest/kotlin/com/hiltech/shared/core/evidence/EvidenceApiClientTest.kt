@@ -212,6 +212,142 @@ class EvidenceApiClientTest {
         }
 
     @Test
+    fun metadataAndDownloadTargetUseAuthenticatedReadContext() =
+        runBlocking {
+            val seenPaths =
+                mutableListOf<String>()
+            val apiHttp =
+                HttpClient(
+                    MockEngine { request ->
+                        seenPaths +=
+                            request.url.encodedPath
+                        assertEquals(
+                            "Bearer evidence-token",
+                            request.headers[
+                                HttpHeaders.Authorization
+                            ],
+                        )
+                        assertEquals(
+                            "11111111-1111-1111-1111-111111111111",
+                            request.headers[
+                                "X-Device-Installation-Id"
+                            ],
+                        )
+                        assertNull(
+                            request.headers[
+                                "Idempotency-Key"
+                            ],
+                        )
+
+                        val body =
+                            if (
+                                request.url.encodedPath
+                                    .endsWith(
+                                        "/download-target",
+                                    )
+                            ) {
+                                """
+                                {
+                                  "downloadUrl":"https://storage.test/private-get",
+                                  "expiresAt":"2026-09-19T09:20:00Z",
+                                  "correlationId":"corr-download"
+                                }
+                                """.trimIndent()
+                            } else {
+                                """
+                                {
+                                  "evidenceId":"evidence-1",
+                                  "uploadSessionId":"upload-1",
+                                  "targetType":"WORK_ORDER",
+                                  "targetId":"work-1",
+                                  "workOrderId":"work-1",
+                                  "evidenceRequirementKey":"after-photo",
+                                  "evidencePolicyId":"policy-1",
+                                  "evidencePolicyRevision":3,
+                                  "evidenceTypeCode":"PHOTO",
+                                  "contentType":"image/jpeg",
+                                  "sizeBytes":3,
+                                  "sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                                  "storageState":"READY",
+                                  "classificationCode":"INTERNAL",
+                                  "clientVisibilityMode":"INTERNAL_ONLY",
+                                  "evidenceVersion":2
+                                }
+                                """.trimIndent()
+                            }
+
+                        respond(
+                            content = body,
+                            status =
+                                HttpStatusCode.OK,
+                            headers =
+                                headersOf(
+                                    HttpHeaders.ContentType,
+                                    "application/json",
+                                ),
+                        )
+                    },
+                )
+
+            val client =
+                EvidenceApiClient(
+                    api =
+                        HiltechApiClient(
+                            client = apiHttp,
+                            baseUrl =
+                                "https://api.hiltech.test",
+                            accessTokenProvider = {
+                                "evidence-token"
+                            },
+                            correlationIdProvider = {
+                                "corr-client"
+                            },
+                        ),
+                    binaryClient =
+                        HttpClient(
+                            MockEngine {
+                                error(
+                                    "binary network should not be used",
+                                )
+                            },
+                        ),
+                )
+            val installationId =
+                "11111111-1111-1111-1111-111111111111"
+
+            val metadata =
+                client.metadata(
+                    evidenceId =
+                        "evidence-1",
+                    installationId =
+                        installationId,
+                )
+            val download =
+                client.downloadTarget(
+                    evidenceId =
+                        "evidence-1",
+                    installationId =
+                        installationId,
+                )
+
+            assertEquals(
+                "READY",
+                metadata.storageState,
+            )
+            assertEquals(
+                "https://storage.test/private-get",
+                download.downloadUrl,
+            )
+            assertEquals(
+                listOf(
+                    "/v1/evidence/evidence-1",
+                    "/v1/evidence/evidence-1/download-target",
+                ),
+                seenPaths,
+            )
+        }
+
+    @Test
     fun signedBinaryUploadUsesOnlyStorageHeadersAndNoBearerToken() =
         runBlocking {
             var called = false
