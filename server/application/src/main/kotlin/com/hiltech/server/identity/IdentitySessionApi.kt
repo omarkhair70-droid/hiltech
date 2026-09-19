@@ -51,10 +51,14 @@ data class IdentityDeviceSecurityResponse(
     val version: Long,
 )
 
+fun interface IdTokenProofVerifier {
+    fun verify(rawIdToken: String): Jwt
+}
+
 @Component
 class OidcIdTokenProofVerifier(
     private val properties: HiltechOidcProperties,
-) {
+) : IdTokenProofVerifier {
     private val decoder: JwtDecoder by lazy {
         properties.validateEnabledConfiguration()
 
@@ -75,7 +79,7 @@ class OidcIdTokenProofVerifier(
         nimbus
     }
 
-    fun verify(
+    override fun verify(
         rawIdToken: String,
     ): Jwt {
         if (rawIdToken.isBlank()) {
@@ -103,7 +107,7 @@ class IdentitySessionSecurityService(
     private val sessionService: IdentitySessionService,
     private val sessionRepository: IdentitySessionRepository,
     private val identityRepository: IdentityRuntimeRepository,
-    private val proofVerifier: OidcIdTokenProofVerifier,
+    private val proofVerifier: IdTokenProofVerifier,
     private val sessionProperties: HiltechIdentitySessionProperties,
     private val clock: Clock = Clock.systemUTC(),
 ) {
