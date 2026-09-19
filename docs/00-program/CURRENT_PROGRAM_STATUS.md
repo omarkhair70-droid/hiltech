@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 2 ACTIVE — SLICES 01–05 VERIFIED / MERGED / SLICE 06 NOTIFICATION ABSTRACTION CONTRACTING**
+**PHASE 2 ACTIVE — SLICES 01–05 VERIFIED / MERGED / SLICE 06 NOTIFICATION ABSTRACTION IMPLEMENTATION AUTHORIZED**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -82,7 +82,7 @@ Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–05 are VERI
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
 | Implementation order | PHASE 2 ACTIVE | Slices 01–05 verified/merged; Slice 06 Notification Abstraction is current |
-| Production code | PHASE 2 SLICES 01–05 VERIFIED / MERGED | Inbox / Work Queue is on main; Slice 06 Notification Abstraction is contracting and must remain provider-neutral until a real channel/provider is validated |
+| Production code | PHASE 2 SLICES 01–05 VERIFIED / MERGED | Inbox / Work Queue is on main; Slice 06 Notification Abstraction is implementation-authorized as a provider-neutral foundation only |
 
 ---
 
