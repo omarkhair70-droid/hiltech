@@ -58,6 +58,9 @@ jobs:
             -subj "/CN=127.0.0.1" \
             -addext "subjectAltName=IP:127.0.0.1,DNS:localhost"
 
+          chmod 644 "$RUNNER_TEMP/keycloak-tls/cert.pem"
+          chmod 644 "$RUNNER_TEMP/keycloak-tls/key.pem"
+
           keytool -importcert -noprompt \
             -alias hiltech-phase1-keycloak \
             -file "$RUNNER_TEMP/keycloak-tls/cert.pem" \
