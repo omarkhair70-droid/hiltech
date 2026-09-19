@@ -162,16 +162,17 @@ No payroll/attendance/leave/import.
 
 ### Slice 02 — Workforce Assignment / Reporting Structure
 
-Build the business relationship layer:
+Build one effective-dated `WorkforceAssignment` business relationship layer:
 - reuse existing Team;
 - employee↔team assignment;
 - role code/label assignment;
 - manager/reporting relationship;
-- effective dates/history;
+- effective-from/effective-to history;
+- one current assignment in the minimal HILTECH baseline, without making future multiple/concurrent assignments impossible;
 - org structure read models;
 - authorization recomputation/projection integration.
 
-No duplicate Team table.
+No duplicate Team table. Do not copy current role/team/manager fields back onto Employee as a second source of truth.
 
 ### Slice 03 — HR Documents / Certifications
 
@@ -197,15 +198,17 @@ No separate onboarding app.
 
 Exact required onboarding checklist by employee category is phase-local configuration and may require a narrow HILTECH validation before this slice freezes.
 
-### Slice 05 — Role / Team / Manager Change
+### Slice 05 — Workforce Assignment Change Workflow
 
-Build:
-- effective-dated workforce change command;
+Build lifecycle commands over the same `WorkforceAssignment` model created in Slice 02:
+- role/team/manager change as a new effective-dated assignment revision, not in-place history loss;
 - exact-version/idempotent transition;
 - history preserved;
 - security/authorization recomputation;
 - activity/audit/inbox where action is required;
 - project-impact hook only; Project reassignment behavior belongs to Phase 4.
+
+Slice 05 must not introduce a second role/team/manager data model.
 
 ### Slice 06 — Offboarding Skeleton
 
@@ -243,13 +246,14 @@ Phase 3 is complete only when:
 1. Person/Employee/Employment are canonical and organization-scoped.
 2. identity and employee truth remain distinct.
 3. existing Team foundation is reused, not duplicated.
-4. team/role/manager changes preserve history and authorization correctness.
-5. employee documents/certifications do not leak restricted data.
-6. onboarding activation is typed/versioned/audited.
-7. self-service is own-record scoped.
-8. offboarding revokes access/session authority safely.
-9. no later-domain truth is duplicated in People.
-10. Android/Windows shared client contracts for Phase 3 surfaces compile and inherited Phase 0–2 regressions remain green.
+4. `WorkforceAssignment` is the single effective-dated source for role/team/manager business relationships.
+5. team/role/manager changes preserve history and authorization correctness.
+6. employee documents/certifications do not leak restricted data.
+7. onboarding activation is typed/versioned/audited.
+8. self-service is own-record scoped.
+9. offboarding revokes access/session authority safely.
+10. no later-domain truth is duplicated in People.
+11. Android/Windows shared client contracts for Phase 3 surfaces compile and inherited Phase 0–2 regressions remain green.
 
 ## Immediate execution
 
