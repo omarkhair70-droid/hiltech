@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletRequest
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -87,6 +88,12 @@ data class FinalizeEvidenceResponse(
     val evidence: EvidenceMetadataResponse,
     val correlationId: String,
     val replayed: Boolean,
+)
+
+data class EvidenceDownloadTargetResponse(
+    val downloadUrl: String,
+    val expiresAt: String,
+    val correlationId: String,
 )
 
 fun interface EvidenceStorageAccessPort {
@@ -549,6 +556,173 @@ class EvidenceLifecycleService(
         )
     }
 
+    fun metadata(
+        actorIdentityId: UUID,
+        evidenceId: UUID,
+    ): EvidenceMetadataResponse {
+        val record =
+            loadVisibleEvidence(
+                actorIdentityId =
+                    actorIdentityId,
+                evidenceId =
+                    evidenceId,
+                download = false,
+            )
+
+        return record.toMetadata()
+    }
+
+    fun downloadTarget(
+        actorIdentityId: UUID,
+        evidenceId: UUID,
+        correlationId: String,
+    ): EvidenceDownloadTargetResponse {
+        val record =
+            loadVisibleEvidence(
+                actorIdentityId =
+                    actorIdentityId,
+                evidenceId =
+                    evidenceId,
+                download = true,
+            )
+
+        if (
+            record.storageState != "READY"
+        ) {
+            throw ProductApiException(
+                code =
+                    "EVIDENCE_NOT_DOWNLOADABLE",
+                message =
+                    "Evidence is not ready for download.",
+                status =
+                    HttpStatus.CONFLICT,
+            )
+        }
+
+        if (
+            record.classificationCode
+                .equals(
+                    "HIGHLY_RESTRICTED",
+                    ignoreCase = true,
+                )
+        ) {
+            throw ProductApiException(
+                code =
+                    "EVIDENCE_DIRECT_DOWNLOAD_FORBIDDEN",
+                message =
+                    "This Evidence classification requires protected delivery.",
+                status =
+                    HttpStatus.valueOf(422),
+            )
+        }
+
+        val storage =
+            requireStorage()
+        val signed =
+            runCatching {
+                storage.createDownloadTarget(
+                    record.objectKey,
+                )
+            }.getOrElse {
+                throw ProductApiException(
+                    code =
+                        "EVIDENCE_STORAGE_UNAVAILABLE",
+                    message =
+                        "Evidence storage is temporarily unavailable.",
+                    status =
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                    retryable = true,
+                )
+            }
+
+        audit.append(
+            AuditEventRecord(
+                actorUserId =
+                    actorIdentityId,
+                action =
+                    "EVIDENCE_DOWNLOAD_TARGET_ISSUED",
+                targetType =
+                    "Evidence",
+                targetId =
+                    record.evidenceId,
+                newStateRef =
+                    "evidence:" +
+                        record.storageState,
+                occurredAt =
+                    clock.instant(),
+                correlationId =
+                    correlationId,
+                reason =
+                    "PRIVATE_SIGNED_DOWNLOAD",
+                configRevisionRefsJson =
+                    """{"evidencePolicyId":"${record.evidencePolicyId}","revision":${record.evidencePolicyRevision}}""",
+            ),
+        )
+
+        return EvidenceDownloadTargetResponse(
+            downloadUrl =
+                signed.downloadUrl,
+            expiresAt =
+                signed.expiresAt.toString(),
+            correlationId =
+                correlationId,
+        )
+    }
+
+    private fun loadVisibleEvidence(
+        actorIdentityId: UUID,
+        evidenceId: UUID,
+        download: Boolean,
+    ): EvidenceFinalizeRecord {
+        val record =
+            persistence.loadEvidenceRecord(
+                evidenceId,
+            ) ?: throw ProductApiException(
+                code = "OBJECT_NOT_VISIBLE",
+                message =
+                    "The requested Evidence is not available.",
+                status = HttpStatus.NOT_FOUND,
+            )
+
+        val allowed =
+            if (download) {
+                targetAuthorization
+                    .canDownloadEvidence(
+                        identityId =
+                            actorIdentityId,
+                        evidenceId =
+                            record.evidenceId,
+                        workOrderId =
+                            record.workOrderId,
+                        creatorIdentityId =
+                            record.capturedByUserId,
+                    )
+            } else {
+                targetAuthorization
+                    .canViewEvidence(
+                        identityId =
+                            actorIdentityId,
+                        evidenceId =
+                            record.evidenceId,
+                        workOrderId =
+                            record.workOrderId,
+                        creatorIdentityId =
+                            record.capturedByUserId,
+                    )
+            }
+
+        if (!allowed) {
+            throw ProductApiException(
+                code = "OBJECT_NOT_VISIBLE",
+                message =
+                    "The requested Evidence is not available.",
+                status = HttpStatus.NOT_FOUND,
+            )
+        }
+
+        return record
+    }
+
     private fun validateReserveAgainstPolicy(
         command: ReserveCommand,
         policy: WorkOrderEvidencePolicySnapshot,
@@ -987,6 +1161,50 @@ class EvidenceLifecycleController(
             correlationId =
                 context.correlationId,
             request = request,
+        )
+    }
+
+    @GetMapping("/{evidenceId}")
+    fun evidenceMetadata(
+        requestContext: HttpServletRequest,
+        @PathVariable
+        evidenceId: String,
+    ): EvidenceMetadataResponse {
+        val context =
+            HiltechRequestContext.current(
+                requestContext,
+            )
+
+        return service.metadata(
+            actorIdentityId =
+                context.requireIdentityId(),
+            evidenceId =
+                evidenceId.toUuidOrBadRequest(
+                    "INVALID_EVIDENCE_ID",
+                ),
+        )
+    }
+
+    @PostMapping("/{evidenceId}/download-target")
+    fun downloadTarget(
+        requestContext: HttpServletRequest,
+        @PathVariable
+        evidenceId: String,
+    ): EvidenceDownloadTargetResponse {
+        val context =
+            HiltechRequestContext.current(
+                requestContext,
+            )
+
+        return service.downloadTarget(
+            actorIdentityId =
+                context.requireIdentityId(),
+            evidenceId =
+                evidenceId.toUuidOrBadRequest(
+                    "INVALID_EVIDENCE_ID",
+                ),
+            correlationId =
+                context.correlationId,
         )
     }
 
