@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 1 VERIFIED / COMPLETE — PHASE 2 NEXT**
+**PHASE 2 ACTIVE — SHARED PRODUCT INFRASTRUCTURE / SLICE 01 CONTRACTED**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -50,7 +50,7 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is next and has not started.
+Phase 2 — Shared Product Infrastructure — is ACTIVE on branch `phase2/evidence-foundation-20260919`. Slice 01 is Shared HTTP / Command Runtime, selected because it is cross-cutting and dependency-free. Evidence remains the next likely slice, but target-specific authorization must fail closed rather than borrowing broad organization membership.
 
 ---
 
@@ -81,8 +81,8 @@ Phase 2 — Shared Product Infrastructure — is next and has not started.
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 1 VERIFIED / COMPLETE | All five Phase 1 slices verified; Phase 2 Shared Product Infrastructure is next |
-| Production code | PHASE 1 VERIFIED / COMPLETE | Identity/bootstrap, native OIDC, Role/Team authority, re-auth/revocation, audit baseline, and Me/Sessions minimal are verified on production-shaped code |
+| Implementation order | PHASE 2 ACTIVE | Slice 01 Shared HTTP / Command Runtime contracted; Evidence follows after target-authorization boundary closure |
+| Production code | PHASE 2 SLICE 01 AUTHORIZED | Phase 1 remains verified; shared HTTP/error/idempotency/client runtime is the active implementation boundary |
 
 ---
 
@@ -234,10 +234,10 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Phase 1 is closed; do not reopen it without a genuine cross-cutting contradiction.
-2. Before Phase 2 code, read the Phase 2 scope/contracts and close any Phase 2-specific reality or contract gaps.
-3. Begin Phase 2 — Shared Product Infrastructure — as complete vertical slices.
-4. Keep Bootstrap Verification gates mandatory on foundation-affecting changes.
+1. Implement Phase 2 Slice 01 from `docs/13-delivery/phase2/01_SHARED_HTTP_COMMAND_RUNTIME_SLICE_2026-09-19.md`.
+2. Keep Phase 1 regression gates mandatory while extracting shared HTTP/error/idempotency behavior.
+3. Do not start Evidence APIs by weakening target authorization; unsupported target authority must fail closed.
+4. After Slice 01 verification, contract the Evidence metadata/reserve/finalize vertical against the existing V0007 + storage adapter.
 5. Record later-domain discoveries in the Reality Evidence Register and consume them only when their phase arrives.
 6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
 

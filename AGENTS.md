@@ -10,7 +10,8 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
-- Next execution phase: **Phase 2 — Shared Product Infrastructure (NOT STARTED)**
+- Current execution phase: **Phase 2 — Shared Product Infrastructure**
+- Current vertical slice: **Slice 01 — Shared HTTP / Command Runtime (CONTRACTED / IMPLEMENTATION AUTHORIZED)**
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
