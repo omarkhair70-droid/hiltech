@@ -1,9 +1,12 @@
 package com.hiltech.server.security
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 import java.util.UUID
 
 class RoleTeamAuthorizationTest {
@@ -66,9 +69,14 @@ class RoleTeamAuthorizationTest {
     }
 
     @Test
-    fun teamChecksUseOpenFgaActionsAndDirectRelationshipGuards() {
+    fun teamChecksUseOnlyCurrentlyValidStructuralGuardRelations() {
         val captured = mutableListOf<AuthorizationCheckRequest>()
-        val service = RoleTeamAuthorizationService(
+        val source = FakeSourceAuthority(
+            teamMemberCurrent = true,
+            teamManagerCurrent = false,
+        )
+        val service = service(
+            source = source,
             authorization = AuthorizationCheckPort { request ->
                 captured += request
                 true
@@ -76,27 +84,49 @@ class RoleTeamAuthorizationTest {
         )
 
         assertTrue(service.canViewTeam(identityId, teamId))
-        assertTrue(service.canManageMembership(identityId, teamId))
 
-        val view = captured[0]
+        val view = captured.single()
         assertEquals("can_view", view.checkTuple.relation)
         assertEquals(
-            listOf("member", "manager"),
+            listOf("member"),
             view.failClosedGuardTuples.map { it.relation },
-        )
-
-        val manage = captured[1]
-        assertEquals("can_manage_membership", manage.checkTuple.relation)
-        assertEquals(
-            listOf("manager"),
-            manage.failClosedGuardTuples.map { it.relation },
         )
     }
 
     @Test
-    fun organizationMembershipCheckIsDirectAndFailClosedGuarded() {
+    fun sourceRevocationOrExpiryDeniesBeforeOpenFgaIsConsulted() {
+        var authorizationCalls = 0
+        val service = service(
+            source = FakeSourceAuthority(
+                organizationMemberCurrent = false,
+                teamMemberCurrent = false,
+                teamManagerCurrent = false,
+            ),
+            authorization = AuthorizationCheckPort {
+                authorizationCalls += 1
+                true
+            },
+        )
+
+        assertFalse(
+            service.isOrganizationMember(
+                identityId = identityId,
+                organizationId = organizationId,
+            ),
+        )
+        assertFalse(service.canViewTeam(identityId, teamId))
+        assertFalse(service.canManageMembership(identityId, teamId))
+        assertEquals(0, authorizationCalls)
+    }
+
+    @Test
+    fun managerActionIsDirectAndFailClosedGuarded() {
         var captured: AuthorizationCheckRequest? = null
-        val service = RoleTeamAuthorizationService(
+        val service = service(
+            source = FakeSourceAuthority(
+                teamMemberCurrent = false,
+                teamManagerCurrent = true,
+            ),
             authorization = AuthorizationCheckPort { request ->
                 captured = request
                 true
@@ -104,17 +134,59 @@ class RoleTeamAuthorizationTest {
         )
 
         assertTrue(
-            service.isOrganizationMember(
+            service.canManageMembership(
                 identityId = identityId,
-                organizationId = organizationId,
+                teamId = teamId,
             ),
         )
 
         val request = requireNotNull(captured)
-        assertEquals("member", request.checkTuple.relation)
         assertEquals(
-            listOf(request.checkTuple),
-            request.failClosedGuardTuples,
+            "can_manage_membership",
+            request.checkTuple.relation,
         )
+        assertEquals(
+            listOf("manager"),
+            request.failClosedGuardTuples.map { it.relation },
+        )
+    }
+
+    private fun service(
+        source: RoleTeamSourceAuthorityPort =
+            FakeSourceAuthority(),
+        authorization: AuthorizationCheckPort =
+            AuthorizationCheckPort { true },
+    ): RoleTeamAuthorizationService =
+        RoleTeamAuthorizationService(
+            authorization = authorization,
+            sourceAuthority = source,
+            clock = Clock.fixed(now, ZoneOffset.UTC),
+        )
+
+    private class FakeSourceAuthority(
+        private val organizationMemberCurrent: Boolean = true,
+        private val teamMemberCurrent: Boolean = true,
+        private val teamManagerCurrent: Boolean = true,
+    ) : RoleTeamSourceAuthorityPort {
+        override fun isOrganizationMemberCurrent(
+            identityId: UUID,
+            organizationId: UUID,
+            at: Instant,
+        ): Boolean =
+            organizationMemberCurrent
+
+        override fun isTeamMemberCurrent(
+            identityId: UUID,
+            teamId: UUID,
+            at: Instant,
+        ): Boolean =
+            teamMemberCurrent
+
+        override fun isTeamManagerCurrent(
+            identityId: UUID,
+            teamId: UUID,
+            at: Instant,
+        ): Boolean =
+            teamManagerCurrent
     }
 }

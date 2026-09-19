@@ -40,12 +40,24 @@ Implemented:
 - fail-closed guard tuples for the structural relations feeding derived OpenFGA actions,
 - unit tests proving member/manager separation and action mapping.
 
+## Commit 02 — source-truth guard + transactional projection bridge
+
+Implemented:
+
+- PostgreSQL source-truth guards for organization member, team member, and team manager,
+- identity / organization / team active-state and validity-window checks before OpenFGA,
+- explicit organization-context requirement for team member/manager authority,
+- MANDATORY-transaction projection bridge for organization membership and team membership,
+- team-manager replacement projection with old-manager ABSENT + new-manager PRESENT,
+- real PostgreSQL + real OpenFGA contract test wired into the local-platform CI gate,
+- pending grants fail closed before tuple application,
+- membership expiry/revoke denies from PostgreSQL truth before stale FGA cleanup,
+- manager replacement denies old authority immediately and keeps new authority pending until projection,
+- stale manager grant outbox cannot replay over a newer replacement.
+
 ## Next in this slice
 
-1. wire authoritative organization/team relationship mutations to the projection intent writer in the same PostgreSQL transaction,
-2. prove PRESENT grant remains denied until projection is APPLIED,
-3. prove revoke/expiry is denied immediately before stale OpenFGA cleanup,
-4. prove team manager replacement cannot replay stale authority,
-5. run PostgreSQL + real OpenFGA integration evidence,
-6. expose only the minimal client context required by Phase 1,
-7. mark VERIFIED only after the real grant/revoke scenarios pass.
+1. let CI prove the PostgreSQL/OpenFGA scenarios against the production adapters,
+2. expose only the minimal client authority context required by Phase 1,
+3. record run evidence,
+4. mark Slice 03 VERIFIED only after all existing foundation/OIDC/OpenFGA gates remain green.

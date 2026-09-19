@@ -1,5 +1,6 @@
 package com.hiltech.server.security
 
+import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 
@@ -117,13 +118,46 @@ object RoleTeamAuthorizationProjectionFactory {
         )
 }
 
+interface RoleTeamSourceAuthorityPort {
+    fun isOrganizationMemberCurrent(
+        identityId: UUID,
+        organizationId: UUID,
+        at: Instant,
+    ): Boolean
+
+    fun isTeamMemberCurrent(
+        identityId: UUID,
+        teamId: UUID,
+        at: Instant,
+    ): Boolean
+
+    fun isTeamManagerCurrent(
+        identityId: UUID,
+        teamId: UUID,
+        at: Instant,
+    ): Boolean
+}
+
 class RoleTeamAuthorizationService(
     private val authorization: AuthorizationCheckPort,
+    private val sourceAuthority: RoleTeamSourceAuthorityPort,
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     fun isOrganizationMember(
         identityId: UUID,
         organizationId: UUID,
     ): Boolean {
+        val at = clock.instant()
+        if (
+            !sourceAuthority.isOrganizationMemberCurrent(
+                identityId = identityId,
+                organizationId = organizationId,
+                at = at,
+            )
+        ) {
+            return false
+        }
+
         val member = RoleTeamAuthorizationRelations.organizationMember(
             identityId = identityId,
             organizationId = organizationId,
@@ -140,6 +174,24 @@ class RoleTeamAuthorizationService(
         identityId: UUID,
         teamId: UUID,
     ): Boolean {
+        val at = clock.instant()
+        val memberCurrent =
+            sourceAuthority.isTeamMemberCurrent(
+                identityId = identityId,
+                teamId = teamId,
+                at = at,
+            )
+        val managerCurrent =
+            sourceAuthority.isTeamManagerCurrent(
+                identityId = identityId,
+                teamId = teamId,
+                at = at,
+            )
+
+        if (!memberCurrent && !managerCurrent) {
+            return false
+        }
+
         val member = RoleTeamAuthorizationRelations.teamMember(
             identityId = identityId,
             teamId = teamId,
@@ -148,6 +200,15 @@ class RoleTeamAuthorizationService(
             identityId = identityId,
             teamId = teamId,
         )
+
+        val guards = buildList {
+            if (memberCurrent) {
+                add(member)
+            }
+            if (managerCurrent) {
+                add(manager)
+            }
+        }
 
         return authorization.isAllowed(
             AuthorizationCheckRequest(
@@ -158,10 +219,7 @@ class RoleTeamAuthorizationService(
                     objectType = "team",
                     objectId = teamId.toString(),
                 ),
-                failClosedGuardTuples = listOf(
-                    member,
-                    manager,
-                ),
+                failClosedGuardTuples = guards,
             ),
         )
     }
@@ -170,6 +228,17 @@ class RoleTeamAuthorizationService(
         identityId: UUID,
         teamId: UUID,
     ): Boolean {
+        val at = clock.instant()
+        if (
+            !sourceAuthority.isTeamManagerCurrent(
+                identityId = identityId,
+                teamId = teamId,
+                at = at,
+            )
+        ) {
+            return false
+        }
+
         val manager = RoleTeamAuthorizationRelations.teamManager(
             identityId = identityId,
             teamId = teamId,
