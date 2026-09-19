@@ -731,6 +731,15 @@ class PeopleService(
             )
     }
 
+    fun canManagePeople(
+        actorUserId: UUID,
+        organizationId: UUID,
+    ): Boolean =
+        authorization.canManagePeople(
+            actorUserId = actorUserId,
+            organizationId = organizationId,
+        )
+
     fun detail(
         actorUserId: UUID,
         employeeId: UUID,
