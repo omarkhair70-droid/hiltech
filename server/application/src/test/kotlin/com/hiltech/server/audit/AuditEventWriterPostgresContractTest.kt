@@ -150,13 +150,22 @@ class AuditEventWriterPostgresContractTest {
             "REMOTE_SESSION_REVOKE",
             row["reason"],
         )
-        assertEquals(
-            now,
-            (row["occurred_at"] as OffsetDateTime)
-                .toInstant(),
-        )
+        val occurredAt =
+            when (val value = row["occurred_at"]) {
+                is OffsetDateTime ->
+                    value.toInstant()
+                is java.sql.Timestamp ->
+                    value.toInstant()
+                else ->
+                    error(
+                        "Unexpected occurred_at type: " +
+                            value?.javaClass?.name,
+                    )
+            }
+        assertEquals(now, occurredAt)
+
         val safeDiff =
-            row["safe_diff"] as String
+            row["safe_diff"].toString()
         assertNotNull(safeDiff)
         assertFalse(
             safeDiff.contains(
