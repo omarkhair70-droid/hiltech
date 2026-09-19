@@ -276,12 +276,14 @@ jobs:
           HILTECH_DB_PASSWORD: hiltech-app-local
           HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
           HILTECH_ROLE_TEAM_AUTH_CONTRACT_TEST: "1"
+          HILTECH_IDENTITY_SESSION_CONTRACT_TEST: "1"
           HILTECH_FGA_ENABLED: "1"
           HILTECH_FGA_API_URL: http://127.0.0.1:8082
         run: |
           ./gradlew :server:application:test \
             --tests com.hiltech.server.DatabaseMigrationContractTest \
             --tests com.hiltech.server.security.RoleTeamAuthorizationPostgresOpenFgaContractTest \
+            --tests com.hiltech.server.identity.IdentitySessionPostgresContractTest \
             --rerun-tasks
 
           if PGPASSWORD=hiltech-keycloak-local \
