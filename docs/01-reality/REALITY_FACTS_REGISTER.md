@@ -319,6 +319,39 @@ Keep these as conditional/future capability points until the relevant phase vali
 
 ---
 
+## RF-020 — Current approval/operational authority baseline is owner-final with Finance/Admin preparation, but detailed policy is still open
+Status: **INTERNAL_REPORTED / PARTIALLY OPEN**
+Date: 2026-09-19
+
+User-confirmed current operating facts:
+- Mohamed is the company owner and current final decision-maker.
+- Ahmed Fawzy is responsible for accounts / finance-admin operational work.
+- Ahmed coordinates employee/technician operational administration including work-related money, custody/equipment and related handoffs.
+- field staff document execution, expenses and materials, then return that information/state to Ahmed for review/settlement.
+- Mohamed sees the broader company picture and intervenes where a decision requires owner authority.
+- the product must keep these rules configurable/relationship-driven rather than hard-coding named people because HILTECH is growing and authority/personnel can change.
+
+Not yet user-confirmed:
+- exact subject-by-subject approval chains,
+- numeric thresholds or an explicit statement that a subject has no threshold,
+- requester/preparer self-approval rules,
+- delegation/absence rules,
+- emergency approval paths,
+- exact reject/request-change/cancel/expiry semantics,
+- bank/payment execution authority.
+
+Product consequence:
+- this baseline can seed the Approval reality map,
+- it does **not** authorize production routing such as "Ahmed then Mohamed",
+- owner-final and Finance/Admin preparation must be converted to typed relationships/policy only after subject-specific reality is validated,
+- payment execution remains a separate unknown authority boundary.
+
+Consume in:
+- Phase 2 Slice 04 Approval Engine Authority Reality Closure,
+- later Finance/Payroll/Procurement slices for subject-specific policy.
+
+---
+
 # High-Priority Unknowns
 
 ## RF-010 — Payroll source of truth

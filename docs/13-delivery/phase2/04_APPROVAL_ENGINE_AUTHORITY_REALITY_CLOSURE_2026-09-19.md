@@ -82,6 +82,29 @@ Repository evidence supports these statements:
 
 These facts are enough to define the reality questions, but **not enough to generate executable approval routing**.
 
+## Prior user-confirmed authority baseline
+
+The following facts were already provided directly and are now durable in `REALITY_FACTS_REGISTER.md` as RF-020:
+
+- Mohamed is the owner and current final decision-maker.
+- Ahmed Fawzy owns the current accounts / finance-admin operational role.
+- Ahmed coordinates work-related employee/technician administration including money/custody/equipment handoffs.
+- technicians/field staff return execution, expenses and materials information to Ahmed for review/settlement.
+- Mohamed operates at the broader company/decision level rather than needing to perform every routine administrative step.
+- HILTECH is growing; authority must remain configurable and relationship-driven rather than tied to today's names.
+
+This closes the **broad current operating shape**.
+
+It still does not answer the subject-specific authority questions required for executable Approval policy:
+- whether each subject is Ahmed-only, Mohamed-only, Ahmed-then-Mohamed, another relationship, or conditional;
+- whether amount/risk thresholds exist;
+- whether self-approval is ever allowed;
+- who acts during absence/delegation;
+- who has bank/payment execution authority;
+- what emergency or expiry rules exist.
+
+Do not ask again for the broad facts above. Collect only the remaining subject-specific facts.
+
 ## Named people are evidence, not product authority
 
 Current documents use Mohamed/Ahmed and other names because they describe today's observed/reported operation.
