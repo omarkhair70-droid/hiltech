@@ -294,6 +294,7 @@ class IdentityBootstrapService(
 class IdentityBootstrapController(
     identityRepository: IdentityRuntimeRepository,
     organizationContext: OrganizationIdentityContextPort,
+    private val sessionService: IdentitySessionService,
 ) {
     private val service = IdentityBootstrapService(
         identityRepository = identityRepository,
@@ -329,11 +330,28 @@ class IdentityBootstrapController(
     fun registerDevice(
         @AuthenticationPrincipal jwt: Jwt,
         @RequestBody request: DeviceRegistrationRequest,
-    ): IdentityDeviceResponse =
-        service.registerDevice(
+    ): IdentityDeviceResponse {
+        val response = service.registerDevice(
             subject = OidcSubjectResolver.from(jwt),
             request = request,
         )
+        sessionService.registerOrTouch(
+            jwt = jwt,
+            installationId =
+                request.installationId.toUuidHeaderOrBadRequest(),
+        )
+        return response
+    }
+
+    private fun String.toUuidHeaderOrBadRequest(): UUID =
+        runCatching { UUID.fromString(this) }
+            .getOrElse {
+                throw IdentityAccessException(
+                    code = "INVALID_INSTALLATIONID",
+                    message = "installationId must be a UUID.",
+                    status = HttpStatus.BAD_REQUEST,
+                )
+            }
 }
 
 @RestControllerAdvice
