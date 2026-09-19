@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
+import java.time.ZoneOffset
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -305,7 +306,9 @@ class ApprovalRecoveryProbe(
             """.trimIndent(),
             event.eventId,
             event.approvalRequestId,
-            event.occurredAt,
+            event.occurredAt.atOffset(
+                ZoneOffset.UTC,
+            ),
         )
     }
 }
