@@ -11,6 +11,7 @@ import com.hiltech.android.identity.AndroidIdentityRuntime
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.identity.IdentityApiException
+import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,10 @@ class MainActivity : ComponentActivity() {
                 onSignIn = ::startSignIn,
                 onSignOut = ::signOut,
                 onRetry = ::restoreOrSignIn,
+                onRefreshSecurity = ::refreshSecurity,
+                onReauthenticate = ::startReauthentication,
+                onRevokeSession = ::revokeSession,
+                onRevokeDevice = ::revokeDevice,
             )
         }
 
@@ -91,14 +96,12 @@ class MainActivity : ComponentActivity() {
             runCatching {
                 identityRuntime.restoreIdentity()
             }.onSuccess { identity ->
-                shellState =
-                    if (identity == null) {
+                if (identity == null) {
+                    shellState =
                         HiltechShellState.SignedOut
-                    } else {
-                        HiltechShellState.SignedIn(
-                            identity,
-                        )
-                    }
+                } else {
+                    showSignedIn(identity)
+                }
             }.onFailure(::showFailure)
         }
     }
@@ -148,13 +151,114 @@ class MainActivity : ComponentActivity() {
                     uri.toString(),
                 )
             }.onSuccess { identity ->
-                shellState =
-                    HiltechShellState.SignedIn(
-                        identity,
-                    )
+                showSignedIn(identity)
             }.onFailure(::showFailure)
         }
         return true
+    }
+
+    private fun showSignedIn(
+        identity: IdentityBootstrapDto,
+    ) {
+        shellState =
+            HiltechShellState.SignedIn(
+                identity = identity,
+            )
+        refreshSecurity()
+    }
+
+    private fun refreshSecurity() {
+        val signed =
+            shellState as? HiltechShellState.SignedIn
+                ?: return
+
+        scope.launch {
+            runCatching {
+                identityRuntime.loadSecuritySnapshot()
+            }.onSuccess { security ->
+                val current =
+                    shellState as? HiltechShellState.SignedIn
+                if (
+                    current != null &&
+                    current.identity.identityId ==
+                    signed.identity.identityId
+                ) {
+                    shellState =
+                        current.copy(
+                            security = security,
+                        )
+                }
+            }.onFailure(::showFailure)
+        }
+    }
+
+    private fun startReauthentication() {
+        shellState =
+            HiltechShellState.Working(
+                "Confirm your HILTECH identity in the browser…",
+            )
+
+        scope.launch {
+            runCatching {
+                identityRuntime.beginSignIn(
+                    forceReauthentication = true,
+                )
+            }.onSuccess { authorizationUrl ->
+                startActivity(
+                    identityRuntime.browserIntent(
+                        authorizationUrl,
+                    ),
+                )
+                shellState =
+                    HiltechShellState.Working(
+                        "Complete re-authentication in your browser…",
+                    )
+            }.onFailure(::showFailure)
+        }
+    }
+
+    private fun revokeSession(
+        sessionId: String,
+    ) {
+        val signed =
+            shellState as? HiltechShellState.SignedIn
+                ?: return
+
+        scope.launch {
+            runCatching {
+                identityRuntime.revokeSession(
+                    sessionId,
+                )
+                identityRuntime.loadSecuritySnapshot()
+            }.onSuccess { security ->
+                shellState =
+                    signed.copy(
+                        security = security,
+                    )
+            }.onFailure(::showFailure)
+        }
+    }
+
+    private fun revokeDevice(
+        deviceId: String,
+    ) {
+        val signed =
+            shellState as? HiltechShellState.SignedIn
+                ?: return
+
+        scope.launch {
+            runCatching {
+                identityRuntime.revokeDevice(
+                    deviceId,
+                )
+                identityRuntime.loadSecuritySnapshot()
+            }.onSuccess { security ->
+                shellState =
+                    signed.copy(
+                        security = security,
+                    )
+            }.onFailure(::showFailure)
+        }
     }
 
     private fun signOut() {
@@ -188,6 +292,14 @@ class MainActivity : ComponentActivity() {
                                 ?: "HILTECH access is unavailable.",
                     )
                 }
+
+                failure is IdentityApiException ->
+                    HiltechShellState.Failure(
+                        code = failure.code,
+                        message =
+                            failure.message
+                                ?: "HILTECH security request failed.",
+                    )
 
                 failure is NativeOidcException ->
                     HiltechShellState.Failure(
