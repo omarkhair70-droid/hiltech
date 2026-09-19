@@ -1,19 +1,16 @@
 package com.hiltech.server.identity
 
 import com.hiltech.server.organizations.OrganizationIdentityContextPort
-import jakarta.servlet.http.HttpServletRequest
+import com.hiltech.server.platform.ProductApiException
 import org.springframework.http.HttpStatus
-import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.oauth2.jwt.Jwt
-import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.bind.annotation.RestControllerAdvice
 import java.time.Clock
 import java.util.UUID
 
@@ -67,18 +64,15 @@ data class IdentityDeviceResponse(
     val version: Long,
 )
 
-data class IdentityApiError(
-    val code: String,
-    val message: String,
-    val correlationId: String,
-    val retryable: Boolean = false,
-)
-
 class IdentityAccessException(
-    val code: String,
-    override val message: String,
-    val status: HttpStatus = HttpStatus.FORBIDDEN,
-) : RuntimeException(message)
+    code: String,
+    message: String,
+    status: HttpStatus = HttpStatus.FORBIDDEN,
+) : ProductApiException(
+    code = code,
+    message = message,
+    status = status,
+)
 
 class IdentityBootstrapService(
     private val identityRepository: IdentityRuntimeRepository,
@@ -352,27 +346,4 @@ class IdentityBootstrapController(
                     status = HttpStatus.BAD_REQUEST,
                 )
             }
-}
-
-@RestControllerAdvice
-class IdentityApiExceptionHandler {
-    @ExceptionHandler(IdentityAccessException::class)
-    fun handleIdentityAccess(
-        exception: IdentityAccessException,
-        request: HttpServletRequest,
-    ): ResponseEntity<IdentityApiError> {
-        val correlationId =
-            request.getHeader("X-Correlation-Id")
-                ?.takeIf { it.isNotBlank() }
-                ?.take(160)
-                ?: UUID.randomUUID().toString()
-
-        return ResponseEntity.status(exception.status).body(
-            IdentityApiError(
-                code = exception.code,
-                message = exception.message,
-                correlationId = correlationId,
-            ),
-        )
-    }
 }

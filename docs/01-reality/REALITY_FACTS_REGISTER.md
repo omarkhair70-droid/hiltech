@@ -1,7 +1,7 @@
 # HILTECH Reality Facts Register
 
 Status: **ACTIVE / PHASED REALITY REGISTER**
-Updated: 2026-09-18
+Updated: 2026-09-19
 
 ## Purpose
 
@@ -196,6 +196,129 @@ Product consequence:
 
 ---
 
+
+## RF-008 — Reducing routine dependence on Mohamed is a core operating outcome
+Status: **INTERNAL_REPORTED**
+Date: 2026-09-19
+
+Reported reality:
+- Mohamed is the owner and a central company decision-maker,
+- a large amount of follow-up, calls, people/site coordination and status chasing currently concentrates on him,
+- one core purpose of HILTECH OS is to reduce the routine coordination that requires Mohamed personally while preserving the decisions/authority that genuinely belong to him.
+
+Product consequence:
+- work/status/exception/approval surfaces should make pending state and ownership visible without requiring repeated calls,
+- automation/configuration should remove chasing, not silently transfer Mohamed's decision authority,
+- this is an internal operating-system objective, not a reason to prioritize a Client Portal.
+
+Validation still useful:
+- which decisions Mohamed must personally retain,
+- which follow-ups can be delegated/configured,
+- which summaries/exceptions he wants surfaced proactively.
+
+---
+
+## RF-009 — Daily tool issue/return is currently person-mediated and WhatsApp/photo-assisted
+Status: **INTERNAL_REPORTED**
+Date: 2026-09-19
+
+Reported reality:
+- Osama is the reported day-to-day handler of the Maadi tool/equipment storage movement,
+- a common flow is: person arrives for tools → Osama photographs the item(s) → update/photo is sent through WhatsApp / to Ahmed → item leaves → it is expected back after the work/day according to the real case,
+- the storage space itself is modest, but some equipment is high-value, so custody/history matters more than warehouse scale.
+
+Product consequence:
+- issue/return must answer who took what, for which Project/Site/Work context, when it left, whether/when it returned, and condition/evidence,
+- photos remain useful Evidence,
+- WhatsApp must not remain the authoritative custody database,
+- initial UX should be fast enough for a small real store rather than a distribution-center workflow.
+
+Validation still useful:
+- exact return timing rules/exceptions,
+- whether Ahmed must acknowledge every issue/return,
+- damaged/missing/tool-service handling,
+- Osama's exact role/authority and backup coverage.
+
+---
+
+## RF-015 — Finance/admin disbursement reality involves Ahmed Fawzy and Dr. Mohamed, but terminology/authority is phase-local
+Status: **INTERNAL_REPORTED / PARTIALLY OPEN**
+Date: 2026-09-19
+
+Reported reality:
+- Ahmed Fawzy is central to accounts/admin work, bank errands, worker payments and work-related cash movement,
+- Dr. Mohamed also participates with Ahmed in some employee payment/disbursement and administrative/financial operations,
+- operational money concepts reported include salary, employee advance, financial imprest/custody, Pocket Money/site allowance/expense terminology, and employee-paid expense reimbursement.
+
+Product consequence:
+- do not collapse these concepts into one generic payment,
+- do not assume accounting/legal meaning from colloquial terminology,
+- current Excel/files and the actual Ahmed/Mohamed process are evidence to reconcile when Finance/Payroll phases arrive,
+- exact authority, naming, settlement and accounting boundaries remain phase-local validation work.
+
+---
+
+## RF-016 — Field documentation must support fast contextual capture before formal transitions
+Status: **INTERNAL_REPORTED**
+Date: 2026-09-19
+
+Reported reality:
+- technicians/engineers need to report what happened at a site quickly,
+- useful capture includes text, photo, file, voice note, problem/update/completion and mentions linked to the relevant context,
+- not every field observation should require a heavy form.
+
+Product consequence:
+- preserve low-friction contextual notes/evidence,
+- use structured/versioned/audited commands when a formal state changes: custody, issue/return, acceptance, approval, payment, completion, etc.,
+- do not infer a full person-to-person chat product from this requirement; current scope remains Inbox/comments/mentions/contextual voice-text notes/evidence unless a separate chat product is later approved.
+
+---
+
+## RF-017 — Arabic-first is an operating reality, not only a visual preference
+Status: **INTERNAL_REPORTED**
+Date: 2026-09-19
+
+Reported reality:
+Internal HILTECH use is primarily Egyptian Arabic / Arabic.
+
+Product consequence:
+- the already-frozen `Arabic Is Native` design doctrine remains operationally justified,
+- Arabic/RTL/Bidi must be tested in real product flows,
+- codes, serials, IPs, model names and other Latin technical tokens must remain readable inside Arabic UI.
+
+---
+
+## RF-018 — Location/tracking may help active field work but is not an all-day surveillance assumption
+Status: **INTERNAL_REPORTED / CONDITIONAL**
+Date: 2026-09-19
+
+Reported reality:
+Map/navigation/check-in or active-task tracking may have value for remote/field work if the real workflow needs it.
+
+Product consequence:
+- tracking remains policy/configuration controlled,
+- do not assume continuous employee monitoring,
+- validate purpose, time window, consent/policy, device reality and client/site restrictions before enabling any location mode.
+
+---
+
+## RF-019 — Roadmap integrations are not evidence of current HILTECH deployment
+Status: **INTERNAL_REPORTED / CONDITIONAL**
+Date: 2026-09-19
+
+Not confirmed as current operating reality:
+- CCTV/NVR integration,
+- access-control/door integration,
+- NOC / Managed Service operation,
+- GPS/IoT integration,
+- any specific bank API,
+- any specific accounting-system integration.
+
+Product consequence:
+Keep these as conditional/future capability points until the relevant phase validates an actual HILTECH need and authoritative system boundary. Roadmap presence must never be interpreted as a current implementation commitment.
+
+---
+
 # High-Priority Unknowns
 
 ## RF-010 — Payroll source of truth
@@ -246,8 +369,8 @@ Known:
 - remote projects may hold temporary project/site stock.
 
 Still useful to validate:
-- exact responsible people,
-- current issue/return practice,
+- Osama's exact authority/backup coverage,
+- exact issue/return acknowledgement and exception rules,
 - calibration-required tool classes,
 - current records/labels,
 - physical access/cameras,

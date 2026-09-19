@@ -51,6 +51,7 @@ object SafeTelemetry {
         "hiltech.object_type",
         "hiltech.command_type",
         "hiltech.error_code",
+        "hiltech.result_code",
         "hiltech.module",
     )
 

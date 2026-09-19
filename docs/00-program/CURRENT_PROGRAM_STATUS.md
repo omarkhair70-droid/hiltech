@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 1 VERIFIED / COMPLETE — PHASE 2 NEXT**
+**PHASE 2 ACTIVE — SLICE 01 VERIFIED / SLICE 02 CONTRACT CHECK NEXT**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -50,7 +50,7 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is next and has not started.
+Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTTP / Command Runtime — is VERIFIED on head `8983b673880d2a27331291f132edd4c3688d8597` with real PostgreSQL idempotency, shared Android/Windows HTTP contracts, Spring Modulith boundaries, Bootstrap regressions, and Phase 1 native OIDC regressions green. Evidence Metadata + Upload/Finalize is the next contract check; target-specific authorization must fail closed rather than borrowing broad organization membership.
 
 ---
 
@@ -81,8 +81,8 @@ Phase 2 — Shared Product Infrastructure — is next and has not started.
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 1 VERIFIED / COMPLETE | All five Phase 1 slices verified; Phase 2 Shared Product Infrastructure is next |
-| Production code | PHASE 1 VERIFIED / COMPLETE | Identity/bootstrap, native OIDC, Role/Team authority, re-auth/revocation, audit baseline, and Me/Sessions minimal are verified on production-shaped code |
+| Implementation order | PHASE 2 ACTIVE | Slice 01 Shared HTTP / Command Runtime verified; Slice 02 Evidence contract check next with target authority fail-closed |
+| Production code | PHASE 2 SLICE 01 VERIFIED | Shared HTTP/error/idempotency/client runtime verified; Phase 1 regressions remain green |
 
 ---
 
@@ -234,11 +234,11 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Phase 1 is closed; do not reopen it without a genuine cross-cutting contradiction.
-2. Before Phase 2 code, read the Phase 2 scope/contracts and close any Phase 2-specific reality or contract gaps.
-3. Begin Phase 2 — Shared Product Infrastructure — as complete vertical slices.
-4. Keep Bootstrap Verification gates mandatory on foundation-affecting changes.
-5. Record later-domain discoveries in the Reality Evidence Register and consume them only when their phase arrives.
+1. Slice 01 is closed; do not reopen it without a genuine cross-cutting contradiction.
+2. Contract Phase 2 Slice 02 — Evidence Metadata + Upload/Finalize — against the existing V0007 schema and verified storage adapter.
+3. Do not weaken target authorization to make Evidence callable; unsupported target authority must fail closed.
+4. Use the Reality Evidence/Facts registers during every later business slice to confirm who performs the work today, what the system replaces, terminology, configuration and conditional capability status.
+5. Keep Phase 1 and Slice 01 regression gates mandatory on shared-foundation changes.
 6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.

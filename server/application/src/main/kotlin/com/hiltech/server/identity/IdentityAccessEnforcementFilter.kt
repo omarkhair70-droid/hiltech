@@ -1,9 +1,10 @@
 package com.hiltech.server.identity
 
+import com.hiltech.server.platform.HiltechRequestContext
+import com.hiltech.server.platform.ProductApiErrorWriter
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import org.springframework.http.MediaType
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.stereotype.Component
@@ -14,6 +15,7 @@ import java.util.UUID
 class IdentityAccessEnforcementFilter(
     private val sessionService: IdentitySessionService,
     private val oidcProperties: HiltechOidcProperties,
+    private val errorWriter: ProductApiErrorWriter,
 ) : OncePerRequestFilter() {
     override fun shouldNotFilter(
         request: HttpServletRequest,
@@ -67,14 +69,28 @@ class IdentityAccessEnforcementFilter(
                             "A registered device context is required.",
                     )
 
-            sessionService.requireCurrentAccess(
-                jwt = jwt,
-                installationId = installationId,
-            )
+            val access =
+                sessionService.requireCurrentAccess(
+                    jwt = jwt,
+                    installationId = installationId,
+                )
 
-            filterChain.doFilter(request, response)
+            HiltechRequestContext
+                .bindAuthenticatedIdentity(
+                    request = request,
+                    identityId =
+                        access.identity.id,
+                    sessionId =
+                        access.session.id,
+                )
+
+            filterChain.doFilter(
+                request,
+                response,
+            )
         } catch (failure: IdentityAccessException) {
             writeFailure(
+                request = request,
                 response = response,
                 failure = failure,
             )
@@ -82,18 +98,19 @@ class IdentityAccessEnforcementFilter(
     }
 
     private fun writeFailure(
+        request: HttpServletRequest,
         response: HttpServletResponse,
         failure: IdentityAccessException,
     ) {
-        val correlationId =
-            UUID.randomUUID().toString()
-
-        response.status = failure.status.value()
-        response.contentType =
-            MediaType.APPLICATION_JSON_VALUE
-        response.characterEncoding = "UTF-8"
-        response.writer.write(
-            """{"code":"${failure.code}","message":"${safeMessage(failure.code)}","correlationId":"$correlationId","retryable":false}""",
+        errorWriter.write(
+            request = request,
+            response = response,
+            status = failure.status,
+            code = failure.code,
+            message =
+                safeMessage(failure.code),
+            retryable =
+                failure.retryable,
         )
     }
 

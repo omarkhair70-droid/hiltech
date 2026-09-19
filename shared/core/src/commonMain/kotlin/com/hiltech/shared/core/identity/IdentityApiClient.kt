@@ -1,24 +1,14 @@
 package com.hiltech.shared.core.identity
 
-import com.hiltech.shared.core.network.ErrorEnvelope
+import com.hiltech.shared.core.network.HiltechApiClient
+import com.hiltech.shared.core.network.HiltechApiException
+import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.client.HttpClient
-import io.ktor.client.request.header
-import io.ktor.client.request.request
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
-import io.ktor.http.contentType
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
-class IdentityApiException(
-    val code: String,
-    val correlationId: String?,
-    val httpStatus: Int?,
-    message: String,
-) : RuntimeException(message)
+typealias IdentityApiException = HiltechApiException
 
 class IdentityApiClient(
     private val client: HttpClient,
@@ -31,7 +21,18 @@ class IdentityApiClient(
         explicitNulls = false
     },
 ) {
-    private val baseUrl = baseUrl.trimEnd('/')
+    private val api =
+        HiltechApiClient(
+            client = client,
+            baseUrl = baseUrl,
+            accessTokenProvider =
+                accessTokenProvider,
+            correlationIdProvider =
+                correlationIdProvider,
+            traceParentProvider =
+                traceParentProvider,
+            json = json,
+        )
 
     suspend fun bootstrap(
         installationId: String?,
@@ -151,62 +152,17 @@ class IdentityApiClient(
         installationId: String?,
         requestBody: String?,
         decode: (String) -> T,
-    ): T {
-        val correlationId = correlationIdProvider()
-        val token = accessTokenProvider()
-            ?.takeIf { it.isNotBlank() }
-            ?: throw IdentityApiException(
-                code = "REAUTH_REQUIRED",
-                correlationId = correlationId,
-                httpStatus = null,
-                message = "No access token is available.",
-            )
-
-        val response = client.request(baseUrl + path) {
-            this.method = method
-            contentType(ContentType.Application.Json)
-            header(
-                HttpHeaders.Authorization,
-                "Bearer $token",
-            )
-            header(
-                "X-Correlation-Id",
-                correlationId,
-            )
-            installationId
-                ?.takeIf { it.isNotBlank() }
-                ?.let {
-                    header(
-                        "X-Device-Installation-Id",
-                        it,
-                    )
-                }
-            traceParentProvider()
-                ?.takeIf { it.isNotBlank() }
-                ?.let {
-                    header("traceparent", it)
-                }
-            if (requestBody != null) {
-                setBody(requestBody)
-            }
-        }
-
-        val body = response.bodyAsText()
-        if (response.status.value in 200..299) {
-            return decode(body)
-        }
-
-        val error = runCatching {
-            json.decodeFromString<ErrorEnvelope>(body)
-        }.getOrNull()
-
-        throw IdentityApiException(
-            code = error?.code ?: "HTTP_ERROR",
-            correlationId =
-                error?.correlationId ?: correlationId,
-            httpStatus = response.status.value,
-            message =
-                error?.message ?: "Identity API request failed.",
+    ): T =
+        api.request(
+            method = method,
+            path = path,
+            options =
+                HiltechRequestOptions(
+                    installationId =
+                        installationId,
+                ),
+            requestBody = requestBody,
+            decode = decode,
         )
-    }
+
 }

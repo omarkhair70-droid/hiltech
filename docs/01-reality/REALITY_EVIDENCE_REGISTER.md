@@ -142,10 +142,104 @@ Consume in:
 
 ---
 
+
+## RE-006 — Owner coordination load is a primary internal-OS problem
+Evidence: **INTERNAL_REPORTED**
+
+Reported operating meaning:
+- Mohamed carries substantial routine calls, follow-up and cross-site/person coordination,
+- HILTECH OS should reduce status chasing and make exceptions/required decisions visible.
+
+Product consequence:
+- later management surfaces should optimize for exception visibility, ownership and pending decisions,
+- do not turn this into hard-coded "Mohamed screens"; model authority/role/context so the system survives organizational change.
+
+Consume in:
+- Phase 3/4 Project/Work management,
+- Phase 7 reporting/dashboard,
+- approval/inbox slices where pending decisions surface.
+
+---
+
+## RE-007 — Tool custody currently uses photo + WhatsApp handoff
+Evidence: **INTERNAL_REPORTED**
+
+Reported operating meaning:
+- Osama is reported as the daily storage handler,
+- issue flow commonly includes photographing tools and sending the update through WhatsApp/to Ahmed,
+- return is expected after work/day according to the real case,
+- asset value/custody risk is more important than warehouse volume.
+
+Product consequence:
+- photos are Evidence, not the authoritative movement ledger,
+- Warehouse/Asset UX must make issue/return faster than the current manual handoff while preserving who/what/context/time/condition,
+- exact acknowledgement/return exception rules remain validation work.
+
+Consume in:
+- Phase 5 Assets / Warehouse.
+
+---
+
+## RE-008 — Finance terminology must remain distinct until Ahmed/Dr. Mohamed reality validation
+Evidence: **INTERNAL_REPORTED**
+
+Reported operating meaning:
+- Ahmed Fawzy and Dr. Mohamed participate in employee/work-related payment/disbursement operations,
+- salary, advance, financial custody/imprest, Pocket Money/site allowance terminology and reimbursement are not interchangeable concepts.
+
+Product consequence:
+- preserve distinct domain candidates,
+- do not assign accounting semantics from colloquial names,
+- current Excel/files and direct workflow observation are evidence inputs, not canonical truth.
+
+Consume in:
+- Phase 8 Finance Operations,
+- Phase 9 Payroll.
+
+---
+
+## RE-009 — Field capture should combine WhatsApp-like speed with structured official transitions
+Evidence: **INTERNAL_REPORTED**
+
+Reported operating meaning:
+- field staff need fast text/photo/file/voice/problem/completion capture tied to context,
+- heavy forms for every observation would not match the reported operating reality.
+
+Product consequence:
+- contextual notes/evidence remain low-friction,
+- formal state transitions stay typed, versioned, authorized and audited,
+- do not infer a full chat application without a separate product decision.
+
+Consume in:
+- Phase 4 Work Execution,
+- Phase 2 Evidence/Inbox foundations where applicable.
+
+---
+
+## RE-010 — Arabic-first and conditional capabilities
+Evidence: **INTERNAL_REPORTED**
+
+Reported operating meaning:
+- internal usage is primarily Arabic,
+- active-task location features may be useful when policy/workflow requires them,
+- CCTV/NVR/access control/NOC/GPS-IoT/specific bank or accounting integrations are not confirmed current reality.
+
+Product consequence:
+- preserve Arabic-native/RTL/Bidi requirements,
+- keep tracking configurable and task-scoped rather than assuming all-day monitoring,
+- keep unverified integrations conditional until their phase proves a real authoritative boundary.
+
+Consume in:
+- all UI/business phases for Arabic,
+- field/location phases for tracking,
+- integration phases only when reality validation promotes a conditional capability.
+
+---
+
 # Current phase rule
 
-Phase 1 implementation proceeds normally.
+Phase 2 implementation proceeds normally.
 
-Entries above are queued for their relevant phases and must not cause speculative implementation now.
+Entries above are queued for their relevant business phases and must not cause speculative implementation, Phase reset, or reopening of verified Phase 1 work.
 
 If a later phase discovers a genuine cross-cutting contradiction, use formal change control rather than silently rewriting earlier contracts.

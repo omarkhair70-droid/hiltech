@@ -185,3 +185,27 @@ The target is not “ERP installation.” The target is a HILTECH-native operati
 - current project communication/reporting tools.
 
 Sensitive values/client information can be redacted. We need workflow shape before confidential content.
+
+
+---
+
+## 2026-09-19 internal operating alignment
+
+Evidence level: `INTERNAL-UNVERIFIED` / `INTERNAL_REPORTED`
+
+This alignment does not replace the phased architecture. It clarifies how later business slices should be grounded:
+
+- Mohamed remains a central owner/decision-maker; a primary OS outcome is reducing routine chasing/calls/follow-up that depend on him personally.
+- Ahmed Fawzy is central to accounts/admin/bank errands and reported work-related cash movement; Dr. Mohamed also participates in some payment/admin operations. Exact authority and accounting terminology remain validation work.
+- Osama is reported as the daily tool-storage handler. Current issue/return can involve photographing equipment and sending updates via WhatsApp/Ahmed. The future system should retain useful photo Evidence but own custody truth itself.
+- Field staff need low-friction contextual text/photo/file/voice updates as well as formal structured transitions when an official business state changes.
+- Internal usage is Arabic-first; technical Latin tokens must remain correctly isolated/readable in RTL UI.
+- Location/tracking is conditional and policy-controlled around active work, not assumed continuous surveillance.
+- CCTV/NVR, access control, NOC, GPS/IoT, a specific bank API, and a specific accounting system remain conditional/unknown capabilities rather than current HILTECH facts.
+
+Operating rule for every later business slice:
+1. identify who actually performs the work today,
+2. identify the current substitute/process,
+3. use reality to validate terminology/configuration/flow,
+4. preserve conditional capabilities as conditional,
+5. record new evidence/facts rather than silently turning hypotheses into mandatory features.

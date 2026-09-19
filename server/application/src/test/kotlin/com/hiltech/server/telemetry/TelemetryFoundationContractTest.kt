@@ -142,12 +142,14 @@ class TelemetryFoundationContractTest {
             mapOf(
                 "hiltech.correlation_id" to "c".repeat(300),
                 "hiltech.module" to "work",
+                "hiltech.result_code" to "ACCEPTED",
+                "payload" to "VALUE_THAT_MUST_NOT_EXPORT",
                 "unknown.private" to "VALUE_THAT_MUST_NOT_EXPORT",
             ),
         )
 
         val map = attributes.asMap()
-        assertEquals(2, map.size)
+        assertEquals(3, map.size)
 
         val correlation = map.entries
             .single {
