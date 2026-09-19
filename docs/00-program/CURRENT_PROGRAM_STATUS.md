@@ -33,7 +33,7 @@ Canonical decision:
 Repository / engineering foundation implementation is now complete and Bootstrap Verification is PASS.
 
 Business production implementation is active.
-Phase 1 Slice 01 — Authenticated Identity Bootstrap — is VERIFIED. The next slice is native OIDC client/session runtime and the permission-safe identity-aware client shell.
+Phase 1 Slice 01 — Authenticated Identity Bootstrap — is VERIFIED. Phase 1 Slice 02 — Native OIDC Session Runtime — is implementation-complete and CI-green on run 35418927238. Configured-provider/browser callback smoke and rendered shell-state evidence remain before Slice 02 is marked VERIFIED.
 
 ---
 
@@ -64,8 +64,8 @@ Phase 1 Slice 01 — Authenticated Identity Bootstrap — is VERIFIED. The next 
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 1 ACTIVE | Slice 01 identity bootstrap verified; native OIDC/session runtime is next |
-| Production code | PHASE 1 BUSINESS IMPLEMENTATION ACTIVE | Authenticated identity/org/device bootstrap is implemented and verified; client sign-in/session runtime is next |
+| Implementation order | PHASE 1 ACTIVE | Slice 01 verified; Slice 02 native OIDC/session implementation is CI-green; provider/browser/render smoke remains |
+| Production code | PHASE 1 BUSINESS IMPLEMENTATION ACTIVE | Identity/org/device bootstrap is verified; Android + Windows native OIDC/session wiring is implemented and CI-green; final Slice 02 smoke evidence remains |
 
 ---
 
@@ -217,11 +217,12 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Begin Phase 1 — Identity, Organization, Permissions Foundation from the frozen contracts.
-2. Implement Phase 1 as complete vertical slices with DB/server/auth/client/UI/tests/observability as applicable.
-3. Keep Bootstrap Verification gates mandatory on foundation-affecting changes.
-4. Record later-domain discoveries in the Reality Evidence Register and consume them only when their phase arrives.
-5. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
+1. Close Phase 1 Slice 02 with configured Keycloak/browser callback smoke on Android + Windows and rendered shell-state evidence.
+2. After Slice 02 verification, continue the remaining Phase 1 foundations from the frozen order: Role/Team authorization integration, re-auth, access revocation, audit baseline, and minimal Me / Sessions.
+3. Implement Phase 1 as complete vertical slices with DB/server/auth/client/UI/tests/observability as applicable.
+4. Keep Bootstrap Verification gates mandatory on foundation-affecting changes.
+5. Record later-domain discoveries in the Reality Evidence Register and consume them only when their phase arrives.
+6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 

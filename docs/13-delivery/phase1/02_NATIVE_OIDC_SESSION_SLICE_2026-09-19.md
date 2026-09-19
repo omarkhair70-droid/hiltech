@@ -1,7 +1,7 @@
 # Phase 1 / Slice 02 — Native OIDC Session Runtime
 
 Date: 2026-09-19
-Status: **IMPLEMENTING**
+Status: **IMPLEMENTATION COMPLETE / CI PASS — PROVIDER + RENDER SMOKE PENDING**
 
 ## Goal
 
@@ -44,16 +44,30 @@ Shared KMP runtime implements:
 
 The baseline scopes include `openid` and explicitly reject `offline_access`.
 
-## Remaining in this slice
+## Implementation / verification state
 
-1. contract tests for the shared runtime,
+Implemented:
+1. shared OIDC protocol/session contract tests,
 2. Android system-browser launch + private-use callback,
 3. Windows system-browser + loopback listener,
-4. platform session storage boundary,
-5. wire tokens into Android sync runtime,
-6. register/touch device + call `/v1/me/bootstrap`,
-7. replace the Phase 0 placeholder shell with signed-out / signing-in / loading / access-denied / signed-in states,
-8. rendered/CI verification.
+4. platform session storage boundaries,
+5. Android sync token wiring,
+6. device register/touch + `/v1/me/bootstrap`,
+7. signed-out / working / access-denied / signed-in permission-safe shell states.
+
+CI evidence:
+- GitHub Actions run `35418927238` — **PASS**,
+- tested head: `2c0a29dadbbe2ac2d1670b66bad29e27e82dfcd7`,
+- shared tests: PASS,
+- Android debug build: PASS,
+- Desktop compile: PASS,
+- Server tests: PASS,
+- database / local-platform / evidence / dependency / Terraform / supply-chain contracts: PASS.
+
+Remaining before this slice may be marked VERIFIED:
+1. configured Keycloak/browser callback smoke on Android,
+2. configured Windows loopback/browser callback smoke,
+3. rendered shell-state evidence on the production client surfaces.
 
 
 ## Android production wiring
