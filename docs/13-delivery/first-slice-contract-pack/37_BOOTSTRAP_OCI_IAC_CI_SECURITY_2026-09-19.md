@@ -59,7 +59,7 @@ Implemented:
 - mutable `:latest` marker denial,
 - tracked real `.tfvars` denial,
 - weekly Dependabot for GitHub Actions + Gradle,
-- PR-only resolved Gradle dependency vulnerability review against the official OSV API.
+- PR-only shipped-runtime Gradle dependency vulnerability review against the official OSV API.
 
 The initial native GitHub Dependency Review Action attempt correctly failed because this repository does not have GitHub Dependency Graph enabled. The gate was not disabled: it was replaced with a repository-owned OSV review that resolves all Gradle module dependency reports and fails closed on HIGH/CRITICAL known vulnerabilities or API/parser failure.
 
@@ -92,3 +92,28 @@ Still activation/cutover work:
 - immutable deployment image digests,
 - staging deploy/recovery/security smoke,
 - production approval.
+
+
+### Runtime vulnerability remediation
+
+The first broad OSV inventory intentionally exposed that scanning every Gradle configuration mixes shipped runtime dependencies with build/test/tooling dependencies.
+
+The PR gate was therefore narrowed to the actual shipping graphs:
+- `server:application runtimeClasspath`,
+- `androidApp releaseRuntimeClasspath`,
+- `desktopApp runtimeClasspath`.
+
+That review reduced 722 broad coordinates / 23 blocking advisories to one actual shipping component:
+`org.apache.tomcat.embed:tomcat-embed-core:11.0.24`.
+
+Three CRITICAL Tomcat advisories affected the shipped server runtime.
+
+Security change control therefore keeps:
+- Spring Boot **4.1.1** unchanged,
+- Tomcat major/minor **11.0** unchanged,
+
+and advances only the embedded Tomcat patch line to **11.0.26** across `org.apache.tomcat.embed` server configurations.
+
+The override is explicit in `server/application/build.gradle.kts` and the exact version is pinned in the version catalog.
+
+No advisory allowlist or suppression was introduced.

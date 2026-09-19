@@ -16,6 +16,17 @@ java {
 val jooqCodegen by configurations.creating
 val generatedJooqDir = rootProject.layout.projectDirectory.dir("server/build/generated-src/jooq/main")
 
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.apache.tomcat.embed") {
+            useVersion(libs.versions.tomcat.get())
+            because(
+                "HILTECH security patch: keep embedded Tomcat on the reviewed 11.0.26 patch line while retaining Spring Boot 4.1.1.",
+            )
+        }
+    }
+}
+
 dependencies {
     implementation(platform("org.springframework.boot:spring-boot-dependencies:${libs.versions.springBoot.get()}"))
     implementation(platform("org.springframework.modulith:spring-modulith-bom:${libs.versions.springModulith.get()}"))

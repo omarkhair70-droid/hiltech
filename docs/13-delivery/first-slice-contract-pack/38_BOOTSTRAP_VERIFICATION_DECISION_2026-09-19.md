@@ -75,7 +75,9 @@ Green jobs:
 - supply-chain-contract.
 
 The PR-only dependency-review job is intentionally skipped on branch push.
-On the Bootstrap PR it must resolve the Gradle dependency inventory and pass the OSV HIGH/CRITICAL vulnerability gate before merge.
+On the Bootstrap PR it resolves only shipped runtime dependency graphs and must pass the OSV HIGH/CRITICAL vulnerability gate before merge.
+
+The first shipped-runtime review identified Tomcat 11.0.24 as the sole HIGH/CRITICAL runtime blocker. Bootstrap security change control patches the embedded Tomcat 11.0 line to **11.0.26** while retaining Spring Boot 4.1.1.
 
 ## Change-control result
 
