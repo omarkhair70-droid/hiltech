@@ -344,12 +344,59 @@ def drive_windows(smoke_dir: pathlib.Path) -> None:
             f"Unexpected Windows callback URL: {page.url}",
         )
 
+        reauth_url = wait_text(
+            smoke_dir / "windows-reauth-url.txt",
+        )
+        parsed = urlparse(reauth_url)
+        params = parse_qs(parsed.query)
+        require(
+            params.get("prompt") == ["login"],
+            "Forced re-auth is missing prompt=login.",
+        )
+        require(
+            params.get("max_age") == ["0"],
+            "Forced re-auth is missing max_age=0.",
+        )
+
+        page.goto(
+            reauth_url,
+            wait_until="domcontentloaded",
+        )
+        require(
+            not page.url.startswith("http://127.0.0.1:"),
+            "Forced re-auth unexpectedly reused SSO without interaction.",
+        )
+
+        password = page.locator("#password")
+        require(
+            password.is_visible(),
+            "Forced re-auth did not require an interactive password step.",
+        )
+        username = page.locator("#username")
+        if username.is_visible():
+            username.fill(USERNAME)
+
+        password.fill(PASSWORD)
+        page.locator("#kc-login").click()
+        page.wait_for_selector(
+            "text=HILTECH authentication received",
+            timeout=20_000,
+        )
+
+        require(
+            (smoke_dir / "windows-reauth-id-token.txt").is_file()
+            or wait_text(
+                smoke_dir / "windows-reauth-id-token.txt",
+            ),
+            "Forced re-auth ID token evidence was not produced.",
+        )
+
         context.close()
         browser.close()
 
     print(
         "HILTECH_PHASE1_WINDOWS_BROWSER_CALLBACK_PASS "
-        "loopback=PASS chromium=PASS",
+        "loopback=PASS chromium=PASS reauth=PASS",
     )
 
 
