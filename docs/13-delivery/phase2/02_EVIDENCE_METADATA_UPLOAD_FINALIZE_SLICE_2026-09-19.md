@@ -1,7 +1,7 @@
 # Phase 2 / Slice 02 — Evidence Metadata + Upload / Finalize
 
 Date: 2026-09-19  
-Status: **CONTRACTED / IMPLEMENTATION AUTHORIZED**
+Status: **VERIFIED**
 
 ## Goal
 
@@ -312,3 +312,55 @@ Mark Slice 02 VERIFIED only on the exact head where:
 - no client-controlled classification/visibility exists,
 - no corrupt/quarantined binary can become READY,
 - all inherited regression gates are green.
+
+
+---
+
+## Verification closure
+
+Canonical verified code head:
+`563875c0421df713b52e6661bf3d46b8c5ec5878`
+
+Exact-head GitHub Actions evidence:
+- Phase 2 — Shared Command Runtime run `35433246103` — **PASS**
+  - shared Android/Windows HTTP client contract — PASS,
+  - real PostgreSQL idempotency contract — PASS.
+- Bootstrap Phase 0 run `35433246124` — **PASS**
+  - `local-platform-contract` — PASS with `EvidenceLifecyclePostgresOpenFgaS3ContractTest`,
+  - `database-contract` — PASS,
+  - `evidence-storage-contract` — PASS against the S3-compatible adapter,
+  - `foundation` / Spring Modulith boundaries — PASS,
+  - supply-chain / Terraform / dependency-review gates — PASS.
+- Phase 1 — Native OIDC Production Smoke run `35433246188` — **PASS**
+  - Android — PASS,
+  - Desktop — PASS,
+  - provider/browser — PASS.
+
+Required evidence closure:
+1. real PostgreSQL reserve/finalize — PASS,
+2. real S3-compatible adapter contract — PASS,
+3. real OpenFGA WorkOrder authorization — PASS,
+4. unauthorized reservation denied — PASS,
+5. unsupported target denied — PASS,
+6. exact duplicate reserve returns same Evidence/session identity — PASS,
+7. changed semantic request with reused operation ID rejected — PASS,
+8. valid native upload reaches READY — PASS,
+9. corrupt/truncated/hash mismatch reaches REJECTED — PASS,
+10. missing object remains retryable/non-READY — PASS,
+11. expired upload session denies finalize — PASS,
+12. ARBITRARY_FILE reaches QUARANTINED and cannot download — PASS,
+13. native-media signature mismatch reaches REJECTED — PASS,
+14. reassignment/cancellation re-evaluates authority/obligation — PASS,
+15. authorized private signed download + restricted download denial — PASS,
+16. shared Android/Windows Evidence client contracts — PASS,
+17. Bootstrap / Phase 1 / Slice 01 inherited regressions — PASS,
+18. Spring Modulith boundary verification — PASS.
+
+Additional safety closure on the same head:
+- server-authoritative EvidencePolicy classification/content/visibility,
+- private signed download expiry bounded to five minutes,
+- HIGHLY_RESTRICTED direct download fails closed,
+- Evidence download-target issuance is audited,
+- signed upload/download targets and raw binary content are not persisted as authority.
+
+Slice 02 is **VERIFIED** on the exact code head above. The later docs-closure commit may have a different SHA; it does not replace the canonical tested code head recorded here.
