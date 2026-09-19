@@ -45,17 +45,14 @@ class AndroidIdentityRuntime(
         },
     )
 
-    val configured: Boolean =
-        apiBaseUrl.isNotBlank() &&
-            oidcIssuer.isNotBlank() &&
-            oidcClientId.isNotBlank()
-
     suspend fun currentAccessToken(): String? =
-        if (configured) session.currentAccessToken() else null
+        session?.currentAccessToken()
 
     suspend fun restoreIdentity(): IdentityBootstrapDto? {
         ensureConfigured()
-        if (session.currentAccessToken() == null) return null
+        val activeSession = session
+            ?: return null
+        if (activeSession.currentAccessToken() == null) return null
         return bootstrapCurrentIdentity()
     }
 
@@ -63,7 +60,8 @@ class AndroidIdentityRuntime(
         forceReauthentication: Boolean = false,
     ): String {
         ensureConfigured()
-        val attempt = session.beginAuthorization(
+        val activeSession = requireNotNull(session)
+        val attempt = activeSession.beginAuthorization(
             redirectUri = ANDROID_REDIRECT_URI,
             forceReauthentication = forceReauthentication,
         )
@@ -82,7 +80,7 @@ class AndroidIdentityRuntime(
             )
 
         try {
-            session.completeAuthorization(
+            requireNotNull(session).completeAuthorization(
                 callbackUri = callbackUri,
                 attempt = attempt,
             )
@@ -98,7 +96,7 @@ class AndroidIdentityRuntime(
             store.clear()
             return
         }
-        session.logout()
+        requireNotNull(session).logout()
     }
 
     fun browserIntent(authorizationUrl: String): Intent =

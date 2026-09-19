@@ -72,3 +72,19 @@ Runtime configuration:
 - `hiltech.oidcClientId` (default `hiltech-native`)
 
 Blank API/OIDC configuration fails closed in the shell.
+
+
+## Windows production wiring
+
+Windows Desktop now:
+- binds an ephemeral callback listener explicitly to `127.0.0.1`,
+- creates `http://127.0.0.1:<port>/callback` per sign-in attempt,
+- opens the authorization URL in the system browser,
+- returns a minimal local completion page,
+- validates state/code through the shared PKCE runtime,
+- registers/touches the Windows installation before identity bootstrap,
+- intentionally keeps OIDC tokens in memory only.
+
+The Desktop client does not write refresh tokens to Preferences or other plaintext local storage. After process restart, the user re-enters the browser flow; Keycloak browser SSO can complete without embedding credentials in HILTECH.
+
+Blank API/OIDC configuration is represented as a fail-closed shell state on both Android and Windows.

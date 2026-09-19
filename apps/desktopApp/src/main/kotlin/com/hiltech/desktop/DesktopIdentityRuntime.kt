@@ -32,14 +32,24 @@ class DesktopIdentityRuntime(
     private val httpClient = createPlatformHttpClient()
     private val tokenStore = InMemoryOidcTokenStore()
 
-    private val session = NativeOidcSessionManager(
-        client = httpClient,
-        config = NativeOidcConfig(
-            issuer = oidcIssuer,
-            clientId = oidcClientId,
-        ),
-        tokenStore = tokenStore,
-    )
+    val configured: Boolean =
+        apiBaseUrl.isNotBlank() &&
+            oidcIssuer.isNotBlank() &&
+            oidcClientId.isNotBlank()
+
+    private val session =
+        if (configured) {
+            NativeOidcSessionManager(
+                client = httpClient,
+                config = NativeOidcConfig(
+                    issuer = oidcIssuer,
+                    clientId = oidcClientId,
+                ),
+                tokenStore = tokenStore,
+            )
+        } else {
+            null
+        }
 
     private val installationId =
         DesktopInstallationIdStore().getOrCreate()
@@ -48,17 +58,12 @@ class DesktopIdentityRuntime(
         client = httpClient,
         baseUrl = apiBaseUrl,
         accessTokenProvider = {
-            session.currentAccessToken()
+            session?.currentAccessToken()
         },
         correlationIdProvider = {
             UUID.randomUUID().toString()
         },
     )
-
-    val configured: Boolean =
-        apiBaseUrl.isNotBlank() &&
-            oidcIssuer.isNotBlank() &&
-            oidcClientId.isNotBlank()
 
     suspend fun signIn(
         forceReauthentication: Boolean = false,
@@ -70,7 +75,7 @@ class DesktopIdentityRuntime(
 
         val server = HttpServer.create(
             InetSocketAddress(
-                InetAddress.getLoopbackAddress(),
+                InetAddress.getByName("127.0.0.1"),
                 0,
             ),
             0,
@@ -89,7 +94,8 @@ class DesktopIdentityRuntime(
         server.start()
 
         try {
-            val attempt = session.beginAuthorization(
+            val activeSession = requireNotNull(session)
+            val attempt = activeSession.beginAuthorization(
                 redirectUri = redirectUri,
                 forceReauthentication =
                     forceReauthentication,
@@ -106,7 +112,7 @@ class DesktopIdentityRuntime(
                 )
             }
 
-            session.completeAuthorization(
+            activeSession.completeAuthorization(
                 callbackUri = callbackUri,
                 attempt = attempt,
             )
@@ -121,7 +127,9 @@ class DesktopIdentityRuntime(
         IdentityBootstrapDto? {
         ensureConfigured()
 
-        if (session.currentAccessToken() == null) {
+        val activeSession = session
+            ?: return null
+        if (activeSession.currentAccessToken() == null) {
             return null
         }
         return bootstrapCurrentIdentity()
@@ -132,7 +140,7 @@ class DesktopIdentityRuntime(
             tokenStore.clear()
             return
         }
-        session.logout()
+        requireNotNull(session).logout()
     }
 
     override fun close() {
