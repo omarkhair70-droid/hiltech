@@ -415,7 +415,7 @@ The Project/Work/Warehouse/Field structural contracts and representative reality
 
 The rendered design proof and formal First-Slice Freeze Review now PASS.
 
-The implementation order has completed Repository Bootstrap and Phase 1 Identity / Organization / Permissions. Phase 2 Shared Product Infrastructure is active: Slice 01 Shared HTTP / Command Runtime and Slice 02 Evidence Metadata + Upload/Finalize are VERIFIED. The next Phase 2 capability must be contract-checked from the remaining shared-infrastructure list before implementation.
+The implementation order has completed Repository Bootstrap and Phase 1 Identity / Organization / Permissions. Phase 2 Shared Product Infrastructure is active: Slice 01 Shared HTTP / Command Runtime and Slice 02 Evidence Metadata + Upload/Finalize are VERIFIED and merged. The next remaining item after the already-verified Phase 1 audit baseline is Activity Events; Slice 03 Activity Events Foundation is CONTRACTED / IMPLEMENTATION AUTHORIZED. Approval Engine remains after Activity and is not authority-frozen by this selection.
 
 ---
 
@@ -455,7 +455,7 @@ Pilot seed values and production activation steps occur after contract Freeze un
 Immediate next execution:
 **PHASE 2 — Shared Product Infrastructure**.
 
-Phase 0 engineering foundation is verified and merged. Phase 1 Identity / Organization / Permissions is verified and complete. Phase 2 is active with Slices 01–02 verified; it continues by complete vertical slice after each repo-grounded contract/reality check.
+Phase 0 engineering foundation is verified and merged. Phase 1 Identity / Organization / Permissions is verified and complete. Phase 2 is active with Slices 01–02 verified/merged and Slice 03 Activity Events Foundation contracted. It continues by complete vertical slice after each repo-grounded contract/reality check.
 
 
 ---

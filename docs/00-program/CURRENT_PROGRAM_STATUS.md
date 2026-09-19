@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 2 ACTIVE — SLICE 02 VERIFIED / NEXT CONTRACT CHECK AFTER MERGE**
+**PHASE 2 ACTIVE — SLICE 02 MERGED / SLICE 03 ACTIVITY EVENTS CONTRACTED**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -50,7 +50,7 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTTP / Command Runtime — is VERIFIED and merged. Slice 02 — Evidence Metadata + Upload/Finalize — is **VERIFIED** on canonical code head `563875c0421df713b52e6661bf3d46b8c5ec5878`. Exact-head evidence: Phase 2 — Shared Command Runtime run `35433246103` PASS; Bootstrap Phase 0 run `35433246124` PASS (including local-platform Evidence lifecycle, database, evidence-storage, Spring Modulith foundation, dependency/supply-chain/Terraform gates); Phase 1 — Native OIDC Production Smoke run `35433246188` PASS (Android, Desktop, provider/browser). WorkOrder-targeted authorization remains authoritative and unsupported Evidence targets remain fail-closed.
+Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTTP / Command Runtime — is VERIFIED and merged. Slice 02 — Evidence Metadata + Upload/Finalize — is VERIFIED and merged at `21a04718414ab20ecf8deeffccfd63961e45099a`; post-merge Bootstrap run `35434157140` PASS. Slice 03 — Activity Events Foundation — is now CONTRACTED / IMPLEMENTATION AUTHORIZED. Its first production scope is a permission-safe WorkOrder activity projection driven by authoritative Evidence lifecycle facts, while Audit remains a separate append-only compliance/security boundary and Approval/Inbox/Notifications remain outside this slice.
 
 ---
 
@@ -81,7 +81,7 @@ Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTT
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 2 ACTIVE | Slices 01–02 verified; next Phase 2 vertical requires repo-grounded contract check after Slice 02 merge |
+| Implementation order | PHASE 2 ACTIVE | Slices 01–02 verified/merged; Slice 03 Activity Events Foundation contracted and implementation-authorized |
 | Production code | PHASE 2 SLICE 02 VERIFIED | Evidence reserve/upload/finalize/read/download verified on PostgreSQL + OpenFGA + S3-compatible storage with shared Android/Windows client contracts |
 
 ---
@@ -234,12 +234,14 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Slice 02 is VERIFIED on code head `563875c0421df713b52e6661bf3d46b8c5ec5878`; do not reopen it without a genuine contradiction.
-2. Close this PR only on the exact docs-closure head after inherited Actions remain green.
-3. After merge, inspect current `main` and contract-check the next Phase 2 shared capability from the canonical implementation order; do not reset Phase 1 or re-plan Phase 2.
-4. Preserve WorkOrder-targeted Evidence authority and keep unsupported target types fail-closed until their owning domain phase provides authoritative relations.
-5. Continue consuming Reality Evidence/Facts by phase; reported people/process/integration facts remain evidence/configuration inputs, not hard-coded product roles.
-6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
+1. Slices 01–02 are VERIFIED and merged; do not reopen them without a genuine contradiction.
+2. Execute Phase 2 Slice 03 — Activity Events Foundation — against `docs/13-delivery/phase2/03_ACTIVITY_EVENTS_FOUNDATION_SLICE_2026-09-19.md`.
+3. Keep Audit and Activity distinct: audit is compliance/security evidence; activity is a permission-filtered operational read projection and never authority.
+4. Initial Activity scope is WorkOrder context fed only by authoritative Evidence lifecycle facts already owned by Slice 02; unsupported scopes remain fail-closed.
+5. Do not pull Approval, Inbox, Notifications, comments/mentions, message brokers or broad event vocabulary into Slice 03.
+6. Approval remains later in canonical Phase 2 order and must not be authority-frozen until its own explicit HILTECH approval-policy reality gate is satisfied.
+7. Continue consuming Reality Evidence/Facts by phase; people/process/integration facts remain evidence/configuration inputs, not hard-coded product roles.
+8. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 

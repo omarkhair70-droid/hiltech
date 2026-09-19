@@ -15,7 +15,10 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
 - Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
 - Slice 02 verification runs: Phase 2 `35433246103` / Bootstrap `35433246124` / Phase 1 OIDC `35433246188` — **PASS**
-- Next execution: **merge exact tested docs-closure head, then contract-check the next Phase 2 vertical from canonical repo order**
+- Phase 2 Slice 02 merge commit: `21a04718414ab20ecf8deeffccfd63961e45099a`; post-merge Bootstrap run `35434157140` — **PASS**
+- Current vertical: **Phase 2 / Slice 03 — Activity Events Foundation (CONTRACTED / IMPLEMENTATION AUTHORIZED)**
+- Slice 03 branch: `phase2/activity-events-foundation-20260919`
+- Slice 03 contract: `docs/13-delivery/phase2/03_ACTIVITY_EVENTS_FOUNDATION_SLICE_2026-09-19.md`
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
