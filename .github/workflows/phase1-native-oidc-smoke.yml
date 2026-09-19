@@ -1,0 +1,266 @@
+name: Phase 1 — Native OIDC Production Smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/**"
+      - "shared/**"
+      - "gradle/**"
+      - "scripts/ci/phase1_*"
+      - ".github/workflows/phase1-native-oidc-smoke.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  provider-browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Install pinned browser-smoke dependencies
+        run: |
+          python3 -m pip install --disable-pip-version-check \
+            requests==2.32.3 \
+            beautifulsoup4==4.12.3 \
+            playwright==1.63.0
+          python3 -m playwright install --with-deps chromium
+
+      - name: Generate disposable Keycloak TLS identity and Java trust store
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/keycloak-tls"
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout "$RUNNER_TEMP/keycloak-tls/key.pem" \
+            -out "$RUNNER_TEMP/keycloak-tls/cert.pem" \
+            -days 1 \
+            -subj "/CN=127.0.0.1" \
+            -addext "subjectAltName=IP:127.0.0.1,DNS:localhost"
+
+          keytool -importcert -noprompt \
+            -alias hiltech-phase1-keycloak \
+            -file "$RUNNER_TEMP/keycloak-tls/cert.pem" \
+            -keystore "$RUNNER_TEMP/keycloak-truststore.p12" \
+            -storetype PKCS12 \
+            -storepass changeit
+
+      - name: Start Keycloak 26.7.4 over HTTPS
+        shell: bash
+        run: |
+          docker run -d --name hiltech-phase1-keycloak \
+            -p 8443:8443 \
+            -v "$RUNNER_TEMP/keycloak-tls:/certs:ro" \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+            -e KC_HTTPS_CERTIFICATE_FILE=/certs/cert.pem \
+            -e KC_HTTPS_CERTIFICATE_KEY_FILE=/certs/key.pem \
+            quay.io/keycloak/keycloak:26.7.4 \
+            start-dev --https-port=8443 --http-enabled=false
+
+          for i in $(seq 1 90); do
+            if curl -kfsS \
+              https://127.0.0.1:8443/realms/master/.well-known/openid-configuration \
+              >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs hiltech-phase1-keycloak
+          exit 1
+
+      - name: Provision disposable Phase 1 identity fixture
+        env:
+          KEYCLOAK_URL: https://127.0.0.1:8443
+          KEYCLOAK_ADMIN: admin
+          KEYCLOAK_ADMIN_PASSWORD: admin
+          REQUESTS_CA_BUNDLE: ${{ runner.temp }}/keycloak-tls/cert.pem
+        run: python3 scripts/ci/phase1_native_oidc_browser.py setup
+
+      - name: Android private-use callback through production OIDC session core
+        shell: bash
+        env:
+          KEYCLOAK_URL: https://127.0.0.1:8443
+          REQUESTS_CA_BUNDLE: ${{ runner.temp }}/keycloak-tls/cert.pem
+          HILTECH_OIDC_ISSUER_URI: https://127.0.0.1:8443/realms/hiltech
+          HILTECH_OIDC_SMOKE_MODE: android
+          HILTECH_OIDC_SMOKE_DIR: ${{ runner.temp }}/phase1-oidc-android
+          HILTECH_OIDC_TRUST_STORE: ${{ runner.temp }}/keycloak-truststore.p12
+          HILTECH_OIDC_TRUST_STORE_PASSWORD: changeit
+        run: |
+          mkdir -p "$HILTECH_OIDC_SMOKE_DIR"
+          ./gradlew :apps:desktopApp:runOidcProviderSmoke \
+            >/tmp/hiltech-oidc-android.log 2>&1 &
+          PID=$!
+
+          python3 scripts/ci/phase1_native_oidc_browser.py \
+            android \
+            --smoke-dir "$HILTECH_OIDC_SMOKE_DIR"
+
+          wait "$PID"
+          cat /tmp/hiltech-oidc-android.log
+          grep -q \
+            "HILTECH_PHASE1_NATIVE_OIDC_PROVIDER_PASS mode=android" \
+            /tmp/hiltech-oidc-android.log
+          test -s "$HILTECH_OIDC_SMOKE_DIR/android-pass.txt"
+
+      - name: Windows loopback callback through Chromium and production OIDC session core
+        shell: bash
+        env:
+          KEYCLOAK_URL: https://127.0.0.1:8443
+          REQUESTS_CA_BUNDLE: ${{ runner.temp }}/keycloak-tls/cert.pem
+          HILTECH_OIDC_ISSUER_URI: https://127.0.0.1:8443/realms/hiltech
+          HILTECH_OIDC_SMOKE_MODE: windows
+          HILTECH_OIDC_SMOKE_DIR: ${{ runner.temp }}/phase1-oidc-windows
+          HILTECH_OIDC_TRUST_STORE: ${{ runner.temp }}/keycloak-truststore.p12
+          HILTECH_OIDC_TRUST_STORE_PASSWORD: changeit
+        run: |
+          mkdir -p "$HILTECH_OIDC_SMOKE_DIR"
+          ./gradlew :apps:desktopApp:runOidcProviderSmoke \
+            >/tmp/hiltech-oidc-windows.log 2>&1 &
+          PID=$!
+
+          python3 scripts/ci/phase1_native_oidc_browser.py \
+            windows \
+            --smoke-dir "$HILTECH_OIDC_SMOKE_DIR"
+
+          wait "$PID"
+          cat /tmp/hiltech-oidc-windows.log
+          grep -q \
+            "HILTECH_PHASE1_NATIVE_OIDC_PROVIDER_PASS mode=windows" \
+            /tmp/hiltech-oidc-windows.log
+          test -s "$HILTECH_OIDC_SMOKE_DIR/windows-pass.txt"
+
+      - name: Keycloak and runtime logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          docker logs hiltech-phase1-keycloak || true
+          cat /tmp/hiltech-oidc-android.log 2>/dev/null || true
+          cat /tmp/hiltech-oidc-windows.log 2>/dev/null || true
+
+  desktop-shell-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Render production Desktop shell states
+        env:
+          HILTECH_SHELL_EVIDENCE_DIR: ${{ github.workspace }}/build/reports/phase1-native-oidc
+        run: |
+          xvfb-run -a ./gradlew :apps:desktopApp:renderPhase1ShellEvidence \
+            | tee /tmp/hiltech-desktop-shell.log
+          grep -q "HILTECH_PHASE1_DESKTOP_SHELL_RENDER_PASS" \
+            /tmp/hiltech-desktop-shell.log
+          test -s build/reports/phase1-native-oidc/desktop-signed-out.png
+          test -s build/reports/phase1-native-oidc/desktop-access-denied.png
+
+      - name: Upload Desktop rendered shell evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hiltech-phase1-desktop-shell-evidence
+          path: build/reports/phase1-native-oidc/*.png
+          if-no-files-found: error
+          retention-days: 30
+
+  android-shell-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Build configured production Android APK
+        run: |
+          ./gradlew :apps:androidApp:assembleDebug \
+            -Philtech.apiBaseUrl=https://api.hiltech.invalid \
+            -Philtech.oidcIssuerUri=https://identity.hiltech.invalid/realms/hiltech
+
+      - name: Free runner disk before emulator
+        shell: bash
+        run: |
+          ./gradlew --stop || true
+          rm -rf "$HOME/.gradle/caches" || true
+          rm -rf "$HOME/.gradle/wrapper/dists" || true
+          df -h /
+
+      - name: Enable KVM
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Render production Android shell and prove private callback routing
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disk-size: 4096M
+          emulator-boot-timeout: 300
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          disable-animations: true
+          script: bash scripts/ci/phase1_android_identity_shell_smoke.sh
+
+      - name: Verify Android rendered evidence
+        run: |
+          test -s build/reports/phase1-native-oidc/android-signed-out.png
+          test -s build/reports/phase1-native-oidc/android-callback-failure.png
+
+      - name: Upload Android rendered shell evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hiltech-phase1-android-shell-evidence
+          path: build/reports/phase1-native-oidc/*.png
+          if-no-files-found: error
+          retention-days: 30

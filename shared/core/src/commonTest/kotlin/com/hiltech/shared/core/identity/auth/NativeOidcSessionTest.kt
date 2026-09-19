@@ -82,6 +82,37 @@ class NativeOidcSessionTest {
         }
 
     @Test
+    fun forceReauthenticationAddsPromptLogin() =
+        runBlocking {
+            val client = clientWith(
+                MockEngine {
+                    respond(
+                        discoveryJson(),
+                        HttpStatusCode.OK,
+                        jsonHeaders(),
+                    )
+                },
+            )
+            val manager = NativeOidcSessionManager(
+                client = client,
+                config = config(),
+                tokenStore = InMemoryOidcTokenStore(),
+            )
+
+            val attempt = manager.beginAuthorization(
+                redirectUri =
+                    "com.hiltech.app:/oauth2redirect",
+                forceReauthentication = true,
+            )
+
+            val url = Url(attempt.authorizationUrl)
+            assertEquals(
+                "login",
+                url.parameters["prompt"],
+            )
+        }
+
+    @Test
     fun stateMismatchFailsBeforeCodeExchange() =
         runBlocking {
             var tokenEndpointCalled = false

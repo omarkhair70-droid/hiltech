@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-BOOTSTRAP_WORKFLOW = ROOT / ".github/workflows/bootstrap-phase0.yml"
+WORKFLOWS_DIR = ROOT / ".github/workflows"
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 USES_LINE = re.compile(r"^\s*uses:\s*([^\s#]+)", re.MULTILINE)
@@ -33,7 +33,10 @@ def tracked_files() -> list[Path]:
     ]
 
 
-def verify_action_pins(workflow_text: str) -> None:
+def verify_action_pins(
+    workflow_path: Path,
+    workflow_text: str,
+) -> None:
     failures: list[str] = []
 
     for match in USES_LINE.finditer(workflow_text):
@@ -49,21 +52,25 @@ def verify_action_pins(workflow_text: str) -> None:
         action, ref = reference.rsplit("@", 1)
         if not FULL_SHA.fullmatch(ref):
             failures.append(
-                f"external action is not pinned to a full commit SHA: "
-                f"{action}@{ref}"
+                f"{workflow_path.relative_to(ROOT)}: external action is not "
+                f"pinned to a full commit SHA: {action}@{ref}"
             )
 
     if failures:
         raise SystemExit("\n".join(failures))
 
 
-def verify_default_permissions(workflow_text: str) -> None:
+def verify_default_permissions(
+    workflow_path: Path,
+    workflow_text: str,
+) -> None:
     if not re.search(
         r"(?m)^permissions:\s*\n\s{2}contents:\s*read\s*$",
         workflow_text,
     ):
         raise SystemExit(
-            "Bootstrap workflow must keep default token permission at contents: read."
+            f"{workflow_path.relative_to(ROOT)} must keep default "
+            "token permission at contents: read."
         )
 
 
@@ -136,11 +143,19 @@ def verify_no_real_tfvars(files: list[Path]) -> None:
 
 
 def main() -> None:
-    workflow_text = BOOTSTRAP_WORKFLOW.read_text(encoding="utf-8")
     files = tracked_files()
+    workflow_paths = sorted(
+        list(WORKFLOWS_DIR.glob("*.yml"))
+        + list(WORKFLOWS_DIR.glob("*.yaml"))
+    )
 
-    verify_action_pins(workflow_text)
-    verify_default_permissions(workflow_text)
+    if not workflow_paths:
+        raise SystemExit("No GitHub Actions workflows found.")
+
+    for workflow_path in workflow_paths:
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        verify_action_pins(workflow_path, workflow_text)
+        verify_default_permissions(workflow_path, workflow_text)
     verify_no_strong_secret_material(files)
     verify_no_mutable_runtime_markers(files)
     verify_gradle_versions_are_not_dynamic()
@@ -148,7 +163,8 @@ def main() -> None:
 
     print(
         "HILTECH_SUPPLY_CHAIN_CONTRACT=PASS "
-        "actions=full-sha secrets=strong-patterns dynamic_versions=denied"
+        f"actions=full-sha workflows={len(workflow_paths)} "
+        "secrets=strong-patterns dynamic_versions=denied"
     )
 
 
