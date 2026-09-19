@@ -229,6 +229,17 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                 now.plusSeconds(3),
             )
 
+            proveMetadataAndPrivateDownload(
+                fixture = fixture,
+                reserve = jpegReserve,
+                expectedBytes = jpeg,
+            )
+
+            proveHighlyRestrictedBlocksDirectDownload(
+                fixture,
+                now.plusSeconds(5),
+            )
+
             proveArbitraryFileQuarantines(
                 fixture,
                 now.plusSeconds(10),
@@ -369,6 +380,167 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
         assertEquals(
             "OBJECT_NOT_VISIBLE",
             unauthorized.code,
+        )
+    }
+
+    private fun proveMetadataAndPrivateDownload(
+        fixture: Fixture,
+        reserve: Reserved,
+        expectedBytes: ByteArray,
+    ) {
+        val evidenceId =
+            UUID.fromString(
+                reserve.response
+                    .evidence
+                    .evidenceId,
+            )
+
+        val metadata =
+            fixture.service.metadata(
+                actorIdentityId =
+                    fixture.actorId,
+                evidenceId =
+                    evidenceId,
+            )
+        assertEquals(
+            "READY",
+            metadata.storageState,
+        )
+        assertEquals(
+            reserve.response.evidence.sha256,
+            metadata.sha256,
+        )
+
+        val download =
+            fixture.service.downloadTarget(
+                actorIdentityId =
+                    fixture.actorId,
+                evidenceId =
+                    evidenceId,
+                correlationId =
+                    "corr-private-download",
+            )
+        val expiresAt =
+            Instant.parse(
+                download.expiresAt,
+            )
+        val ttl =
+            java.time.Duration.between(
+                fixture.clock.instant(),
+                expiresAt,
+            ).seconds
+        assertTrue(
+            ttl in 1..300,
+            "Signed Evidence download must expire within five minutes.",
+        )
+
+        val downloaded =
+            get(download.downloadUrl)
+        assertTrue(
+            expectedBytes.contentEquals(
+                downloaded,
+            ),
+            "Signed private download must return the authoritative stored bytes.",
+        )
+
+        val hiddenMetadata =
+            assertThrows<
+                ProductApiException
+            > {
+                fixture.service.metadata(
+                    actorIdentityId =
+                        fixture.unassignedActorId,
+                    evidenceId =
+                        evidenceId,
+                )
+            }
+        assertEquals(
+            "OBJECT_NOT_VISIBLE",
+            hiddenMetadata.code,
+        )
+
+        val hiddenDownload =
+            assertThrows<
+                ProductApiException
+            > {
+                fixture.service.downloadTarget(
+                    actorIdentityId =
+                        fixture.unassignedActorId,
+                    evidenceId =
+                        evidenceId,
+                    correlationId =
+                        "corr-hidden-download",
+                )
+            }
+        assertEquals(
+            "OBJECT_NOT_VISIBLE",
+            hiddenDownload.code,
+        )
+    }
+
+    private fun proveHighlyRestrictedBlocksDirectDownload(
+        fixture: Fixture,
+        at: Instant,
+    ) {
+        val pdf =
+            "%PDF-1.7\nHILTECH PROTECTED\n"
+                .encodeToByteArray()
+        val reserve =
+            reserve(
+                fixture = fixture,
+                operationId =
+                    UUID.randomUUID(),
+                requirementKey =
+                    "secure-generated",
+                evidenceType =
+                    "GENERATED_DOCUMENT",
+                contentType =
+                    "application/pdf",
+                bytes = pdf,
+                capturedAt = at,
+            )
+        put(
+            reserve.response.upload,
+            "application/pdf",
+            pdf,
+        )
+        val finalized =
+            finalize(
+                fixture = fixture,
+                reserve = reserve,
+                operationId =
+                    UUID.randomUUID(),
+            )
+        assertEquals(
+            "READY",
+            finalized.evidence.storageState,
+        )
+
+        drain(
+            fixture.processor,
+            at.plusSeconds(1),
+        )
+
+        val denied =
+            assertThrows<
+                ProductApiException
+            > {
+                fixture.service.downloadTarget(
+                    actorIdentityId =
+                        fixture.actorId,
+                    evidenceId =
+                        UUID.fromString(
+                            reserve.response
+                                .evidence
+                                .evidenceId,
+                        ),
+                    correlationId =
+                        "corr-highly-restricted",
+                )
+            }
+        assertEquals(
+            "EVIDENCE_DIRECT_DOWNLOAD_FORBIDDEN",
+            denied.code,
         )
     }
 
@@ -1460,8 +1632,23 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                 'INTERNAL_ONLY',
                 NULL,
                 'ARBITRARY_FILE'
+            ),
+            (
+                ?, ?,
+                'secure-generated',
+                'GENERATED_DOCUMENT',
+                'BEFORE_SUBMIT',
+                0, NULL, true,
+                ARRAY['application/pdf']::varchar(160)[],
+                'HIGHLY_RESTRICTED',
+                NULL,
+                'INTERNAL_ONLY',
+                NULL,
+                'GENERATED_TRUSTED_FORMAT'
             )
             """.trimIndent(),
+            UUID.randomUUID(),
+            evidencePolicyId,
             UUID.randomUUID(),
             evidencePolicyId,
             UUID.randomUUID(),
@@ -1707,6 +1894,45 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
         connection.inputStream
             ?.use { it.readBytes() }
         connection.disconnect()
+    }
+
+    private fun get(
+        downloadUrl: String,
+    ): ByteArray {
+        val connection =
+            URI(downloadUrl)
+                .toURL()
+                .openConnection()
+                as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 10_000
+
+        val status =
+            connection.responseCode
+        if (status >= 400) {
+            val body =
+                connection.errorStream
+                    ?.use {
+                        it.readBytes()
+                    }
+            connection.disconnect()
+            error(
+                "Signed Evidence GET failed: HTTP " +
+                    status +
+                    " body=" +
+                    (body?.decodeToString()
+                        ?: ""),
+            )
+        }
+
+        val bytes =
+            connection.inputStream
+                .use {
+                    it.readBytes()
+                }
+        connection.disconnect()
+        return bytes
     }
 
     private fun drain(
