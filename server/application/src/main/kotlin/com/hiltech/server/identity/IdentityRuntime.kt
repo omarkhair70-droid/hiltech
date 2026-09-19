@@ -65,6 +65,16 @@ interface IdentityRuntimeRepository {
         registration: DeviceRegistration,
         seenAt: Instant,
     ): DeviceRegistrationOutcome
+
+    fun listDevices(
+        identityId: UUID,
+    ): List<DeviceRuntime> = emptyList()
+
+    fun revokeDevice(
+        identityId: UUID,
+        deviceId: UUID,
+        revokedAt: Instant,
+    ): Boolean = false
 }
 
 @Component
@@ -159,6 +169,81 @@ class JdbcIdentityRuntimeRepository(
             },
             installationId,
         ).singleOrNull()
+
+    override fun listDevices(
+        identityId: UUID,
+    ): List<DeviceRuntime> =
+        jdbc.query(
+            """
+            SELECT
+                id,
+                user_identity_id,
+                installation_id,
+                platform,
+                device_name,
+                app_version,
+                os_version,
+                last_seen_at,
+                revoked_at,
+                version
+            FROM device
+            WHERE user_identity_id = ?
+            ORDER BY
+                (revoked_at IS NULL) DESC,
+                last_seen_at DESC NULLS LAST,
+                created_at DESC
+            LIMIT 100
+            """.trimIndent(),
+            { rs, _ ->
+                DeviceRuntime(
+                    id = rs.getObject(
+                        "id",
+                        UUID::class.java,
+                    ),
+                    userIdentityId = rs.getObject(
+                        "user_identity_id",
+                        UUID::class.java,
+                    ),
+                    installationId = rs.getObject(
+                        "installation_id",
+                        UUID::class.java,
+                    ),
+                    platform = rs.getString("platform"),
+                    deviceName = rs.getString("device_name"),
+                    appVersion = rs.getString("app_version"),
+                    osVersion = rs.getString("os_version"),
+                    lastSeenAt = rs.getObject(
+                        "last_seen_at",
+                        OffsetDateTime::class.java,
+                    )?.toInstant(),
+                    revokedAt = rs.getObject(
+                        "revoked_at",
+                        OffsetDateTime::class.java,
+                    )?.toInstant(),
+                    version = rs.getLong("version"),
+                )
+            },
+            identityId,
+        )
+
+    override fun revokeDevice(
+        identityId: UUID,
+        deviceId: UUID,
+        revokedAt: Instant,
+    ): Boolean =
+        jdbc.update(
+            """
+            UPDATE device
+            SET revoked_at = ?,
+                version = version + 1
+            WHERE id = ?
+              AND user_identity_id = ?
+              AND revoked_at IS NULL
+            """.trimIndent(),
+            revokedAt.atOffset(ZoneOffset.UTC),
+            deviceId,
+            identityId,
+        ) == 1
 
     override fun registerOrTouchDevice(
         identityId: UUID,
