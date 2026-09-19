@@ -102,9 +102,9 @@ Required constraints:
 
 Approval producer key:
 
-`approval:<approvalRequestId>:requested:<assignmentId>`
+`approval:<approvalRequestId>:requested`
 
-The key identifies one semantic delivery intent and makes event redelivery idempotent.
+Slice 04 has one assignment per request in this minimal foundation, so request identity is sufficient for one semantic requested-notification intent. The key makes event redelivery idempotent.
 
 ## Delivery attempt persistence
 
