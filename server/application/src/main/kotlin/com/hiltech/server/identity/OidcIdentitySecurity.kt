@@ -22,6 +22,7 @@ data class HiltechOidcProperties(
     var enabled: Boolean = false,
     var issuerUri: String = "",
     var audience: String = "",
+    var nativeClientId: String = "hiltech-native",
 ) {
     fun validateEnabledConfiguration() {
         if (!enabled) {
@@ -30,6 +31,9 @@ data class HiltechOidcProperties(
 
         require(issuerUri.isNotBlank()) {
             "hiltech.identity.oidc.issuer-uri must be configured when OIDC is enabled."
+        }
+        require(nativeClientId.isNotBlank()) {
+            "hiltech.identity.oidc.native-client-id must be configured when OIDC is enabled."
         }
     }
 }
