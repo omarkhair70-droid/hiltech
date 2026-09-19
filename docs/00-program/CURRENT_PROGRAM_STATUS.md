@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 2 ACTIVE — SLICES 01–05 VERIFIED / MERGED / SLICE 06 NOTIFICATION ABSTRACTION IMPLEMENTATION AUTHORIZED**
+**PHASE 2 ACTIVE — SLICES 01–05 VERIFIED / MERGED / SLICE 06 NOTIFICATION ABSTRACTION VERIFIED / READY TO MERGE**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -50,7 +50,7 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–05 are VERIFIED and merged. Slice 05 — Inbox / Work Queue Foundation — merged as `6b6194a9107dcfc1ba74e392776a1dee9e38964a`; post-merge Bootstrap run `35468123129` is **PASS** with foundation, database, local-platform, evidence-storage, Terraform and supply-chain gates green. Slice 05 adds V0013 durable Inbox/read-state persistence, Approval-driven source-linked projection, current source/authority/OpenFGA revalidation, per-user idempotent read/unread, deterministic Work Queue/Inbox pagination, one shared Android/Windows client, and durable Spring Modulith recovery without duplicate effect. Source domains remain authoritative. The current target is **Slice 06 — Notification Abstraction**: provider-neutral delivery intent/policy/attempt foundations only; no push/email/SMS provider, user preferences, quiet-hours, digest or escalation policy may be invented.
+Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–05 are VERIFIED and merged. Slice 06 — Notification Abstraction — is **VERIFIED / READY TO MERGE** on canonical tested code head `df72b296181890b3f4a680800f924c8bde3ec5b8`. Exact-head verification is PASS: Bootstrap `35472074530`, Phase 2 Shared Command Runtime `35472074603`, and Phase 1 Native OIDC Production Smoke `35472074705`. Slice 06 adds V0014 durable Notification intent/delivery-attempt persistence, ApprovalRequested(USER) projection, current Approval authority/OpenFGA revalidation before dispatch, provider-neutral dispatch contracts, safe payload boundaries, no-provider honesty, TEAM no-fan-out, and Spring Modulith recovery without duplicate intent. No production push/email/SMS/desktop provider, device-token flow, preferences, quiet-hours, digest or escalation policy was activated.
 
 ---
 
@@ -81,8 +81,8 @@ Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–05 are VERI
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 2 ACTIVE | Slices 01–05 verified/merged; Slice 06 Notification Abstraction is current |
-| Production code | PHASE 2 SLICES 01–05 VERIFIED / MERGED | Inbox / Work Queue is on main; Slice 06 Notification Abstraction is implementation-authorized as a provider-neutral foundation only |
+| Implementation order | PHASE 2 ACTIVE | Slices 01–05 verified/merged; Slice 06 Notification Abstraction verified/ready to merge; final Phase 2 gap review follows merge verification |
+| Production code | PHASE 2 SLICE 06 VERIFIED / READY TO MERGE | Provider-neutral Notification intent/policy/attempt foundation is exact-head verified; no real delivery provider was activated |
 
 ---
 
@@ -236,7 +236,7 @@ Final stack/version review:
 Immediate continuation:
 1. Slices 01–05 are VERIFIED and merged. Slice 05 merge commit is `6b6194a9107dcfc1ba74e392776a1dee9e38964a` and post-merge Bootstrap `35468123129` is PASS; do not reopen these slices without a genuine contradiction.
 2. Merge PR #34 only from the verified docs-closure head after its docs-only CI is green, then require post-merge main Bootstrap PASS.
-3. The current shared capability in the frozen Phase 2 order is **Notification Abstraction**. Use the Slice 06 reality/implementation contracts; do not infer production provider, channel enablement, preferences, quiet hours, digest or escalation policy from Inbox.
+3. Slice 06 **Notification Abstraction** is VERIFIED / READY TO MERGE on `df72b296181890b3f4a680800f924c8bde3ec5b8`. After merge and post-merge verification, run the Phase 2 shared-infrastructure gap review against the frozen implementation order before selecting any additional slice or Phase 3.
 4. Preserve the separation: source-domain business truth != Inbox/Work Queue attention projection != Notification delivery.
 5. Do not invent push/email/SMS channel policy, quiet hours, notification preferences, digest cadence, escalation timers, priority scoring or broad recipient fan-out before the Notification closure.
 6. Continue consuming Reality Evidence/Facts by phase; people/process/integration facts remain evidence/configuration inputs, not hard-coded product roles.

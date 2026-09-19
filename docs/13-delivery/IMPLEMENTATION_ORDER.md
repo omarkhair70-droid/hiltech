@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 ACTIVE — SLICES 01–05 VERIFIED / MERGED / SLICE 06 NOTIFICATION ABSTRACTION IMPLEMENTATION AUTHORIZED**
+Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 ACTIVE — SLICES 01–05 VERIFIED / MERGED / SLICE 06 NOTIFICATION ABSTRACTION VERIFIED / READY TO MERGE**
 
 ## Core Rule
 
@@ -415,7 +415,7 @@ The Project/Work/Warehouse/Field structural contracts and representative reality
 
 The rendered design proof and formal First-Slice Freeze Review now PASS.
 
-The implementation order has completed Repository Bootstrap and Phase 1 Identity / Organization / Permissions. Phase 2 Shared Product Infrastructure is active: Slices 01–05 are VERIFIED and merged. Slice 05 **Inbox / Work Queue Foundation** merged as `6b6194a9107dcfc1ba74e392776a1dee9e38964a`; post-merge Bootstrap `35468123129` PASS. The source-authoritative rule is preserved: actionable queue entries are projections of current source-domain work; Inbox adds durable attention/read state; neither grants source authority. The current capability is **Slice 06 — Notification Abstraction**. Its minimal reality closure and implementation contract are frozen; implementation is authorized only for provider-neutral intent/policy/delivery-attempt foundations and must not invent a real provider, preferences, quiet hours, digest, escalation or TEAM fan-out.
+The implementation order has completed Repository Bootstrap and Phase 1 Identity / Organization / Permissions. Phase 2 Shared Product Infrastructure is active: Slices 01–05 are VERIFIED and merged. Slice 06 **Notification Abstraction** is VERIFIED / READY TO MERGE on canonical tested code head `df72b296181890b3f4a680800f924c8bde3ec5b8`; Bootstrap `35472074530`, Phase 2 `35472074603`, and Phase 1 OIDC `35472074705` PASS. The provider-neutral boundary is preserved: source domains remain authoritative; Notifications are delivery output; no production provider/preferences/quiet-hours/digest/escalation/TEAM fan-out were invented. After merge and post-merge verification, perform a Phase 2 shared-infrastructure gap review against this frozen order before selecting further implementation.
 
 ---
 
@@ -455,7 +455,7 @@ Pilot seed values and production activation steps occur after contract Freeze un
 Immediate next execution:
 **PHASE 2 — Shared Product Infrastructure**.
 
-Phase 0 engineering foundation is verified and merged. Phase 1 Identity / Organization / Permissions is verified and complete. Phase 2 is active with Slices 01–05 verified and merged. Slice 05 Inbox / Work Queue Foundation is on `main` at merge commit `6b6194a9107dcfc1ba74e392776a1dee9e38964a`, with post-merge Bootstrap `35468123129` PASS. The immediate execution target is **Slice 06 — Notification Abstraction**. Its minimal reality closure and implementation contract are frozen and implementation-authorized. No production channel/provider activation is authorized by this slice.
+Phase 0 engineering foundation is verified and merged. Phase 1 Identity / Organization / Permissions is verified and complete. Phase 2 is active with Slices 01–05 verified and merged. Slice 06 Notification Abstraction is VERIFIED / READY TO MERGE on exact tested code head `df72b296181890b3f4a680800f924c8bde3ec5b8`. The immediate execution target is closure: merge the exact verified Slice 06 branch, run post-merge Bootstrap on `main`, then execute the Phase 2 shared-infrastructure gap review before deciding whether another small shared slice remains or Phase 3 may begin.
 
 
 ---

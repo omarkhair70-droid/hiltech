@@ -1,7 +1,7 @@
 # Phase 2 / Slice 06 — Notification Abstraction Foundation
 
 Date: 2026-09-20
-Status: **IMPLEMENTATION AUTHORIZED / CONTRACT FROZEN FOR MINIMAL FOUNDATION**
+Status: **VERIFIED / READY TO MERGE**
 
 ## Reality basis
 
@@ -358,8 +358,34 @@ Only then:
 - merge the exact tested closure head;
 - run post-merge main Bootstrap.
 
+## Verification closure
+
+Canonical tested code head:
+
+`df72b296181890b3f4a680800f924c8bde3ec5b8`
+
+Exact-head verification:
+- Bootstrap Phase 0 run `35472074530` — **PASS**;
+- Phase 2 Shared Command Runtime run `35472074603` — **PASS**;
+- Phase 1 Native OIDC Production Smoke run `35472074705` — **PASS** after the Desktop render job was re-run on the same SHA following a runner timeout/cancellation; Android, Desktop and provider-browser jobs all finished SUCCESS.
+
+The verified implementation includes:
+- V0014 Notification intent and delivery-attempt persistence;
+- ApprovalRequested(USER) durable projection with semantic deduplication;
+- current Approval / authority / OpenFGA revalidation before dispatch;
+- provider-neutral delivery port and deterministic test transport;
+- honest `NO_PROVIDER` behavior when no real provider is configured;
+- retryable/final delivery-attempt evidence without source mutation;
+- stale/terminal/cross-authority suppression;
+- TEAM no-fan-out;
+- safe payload boundaries;
+- Spring Modulith failed-publication recovery without duplicate intent;
+- inherited Slice 01–05 and Phase 1 regression coverage.
+
+No production delivery provider or preference policy was activated.
+
 ## Contract conclusion
 
-**IMPLEMENTATION AUTHORIZED for the provider-neutral Notification Abstraction foundation only.**
+**VERIFIED / READY TO MERGE.**
 
-The next action is production implementation against this contract without selecting or pretending to enable a real delivery provider.
+Next: merge the verified Slice 06 branch, run post-merge Bootstrap on `main`, then perform the Phase 2 shared-infrastructure gap review before selecting any further slice.
