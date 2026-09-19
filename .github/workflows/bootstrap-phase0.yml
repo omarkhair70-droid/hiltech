@@ -293,3 +293,54 @@ jobs:
             --env-file infrastructure/local/.env.example \
             -f infrastructure/local/docker-compose.yml \
             down -v --remove-orphans
+
+  terraform-contract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify canonical Terraform formatting
+        shell: bash
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            hashicorp/terraform:1.16.3 \
+            fmt -recursive infrastructure/oci
+          git diff --exit-code -- infrastructure/oci
+
+      - name: Validate staging OCI root
+        shell: bash
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace/infrastructure/oci/environments/staging \
+            hashicorp/terraform:1.16.3 \
+            init -backend=false -input=false
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace/infrastructure/oci/environments/staging \
+            hashicorp/terraform:1.16.3 \
+            validate
+
+      - name: Validate production OCI root
+        shell: bash
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace/infrastructure/oci/environments/production \
+            hashicorp/terraform:1.16.3 \
+            init -backend=false -input=false
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace/infrastructure/oci/environments/production \
+            hashicorp/terraform:1.16.3 \
+            validate
+
+      - name: Verify pinned Terraform and OCI provider line
+        shell: bash
+        run: |
+          grep -R 'required_version = "= 1.16.3"' infrastructure/oci/environments
+          grep -R 'version = "= 8.29.0"' infrastructure/oci/environments
