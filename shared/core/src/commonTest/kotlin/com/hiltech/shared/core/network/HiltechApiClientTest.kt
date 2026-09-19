@@ -314,4 +314,238 @@ class HiltechApiClientTest {
             assertFalse(failure.retryable)
             assertFalse(networkCalled)
         }
+
+    @Test
+    fun reauthRetryReusesSameOperationAndFreshTokenOnce() =
+        runBlocking {
+            var requestCount = 0
+            var token = "token-before-reauth"
+            var reauthCount = 0
+            val seenAuthorization =
+                mutableListOf<String?>()
+            val seenIdempotency =
+                mutableListOf<String?>()
+
+            val client = HttpClient(
+                MockEngine { request ->
+                    requestCount += 1
+                    seenAuthorization +=
+                        request.headers[
+                            HttpHeaders.Authorization
+                        ]
+                    seenIdempotency +=
+                        request.headers[
+                            "Idempotency-Key"
+                        ]
+
+                    if (requestCount == 1) {
+                        respond(
+                            content = """
+                            {
+                              "code":"REAUTH_REQUIRED",
+                              "message":"Fresh authentication required.",
+                              "correlationId":"corr-reauth",
+                              "retryable":false
+                            }
+                            """.trimIndent(),
+                            status =
+                                HttpStatusCode(428, "Precondition Required"),
+                            headers = headersOf(
+                                HttpHeaders.ContentType,
+                                "application/json",
+                            ),
+                        )
+                    } else {
+                        respond(
+                            content = """{"ok":true}""",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(
+                                HttpHeaders.ContentType,
+                                "application/json",
+                            ),
+                        )
+                    }
+                },
+            )
+
+            val api = HiltechApiClient(
+                client = client,
+                baseUrl =
+                    "https://api.hiltech.test",
+                accessTokenProvider = {
+                    token
+                },
+                correlationIdProvider = {
+                    "corr-client-reauth"
+                },
+            )
+
+            val operationId =
+                "33333333-3333-3333-3333-333333333333"
+
+            val result =
+                api.requestWithReauthentication(
+                    method = HttpMethod.Post,
+                    path = "/v1/probe",
+                    options =
+                        HiltechRequestOptions(
+                            idempotencyKey =
+                                operationId,
+                        ),
+                    requestBody =
+                        """{"operationId":"$operationId"}""",
+                    reauthenticate = {
+                        reauthCount += 1
+                        token =
+                            "token-after-reauth"
+                    },
+                    decode = { it },
+                )
+
+            assertEquals(
+                """{"ok":true}""",
+                result,
+            )
+            assertEquals(2, requestCount)
+            assertEquals(1, reauthCount)
+            assertEquals(
+                listOf(
+                    "Bearer token-before-reauth",
+                    "Bearer token-after-reauth",
+                ),
+                seenAuthorization,
+            )
+            assertEquals(
+                listOf(
+                    operationId,
+                    operationId,
+                ),
+                seenIdempotency,
+            )
+        }
+
+    @Test
+    fun secondReauthRequiredDoesNotLoop() =
+        runBlocking {
+            var requestCount = 0
+            var reauthCount = 0
+
+            val client = HttpClient(
+                MockEngine {
+                    requestCount += 1
+                    respond(
+                        content = """
+                        {
+                          "code":"REAUTH_REQUIRED",
+                          "message":"Fresh authentication required.",
+                          "correlationId":"corr-reauth-loop",
+                          "retryable":false
+                        }
+                        """.trimIndent(),
+                        status =
+                            HttpStatusCode(428, "Precondition Required"),
+                        headers = headersOf(
+                            HttpHeaders.ContentType,
+                            "application/json",
+                        ),
+                    )
+                },
+            )
+
+            val api = HiltechApiClient(
+                client = client,
+                baseUrl =
+                    "https://api.hiltech.test",
+                accessTokenProvider = {
+                    "token"
+                },
+                correlationIdProvider = {
+                    "corr-client-loop"
+                },
+            )
+
+            val failure =
+                assertFailsWith<
+                    HiltechApiException
+                > {
+                    api.requestWithReauthentication(
+                        method = HttpMethod.Post,
+                        path = "/v1/probe",
+                        options =
+                            HiltechRequestOptions(
+                                idempotencyKey =
+                                    "44444444-4444-4444-4444-444444444444",
+                            ),
+                        requestBody =
+                            """{"operationId":"44444444-4444-4444-4444-444444444444"}""",
+                        reauthenticate = {
+                            reauthCount += 1
+                        },
+                        decode = { it },
+                    )
+                }
+
+            assertEquals(
+                "REAUTH_REQUIRED",
+                failure.code,
+            )
+            assertEquals(2, requestCount)
+            assertEquals(1, reauthCount)
+        }
+
+    @Test
+    fun stateChangingRequestWithoutIdempotencyIsNotAutoReplayed() =
+        runBlocking {
+            var requestCount = 0
+            var reauthCount = 0
+
+            val client = HttpClient(
+                MockEngine {
+                    requestCount += 1
+                    respond(
+                        content = "",
+                        status =
+                            HttpStatusCode(428, "Precondition Required"),
+                        headers = headersOf(
+                            "X-Correlation-Id",
+                            "corr-428-fallback",
+                        ),
+                    )
+                },
+            )
+
+            val api = HiltechApiClient(
+                client = client,
+                baseUrl =
+                    "https://api.hiltech.test",
+                accessTokenProvider = {
+                    "token"
+                },
+                correlationIdProvider = {
+                    "corr-client-no-replay"
+                },
+            )
+
+            val failure =
+                assertFailsWith<
+                    HiltechApiException
+                > {
+                    api.requestWithReauthentication(
+                        method = HttpMethod.Post,
+                        path = "/v1/probe",
+                        reauthenticate = {
+                            reauthCount += 1
+                        },
+                        decode = { it },
+                    )
+                }
+
+            assertEquals(
+                "REAUTH_REQUIRED",
+                failure.code,
+            )
+            assertEquals(1, requestCount)
+            assertEquals(0, reauthCount)
+        }
+
 }
