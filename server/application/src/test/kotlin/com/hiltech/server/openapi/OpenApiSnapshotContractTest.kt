@@ -12,7 +12,7 @@ import com.hiltech.server.identity.IdentityRuntimeRepository
 import com.hiltech.server.identity.IdentitySessionSecurityController
 import com.hiltech.server.identity.IdentitySessionSecurityService
 import com.hiltech.server.identity.IdentitySessionService
-import com.hiltech.server.identity.OrganizationIdentityContextPort
+import com.hiltech.server.organizations.OrganizationIdentityContextPort
 import com.hiltech.server.inbox.InboxController
 import com.hiltech.server.inbox.InboxService
 import com.hiltech.server.inbox.WorkQueueController
@@ -28,7 +28,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.SpringBootConfiguration
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.bean.override.mockito.MockitoBean
