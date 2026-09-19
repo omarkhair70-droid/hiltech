@@ -408,13 +408,6 @@ class JdbcIdempotentCommandExecutor(
                     status =
                         HttpStatus.CONFLICT,
                     retryable = false,
-                    details =
-                        existing.resultCode
-                            ?.let {
-                                mapOf(
-                                    "resultCode" to it,
-                                )
-                            },
                 )
 
             else ->
