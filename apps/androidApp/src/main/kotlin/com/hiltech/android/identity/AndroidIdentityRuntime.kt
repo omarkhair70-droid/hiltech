@@ -89,7 +89,7 @@ class AndroidIdentityRuntime(
                 message = "No active HILTECH sign-in attempt exists.",
             )
 
-        try {
+        val tokens = try {
             requireNotNull(session).completeAuthorization(
                 callbackUri = callbackUri,
                 attempt = attempt,
@@ -98,7 +98,23 @@ class AndroidIdentityRuntime(
             store.clearPendingAttempt()
         }
 
-        return bootstrapCurrentIdentity()
+        val identity = bootstrapCurrentIdentity()
+
+        if (attempt.forceReauthentication) {
+            val idToken = tokens.idToken
+                ?.takeIf { it.isNotBlank() }
+                ?: throw NativeOidcException(
+                    code = "OIDC_ID_TOKEN_MISSING",
+                    message =
+                        "Fresh authentication did not return an ID token.",
+                )
+            identityApi.completeReauthentication(
+                idToken = idToken,
+                installationId = installationId,
+            )
+        }
+
+        return identity
     }
 
     suspend fun logout() {
