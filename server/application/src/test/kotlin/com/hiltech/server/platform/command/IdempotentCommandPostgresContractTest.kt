@@ -1,6 +1,8 @@
 package com.hiltech.server.platform.command
 
 import com.hiltech.server.platform.http.ProductApiException
+import com.hiltech.server.telemetry.HiltechTelemetryRuntime
+import io.opentelemetry.api.OpenTelemetry
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -536,6 +538,12 @@ class IdempotentCommandPostgresContractTest {
                     Clock.fixed(
                         now,
                         ZoneOffset.UTC,
+                    ),
+                telemetry =
+                    HiltechTelemetryRuntime(
+                        openTelemetry =
+                            OpenTelemetry.noop(),
+                        closeAction = {},
                     ),
             )
 
