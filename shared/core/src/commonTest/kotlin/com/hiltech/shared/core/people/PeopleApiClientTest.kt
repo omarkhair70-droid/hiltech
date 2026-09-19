@@ -107,8 +107,8 @@ class PeopleApiClientTest {
                                 request.url.encodedPath ==
                                     "/v1/me/employee" ->
                                     detail.replace(
-                                        ""linkedIdentityId":"$identityId",",
-                                        ""linkedIdentityId":null,",
+                                        "\"linkedIdentityId\":\"$identityId\",",
+                                        "\"linkedIdentityId\":null,",
                                     )
 
                                 request.method.value in
