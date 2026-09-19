@@ -12,7 +12,7 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
 - Current execution phase: **Phase 2 — Shared Product Infrastructure**
 - Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
-- Next vertical contract check: **Slice 02 — Evidence Metadata + Upload/Finalize**
+- Current vertical slice: **Slice 02 — Evidence Metadata + Upload/Finalize (CONTRACTED / IMPLEMENTATION AUTHORIZED)**
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**

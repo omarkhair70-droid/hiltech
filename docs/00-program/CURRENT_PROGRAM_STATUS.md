@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 2 ACTIVE — SLICE 01 VERIFIED / SLICE 02 CONTRACT CHECK NEXT**
+**PHASE 2 ACTIVE — SLICE 02 EVIDENCE METADATA + UPLOAD/FINALIZE**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -50,7 +50,7 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTTP / Command Runtime — is VERIFIED on head `8983b673880d2a27331291f132edd4c3688d8597` with real PostgreSQL idempotency, shared Android/Windows HTTP contracts, Spring Modulith boundaries, Bootstrap regressions, and Phase 1 native OIDC regressions green. Evidence Metadata + Upload/Finalize is the next contract check; target-specific authorization must fail closed rather than borrowing broad organization membership.
+Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTTP / Command Runtime — is VERIFIED and merged. Slice 02 — Evidence Metadata + Upload/Finalize — is CONTRACTED / IMPLEMENTATION AUTHORIZED on branch `phase2/evidence-lifecycle-20260919`. Initial production target scope is WorkOrder only; unsupported target types fail closed until their authoritative domain relations exist.
 
 ---
 
@@ -81,8 +81,8 @@ Phase 2 — Shared Product Infrastructure — is ACTIVE. Slice 01 — Shared HTT
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 2 ACTIVE | Slice 01 Shared HTTP / Command Runtime verified; Slice 02 Evidence contract check next with target authority fail-closed |
-| Production code | PHASE 2 SLICE 01 VERIFIED | Shared HTTP/error/idempotency/client runtime verified; Phase 1 regressions remain green |
+| Implementation order | PHASE 2 ACTIVE | Slice 01 verified/merged; Slice 02 WorkOrder-targeted Evidence lifecycle active with unsupported targets fail-closed |
+| Production code | PHASE 2 SLICE 02 ACTIVE | Evidence metadata/reserve/upload/finalize implementation active on verified shared runtime |
 
 ---
 
@@ -234,12 +234,12 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Slice 01 is closed; do not reopen it without a genuine cross-cutting contradiction.
-2. Contract Phase 2 Slice 02 — Evidence Metadata + Upload/Finalize — against the existing V0007 schema and verified storage adapter.
-3. Do not weaken target authorization to make Evidence callable; unsupported target authority must fail closed.
-4. Use the Reality Evidence/Facts registers during every later business slice to confirm who performs the work today, what the system replaces, terminology, configuration and conditional capability status.
-5. Keep Phase 1 and Slice 01 regression gates mandatory on shared-foundation changes.
-6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
+1. Implement Phase 2 Slice 02 from `docs/13-delivery/phase2/02_EVIDENCE_METADATA_UPLOAD_FINALIZE_SLICE_2026-09-19.md`.
+2. Support WorkOrder-targeted binary Evidence first; all unsupported target types must fail closed.
+3. Resolve classification/content/visibility from the WorkOrder-bound EvidencePolicy snapshot; do not trust those values from the client.
+4. Keep Phase 1 + Slice 01 regression gates mandatory.
+5. Use Reality Evidence/Facts during Evidence UX work: fast field capture is required, but formal reserve/finalize remains typed/authorized/audited.
+6. Treat malware-scanner/OCI production activation as provider operations, not a reason to weaken evidence state/security semantics.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 
