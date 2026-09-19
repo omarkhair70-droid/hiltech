@@ -1,7 +1,7 @@
 package com.hiltech.server.identity
 
 import com.hiltech.server.organizations.OrganizationIdentityContextPort
-import com.hiltech.server.platform.http.ProductApiException
+import com.hiltech.server.platform.ProductApiException
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.oauth2.jwt.Jwt

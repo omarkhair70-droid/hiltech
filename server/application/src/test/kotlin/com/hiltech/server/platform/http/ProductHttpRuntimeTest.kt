@@ -1,4 +1,4 @@
-package com.hiltech.server.platform.http
+package com.hiltech.server.platform
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse

@@ -1,7 +1,7 @@
 package com.hiltech.server.identity
 
-import com.hiltech.server.platform.http.HiltechRequestContextFilter
-import com.hiltech.server.platform.http.ProductApiErrorWriter
+import com.hiltech.server.platform.HiltechRequestContextFilter
+import com.hiltech.server.platform.ProductApiErrorWriter
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.ConfigurationProperties

@@ -1,7 +1,7 @@
 package com.hiltech.server.identity
 
-import com.hiltech.server.platform.http.HiltechRequestContext
-import com.hiltech.server.platform.http.ProductApiErrorWriter
+import com.hiltech.server.platform.HiltechRequestContext
+import com.hiltech.server.platform.ProductApiErrorWriter
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse

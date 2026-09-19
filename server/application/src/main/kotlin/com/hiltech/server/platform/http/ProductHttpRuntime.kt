@@ -1,4 +1,4 @@
-package com.hiltech.server.platform.http
+package com.hiltech.server.platform
 
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
