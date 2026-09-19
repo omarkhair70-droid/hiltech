@@ -56,3 +56,37 @@ data class IdentityDeviceDto(
     val lastSeenAt: String? = null,
     val version: Long,
 )
+
+
+@Serializable
+data class ReauthenticationCompletionDto(
+    val idToken: String,
+)
+
+@Serializable
+data class IdentitySessionDto(
+    val sessionId: String,
+    val deviceId: String,
+    val createdAt: String,
+    val lastSeenAt: String,
+    val expiresAt: String,
+    val revokedAt: String? = null,
+    val authenticationStrength: String,
+    val reauthSatisfiedUntil: String? = null,
+    val current: Boolean,
+    val version: Long,
+)
+
+@Serializable
+data class IdentityDeviceSecurityDto(
+    val deviceId: String,
+    val installationId: String,
+    val platform: String,
+    val deviceName: String? = null,
+    val appVersion: String,
+    val osVersion: String? = null,
+    val lastSeenAt: String? = null,
+    val revokedAt: String? = null,
+    val current: Boolean,
+    val version: Long,
+)
