@@ -74,6 +74,30 @@ object EvidenceAuthorizationRelations {
             objectType = "work_order",
             objectId = workOrderId.toString(),
         )
+
+    fun evidenceCanView(
+        identityId: UUID,
+        evidenceId: UUID,
+    ): OpenFgaTuple =
+        OpenFgaTuple(
+            subjectType = "user",
+            subjectId = identityId.toString(),
+            relation = "can_view",
+            objectType = "evidence",
+            objectId = evidenceId.toString(),
+        )
+
+    fun evidenceCanDownload(
+        identityId: UUID,
+        evidenceId: UUID,
+    ): OpenFgaTuple =
+        OpenFgaTuple(
+            subjectType = "user",
+            subjectId = identityId.toString(),
+            relation = "can_download",
+            objectType = "evidence",
+            objectId = evidenceId.toString(),
+        )
 }
 
 object EvidenceAuthorizationProjectionFactory {
@@ -132,6 +156,20 @@ interface EvidenceTargetAuthorizationPort {
         workOrderId: UUID,
         creatorIdentityId: UUID,
     ): Boolean
+
+    fun canViewEvidence(
+        identityId: UUID,
+        evidenceId: UUID,
+        workOrderId: UUID,
+        creatorIdentityId: UUID,
+    ): Boolean
+
+    fun canDownloadEvidence(
+        identityId: UUID,
+        evidenceId: UUID,
+        workOrderId: UUID,
+        creatorIdentityId: UUID,
+    ): Boolean
 }
 
 @Component
@@ -181,6 +219,187 @@ class JdbcEvidenceTargetAuthorization(
             workOrderId = workOrderId,
             at = clock.instant(),
         )
+    }
+
+    override fun canViewEvidence(
+        identityId: UUID,
+        evidenceId: UUID,
+        workOrderId: UUID,
+        creatorIdentityId: UUID,
+    ): Boolean =
+        canAccessEvidence(
+            identityId = identityId,
+            evidenceId = evidenceId,
+            workOrderId = workOrderId,
+            creatorIdentityId = creatorIdentityId,
+            relation = "can_view",
+        )
+
+    override fun canDownloadEvidence(
+        identityId: UUID,
+        evidenceId: UUID,
+        workOrderId: UUID,
+        creatorIdentityId: UUID,
+    ): Boolean =
+        canAccessEvidence(
+            identityId = identityId,
+            evidenceId = evidenceId,
+            workOrderId = workOrderId,
+            creatorIdentityId = creatorIdentityId,
+            relation = "can_download",
+        )
+
+    private fun canAccessEvidence(
+        identityId: UUID,
+        evidenceId: UUID,
+        workOrderId: UUID,
+        creatorIdentityId: UUID,
+        relation: String,
+    ): Boolean {
+        val creator =
+            EvidenceAuthorizationRelations
+                .evidenceCreator(
+                    identityId = identityId,
+                    evidenceId = evidenceId,
+                )
+
+        if (
+            identityId == creatorIdentityId &&
+            authorization.isAllowed(
+                AuthorizationCheckRequest(
+                    checkTuple =
+                        if (relation == "can_download") {
+                            EvidenceAuthorizationRelations
+                                .evidenceCanDownload(
+                                    identityId = identityId,
+                                    evidenceId = evidenceId,
+                                )
+                        } else {
+                            EvidenceAuthorizationRelations
+                                .evidenceCanView(
+                                    identityId = identityId,
+                                    evidenceId = evidenceId,
+                                )
+                        },
+                    failClosedGuardTuples =
+                        listOf(creator),
+                ),
+            )
+        ) {
+            return true
+        }
+
+        val evidenceWorkOrder =
+            EvidenceAuthorizationRelations
+                .evidenceWorkOrder(
+                    workOrderId = workOrderId,
+                    evidenceId = evidenceId,
+                )
+        val assignments =
+            currentAssignments(
+                workOrderId = workOrderId,
+                at = clock.instant(),
+            )
+
+        assignments
+            .filter {
+                it.targetType == "USER" &&
+                    it.targetId == identityId
+            }
+            .forEach {
+                val assignedUser =
+                    EvidenceAuthorizationRelations
+                        .workOrderAssignedUser(
+                            identityId = identityId,
+                            workOrderId = workOrderId,
+                        )
+                val allowed =
+                    authorization.isAllowed(
+                        AuthorizationCheckRequest(
+                            checkTuple =
+                                if (relation == "can_download") {
+                                    EvidenceAuthorizationRelations
+                                        .evidenceCanDownload(
+                                            identityId = identityId,
+                                            evidenceId = evidenceId,
+                                        )
+                                } else {
+                                    EvidenceAuthorizationRelations
+                                        .evidenceCanView(
+                                            identityId = identityId,
+                                            evidenceId = evidenceId,
+                                        )
+                                },
+                            failClosedGuardTuples =
+                                listOf(
+                                    evidenceWorkOrder,
+                                    assignedUser,
+                                ),
+                        ),
+                    )
+                if (allowed) {
+                    return true
+                }
+            }
+
+        assignments
+            .filter { it.targetType == "TEAM" }
+            .forEach { assignment ->
+                val teamId =
+                    assignment.targetId
+                if (
+                    !teamAuthority.isTeamMemberCurrent(
+                        identityId = identityId,
+                        teamId = teamId,
+                        at = clock.instant(),
+                    )
+                ) {
+                    return@forEach
+                }
+
+                val assignedTeam =
+                    EvidenceAuthorizationRelations
+                        .workOrderAssignedTeam(
+                            teamId = teamId,
+                            workOrderId = workOrderId,
+                        )
+                val teamMember =
+                    RoleTeamAuthorizationRelations
+                        .teamMember(
+                            identityId = identityId,
+                            teamId = teamId,
+                        )
+                val allowed =
+                    authorization.isAllowed(
+                        AuthorizationCheckRequest(
+                            checkTuple =
+                                if (relation == "can_download") {
+                                    EvidenceAuthorizationRelations
+                                        .evidenceCanDownload(
+                                            identityId = identityId,
+                                            evidenceId = evidenceId,
+                                        )
+                                } else {
+                                    EvidenceAuthorizationRelations
+                                        .evidenceCanView(
+                                            identityId = identityId,
+                                            evidenceId = evidenceId,
+                                        )
+                                },
+                            failClosedGuardTuples =
+                                listOf(
+                                    evidenceWorkOrder,
+                                    assignedTeam,
+                                    teamMember,
+                                ),
+                        ),
+                    )
+                if (allowed) {
+                    return true
+                }
+            }
+
+        return false
     }
 
     private fun canSubmitCompletion(
