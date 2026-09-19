@@ -306,6 +306,7 @@ jobs:
             --tests com.hiltech.server.approval.ApprovalEnginePostgresOpenFgaContractTest \
             --tests com.hiltech.server.approval.ApprovalModulithRecoveryContractTest \
             --tests com.hiltech.server.inbox.InboxWorkQueuePostgresOpenFgaContractTest \
+            --tests com.hiltech.server.inbox.InboxModulithRecoveryContractTest \
             --rerun-tasks
 
           if PGPASSWORD=hiltech-keycloak-local \
