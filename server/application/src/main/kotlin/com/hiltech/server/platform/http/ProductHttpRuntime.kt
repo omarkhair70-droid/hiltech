@@ -448,6 +448,13 @@ class ProductApiExceptionHandler(
                 HiltechRequestHeaders.CORRELATION_ID,
                 envelope.correlationId,
             )
-            .body(envelope)
+            .contentType(
+                MediaType.APPLICATION_JSON,
+            )
+            .body(
+                errorWriter.encode(
+                    envelope,
+                ),
+            )
     }
 }
