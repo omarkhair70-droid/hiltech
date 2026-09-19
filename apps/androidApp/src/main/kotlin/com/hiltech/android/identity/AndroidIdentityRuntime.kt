@@ -25,20 +25,30 @@ class AndroidIdentityRuntime(
 ) {
     private val store = AndroidEncryptedOidcStore(context)
 
-    private val session = NativeOidcSessionManager(
-        client = httpClient,
-        config = NativeOidcConfig(
-            issuer = oidcIssuer,
-            clientId = oidcClientId,
-        ),
-        tokenStore = store,
-    )
+    val configured: Boolean =
+        apiBaseUrl.isNotBlank() &&
+            oidcIssuer.isNotBlank() &&
+            oidcClientId.isNotBlank()
+
+    private val session =
+        if (configured) {
+            NativeOidcSessionManager(
+                client = httpClient,
+                config = NativeOidcConfig(
+                    issuer = oidcIssuer,
+                    clientId = oidcClientId,
+                ),
+                tokenStore = store,
+            )
+        } else {
+            null
+        }
 
     private val identityApi = IdentityApiClient(
         client = httpClient,
         baseUrl = apiBaseUrl,
         accessTokenProvider = {
-            session.currentAccessToken()
+            session?.currentAccessToken()
         },
         correlationIdProvider = {
             UUID.randomUUID().toString()
