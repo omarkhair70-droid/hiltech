@@ -41,3 +41,10 @@ hiltech:
       bucket: ${HILTECH_EVIDENCE_STORAGE_BUCKET:}
       upload-expiry-seconds: ${HILTECH_EVIDENCE_UPLOAD_EXPIRY_SECONDS:600}
       download-expiry-seconds: ${HILTECH_EVIDENCE_DOWNLOAD_EXPIRY_SECONDS:300}
+
+
+  observability:
+    enabled: ${HILTECH_OTEL_ENABLED:false}
+    service-name: ${HILTECH_OTEL_SERVICE_NAME:hiltech-server}
+    otlp-endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://127.0.0.1:4317}
+    exporter-timeout-ms: ${HILTECH_OTEL_EXPORTER_TIMEOUT_MS:5000}

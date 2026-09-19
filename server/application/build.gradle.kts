@@ -34,12 +34,17 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.aws.s3)
     implementation(libs.aws.urlconnection)
+    implementation(libs.opentelemetry.api)
+    implementation(libs.opentelemetry.sdk)
+    implementation(libs.opentelemetry.sdk.trace)
+    implementation(libs.opentelemetry.exporter.otlp)
     runtimeOnly(libs.postgresql)
 
     add(jooqCodegen.name, libs.jooq.codegen)
     add(jooqCodegen.name, libs.postgresql)
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation(libs.opentelemetry.sdk.testing)
     testImplementation("org.springframework.modulith:spring-modulith-starter-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
