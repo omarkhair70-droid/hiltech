@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 2 ACTIVE — SLICES 01–03 VERIFIED / MERGED / SLICE 04 MINIMAL APPROVAL FOUNDATION VERIFIED / READY TO MERGE**
+**PHASE 2 ACTIVE — SLICES 01–04 VERIFIED / MERGED / SLICE 05 VERIFIED / READY TO MERGE**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -50,7 +50,7 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–03 are VERIFIED and merged. Slice 03 merged at `9eaf7a2a18ac7138a08c6fcab43ab282b2449ce9`; post-merge Bootstrap run `35438086181` PASS. Slice 04 — Minimal Approval Engine Foundation — is now **VERIFIED / READY TO MERGE** on canonical tested code head `5daaf57509f2f3a4013a16717531a77325c59d98`. Exact-head verification is PASS: Bootstrap `35463223977`, Phase 2 shared runtime `35463223971`, OpenFGA `35463223968`, and Phase 1 OIDC `35463223979`. The verified foundation preserves HILTECH reality: routine Finance/Admin authority stays low-friction; explicit unusual/non-routine cases can escalate to configurable owner/final authority; no general numeric threshold table was invented; current authority is re-evaluated against live data; stale assignment/OpenFGA authority fails closed; decisions are version-bound, idempotent, concurrency-safe and durably published through Spring Modulith. Supplier/payment/bank-specific routing, broad delegation, emergency mode and richer domain policy remain phase-local and deferred. Named people are evidence examples only; executable authority resolves through configurable authority bindings and current relationships.
+Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–04 are VERIFIED and merged. Slice 05 — Inbox / Work Queue Foundation — is **VERIFIED / READY TO MERGE** on canonical tested code head `fa8d0660f49c6de0dc4bc1285976f6a06a4610cb`. Exact-head verification is PASS: Bootstrap `35467408783`, Phase 2 Shared Command Runtime `35467408781`, and Phase 1 Native OIDC Production Smoke `35467408788`. The verified foundation adds V0013 durable Inbox/read-state persistence, Approval-driven source-linked projection, current source/authority/OpenFGA revalidation, per-user idempotent read/unread, deterministic oldest-first Work Queue and newest-first Inbox pagination, full-precision opaque HMAC cursors with canonical Base64 tamper rejection, one shared Android/Windows client, and production Spring Modulith failed-publication recovery without duplicate effect. Source domains remain authoritative and Notification delivery remains deliberately separate.
 
 ---
 
@@ -81,8 +81,8 @@ Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–03 are VERI
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 2 ACTIVE | Slices 01–03 verified/merged; Slice 04 verified/ready to merge; Inbox / Work Queue contract is next |
-| Production code | PHASE 2 SLICE 04 VERIFIED | Minimal Approval Engine verified: configurable current authority, exception-only requests, exact-version decisions, OpenFGA fail-closed checks, deterministic assigned reads, shared client and durable Modulith recovery |
+| Implementation order | PHASE 2 ACTIVE | Slices 01–04 verified/merged; Slice 05 verified/ready to merge; Notification Abstraction is next after merge verification |
+| Production code | PHASE 2 SLICE 05 VERIFIED / READY TO MERGE | Inbox / Work Queue source-authorized attention foundation is exact-head verified; no Notification delivery was added |
 
 ---
 
@@ -234,14 +234,13 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Slices 01–03 are VERIFIED and merged; Slice 04 is VERIFIED on exact tested head `5daaf57509f2f3a4013a16717531a77325c59d98`. Do not reopen them without a genuine contradiction.
-2. Merge PR #33 only from the verified closure head after docs-only CI is green, then run post-merge main Bootstrap.
-3. Next shared capability is **Inbox / Work Queue Foundation** from the frozen Phase 2 order. Create its own reality/contract closure before implementation; do not turn Approval into Inbox and do not infer notification policy.
-4. Preserve the accepted Approval structural model: version-bound subject, explicit exception request, configurable current authority, immutable decision evidence, Audit separation and durable internal events.
-5. Do not hard-code Mohamed, Ahmed or any named person as product authority. Real people may be evidence examples; executable authority must resolve through configuration/relationships/policy.
-6. Richer supplier/payment/bank approval policy, amount bands, delegation/absence, emergency handling and subject-specific re-auth remain deferred to the phase that owns that real workflow.
-7. Continue consuming Reality Evidence/Facts by phase; people/process/integration facts remain evidence/configuration inputs, not hard-coded product roles.
-8. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
+1. Slices 01–04 are VERIFIED and merged. Slice 05 is VERIFIED on canonical tested code head `fa8d0660f49c6de0dc4bc1285976f6a06a4610cb`; do not reopen these slices without a genuine contradiction.
+2. Merge PR #34 only from the verified docs-closure head after its docs-only CI is green, then require post-merge main Bootstrap PASS.
+3. The next shared capability in the frozen Phase 2 order is **Notification Abstraction**. Create its own reality/contract closure before implementation; implementation is not authorized merely because Inbox exists.
+4. Preserve the separation: source-domain business truth != Inbox/Work Queue attention projection != Notification delivery.
+5. Do not invent push/email/SMS channel policy, quiet hours, notification preferences, digest cadence, escalation timers, priority scoring or broad recipient fan-out before the Notification closure.
+6. Continue consuming Reality Evidence/Facts by phase; people/process/integration facts remain evidence/configuration inputs, not hard-coded product roles.
+7. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 

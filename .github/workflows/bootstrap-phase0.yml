@@ -284,7 +284,9 @@ jobs:
           HILTECH_EVIDENCE_LIFECYCLE_CONTRACT_TEST: "1"
           HILTECH_ACTIVITY_CONTRACT_TEST: "1"
           HILTECH_APPROVAL_CONTRACT_TEST: "1"
+          HILTECH_INBOX_CONTRACT_TEST: "1"
           HILTECH_ACTIVITY_CURSOR_SIGNING_KEY: "activity-contract-signing-key-20260919-strong"
+          HILTECH_INBOX_CURSOR_SIGNING_KEY: "inbox-contract-signing-key-20260919-strong"
           HILTECH_FGA_ENABLED: "true"
           HILTECH_FGA_API_URL: http://127.0.0.1:8082
           AWS_ACCESS_KEY_ID: test
@@ -301,6 +303,10 @@ jobs:
             --tests com.hiltech.server.documents.EvidenceLifecyclePostgresOpenFgaS3ContractTest \
             --tests com.hiltech.server.activity.ActivityProjectionPostgresOpenFgaContractTest \
             --tests com.hiltech.server.activity.ActivityModulithRecoveryContractTest \
+            --tests com.hiltech.server.approval.ApprovalEnginePostgresOpenFgaContractTest \
+            --tests com.hiltech.server.approval.ApprovalModulithRecoveryContractTest \
+            --tests com.hiltech.server.inbox.InboxWorkQueuePostgresOpenFgaContractTest \
+            --tests com.hiltech.server.inbox.InboxModulithRecoveryContractTest \
             --rerun-tasks
 
           if PGPASSWORD=hiltech-keycloak-local \

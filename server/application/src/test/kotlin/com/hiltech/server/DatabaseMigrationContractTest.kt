@@ -41,7 +41,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(12, result.migrationsExecuted)
+        assertEquals(13, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -56,12 +56,13 @@ class DatabaseMigrationContractTest {
                         'authorization_relation_projection','authorization_projection_outbox',
                         'identity_session','activity_event','event_publication',
                         'approval_authority_binding','approval_policy_version','approval_request',
-                        'approval_step','approval_assignment','approval_decision'
+                        'approval_step','approval_assignment','approval_decision',
+                        'inbox_item','inbox_user_state'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(20, tables.getInt(1))
+                assertEquals(22, tables.getInt(1))
             }
 
             val orgId = UUID.randomUUID()
@@ -182,6 +183,170 @@ class DatabaseMigrationContractTest {
                     ps.setObject(4, now)
                     ps.setObject(5, userId)
                     ps.setObject(6, now)
+                    ps.executeUpdate()
+                }
+            }
+
+            val inboxItemId = UUID.randomUUID()
+            connection.prepareStatement(
+                """
+                INSERT INTO inbox_item (
+                    id,
+                    organization_id,
+                    producer_key,
+                    source_type,
+                    source_id,
+                    source_version,
+                    action_key,
+                    attention_class,
+                    target_principal_type,
+                    target_user_id,
+                    state,
+                    safe_title_code,
+                    source_event_id,
+                    created_at,
+                    updated_at,
+                    correlation_id,
+                    version
+                )
+                VALUES (
+                    ?, ?,
+                    'approval:contract:decide',
+                    'APPROVAL_REQUEST',
+                    ?, 1,
+                    'DECIDE_APPROVAL',
+                    'ACTION_REQUIRED',
+                    'USER', ?,
+                    'OPEN',
+                    'APPROVAL_DECISION_REQUIRED',
+                    ?, ?, ?,
+                    'corr-inbox-contract',
+                    1
+                )
+                """.trimIndent(),
+            ).use { ps ->
+                ps.setObject(1, inboxItemId)
+                ps.setObject(2, orgId)
+                ps.setObject(3, UUID.randomUUID())
+                ps.setObject(4, userId)
+                ps.setObject(5, UUID.randomUUID())
+                ps.setObject(6, now)
+                ps.setObject(7, now)
+                ps.executeUpdate()
+            }
+
+            connection.prepareStatement(
+                """
+                INSERT INTO inbox_user_state (
+                    inbox_item_id,
+                    user_identity_id,
+                    read_at,
+                    updated_at,
+                    version
+                )
+                VALUES (?, ?, NULL, ?, 1)
+                """.trimIndent(),
+            ).use { ps ->
+                ps.setObject(1, inboxItemId)
+                ps.setObject(2, userId)
+                ps.setObject(3, now)
+                ps.executeUpdate()
+            }
+
+            assertConstraintRejects(connection) {
+                prepareStatement(
+                    """
+                    INSERT INTO inbox_item (
+                        id,
+                        organization_id,
+                        producer_key,
+                        source_type,
+                        source_id,
+                        source_version,
+                        action_key,
+                        attention_class,
+                        target_principal_type,
+                        target_user_id,
+                        target_team_id,
+                        state,
+                        safe_title_code,
+                        source_event_id,
+                        created_at,
+                        updated_at,
+                        version
+                    )
+                    VALUES (
+                        ?, ?,
+                        'invalid:principal:shape',
+                        'APPROVAL_REQUEST',
+                        ?, 1,
+                        'DECIDE_APPROVAL',
+                        'ACTION_REQUIRED',
+                        'USER',
+                        ?, ?,
+                        'OPEN',
+                        'APPROVAL_DECISION_REQUIRED',
+                        ?, ?, ?, 1
+                    )
+                    """.trimIndent(),
+                ).use { ps ->
+                    ps.setObject(1, UUID.randomUUID())
+                    ps.setObject(2, orgId)
+                    ps.setObject(3, UUID.randomUUID())
+                    ps.setObject(4, userId)
+                    ps.setObject(5, UUID.randomUUID())
+                    ps.setObject(6, UUID.randomUUID())
+                    ps.setObject(7, now)
+                    ps.setObject(8, now)
+                    ps.executeUpdate()
+                }
+            }
+
+            assertConstraintRejects(connection) {
+                prepareStatement(
+                    """
+                    INSERT INTO inbox_item (
+                        id,
+                        organization_id,
+                        producer_key,
+                        source_type,
+                        source_id,
+                        source_version,
+                        action_key,
+                        attention_class,
+                        target_principal_type,
+                        target_user_id,
+                        state,
+                        safe_title_code,
+                        source_event_id,
+                        created_at,
+                        updated_at,
+                        resolved_at,
+                        version
+                    )
+                    VALUES (
+                        ?, ?,
+                        'invalid:open:resolved',
+                        'APPROVAL_REQUEST',
+                        ?, 1,
+                        'DECIDE_APPROVAL',
+                        'ACTION_REQUIRED',
+                        'USER',
+                        ?,
+                        'OPEN',
+                        'APPROVAL_DECISION_REQUIRED',
+                        ?, ?, ?, ?, 1
+                    )
+                    """.trimIndent(),
+                ).use { ps ->
+                    ps.setObject(1, UUID.randomUUID())
+                    ps.setObject(2, orgId)
+                    ps.setObject(3, UUID.randomUUID())
+                    ps.setObject(4, userId)
+                    ps.setObject(5, UUID.randomUUID())
+                    ps.setObject(6, now)
+                    ps.setObject(7, now)
+                    ps.setObject(8, now)
                     ps.executeUpdate()
                 }
             }

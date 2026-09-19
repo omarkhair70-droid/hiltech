@@ -20,14 +20,19 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 03 merge commit: `9eaf7a2a18ac7138a08c6fcab43ab282b2449ce9`
 - Slice 03 post-merge Bootstrap run: `35438086181` — **PASS**
 - Slice 03 contract: `docs/13-delivery/phase2/03_ACTIVITY_EVENTS_FOUNDATION_SLICE_2026-09-19.md`
-- Phase 2 Slice 04: **Minimal Approval Engine Foundation — VERIFIED / READY TO MERGE**
-- Slice 04 branch / PR: `phase2/approval-engine-foundation-20260919` / **#33**
-- Slice 04 canonical tested code head: `5daaf57509f2f3a4013a16717531a77325c59d98`
-- Slice 04 verification runs: Bootstrap `35463223977` / Phase 2 `35463223971` / OpenFGA `35463223968` / Phase 1 OIDC `35463223979` — **PASS**
-- Slice 04 reality gate: `docs/13-delivery/phase2/04_APPROVAL_ENGINE_AUTHORITY_REALITY_CLOSURE_2026-09-19.md` — **PASS**
+- Phase 2 Slice 04: **Minimal Approval Engine Foundation — VERIFIED / MERGED**
+- Slice 04 merge commit: `b6aad197bb4a9e8200717ad9801092dc2cabbb5b`
+- Slice 04 post-merge Bootstrap run `35464733404` — **PASS**
+- Slice 04 post-merge OpenFGA run `35464733333` — **PASS**
 - Slice 04 implementation contract: `docs/13-delivery/phase2/04_APPROVAL_ENGINE_FOUNDATION_SLICE_2026-09-19.md` — **VERIFIED**
-- Reality rule preserved in production: routine authority remains low-friction; only explicit exception/escalation enters Approval. No general numeric threshold table is assumed.
-- Next shared capability after Slice 04 merge: **Inbox / Work Queue Foundation**. It requires its own contract/reality closure before implementation; do not infer approval semantics into Inbox.
+- Phase 2 Slice 05: **Inbox / Work Queue Foundation — VERIFIED / READY TO MERGE**
+- Slice 05 branch / PR: `phase2/inbox-work-queue-foundation-20260919` / **#34**
+- Slice 05 canonical tested code head: `fa8d0660f49c6de0dc4bc1285976f6a06a4610cb`
+- Slice 05 verification runs: Bootstrap `35467408783` / Phase 2 `35467408781` / Phase 1 OIDC `35467408788` — **PASS**
+- Slice 05 reality gate: `docs/13-delivery/phase2/05_INBOX_WORK_QUEUE_REALITY_CLOSURE_2026-09-19.md` — **PASS**
+- Slice 05 implementation contract: `docs/13-delivery/phase2/05_INBOX_WORK_QUEUE_FOUNDATION_SLICE_2026-09-19.md` — **VERIFIED**
+- Slice 05 rule preserved in production: source domains stay authoritative; Work Queue is current actionable attention, Inbox is durable attention/read state, and Notifications remain a separate delivery concern.
+- Next shared capability after Slice 05 merge verification: **Notification Abstraction**. It requires its own reality/contract closure before implementation; do not infer channel, preference, quiet-hours, escalation or delivery policy from Inbox.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**

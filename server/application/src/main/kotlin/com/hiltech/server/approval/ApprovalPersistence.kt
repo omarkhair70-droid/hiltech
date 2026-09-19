@@ -60,6 +60,21 @@ data class ApprovalReadRecord(
     val assignmentPrincipalId: UUID,
 )
 
+data class ApprovalAttentionSnapshot(
+    val requestId: UUID,
+    val organizationId: UUID,
+    val requestVersion: Long,
+    val requestState: ApprovalRequestState,
+    val reasonCode: String,
+    val safeReasonSummary: String?,
+    val createdAt: Instant,
+    val completedAt: Instant?,
+    val authorityKey: String,
+    val assignmentPrincipalType: ApprovalPrincipalType,
+    val assignmentPrincipalId: UUID,
+    val assignmentState: String,
+)
+
 data class ApprovalDecisionContext(
     val requestId: UUID,
     val organizationId: UUID,
@@ -111,6 +126,10 @@ interface ApprovalPersistencePort {
     fun loadPendingAssignedRequest(
         approvalRequestId: UUID,
     ): ApprovalReadRecord?
+
+    fun loadAttentionSnapshot(
+        approvalRequestId: UUID,
+    ): ApprovalAttentionSnapshot?
 
     fun findPendingAssignedRequests(
         actorUserId: UUID,
@@ -468,6 +487,107 @@ class JdbcApprovalPersistence(
             at,
         )
     }
+
+    override fun loadAttentionSnapshot(
+        approvalRequestId: UUID,
+    ): ApprovalAttentionSnapshot? =
+        jdbc.query(
+            """
+            SELECT
+                r.id AS request_id,
+                r.organization_id,
+                r.version AS request_version,
+                r.state AS request_state,
+                r.reason_code,
+                r.safe_reason_summary,
+                r.created_at,
+                r.completed_at,
+                s.authority_key,
+                a.principal_type,
+                a.principal_user_id,
+                a.principal_team_id,
+                a.state AS assignment_state
+            FROM approval_request r
+            JOIN approval_step s
+              ON s.approval_request_id = r.id
+             AND s.sequence_number = 1
+            JOIN approval_assignment a
+              ON a.approval_request_id = r.id
+             AND a.approval_step_id = s.id
+            WHERE r.id = ?
+            """.trimIndent(),
+            { rs, _ ->
+                val principalType =
+                    ApprovalPrincipalType.valueOf(
+                        rs.getString(
+                            "principal_type",
+                        ),
+                    )
+                ApprovalAttentionSnapshot(
+                    requestId =
+                        rs.getObject(
+                            "request_id",
+                            UUID::class.java,
+                        ),
+                    organizationId =
+                        rs.getObject(
+                            "organization_id",
+                            UUID::class.java,
+                        ),
+                    requestVersion =
+                        rs.getLong(
+                            "request_version",
+                        ),
+                    requestState =
+                        ApprovalRequestState.valueOf(
+                            rs.getString(
+                                "request_state",
+                            ),
+                        ),
+                    reasonCode =
+                        rs.getString(
+                            "reason_code",
+                        ),
+                    safeReasonSummary =
+                        rs.getString(
+                            "safe_reason_summary",
+                        ),
+                    createdAt =
+                        rs.getObject(
+                            "created_at",
+                            OffsetDateTime::class.java,
+                        ).toInstant(),
+                    completedAt =
+                        rs.getObject(
+                            "completed_at",
+                            OffsetDateTime::class.java,
+                        )?.toInstant(),
+                    authorityKey =
+                        rs.getString(
+                            "authority_key",
+                        ),
+                    assignmentPrincipalType =
+                        principalType,
+                    assignmentPrincipalId =
+                        rs.getObject(
+                            if (
+                                principalType ==
+                                ApprovalPrincipalType.USER
+                            ) {
+                                "principal_user_id"
+                            } else {
+                                "principal_team_id"
+                            },
+                            UUID::class.java,
+                        ),
+                    assignmentState =
+                        rs.getString(
+                            "assignment_state",
+                        ),
+                )
+            },
+            approvalRequestId,
+        ).singleOrNull()
 
     override fun loadPendingAssignedRequest(
         approvalRequestId: UUID,
