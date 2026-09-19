@@ -49,6 +49,7 @@ data class EmployeeDirectoryItemDto(
 @Serializable
 data class EmployeeDirectoryDto(
     val items: List<EmployeeDirectoryItemDto>,
+    val canManagePeople: Boolean,
     val correlationId: String,
 )
 
