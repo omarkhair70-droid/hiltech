@@ -1,7 +1,7 @@
 # 32 — Bootstrap Keycloak / OIDC Server Adapter
 
 Date: 2026-09-19
-Status: **IMPLEMENTED / CI VERIFICATION PENDING**
+Status: **PASS / BOOTSTRAP VERIFIED**
 
 ## Purpose
 
@@ -86,7 +86,17 @@ Unit tests prove:
 - identity resolution is issuer + subject,
 - missing subject fails closed.
 
-CI must additionally prove existing module, Android, Desktop, DB and jOOQ gates remain green.
+CI verification completed successfully.
+
+Run `35407526674` (#22) proved:
+- Shared tests PASS,
+- committed Room schema PASS,
+- Android debug build PASS,
+- Desktop compile PASS,
+- Server tests PASS,
+- PostgreSQL migrations/constraints PASS,
+- jOOQ generation/verification PASS,
+- server compile against generated jOOQ PASS.
 
 ## Next
 
