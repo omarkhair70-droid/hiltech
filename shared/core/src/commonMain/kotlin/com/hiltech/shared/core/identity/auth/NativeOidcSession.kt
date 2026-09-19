@@ -70,6 +70,7 @@ data class NativeOidcConfig(
         get() = issuer.trimEnd('/')
 }
 
+@Serializable
 data class NativeAuthorizationAttempt(
     val redirectUri: String,
     val state: String,
