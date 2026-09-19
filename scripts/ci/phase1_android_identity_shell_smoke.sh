@@ -9,6 +9,7 @@ APK="$(find apps/androidApp/build/outputs/apk/debug -name '*-debug.apk' | head -
 test -n "$APK"
 mkdir -p "$REPORT_DIR"
 adb install -r "$APK" >/dev/null
+adb shell pm clear "$PKG" >/dev/null
 
 dump_ui () {
   adb shell uiautomator dump /sdcard/hiltech-window.xml >/dev/null
