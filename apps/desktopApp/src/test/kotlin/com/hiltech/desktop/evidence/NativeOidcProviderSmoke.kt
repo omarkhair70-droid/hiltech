@@ -13,7 +13,7 @@ import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
 private const val ANDROID_REDIRECT_URI =
@@ -113,7 +113,8 @@ private suspend fun runWindowsLoopbackSmoke(
     session: NativeOidcSessionManager,
     smokeDirectory: Path,
 ) {
-    val callbackFuture = CompletableFuture<String>()
+    val callbacks =
+        LinkedBlockingQueue<String>()
     val server = HttpServer.create(
         InetSocketAddress(
             InetAddress.getByName("127.0.0.1"),
@@ -122,13 +123,14 @@ private suspend fun runWindowsLoopbackSmoke(
         0,
     )
     val port = server.address.port
-    val redirectUri = "http://127.0.0.1:$port/callback"
+    val redirectUri =
+        "http://127.0.0.1:$port/callback"
 
     server.createContext("/callback") { exchange ->
         handleLoopbackCallback(
             exchange = exchange,
             port = port,
-            callbackFuture = callbackFuture,
+            callbacks = callbacks,
         )
     }
     server.start()
@@ -138,14 +140,21 @@ private suspend fun runWindowsLoopbackSmoke(
             redirectUri = redirectUri,
         )
         Files.writeString(
-            smokeDirectory.resolve("windows-auth-url.txt"),
+            smokeDirectory.resolve(
+                "windows-auth-url.txt",
+            ),
             attempt.authorizationUrl,
         )
 
-        val callbackUri = callbackFuture.get(
-            90,
-            TimeUnit.SECONDS,
-        )
+        val callbackUri =
+            requireNotNull(
+                callbacks.poll(
+                    90,
+                    TimeUnit.SECONDS,
+                ),
+            ) {
+                "Timed out waiting for normal Windows OIDC callback."
+            }
         val tokens = session.completeAuthorization(
             callbackUri = callbackUri,
             attempt = attempt,
@@ -153,6 +162,63 @@ private suspend fun runWindowsLoopbackSmoke(
 
         require(tokens.accessToken.isNotBlank())
         require(!tokens.refreshToken.isNullOrBlank())
+        val normalIdToken =
+            requireNotNull(tokens.idToken)
+                .takeIf { it.isNotBlank() }
+                ?: error(
+                    "Normal OIDC login did not return an ID token.",
+                )
+        Files.writeString(
+            smokeDirectory.resolve(
+                "windows-id-token.txt",
+            ),
+            normalIdToken,
+        )
+
+        val reauthAttempt =
+            session.beginAuthorization(
+                redirectUri = redirectUri,
+                forceReauthentication = true,
+            )
+        Files.writeString(
+            smokeDirectory.resolve(
+                "windows-reauth-url.txt",
+            ),
+            reauthAttempt.authorizationUrl,
+        )
+
+        val reauthCallback =
+            requireNotNull(
+                callbacks.poll(
+                    90,
+                    TimeUnit.SECONDS,
+                ),
+            ) {
+                "Timed out waiting for Windows re-auth callback."
+            }
+        val reauthTokens =
+            session.completeAuthorization(
+                callbackUri = reauthCallback,
+                attempt = reauthAttempt,
+            )
+        val reauthIdToken =
+            requireNotNull(
+                reauthTokens.idToken,
+            ).takeIf { it.isNotBlank() }
+                ?: error(
+                    "Forced re-auth did not return an ID token.",
+                )
+
+        Files.writeString(
+            smokeDirectory.resolve(
+                "windows-reauth-id-token.txt",
+            ),
+            reauthIdToken,
+        )
+        println(
+            "HILTECH_PHASE1_REAUTH_PROVIDER_PASS " +
+                "prompt_login=PASS max_age_zero=PASS id_token=PASS",
+        )
     } finally {
         server.stop(0)
     }
@@ -161,7 +227,7 @@ private suspend fun runWindowsLoopbackSmoke(
 private fun handleLoopbackCallback(
     exchange: HttpExchange,
     port: Int,
-    callbackFuture: CompletableFuture<String>,
+    callbacks: LinkedBlockingQueue<String>,
 ) {
     try {
         if (
@@ -195,12 +261,10 @@ private fun handleLoopbackCallback(
             it.write(body)
         }
 
-        callbackFuture.complete(
+        callbacks.put(
             "http://127.0.0.1:$port" +
                 exchange.requestURI.toString(),
         )
-    } catch (failure: Throwable) {
-        callbackFuture.completeExceptionally(failure)
     } finally {
         exchange.close()
     }
