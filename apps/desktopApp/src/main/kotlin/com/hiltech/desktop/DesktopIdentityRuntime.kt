@@ -112,12 +112,29 @@ class DesktopIdentityRuntime(
                 )
             }
 
-            activeSession.completeAuthorization(
-                callbackUri = callbackUri,
-                attempt = attempt,
-            )
+            val tokens =
+                activeSession.completeAuthorization(
+                    callbackUri = callbackUri,
+                    attempt = attempt,
+                )
 
-            return bootstrapCurrentIdentity()
+            val identity = bootstrapCurrentIdentity()
+
+            if (attempt.forceReauthentication) {
+                val idToken = tokens.idToken
+                    ?.takeIf { it.isNotBlank() }
+                    ?: throw NativeOidcException(
+                        code = "OIDC_ID_TOKEN_MISSING",
+                        message =
+                            "Fresh authentication did not return an ID token.",
+                    )
+                identityApi.completeReauthentication(
+                    idToken = idToken,
+                    installationId = installationId,
+                )
+            }
+
+            return identity
         } finally {
             server.stop(0)
         }
