@@ -4,6 +4,9 @@ import com.hiltech.shared.core.identity.DeviceRegistrationDto
 import com.hiltech.shared.core.identity.IdentityApiClient
 import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
+import com.hiltech.shared.core.identity.IdentityDeviceSecurityDto
+import com.hiltech.shared.core.identity.IdentitySecuritySnapshot
+import com.hiltech.shared.core.identity.IdentitySessionDto
 import com.hiltech.shared.core.identity.auth.InMemoryOidcTokenStore
 import com.hiltech.shared.core.identity.auth.NativeOidcConfig
 import com.hiltech.shared.core.identity.auth.NativeOidcException
@@ -150,6 +153,41 @@ class DesktopIdentityRuntime(
             return null
         }
         return bootstrapCurrentIdentity()
+    }
+
+    suspend fun loadSecuritySnapshot():
+        IdentitySecuritySnapshot {
+        ensureConfigured()
+        return IdentitySecuritySnapshot(
+            sessions =
+                identityApi.sessions(
+                    installationId,
+                ),
+            devices =
+                identityApi.devices(
+                    installationId,
+                ),
+        )
+    }
+
+    suspend fun revokeSession(
+        sessionId: String,
+    ): IdentitySessionDto {
+        ensureConfigured()
+        return identityApi.revokeSession(
+            sessionId = sessionId,
+            installationId = installationId,
+        )
+    }
+
+    suspend fun revokeDevice(
+        deviceId: String,
+    ): IdentityDeviceSecurityDto {
+        ensureConfigured()
+        return identityApi.revokeDevice(
+            deviceId = deviceId,
+            installationId = installationId,
+        )
     }
 
     suspend fun logout() {
