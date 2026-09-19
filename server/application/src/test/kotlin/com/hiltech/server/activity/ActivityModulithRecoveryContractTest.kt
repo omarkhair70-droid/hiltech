@@ -13,7 +13,6 @@ import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
-import org.springframework.context.ApplicationEventPublisher
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.modulith.events.FailedEventPublications
 import org.springframework.modulith.events.ResubmissionOptions
@@ -112,10 +111,6 @@ class ActivityModulithRecoveryContractTest {
                 context.getBean(
                     JdbcTemplate::class.java,
                 )
-            val publisher =
-                context.getBean(
-                    ApplicationEventPublisher::class.java,
-                )
             val transactionManager =
                 context.getBean(
                     PlatformTransactionManager::class.java,
@@ -164,7 +159,7 @@ class ActivityModulithRecoveryContractTest {
                 )
 
             transaction.executeWithoutResult {
-                publisher.publishEvent(
+                context.publishEvent(
                     event,
                 )
             }
