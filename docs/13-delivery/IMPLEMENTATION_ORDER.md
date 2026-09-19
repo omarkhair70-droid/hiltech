@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.0 FOR FIRST PRODUCTION SLICE / REPOSITORY BOOTSTRAP NEXT**
+Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 AUTHORIZED**
 
 ## Core Rule
 
@@ -406,7 +406,7 @@ The Project/Work/Warehouse/Field structural contracts and representative reality
 
 The rendered design proof and formal First-Slice Freeze Review now PASS.
 
-The first-slice implementation order is authorized to enter Repository Bootstrap.
+The first-slice implementation order has completed Repository Bootstrap and is authorized to enter Phase 1 business implementation.
 
 ---
 
@@ -444,9 +444,9 @@ Closed:
 Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
 
 Immediate next execution:
-**PHASE 0 — Repository / Engineering Foundation**.
+**PHASE 1 — Identity, Organization, Permissions Foundation**.
 
-No production code starts merely because the technical spike gate is green.
+Phase 0 engineering foundation is verified and merged. Business production implementation now proceeds by complete vertical slice.
 
 
 ---
