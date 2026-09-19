@@ -101,6 +101,9 @@ jobs:
           REQUESTS_CA_BUNDLE: ${{ runner.temp }}/keycloak-tls/cert.pem
         run: python3 scripts/ci/phase1_native_oidc_browser.py setup
 
+      - name: Compile provider smoke harness before timed browser checks
+        run: ./gradlew :apps:desktopApp:testClasses --stacktrace
+
       - name: Android private-use callback through production OIDC session core
         shell: bash
         env:
