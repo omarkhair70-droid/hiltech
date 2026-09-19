@@ -10,6 +10,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 class IdentityApiException(
@@ -58,6 +59,89 @@ class IdentityApiClient(
             ),
             decode = {
                 json.decodeFromString<IdentityDeviceDto>(it)
+            },
+        )
+
+    suspend fun completeReauthentication(
+        idToken: String,
+        installationId: String,
+    ): IdentitySessionDto =
+        request(
+            method = HttpMethod.Post,
+            path = "/v1/me/reauth/complete",
+            installationId = installationId,
+            requestBody = json.encodeToString(
+                ReauthenticationCompletionDto.serializer(),
+                ReauthenticationCompletionDto(
+                    idToken = idToken,
+                ),
+            ),
+            decode = {
+                json.decodeFromString<IdentitySessionDto>(it)
+            },
+        )
+
+    suspend fun sessions(
+        installationId: String,
+    ): List<IdentitySessionDto> =
+        request(
+            method = HttpMethod.Get,
+            path = "/v1/me/sessions",
+            installationId = installationId,
+            requestBody = null,
+            decode = {
+                json.decodeFromString(
+                    ListSerializer(
+                        IdentitySessionDto.serializer(),
+                    ),
+                    it,
+                )
+            },
+        )
+
+    suspend fun devices(
+        installationId: String,
+    ): List<IdentityDeviceSecurityDto> =
+        request(
+            method = HttpMethod.Get,
+            path = "/v1/me/devices",
+            installationId = installationId,
+            requestBody = null,
+            decode = {
+                json.decodeFromString(
+                    ListSerializer(
+                        IdentityDeviceSecurityDto.serializer(),
+                    ),
+                    it,
+                )
+            },
+        )
+
+    suspend fun revokeSession(
+        sessionId: String,
+        installationId: String,
+    ): IdentitySessionDto =
+        request(
+            method = HttpMethod.Post,
+            path = "/v1/me/sessions/$sessionId/revoke",
+            installationId = installationId,
+            requestBody = null,
+            decode = {
+                json.decodeFromString<IdentitySessionDto>(it)
+            },
+        )
+
+    suspend fun revokeDevice(
+        deviceId: String,
+        installationId: String,
+    ): IdentityDeviceSecurityDto =
+        request(
+            method = HttpMethod.Post,
+            path = "/v1/me/devices/$deviceId/revoke",
+            installationId = installationId,
+            requestBody = null,
+            decode = {
+                json.decodeFromString<IdentityDeviceSecurityDto>(it)
             },
         )
 
