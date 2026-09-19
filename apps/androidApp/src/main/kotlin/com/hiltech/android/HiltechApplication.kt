@@ -7,7 +7,9 @@ import com.hiltech.android.sync.AndroidSessionTokenProvider
 import com.hiltech.android.sync.AndroidSyncRuntime
 import com.hiltech.shared.core.local.buildHiltechLocalDatabase
 import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
+import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
+import com.hiltech.shared.core.people.PeopleApiClient
 import java.util.UUID
 
 class HiltechApplication : Application() {
@@ -35,6 +37,23 @@ class HiltechApplication : Application() {
             installationId = installationId,
             clientVersion = BuildConfig.VERSION_NAME,
         )
+    }
+
+    private val productApi: HiltechApiClient by lazy {
+        HiltechApiClient(
+            client = httpClient,
+            baseUrl = BuildConfig.HILTECH_API_BASE_URL,
+            accessTokenProvider = {
+                identityRuntime.currentAccessToken()
+            },
+            correlationIdProvider = {
+                UUID.randomUUID().toString()
+            },
+        )
+    }
+
+    val peopleApi: PeopleApiClient by lazy {
+        PeopleApiClient(productApi)
     }
 
     val syncRuntime: AndroidSyncRuntime by lazy {
