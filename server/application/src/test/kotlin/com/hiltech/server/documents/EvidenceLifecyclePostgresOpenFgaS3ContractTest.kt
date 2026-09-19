@@ -279,6 +279,21 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                 ) ?: 0
             assertTrue(auditCount >= 4)
 
+            val downloadAuditCount =
+                fixture.jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM audit_event
+                    WHERE action =
+                        'EVIDENCE_DOWNLOAD_TARGET_ISSUED'
+                    """.trimIndent(),
+                    Int::class.java,
+                ) ?: 0
+            assertTrue(
+                downloadAuditCount >= 1,
+                "Private Evidence download issuance must be audited.",
+            )
+
             val leaked =
                 fixture.jdbc.queryForObject(
                     """
@@ -580,6 +595,33 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
         assertEquals(
             "QUARANTINED",
             finalized.evidence.storageState,
+        )
+
+        drain(
+            fixture.processor,
+            at.plusSeconds(1),
+        )
+
+        val denied =
+            assertThrows<
+                ProductApiException
+            > {
+                fixture.service.downloadTarget(
+                    actorIdentityId =
+                        fixture.actorId,
+                    evidenceId =
+                        UUID.fromString(
+                            reserve.response
+                                .evidence
+                                .evidenceId,
+                        ),
+                    correlationId =
+                        "corr-quarantined-download",
+                )
+            }
+        assertEquals(
+            "EVIDENCE_NOT_DOWNLOADABLE",
+            denied.code,
         )
     }
 
