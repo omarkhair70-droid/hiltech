@@ -42,6 +42,24 @@ data class ApprovalRequestCreation(
     val createdAt: Instant,
 )
 
+data class ApprovalReadRecord(
+    val requestId: UUID,
+    val organizationId: UUID,
+    val subjectType: String,
+    val subjectId: UUID,
+    val subjectVersion: Long,
+    val policyKey: String,
+    val policyVersion: Int,
+    val requesterUserId: UUID,
+    val state: ApprovalRequestState,
+    val reasonCode: String,
+    val safeReasonSummary: String?,
+    val createdAt: Instant,
+    val authorityKey: String,
+    val assignmentPrincipalType: ApprovalPrincipalType,
+    val assignmentPrincipalId: UUID,
+)
+
 data class ApprovalDecisionContext(
     val requestId: UUID,
     val organizationId: UUID,
@@ -89,6 +107,19 @@ interface ApprovalPersistencePort {
     fun insertExceptionRequest(
         creation: ApprovalRequestCreation,
     )
+
+    fun loadPendingAssignedRequest(
+        approvalRequestId: UUID,
+    ): ApprovalReadRecord?
+
+    fun findPendingAssignedRequests(
+        actorUserId: UUID,
+        authorityAt: Instant,
+        asOf: Instant,
+        afterCreatedAt: Instant?,
+        afterRequestId: UUID?,
+        limit: Int,
+    ): List<ApprovalReadRecord>
 
     fun loadDecisionContextForUpdate(
         approvalRequestId: UUID,
@@ -438,6 +469,220 @@ class JdbcApprovalPersistence(
         )
     }
 
+    override fun loadPendingAssignedRequest(
+        approvalRequestId: UUID,
+    ): ApprovalReadRecord? =
+        jdbc.query(
+            """
+            SELECT
+                r.id AS request_id,
+                r.organization_id,
+                r.subject_type,
+                r.subject_id,
+                r.subject_version,
+                r.policy_key,
+                r.policy_version,
+                r.requester_user_id,
+                r.state AS request_state,
+                r.reason_code,
+                r.safe_reason_summary,
+                r.created_at,
+                s.authority_key,
+                a.principal_type,
+                a.principal_user_id,
+                a.principal_team_id
+            FROM approval_request r
+            JOIN approval_step s
+              ON s.approval_request_id = r.id
+             AND s.sequence_number = 1
+             AND s.state = 'PENDING'
+            JOIN approval_assignment a
+              ON a.approval_request_id = r.id
+             AND a.approval_step_id = s.id
+             AND a.state = 'ASSIGNED'
+            WHERE r.id = ?
+              AND r.state = 'PENDING'
+            """.trimIndent(),
+            approvalReadMapper,
+            approvalRequestId,
+        ).singleOrNull()
+
+    override fun findPendingAssignedRequests(
+        actorUserId: UUID,
+        authorityAt: Instant,
+        asOf: Instant,
+        afterCreatedAt: Instant?,
+        afterRequestId: UUID?,
+        limit: Int,
+    ): List<ApprovalReadRecord> {
+        require(limit in 1..101)
+        require(
+            (afterCreatedAt == null) ==
+                (afterRequestId == null),
+        )
+
+        val baseSql =
+            """
+            SELECT
+                r.id AS request_id,
+                r.organization_id,
+                r.subject_type,
+                r.subject_id,
+                r.subject_version,
+                r.policy_key,
+                r.policy_version,
+                r.requester_user_id,
+                r.state AS request_state,
+                r.reason_code,
+                r.safe_reason_summary,
+                r.created_at,
+                s.authority_key,
+                a.principal_type,
+                a.principal_user_id,
+                a.principal_team_id
+            FROM approval_request r
+            JOIN approval_step s
+              ON s.approval_request_id = r.id
+             AND s.sequence_number = 1
+             AND s.state = 'PENDING'
+            JOIN approval_assignment a
+              ON a.approval_request_id = r.id
+             AND a.approval_step_id = s.id
+             AND a.state = 'ASSIGNED'
+            JOIN approval_authority_binding b
+              ON b.organization_id = r.organization_id
+             AND b.authority_key = s.authority_key
+             AND b.active = true
+             AND b.effective_from <= ?
+             AND (
+                 b.effective_to IS NULL
+                 OR b.effective_to > ?
+             )
+             AND b.principal_type = a.principal_type
+             AND (
+                 (
+                     b.principal_type = 'USER'
+                     AND b.principal_user_id = a.principal_user_id
+                 )
+                 OR
+                 (
+                     b.principal_type = 'TEAM'
+                     AND b.principal_team_id = a.principal_team_id
+                 )
+             )
+            WHERE r.state = 'PENDING'
+              AND r.created_at <= ?
+              AND EXISTS (
+                  SELECT 1
+                  FROM organization_membership om
+                  JOIN user_identity ui
+                    ON ui.id = om.user_identity_id
+                  WHERE om.organization_id = r.organization_id
+                    AND om.user_identity_id = ?
+                    AND om.state = 'ACTIVE'
+                    AND ui.status = 'ACTIVE'
+                    AND om.valid_from <= ?
+                    AND (
+                        om.valid_until IS NULL
+                        OR om.valid_until > ?
+                    )
+              )
+              AND (
+                  (
+                      a.principal_type = 'USER'
+                      AND a.principal_user_id = ?
+                  )
+                  OR
+                  (
+                      a.principal_type = 'TEAM'
+                      AND EXISTS (
+                          SELECT 1
+                          FROM team t
+                          JOIN team_membership tm
+                            ON tm.team_id = t.id
+                          WHERE t.id = a.principal_team_id
+                            AND t.organization_id = r.organization_id
+                            AND t.active = true
+                            AND tm.user_identity_id = ?
+                            AND tm.valid_from <= ?
+                            AND (
+                                tm.valid_until IS NULL
+                                OR tm.valid_until > ?
+                            )
+                      )
+                  )
+              )
+            """.trimIndent()
+
+        val authorityOffset =
+            authorityAt.atOffset(
+                ZoneOffset.UTC,
+            )
+        val asOfOffset =
+            asOf.atOffset(
+                ZoneOffset.UTC,
+            )
+
+        val args =
+            mutableListOf<Any>(
+                authorityOffset,
+                authorityOffset,
+                asOfOffset,
+                actorUserId,
+                authorityOffset,
+                authorityOffset,
+                actorUserId,
+                actorUserId,
+                authorityOffset,
+                authorityOffset,
+            )
+
+        val pagePredicate =
+            if (
+                afterCreatedAt != null &&
+                afterRequestId != null
+            ) {
+                args +=
+                    afterCreatedAt.atOffset(
+                        ZoneOffset.UTC,
+                    )
+                args +=
+                    afterCreatedAt.atOffset(
+                        ZoneOffset.UTC,
+                    )
+                args += afterRequestId
+                """
+                  AND (
+                      r.created_at < ?
+                      OR (
+                          r.created_at = ?
+                          AND r.id < ?
+                      )
+                  )
+                """.trimIndent()
+            } else {
+                ""
+            }
+
+        args += limit
+
+        return jdbc.query(
+            baseSql +
+                "
+" +
+                pagePredicate +
+                """
+                
+                ORDER BY
+                    r.created_at DESC,
+                    r.id DESC
+                LIMIT ?
+                """.trimIndent(),
+            approvalReadMapper,
+            *args.toTypedArray(),
+        )
+    }
+
     override fun loadDecisionContextForUpdate(
         approvalRequestId: UUID,
     ): ApprovalDecisionContext? =
@@ -743,6 +988,91 @@ class JdbcApprovalPersistence(
             ) == 1,
         )
     }
+
+    private val approvalReadMapper =
+        { rs: java.sql.ResultSet, _: Int ->
+            val principalType =
+                ApprovalPrincipalType.valueOf(
+                    rs.getString(
+                        "principal_type",
+                    ),
+                )
+            ApprovalReadRecord(
+                requestId =
+                    rs.getObject(
+                        "request_id",
+                        UUID::class.java,
+                    ),
+                organizationId =
+                    rs.getObject(
+                        "organization_id",
+                        UUID::class.java,
+                    ),
+                subjectType =
+                    rs.getString(
+                        "subject_type",
+                    ),
+                subjectId =
+                    rs.getObject(
+                        "subject_id",
+                        UUID::class.java,
+                    ),
+                subjectVersion =
+                    rs.getLong(
+                        "subject_version",
+                    ),
+                policyKey =
+                    rs.getString(
+                        "policy_key",
+                    ),
+                policyVersion =
+                    rs.getInt(
+                        "policy_version",
+                    ),
+                requesterUserId =
+                    rs.getObject(
+                        "requester_user_id",
+                        UUID::class.java,
+                    ),
+                state =
+                    ApprovalRequestState.valueOf(
+                        rs.getString(
+                            "request_state",
+                        ),
+                    ),
+                reasonCode =
+                    rs.getString(
+                        "reason_code",
+                    ),
+                safeReasonSummary =
+                    rs.getString(
+                        "safe_reason_summary",
+                    ),
+                createdAt =
+                    rs.getObject(
+                        "created_at",
+                        OffsetDateTime::class.java,
+                    ).toInstant(),
+                authorityKey =
+                    rs.getString(
+                        "authority_key",
+                    ),
+                assignmentPrincipalType =
+                    principalType,
+                assignmentPrincipalId =
+                    rs.getObject(
+                        if (
+                            principalType ==
+                            ApprovalPrincipalType.USER
+                        ) {
+                            "principal_user_id"
+                        } else {
+                            "principal_team_id"
+                        },
+                        UUID::class.java,
+                    ),
+            )
+        }
 
     private fun authorityPrincipalBelongsToOrganization(
         authority: ApprovalAuthorityBindingSnapshot,
