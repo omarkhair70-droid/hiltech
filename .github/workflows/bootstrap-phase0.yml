@@ -124,7 +124,7 @@ jobs:
           HILTECH_DB_USER: hiltech
           HILTECH_DB_PASSWORD: hiltech
           HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
-        run: ./gradlew :server:application:test --tests com.hiltech.server.DatabaseMigrationContractTest
+        run: ./gradlew :server:application:test --tests com.hiltech.server.DatabaseMigrationContractTest --rerun-tasks
 
       - name: Generate and verify jOOQ Kotlin sources
         env:
@@ -175,7 +175,7 @@ jobs:
           exit 1
 
       - name: Verify signed evidence storage contract
-        run: ./gradlew :server:application:test --tests com.hiltech.server.documents.storage.EvidenceObjectStorageContractTest
+        run: ./gradlew :server:application:test --tests com.hiltech.server.documents.storage.EvidenceObjectStorageContractTest --rerun-tasks
 
       - name: Moto logs on failure
         if: failure()
@@ -257,7 +257,7 @@ jobs:
           HILTECH_DB_PASSWORD: hiltech-app-local
           HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
         run: |
-          ./gradlew :server:application:test --tests com.hiltech.server.DatabaseMigrationContractTest
+          ./gradlew :server:application:test --tests com.hiltech.server.DatabaseMigrationContractTest --rerun-tasks
 
           if PGPASSWORD=hiltech-keycloak-local \
             psql -h 127.0.0.1 -U hiltech_keycloak -d hiltech \
