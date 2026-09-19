@@ -379,17 +379,30 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
-      - name: Resolve Gradle dependency inventory
+      - name: Resolve shipped runtime dependency inventory
         shell: bash
         run: |
           mkdir -p build/reports
-          ./gradlew \
-            :server:application:dependencies \
-            :shared:core:dependencies \
-            :apps:androidApp:dependencies \
-            :apps:desktopApp:dependencies \
+          ./gradlew :server:application:dependencies \
+            --configuration runtimeClasspath \
             --console=plain \
-            > build/reports/hiltech-dependencies.txt
+            > build/reports/server-runtime.txt
 
-      - name: Review resolved dependencies against OSV
-        run: python3 scripts/ci/osv_gradle_review.py build/reports/hiltech-dependencies.txt
+          ./gradlew :apps:androidApp:dependencies \
+            --configuration releaseRuntimeClasspath \
+            --console=plain \
+            > build/reports/android-release-runtime.txt
+
+          ./gradlew :apps:desktopApp:dependencies \
+            --configuration runtimeClasspath \
+            --console=plain \
+            > build/reports/desktop-runtime.txt
+
+          cat \
+            build/reports/server-runtime.txt \
+            build/reports/android-release-runtime.txt \
+            build/reports/desktop-runtime.txt \
+            > build/reports/hiltech-shipped-runtime-dependencies.txt
+
+      - name: Review shipped runtime dependencies against OSV
+        run: python3 scripts/ci/osv_gradle_review.py build/reports/hiltech-shipped-runtime-dependencies.txt
