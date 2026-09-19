@@ -34,7 +34,10 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 05 reality gate: `docs/13-delivery/phase2/05_INBOX_WORK_QUEUE_REALITY_CLOSURE_2026-09-19.md` — **PASS**
 - Slice 05 implementation contract: `docs/13-delivery/phase2/05_INBOX_WORK_QUEUE_FOUNDATION_SLICE_2026-09-19.md` — **VERIFIED / MERGED**
 - Slice 05 rule preserved in production: source domains stay authoritative; Work Queue is current actionable attention, Inbox is durable attention/read state, and Notifications remain a separate delivery concern.
-- Current next capability: **Phase 2 Slice 06 — Notification Abstraction**. Its minimal reality closure is `docs/13-delivery/phase2/06_NOTIFICATION_ABSTRACTION_REALITY_CLOSURE_2026-09-20.md`; implementation may start only against the corresponding frozen Slice 06 contract.
+- Phase 2 Slice 06: **Notification Abstraction — IMPLEMENTATION AUTHORIZED**
+- Slice 06 reality gate: `docs/13-delivery/phase2/06_NOTIFICATION_ABSTRACTION_REALITY_CLOSURE_2026-09-20.md` — **PASS**
+- Slice 06 implementation contract: `docs/13-delivery/phase2/06_NOTIFICATION_ABSTRACTION_FOUNDATION_SLICE_2026-09-20.md` — **FROZEN / IMPLEMENTATION AUTHORIZED**
+- Slice 06 rule: provider-neutral Notification intent/policy/attempt foundation only; do not invent production provider, preferences, quiet hours, digest, escalation or TEAM fan-out.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
