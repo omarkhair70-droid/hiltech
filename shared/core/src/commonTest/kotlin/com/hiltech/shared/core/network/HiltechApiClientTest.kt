@@ -409,14 +409,14 @@ class HiltechApiClientTest {
             assertEquals(2, requestCount)
             assertEquals(1, reauthCount)
             assertEquals(
-                listOf(
+                listOf<String?>(
                     "Bearer token-before-reauth",
                     "Bearer token-after-reauth",
                 ),
                 seenAuthorization,
             )
             assertEquals(
-                listOf(
+                listOf<String?>(
                     operationId,
                     operationId,
                 ),
