@@ -233,9 +233,8 @@ class EvidenceApiClientTest {
                         )
                         assertEquals(
                             "image/jpeg",
-                            request.headers[
-                                HttpHeaders.ContentType
-                            ],
+                            request.body.contentType
+                                ?.toString(),
                         )
 
                         respond(
