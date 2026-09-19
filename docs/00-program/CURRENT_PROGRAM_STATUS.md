@@ -50,7 +50,7 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Slice 06 — Notification Abstraction — merged through PR #35 at `a24715e9d792672a0a33fbebaf2e16a1acafadc9`; post-merge Bootstrap `35474093059` is PASS. Final gap review `docs/13-delivery/phase2/07_PHASE2_FINAL_GAP_REVIEW_2026-09-20.md` concludes that error model, API conventions, IDs/versioning and read-model/query foundations are already executable through the shared runtime and verified Slices 01–06; no speculative Slice 07 is required. The next canonical phase is **Phase 3 — People / Internal Workforce Core**, beginning with narrow reality/contract closure before production implementation.
+Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Slice 06 merged through PR #35 at `a24715e9d792672a0a33fbebaf2e16a1acafadc9`; post-merge Bootstrap `35474093059` PASS. Final Phase 2 closure PR #37 merged at `624bd6c50f8d17535316ae450a8a780bc756a108`; post-merge Bootstrap `35474921624` PASS. Phase 3 — People / Internal Workforce Core — is now ACTIVE. Its scope/slice plan is frozen in `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md`, and **Slice 01 — Employee / Employment Core is IMPLEMENTATION AUTHORIZED**.
 
 ---
 
@@ -81,8 +81,8 @@ Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Slice 
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 2 VERIFIED / COMPLETE | Final gap review PASS; next is Phase 3 People / Internal Workforce reality/contract closure |
-| Production code | PHASE 2 VERIFIED / COMPLETE | Slices 01–06 are merged and post-merge verified; Phase 3 implementation is not yet authorized until its reality/contract closure |
+| Implementation order | PHASE 3 ACTIVE | Scope/slice plan frozen; Slice 01 Employee / Employment Core implementation authorized |
+| Production code | PHASE 3 SLICE 01 AUTHORIZED | Employee / Employment Core may implement; later People slices remain closed until Slice 01 verification |
 
 ---
 
@@ -234,13 +234,12 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Slices 01–05 are VERIFIED and merged. Slice 05 merge commit is `6b6194a9107dcfc1ba74e392776a1dee9e38964a` and post-merge Bootstrap `35468123129` is PASS; do not reopen these slices without a genuine contradiction.
-2. Merge PR #34 only from the verified docs-closure head after its docs-only CI is green, then require post-merge main Bootstrap PASS.
-3. Phase 2 is **VERIFIED / COMPLETE**. Slice 06 merged at `a24715e9d792672a0a33fbebaf2e16a1acafadc9`, post-merge Bootstrap `35474093059` PASS, and the final gap review found no additional shared-infrastructure slice necessary. The next work is **Phase 3 — People / Internal Workforce Core reality/contract closure**; do not start production code until that phase contract is frozen.
-4. Preserve the separation: source-domain business truth != Inbox/Work Queue attention projection != Notification delivery.
-5. Do not invent push/email/SMS channel policy, quiet hours, notification preferences, digest cadence, escalation timers, priority scoring or broad recipient fan-out before the Notification closure.
-6. Continue consuming Reality Evidence/Facts by phase; people/process/integration facts remain evidence/configuration inputs, not hard-coded product roles.
-7. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
+1. Phase 0, Phase 1 and Phase 2 are VERIFIED / COMPLETE; do not reopen them without a genuine cross-cutting contradiction.
+2. Phase 3 scope/slice plan is frozen in `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md`.
+3. Execute **Phase 3 / Slice 01 — Employee / Employment Core** only against `docs/13-delivery/phase3/01_EMPLOYEE_EMPLOYMENT_CORE_SLICE_2026-09-20.md`.
+4. Do not pull Team/Manager assignment, HR docs/certifications, onboarding, role/team change, offboarding, attendance, leave, expenses, advances or payroll into Slice 01.
+5. Continue consuming Reality Evidence/Facts by phase; current employee-master/import/legal HR unknowns are scoped out rather than guessed.
+6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 
