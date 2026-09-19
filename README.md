@@ -4,9 +4,9 @@ This repository is the single source of truth for the HILTECH digital transforma
 
 ## Current phase
 
-**Repository Bootstrap / Phase 0 — Engineering Foundation.**
+**Phase 1 — Identity, Organization, Permissions Foundation.**
 
-The first production slice is frozen at the pre-code contract/design/stack level and Repository Bootstrap is authorized.
+The first production slice is frozen, Repository Bootstrap / Phase 0 is verified and merged, and business vertical implementation is authorized to begin with Phase 1.
 
 Canonical freeze decision:
 `docs/13-delivery/first-slice-contract-pack/24_FIRST_SLICE_FREEZE_DECISION_2026-09-19.md`
@@ -16,7 +16,7 @@ Canonical stack:
 
 Current implementation rule:
 
-> **Bootstrap the shared foundation once, then ship complete vertical slices.**
+> **The shared foundation is verified. Ship complete vertical slices from the frozen contracts.**
 
 The first production vertical remains:
 
@@ -29,7 +29,7 @@ PM Desktop
 → Supervisor Acceptance
 → PM Read / Audit
 
-Do not expand into later domains before the Bootstrap Verification gates are green.
+Do not prematurely implement later domains; record useful reality evidence now and consume it when the relevant phase arrives.
 
 ## Product thesis
 
@@ -45,7 +45,19 @@ Key pins include Kotlin 2.4.20, Compose Multiplatform 1.11.1, AGP 9.3.3, Gradle 
 
 ## Start here
 
+- Mandatory agent entrypoint: `AGENTS.md`
+- Session/agent continuity: `docs/00-program/AGENT_EXECUTION_PROTOCOL.md`
 - Program status: `docs/00-program/CURRENT_PROGRAM_STATUS.md`
 - Freeze pack: `docs/13-delivery/first-slice-contract-pack/README.md`
-- Freeze → Bootstrap boundary: `docs/13-delivery/first-slice-contract-pack/17_FREEZE_TO_BOOTSTRAP_BOUNDARY.md`
 - Implementation order: `docs/13-delivery/IMPLEMENTATION_ORDER.md`
+
+
+## Reality evidence
+
+Raw internal HILTECH workbooks are not committed by default.
+
+Durable learnings are captured in:
+- `docs/01-reality/REALITY_EVIDENCE_REGISTER.md`
+- `docs/01-reality/RAW_EVIDENCE_POLICY.md`
+
+Later-phase evidence does not reopen completed phases unless it exposes a genuine cross-cutting contradiction.

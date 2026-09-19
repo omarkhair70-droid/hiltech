@@ -1,11 +1,17 @@
 # HILTECH Reality Facts Register
 
-Status: **ACTIVE / PRE-FREEZE**
+Status: **ACTIVE / PHASED REALITY REGISTER**
 Updated: 2026-09-18
 
 ## Purpose
 
 Keep real-company facts separate from assumptions.
+
+Phase-queued learnings extracted from private operational files are tracked separately in:
+`REALITY_EVIDENCE_REGISTER.md`.
+
+Raw source handling policy:
+`RAW_EVIDENCE_POLICY.md`.
 
 Every important product/architecture statement that depends on HILTECH reality should be traceable to one of:
 

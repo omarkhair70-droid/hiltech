@@ -22,3 +22,11 @@ server/build/generated-src/
 *.p12
 *.pfx
 secrets/
+
+# Private/raw HILTECH discovery evidence.
+# Commit only sanitized/synthetic fixtures, never raw operational exports.
+docs/01-reality/private-evidence/
+docs/01-reality/raw-evidence/
+*.raw.xlsx
+*.raw.xls
+*.raw.csv

@@ -41,7 +41,7 @@ The next phase is Phase 1 — Identity, Organization, Permissions Foundation, fo
 
 | Layer | State | Notes |
 |---|---|---|
-| Program governance | STRONG FIRST PASS | Constitution, completeness, freeze/status controls exist |
+| Program governance | STRONG / CONTINUITY-CLOSED | Constitution, freeze/status controls, root AGENTS.md and agent/session execution protocol exist |
 | Company reality | REPRESENTATIVE FIRST-SLICE COVERAGE | Internal redacted fixtures validate Project/Field/Warehouse structure; remaining reality is seed/terminology/legal/device validation for affected scope |
 | Human map | FIRST PASS | Main personas covered |
 | Role experiences | FIRST PASS | Main personas covered |
@@ -217,10 +217,10 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Merge the verified Repository Bootstrap PR to main after PR-only dependency review is green.
-2. Begin Phase 1 — Identity, Organization, Permissions Foundation from the frozen contracts.
-3. Continue the first production vertical as complete DB/server/auth/client/offline/observability slices.
-4. Keep Bootstrap Verification gates mandatory on every foundation-affecting PR.
+1. Begin Phase 1 — Identity, Organization, Permissions Foundation from the frozen contracts.
+2. Implement Phase 1 as complete vertical slices with DB/server/auth/client/UI/tests/observability as applicable.
+3. Keep Bootstrap Verification gates mandatory on foundation-affecting changes.
+4. Record later-domain discoveries in the Reality Evidence Register and consume them only when their phase arrives.
 5. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
