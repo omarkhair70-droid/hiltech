@@ -158,3 +158,13 @@ type configuration_revision
     define can_supersede: can_activate
     define can_retire: can_activate
     define can_view_history: can_view
+
+type approval_request
+  relations
+    define organization: [organization]
+    define requester: [user]
+    define approver: [user, team#member]
+    define viewer: [user, team#member]
+
+    define can_view: requester or approver or viewer
+    define can_decide: approver
