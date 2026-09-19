@@ -1,7 +1,7 @@
 # Phase 2 / Slice 03 — Activity Events Foundation
 
 Date: 2026-09-19  
-Status: **CONTRACTED / IMPLEMENTATION AUTHORIZED**
+Status: **VERIFICATION CANDIDATE — CODE GATES PASS / CLOSURE CI PENDING**
 
 ## Why this is the next Phase 2 slice
 
@@ -309,6 +309,39 @@ Do not implement in Slice 03:
 20. Phase 2 Slice 01 shared command/runtime regressions remain PASS.
 21. Phase 2 Slice 02 Evidence lifecycle/PostgreSQL/OpenFGA/S3 regressions remain PASS.
 22. Bootstrap database/foundation/supply-chain/Terraform/evidence-storage/local-platform gates remain PASS where applicable.
+
+## Verification candidate evidence — 2026-09-19
+
+Canonical implementation code head:
+`e1244da23a0889bab33b249bf4ef96488aef1699`
+
+Exact-head regression evidence already complete:
+- Bootstrap Phase 0 run `35436760827` — **PASS**, including:
+  - local-platform-contract,
+  - database-contract,
+  - foundation / Spring Modulith verification,
+  - evidence-storage-contract,
+  - dependency-review,
+  - supply-chain-contract,
+  - terraform-contract.
+- Phase 2 — Shared Command Runtime run `35436760820` — **PASS**.
+
+The Bootstrap local-platform gate proves:
+- PostgreSQL Activity persistence,
+- READY / QUARANTINED / REJECTED projection,
+- source-event dedupe,
+- current WorkOrder authorization re-evaluation,
+- safe Activity payload,
+- Audit/Activity separation,
+- fixed-`asOf` opaque cursor behavior,
+- existing Evidence lifecycle regressions,
+- Spring Modulith durable failed-publication detection and controlled resubmission without duplicate Activity.
+
+Phase 1 OIDC exact-head closure is intentionally re-triggered by this documentation commit because the prior exact-head run had Android/provider PASS while one Desktop GitHub runner remained stuck `in_progress` beyond its declared job timeout. No Phase 1 production code was changed to work around that runner state.
+
+Do not mark Slice 03 VERIFIED or merge until the documentation-closure head itself is green.
+
+---
 
 ## Contract-check conclusion
 
