@@ -1,7 +1,7 @@
 # Phase 1 / Slice 01 — Authenticated Identity Bootstrap
 
 Date: 2026-09-19
-Status: **IMPLEMENTING**
+Status: **VERIFYING**
 
 ## Goal
 
@@ -97,4 +97,18 @@ Before slice acceptance:
 - database contract remains green,
 - Android/Desktop builds remain green,
 - architecture test remains green,
-- real PostgreSQL exercise for identity/device constraints is added before final slice closure.
+- real PostgreSQL identity/membership/team/device lifecycle exercise PASS.
+
+
+## PostgreSQL contract exercise
+
+`IdentityRuntimePostgresContractTest` uses the real migrated PostgreSQL schema and proves:
+- issuer + subject resolves the intended HILTECH identity,
+- ended membership is excluded,
+- active in-window membership is returned,
+- active team context is returned,
+- bootstrap marks `last_authenticated_at`,
+- first device registration starts at version 1,
+- metadata touch increments device version,
+- one installation cannot move to another identity,
+- revoked installation cannot be resurrected.

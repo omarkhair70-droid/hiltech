@@ -117,14 +117,18 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
-      - name: Migrate empty PostgreSQL and verify first-slice constraints
+      - name: Migrate empty PostgreSQL and verify database contracts
         env:
           HILTECH_DB_CONTRACT_TEST: "1"
           HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
           HILTECH_DB_USER: hiltech
           HILTECH_DB_PASSWORD: hiltech
           HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
-        run: ./gradlew :server:application:test --tests com.hiltech.server.DatabaseMigrationContractTest --rerun-tasks
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --tests com.hiltech.server.identity.IdentityRuntimePostgresContractTest \
+            --rerun-tasks
 
       - name: Generate and verify jOOQ Kotlin sources
         env:
