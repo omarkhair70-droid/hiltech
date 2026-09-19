@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**REPOSITORY BOOTSTRAP VERIFIED / PHASE 1 NEXT**
+**PHASE 1 ACTIVE — IDENTITY / ORGANIZATION / PERMISSIONS**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -32,8 +32,8 @@ Canonical decision:
 
 Repository / engineering foundation implementation is now complete and Bootstrap Verification is PASS.
 
-Business vertical implementation has not started yet.
-The next phase is Phase 1 — Identity, Organization, Permissions Foundation, followed by complete production vertical slices under the frozen contracts.
+Business production implementation is active.
+Phase 1 Slice 01 — Authenticated Identity Bootstrap — is VERIFIED. The next slice is native OIDC client/session runtime and the permission-safe identity-aware client shell.
 
 ---
 
@@ -64,8 +64,8 @@ The next phase is Phase 1 — Identity, Organization, Permissions Foundation, fo
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 0 VERIFIED / PHASE 1 NEXT | Repository engineering foundation is verified; Identity / Organization / Permissions Foundation is next |
-| Production code | FOUNDATION IMPLEMENTED / BUSINESS VERTICAL NOT STARTED | Engineering foundation is production-shaped and verified; business capabilities now proceed by vertical slice |
+| Implementation order | PHASE 1 ACTIVE | Slice 01 identity bootstrap verified; native OIDC/session runtime is next |
+| Production code | PHASE 1 BUSINESS IMPLEMENTATION ACTIVE | Authenticated identity/org/device bootstrap is implemented and verified; client sign-in/session runtime is next |
 
 ---
 

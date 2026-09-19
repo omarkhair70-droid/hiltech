@@ -1,7 +1,7 @@
 # Phase 1 / Slice 01 — Authenticated Identity Bootstrap
 
 Date: 2026-09-19
-Status: **VERIFYING**
+Status: **PASS / VERIFIED**
 
 ## Goal
 
@@ -112,3 +112,29 @@ Before slice acceptance:
 - metadata touch increments device version,
 - one installation cannot move to another identity,
 - revoked installation cannot be resurrected.
+
+
+## Verification
+
+Canonical run:
+`35415954086` (#60) — **SUCCESS**
+
+Passed:
+- shared KMP tests,
+- Android debug build,
+- Desktop compile,
+- Server tests,
+- real PostgreSQL database contracts including IdentityRuntimePostgresContractTest,
+- jOOQ generation / server compile,
+- local platform contract,
+- Evidence storage contract,
+- OCI Terraform contract,
+- supply-chain contract,
+- shipped-runtime OSV dependency review.
+
+## Slice decision
+
+`PHASE1_IDENTITY_BOOTSTRAP = PASS`
+
+The next Phase 1 slice is native OIDC client/session runtime:
+Authorization Code + PKCE through the system browser, Android private-use callback, Windows loopback callback, refresh/logout/re-auth boundaries, then the permission-safe identity-aware client shell.
