@@ -22,10 +22,10 @@ hiltech:
 
   authorization:
     openfga:
-      enabled: \${HILTECH_FGA_ENABLED:false}
-      api-url: \${HILTECH_FGA_API_URL:}
-      store-id: \${HILTECH_FGA_STORE_ID:}
-      authorization-model-id: \${HILTECH_FGA_MODEL_ID:}
-      request-timeout-ms: \${HILTECH_FGA_REQUEST_TIMEOUT_MS:2000}
-      projector-poll-delay-ms: \${HILTECH_FGA_PROJECTOR_POLL_DELAY_MS:1000}
-      claim-lease-seconds: \${HILTECH_FGA_CLAIM_LEASE_SECONDS:60}
+      enabled: ${HILTECH_FGA_ENABLED:false}
+      api-url: ${HILTECH_FGA_API_URL:}
+      store-id: ${HILTECH_FGA_STORE_ID:}
+      authorization-model-id: ${HILTECH_FGA_MODEL_ID:}
+      request-timeout-ms: ${HILTECH_FGA_REQUEST_TIMEOUT_MS:2000}
+      projector-poll-delay-ms: ${HILTECH_FGA_PROJECTOR_POLL_DELAY_MS:1000}
+      claim-lease-seconds: ${HILTECH_FGA_CLAIM_LEASE_SECONDS:60}
