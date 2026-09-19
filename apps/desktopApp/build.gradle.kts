@@ -10,6 +10,8 @@ plugins {
 dependencies {
     implementation(project(":shared:core"))
     implementation(compose.desktop.currentOs)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.ktor.client.core)
 }
 
 compose.desktop {
