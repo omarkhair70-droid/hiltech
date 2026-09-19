@@ -177,3 +177,119 @@ jobs:
       - name: Moto logs on failure
         if: failure()
         run: cat /tmp/hiltech-moto.log
+
+  local-platform-contract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Validate local Compose
+        shell: bash
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            config --quiet
+
+      - name: Start isolated local platform
+        shell: bash
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            up -d postgres keycloak openfga-migrate openfga moto
+
+      - name: Wait for local platform contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8081/realms/hiltech/.well-known/openid-configuration >/tmp/hiltech-oidc.json; then
+              break
+            fi
+            sleep 2
+          done
+          grep -q '"issuer":"http://localhost:8080/realms/hiltech"' /tmp/hiltech-oidc.json || \
+            grep -q '"issuer":"http://127.0.0.1:8081/realms/hiltech"' /tmp/hiltech-oidc.json
+
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8082/healthz >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8082/healthz >/dev/null
+          curl -fsS http://127.0.0.1:5000/ >/dev/null
+
+      - name: Prove canonical OpenFGA model loads
+        shell: bash
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            --profile tools run --rm openfga-cli \
+            store create --model /contracts/first-slice-model.fga \
+            | tee /tmp/hiltech-openfga-create.json
+
+          grep -q 'authorization_model_id' /tmp/hiltech-openfga-create.json
+
+      - name: Migrate local HILTECH database and prove service-user isolation
+        shell: bash
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://127.0.0.1:5432/hiltech
+          HILTECH_DB_USER: hiltech_app
+          HILTECH_DB_PASSWORD: hiltech-app-local
+          HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+        run: |
+          ./gradlew :server:application:test --tests com.hiltech.server.DatabaseMigrationContractTest
+
+          if PGPASSWORD=hiltech-keycloak-local \
+            psql -h 127.0.0.1 -U hiltech_keycloak -d hiltech \
+            -c 'SELECT count(*) FROM organization;' >/tmp/keycloak-cross-db.out 2>&1; then
+            echo "Keycloak local DB role unexpectedly read HILTECH business tables."
+            cat /tmp/keycloak-cross-db.out
+            exit 1
+          fi
+
+          if PGPASSWORD=hiltech-openfga-local \
+            psql -h 127.0.0.1 -U hiltech_openfga -d hiltech \
+            -c 'SELECT count(*) FROM organization;' >/tmp/openfga-cross-db.out 2>&1; then
+            echo "OpenFGA local DB role unexpectedly read HILTECH business tables."
+            cat /tmp/openfga-cross-db.out
+            exit 1
+          fi
+
+      - name: Local platform logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            ps
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            logs --no-color --tail=300
+
+      - name: Stop local platform
+        if: always()
+        shell: bash
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            down -v --remove-orphans
