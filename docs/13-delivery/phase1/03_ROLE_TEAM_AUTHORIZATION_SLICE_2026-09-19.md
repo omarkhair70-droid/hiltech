@@ -1,7 +1,7 @@
 # Phase 1 / Slice 03 — Role / Team Authorization Integration
 
 Date: 2026-09-19  
-Status: **IMPLEMENTING**
+Status: **VERIFIED**
 
 ## Goal
 
@@ -55,9 +55,31 @@ Implemented:
 - manager replacement denies old authority immediately and keeps new authority pending until projection,
 - stale manager grant outbox cannot replay over a newer replacement.
 
-## Next in this slice
+## Verification closure
 
-1. let CI prove the PostgreSQL/OpenFGA scenarios against the production adapters,
-2. expose only the minimal client authority context required by Phase 1,
-3. record run evidence,
-4. mark Slice 03 VERIFIED only after all existing foundation/OIDC/OpenFGA gates remain green.
+Canonical verified head:
+`d9278bb5cc57ffe2dab51b595b388dd29769c0a5`
+
+Evidence:
+- Bootstrap Phase 0 run `35422210826` — PASS,
+- local-platform contract — PASS with real PostgreSQL 18.6 + real OpenFGA 1.20.0,
+- Contract — OpenFGA First Slice run `35422210814` — PASS,
+- Native OIDC Production Smoke run `35422210824` — PASS,
+- foundation / database / evidence / dependency / Terraform / supply-chain gates — PASS.
+
+The real role/team contract proved:
+- PRESENT authority stays denied while projection is pending,
+- applied organization membership authorizes only through the explicit structural relation,
+- expired/revoked team membership denies immediately from PostgreSQL truth while stale FGA still allows,
+- cleanup removes the stale FGA tuple,
+- manager replacement immediately denies the old manager,
+- the replacement manager remains denied until projection applies,
+- a stale old-manager grant outbox cannot replay over the newer manager revision.
+
+## Client boundary decision
+
+No client-side role/permission claims were added.
+
+The existing identity bootstrap continues to expose only descriptive organization/team context. `roleLabel`, `membershipType`, and `roleInTeam` remain display/context data. Server-side source truth + OpenFGA remains the enforcement boundary.
+
+Slice 03 is VERIFIED.

@@ -192,6 +192,7 @@ class NativeOidcSessionTest {
                                     tokenJson(
                                         access = "access-1",
                                         refresh = "refresh-1",
+                                        idToken = "id-token-1",
                                         expires = 1,
                                     ),
                                     HttpStatusCode.OK,
@@ -233,6 +234,8 @@ class NativeOidcSessionTest {
                 attempt = attempt,
             )
             assertEquals("access-1", first.accessToken)
+            assertEquals("id-token-1", first.idToken)
+            assertEquals("id-token-1", manager.currentIdToken())
             assertTrue(manager.hasSession())
 
             val access = manager.currentAccessToken()
@@ -240,6 +243,8 @@ class NativeOidcSessionTest {
 
             val stored = store.load()
             assertEquals("refresh-2", stored?.refreshToken)
+            assertEquals("id-token-1", stored?.idToken)
+            assertEquals("id-token-1", manager.currentIdToken())
             assertEquals(2, tokenCalls)
             assertTrue(
                 requests.any {
@@ -346,15 +351,21 @@ class NativeOidcSessionTest {
     private fun tokenJson(
         access: String,
         refresh: String = "refresh",
+        idToken: String? = null,
         expires: Long = 300,
-    ): String =
-        """
+    ): String {
+        val idTokenJson =
+            idToken?.let { ",\n  \"id_token\":\"$it\"" }
+                ?: ""
+
+        return """
         {
           "access_token":"$access",
           "refresh_token":"$refresh",
           "token_type":"Bearer",
           "expires_in":$expires,
-          "scope":"openid"
+          "scope":"openid"$idTokenJson
         }
         """.trimIndent()
+    }
 }

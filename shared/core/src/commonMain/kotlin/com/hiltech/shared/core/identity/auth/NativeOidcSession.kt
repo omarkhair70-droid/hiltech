@@ -32,6 +32,8 @@ data class OidcTokenResponse(
     val accessToken: String,
     @SerialName("refresh_token")
     val refreshToken: String? = null,
+    @SerialName("id_token")
+    val idToken: String? = null,
     @SerialName("token_type")
     val tokenType: String,
     @SerialName("expires_in")
@@ -43,6 +45,7 @@ data class OidcTokenResponse(
 data class NativeOidcTokenSet(
     val accessToken: String,
     val refreshToken: String?,
+    val idToken: String? = null,
     val tokenType: String,
     val scope: String?,
     val obtainedAtEpochMs: Long,
@@ -247,6 +250,9 @@ class NativeOidcSessionManager(
         return tokenSet
     }
 
+    suspend fun currentIdToken(): String? =
+        tokenStore.load()?.idToken
+
     suspend fun currentAccessToken(): String? {
         val current = tokenStore.load() ?: return null
         val now = NativeOidcPlatform.currentTimeMillis()
@@ -277,8 +283,9 @@ class NativeOidcSessionManager(
     suspend fun refresh(
         refreshToken: String? = null,
     ): NativeOidcTokenSet {
+        val stored = tokenStore.load()
         val token = refreshToken
-            ?: tokenStore.load()?.refreshToken
+            ?: stored?.refreshToken
             ?: throw NativeOidcException(
                 code = "OIDC_REFRESH_UNAVAILABLE",
                 message = "No refresh token is available.",
@@ -302,7 +309,12 @@ class NativeOidcSessionManager(
         }
 
         val refreshed = response.body<OidcTokenResponse>()
-            .toTokenSet(fallbackRefreshToken = token)
+            .toTokenSet(
+                fallbackRefreshToken = token,
+                fallbackIdToken = stored
+                    ?.takeIf { it.refreshToken == token }
+                    ?.idToken,
+            )
         tokenStore.save(refreshed)
         return refreshed
     }
@@ -343,6 +355,7 @@ class NativeOidcSessionManager(
 
     private fun OidcTokenResponse.toTokenSet(
         fallbackRefreshToken: String? = null,
+        fallbackIdToken: String? = null,
     ): NativeOidcTokenSet {
         if (!tokenType.equals("Bearer", ignoreCase = true)) {
             throw NativeOidcException(
@@ -361,6 +374,7 @@ class NativeOidcSessionManager(
         return NativeOidcTokenSet(
             accessToken = accessToken,
             refreshToken = refreshToken ?: fallbackRefreshToken,
+            idToken = idToken ?: fallbackIdToken,
             tokenType = tokenType,
             scope = scope,
             obtainedAtEpochMs = now,

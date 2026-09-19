@@ -33,7 +33,7 @@ Canonical decision:
 Repository / engineering foundation implementation is now complete and Bootstrap Verification is PASS.
 
 Business production implementation is active.
-Phase 1 Slice 01 — Authenticated Identity Bootstrap — is VERIFIED. Phase 1 Slice 02 — Native OIDC Session Runtime — is VERIFIED on run 35420251296 with real Keycloak 26.7.4 HTTPS provider smoke, Android private-use callback proof, Windows Chromium loopback proof, API 36 Android shell/callback render evidence, and Desktop shell render evidence.
+Phase 1 Slice 01 — Authenticated Identity Bootstrap — is VERIFIED. Phase 1 Slice 02 — Native OIDC Session Runtime — is VERIFIED. Phase 1 Slice 03 — Role / Team Authorization Integration — is VERIFIED on head d9278bb5 with real PostgreSQL + OpenFGA grant/revoke/manager-replacement evidence. Phase 1 Slice 04 — Re-auth + Access Revocation — is now ACTIVE.
 
 ---
 
@@ -64,8 +64,8 @@ Phase 1 Slice 01 — Authenticated Identity Bootstrap — is VERIFIED. Phase 1 S
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 1 ACTIVE | Slice 01 + Slice 02 verified; next: Role/Team authorization integration, re-auth, revocation, audit baseline, and minimal Me / Sessions |
-| Production code | PHASE 1 BUSINESS IMPLEMENTATION ACTIVE | Authenticated identity bootstrap and Android/Windows native OIDC/session runtime are verified on production-shaped code |
+| Implementation order | PHASE 1 ACTIVE | Slices 01–03 verified; Slice 04 re-auth + access revocation active; audit baseline + minimal Me / Sessions remain |
+| Production code | PHASE 1 BUSINESS IMPLEMENTATION ACTIVE | Identity bootstrap, native OIDC runtime, and PostgreSQL→OpenFGA Role/Team authority integration are verified; re-auth/revocation implementation is active |
 
 ---
 
@@ -217,8 +217,9 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Continue the remaining Phase 1 foundations from the frozen order: Role/Team authorization integration, re-auth, access revocation, audit baseline, and minimal Me / Sessions.
-2. Implement Phase 1 as complete vertical slices with DB/server/auth/client/UI/tests/observability as applicable.
+1. Implement Phase 1 Slice 04 — re-auth + access revocation — on the verified identity/authority foundation.
+2. After Slice 04, close audit baseline + minimal Me / Sessions to finish Phase 1.
+3. Implement Phase 1 as complete vertical slices with DB/server/auth/client/UI/tests/observability as applicable.
 3. Keep Bootstrap Verification gates mandatory on foundation-affecting changes.
 4. Record later-domain discoveries in the Reality Evidence Register and consume them only when their phase arrives.
 5. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
