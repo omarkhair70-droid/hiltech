@@ -4,6 +4,7 @@ plugins {
     id("com.hiltech.base")
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.kotlinSpring)
+    alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.springBoot)
 }
 
