@@ -90,3 +90,9 @@ data class IdentityDeviceSecurityDto(
     val current: Boolean,
     val version: Long,
 )
+
+
+data class IdentitySecuritySnapshot(
+    val sessions: List<IdentitySessionDto>,
+    val devices: List<IdentityDeviceSecurityDto>,
+)
