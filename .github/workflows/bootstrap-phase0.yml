@@ -19,6 +19,8 @@ on:
       - "server/**"
       - "database/**"
       - "infrastructure/**"
+      - "scripts/ci/**"
+      - ".github/dependabot.yml"
       - ".github/workflows/bootstrap-phase0.yml"
 
 permissions:

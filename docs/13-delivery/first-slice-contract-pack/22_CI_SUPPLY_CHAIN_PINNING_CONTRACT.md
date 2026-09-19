@@ -1,6 +1,6 @@
 # 22 — CI Supply-Chain / Action Pinning Contract
 
-Status: **CONTRACT CANDIDATE v0.1 / BASELINE PINS DEFINED**
+Status: **PASS / BOOTSTRAP IMPLEMENTED**
 Date: 2026-09-18
 
 ## Purpose
@@ -54,6 +54,16 @@ Release:
 Production/contract reference:
 `openfga/action-openfga-test@e89aa8259796cd5ee5c1b1ae7d72c401029cb947 # v0.1.2`
 
+## Dependency review
+
+Release:
+`actions/dependency-review-action v5.0.0`
+
+Production/PR reference:
+`actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0`
+
+It runs on pull requests only and fails on newly introduced HIGH-or-higher dependency vulnerabilities.
+
 ---
 
 # 2. New action admission rule
@@ -102,9 +112,10 @@ PR from untrusted forks:
 
 # 4. Dependabot
 
-Create/update `.github/dependabot.yml` after production workflow bootstrap:
+Bootstrap now includes `.github/dependabot.yml`:
 
 - package-ecosystem: github-actions
+- package-ecosystem: gradle
 - directory: /
 - schedule: weekly
 
@@ -198,8 +209,19 @@ Baseline immutable pins:
 - setup-java v6.0.1
 - gradle/actions v6.3.0
 - OpenFGA test action v0.1.2
+- dependency-review-action v5.0.0
+
+Bootstrap enforcement is active:
+- external actions in the production Bootstrap workflow must use full 40-character SHAs,
+- default workflow token remains `contents: read`,
+- strong committed-secret signatures are rejected,
+- mutable `:latest` runtime markers are rejected,
+- dynamic Gradle versions are rejected,
+- tracked real `.tfvars` files are rejected,
+- Dependabot monitors GitHub Actions and Gradle,
+- PR dependency review is required by workflow behavior before Bootstrap merge.
 
 Remaining:
-- apply these pins when production workflows are generated after Freeze,
-- add/pin DigiCert/OCI-specific actions only if selected,
-- enable Dependabot/policy checks during repository bootstrap.
+- enforce equivalent repository/organization Actions policy where account settings permit,
+- add/pin DigiCert/OCI deployment actions only if they are actually selected,
+- production environment approval/federated OCI auth remain cutover work.

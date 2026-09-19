@@ -1,7 +1,7 @@
 # HILTECH OS — FINAL STACK
 
 Date: 2026-09-18
-Status: **FROZEN FOR FIRST PRODUCTION SLICE / REPOSITORY BOOTSTRAP AUTHORIZED**
+Status: **FROZEN FOR FIRST PRODUCTION SLICE / REPOSITORY BOOTSTRAP VERIFIED**
 
 This file is the canonical first-slice technology baseline.
 
@@ -437,7 +437,9 @@ Keys:
 OCI KMS.
 
 IaC:
-Terraform + OCI Terraform Provider.
+Terraform **1.16.3** + OCI Terraform Provider **8.29.0**.
+
+These exact Bootstrap pins are validated for both staging and production roots with formatting, provider init and `terraform validate`.
 
 Remote state/locking/execution baseline:
 OCI Resource Manager.
@@ -528,7 +530,6 @@ reviewed dependency maintenance after Bootstrap/first slice, or earlier only for
 The following are not unresolved product architecture:
 
 - exact OCI CPU/RAM shapes,
-- exact Terraform CLI/provider patch,
 - exact OTel Collector image digest,
 - exact Keycloak/OpenFGA container digest,
 - exact Flyway transitive resolved version,
@@ -583,6 +584,6 @@ Canonical decision:
 `docs/13-delivery/first-slice-contract-pack/24_FIRST_SLICE_FREEZE_DECISION_2026-09-19.md`
 
 Next:
-`REPOSITORY_BOOTSTRAP`
+`PHASE_1_IDENTITY_ORGANIZATION_PERMISSIONS`
 
 No first-slice pre-code gate remains outside the stack.
