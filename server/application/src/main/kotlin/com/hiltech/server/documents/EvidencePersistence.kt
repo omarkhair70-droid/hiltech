@@ -107,6 +107,10 @@ interface EvidencePersistencePort {
         operationId: UUID,
     ): EvidenceReservationRecord?
 
+    fun loadEvidenceRecord(
+        evidenceId: UUID,
+    ): EvidenceFinalizeRecord?
+
     fun loadFinalizeRecord(
         evidenceId: UUID,
         uploadSessionId: UUID,
