@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 2 ACTIVE — SLICES 01–04 VERIFIED / MERGED / SLICE 05 INBOX / WORK QUEUE FOUNDATION AUTHORIZED**
+**PHASE 2 ACTIVE — SLICES 01–04 VERIFIED / MERGED / SLICE 05 VERIFIED / READY TO MERGE**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -50,7 +50,7 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–04 are VERIFIED and merged. Slice 04 Minimal Approval Engine Foundation merged at `b6aad197bb4a9e8200717ad9801092dc2cabbb5b`; post-merge Bootstrap `35464733404` PASS and OpenFGA `35464733333` PASS. Slice 05 — Inbox / Work Queue Foundation — has completed its minimal reality/contract closure and is implementation-authorized. The frozen rule is source-authoritative: Work Queue is the current actionable subset of durable attention; Inbox carries source-linked attention plus per-user read state; read/unread never changes business truth; Notification delivery remains a separate later slice. Approval is the first verified producer so the shared foundation can be proven without inventing unfinished business-domain semantics.
+Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–04 are VERIFIED and merged. Slice 05 — Inbox / Work Queue Foundation — is **VERIFIED / READY TO MERGE** on canonical tested code head `fa8d0660f49c6de0dc4bc1285976f6a06a4610cb`. Exact-head verification is PASS: Bootstrap `35467408783`, Phase 2 Shared Command Runtime `35467408781`, and Phase 1 Native OIDC Production Smoke `35467408788`. The verified foundation adds V0013 durable Inbox/read-state persistence, Approval-driven source-linked projection, current source/authority/OpenFGA revalidation, per-user idempotent read/unread, deterministic oldest-first Work Queue and newest-first Inbox pagination, full-precision opaque HMAC cursors with canonical Base64 tamper rejection, one shared Android/Windows client, and production Spring Modulith failed-publication recovery without duplicate effect. Source domains remain authoritative and Notification delivery remains deliberately separate.
 
 ---
 
@@ -81,8 +81,8 @@ Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–04 are VERI
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 2 ACTIVE | Slices 01–04 verified/merged; Slice 05 Inbox / Work Queue foundation implementation authorized |
-| Production code | PHASE 2 SLICE 04 VERIFIED / MERGED | Minimal Approval Engine is merged; Slice 05 attention/action projection is the current implementation target |
+| Implementation order | PHASE 2 ACTIVE | Slices 01–04 verified/merged; Slice 05 verified/ready to merge; Notification Abstraction is next after merge verification |
+| Production code | PHASE 2 SLICE 05 VERIFIED / READY TO MERGE | Inbox / Work Queue source-authorized attention foundation is exact-head verified; no Notification delivery was added |
 
 ---
 
@@ -234,14 +234,13 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Slices 01–04 are VERIFIED and merged; do not reopen them without a genuine contradiction.
-2. Execute Phase 2 Slice 05 **Inbox / Work Queue Foundation** against `docs/13-delivery/phase2/05_INBOX_WORK_QUEUE_FOUNDATION_SLICE_2026-09-19.md`.
-3. Keep source domains authoritative. Do not create a generic Task business object or generic "complete" command.
-4. Use Approval as the first real producer: requested -> OPEN actionable attention; terminal/superseded -> RESOLVED.
-5. Re-evaluate current source authorization/actionability on read; queue projections never grant authority.
-6. Keep Notification abstraction, push/email/SMS, priority scoring, escalation timers and quiet hours out of Slice 05.
-7. Continue consuming Reality Evidence/Facts by phase; people/process/integration facts remain evidence/configuration inputs, not hard-coded product roles.
-8. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
+1. Slices 01–04 are VERIFIED and merged. Slice 05 is VERIFIED on canonical tested code head `fa8d0660f49c6de0dc4bc1285976f6a06a4610cb`; do not reopen these slices without a genuine contradiction.
+2. Merge PR #34 only from the verified docs-closure head after its docs-only CI is green, then require post-merge main Bootstrap PASS.
+3. The next shared capability in the frozen Phase 2 order is **Notification Abstraction**. Create its own reality/contract closure before implementation; implementation is not authorized merely because Inbox exists.
+4. Preserve the separation: source-domain business truth != Inbox/Work Queue attention projection != Notification delivery.
+5. Do not invent push/email/SMS channel policy, quiet hours, notification preferences, digest cadence, escalation timers, priority scoring or broad recipient fan-out before the Notification closure.
+6. Continue consuming Reality Evidence/Facts by phase; people/process/integration facts remain evidence/configuration inputs, not hard-coded product roles.
+7. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 

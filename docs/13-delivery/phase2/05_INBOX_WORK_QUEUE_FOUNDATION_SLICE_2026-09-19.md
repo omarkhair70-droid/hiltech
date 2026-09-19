@@ -1,7 +1,7 @@
 # Phase 2 / Slice 05 — Inbox / Work Queue Foundation
 
 Date: 2026-09-19  
-Status: **CONTRACTED / IMPLEMENTATION AUTHORIZED**
+Status: **VERIFIED / READY TO MERGE**
 
 ## Reality basis
 
@@ -448,8 +448,37 @@ Only then:
 - merge exact tested closure head;
 - run post-merge main Bootstrap.
 
+## Verification closure — 2026-09-19
+
+Canonical tested code head:
+
+`fa8d0660f49c6de0dc4bc1285976f6a06a4610cb`
+
+Exact-head verification:
+- Bootstrap Phase 0 run `35467408783` — **PASS**.
+- Phase 2 — Shared Command Runtime run `35467408781` — **PASS**.
+- Phase 1 — Native OIDC Production Smoke run `35467408788` — **PASS**.
+
+Verified evidence includes:
+- Flyway V0013 Inbox/read-state persistence plus jOOQ generation/compile;
+- ApprovalRequested -> exactly one OPEN ACTION_REQUIRED projection;
+- APPROVE / REJECT / REQUEST_CHANGE / SUPERSEDED -> RESOLVED;
+- exact event redelivery as a projection no-op and delayed requested-event replay unable to reopen terminal source truth;
+- real PostgreSQL + OpenFGA current-source authorization, including cross-organization denial, current authority replacement and TEAM-membership loss hiding stale projected work;
+- per-user idempotent read/unread that does not mutate Approval or Inbox OPEN/RESOLVED business truth;
+- deterministic oldest-first Work Queue and newest-first Inbox cursor pagination without duplicate/skip;
+- full `Instant` precision plus HMAC-protected, canonical URL-safe Base64 cursor decoding that rejects textual tampering, wrong actor/filter/surface and non-canonical encodings;
+- one shared Android/Windows Inbox/Work Queue DTO/client contract;
+- production `ApprovalInboxProjectionListener` failed-publication persistence and accepted Spring Modulith resubmission/recovery with no duplicate effect;
+- Activity, Audit and Inbox remaining separate truth/presentation concerns;
+- inherited Slice 04 Approval, Slice 03 Activity/Modulith, Slice 02 Evidence, Slice 01 runtime, database, supply-chain, Terraform, local-platform and OIDC regression gates all PASS.
+
+No generic Task object, generic complete/create/reassign endpoint, notification delivery, push/email/SMS, quiet-hours policy, priority/SLA engine, comments/chat/mentions, Kafka/RabbitMQ, or named-person authority was added.
+
 ## Contract conclusion
 
-**IMPLEMENTATION AUTHORIZED.**
+**VERIFIED / READY TO MERGE.**
 
 The slice creates a shared, source-linked attention/action projection without turning HILTECH into a generic task manager or notification spam system.
+
+Next after merge verification: **Notification Abstraction reality/contract closure**.
