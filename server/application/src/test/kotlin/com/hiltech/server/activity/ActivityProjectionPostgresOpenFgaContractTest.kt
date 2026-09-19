@@ -726,7 +726,7 @@ class ActivityProjectionPostgresOpenFgaContractTest {
                 (
                     evidenceId,
                     stateAndClassification,
-                ),
+                )
             ->
             jdbc.update(
                 """
