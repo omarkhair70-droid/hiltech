@@ -25,14 +25,16 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 04 post-merge Bootstrap run `35464733404` — **PASS**
 - Slice 04 post-merge OpenFGA run `35464733333` — **PASS**
 - Slice 04 implementation contract: `docs/13-delivery/phase2/04_APPROVAL_ENGINE_FOUNDATION_SLICE_2026-09-19.md` — **VERIFIED**
-- Phase 2 Slice 05: **Inbox / Work Queue Foundation — VERIFIED / READY TO MERGE**
+- Phase 2 Slice 05: **Inbox / Work Queue Foundation — VERIFIED / MERGED**
 - Slice 05 branch / PR: `phase2/inbox-work-queue-foundation-20260919` / **#34**
 - Slice 05 canonical tested code head: `fa8d0660f49c6de0dc4bc1285976f6a06a4610cb`
-- Slice 05 verification runs: Bootstrap `35467408783` / Phase 2 `35467408781` / Phase 1 OIDC `35467408788` — **PASS**
+- Slice 05 merge commit: `6b6194a9107dcfc1ba74e392776a1dee9e38964a`
+- Slice 05 exact-head verification: Bootstrap `35467408783` / Phase 2 `35467408781` / Phase 1 OIDC `35467408788` — **PASS**
+- Slice 05 post-merge Bootstrap run: `35468123129` — **PASS**
 - Slice 05 reality gate: `docs/13-delivery/phase2/05_INBOX_WORK_QUEUE_REALITY_CLOSURE_2026-09-19.md` — **PASS**
-- Slice 05 implementation contract: `docs/13-delivery/phase2/05_INBOX_WORK_QUEUE_FOUNDATION_SLICE_2026-09-19.md` — **VERIFIED**
+- Slice 05 implementation contract: `docs/13-delivery/phase2/05_INBOX_WORK_QUEUE_FOUNDATION_SLICE_2026-09-19.md` — **VERIFIED / MERGED**
 - Slice 05 rule preserved in production: source domains stay authoritative; Work Queue is current actionable attention, Inbox is durable attention/read state, and Notifications remain a separate delivery concern.
-- Next shared capability after Slice 05 merge verification: **Notification Abstraction**. It requires its own reality/contract closure before implementation; do not infer channel, preference, quiet-hours, escalation or delivery policy from Inbox.
+- Current next capability: **Phase 2 Slice 06 — Notification Abstraction**. Its minimal reality closure is `docs/13-delivery/phase2/06_NOTIFICATION_ABSTRACTION_REALITY_CLOSURE_2026-09-20.md`; implementation may start only against the corresponding frozen Slice 06 contract.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
