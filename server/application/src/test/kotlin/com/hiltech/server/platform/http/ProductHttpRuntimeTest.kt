@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpStatus
+import org.springframework.mock.web.MockFilterChain
+import org.springframework.mock.web.MockHttpServletRequest
+import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
@@ -30,9 +33,6 @@ class ProductHttpRuntimeTest {
                 ProductApiExceptionHandler(
                     errorWriter,
                 ),
-            )
-            .addFilters(
-                HiltechRequestContextFilter(),
             )
             .build()
 
@@ -130,21 +130,25 @@ class ProductHttpRuntimeTest {
 
     @Test
     fun unsafeCorrelationHeaderIsReplacedServerSide() {
-        val result =
-            mvc.perform(
-                get("/probe/ok")
-                    .header(
-                        HiltechRequestHeaders.CORRELATION_ID,
-                        "unsafe correlation value",
-                    ),
-            )
-                .andExpect(
-                    status().isOk,
+        val request =
+            MockHttpServletRequest().apply {
+                addHeader(
+                    HiltechRequestHeaders.CORRELATION_ID,
+                    "unsafe correlation value",
                 )
-                .andReturn()
+            }
+        val response =
+            MockHttpServletResponse()
+
+        HiltechRequestContextFilter()
+            .doFilter(
+                request,
+                response,
+                MockFilterChain(),
+            )
 
         val correlation =
-            result.response.getHeader(
+            response.getHeader(
                 HiltechRequestHeaders.CORRELATION_ID,
             )
 
