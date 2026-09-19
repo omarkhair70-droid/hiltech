@@ -16,6 +16,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
+import java.time.Clock
 
 @ConfigurationProperties(prefix = "hiltech.identity.oidc")
 data class HiltechOidcProperties(
@@ -77,6 +78,10 @@ object OidcSubjectResolver {
     HiltechIdentitySessionProperties::class,
 )
 class IdentitySecurityConfiguration {
+    @Bean
+    fun hiltechClock(): Clock =
+        Clock.systemUTC()
+
     @Bean
     fun hiltechSecurityFilterChain(
         http: HttpSecurity,
