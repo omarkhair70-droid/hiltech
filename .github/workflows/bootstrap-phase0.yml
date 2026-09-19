@@ -1,0 +1,408 @@
+name: Bootstrap Phase 0
+
+on:
+  push:
+    branches:
+      - "bootstrap/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "build-logic/**"
+      - "gradle/**"
+      - "gradlew"
+      - "gradlew.bat"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "shared/**"
+      - "apps/**"
+      - "server/**"
+      - "database/**"
+      - "infrastructure/**"
+      - "scripts/ci/**"
+      - ".github/dependabot.yml"
+      - ".github/workflows/bootstrap-phase0.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up frozen Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Verify committed Gradle Wrapper
+        shell: bash
+        run: |
+          test -f gradlew
+          test -f gradlew.bat
+          test -f gradle/wrapper/gradle-wrapper.jar
+          test -f gradle/wrapper/gradle-wrapper.properties
+          grep -q 'gradle-9.5.0-bin.zip' gradle/wrapper/gradle-wrapper.properties
+
+      - name: Verify wrapper version
+        run: ./gradlew --version
+
+      - name: Shared tests
+        run: ./gradlew :shared:core:allTests
+
+      - name: Verify committed Room schema
+        shell: bash
+        run: |
+          SCHEMA_DIR="shared/core/schemas"
+          SCHEMA_FILE="$SCHEMA_DIR/com.hiltech.shared.core.local.HiltechLocalDatabase/1.json"
+
+          test -f "$SCHEMA_FILE"
+          git diff --exit-code -- "$SCHEMA_DIR"
+
+          if [[ -n "$(git status --porcelain --untracked-files=all -- "$SCHEMA_DIR")" ]]; then
+            echo "Room schema export differs from committed schema history."
+            git status --short --untracked-files=all -- "$SCHEMA_DIR"
+            exit 1
+          fi
+
+      - name: Android debug build
+        run: ./gradlew :apps:androidApp:assembleDebug
+
+      - name: Desktop compile
+        run: ./gradlew :apps:desktopApp:compileKotlin
+
+      - name: Server tests
+        run: ./gradlew :server:application:test
+
+
+  database-contract:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_DB: hiltech
+          POSTGRES_USER: hiltech
+          POSTGRES_PASSWORD: hiltech
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hiltech -d hiltech"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Migrate empty PostgreSQL and verify first-slice constraints
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
+          HILTECH_DB_USER: hiltech
+          HILTECH_DB_PASSWORD: hiltech
+          HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+        run: ./gradlew :server:application:test --tests com.hiltech.server.DatabaseMigrationContractTest
+
+      - name: Generate and verify jOOQ Kotlin sources
+        env:
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
+          HILTECH_DB_USER: hiltech
+          HILTECH_DB_PASSWORD: hiltech
+        run: ./gradlew :server:application:verifyJooqGeneration
+
+      - name: Compile server against generated jOOQ sources
+        run: ./gradlew :server:application:compileKotlin
+
+  evidence-storage-contract:
+    runs-on: ubuntu-latest
+
+    env:
+      HILTECH_EVIDENCE_STORAGE_CONTRACT_TEST: "1"
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      S3_ENDPOINT: http://127.0.0.1:5000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Start disposable S3-compatible contract endpoint
+        shell: bash
+        run: |
+          python3 -m venv /tmp/hiltech-moto
+          /tmp/hiltech-moto/bin/pip install --disable-pip-version-check "moto[server]==5.2.3"
+          nohup /tmp/hiltech-moto/bin/moto_server -H 127.0.0.1 -p 5000 >/tmp/hiltech-moto.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5000/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/hiltech-moto.log
+          exit 1
+
+      - name: Verify signed evidence storage contract
+        run: ./gradlew :server:application:test --tests com.hiltech.server.documents.storage.EvidenceObjectStorageContractTest
+
+      - name: Moto logs on failure
+        if: failure()
+        run: cat /tmp/hiltech-moto.log
+
+  local-platform-contract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Validate local Compose
+        shell: bash
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            config --quiet
+
+      - name: Start isolated local platform
+        shell: bash
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            up -d postgres keycloak openfga-migrate openfga moto
+
+      - name: Wait for local platform contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8081/realms/hiltech/.well-known/openid-configuration >/tmp/hiltech-oidc.json; then
+              break
+            fi
+            sleep 2
+          done
+          grep -q '"issuer":"http://localhost:8080/realms/hiltech"' /tmp/hiltech-oidc.json || \
+            grep -q '"issuer":"http://127.0.0.1:8081/realms/hiltech"' /tmp/hiltech-oidc.json
+
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8082/healthz >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8082/healthz >/dev/null
+          curl -fsS http://127.0.0.1:5000/ >/dev/null
+
+      - name: Prove canonical OpenFGA model loads
+        shell: bash
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            --profile tools run --rm openfga-cli \
+            store create --model /contracts/first-slice-model.fga \
+            | tee /tmp/hiltech-openfga-create.json
+
+          grep -q 'authorization_model_id' /tmp/hiltech-openfga-create.json
+
+      - name: Migrate local HILTECH database and prove service-user isolation
+        shell: bash
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://127.0.0.1:5432/hiltech
+          HILTECH_DB_USER: hiltech_app
+          HILTECH_DB_PASSWORD: hiltech-app-local
+          HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+        run: |
+          ./gradlew :server:application:test --tests com.hiltech.server.DatabaseMigrationContractTest
+
+          if PGPASSWORD=hiltech-keycloak-local \
+            psql -h 127.0.0.1 -U hiltech_keycloak -d hiltech \
+            -c 'SELECT count(*) FROM organization;' >/tmp/keycloak-cross-db.out 2>&1; then
+            echo "Keycloak local DB role unexpectedly read HILTECH business tables."
+            cat /tmp/keycloak-cross-db.out
+            exit 1
+          fi
+
+          if PGPASSWORD=hiltech-openfga-local \
+            psql -h 127.0.0.1 -U hiltech_openfga -d hiltech \
+            -c 'SELECT count(*) FROM organization;' >/tmp/openfga-cross-db.out 2>&1; then
+            echo "OpenFGA local DB role unexpectedly read HILTECH business tables."
+            cat /tmp/openfga-cross-db.out
+            exit 1
+          fi
+
+      - name: Local platform logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            ps
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            logs --no-color --tail=300
+
+      - name: Stop local platform
+        if: always()
+        shell: bash
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            down -v --remove-orphans
+
+  terraform-contract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify canonical Terraform formatting
+        shell: bash
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            hashicorp/terraform:1.16.3 \
+            fmt -recursive infrastructure/oci
+          git diff --exit-code -- infrastructure/oci
+
+      - name: Validate staging OCI root
+        shell: bash
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace/infrastructure/oci/environments/staging \
+            hashicorp/terraform:1.16.3 \
+            init -backend=false -input=false
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace/infrastructure/oci/environments/staging \
+            hashicorp/terraform:1.16.3 \
+            validate
+
+      - name: Validate production OCI root
+        shell: bash
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace/infrastructure/oci/environments/production \
+            hashicorp/terraform:1.16.3 \
+            init -backend=false -input=false
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace/infrastructure/oci/environments/production \
+            hashicorp/terraform:1.16.3 \
+            validate
+
+      - name: Verify pinned Terraform and OCI provider line
+        shell: bash
+        run: |
+          grep -R 'required_version = "= 1.16.3"' infrastructure/oci/environments
+          grep -R 'version = "= 8.29.0"' infrastructure/oci/environments
+
+  supply-chain-contract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify CI scripts compile
+        run: python3 -m py_compile scripts/ci/*.py
+
+      - name: Verify immutable actions and repository secret hygiene
+        run: python3 scripts/ci/verify_supply_chain.py
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Resolve shipped runtime dependency inventory
+        shell: bash
+        run: |
+          mkdir -p build/reports
+          ./gradlew :server:application:dependencies \
+            --configuration runtimeClasspath \
+            --console=plain \
+            > build/reports/server-runtime.txt
+
+          ./gradlew :apps:androidApp:dependencies \
+            --configuration releaseRuntimeClasspath \
+            --console=plain \
+            > build/reports/android-release-runtime.txt
+
+          ./gradlew :apps:desktopApp:dependencies \
+            --configuration runtimeClasspath \
+            --console=plain \
+            > build/reports/desktop-runtime.txt
+
+          cat \
+            build/reports/server-runtime.txt \
+            build/reports/android-release-runtime.txt \
+            build/reports/desktop-runtime.txt \
+            > build/reports/hiltech-shipped-runtime-dependencies.txt
+
+      - name: Review shipped runtime dependencies against OSV
+        run: python3 scripts/ci/osv_gradle_review.py build/reports/hiltech-shipped-runtime-dependencies.txt

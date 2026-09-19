@@ -1024,9 +1024,9 @@ Filename:
 - example: V0005__work__create_work_order.sql
 
 Initial bootstrap ordering:
-- V0001 platform foundations
-- V0002 configuration
-- V0003 identity_organization
+- V0001 identity_organization
+- V0002 platform foundations
+- V0003 configuration
 - V0004 projects_sites
 - V0005 work
 - V0006 warehouse_assets

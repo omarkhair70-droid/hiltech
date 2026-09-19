@@ -1,6 +1,6 @@
 # 22 — CI Supply-Chain / Action Pinning Contract
 
-Status: **CONTRACT CANDIDATE v0.1 / BASELINE PINS DEFINED**
+Status: **PASS / BOOTSTRAP IMPLEMENTED**
 Date: 2026-09-18
 
 ## Purpose
@@ -54,6 +54,20 @@ Release:
 Production/contract reference:
 `openfga/action-openfga-test@e89aa8259796cd5ee5c1b1ae7d72c401029cb947 # v0.1.2`
 
+## Dependency vulnerability review
+
+The Bootstrap PR gate resolves the actual Gradle dependency graph for:
+- server,
+- shared KMP core,
+- Android app,
+- Desktop app.
+
+A repository-owned Python gate queries the official OSV API by Maven coordinate/version and fails closed on query/parse errors or HIGH/CRITICAL known vulnerabilities.
+
+This gate is PR-only.
+
+The native GitHub Dependency Review Action was evaluated but requires the repository Dependency Graph feature. Rather than weaken or skip vulnerability review when that repository setting is unavailable, HILTECH uses the source-controlled OSV gate.
+
 ---
 
 # 2. New action admission rule
@@ -102,9 +116,10 @@ PR from untrusted forks:
 
 # 4. Dependabot
 
-Create/update `.github/dependabot.yml` after production workflow bootstrap:
+Bootstrap now includes `.github/dependabot.yml`:
 
 - package-ecosystem: github-actions
+- package-ecosystem: gradle
 - directory: /
 - schedule: weekly
 
@@ -199,7 +214,17 @@ Baseline immutable pins:
 - gradle/actions v6.3.0
 - OpenFGA test action v0.1.2
 
+Bootstrap enforcement is active:
+- external actions in the production Bootstrap workflow must use full 40-character SHAs,
+- default workflow token remains `contents: read`,
+- strong committed-secret signatures are rejected,
+- mutable `:latest` runtime markers are rejected,
+- dynamic Gradle versions are rejected,
+- tracked real `.tfvars` files are rejected,
+- Dependabot monitors GitHub Actions and Gradle,
+- PR resolved-dependency OSV vulnerability review is required by workflow behavior before Bootstrap merge.
+
 Remaining:
-- apply these pins when production workflows are generated after Freeze,
-- add/pin DigiCert/OCI-specific actions only if selected,
-- enable Dependabot/policy checks during repository bootstrap.
+- enforce equivalent repository/organization Actions policy where account settings permit,
+- add/pin DigiCert/OCI deployment actions only if they are actually selected,
+- production environment approval/federated OCI auth remain cutover work.

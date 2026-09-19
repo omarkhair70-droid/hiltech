@@ -1,0 +1,321 @@
+package com.hiltech.server
+
+import com.hiltech.server.security.AuthorizationDesiredState
+import com.hiltech.server.security.AuthorizationProjectionIntent
+import com.hiltech.server.security.AuthorizationProjectionRetryPolicy
+import com.hiltech.server.security.HiltechOpenFgaProperties
+import com.hiltech.server.security.JdbcAuthorizationProjectionGuard
+import com.hiltech.server.security.JdbcAuthorizationProjectionIntentWriter
+import com.hiltech.server.security.JdbcAuthorizationProjectionStore
+import com.hiltech.server.security.OpenFgaTuple
+import com.hiltech.server.security.ProjectionGuardDecision
+import org.flywaydb.core.Flyway
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.Test
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.datasource.DataSourceTransactionManager
+import org.springframework.jdbc.datasource.DriverManagerDataSource
+import org.springframework.transaction.support.TransactionTemplate
+import java.sql.DriverManager
+import java.sql.SQLException
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.util.UUID
+
+class DatabaseMigrationContractTest {
+    private val enabled = System.getenv("HILTECH_DB_CONTRACT_TEST") == "1"
+    private val url = System.getenv("HILTECH_DB_URL") ?: "jdbc:postgresql://localhost:5432/hiltech"
+    private val user = System.getenv("HILTECH_DB_USER") ?: "hiltech"
+    private val password = System.getenv("HILTECH_DB_PASSWORD") ?: "hiltech"
+    private val migrationPath = System.getenv("HILTECH_MIGRATIONS_PATH") ?: "database/migrations"
+
+    @Test
+    fun emptyPostgresMigratesThroughFirstSliceAndRejectsInvalidStates() {
+        assumeTrue(enabled)
+
+        val result = Flyway.configure()
+            .dataSource(url, user, password)
+            .locations("filesystem:$migrationPath")
+            .load()
+            .migrate()
+
+        assertEquals(9, result.migrationsExecuted)
+
+        DriverManager.getConnection(url, user, password).use { connection ->
+            connection.createStatement().use { statement ->
+                val tables = statement.executeQuery(
+                    """
+                    SELECT count(*)
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                      AND table_name IN (
+                        'organization','user_identity','config_revision','project','site',
+                        'work_order','asset','stock_balance','evidence',
+                        'authorization_relation_projection','authorization_projection_outbox'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(tables.next())
+                assertEquals(11, tables.getInt(1))
+            }
+
+            val orgId = UUID.randomUUID()
+            val userId = UUID.randomUUID()
+            val now = OffsetDateTime.now()
+
+            connection.prepareStatement(
+                """
+                INSERT INTO organization
+                    (id, organization_code, legal_name, display_name, organization_type, status, created_at, version)
+                VALUES (?, ?, ?, ?, 'HILTECH', 'ACTIVE', ?, 1)
+                """.trimIndent(),
+            ).use { ps ->
+                ps.setObject(1, orgId)
+                ps.setString(2, "HILTECH-CONTRACT")
+                ps.setString(3, "HILTECH Contract Test")
+                ps.setString(4, "HILTECH")
+                ps.setObject(5, now)
+                ps.executeUpdate()
+            }
+
+            connection.prepareStatement(
+                """
+                INSERT INTO user_identity
+                    (id, auth_provider, auth_subject, status, primary_organization_id, created_at, version)
+                VALUES (?, 'test', ?, 'ACTIVE', ?, ?, 1)
+                """.trimIndent(),
+            ).use { ps ->
+                ps.setObject(1, userId)
+                ps.setString(2, "subject-${UUID.randomUUID()}")
+                ps.setObject(3, orgId)
+                ps.setObject(4, now)
+                ps.executeUpdate()
+            }
+
+            assertConstraintRejects(connection) {
+                prepareStatement(
+                    """
+                    INSERT INTO organization
+                        (id, organization_code, legal_name, display_name, organization_type, status, created_at, version)
+                    VALUES (?, ?, 'Invalid', 'Invalid', 'HILTECH', 'BROKEN', ?, 1)
+                    """.trimIndent(),
+                ).use { ps ->
+                    ps.setObject(1, UUID.randomUUID())
+                    ps.setString(2, "INVALID-${UUID.randomUUID()}")
+                    ps.setObject(3, now)
+                    ps.executeUpdate()
+                }
+            }
+
+            val activeConfigId = UUID.randomUUID()
+            connection.prepareStatement(
+                """
+                INSERT INTO config_revision
+                    (id, scope_type, scope_organization_id, family, code, name, lifecycle_state,
+                     revision_number, created_at, created_by, activated_at, activated_by, version)
+                VALUES (?, 'SYSTEM', NULL, 'work-types', 'CONTRACT_DUP', 'Contract', 'ACTIVE',
+                        1, ?, ?, ?, ?, 1)
+                """.trimIndent(),
+            ).use { ps ->
+                ps.setObject(1, activeConfigId)
+                ps.setObject(2, now)
+                ps.setObject(3, userId)
+                ps.setObject(4, now)
+                ps.setObject(5, userId)
+                ps.executeUpdate()
+            }
+
+            assertConstraintRejects(connection) {
+                prepareStatement(
+                    """
+                    INSERT INTO config_revision
+                        (id, scope_type, scope_organization_id, family, code, name, lifecycle_state,
+                         revision_number, created_at, created_by, activated_at, activated_by, version)
+                    VALUES (?, 'SYSTEM', NULL, 'work-types', 'CONTRACT_DUP', 'Contract 2', 'ACTIVE',
+                            2, ?, ?, ?, ?, 1)
+                    """.trimIndent(),
+                ).use { ps ->
+                    ps.setObject(1, UUID.randomUUID())
+                    ps.setObject(2, now)
+                    ps.setObject(3, userId)
+                    ps.setObject(4, now)
+                    ps.setObject(5, userId)
+                    ps.executeUpdate()
+                }
+            }
+
+            assertConstraintRejects(connection) {
+                prepareStatement(
+                    """
+                    INSERT INTO evidence
+                        (id, organization_id, target_type, target_id, evidence_type_code, content_type,
+                         size_bytes, sha256, captured_at, captured_by_user_id, storage_state,
+                         classification_code, client_visibility_mode, created_at, version)
+                    VALUES (?, ?, 'CONTRACT_TEST', ?, 'PHOTO', 'image/jpeg',
+                            16777217, ?, ?, ?, 'RESERVED', 'INTERNAL', 'INTERNAL', ?, 1)
+                    """.trimIndent(),
+                ).use { ps ->
+                    ps.setObject(1, UUID.randomUUID())
+                    ps.setObject(2, orgId)
+                    ps.setObject(3, UUID.randomUUID())
+                    ps.setString(4, "a".repeat(64))
+                    ps.setObject(5, now)
+                    ps.setObject(6, userId)
+                    ps.setObject(7, now)
+                    ps.executeUpdate()
+                }
+            }
+        }
+
+        val dataSource = DriverManagerDataSource(url, user, password)
+        val jdbc = JdbcTemplate(dataSource)
+        val transactionManager = DataSourceTransactionManager(dataSource)
+        val transaction = TransactionTemplate(transactionManager)
+        val openFgaProperties = HiltechOpenFgaProperties(
+            enabled = true,
+            apiUrl = "http://openfga-contract",
+            storeId = "store-contract",
+            authorizationModelId = "model-contract",
+        )
+        val intentWriter = JdbcAuthorizationProjectionIntentWriter(
+            jdbc = jdbc,
+            properties = openFgaProperties,
+        )
+        val retryPolicy = AuthorizationProjectionRetryPolicy()
+        val projectionStore = JdbcAuthorizationProjectionStore(
+            jdbc = jdbc,
+            transactionManager = transactionManager,
+            properties = openFgaProperties,
+            retryPolicy = retryPolicy,
+        )
+        val guard = JdbcAuthorizationProjectionGuard(jdbc)
+
+        val tuple = OpenFgaTuple(
+            subjectType = "user",
+            subjectId = "contract-user",
+            relation = "assigned_user",
+            objectType = "work_order",
+            objectId = "contract-work",
+        )
+        val projectionStartedAt = Instant.parse("2026-09-19T00:00:00Z")
+
+        transaction.executeWithoutResult {
+            intentWriter.write(
+                AuthorizationProjectionIntent(
+                    eventId = UUID.randomUUID(),
+                    tuple = tuple,
+                    desiredState = AuthorizationDesiredState.PRESENT,
+                    sourceType = "WorkAssignment",
+                    sourceId = "contract-assignment",
+                    sourceVersion = 1,
+                    occurredAt = projectionStartedAt,
+                ),
+            )
+        }
+
+        assertEquals(
+            ProjectionGuardDecision.DENY_FAIL_CLOSED,
+            guard.evaluate(tuple),
+            "Pending grants must fail closed before OpenFGA projection is APPLIED.",
+        )
+
+        val grantWork = projectionStore.claimNext(
+            projectionStartedAt.plusSeconds(1),
+        )
+        assertTrue(grantWork != null, "Expected pending grant outbox work.")
+        assertEquals(
+            AuthorizationDesiredState.PRESENT,
+            grantWork!!.projection.desiredState,
+        )
+
+        projectionStore.markApplied(
+            work = grantWork,
+            now = projectionStartedAt.plusSeconds(1),
+        )
+
+        assertEquals(
+            ProjectionGuardDecision.PROCEED_TO_OPENFGA,
+            guard.evaluate(tuple),
+            "Applied grants may proceed to the pinned OpenFGA decision.",
+        )
+
+        transaction.executeWithoutResult {
+            intentWriter.write(
+                AuthorizationProjectionIntent(
+                    eventId = UUID.randomUUID(),
+                    tuple = tuple,
+                    desiredState = AuthorizationDesiredState.ABSENT,
+                    sourceType = "WorkAssignment",
+                    sourceId = "contract-assignment",
+                    sourceVersion = 2,
+                    occurredAt = projectionStartedAt.plusSeconds(2),
+                ),
+            )
+        }
+
+        assertEquals(
+            ProjectionGuardDecision.DENY_FAIL_CLOSED,
+            guard.evaluate(tuple),
+            "Pending revokes must deny immediately while stale OpenFGA tuples may still exist.",
+        )
+
+        val revokeWork = projectionStore.claimNext(
+            projectionStartedAt.plusSeconds(3),
+        )
+        assertTrue(revokeWork != null, "Expected pending revoke outbox work.")
+        assertEquals(
+            AuthorizationDesiredState.ABSENT,
+            revokeWork!!.projection.desiredState,
+        )
+
+        projectionStore.markApplied(
+            work = revokeWork,
+            now = projectionStartedAt.plusSeconds(3),
+        )
+
+        assertEquals(
+            ProjectionGuardDecision.PROCEED_TO_OPENFGA,
+            guard.evaluate(tuple),
+            "Once revoke projection is APPLIED, normal OpenFGA evaluation may resume.",
+        )
+
+        val projectionState = jdbc.queryForMap(
+            """
+            SELECT desired_state, projection_state, authorization_model_id
+            FROM authorization_relation_projection
+            WHERE relation_key = ?
+            """.trimIndent(),
+            tuple.relationKey,
+        )
+        assertEquals("ABSENT", projectionState["desired_state"])
+        assertEquals("APPLIED", projectionState["projection_state"])
+        assertEquals("model-contract", projectionState["authorization_model_id"])
+
+        val completedOutbox = jdbc.queryForObject(
+            """
+            SELECT count(*)
+            FROM authorization_projection_outbox
+            WHERE relation_key = ?
+              AND completed_at IS NOT NULL
+            """.trimIndent(),
+            Int::class.java,
+            tuple.relationKey,
+        )
+        assertEquals(2, completedOutbox)
+    }
+
+    private fun assertConstraintRejects(
+        connection: java.sql.Connection,
+        block: java.sql.Connection.() -> Unit,
+    ) {
+        var rejected = false
+        try {
+            connection.block()
+        } catch (_: SQLException) {
+            rejected = true
+        }
+        assertTrue(rejected, "Expected PostgreSQL to reject contract-invalid data")
+    }
+}

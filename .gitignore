@@ -1,0 +1,24 @@
+.gradle/
+**/build/
+**/.kotlin/
+.idea/
+*.iml
+local.properties
+.DS_Store
+
+# Local runtime data
+*.db
+*.db-shm
+*.db-wal
+
+# Generated sources
+server/build/generated-src/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+secrets/

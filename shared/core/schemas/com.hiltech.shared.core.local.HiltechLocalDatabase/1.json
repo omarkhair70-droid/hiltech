@@ -1,0 +1,1276 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "133ff7f74bd8dc26d034ba510d4acaa5",
+    "entities": [
+      {
+        "tableName": "local_project_context",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`project_id` TEXT NOT NULL, `project_code` TEXT NOT NULL, `display_name` TEXT NOT NULL, `lifecycle_state` TEXT NOT NULL, `safe_health_summary` TEXT, `source_version` INTEGER NOT NULL, `fetched_at_epoch_ms` INTEGER NOT NULL, PRIMARY KEY(`project_id`))",
+        "fields": [
+          {
+            "fieldPath": "projectId",
+            "columnName": "project_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "projectCode",
+            "columnName": "project_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "display_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lifecycleState",
+            "columnName": "lifecycle_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "safeHealthSummary",
+            "columnName": "safe_health_summary",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceVersion",
+            "columnName": "source_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMs",
+            "columnName": "fetched_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "project_id"
+          ]
+        }
+      },
+      {
+        "tableName": "local_site_context",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`site_id` TEXT NOT NULL, `project_id` TEXT NOT NULL, `site_code` TEXT NOT NULL, `display_name` TEXT NOT NULL, `address_text` TEXT, `latitude` REAL, `longitude` REAL, `access_instructions` TEXT, `timezone` TEXT, `source_version` INTEGER NOT NULL, `fetched_at_epoch_ms` INTEGER NOT NULL, PRIMARY KEY(`site_id`))",
+        "fields": [
+          {
+            "fieldPath": "siteId",
+            "columnName": "site_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "projectId",
+            "columnName": "project_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "siteCode",
+            "columnName": "site_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "display_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "addressText",
+            "columnName": "address_text",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "latitude",
+            "columnName": "latitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "longitude",
+            "columnName": "longitude",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "accessInstructions",
+            "columnName": "access_instructions",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "timezone",
+            "columnName": "timezone",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceVersion",
+            "columnName": "source_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMs",
+            "columnName": "fetched_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "site_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_local_site_context_project_id",
+            "unique": false,
+            "columnNames": [
+              "project_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_site_context_project_id` ON `${TABLE_NAME}` (`project_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "local_work_order",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`work_order_id` TEXT NOT NULL, `work_order_code` TEXT NOT NULL, `project_id` TEXT NOT NULL, `site_id` TEXT, `area_id` TEXT, `work_type_code` TEXT NOT NULL, `lifecycle_state` TEXT NOT NULL, `readiness_state` TEXT NOT NULL, `work_order_version` INTEGER NOT NULL, `policy_binding_ref` TEXT, `planned_start_epoch_ms` INTEGER, `planned_end_epoch_ms` INTEGER, `priority_code` TEXT, `instruction_revision` INTEGER NOT NULL, `fetched_at_epoch_ms` INTEGER NOT NULL, `freshness_expires_at_epoch_ms` INTEGER, `bundle_revision` TEXT NOT NULL, `local_sync_state` TEXT NOT NULL, `updated_at_epoch_ms` INTEGER NOT NULL, PRIMARY KEY(`work_order_id`))",
+        "fields": [
+          {
+            "fieldPath": "workOrderId",
+            "columnName": "work_order_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workOrderCode",
+            "columnName": "work_order_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "projectId",
+            "columnName": "project_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "siteId",
+            "columnName": "site_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "areaId",
+            "columnName": "area_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "workTypeCode",
+            "columnName": "work_type_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lifecycleState",
+            "columnName": "lifecycle_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "readinessState",
+            "columnName": "readiness_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workOrderVersion",
+            "columnName": "work_order_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "policyBindingRef",
+            "columnName": "policy_binding_ref",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "plannedStartEpochMs",
+            "columnName": "planned_start_epoch_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "plannedEndEpochMs",
+            "columnName": "planned_end_epoch_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "priorityCode",
+            "columnName": "priority_code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "instructionRevision",
+            "columnName": "instruction_revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMs",
+            "columnName": "fetched_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "freshnessExpiresAtEpochMs",
+            "columnName": "freshness_expires_at_epoch_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "bundleRevision",
+            "columnName": "bundle_revision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localSyncState",
+            "columnName": "local_sync_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMs",
+            "columnName": "updated_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "work_order_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_local_work_order_lifecycle_state_planned_start_epoch_ms",
+            "unique": false,
+            "columnNames": [
+              "lifecycle_state",
+              "planned_start_epoch_ms"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_work_order_lifecycle_state_planned_start_epoch_ms` ON `${TABLE_NAME}` (`lifecycle_state`, `planned_start_epoch_ms`)"
+          },
+          {
+            "name": "index_local_work_order_project_id",
+            "unique": false,
+            "columnNames": [
+              "project_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_work_order_project_id` ON `${TABLE_NAME}` (`project_id`)"
+          },
+          {
+            "name": "index_local_work_order_site_id",
+            "unique": false,
+            "columnNames": [
+              "site_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_work_order_site_id` ON `${TABLE_NAME}` (`site_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "local_policy_binding",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`work_order_id` TEXT NOT NULL, `work_type_definition_id` TEXT NOT NULL, `work_type_revision` INTEGER NOT NULL, `assignment_policy_id` TEXT NOT NULL, `assignment_policy_revision` INTEGER NOT NULL, `readiness_policy_id` TEXT NOT NULL, `readiness_policy_revision` INTEGER NOT NULL, `evidence_policy_id` TEXT NOT NULL, `evidence_policy_revision` INTEGER NOT NULL, `review_policy_id` TEXT NOT NULL, `review_policy_revision` INTEGER NOT NULL, `tracking_policy_id` TEXT, `tracking_policy_revision` INTEGER, `checklist_template_id` TEXT, `checklist_template_revision` INTEGER, `instruction_template_id` TEXT, `instruction_template_revision` INTEGER, `binding_created_at_epoch_ms` INTEGER NOT NULL, PRIMARY KEY(`work_order_id`))",
+        "fields": [
+          {
+            "fieldPath": "workOrderId",
+            "columnName": "work_order_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workTypeDefinitionId",
+            "columnName": "work_type_definition_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workTypeRevision",
+            "columnName": "work_type_revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assignmentPolicyId",
+            "columnName": "assignment_policy_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assignmentPolicyRevision",
+            "columnName": "assignment_policy_revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "readinessPolicyId",
+            "columnName": "readiness_policy_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "readinessPolicyRevision",
+            "columnName": "readiness_policy_revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evidencePolicyId",
+            "columnName": "evidence_policy_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evidencePolicyRevision",
+            "columnName": "evidence_policy_revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reviewPolicyId",
+            "columnName": "review_policy_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reviewPolicyRevision",
+            "columnName": "review_policy_revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trackingPolicyId",
+            "columnName": "tracking_policy_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "trackingPolicyRevision",
+            "columnName": "tracking_policy_revision",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "checklistTemplateId",
+            "columnName": "checklist_template_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "checklistTemplateRevision",
+            "columnName": "checklist_template_revision",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "instructionTemplateId",
+            "columnName": "instruction_template_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "instructionTemplateRevision",
+            "columnName": "instruction_template_revision",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "bindingCreatedAtEpochMs",
+            "columnName": "binding_created_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "work_order_id"
+          ]
+        }
+      },
+      {
+        "tableName": "local_requirement_instance",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `work_order_id` TEXT NOT NULL, `requirement_family` TEXT NOT NULL, `requirement_key` TEXT NOT NULL, `label` TEXT NOT NULL, `required` INTEGER NOT NULL, `local_or_authoritative_state` TEXT NOT NULL, `source_config_id` TEXT, `source_config_revision` INTEGER, `sort_order` INTEGER NOT NULL, `updated_at_epoch_ms` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workOrderId",
+            "columnName": "work_order_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requirementFamily",
+            "columnName": "requirement_family",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requirementKey",
+            "columnName": "requirement_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "label",
+            "columnName": "label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "required",
+            "columnName": "required",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localOrAuthoritativeState",
+            "columnName": "local_or_authoritative_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceConfigId",
+            "columnName": "source_config_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceConfigRevision",
+            "columnName": "source_config_revision",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sort_order",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMs",
+            "columnName": "updated_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_local_requirement_instance_work_order_id_requirement_family_local_or_authoritative_state",
+            "unique": false,
+            "columnNames": [
+              "work_order_id",
+              "requirement_family",
+              "local_or_authoritative_state"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_requirement_instance_work_order_id_requirement_family_local_or_authoritative_state` ON `${TABLE_NAME}` (`work_order_id`, `requirement_family`, `local_or_authoritative_state`)"
+          }
+        ]
+      },
+      {
+        "tableName": "local_assignment",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `work_order_id` TEXT NOT NULL, `target_type` TEXT NOT NULL, `target_id` TEXT NOT NULL, `display_label` TEXT NOT NULL, `lead` INTEGER NOT NULL, `state` TEXT NOT NULL, `source_version` INTEGER NOT NULL, `updated_at_epoch_ms` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workOrderId",
+            "columnName": "work_order_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetType",
+            "columnName": "target_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetId",
+            "columnName": "target_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayLabel",
+            "columnName": "display_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lead",
+            "columnName": "lead",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceVersion",
+            "columnName": "source_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMs",
+            "columnName": "updated_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_local_assignment_work_order_id_state",
+            "unique": false,
+            "columnNames": [
+              "work_order_id",
+              "state"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_assignment_work_order_id_state` ON `${TABLE_NAME}` (`work_order_id`, `state`)"
+          }
+        ]
+      },
+      {
+        "tableName": "local_document_ref",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `work_order_id` TEXT NOT NULL, `document_id` TEXT NOT NULL, `document_type_code` TEXT NOT NULL, `title` TEXT NOT NULL, `revision_code` TEXT NOT NULL, `local_file_ref` TEXT, `downloaded` INTEGER NOT NULL, `source_version` INTEGER NOT NULL, `fetched_at_epoch_ms` INTEGER NOT NULL, `freshness_expires_at_epoch_ms` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workOrderId",
+            "columnName": "work_order_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "documentId",
+            "columnName": "document_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "documentTypeCode",
+            "columnName": "document_type_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revisionCode",
+            "columnName": "revision_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localFileRef",
+            "columnName": "local_file_ref",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "downloaded",
+            "columnName": "downloaded",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceVersion",
+            "columnName": "source_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMs",
+            "columnName": "fetched_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "freshnessExpiresAtEpochMs",
+            "columnName": "freshness_expires_at_epoch_ms",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_local_document_ref_work_order_id",
+            "unique": false,
+            "columnNames": [
+              "work_order_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_document_ref_work_order_id` ON `${TABLE_NAME}` (`work_order_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "local_asset_ref",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`asset_id` TEXT NOT NULL, `work_order_id` TEXT, `asset_code` TEXT NOT NULL, `type_label` TEXT NOT NULL, `lifecycle_state` TEXT NOT NULL, `condition_state` TEXT NOT NULL, `calibration_summary` TEXT, `custody_summary` TEXT, `tag_code` TEXT, `source_version` INTEGER NOT NULL, `fetched_at_epoch_ms` INTEGER NOT NULL, PRIMARY KEY(`asset_id`))",
+        "fields": [
+          {
+            "fieldPath": "assetId",
+            "columnName": "asset_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workOrderId",
+            "columnName": "work_order_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "assetCode",
+            "columnName": "asset_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "typeLabel",
+            "columnName": "type_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lifecycleState",
+            "columnName": "lifecycle_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "conditionState",
+            "columnName": "condition_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "calibrationSummary",
+            "columnName": "calibration_summary",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "custodySummary",
+            "columnName": "custody_summary",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tagCode",
+            "columnName": "tag_code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceVersion",
+            "columnName": "source_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMs",
+            "columnName": "fetched_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "asset_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_local_asset_ref_work_order_id",
+            "unique": false,
+            "columnNames": [
+              "work_order_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_asset_ref_work_order_id` ON `${TABLE_NAME}` (`work_order_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "pending_command",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`operation_id` TEXT NOT NULL, `actor_user_identity_id` TEXT NOT NULL, `device_id` TEXT NOT NULL, `command_type` TEXT NOT NULL, `target_type` TEXT NOT NULL, `target_id` TEXT NOT NULL, `base_version` INTEGER, `payload_version` INTEGER NOT NULL, `payload_json` TEXT NOT NULL, `client_occurred_at_epoch_ms` INTEGER NOT NULL, `enqueued_at_epoch_ms` INTEGER NOT NULL, `local_sequence` INTEGER NOT NULL, `state` TEXT NOT NULL, `retry_count` INTEGER NOT NULL, `next_retry_at_epoch_ms` INTEGER, `last_attempt_at_epoch_ms` INTEGER, `last_result_code` TEXT, `last_server_version` INTEGER, `last_correlation_id` TEXT, `contract_version` INTEGER NOT NULL, `policy_binding_ref` TEXT, `updated_at_epoch_ms` INTEGER NOT NULL, PRIMARY KEY(`operation_id`))",
+        "fields": [
+          {
+            "fieldPath": "operationId",
+            "columnName": "operation_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actorUserIdentityId",
+            "columnName": "actor_user_identity_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deviceId",
+            "columnName": "device_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "commandType",
+            "columnName": "command_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetType",
+            "columnName": "target_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetId",
+            "columnName": "target_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baseVersion",
+            "columnName": "base_version",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "payloadVersion",
+            "columnName": "payload_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadJson",
+            "columnName": "payload_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clientOccurredAtEpochMs",
+            "columnName": "client_occurred_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "enqueuedAtEpochMs",
+            "columnName": "enqueued_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localSequence",
+            "columnName": "local_sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "retryCount",
+            "columnName": "retry_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextRetryAtEpochMs",
+            "columnName": "next_retry_at_epoch_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastAttemptAtEpochMs",
+            "columnName": "last_attempt_at_epoch_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastResultCode",
+            "columnName": "last_result_code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastServerVersion",
+            "columnName": "last_server_version",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastCorrelationId",
+            "columnName": "last_correlation_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "contractVersion",
+            "columnName": "contract_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "policyBindingRef",
+            "columnName": "policy_binding_ref",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "updatedAtEpochMs",
+            "columnName": "updated_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "operation_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_pending_command_state_next_retry_at_epoch_ms",
+            "unique": false,
+            "columnNames": [
+              "state",
+              "next_retry_at_epoch_ms"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pending_command_state_next_retry_at_epoch_ms` ON `${TABLE_NAME}` (`state`, `next_retry_at_epoch_ms`)"
+          },
+          {
+            "name": "index_pending_command_target_type_target_id",
+            "unique": false,
+            "columnNames": [
+              "target_type",
+              "target_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pending_command_target_type_target_id` ON `${TABLE_NAME}` (`target_type`, `target_id`)"
+          },
+          {
+            "name": "index_pending_command_local_sequence",
+            "unique": false,
+            "columnNames": [
+              "local_sequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pending_command_local_sequence` ON `${TABLE_NAME}` (`local_sequence`)"
+          }
+        ]
+      },
+      {
+        "tableName": "pending_command_dependency",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`operation_id` TEXT NOT NULL, `depends_on_operation_id` TEXT NOT NULL, PRIMARY KEY(`operation_id`, `depends_on_operation_id`))",
+        "fields": [
+          {
+            "fieldPath": "operationId",
+            "columnName": "operation_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dependsOnOperationId",
+            "columnName": "depends_on_operation_id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "operation_id",
+            "depends_on_operation_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_pending_command_dependency_depends_on_operation_id",
+            "unique": false,
+            "columnNames": [
+              "depends_on_operation_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pending_command_dependency_depends_on_operation_id` ON `${TABLE_NAME}` (`depends_on_operation_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "local_evidence",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`evidence_id` TEXT NOT NULL, `work_order_id` TEXT NOT NULL, `target_type` TEXT NOT NULL, `target_id` TEXT NOT NULL, `requirement_key` TEXT, `evidence_policy_id` TEXT, `evidence_policy_revision` INTEGER, `evidence_type_code` TEXT NOT NULL, `local_file_ref` TEXT NOT NULL, `sha256` TEXT NOT NULL, `content_type` TEXT NOT NULL, `size_bytes` INTEGER NOT NULL, `captured_at_epoch_ms` INTEGER NOT NULL, `captured_by_user_id` TEXT NOT NULL, `source_device_id` TEXT NOT NULL, `local_state` TEXT NOT NULL, `upload_session_id` TEXT, `remote_object_ref` TEXT, `finalized_server_evidence_id` TEXT, `upload_attempt_count` INTEGER NOT NULL, `last_upload_error_code` TEXT, `updated_at_epoch_ms` INTEGER NOT NULL, PRIMARY KEY(`evidence_id`))",
+        "fields": [
+          {
+            "fieldPath": "evidenceId",
+            "columnName": "evidence_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workOrderId",
+            "columnName": "work_order_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetType",
+            "columnName": "target_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetId",
+            "columnName": "target_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requirementKey",
+            "columnName": "requirement_key",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "evidencePolicyId",
+            "columnName": "evidence_policy_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "evidencePolicyRevision",
+            "columnName": "evidence_policy_revision",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "evidenceTypeCode",
+            "columnName": "evidence_type_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localFileRef",
+            "columnName": "local_file_ref",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sha256",
+            "columnName": "sha256",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contentType",
+            "columnName": "content_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sizeBytes",
+            "columnName": "size_bytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "capturedAtEpochMs",
+            "columnName": "captured_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "capturedByUserId",
+            "columnName": "captured_by_user_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceDeviceId",
+            "columnName": "source_device_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localState",
+            "columnName": "local_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uploadSessionId",
+            "columnName": "upload_session_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "remoteObjectRef",
+            "columnName": "remote_object_ref",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "finalizedServerEvidenceId",
+            "columnName": "finalized_server_evidence_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "uploadAttemptCount",
+            "columnName": "upload_attempt_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUploadErrorCode",
+            "columnName": "last_upload_error_code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "updatedAtEpochMs",
+            "columnName": "updated_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "evidence_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_local_evidence_work_order_id_local_state",
+            "unique": false,
+            "columnNames": [
+              "work_order_id",
+              "local_state"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_evidence_work_order_id_local_state` ON `${TABLE_NAME}` (`work_order_id`, `local_state`)"
+          },
+          {
+            "name": "index_local_evidence_local_state",
+            "unique": false,
+            "columnNames": [
+              "local_state"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_evidence_local_state` ON `${TABLE_NAME}` (`local_state`)"
+          }
+        ]
+      },
+      {
+        "tableName": "conflict_record",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `operation_id` TEXT NOT NULL, `command_type` TEXT NOT NULL, `target_type` TEXT NOT NULL, `target_id` TEXT NOT NULL, `conflict_type` TEXT NOT NULL, `base_version` INTEGER, `current_server_version` INTEGER, `safe_server_state_json` TEXT NOT NULL, `allowed_recovery_actions_json` TEXT NOT NULL, `detected_at_epoch_ms` INTEGER NOT NULL, `resolved_at_epoch_ms` INTEGER, `resolution_type` TEXT, `resolution_operation_id` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationId",
+            "columnName": "operation_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "commandType",
+            "columnName": "command_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetType",
+            "columnName": "target_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetId",
+            "columnName": "target_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "conflictType",
+            "columnName": "conflict_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baseVersion",
+            "columnName": "base_version",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "currentServerVersion",
+            "columnName": "current_server_version",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "safeServerStateJson",
+            "columnName": "safe_server_state_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "allowedRecoveryActionsJson",
+            "columnName": "allowed_recovery_actions_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "detectedAtEpochMs",
+            "columnName": "detected_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resolvedAtEpochMs",
+            "columnName": "resolved_at_epoch_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "resolutionType",
+            "columnName": "resolution_type",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "resolutionOperationId",
+            "columnName": "resolution_operation_id",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_conflict_record_operation_id",
+            "unique": true,
+            "columnNames": [
+              "operation_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_conflict_record_operation_id` ON `${TABLE_NAME}` (`operation_id`)"
+          },
+          {
+            "name": "index_conflict_record_target_type_target_id",
+            "unique": false,
+            "columnNames": [
+              "target_type",
+              "target_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_conflict_record_target_type_target_id` ON `${TABLE_NAME}` (`target_type`, `target_id`)"
+          },
+          {
+            "name": "index_conflict_record_resolved_at_epoch_ms",
+            "unique": false,
+            "columnNames": [
+              "resolved_at_epoch_ms"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_conflict_record_resolved_at_epoch_ms` ON `${TABLE_NAME}` (`resolved_at_epoch_ms`)"
+          }
+        ]
+      },
+      {
+        "tableName": "sync_cursor",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`scope_key` TEXT NOT NULL, `cursor` TEXT NOT NULL, `last_successful_pull_at_epoch_ms` INTEGER NOT NULL, `server_as_of_epoch_ms` INTEGER, `updated_at_epoch_ms` INTEGER NOT NULL, PRIMARY KEY(`scope_key`))",
+        "fields": [
+          {
+            "fieldPath": "scopeKey",
+            "columnName": "scope_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cursor",
+            "columnName": "cursor",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSuccessfulPullAtEpochMs",
+            "columnName": "last_successful_pull_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverAsOfEpochMs",
+            "columnName": "server_as_of_epoch_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "updatedAtEpochMs",
+            "columnName": "updated_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "scope_key"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '133ff7f74bd8dc26d034ba510d4acaa5')"
+    ]
+  }
+}

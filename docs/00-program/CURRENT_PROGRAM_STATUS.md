@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**FIRST-SLICE FROZEN / REPOSITORY BOOTSTRAP NEXT**
+**REPOSITORY BOOTSTRAP VERIFIED / PHASE 1 NEXT**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -30,8 +30,10 @@ Accepted:
 Canonical decision:
 `docs/13-delivery/first-slice-contract-pack/24_FIRST_SLICE_FREEZE_DECISION_2026-09-19.md`
 
-Production feature implementation has not started yet.
-The next phase is repository/engineering bootstrap from the frozen contracts.
+Repository / engineering foundation implementation is now complete and Bootstrap Verification is PASS.
+
+Business vertical implementation has not started yet.
+The next phase is Phase 1 — Identity, Organization, Permissions Foundation, followed by complete production vertical slices under the frozen contracts.
 
 ---
 
@@ -60,10 +62,10 @@ The next phase is repository/engineering bootstrap from the frozen contracts.
 | Stack | FINAL FIRST-SLICE BASELINE | FINAL_STACK.md created; AGP 9.3.3 validated; OCI/Windows/DR contracts selected; cutover activation remains post-contract |
 | System architecture | FIRST-SLICE CONTRACT-READY | Core architecture proven; provider instantiation now OCI baseline |
 | Module ownership | v0.1 | High-level ownership defined |
-| Monorepo structure | PROPOSED | Not bootstrapped |
+| Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | FIRST-SLICE FROZEN / PHASE 0 NEXT | Repository Bootstrap is now authorized by the scoped Freeze decision |
-| Production code | NOT STARTED | Next step is bootstrap/foundation generation, then vertical implementation after Bootstrap Verification |
+| Implementation order | PHASE 0 VERIFIED / PHASE 1 NEXT | Repository engineering foundation is verified; Identity / Organization / Permissions Foundation is next |
+| Production code | FOUNDATION IMPLEMENTED / BUSINESS VERTICAL NOT STARTED | Engineering foundation is production-shaped and verified; business capabilities now proceed by vertical slice |
 
 ---
 
@@ -215,15 +217,15 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Create Repository Bootstrap branch from the frozen main state.
-2. Generate monorepo/Gradle/module foundation.
-3. Generate DB/API/Room/Auth/IaC/test skeletons from the frozen contracts.
-4. Run Bootstrap Verification gates.
-5. Begin the first production vertical only after those foundation gates are green.
+1. Merge the verified Repository Bootstrap PR to main after PR-only dependency review is green.
+2. Begin Phase 1 — Identity, Organization, Permissions Foundation from the frozen contracts.
+3. Continue the first production vertical as complete DB/server/auth/client/offline/observability slices.
+4. Keep Bootstrap Verification gates mandatory on every foundation-affecting PR.
+5. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 
-No production code yet by design.
+Production engineering foundation now exists by design; business vertical implementation is next.
 
 
 ---

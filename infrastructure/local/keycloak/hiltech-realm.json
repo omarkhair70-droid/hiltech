@@ -1,0 +1,29 @@
+{
+  "realm": "hiltech",
+  "enabled": true,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "rememberMe": false,
+  "clients": [
+    {
+      "clientId": "hiltech-native",
+      "name": "HILTECH Native Local",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "consentRequired": false,
+      "redirectUris": [
+        "com.hiltech.app:/oauth2redirect",
+        "http://127.0.0.1:*"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false"
+      }
+    }
+  ]
+}
