@@ -139,8 +139,7 @@ class JdbcInboxReadStore(
                 """
                   AND i.created_at <= ?
                 """ +
-                "
-" +
+                "\n" +
                 boundary +
                 """
                 
@@ -198,8 +197,7 @@ class JdbcInboxReadStore(
                 """.trimIndent(),
             )
         filters.append(
-            "
-",
+            "\n",
         )
         filters.append(
             visibleTargetPredicate,
@@ -207,8 +205,7 @@ class JdbcInboxReadStore(
 
         stateFilter?.let {
             filters.append(
-                "
-  AND i.state = ?",
+                "\n  AND i.state = ?",
             )
             args += it.name
         }
@@ -216,15 +213,13 @@ class JdbcInboxReadStore(
         when (readFilter) {
             InboxReadFilter.READ -> {
                 filters.append(
-                    "
-  AND us.read_at IS NOT NULL",
+                    "\n  AND us.read_at IS NOT NULL",
                 )
             }
 
             InboxReadFilter.UNREAD -> {
                 filters.append(
-                    "
-  AND us.read_at IS NULL",
+                    "\n  AND us.read_at IS NULL",
                 )
             }
 
@@ -232,8 +227,7 @@ class JdbcInboxReadStore(
         }
 
         filters.append(
-            "
-  AND i.updated_at <= ?",
+            "\n  AND i.updated_at <= ?",
         )
         args +=
             asOf.atOffset(
