@@ -3,11 +3,13 @@ package com.hiltech.desktop
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
+import com.hiltech.shared.core.network.HiltechApiException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -137,9 +139,277 @@ fun main() {
         setState(
             HiltechShellState.SignedIn(
                 identity = identity,
+                people =
+                    HiltechPeopleState(
+                        loading = true,
+                    ),
             ),
         )
         refreshSecurity()
+        refreshPeople()
+    }
+
+    fun refreshPeople() {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+        val organizationId =
+            signed.identity.organizations
+                .firstOrNull {
+                    it.primary
+                }
+                ?.organizationId
+                ?: signed.identity
+                    .organizations
+                    .firstOrNull()
+                    ?.organizationId
+                ?: return
+
+        setState(
+            signed.copy(
+                people =
+                    (signed.people
+                        ?: HiltechPeopleState())
+                        .copy(
+                            loading = true,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+
+        scope.launch {
+            val ownResult =
+                runCatching {
+                    runtime.ownEmployee(
+                        organizationId,
+                    )
+                }
+            runCatching {
+                runtime.peopleDirectory(
+                    organizationId,
+                )
+            }.onSuccess { directory ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                if (
+                    current != null &&
+                    current.identity.identityId ==
+                    signed.identity.identityId
+                ) {
+                    val ownFailure =
+                        ownResult.exceptionOrNull()
+                    val ownMessage =
+                        when {
+                            ownFailure == null ->
+                                null
+
+                            ownFailure is HiltechApiException &&
+                                ownFailure.code ==
+                                "EMPLOYEE_PROFILE_NOT_FOUND" ->
+                                "No employee profile is linked to this identity yet."
+
+                            else ->
+                                ownFailure.message
+                                    ?: "Own employee profile could not be loaded."
+                        }
+
+                    setState(
+                        current.copy(
+                            people =
+                                HiltechPeopleState(
+                                    ownProfile =
+                                        ownResult
+                                            .getOrNull(),
+                                    directory =
+                                        directory,
+                                    selectedEmployee =
+                                        current.people
+                                            ?.selectedEmployee,
+                                    errorMessage =
+                                        ownMessage,
+                                ),
+                        ),
+                    )
+                }
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                if (
+                    current != null &&
+                    current.identity.identityId ==
+                    signed.identity.identityId
+                ) {
+                    setState(
+                        current.copy(
+                            people =
+                                (current.people
+                                    ?: HiltechPeopleState())
+                                    .copy(
+                                        loading = false,
+                                        errorMessage =
+                                            failure.message
+                                                ?: "People directory could not be loaded.",
+                                    ),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun selectEmployee(
+        employeeId: String,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+
+        scope.launch {
+            runCatching {
+                runtime.employeeDetail(
+                    employeeId,
+                )
+            }.onSuccess { detail ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                if (current != null) {
+                    setState(
+                        current.copy(
+                            people =
+                                (current.people
+                                    ?: HiltechPeopleState())
+                                    .copy(
+                                        loading = false,
+                                        selectedEmployee =
+                                            detail,
+                                        errorMessage = null,
+                                    ),
+                        ),
+                    )
+                }
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                if (current != null) {
+                    setState(
+                        current.copy(
+                            people =
+                                (current.people
+                                    ?: HiltechPeopleState())
+                                    .copy(
+                                        loading = false,
+                                        errorMessage =
+                                            failure.message
+                                                ?: "Employee detail could not be loaded.",
+                                    ),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun createEmployee(
+        displayName: String,
+        employeeCode: String,
+        startDate: String,
+        employmentTypeCode: String?,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+        val organizationId =
+            signed.identity.organizations
+                .firstOrNull {
+                    it.primary
+                }
+                ?.organizationId
+                ?: signed.identity
+                    .organizations
+                    .firstOrNull()
+                    ?.organizationId
+                ?: return
+
+        setState(
+            signed.copy(
+                people =
+                    (signed.people
+                        ?: HiltechPeopleState())
+                        .copy(
+                            loading = true,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+
+        scope.launch {
+            runCatching {
+                runtime.createEmployee(
+                    organizationId =
+                        organizationId,
+                    displayName =
+                        displayName,
+                    employeeCode =
+                        employeeCode,
+                    startDate =
+                        startDate,
+                    employmentTypeCode =
+                        employmentTypeCode,
+                )
+            }.onSuccess { created ->
+                runCatching {
+                    runtime.peopleDirectory(
+                        organizationId,
+                    )
+                }.onSuccess { directory ->
+                    val current =
+                        shellState.value as?
+                            HiltechShellState.SignedIn
+                    if (current != null) {
+                        setState(
+                            current.copy(
+                                people =
+                                    HiltechPeopleState(
+                                        ownProfile =
+                                            current.people
+                                                ?.ownProfile,
+                                        directory =
+                                            directory,
+                                        selectedEmployee =
+                                            created.employee,
+                                    ),
+                            ),
+                        )
+                    }
+                }.onFailure(::showFailure)
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                if (current != null) {
+                    setState(
+                        current.copy(
+                            people =
+                                (current.people
+                                    ?: HiltechPeopleState())
+                                    .copy(
+                                        loading = false,
+                                        errorMessage =
+                                            failure.message
+                                                ?: "Employee could not be created.",
+                                    ),
+                        ),
+                    )
+                }
+            }
+        }
     }
 
     fun signIn(
@@ -253,6 +523,9 @@ fun main() {
                 onReauthenticate = { signIn(true) },
                 onRevokeSession = ::revokeSession,
                 onRevokeDevice = ::revokeDevice,
+                onRefreshPeople = ::refreshPeople,
+                onSelectEmployee = ::selectEmployee,
+                onCreateEmployee = ::createEmployee,
             )
         }
     }
