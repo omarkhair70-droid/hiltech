@@ -15,6 +15,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtValidators
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
 
 @ConfigurationProperties(prefix = "hiltech.identity.oidc")
 data class HiltechOidcProperties(
@@ -67,13 +68,17 @@ object OidcSubjectResolver {
 }
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(HiltechOidcProperties::class)
+@EnableConfigurationProperties(
+    HiltechOidcProperties::class,
+    HiltechIdentitySessionProperties::class,
+)
 class IdentitySecurityConfiguration {
     @Bean
     fun hiltechSecurityFilterChain(
         http: HttpSecurity,
         properties: HiltechOidcProperties,
         jwtDecoderProvider: ObjectProvider<JwtDecoder>,
+        identityAccessFilter: IdentityAccessEnforcementFilter,
     ): SecurityFilterChain {
         properties.validateEnabledConfiguration()
 
@@ -108,6 +113,10 @@ class IdentitySecurityConfiguration {
                     jwt.decoder(decoder)
                 }
             }
+            http.addFilterAfter(
+                identityAccessFilter,
+                BearerTokenAuthenticationFilter::class.java,
+            )
         }
 
         return http.build()
