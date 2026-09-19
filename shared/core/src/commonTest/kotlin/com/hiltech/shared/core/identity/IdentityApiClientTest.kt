@@ -86,6 +86,158 @@ class IdentityApiClientTest {
             )
         }
 
+
+    @Test
+    fun meSessionsSecurityRoutesUseSameAuthenticatedDeviceContext() =
+        runBlocking {
+            val paths = mutableListOf<String>()
+            val installationId =
+                "11111111-1111-1111-1111-111111111111"
+
+            val client = HttpClient(
+                MockEngine { request ->
+                    paths += request.url.encodedPath
+                    assertEquals(
+                        "Bearer token-security",
+                        request.headers[
+                            HttpHeaders.Authorization
+                        ],
+                    )
+                    assertEquals(
+                        installationId,
+                        request.headers[
+                            "X-Device-Installation-Id"
+                        ],
+                    )
+
+                    val body =
+                        when (request.url.encodedPath) {
+                            "/v1/me/sessions" ->
+                                """
+                                [{
+                                  "sessionId":"session-1",
+                                  "deviceId":"device-1",
+                                  "createdAt":"2026-09-19T07:00:00Z",
+                                  "lastSeenAt":"2026-09-19T08:00:00Z",
+                                  "expiresAt":"2026-09-19T19:00:00Z",
+                                  "authenticationStrength":"OIDC",
+                                  "current":true,
+                                  "version":1
+                                }]
+                                """.trimIndent()
+
+                            "/v1/me/devices" ->
+                                """
+                                [{
+                                  "deviceId":"device-1",
+                                  "installationId":"$installationId",
+                                  "platform":"ANDROID",
+                                  "deviceName":"Field Phone",
+                                  "appVersion":"0.1.0",
+                                  "current":true,
+                                  "version":1
+                                }]
+                                """.trimIndent()
+
+                            "/v1/me/reauth/complete" ->
+                                """
+                                {
+                                  "sessionId":"session-1",
+                                  "deviceId":"device-1",
+                                  "createdAt":"2026-09-19T07:00:00Z",
+                                  "lastSeenAt":"2026-09-19T08:00:00Z",
+                                  "expiresAt":"2026-09-19T19:00:00Z",
+                                  "authenticationStrength":"OIDC",
+                                  "reauthSatisfiedUntil":"2026-09-19T08:15:00Z",
+                                  "current":true,
+                                  "version":2
+                                }
+                                """.trimIndent()
+
+                            "/v1/me/sessions/session-2/revoke" ->
+                                """
+                                {
+                                  "sessionId":"session-2",
+                                  "deviceId":"device-2",
+                                  "createdAt":"2026-09-18T07:00:00Z",
+                                  "lastSeenAt":"2026-09-19T06:00:00Z",
+                                  "expiresAt":"2026-09-19T18:00:00Z",
+                                  "revokedAt":"2026-09-19T08:01:00Z",
+                                  "authenticationStrength":"OIDC",
+                                  "current":false,
+                                  "version":3
+                                }
+                                """.trimIndent()
+
+                            else ->
+                                error(
+                                    "Unexpected path: " +
+                                        request.url.encodedPath,
+                                )
+                        }
+
+                    respond(
+                        content = body,
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(
+                            HttpHeaders.ContentType,
+                            "application/json",
+                        ),
+                    )
+                },
+            )
+
+            val api = IdentityApiClient(
+                client = client,
+                baseUrl = "https://api.hiltech.test",
+                accessTokenProvider = {
+                    "token-security"
+                },
+                correlationIdProvider = {
+                    "corr-security"
+                },
+            )
+
+            val sessions =
+                api.sessions(installationId)
+            val devices =
+                api.devices(installationId)
+            val reauth =
+                api.completeReauthentication(
+                    idToken = "signed-id-token",
+                    installationId = installationId,
+                )
+            val revoked =
+                api.revokeSession(
+                    sessionId = "session-2",
+                    installationId = installationId,
+                )
+
+            assertEquals(1, sessions.size)
+            assertEquals(true, sessions.single().current)
+            assertEquals(
+                "Field Phone",
+                devices.single().deviceName,
+            )
+            assertEquals(
+                "2026-09-19T08:15:00Z",
+                reauth.reauthSatisfiedUntil,
+            )
+            assertEquals(
+                "2026-09-19T08:01:00Z",
+                revoked.revokedAt,
+            )
+            assertEquals(
+                listOf(
+                    "/v1/me/sessions",
+                    "/v1/me/devices",
+                    "/v1/me/reauth/complete",
+                    "/v1/me/sessions/session-2/revoke",
+                ),
+                paths,
+            )
+        }
+
     @Test
     fun noTokenFailsLocallyWithoutNetworkRequest() =
         runBlocking {
