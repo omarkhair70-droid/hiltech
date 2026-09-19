@@ -236,6 +236,44 @@ Consume in:
 
 ---
 
+## RE-011 — Sales/purchases invoice report proves real tax-document and counterparty lifecycle
+Evidence: **VERIFIED_DOCUMENT**
+
+Source reviewed:
+- user-supplied customized sales/purchases Excel report,
+- raw workbook remains outside GitHub under the raw-evidence policy.
+
+Observed document reality:
+- the report separates sales invoices sent from purchase invoices received,
+- observed coverage spans purchases from 2022-07-24 through 2026-05-19 and sales from 2023-01-29 through 2026-05-14,
+- the supplied report contains 158 sales invoice rows and 115 purchase invoice rows,
+- counterparties are identified by legal/display name and tax-registration identifier,
+- invoice-level fields include value before discount, discount, value after discount, VAT, schedule tax, withholding/tax-account deduction, service charge and total,
+- negative invoice/adjustment rows exist on both sales and purchase sides, so correction/return/credit semantics are real and cannot be modeled as deletion,
+- recurring customers and suppliers appear across many invoices, proving Counterparty identity/history is a durable business concept,
+- different tax-field combinations occur across invoices; tax handling cannot be one fixed percentage assumption,
+- the report does not contain authoritative bank/payment/collection/reconciliation status.
+
+Product consequence:
+- Finance/Sales/Procurement must preserve Invoice identity, exact counterparty tax identity, line/document tax totals and immutable adjustment/credit relationships,
+- Client/Supplier invoices must not be collapsed into generic Payment objects,
+- negative corrections/returns require explicit document relationship/state rather than overwriting the original invoice,
+- counterparty identity should be normalized once and referenced across Sales/Procurement/Finance,
+- tax treatment must be data/configuration-driven and retain imported source provenance,
+- invoice issuance/receipt proves an obligation/document state only; it does **not** prove money was paid or collected,
+- bank/payment execution and reconciliation remain a separate authoritative boundary,
+- future import must reconcile external invoice report values rather than trusting duplicated manual totals.
+
+Consume in:
+- Phase 8 Finance Operations,
+- Phase 10 Sales / Tenders / Commercial,
+- Procurement/Supplier invoice lifecycle,
+- accounting/e-invoice integration work when the actual authoritative system is validated.
+
+This evidence does not reopen or expand Phase 2 Slice 04 Approval scope.
+
+---
+
 # Current phase rule
 
 Phase 2 implementation proceeds normally.

@@ -167,6 +167,12 @@ tasks.register("verifyJooqGeneration") {
             "IdempotentOperation.kt",
             "ActivityEvent.kt",
             "EventPublication.kt",
+            "ApprovalAuthorityBinding.kt",
+            "ApprovalPolicyVersion.kt",
+            "ApprovalRequest.kt",
+            "ApprovalStep.kt",
+            "ApprovalAssignment.kt",
+            "ApprovalDecision.kt",
         ).forEach { expected ->
             check(expected in generatedFileNames) {
                 "Generated jOOQ schema is missing required first-slice table source: $expected"

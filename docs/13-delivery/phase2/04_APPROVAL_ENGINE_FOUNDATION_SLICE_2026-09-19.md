@@ -1,7 +1,7 @@
 # Phase 2 / Slice 04 — Minimal Approval Engine Foundation
 
 Date: 2026-09-19  
-Status: **CONTRACTED / IMPLEMENTATION AUTHORIZED**
+Status: **VERIFIED / READY TO MERGE**
 
 ## Reality basis
 
@@ -408,9 +408,26 @@ Only then:
 - merge exact tested head;
 - run post-merge main Bootstrap.
 
+## Verification closure — 2026-09-19
+
+Canonical tested code head:
+`5daaf57509f2f3a4013a16717531a77325c59d98`
+
+Exact-head verification:
+- Bootstrap Phase 0 run `35463223977` — **PASS**.
+- Phase 2 — Shared Command Runtime run `35463223971` — **PASS**.
+- Contract — OpenFGA First Slice run `35463223968` — **PASS**.
+- Phase 1 — Native OIDC Production Smoke run `35463223979` — **PASS**.
+
+Verified evidence includes the real PostgreSQL/OpenFGA/Spring Modulith local-platform contract, current-authority replacement defeating stale assignment/OpenFGA state, cross-organization read denial, successful APPROVE/REJECT/REQUEST_CHANGE paths, exact duplicate replay, true concurrent conflicting decisions with one authoritative result, exact subject-version supersession, full-precision/tamper-protected pagination, shared Android/Windows DTO/client tests, Audit separation, safe Approval persistence, and durable failed-publication resubmission without duplicate downstream effect.
+
+No generic create-approval HTTP endpoint, Inbox, Notification system, payment execution, amount-band engine, Kafka/RabbitMQ, or named-person authority was added.
+
 ## Contract conclusion
 
-**IMPLEMENTATION AUTHORIZED.**
+**VERIFIED / READY TO MERGE.**
 
 The slice is intentionally small and matches current HILTECH reality:
 routine work stays routine; explicit exceptions receive an authoritative, version-safe decision without hard-coded people or invented bureaucracy.
+
+Next after merge verification: **Inbox / Work Queue Foundation contract/reality closure**.
