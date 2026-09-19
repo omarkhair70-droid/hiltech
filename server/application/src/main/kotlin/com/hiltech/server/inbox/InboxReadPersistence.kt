@@ -78,6 +78,7 @@ class JdbcInboxReadStore(
         val args =
             mutableListOf<Any>(
                 actorUserId,
+                actorUserId,
                 currentAt.atOffset(
                     ZoneOffset.UTC,
                 ),
@@ -171,6 +172,7 @@ class JdbcInboxReadStore(
 
         val args =
             mutableListOf<Any>(
+                actorUserId,
                 actorUserId,
                 currentAt.atOffset(
                     ZoneOffset.UTC,
@@ -297,6 +299,7 @@ class JdbcInboxReadStore(
             mapper,
             actorUserId,
             inboxItemId,
+            actorUserId,
             currentAt.atOffset(
                 ZoneOffset.UTC,
             ),
