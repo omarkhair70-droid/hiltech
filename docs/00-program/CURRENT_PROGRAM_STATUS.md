@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 1 ACTIVE — IDENTITY / ORGANIZATION / PERMISSIONS**
+**PHASE 1 VERIFIED / COMPLETE — PHASE 2 NEXT**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -33,7 +33,24 @@ Canonical decision:
 Repository / engineering foundation implementation is now complete and Bootstrap Verification is PASS.
 
 Business production implementation is active.
-Phase 1 Slices 01–04 are VERIFIED. Slice 04 — Re-auth + Access Revocation — is verified on head cf021ef7 with real PostgreSQL session revocation, real Keycloak forced re-auth/ID-token verification, and Android/Windows runtime evidence. Phase 1 Slice 05 — Audit Baseline + Me / Sessions Minimal — is now ACTIVE.
+
+Phase 1 — Identity, Organization, Permissions Foundation — is **VERIFIED / COMPLETE**.
+
+All five Phase 1 slices are VERIFIED:
+1. Authenticated Identity Bootstrap.
+2. Native OIDC Session Runtime.
+3. Role / Team Authorization Integration.
+4. Re-auth + Access Revocation.
+5. Audit Baseline + Me / Sessions Minimal.
+
+Final Phase 1 code head: `5fee08baecf5bab9ace5ee52081609205ff6a2d1`.
+
+Final full regression evidence on that code head:
+- Bootstrap Phase 0 run `35424990001` — PASS.
+- Contract — OpenFGA First Slice run `35424990060` — PASS.
+- Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
+
+Phase 2 — Shared Product Infrastructure — is next and has not started.
 
 ---
 
@@ -64,8 +81,8 @@ Phase 1 Slices 01–04 are VERIFIED. Slice 04 — Re-auth + Access Revocation �
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 1 ACTIVE | Slices 01–04 verified; final Slice 05 audit baseline + minimal Me / Sessions active |
-| Production code | PHASE 1 BUSINESS IMPLEMENTATION ACTIVE | Identity/bootstrap, native OIDC, Role/Team authority, re-auth, and access revocation are verified; final audit + Me/Sessions closure active |
+| Implementation order | PHASE 1 VERIFIED / COMPLETE | All five Phase 1 slices verified; Phase 2 Shared Product Infrastructure is next |
+| Production code | PHASE 1 VERIFIED / COMPLETE | Identity/bootstrap, native OIDC, Role/Team authority, re-auth/revocation, audit baseline, and Me/Sessions minimal are verified on production-shaped code |
 
 ---
 
@@ -217,12 +234,12 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Implement Phase 1 Slice 05 — audit baseline + minimal Me / Sessions.
-2. Verify security audit persistence, client session/device visibility, and production shell evidence.
-3. Close Phase 1 only after all foundation/OIDC/OpenFGA gates remain green on the exact final head.
-3. Keep Bootstrap Verification gates mandatory on foundation-affecting changes.
-4. Record later-domain discoveries in the Reality Evidence Register and consume them only when their phase arrives.
-5. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
+1. Phase 1 is closed; do not reopen it without a genuine cross-cutting contradiction.
+2. Before Phase 2 code, read the Phase 2 scope/contracts and close any Phase 2-specific reality or contract gaps.
+3. Begin Phase 2 — Shared Product Infrastructure — as complete vertical slices.
+4. Keep Bootstrap Verification gates mandatory on foundation-affecting changes.
+5. Record later-domain discoveries in the Reality Evidence Register and consume them only when their phase arrives.
+6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen the product architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 
