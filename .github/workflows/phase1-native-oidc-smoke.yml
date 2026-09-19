@@ -213,6 +213,7 @@ jobs:
           grep -q "HILTECH_PHASE1_DESKTOP_SHELL_RENDER_PASS" \
             /tmp/hiltech-desktop-shell.log
           test -s build/reports/phase1-native-oidc/desktop-signed-out.png
+          test -s build/reports/phase1-native-oidc/desktop-me-sessions.png
           test -s build/reports/phase1-native-oidc/desktop-access-denied.png
 
       - name: Upload Desktop rendered shell evidence
