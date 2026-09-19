@@ -110,6 +110,11 @@ class NativeOidcSessionTest {
                 "login",
                 url.parameters["prompt"],
             )
+            assertEquals(
+                "0",
+                url.parameters["max_age"],
+            )
+            assertTrue(attempt.forceReauthentication)
         }
 
     @Test
