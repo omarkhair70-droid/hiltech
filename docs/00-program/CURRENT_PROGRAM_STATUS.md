@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 2 ACTIVE — SLICES 01–05 VERIFIED / MERGED / SLICE 06 NOTIFICATION ABSTRACTION VERIFIED / READY TO MERGE**
+**PHASE 2 ACTIVE — SLICES 01–06 VERIFIED / MERGED / SLICE 07 FINAL SHARED CONTRACT CLOSURE ACTIVE**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -81,8 +81,8 @@ Phase 2 — Shared Product Infrastructure — is ACTIVE. Slices 01–05 are VERI
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 2 ACTIVE | Slices 01–05 verified/merged; Slice 06 Notification Abstraction verified/ready to merge; final Phase 2 gap review follows merge verification |
-| Production code | PHASE 2 SLICE 06 VERIFIED / READY TO MERGE | Provider-neutral Notification intent/policy/attempt foundation is exact-head verified; no real delivery provider was activated |
+| Implementation order | PHASE 2 ACTIVE | Slices 01–06 verified/merged; final gap review reduced remaining work to Slice 07 OpenAPI + reauth contract closure |
+| Production code | PHASE 2 SLICE 07 ACTIVE | Error/API/ID/query foundations are materially satisfied; final generated OpenAPI drift + same-operation REAUTH_REQUIRED retry are being closed |
 
 ---
 
