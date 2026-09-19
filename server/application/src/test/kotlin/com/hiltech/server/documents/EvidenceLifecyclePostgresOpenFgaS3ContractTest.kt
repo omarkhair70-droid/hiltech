@@ -140,17 +140,17 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
 
             assertEquals(
                 "RESERVED",
-                jpegReserve.evidence
+                jpegReserve.response.evidence
                     .storageState,
             )
             assertEquals(
                 "INTERNAL",
-                jpegReserve.evidence
+                jpegReserve.response.evidence
                     .classificationCode,
             )
             assertEquals(
                 "INTERNAL_ONLY",
-                jpegReserve.evidence
+                jpegReserve.response.evidence
                     .clientVisibilityMode,
             )
 
