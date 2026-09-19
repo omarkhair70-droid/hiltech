@@ -46,3 +46,25 @@ the re-auth completion path needs a provider-signed authentication proof rather 
 6. prove revoked offline replay fails closed,
 7. run Keycloak production smoke for prompt=login and revocation,
 8. mark VERIFIED only after real provider + PostgreSQL scenarios pass.
+
+
+## Commit 02 — product-side Session + global access guard
+
+Implemented:
+
+- `identity_session` PostgreSQL object with identity/device/provider-session binding,
+- only SHA-256 of the provider session reference is persisted,
+- configurable product session TTL,
+- revoked sessions cannot be resurrected by the same provider session,
+- active identity + active device + active product session are required after authentication,
+- server filter enforces device/session context on authenticated product routes,
+- device registration remains the bootstrap exception and creates/touches the product session,
+- `REAUTH_REQUIRED` is represented as server session state, not client role/UI state,
+- PostgreSQL contract evidence is wired into the local-platform CI gate.
+
+Next:
+1. verify this commit green,
+2. validate provider-signed fresh-auth proof,
+3. wire product session/device revoke commands,
+4. prove offline replay fails closed after revoke,
+5. then close Slice 04.
