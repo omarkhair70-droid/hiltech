@@ -11,7 +11,7 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
 - Phase 2 — Shared Product Infrastructure: **VERIFIED / COMPLETE**
-- Current execution phase: **Phase 3 — People / Internal Workforce Core — REALITY / CONTRACT CLOSURE**
+- Current execution phase: **Phase 3 — People / Internal Workforce Core / Slice 01 — Employee / Employment Core**
 - Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
 - Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
 - Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
@@ -43,7 +43,10 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 06 rule preserved: provider-neutral Notification intent/policy/attempt foundation only; no production provider, preferences, quiet hours, digest, escalation or TEAM fan-out were invented.
 - Slice 06 merge commit: `a24715e9d792672a0a33fbebaf2e16a1acafadc9`; post-merge Bootstrap `35474093059` — **PASS**
 - Phase 2 final gap review: `docs/13-delivery/phase2/07_PHASE2_FINAL_GAP_REVIEW_2026-09-20.md` — **PASS / NO ADDITIONAL PHASE 2 SLICE REQUIRED**
-- Next canonical work: **Phase 3 — People / Internal Workforce Core reality/contract closure**. Do not start Phase 3 production implementation until that closure freezes the build contract.
+- Phase 2 final closure PR #37 merge commit: `624bd6c50f8d17535316ae450a8a780bc756a108`; post-merge Bootstrap `35474921624` — **PASS**
+- Phase 3 scope closure: `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md` — **PASS / SLICE PLAN FROZEN**
+- Phase 3 Slice 01 contract: `docs/13-delivery/phase3/01_EMPLOYEE_EMPLOYMENT_CORE_SLICE_2026-09-20.md` — **IMPLEMENTATION AUTHORIZED**
+- Current rule: implement only Employee / Employment Core; do not pull Team/Manager, onboarding, certifications, offboarding, attendance, payroll or legacy import into Slice 01.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
