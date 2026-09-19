@@ -7,6 +7,8 @@ on:
     paths:
       - "apps/**"
       - "shared/**"
+      - "server/**"
+      - "database/**"
       - "gradle/**"
       - "scripts/ci/phase1_*"
       - ".github/workflows/phase1-native-oidc-smoke.yml"
@@ -156,7 +158,24 @@ jobs:
           grep -q \
             "HILTECH_PHASE1_NATIVE_OIDC_PROVIDER_PASS mode=windows" \
             /tmp/hiltech-oidc-windows.log
+          grep -q \
+            "HILTECH_PHASE1_REAUTH_PROVIDER_PASS" \
+            /tmp/hiltech-oidc-windows.log
           test -s "$HILTECH_OIDC_SMOKE_DIR/windows-pass.txt"
+          test -s "$HILTECH_OIDC_SMOKE_DIR/windows-reauth-id-token.txt"
+
+      - name: Verify re-auth ID token with production server verifier
+        env:
+          HILTECH_REAUTH_ID_TOKEN_CONTRACT_TEST: "1"
+          HILTECH_REAUTH_ID_TOKEN_FILE: ${{ runner.temp }}/phase1-oidc-windows/windows-reauth-id-token.txt
+          HILTECH_OIDC_ISSUER_URI: https://127.0.0.1:8443/realms/hiltech
+          JAVA_TOOL_OPTIONS: >-
+            -Djavax.net.ssl.trustStore=${{ runner.temp }}/keycloak-truststore.p12
+            -Djavax.net.ssl.trustStorePassword=changeit
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.identity.ReauthIdTokenKeycloakContractTest \
+            --rerun-tasks
 
       - name: Keycloak and runtime logs on failure
         if: failure()
