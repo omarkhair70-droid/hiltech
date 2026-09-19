@@ -1,5 +1,7 @@
 package com.hiltech.server.identity
 
+import com.hiltech.server.audit.AuditEventRecord
+import com.hiltech.server.audit.AuditEventWriter
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.assertThrows
@@ -22,6 +24,8 @@ class IdentitySessionSecurityServiceTest {
     @Test
     fun freshSignedProofMarksOnlyCurrentBoundSessionReauthenticated() {
         val sessions = FakeSessionRepository()
+        val auditEvents =
+            mutableListOf<AuditEventRecord>()
         val identityRepository = FakeIdentityRepository()
         val sessionService = sessionService(
             identityRepository,
@@ -38,6 +42,9 @@ class IdentitySessionSecurityServiceTest {
                 )
             },
             sessionProperties = properties(),
+            audit = AuditEventWriter {
+                auditEvents += it
+            },
             clock = fixedClock(),
         )
 
@@ -46,6 +53,7 @@ class IdentitySessionSecurityServiceTest {
                 accessJwt = accessJwt(),
                 installationId = installationId,
                 rawIdToken = "signed-proof",
+                correlationId = "corr-reauth",
             )
 
         assertEquals(
@@ -60,6 +68,18 @@ class IdentitySessionSecurityServiceTest {
         )
         assertNotNull(
             sessions.current.reauthSatisfiedUntil,
+        )
+        assertEquals(
+            "IDENTITY_REAUTH_COMPLETED",
+            auditEvents.single().action,
+        )
+        assertEquals(
+            "corr-reauth",
+            auditEvents.single().correlationId,
+        )
+        assertEquals(
+            currentSessionId,
+            auditEvents.single().targetId,
         )
     }
 
@@ -128,6 +148,8 @@ class IdentitySessionSecurityServiceTest {
     @Test
     fun remoteSessionRevokeRequiresFreshReauthButSelfRevokeDoesNot() {
         val sessions = FakeSessionRepository()
+        val auditEvents =
+            mutableListOf<AuditEventRecord>()
         val identityRepository = FakeIdentityRepository()
         val sessionService =
             sessionService(
@@ -142,6 +164,9 @@ class IdentitySessionSecurityServiceTest {
                 error("unused")
             },
             sessionProperties = properties(),
+            audit = AuditEventWriter {
+                auditEvents += it
+            },
             clock = fixedClock(),
         )
 
@@ -166,8 +191,25 @@ class IdentitySessionSecurityServiceTest {
             jwt = accessJwt(),
             installationId = installationId,
             targetSessionId = currentSessionId,
+            correlationId = "corr-self-revoke",
         )
         assertNotNull(self.revokedAt)
+        assertEquals(
+            1,
+            auditEvents.size,
+        )
+        assertEquals(
+            "IDENTITY_SESSION_REVOKED",
+            auditEvents.single().action,
+        )
+        assertEquals(
+            "corr-self-revoke",
+            auditEvents.single().correlationId,
+        )
+        assertEquals(
+            "SELF_REVOKE",
+            auditEvents.single().reason,
+        )
     }
 
     private fun sessionService(
