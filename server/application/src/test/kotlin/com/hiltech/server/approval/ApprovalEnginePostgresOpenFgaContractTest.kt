@@ -33,7 +33,11 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.Collections
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class ApprovalEnginePostgresOpenFgaContractTest {
     private val enabled =
@@ -428,6 +432,24 @@ class ApprovalEnginePostgresOpenFgaContractTest {
                 "OBJECT_NOT_VISIBLE",
                 outsider.code,
             )
+            val outsiderRead =
+                assertThrows<
+                    ProductApiException
+                > {
+                    readService.one(
+                        actorUserId =
+                            ids.outsiderUserId,
+                        approvalRequestId =
+                            requireNotNull(
+                                first.approvalRequestId,
+                            ),
+                    )
+                }
+            assertEquals(
+                "OBJECT_NOT_VISIBLE",
+                outsiderRead.code,
+                "An active identity from another organization must not read this Approval.",
+            )
 
             replaceOwnerAuthority(
                 jdbc = jdbc,
@@ -731,6 +753,237 @@ class ApprovalEnginePostgresOpenFgaContractTest {
                 conflicting.code,
             )
 
+            val rejectRequest =
+                service.requestException(
+                    actorUserId =
+                        ids.financeUserId,
+                    operationId =
+                        UUID.randomUUID(),
+                    subject =
+                        subject(
+                            ids.organizationId,
+                        ),
+                    policyKey =
+                        "EXCEPTION_OWNER_FINAL",
+                    reasonCode =
+                        "NON_ROUTINE_EXCEPTION",
+                    safeReasonSummary =
+                        null,
+                    correlationId =
+                        "corr-create-reject",
+                )
+            drainProjector(
+                projector = projector,
+                now = clock.instant(),
+            )
+            val rejected =
+                service.decide(
+                    actorUserId =
+                        ids.ownerTwoUserId,
+                    operationId =
+                        UUID.randomUUID(),
+                    approvalRequestId =
+                        requireNotNull(
+                            rejectRequest
+                                .approvalRequestId,
+                        ),
+                    decision =
+                        ApprovalDecisionType.REJECT,
+                    comment =
+                        "Rejected with a required reason.",
+                    correlationId =
+                        "corr-reject",
+                )
+            assertEquals(
+                ApprovalRequestState.REJECTED,
+                rejected.state,
+            )
+
+            val changeRequest =
+                service.requestException(
+                    actorUserId =
+                        ids.financeUserId,
+                    operationId =
+                        UUID.randomUUID(),
+                    subject =
+                        subject(
+                            ids.organizationId,
+                        ),
+                    policyKey =
+                        "EXCEPTION_OWNER_FINAL",
+                    reasonCode =
+                        "NON_ROUTINE_EXCEPTION",
+                    safeReasonSummary =
+                        null,
+                    correlationId =
+                        "corr-create-change",
+                )
+            drainProjector(
+                projector = projector,
+                now = clock.instant(),
+            )
+            val changeRequested =
+                service.decide(
+                    actorUserId =
+                        ids.ownerTwoUserId,
+                    operationId =
+                        UUID.randomUUID(),
+                    approvalRequestId =
+                        requireNotNull(
+                            changeRequest
+                                .approvalRequestId,
+                        ),
+                    decision =
+                        ApprovalDecisionType
+                            .REQUEST_CHANGE,
+                    comment =
+                        "Please change the exceptional item.",
+                    correlationId =
+                        "corr-request-change",
+                )
+            assertEquals(
+                ApprovalRequestState
+                    .CHANGE_REQUESTED,
+                changeRequested.state,
+            )
+
+            val raceRequest =
+                service.requestException(
+                    actorUserId =
+                        ids.financeUserId,
+                    operationId =
+                        UUID.randomUUID(),
+                    subject =
+                        subject(
+                            ids.organizationId,
+                        ),
+                    policyKey =
+                        "EXCEPTION_OWNER_FINAL",
+                    reasonCode =
+                        "NON_ROUTINE_EXCEPTION",
+                    safeReasonSummary =
+                        null,
+                    correlationId =
+                        "corr-create-race",
+                )
+            drainProjector(
+                projector = projector,
+                now = clock.instant(),
+            )
+            val raceRequestId =
+                requireNotNull(
+                    raceRequest.approvalRequestId,
+                )
+            val start =
+                CountDownLatch(1)
+            val outcomes =
+                Collections.synchronizedList(
+                    mutableListOf<Any>(),
+                )
+            val pool =
+                Executors.newFixedThreadPool(2)
+            try {
+                val approveFuture =
+                    pool.submit {
+                        start.await()
+                        try {
+                            outcomes +=
+                                service.decide(
+                                    actorUserId =
+                                        ids.ownerTwoUserId,
+                                    operationId =
+                                        UUID.randomUUID(),
+                                    approvalRequestId =
+                                        raceRequestId,
+                                    decision =
+                                        ApprovalDecisionType
+                                            .APPROVE,
+                                    comment = null,
+                                    correlationId =
+                                        "corr-race-approve",
+                                )
+                        } catch (
+                            failure:
+                                ProductApiException
+                        ) {
+                            outcomes += failure
+                        }
+                    }
+                val rejectFuture =
+                    pool.submit {
+                        start.await()
+                        try {
+                            outcomes +=
+                                service.decide(
+                                    actorUserId =
+                                        ids.ownerTwoUserId,
+                                    operationId =
+                                        UUID.randomUUID(),
+                                    approvalRequestId =
+                                        raceRequestId,
+                                    decision =
+                                        ApprovalDecisionType
+                                            .REJECT,
+                                    comment =
+                                        "Concurrent reject.",
+                                    correlationId =
+                                        "corr-race-reject",
+                                )
+                        } catch (
+                            failure:
+                                ProductApiException
+                        ) {
+                            outcomes += failure
+                        }
+                    }
+
+                start.countDown()
+                approveFuture.get(
+                    15,
+                    TimeUnit.SECONDS,
+                )
+                rejectFuture.get(
+                    15,
+                    TimeUnit.SECONDS,
+                )
+            } finally {
+                pool.shutdownNow()
+            }
+
+            assertEquals(
+                1,
+                outcomes.count {
+                    it is
+                        ApprovalDecisionResult
+                },
+                "Exactly one concurrent Approval decision must become authoritative.",
+            )
+            val raceFailure =
+                outcomes.single {
+                    it is ProductApiException
+                } as ProductApiException
+            assertEquals(
+                "APPROVAL_ALREADY_HANDLED",
+                raceFailure.code,
+            )
+            assertEquals(
+                1,
+                decisionCount(
+                    jdbc,
+                    raceRequestId,
+                ),
+            )
+            assertTrue(
+                requestState(
+                    jdbc,
+                    raceRequestId,
+                ) in
+                    setOf(
+                        "APPROVED",
+                        "REJECTED",
+                    ),
+            )
+
             val thirdSubject =
                 subject(
                     ids.organizationId,
@@ -856,6 +1109,38 @@ class ApprovalEnginePostgresOpenFgaContractTest {
                 ) ?: 0
             assertTrue(
                 approvalAuditCount >= 4,
+            )
+
+            val unsafeApprovalColumns =
+                jdbc.queryForList(
+                    """
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name IN (
+                          'approval_authority_binding',
+                          'approval_policy_version',
+                          'approval_request',
+                          'approval_step',
+                          'approval_assignment',
+                          'approval_decision'
+                      )
+                      AND (
+                          column_name ILIKE '%token%'
+                          OR column_name ILIKE '%secret%'
+                          OR column_name ILIKE '%storage_key%'
+                          OR column_name ILIKE '%raw_filename%'
+                          OR column_name ILIKE '%sha256%'
+                          OR column_name ILIKE '%file_bytes%'
+                          OR column_name ILIKE '%subject_payload%'
+                          OR column_name ILIKE '%subject_body%'
+                      )
+                    """.trimIndent(),
+                    String::class.java,
+                )
+            assertTrue(
+                unsafeApprovalColumns.isEmpty(),
+                "Approval persistence must contain safe references/decision metadata, not sensitive subject payloads or credentials.",
             )
         } finally {
             telemetry.close()
@@ -1006,6 +1291,8 @@ class ApprovalEnginePostgresOpenFgaContractTest {
     ): SeedIds {
         val organizationId =
             UUID.randomUUID()
+        val outsiderOrganizationId =
+            UUID.randomUUID()
         val financeUserId =
             UUID.randomUUID()
         val ownerOneUserId =
@@ -1048,6 +1335,35 @@ class ApprovalEnginePostgresOpenFgaContractTest {
             at,
         )
 
+        jdbc.update(
+            """
+            INSERT INTO organization (
+                id,
+                organization_code,
+                legal_name,
+                display_name,
+                organization_type,
+                status,
+                created_at,
+                version
+            )
+            VALUES (
+                ?, ?,
+                'Approval Outsider Contract',
+                'Approval Outsider Contract',
+                'HILTECH',
+                'ACTIVE',
+                ?, 1
+            )
+            """.trimIndent(),
+            outsiderOrganizationId,
+            "APR-OUT-" +
+                UUID.randomUUID()
+                    .toString()
+                    .take(8),
+            at,
+        )
+
         listOf(
             financeUserId,
             ownerOneUserId,
@@ -1073,7 +1389,14 @@ class ApprovalEnginePostgresOpenFgaContractTest {
                 """.trimIndent(),
                 userId,
                 "approval-$userId",
-                organizationId,
+                if (
+                    userId ==
+                    outsiderUserId
+                ) {
+                    outsiderOrganizationId
+                } else {
+                    organizationId
+                },
                 at,
             )
         }
@@ -1112,6 +1435,35 @@ class ApprovalEnginePostgresOpenFgaContractTest {
                 at.minusMinutes(1),
             )
         }
+
+        jdbc.update(
+            """
+            INSERT INTO organization_membership (
+                id,
+                organization_id,
+                user_identity_id,
+                membership_type,
+                role_label,
+                state,
+                valid_from,
+                valid_until,
+                invited_by,
+                version
+            )
+            VALUES (
+                ?, ?, ?,
+                'EMPLOYEE',
+                'other-organization-only',
+                'ACTIVE',
+                ?, NULL,
+                NULL, 1
+            )
+            """.trimIndent(),
+            UUID.randomUUID(),
+            outsiderOrganizationId,
+            outsiderUserId,
+            at.minusMinutes(1),
+        )
 
         jdbc.update(
             """
