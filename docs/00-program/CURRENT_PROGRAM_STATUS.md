@@ -50,7 +50,7 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is ACTIVE on branch `phase2/evidence-foundation-20260919`. Slice 01 is Shared HTTP / Command Runtime, selected because it is cross-cutting and dependency-free. Evidence remains the next likely slice, but target-specific authorization must fail closed rather than borrowing broad organization membership.
+Phase 2 — Shared Product Infrastructure — is ACTIVE on branch `phase2/shared-command-runtime-20260919`. Slice 01 is Shared HTTP / Command Runtime, selected because it is cross-cutting and dependency-free. Evidence remains the next likely slice, but target-specific authorization must fail closed rather than borrowing broad organization membership.
 
 ---
 
