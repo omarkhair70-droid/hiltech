@@ -98,6 +98,9 @@ Initial states:
 Rules:
 - start date required;
 - end date cannot precede start date;
+- employment is a historical work-relationship period, not a one-row-for-life employee attribute;
+- rehire/history must be representable with additional Employment rows;
+- the minimal HILTECH baseline allows at most one current ACTIVE Employment per Employee because no concurrent-employment reality is verified today, but the model must not make future concurrent/multiple work relationships impossible without migration;
 - no compensation/salary fields;
 - `employment_type_code` is a configurable business code, not a hard-coded legal enum;
 - Slice 01 does not implement contract/legal validation.
@@ -305,19 +308,20 @@ Do not implement:
 3. CreateEmployee is atomic and idempotent.
 4. duplicate employee code in same organization is rejected safely.
 5. same code may exist in another organization only if business scope permits by constraint.
-6. linked identity must belong to same organization/current membership.
-7. one current identity cannot link to two current employees in same organization.
-8. UpdateEmployeeProfile requires exact version and stale update conflicts.
-9. safe directory never returns restricted legal/contact fields.
-10. own-profile resolves only through linked current identity.
-11. cross-organization reads/writes fail closed.
-12. events contain no restricted field values.
-13. audit exists for material commands.
-14. shared error/idempotency/correlation conventions are reused.
-15. real PostgreSQL contract test passes.
-16. OpenFGA/authorization contract test passes.
-17. inherited Phase 0–2 regression suites remain green.
-18. Android/Windows shared-client compile remains green if DTO/client surface is added.
+6. multiple historical Employment periods for one Employee are representable, while the current minimal invariant prevents two simultaneously ACTIVE periods.
+7. linked identity must belong to same organization/current membership.
+8. one current identity cannot link to two current employees in same organization.
+9. UpdateEmployeeProfile requires exact version and stale update conflicts.
+10. safe directory never returns restricted legal/contact fields.
+11. own-profile resolves only through linked current identity.
+12. cross-organization reads/writes fail closed.
+13. events contain no restricted field values.
+14. audit exists for material commands.
+15. shared error/idempotency/correlation conventions are reused.
+16. real PostgreSQL contract test passes.
+17. OpenFGA/authorization contract test passes.
+18. inherited Phase 0–2 regression suites remain green.
+19. Android/Windows shared-client compile remains green if DTO/client surface is added.
 
 ## Contract conclusion
 
