@@ -50,6 +50,11 @@ import java.nio.file.Path
         "springdoc.api-docs.enabled=true",
         "springdoc.api-docs.version=OPENAPI_3_1",
         "spring.main.banner-mode=off",
+        "spring.autoconfigure.exclude=" +
+            "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration," +
+            "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration," +
+            "org.springframework.boot.jooq.autoconfigure.JooqAutoConfiguration," +
+            "org.springframework.modulith.events.jdbc.JdbcEventPublicationAutoConfiguration",
     ],
 )
 @AutoConfigureMockMvc(addFilters = false)
