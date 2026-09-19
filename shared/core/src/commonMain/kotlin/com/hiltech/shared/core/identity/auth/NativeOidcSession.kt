@@ -250,9 +250,13 @@ class NativeOidcSessionManager(
         val current = tokenStore.load() ?: return null
         val now = NativeOidcPlatform.currentTimeMillis()
 
+        val refreshAtEpochMs =
+            (current.expiresAtEpochMs - refreshSkewMs)
+                .coerceAtLeast(0)
+
         if (
             current.accessToken.isNotBlank() &&
-            now + refreshSkewMs < current.expiresAtEpochMs
+            now < refreshAtEpochMs
         ) {
             return current.accessToken
         }
