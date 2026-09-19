@@ -41,7 +41,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(14, result.migrationsExecuted)
+        assertEquals(15, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -58,12 +58,13 @@ class DatabaseMigrationContractTest {
                         'approval_authority_binding','approval_policy_version','approval_request',
                         'approval_step','approval_assignment','approval_decision',
                         'inbox_item','inbox_user_state',
-                        'notification_intent','notification_delivery_attempt'
+                        'notification_intent','notification_delivery_attempt',
+                        'person','employee','employment'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(24, tables.getInt(1))
+                assertEquals(27, tables.getInt(1))
             }
 
             val orgId = UUID.randomUUID()
