@@ -34,13 +34,14 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 05 reality gate: `docs/13-delivery/phase2/05_INBOX_WORK_QUEUE_REALITY_CLOSURE_2026-09-19.md` — **PASS**
 - Slice 05 implementation contract: `docs/13-delivery/phase2/05_INBOX_WORK_QUEUE_FOUNDATION_SLICE_2026-09-19.md` — **VERIFIED / MERGED**
 - Slice 05 rule preserved in production: source domains stay authoritative; Work Queue is current actionable attention, Inbox is durable attention/read state, and Notifications remain a separate delivery concern.
-- Phase 2 Slice 06: **Notification Abstraction — VERIFIED / READY TO MERGE**
+- Phase 2 Slice 06: **Notification Abstraction — VERIFIED / MERGED**
 - Slice 06 reality gate: `docs/13-delivery/phase2/06_NOTIFICATION_ABSTRACTION_REALITY_CLOSURE_2026-09-20.md` — **PASS**
 - Slice 06 implementation contract: `docs/13-delivery/phase2/06_NOTIFICATION_ABSTRACTION_FOUNDATION_SLICE_2026-09-20.md` — **VERIFIED / READY TO MERGE**
-- Slice 06 canonical tested code head: `df72b296181890b3f4a680800f924c8bde3ec5b8`
-- Slice 06 verification runs: Bootstrap `35472074530` / Phase 2 `35472074603` / Phase 1 OIDC `35472074705` — **PASS**
+- Slice 06 canonical tested code head: `ba4fc30e98ce83680b623c9dc27be7dea2f12a67`
+- Slice 06 verification runs: Bootstrap `35473797913` / Phase 2 `35473797915` / Phase 1 OIDC `35473797928` — **PASS**
+- Slice 06 merge commit: `a24715e9d792672a0a33fbebaf2e16a1acafadc9`; post-merge Bootstrap `35474093059` — **PASS**
 - Slice 06 rule preserved: provider-neutral Notification intent/policy/attempt foundation only; no production provider, preferences, quiet hours, digest, escalation or TEAM fan-out were invented.
-- After Slice 06 merge + post-merge verification, perform the Phase 2 shared-infrastructure gap review from `IMPLEMENTATION_ORDER.md`; do not assume the next slice from chat memory.
+- Phase 2 gap review found one final technical closure only: **Slice 07 — Final Shared Contract Closure** (`docs/13-delivery/phase2/07_FINAL_SHARED_CONTRACT_CLOSURE_2026-09-20.md`) — **IMPLEMENTATION AUTHORIZED**. Scope is generated OpenAPI drift protection + explicit same-operation REAUTH_REQUIRED retry; do not expand into new business features.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
