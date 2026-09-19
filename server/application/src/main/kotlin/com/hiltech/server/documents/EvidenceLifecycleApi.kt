@@ -15,6 +15,7 @@ import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.security.AuthorizationProjectionIntentWriter
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.beans.factory.ObjectProvider
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.bind.annotation.GetMapping
@@ -117,6 +118,7 @@ class EvidenceLifecycleService(
     private val audit: AuditEventWriter,
     private val storageAccess: EvidenceStorageAccessPort,
     private val storageProperties: EvidenceStorageProperties,
+    private val events: ApplicationEventPublisher,
     private val clock: Clock,
 ) {
     fun reserve(
@@ -512,6 +514,28 @@ class EvidenceLifecycleService(
                         status = HttpStatus.CONFLICT,
                     )
                 }
+
+                events.publishEvent(
+                    EvidenceTerminalStateChanged(
+                        eventId = UUID.randomUUID(),
+                        evidenceId = record.evidenceId,
+                        workOrderId = record.workOrderId,
+                        sourceVersion =
+                            record.evidenceVersion + 1,
+                        storageState = targetState,
+                        evidenceTypeCode =
+                            record.evidenceTypeCode,
+                        evidenceRequirementKey =
+                            record.evidenceRequirementKey,
+                        classificationCode =
+                            record.classificationCode,
+                        actorIdentityId =
+                            actorIdentityId,
+                        occurredAt = now,
+                        correlationId =
+                            correlationId,
+                    ),
+                )
 
                 audit.append(
                     AuditEventRecord(
