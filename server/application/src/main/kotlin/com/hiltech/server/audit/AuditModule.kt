@@ -28,7 +28,7 @@ fun interface AuditEventWriter {
 
     companion object {
         val NOOP =
-            AuditEventWriter { _ -> Unit }
+            AuditEventWriter { _ -> }
     }
 }
 
