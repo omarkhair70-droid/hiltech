@@ -1,7 +1,7 @@
 # Phase 2 / Slice 03 — Activity Events Foundation
 
 Date: 2026-09-19  
-Status: **VERIFICATION CANDIDATE — CODE GATES PASS / CLOSURE CI PENDING**
+Status: **VERIFIED / READY FOR MERGE**
 
 ## Why this is the next Phase 2 slice
 
@@ -310,21 +310,18 @@ Do not implement in Slice 03:
 21. Phase 2 Slice 02 Evidence lifecycle/PostgreSQL/OpenFGA/S3 regressions remain PASS.
 22. Bootstrap database/foundation/supply-chain/Terraform/evidence-storage/local-platform gates remain PASS where applicable.
 
-## Verification candidate evidence — 2026-09-19
+## Verification closure evidence — 2026-09-19
 
 Canonical implementation code head:
 `e1244da23a0889bab33b249bf4ef96488aef1699`
 
-Exact-head regression evidence already complete:
-- Bootstrap Phase 0 run `35436760827` — **PASS**, including:
-  - local-platform-contract,
-  - database-contract,
-  - foundation / Spring Modulith verification,
-  - evidence-storage-contract,
-  - dependency-review,
-  - supply-chain-contract,
-  - terraform-contract.
-- Phase 2 — Shared Command Runtime run `35436760820` — **PASS**.
+Canonical verification-closure documentation head:
+`1ddf37da97eb626101777f0b1ae2833bfa8baa89`
+
+Closure regression evidence:
+- Phase 2 — Shared Command Runtime run `35437488895` — **PASS**.
+- Bootstrap Phase 0 run `35437488932` — **PASS**, including local-platform, database/jOOQ, foundation/Spring Modulith verification, evidence-storage, dependency-review, supply-chain and Terraform.
+- Phase 1 — Native OIDC Production Smoke run `35437489102` — **PASS**, including Desktop shell render, provider/browser smoke and Android shell/private-callback render.
 
 The Bootstrap local-platform gate proves:
 - PostgreSQL Activity persistence,
@@ -337,15 +334,13 @@ The Bootstrap local-platform gate proves:
 - existing Evidence lifecycle regressions,
 - Spring Modulith durable failed-publication detection and controlled resubmission without duplicate Activity.
 
-Phase 1 OIDC exact-head closure is intentionally re-triggered by this documentation commit because the prior exact-head run had Android/provider PASS while one Desktop GitHub runner remained stuck `in_progress` beyond its declared job timeout. No Phase 1 production code was changed to work around that runner state.
-
-Do not mark Slice 03 VERIFIED or merge until the documentation-closure head itself is green.
+All 22 Required Evidence gates are satisfied.
 
 ---
 
 ## Contract-check conclusion
 
-**IMPLEMENTATION AUTHORIZED.**
+**IMPLEMENTATION VERIFIED.**
 
 No frozen architecture contradiction was found.
 
