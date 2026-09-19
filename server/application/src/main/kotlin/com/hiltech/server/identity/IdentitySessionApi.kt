@@ -1,5 +1,7 @@
 package com.hiltech.server.identity
 
+import com.hiltech.server.audit.AuditEventRecord
+import com.hiltech.server.audit.AuditEventWriter
 import org.springframework.http.HttpStatus
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
 import org.springframework.security.oauth2.jwt.Jwt
@@ -109,12 +111,15 @@ class IdentitySessionSecurityService(
     private val identityRepository: IdentityRuntimeRepository,
     private val proofVerifier: IdTokenProofVerifier,
     private val sessionProperties: HiltechIdentitySessionProperties,
+    private val audit: AuditEventWriter = AuditEventWriter.NOOP,
     private val clock: Clock = Clock.systemUTC(),
 ) {
+    @Transactional
     fun completeReauthentication(
         accessJwt: Jwt,
         installationId: UUID,
         rawIdToken: String,
+        correlationId: String = UUID.randomUUID().toString(),
     ): IdentitySessionRuntime {
         sessionProperties.validate()
         val context = sessionService.requireCurrentAccess(
@@ -188,22 +193,40 @@ class IdentitySessionSecurityService(
             )
         }
 
-        return sessionRepository
-            .markReauthenticationSatisfied(
-                identityId = context.identity.id,
-                sessionId = context.session.id,
-                satisfiedUntil =
-                    now.plusSeconds(
-                        sessionProperties
-                            .reauthWindowSeconds,
-                    ),
-                at = now,
-            )
-            ?: throw IdentityAccessException(
-                code = "SESSION_NOT_ACTIVE",
-                message =
-                    "No active HILTECH session is available.",
-            )
+        val updated =
+            sessionRepository
+                .markReauthenticationSatisfied(
+                    identityId = context.identity.id,
+                    sessionId = context.session.id,
+                    satisfiedUntil =
+                        now.plusSeconds(
+                            sessionProperties
+                                .reauthWindowSeconds,
+                        ),
+                    at = now,
+                )
+                ?: throw IdentityAccessException(
+                    code = "SESSION_NOT_ACTIVE",
+                    message =
+                        "No active HILTECH session is available.",
+                )
+
+        audit.append(
+            AuditEventRecord(
+                actorUserId = context.identity.id,
+                action = "IDENTITY_REAUTH_COMPLETED",
+                targetType = "IdentitySession",
+                targetId = context.session.id,
+                previousStateRef = "reauth:unsatisfied",
+                newStateRef =
+                    "reauth:satisfied",
+                occurredAt = now,
+                correlationId = correlationId,
+                reason = "FRESH_OIDC_PROVIDER_PROOF",
+            ),
+        )
+
+        return updated
     }
 
     fun listSessions(
@@ -236,10 +259,12 @@ class IdentitySessionSecurityService(
             )
     }
 
+    @Transactional
     fun revokeSession(
         jwt: Jwt,
         installationId: UUID,
         targetSessionId: UUID,
+        correlationId: String = UUID.randomUUID().toString(),
     ): IdentitySessionRuntime {
         val context =
             sessionService.requireCurrentAccess(
@@ -261,10 +286,29 @@ class IdentitySessionSecurityService(
             ) ?: throw notFound("SESSION_NOT_FOUND")
 
         if (target.revokedAt == null) {
+            val now = clock.instant()
             sessionRepository.revokeOwned(
                 identityId = context.identity.id,
                 sessionId = targetSessionId,
-                revokedAt = clock.instant(),
+                revokedAt = now,
+            )
+            audit.append(
+                AuditEventRecord(
+                    actorUserId = context.identity.id,
+                    action = "IDENTITY_SESSION_REVOKED",
+                    targetType = "IdentitySession",
+                    targetId = targetSessionId,
+                    previousStateRef = "session:active",
+                    newStateRef = "session:revoked",
+                    occurredAt = now,
+                    correlationId = correlationId,
+                    reason =
+                        if (targetSessionId == context.session.id) {
+                            "SELF_REVOKE"
+                        } else {
+                            "REMOTE_SESSION_REVOKE"
+                        },
+                ),
             )
         }
 
@@ -279,6 +323,7 @@ class IdentitySessionSecurityService(
         jwt: Jwt,
         installationId: UUID,
         targetDeviceId: UUID,
+        correlationId: String = UUID.randomUUID().toString(),
     ): DeviceRuntime {
         val context =
             sessionService.requireCurrentAccess(
@@ -311,6 +356,24 @@ class IdentitySessionSecurityService(
                 identityId = context.identity.id,
                 deviceId = targetDeviceId,
                 revokedAt = now,
+            )
+            audit.append(
+                AuditEventRecord(
+                    actorUserId = context.identity.id,
+                    action = "IDENTITY_DEVICE_REVOKED",
+                    targetType = "Device",
+                    targetId = targetDeviceId,
+                    previousStateRef = "device:active",
+                    newStateRef = "device:revoked",
+                    occurredAt = now,
+                    correlationId = correlationId,
+                    reason =
+                        if (targetDeviceId == context.device.id) {
+                            "SELF_DEVICE_REVOKE"
+                        } else {
+                            "REMOTE_DEVICE_REVOKE"
+                        },
+                ),
             )
         }
 
@@ -363,6 +426,11 @@ class IdentitySessionSecurityController(
         installationId: String,
         @RequestBody
         request: ReauthenticationCompletionRequest,
+        @RequestHeader(
+            name = "X-Correlation-Id",
+            required = false,
+        )
+        correlationId: String?,
     ): IdentitySessionResponse {
         val session =
             service.completeReauthentication(
@@ -372,6 +440,8 @@ class IdentitySessionSecurityController(
                         "INVALID_DEVICE_INSTALLATION_ID",
                     ),
                 rawIdToken = request.idToken,
+                correlationId =
+                    correlationId.safeCorrelationId(),
             )
         return session.toResponse(
             currentSessionId = session.id,
@@ -435,6 +505,11 @@ class IdentitySessionSecurityController(
         installationId: String,
         @PathVariable
         sessionId: String,
+        @RequestHeader(
+            name = "X-Correlation-Id",
+            required = false,
+        )
+        correlationId: String?,
     ): IdentitySessionResponse {
         val target = service.revokeSession(
             jwt = jwt,
@@ -446,6 +521,8 @@ class IdentitySessionSecurityController(
                 sessionId.toUuid(
                     "INVALID_SESSION_ID",
                 ),
+            correlationId =
+                correlationId.safeCorrelationId(),
         )
         return target.toResponse(
             currentSessionId = null,
@@ -461,6 +538,11 @@ class IdentitySessionSecurityController(
         installationId: String,
         @PathVariable
         deviceId: String,
+        @RequestHeader(
+            name = "X-Correlation-Id",
+            required = false,
+        )
+        correlationId: String?,
     ): IdentityDeviceSecurityResponse {
         val currentInstallationId =
             installationId.toUuid(
@@ -474,6 +556,8 @@ class IdentitySessionSecurityController(
                 deviceId.toUuid(
                     "INVALID_DEVICE_ID",
                 ),
+            correlationId =
+                correlationId.safeCorrelationId(),
         )
         return target.toSecurityResponse(
             currentDeviceId =
