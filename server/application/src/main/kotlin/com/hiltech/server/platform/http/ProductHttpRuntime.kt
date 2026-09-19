@@ -1,6 +1,5 @@
 package com.hiltech.server.platform.http
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -15,6 +14,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.filter.OncePerRequestFilter
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import java.util.UUID
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 object HiltechRequestHeaders {
     const val CORRELATION_ID = "X-Correlation-Id"
@@ -228,29 +231,32 @@ class HiltechRequestContextFilter :
     }
 }
 
+@Serializable
 data class ProductTargetRef(
     val type: String,
     val id: String,
 )
 
+@Serializable
 data class ProductConflictPayload(
     val conflictType: String,
     val targetType: String? = null,
     val targetId: String? = null,
     val attemptedBaseVersion: Long? = null,
     val currentVersion: Long? = null,
-    val safeCurrentState: Map<String, Any?>? = null,
+    val safeCurrentState: JsonObject? = null,
     val localWorkSafe: Boolean? = null,
     val allowedRecoveryActions: List<String> =
         emptyList(),
 )
 
+@Serializable
 data class ProductErrorEnvelope(
     val code: String,
     val message: String,
     val correlationId: String,
     val retryable: Boolean = false,
-    val details: Map<String, Any?>? = null,
+    val details: JsonObject? = null,
     val currentVersion: Long? = null,
     val conflict: ProductConflictPayload? = null,
     val messageKey: String? = null,
@@ -262,7 +268,7 @@ open class ProductApiException(
     override val message: String,
     val status: HttpStatus,
     val retryable: Boolean = false,
-    val details: Map<String, Any?>? = null,
+    val details: JsonObject? = null,
     val currentVersion: Long? = null,
     val conflict: ProductConflictPayload? = null,
     val messageKey: String? = null,
@@ -270,15 +276,17 @@ open class ProductApiException(
 ) : RuntimeException(message)
 
 @Component
-class ProductApiErrorWriter(
-    private val objectMapper: ObjectMapper,
-) {
+class ProductApiErrorWriter {
+    private val json = Json {
+        encodeDefaults = true
+        explicitNulls = false
+    }
     fun envelope(
         request: HttpServletRequest,
         code: String,
         message: String,
         retryable: Boolean = false,
-        details: Map<String, Any?>? = null,
+        details: JsonObject? = null,
         currentVersion: Long? = null,
         conflict: ProductConflictPayload? = null,
         messageKey: String? = null,
@@ -299,6 +307,14 @@ class ProductApiErrorWriter(
             target = target,
         )
 
+    fun encode(
+        envelope: ProductErrorEnvelope,
+    ): String =
+        json.encodeToString(
+            ProductErrorEnvelope.serializer(),
+            envelope,
+        )
+
     fun write(
         request: HttpServletRequest,
         response: HttpServletResponse,
@@ -306,7 +322,7 @@ class ProductApiErrorWriter(
         code: String,
         message: String,
         retryable: Boolean = false,
-        details: Map<String, Any?>? = null,
+        details: JsonObject? = null,
         currentVersion: Long? = null,
         conflict: ProductConflictPayload? = null,
         messageKey: String? = null,
@@ -333,9 +349,8 @@ class ProductApiErrorWriter(
             HiltechRequestHeaders.CORRELATION_ID,
             envelope.correlationId,
         )
-        objectMapper.writeValue(
-            response.writer,
-            envelope,
+        response.writer.write(
+            encode(envelope),
         )
     }
 }
@@ -348,7 +363,7 @@ class ProductApiExceptionHandler(
     fun handleProductFailure(
         exception: ProductApiException,
         request: HttpServletRequest,
-    ): ResponseEntity<ProductErrorEnvelope> {
+    ): ResponseEntity<String> {
         val envelope =
             errorWriter.envelope(
                 request = request,
@@ -371,7 +386,14 @@ class ProductApiExceptionHandler(
                 HiltechRequestHeaders.CORRELATION_ID,
                 envelope.correlationId,
             )
-            .body(envelope)
+            .contentType(
+                MediaType.APPLICATION_JSON,
+            )
+            .body(
+                errorWriter.encode(
+                    envelope,
+                ),
+            )
     }
 
     @ExceptionHandler(
@@ -381,7 +403,7 @@ class ProductApiExceptionHandler(
     )
     fun handleMalformedRequest(
         request: HttpServletRequest,
-    ): ResponseEntity<ProductErrorEnvelope> {
+    ): ResponseEntity<String> {
         val envelope =
             errorWriter.envelope(
                 request = request,
@@ -402,7 +424,7 @@ class ProductApiExceptionHandler(
     @ExceptionHandler(Exception::class)
     fun handleUnexpectedFailure(
         request: HttpServletRequest,
-    ): ResponseEntity<ProductErrorEnvelope> {
+    ): ResponseEntity<String> {
         val envelope =
             errorWriter.envelope(
                 request = request,
