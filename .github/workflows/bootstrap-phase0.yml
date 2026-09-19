@@ -263,8 +263,8 @@ jobs:
           model_id = payload["model"]["authorization_model_id"]
 
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as target:
-              target.write(f"HILTECH_FGA_STORE_ID={store_id}\\n")
-              target.write(f"HILTECH_FGA_MODEL_ID={model_id}\\n")
+              target.write(f"HILTECH_FGA_STORE_ID={store_id}\n")
+              target.write(f"HILTECH_FGA_MODEL_ID={model_id}\n")
           PY
 
       - name: Migrate local HILTECH database and prove service-user isolation
