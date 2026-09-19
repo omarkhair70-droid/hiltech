@@ -59,6 +59,7 @@ data class EmployeeDirectoryItemResponse(
 
 data class EmployeeDirectoryResponse(
     val items: List<EmployeeDirectoryItemResponse>,
+    val canManagePeople: Boolean,
     val correlationId: String,
 )
 
@@ -226,6 +227,15 @@ class PeopleController(
                             it.version,
                     )
                 },
+            canManagePeople =
+                service.canManagePeople(
+                    actorUserId =
+                        context.requireIdentityId(),
+                    organizationId =
+                        organizationId.toUuid(
+                            "INVALID_ORGANIZATION_ID",
+                        ),
+                ),
             correlationId =
                 context.correlationId,
         )
