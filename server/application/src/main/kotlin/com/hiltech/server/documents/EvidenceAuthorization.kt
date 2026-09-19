@@ -286,13 +286,57 @@ class JdbcEvidenceTargetAuthorization(
 
         return jdbc.query(
             """
-            SELECT target_type, target_id
-            FROM work_assignment
-            WHERE work_order_id = ?
-              AND state = 'ACTIVE'
-              AND valid_from <= ?
-              AND (valid_until IS NULL OR valid_until >= ?)
-              AND target_type IN ('USER','TEAM')
+            SELECT
+                wa.target_type,
+                wa.target_id
+            FROM work_assignment wa
+            JOIN work_order wo
+              ON wo.id = wa.work_order_id
+            JOIN project p
+              ON p.id = wo.project_id
+            JOIN organization o
+              ON o.id = p.organization_id
+             AND o.status = 'ACTIVE'
+            WHERE wa.work_order_id = ?
+              AND wa.state = 'ACTIVE'
+              AND wa.valid_from <= ?
+              AND (
+                  wa.valid_until IS NULL
+                  OR wa.valid_until >= ?
+              )
+              AND (
+                  (
+                      wa.target_type = 'USER'
+                      AND EXISTS (
+                          SELECT 1
+                          FROM user_identity u
+                          JOIN organization_membership om
+                            ON om.user_identity_id = u.id
+                           AND om.organization_id =
+                               p.organization_id
+                          WHERE u.id = wa.target_id
+                            AND u.status = 'ACTIVE'
+                            AND om.state = 'ACTIVE'
+                            AND om.valid_from <= ?
+                            AND (
+                                om.valid_until IS NULL
+                                OR om.valid_until >= ?
+                            )
+                      )
+                  )
+                  OR
+                  (
+                      wa.target_type = 'TEAM'
+                      AND EXISTS (
+                          SELECT 1
+                          FROM team t
+                          WHERE t.id = wa.target_id
+                            AND t.organization_id =
+                                p.organization_id
+                            AND t.active = true
+                      )
+                  )
+              )
             """.trimIndent(),
             { rs, _ ->
                 CurrentAssignment(
@@ -306,6 +350,8 @@ class JdbcEvidenceTargetAuthorization(
                 )
             },
             workOrderId,
+            timestamp,
+            timestamp,
             timestamp,
             timestamp,
         )
