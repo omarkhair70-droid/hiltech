@@ -319,6 +319,73 @@ Keep these as conditional/future capability points until the relevant phase vali
 
 ---
 
+## RF-020 — Current approval/operational authority baseline is owner-final with Finance/Admin preparation, but detailed policy is still open
+Status: **INTERNAL_REPORTED / PARTIALLY OPEN**
+Date: 2026-09-19
+
+User-confirmed current operating facts:
+- Mohamed is the company owner and current final decision-maker.
+- Ahmed Fawzy is responsible for accounts / finance-admin operational work.
+- Ahmed coordinates employee/technician operational administration including work-related money, custody/equipment and related handoffs.
+- field staff document execution, expenses and materials, then return that information/state to Ahmed for review/settlement.
+- Mohamed sees the broader company picture and intervenes where a decision requires owner authority.
+- the product must keep these rules configurable/relationship-driven rather than hard-coding named people because HILTECH is growing and authority/personnel can change.
+
+Not yet user-confirmed:
+- exact subject-by-subject approval chains,
+- numeric thresholds or an explicit statement that a subject has no threshold,
+- requester/preparer self-approval rules,
+- delegation/absence rules,
+- emergency approval paths,
+- exact reject/request-change/cancel/expiry semantics,
+- bank/payment execution authority.
+
+Product consequence:
+- this baseline can seed the Approval reality map,
+- it does **not** authorize production routing such as "Ahmed then Mohamed",
+- owner-final and Finance/Admin preparation must be converted to typed relationships/policy only after subject-specific reality is validated,
+- payment execution remains a separate unknown authority boundary.
+
+Consume in:
+- Phase 2 Slice 04 Approval Engine Authority Reality Closure,
+- later Finance/Payroll/Procurement slices for subject-specific policy.
+
+---
+
+## RF-021 — HILTECH approval reality is founder-led, flexible and exception-driven rather than threshold-heavy
+Status: **INTERNAL_REPORTED / SUFFICIENT FOR MINIMAL APPROVAL FOUNDATION**
+Date: 2026-09-19
+
+User-confirmed operating shape:
+- HILTECH started founder-led: Mohamed built the company hands-on with a very small technical team and historically did many operational functions himself.
+- roles remain broad and flexible rather than narrowly departmentalized.
+- Mohamed is still the primary company decision-maker for non-routine or significant exceptions.
+- Ahmed Fawzy has broad operational Finance/Admin authority rather than acting as a simple cashier/payroll clerk.
+- Ahmed can add/remove people from payroll administration, handle normal payroll operations and routine employee/technician financial administration.
+- routine employee advance / custody / expense-type handling is normally within Ahmed's operational authority.
+- when a request is unusual, unclear, materially different, or outside the normal pattern, Ahmed may escalate to Mohamed and explain the reason.
+- normal monthly payroll does not require Mohamed to manually approve every routine line.
+- compensation changes and exceptional money decisions are founder-level decisions when they originate from Mohamed or are material exceptions, including examples such as special incentives/extra money and non-routine deductions.
+- the organization currently does not operate from one clear numeric approval-threshold table; decisions are flexible and context-driven.
+- Dr. Mohamed participates alongside Ahmed in some financial/admin work but is not reported as carrying the same primary operational responsibility as Ahmed.
+- other people also hold broad mixed duties; examples include technicians who may also drive and a warehouse/store presence that combines awareness, custody and practical oversight rather than a formal narrow guard/custodian role.
+
+Product consequence:
+- do not impose enterprise-style approval bureaucracy on routine work.
+- model a small number of configurable authority envelopes and exception/escalation paths.
+- numeric amount thresholds are **NONE / NOT CURRENTLY USED AS A GENERAL COMPANY RULE** unless a later subject-specific reality proves otherwise.
+- routine Finance/Admin work may complete under the configured Finance/Admin authority envelope.
+- exceptional/non-routine decisions can require explicit owner authority.
+- the engine must support manual/escalated exception routing without pretending an algorithm can infer every unusual real-world case.
+- Dr. Mohamed and other helpers should be modeled through assignable relationships/permissions, not fixed mandatory approval steps.
+- supplier/payment/procurement-specific chains remain unfrozen and should stay out of the first Approval implementation unless later reality makes them necessary.
+
+Consume in:
+- Phase 2 Slice 04 minimal Approval foundation.
+- later Payroll/Finance/Procurement phases for richer subject-specific policies.
+
+---
+
 # High-Priority Unknowns
 
 ## RF-010 — Payroll source of truth
