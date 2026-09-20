@@ -217,9 +217,9 @@ CREATE UNIQUE INDEX uq_project_plan_dependency_edge
     ON project_plan_dependency (
         project_id,
         COALESCE(predecessor_milestone_id, predecessor_work_package_id),
-        predecessor_milestone_id IS NOT NULL,
+        (predecessor_milestone_id IS NOT NULL),
         COALESCE(successor_milestone_id, successor_work_package_id),
-        successor_milestone_id IS NOT NULL,
+        (successor_milestone_id IS NOT NULL),
         dependency_type
     );
 
