@@ -529,6 +529,129 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
                 cycle.code,
             )
 
+            val staleVersion =
+                assertThrows<
+                    ProductApiException
+                > {
+                    service.create(
+                        CreateWorkforceAssignmentCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            employeeId =
+                                ids.managerEmployee,
+                            baseEmployeeVersion = 99,
+                            teamId = null,
+                            roleCode = "ENGINEER",
+                            roleLabel = null,
+                            reportsToEmployeeId =
+                                null,
+                            effectiveFrom =
+                                now.minusSeconds(1),
+                            actorUserId =
+                                ids.adminIdentity,
+                            correlationId =
+                                "corr-stale-employee",
+                        ),
+                    )
+                }
+            assertEquals(
+                "EMPLOYEE_VERSION_CONFLICT",
+                staleVersion.code,
+            )
+
+            val teamMismatch =
+                assertThrows<
+                    ProductApiException
+                > {
+                    service.create(
+                        CreateWorkforceAssignmentCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            employeeId =
+                                ids.managerEmployee,
+                            baseEmployeeVersion = 1,
+                            teamId =
+                                ids.otherTeam,
+                            roleCode = "ENGINEER",
+                            roleLabel = null,
+                            reportsToEmployeeId =
+                                null,
+                            effectiveFrom =
+                                now.minusSeconds(1),
+                            actorUserId =
+                                ids.adminIdentity,
+                            correlationId =
+                                "corr-team-org-mismatch",
+                        ),
+                    )
+                }
+            assertEquals(
+                "TEAM_ORGANIZATION_MISMATCH",
+                teamMismatch.code,
+            )
+
+            val managerMismatch =
+                assertThrows<
+                    ProductApiException
+                > {
+                    service.create(
+                        CreateWorkforceAssignmentCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            employeeId =
+                                ids.managerEmployee,
+                            baseEmployeeVersion = 1,
+                            teamId = null,
+                            roleCode = "ENGINEER",
+                            roleLabel = null,
+                            reportsToEmployeeId =
+                                ids.crossOrgEmployee,
+                            effectiveFrom =
+                                now.minusSeconds(1),
+                            actorUserId =
+                                ids.adminIdentity,
+                            correlationId =
+                                "corr-manager-org-mismatch",
+                        ),
+                    )
+                }
+            assertEquals(
+                "REPORTING_MANAGER_ORGANIZATION_MISMATCH",
+                managerMismatch.code,
+            )
+
+            val roleDoesNotGrantAuthority =
+                assertThrows<
+                    ProductApiException
+                > {
+                    service.create(
+                        CreateWorkforceAssignmentCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            employeeId =
+                                ids.managerEmployee,
+                            baseEmployeeVersion = 1,
+                            teamId = null,
+                            roleCode =
+                                "PEOPLE_ADMIN",
+                            roleLabel =
+                                "Descriptive only",
+                            reportsToEmployeeId =
+                                null,
+                            effectiveFrom =
+                                now.minusSeconds(1),
+                            actorUserId =
+                                ids.workerIdentity,
+                            correlationId =
+                                "corr-role-not-authority",
+                        ),
+                    )
+                }
+            assertEquals(
+                "PEOPLE_ACCESS_DENIED",
+                roleDoesNotGrantAuthority.code,
+            )
+
             val wrongTeam =
                 assertThrows<
                     ProductApiException
@@ -685,6 +808,16 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
                     now.plusSeconds(10),
             )
 
+            proveHistoricalAssignments(
+                jdbc = jdbc,
+                employeeId =
+                    ids.futureEmployee,
+                organizationId =
+                    ids.organizationOne,
+                at =
+                    now.plusSeconds(30),
+            )
+
             assertTrue(
                 published.any {
                     it is
@@ -723,6 +856,133 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
         } finally {
             telemetry.close()
         }
+    }
+
+    private fun proveHistoricalAssignments(
+        jdbc: JdbcTemplate,
+        employeeId: UUID,
+        organizationId: UUID,
+        at: Instant,
+    ) {
+        val endedId =
+            UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO workforce_assignment (
+                id,
+                organization_id,
+                employee_id,
+                team_id,
+                role_code,
+                role_label,
+                reports_to_employee_id,
+                state,
+                effective_from,
+                effective_to,
+                created_at,
+                updated_at,
+                version
+            )
+            VALUES (
+                ?, ?, ?, NULL,
+                'TECHNICIAN',
+                NULL, NULL,
+                'ENDED',
+                ?, ?,
+                ?, ?, 2
+            )
+            """.trimIndent(),
+            endedId,
+            organizationId,
+            employeeId,
+            at.minusSeconds(120)
+                .atOffset(
+                    ZoneOffset.UTC,
+                ),
+            at.minusSeconds(60)
+                .atOffset(
+                    ZoneOffset.UTC,
+                ),
+            at.minusSeconds(120)
+                .atOffset(
+                    ZoneOffset.UTC,
+                ),
+            at.minusSeconds(60)
+                .atOffset(
+                    ZoneOffset.UTC,
+                ),
+        )
+
+        val currentId =
+            UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO workforce_assignment (
+                id,
+                organization_id,
+                employee_id,
+                team_id,
+                role_code,
+                role_label,
+                reports_to_employee_id,
+                state,
+                effective_from,
+                effective_to,
+                created_at,
+                updated_at,
+                version
+            )
+            VALUES (
+                ?, ?, ?, NULL,
+                'ENGINEER',
+                NULL, NULL,
+                'ACTIVE',
+                ?, NULL,
+                ?, ?, 1
+            )
+            """.trimIndent(),
+            currentId,
+            organizationId,
+            employeeId,
+            at.minusSeconds(30)
+                .atOffset(
+                    ZoneOffset.UTC,
+                ),
+            at.minusSeconds(30)
+                .atOffset(
+                    ZoneOffset.UTC,
+                ),
+            at.minusSeconds(30)
+                .atOffset(
+                    ZoneOffset.UTC,
+                ),
+        )
+
+        assertEquals(
+            2,
+            jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM workforce_assignment
+                WHERE employee_id = ?
+                """.trimIndent(),
+                Int::class.java,
+                employeeId,
+            ),
+        )
+        assertEquals(
+            1,
+            jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM workforce_assignment
+                WHERE employee_id = ?
+                  AND state = 'ACTIVE'
+                """.trimIndent(),
+                Int::class.java,
+                employeeId,
+            ),
+        )
     }
 
     private fun proveSharedTupleAggregate(
@@ -830,6 +1090,27 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
             ),
             "Ending the manual source must not revoke the tuple while the People source remains current.",
         )
+        val manualRow =
+            jdbc.queryForMap(
+                """
+                SELECT
+                    role_in_team,
+                    source_workforce_assignment_id
+                FROM team_membership
+                WHERE id = ?
+                """.trimIndent(),
+                manualMembershipId,
+            )
+        assertEquals(
+            "MANUAL_EXTRA",
+            manualRow["role_in_team"],
+        )
+        assertNull(
+            manualRow[
+                "source_workforce_assignment_id"
+            ],
+            "People must not adopt or overwrite a manual Team membership.",
+        )
         assertTrue(
             RoleTeamAuthorizationService(
                 authorization =
@@ -917,7 +1198,7 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
 
     private fun testPeopleAuthorization(
         adminIdentityId: UUID,
-        organizationId: UUID,
+        expectedOrganizationId: UUID,
         sourceAuthority:
             JdbcRoleTeamSourceAuthority,
         clock: Clock,
@@ -931,7 +1212,7 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
                 actorUserId ==
                     adminIdentityId &&
                     organizationId ==
-                    organizationId &&
+                    expectedOrganizationId &&
                     sourceAuthority
                         .isOrganizationMemberCurrent(
                             actorUserId,
