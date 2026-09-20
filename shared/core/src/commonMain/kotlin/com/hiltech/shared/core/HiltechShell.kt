@@ -44,6 +44,8 @@ sealed interface HiltechShellState {
         val people: HiltechPeopleState? = null,
         val onboarding:
             HiltechOnboardingState? = null,
+        val projects:
+            HiltechProjectsState? = null,
     ) : HiltechShellState
     data class AccessDenied(
         val code: String,
@@ -152,6 +154,63 @@ fun HiltechShell(
             startDate: String,
             employmentTypeCode: String?,
         ) -> Unit = { _, _, _, _ -> },
+    onRefreshProjects: () -> Unit = {},
+    onSelectProject: (String) -> Unit = {},
+    onCreateProject:
+        (
+            name: String,
+            clientOrganizationId: String,
+            sourceType: String,
+            sourceExternalReference: String?,
+            explicitProjectCode: String?,
+            principalType: String?,
+            principalId: String?,
+            startDatePlanned: String?,
+            endDatePlanned: String?,
+        ) -> Unit = {
+            _, _, _, _, _, _, _, _, _ -> Unit
+        },
+    onChangeProjectManager:
+        (
+            projectId: String,
+            baseVersion: Long,
+            principalType: String,
+            principalId: String,
+            reason: String?,
+        ) -> Unit = {
+            _, _, _, _, _ -> Unit
+        },
+    onStartProjectKickoff:
+        (
+            projectId: String,
+            baseVersion: Long,
+        ) -> Unit = { _, _ -> },
+    onCompleteProjectKickoff:
+        (
+            projectId: String,
+            baseVersion: Long,
+        ) -> Unit = { _, _ -> },
+    onCreateSite:
+        (
+            clientOrganizationId: String,
+            siteCode: String,
+            name: String,
+            addressText: String?,
+            timezone: String?,
+        ) -> Unit = {
+            _, _, _, _, _ -> Unit
+        },
+    onAttachProjectSite:
+        (
+            projectId: String,
+            baseProjectVersion: Long,
+            siteId: String,
+            projectSiteCode: String?,
+            accessInstructions: String?,
+            projectSpecificNotes: String?,
+        ) -> Unit = {
+            _, _, _, _, _, _ -> Unit
+        },
 ) {
     MaterialTheme {
         Column(
@@ -348,6 +407,28 @@ fun HiltechShell(
                                 onCompleteOffboarding,
                             onCreateEmployee =
                                 onCreateEmployee,
+                        )
+                    }
+
+                    state.projects?.let {
+                        ProjectControlSection(
+                            state = it,
+                            onRefresh =
+                                onRefreshProjects,
+                            onSelectProject =
+                                onSelectProject,
+                            onCreateProject =
+                                onCreateProject,
+                            onChangeManager =
+                                onChangeProjectManager,
+                            onStartKickoff =
+                                onStartProjectKickoff,
+                            onCompleteKickoff =
+                                onCompleteProjectKickoff,
+                            onCreateSite =
+                                onCreateSite,
+                            onAttachSite =
+                                onAttachProjectSite,
                         )
                     }
 
