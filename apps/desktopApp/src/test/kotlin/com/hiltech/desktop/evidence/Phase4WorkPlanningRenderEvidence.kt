@@ -56,22 +56,29 @@ fun main() = application {
                 0 ->
                     WorkPlanningSection(
                         plan = plan("PLANNING", 12),
-                        workTypes = listOf(workType()),
+                        workTypes = listOf(workType(), surveyType()),
                         orders = listOf(plannedOrder()),
                         onAction = {},
                     )
                 1 ->
                     WorkPlanningSection(
                         plan = plan("READY", 13),
-                        workTypes = listOf(workType()),
+                        workTypes = listOf(workType(), surveyType()),
                         orders = listOf(draftOrder()),
+                        onAction = {},
+                    )
+                2 ->
+                    WorkPlanningSection(
+                        plan = plan("READY", 14),
+                        workTypes = listOf(workType(), surveyType()),
+                        orders = listOf(plannedOrder()),
                         onAction = {},
                     )
                 else ->
                     WorkPlanningSection(
-                        plan = plan("READY", 14),
-                        workTypes = listOf(workType()),
-                        orders = listOf(plannedOrder()),
+                        plan = plan("PLANNING", 15),
+                        workTypes = listOf(workType(), surveyType()),
+                        orders = emptyList(),
                         onAction = {},
                     )
             }
@@ -102,12 +109,22 @@ fun main() = application {
                         "desktop-project-activation-ready.png",
                     ),
                 )
+                screen = 3
+                settle()
+                captureWindow(
+                    frame,
+                    outputDirectory.resolve(
+                        "desktop-work-editor-contract.png",
+                    ),
+                )
                 println(
                     "HILTECH_PHASE4_WORK_RENDER_PASS " +
                         "bound_revisions=PASS checklist_definition=PASS " +
                         "requirements_pending=PASS document_requirement=PASS " +
                         "readiness_not_evaluated=PASS draft_gate=PASS " +
-                        "activation_ready=PASS no_fake_assignment=PASS " +
+                        "activation_ready=PASS work_type_selector=PASS " +
+                        "schedule_editor=PASS dependency_editor=PASS " +
+                        "task_update_control=PASS no_fake_assignment=PASS " +
                         "no_fake_resource_availability=PASS",
                 )
             } finally {
@@ -174,6 +191,21 @@ private fun workType() =
         countsTowardProjectProgress = true,
     )
 
+private fun surveyType() =
+    WorkTypeChoiceDto(
+        workType =
+            ConfigRefDto(
+                SURVEY_WORK_TYPE_ID,
+                "SURVEY",
+                "Survey",
+                2,
+            ),
+        description = "رفع ومعاينة قبل التنفيذ",
+        defaultPriorityCode = "HIGH",
+        defaultProgressWeight = "1.0",
+        countsTowardProjectProgress = true,
+    )
+
 private fun plannedOrder(): WorkOrderDto =
     WorkOrderDto(
         workOrderId = WORK_ORDER_ID,
@@ -186,6 +218,8 @@ private fun plannedOrder(): WorkOrderDto =
         description = "نطاق فعلي مخطط ومربوط بالمراجعات",
         lifecycleState = "PLANNED",
         readinessState = "NOT_EVALUATED",
+        plannedStart = "2026-09-22T06:00:00Z",
+        plannedEnd = "2026-09-22T08:00:00Z",
         priorityCode = "NORMAL",
         countsTowardProjectProgress = true,
         progressWeight = "2.0",
@@ -377,6 +411,7 @@ private const val WORK_ORDER_ID = "55555555-5555-4555-8555-555555555555"
 private const val DRAFT_WORK_ORDER_ID = "66666666-6666-4666-8666-666666666666"
 private const val PREDECESSOR_ID = "77777777-7777-4777-8777-777777777777"
 private const val WORK_TYPE_ID = "88888888-8888-4888-8888-888888888888"
+private const val SURVEY_WORK_TYPE_ID = "89898989-8989-4989-8989-898989898989"
 private const val ASSIGNMENT_ID = "99999999-9999-4999-8999-999999999999"
 private const val READINESS_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 private const val EVIDENCE_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
