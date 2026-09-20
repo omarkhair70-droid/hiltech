@@ -116,3 +116,22 @@ CREATE TABLE team_membership_authority_aggregate (
         user_identity_id
     )
 );
+
+-- Preserve monotonic ordering if V0016 is applied over already-projected
+-- Phase 1 memberships. The first post-migration sync increments from at
+-- least the highest legacy row version for that shared tuple.
+INSERT INTO team_membership_authority_aggregate (
+    team_id,
+    user_identity_id,
+    generation,
+    updated_at
+)
+SELECT
+    team_id,
+    user_identity_id,
+    MAX(version),
+    CURRENT_TIMESTAMP
+FROM team_membership
+GROUP BY
+    team_id,
+    user_identity_id;
