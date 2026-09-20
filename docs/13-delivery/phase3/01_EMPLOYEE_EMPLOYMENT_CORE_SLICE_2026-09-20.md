@@ -1,7 +1,7 @@
 # Phase 3 / Slice 01 — Employee / Employment Core
 
 Date: 2026-09-20  
-Status: **IMPLEMENTATION AUTHORIZED / CONTRACT FROZEN**
+Status: **VERIFIED / READY TO MERGE**
 
 ## Reality basis
 
@@ -331,10 +331,45 @@ Do not implement:
 22. inherited Phase 0–2 regression suites remain green.
 23. Android/Windows shared-client compile remains green if DTO/client surface is added.
 
+## Verification closure
+
+Canonical tested code head:
+
+`59c5cb9fb4d859260ba48a9f8edd5ecce5a97e96`
+
+Exact-head verification:
+
+- Contract — OpenFGA First Slice `35477856791` — **PASS**
+- Bootstrap Phase 0 `35477856788` — **PASS**
+  - database/jOOQ contract — PASS
+  - local PostgreSQL/OpenFGA People contract — PASS
+  - shared/client/foundation regressions — PASS
+  - evidence-storage / Terraform / supply-chain — PASS
+- Phase 1 Native OIDC Production Smoke `35477856782` — **PASS**
+  - browser provider smoke — PASS
+  - Windows production shell render — PASS
+  - Android production shell render — PASS
+- Phase 2 Shared Command Runtime `35477856796` — **PASS**
+
+Verified implementation includes:
+
+- Person / Employee / historical Employment persistence;
+- one current ACTIVE Employment baseline with rehire/history representable;
+- the existing `user_identity.person_id` as the only Identity↔Person link;
+- safe employee directory, privileged detail and own-profile reads;
+- idempotent employee create / identity-link / profile-update commands;
+- exact-version conflict handling;
+- audit + safe domain events;
+- explicit effective-dated People authority binding source;
+- fail-closed OpenFGA People authority projection including grant/revoke convergence;
+- shared KMP People contracts/client;
+- Android own-profile proof surface;
+- Windows People directory/detail/create proof surface.
+
+No Team/Manager, onboarding, certification/document, attendance, leave, payroll, offboarding or legacy-import scope was pulled into Slice 01.
+
 ## Contract conclusion
 
-**IMPLEMENTATION AUTHORIZED.**
+**VERIFIED / READY TO MERGE.**
 
-Build only the Employee / Employment Core described above.
-
-Do not expand into the remaining Phase 3 slices until Slice 01 is verified/merged.
+Merge only the verified closure head after docs-only closure checks. After merge, require post-merge `main` Bootstrap PASS before opening Phase 3 Slice 02 implementation.
