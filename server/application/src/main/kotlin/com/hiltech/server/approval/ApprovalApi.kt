@@ -118,6 +118,20 @@ class ApprovalCursorCodec(
                 invalid()
             }
 
+        // Base64url has unused trailing bits for some unpadded lengths.
+        // Java's decoder accepts multiple textual encodings that decode to
+        // identical bytes. Cursors are signed opaque tokens, so accept only
+        // our canonical no-padding encoding before checking the MAC.
+        if (
+            encoder.encodeToString(payload) !=
+                parts[0] ||
+            encoder.encodeToString(
+                suppliedSignature,
+            ) != parts[1]
+        ) {
+            invalid()
+        }
+
         if (
             !MessageDigest.isEqual(
                 sign(payload),
