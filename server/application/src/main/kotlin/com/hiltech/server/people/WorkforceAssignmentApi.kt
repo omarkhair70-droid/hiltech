@@ -26,6 +26,16 @@ data class CreateWorkforceAssignmentRequest(
     val effectiveFrom: String,
 )
 
+data class ChangeWorkforceAssignmentRequest(
+    val operationId: String,
+    val currentAssignmentId: String,
+    val baseAssignmentVersion: Long,
+    val teamId: String? = null,
+    val roleCode: String,
+    val roleLabel: String? = null,
+    val reportsToEmployeeId: String? = null,
+)
+
 data class WorkforceAssignmentResponse(
     val assignmentId: String,
     val organizationId: String,
@@ -44,6 +54,7 @@ data class WorkforceAssignmentResponse(
     val effectiveFrom: String,
     val effectiveTo: String?,
     val version: Long,
+    val supersedesAssignmentId: String? = null,
 )
 
 data class WorkforceAssignmentCommandResponse(
@@ -142,6 +153,125 @@ class WorkforceAssignmentEmployeeController(
                     .toResponse(),
             replayed =
                 result.replayed,
+            correlationId =
+                context.correlationId,
+        )
+    }
+
+    @PostMapping(
+        "/{employeeId}/workforce-assignment/change",
+    )
+    fun change(
+        servletRequest:
+            HttpServletRequest,
+        @PathVariable
+        employeeId: String,
+        @RequestHeader(
+            name = "Idempotency-Key",
+        )
+        idempotencyKey: String,
+        @RequestBody
+        request:
+            ChangeWorkforceAssignmentRequest,
+    ): WorkforceAssignmentCommandResponse {
+        val context =
+            HiltechRequestContext.current(
+                servletRequest,
+            )
+        val operationId =
+            request.operationId
+                .toWorkforceUuid(
+                    "INVALID_OPERATION_ID",
+                )
+        IdempotencyKeyContract
+            .requireMatches(
+                idempotencyKey,
+                operationId,
+            )
+
+        val result =
+            service.change(
+                ChangeWorkforceAssignmentCommand(
+                    operationId =
+                        operationId,
+                    employeeId =
+                        employeeId
+                            .toWorkforceUuid(
+                                "INVALID_EMPLOYEE_ID",
+                            ),
+                    currentAssignmentId =
+                        request.currentAssignmentId
+                            .toWorkforceUuid(
+                                "INVALID_WORKFORCE_ASSIGNMENT_ID",
+                            ),
+                    baseAssignmentVersion =
+                        request.baseAssignmentVersion,
+                    teamId =
+                        request.teamId
+                            ?.toWorkforceUuid(
+                                "INVALID_TEAM_ID",
+                            ),
+                    roleCode =
+                        request.roleCode,
+                    roleLabel =
+                        request.roleLabel,
+                    reportsToEmployeeId =
+                        request
+                            .reportsToEmployeeId
+                            ?.toWorkforceUuid(
+                                "INVALID_REPORTING_MANAGER_ID",
+                            ),
+                    actorUserId =
+                        context
+                            .requireWorkforceIdentityId(),
+                    correlationId =
+                        context.correlationId,
+                ),
+            )
+
+        return WorkforceAssignmentCommandResponse(
+            assignment =
+                result.assignment.toResponse(),
+            replayed =
+                result.replayed,
+            correlationId =
+                context.correlationId,
+        )
+    }
+
+    @GetMapping(
+        "/{employeeId}/workforce-assignments",
+    )
+    fun history(
+        servletRequest:
+            HttpServletRequest,
+        @PathVariable
+        employeeId: String,
+        @RequestParam(
+            defaultValue = "100",
+        )
+        limit: Int,
+    ): WorkforceStructureResponse {
+        val context =
+            HiltechRequestContext.current(
+                servletRequest,
+            )
+
+        return WorkforceStructureResponse(
+            items =
+                service.historyForEmployee(
+                    actorUserId =
+                        context
+                            .requireWorkforceIdentityId(),
+                    employeeId =
+                        employeeId
+                            .toWorkforceUuid(
+                                "INVALID_EMPLOYEE_ID",
+                            ),
+                    limit = limit,
+                ).map {
+                    it.toResponse()
+                },
             correlationId =
                 context.correlationId,
         )
@@ -289,6 +419,9 @@ private fun WorkforceAssignmentSnapshot
             effectiveTo?.toString(),
         version =
             version,
+        supersedesAssignmentId =
+            supersedesAssignmentId
+                ?.toString(),
     )
 
 private fun String.toWorkforceUuid(

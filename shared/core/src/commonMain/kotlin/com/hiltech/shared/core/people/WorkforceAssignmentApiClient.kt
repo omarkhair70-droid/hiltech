@@ -96,6 +96,83 @@ class WorkforceAssignmentApiClient(
         )
     }
 
+    suspend fun history(
+        employeeId: String,
+        installationId: String,
+        limit: Int = 100,
+    ): WorkforceStructureDto {
+        requireId(employeeId)
+        require(limit in 1..200)
+
+        return api.request(
+            method = HttpMethod.Get,
+            path =
+                "/v1/employees/" +
+                    employeeId +
+                    "/workforce-assignments?limit=" +
+                    limit,
+            options =
+                HiltechRequestOptions(
+                    installationId =
+                        installationId,
+                ),
+            decode = {
+                json.decodeFromString(
+                    WorkforceStructureDto
+                        .serializer(),
+                    it,
+                )
+            },
+        )
+    }
+
+    suspend fun change(
+        employeeId: String,
+        request:
+            ChangeWorkforceAssignmentRequestDto,
+        installationId: String,
+    ): WorkforceAssignmentCommandResponseDto {
+        requireId(employeeId)
+        requireId(request.operationId)
+        requireId(
+            request.currentAssignmentId,
+        )
+        require(
+            request.baseAssignmentVersion >= 1,
+        )
+        request.teamId?.let(::requireId)
+        request.reportsToEmployeeId
+            ?.let(::requireId)
+
+        return api.request(
+            method = HttpMethod.Post,
+            path =
+                "/v1/employees/" +
+                    employeeId +
+                    "/workforce-assignment/change",
+            options =
+                HiltechRequestOptions(
+                    installationId =
+                        installationId,
+                    idempotencyKey =
+                        request.operationId,
+                ),
+            requestBody =
+                json.encodeToString(
+                    ChangeWorkforceAssignmentRequestDto
+                        .serializer(),
+                    request,
+                ),
+            decode = {
+                json.decodeFromString(
+                    WorkforceAssignmentCommandResponseDto
+                        .serializer(),
+                    it,
+                )
+            },
+        )
+    }
+
     suspend fun create(
         employeeId: String,
         request:

@@ -14,6 +14,17 @@ data class CreateWorkforceAssignmentRequestDto(
 )
 
 @Serializable
+data class ChangeWorkforceAssignmentRequestDto(
+    val operationId: String,
+    val currentAssignmentId: String,
+    val baseAssignmentVersion: Long,
+    val teamId: String? = null,
+    val roleCode: String,
+    val roleLabel: String? = null,
+    val reportsToEmployeeId: String? = null,
+)
+
+@Serializable
 data class WorkforceAssignmentDto(
     val assignmentId: String,
     val organizationId: String,
@@ -32,6 +43,7 @@ data class WorkforceAssignmentDto(
     val effectiveFrom: String,
     val effectiveTo: String? = null,
     val version: Long,
+    val supersedesAssignmentId: String? = null,
 )
 
 @Serializable

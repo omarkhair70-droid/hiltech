@@ -76,6 +76,10 @@ data class HiltechPeopleState(
     val directory: EmployeeDirectoryDto? = null,
     val workforceStructure: WorkforceStructureDto? = null,
     val selectedEmployee: EmployeeDetailDto? = null,
+    val selectedWorkforceAssignment:
+        WorkforceAssignmentDto? = null,
+    val selectedWorkforceHistory:
+        WorkforceStructureDto? = null,
     val errorMessage: String? = null,
 )
 
@@ -92,6 +96,18 @@ fun HiltechShell(
     onRefreshPeople: () -> Unit = {},
     onRefreshOnboarding: () -> Unit = {},
     onSelectEmployee: (String) -> Unit = {},
+    onChangeWorkforceAssignment:
+        (
+            employeeId: String,
+            currentAssignmentId: String,
+            baseAssignmentVersion: Long,
+            teamId: String?,
+            roleCode: String,
+            roleLabel: String?,
+            reportsToEmployeeId: String?,
+        ) -> Unit = {
+            _, _, _, _, _, _, _ -> Unit
+        },
     onCreateEmployee:
         (
             displayName: String,
@@ -283,6 +299,8 @@ fun HiltechShell(
                                 onRefreshPeople,
                             onSelectEmployee =
                                 onSelectEmployee,
+                            onChangeWorkforceAssignment =
+                                onChangeWorkforceAssignment,
                             onCreateEmployee =
                                 onCreateEmployee,
                         )
@@ -594,6 +612,16 @@ private fun PeopleSection(
     state: HiltechPeopleState,
     onRefresh: () -> Unit,
     onSelectEmployee: (String) -> Unit,
+    onChangeWorkforceAssignment:
+        (
+            employeeId: String,
+            currentAssignmentId: String,
+            baseAssignmentVersion: Long,
+            teamId: String?,
+            roleCode: String,
+            roleLabel: String?,
+            reportsToEmployeeId: String?,
+        ) -> Unit,
     onCreateEmployee:
         (
             displayName: String,
@@ -761,12 +789,404 @@ private fun PeopleSection(
         employee.email?.let {
             Text("Email: $it")
         }
+
+        state.selectedWorkforceAssignment
+            ?.let { assignment ->
+                WorkforceAssignmentChangeSection(
+                    employee = employee,
+                    current = assignment,
+                    structure =
+                        state.workforceStructure,
+                    history =
+                        state.selectedWorkforceHistory,
+                    onChange =
+                        onChangeWorkforceAssignment,
+                )
+            }
     }
 
     OutlinedButton(
         onClick = onRefresh,
     ) {
         Text("Refresh People")
+    }
+}
+
+
+@Composable
+private fun WorkforceAssignmentChangeSection(
+    employee: EmployeeDetailDto,
+    current: WorkforceAssignmentDto,
+    structure: WorkforceStructureDto?,
+    history: WorkforceStructureDto?,
+    onChange:
+        (
+            employeeId: String,
+            currentAssignmentId: String,
+            baseAssignmentVersion: Long,
+            teamId: String?,
+            roleCode: String,
+            roleLabel: String?,
+            reportsToEmployeeId: String?,
+        ) -> Unit,
+) {
+    var proposedTeamId by
+        remember(current.assignmentId) {
+            mutableStateOf(
+                current.teamId,
+            )
+        }
+    var proposedRoleCode by
+        remember(current.assignmentId) {
+            mutableStateOf(
+                current.roleCode,
+            )
+        }
+    var proposedRoleLabel by
+        remember(current.assignmentId) {
+            mutableStateOf(
+                current.roleLabel.orEmpty(),
+            )
+        }
+    var proposedManagerId by
+        remember(current.assignmentId) {
+            mutableStateOf(
+                current.reportsToEmployeeId,
+            )
+        }
+    var confirming by
+        remember(current.assignmentId) {
+            mutableStateOf(false)
+        }
+
+    val knownTeams =
+        structure
+            ?.items
+            ?.mapNotNull {
+                assignment ->
+                assignment.teamId
+                    ?.let {
+                        id ->
+                        id to
+                            (
+                                assignment.teamName
+                                    ?: assignment.teamCode
+                                    ?: id.take(8)
+                            )
+                    }
+            }
+            ?.distinctBy {
+                it.first
+            }
+            .orEmpty()
+
+    val managerCandidates =
+        structure
+            ?.items
+            ?.filter {
+                it.employeeId !=
+                    employee.employeeId
+            }
+            ?.distinctBy {
+                it.employeeId
+            }
+            .orEmpty()
+
+    Text(
+        "Current assignment",
+        style =
+            MaterialTheme.typography.titleSmall,
+    )
+    Text(
+        buildString {
+            append(
+                current.roleLabel
+                    ?: current.roleCode,
+            )
+            append(" · ")
+            append(
+                current.teamName
+                    ?: "No team",
+            )
+            append(" · reports to ")
+            append(
+                current.reportsToDisplayName
+                    ?: "Nobody",
+            )
+        },
+    )
+
+    Text(
+        "Change assignment",
+        style =
+            MaterialTheme.typography.titleSmall,
+    )
+    Text(
+        "This updates People and Team access only. " +
+            "Project / Site / Work assignments are not changed here.",
+    )
+
+    Text("New team")
+    if (knownTeams.isEmpty()) {
+        Text(
+            current.teamName
+                ?: "No known Team choices are available in the current organization structure.",
+        )
+    } else {
+        knownTeams.forEach {
+            (teamId, teamName) ->
+            OutlinedButton(
+                onClick = {
+                    proposedTeamId =
+                        teamId
+                    confirming = false
+                },
+            ) {
+                Text(
+                    if (
+                        proposedTeamId ==
+                        teamId
+                    ) {
+                        "✓ $teamName"
+                    } else {
+                        teamName
+                    },
+                )
+            }
+        }
+        OutlinedButton(
+            onClick = {
+                proposedTeamId = null
+                confirming = false
+            },
+        ) {
+            Text(
+                if (
+                    proposedTeamId == null
+                ) {
+                    "✓ No team"
+                } else {
+                    "No team"
+                },
+            )
+        }
+    }
+
+    OutlinedTextField(
+        value = proposedRoleCode,
+        onValueChange = {
+            proposedRoleCode = it
+            confirming = false
+        },
+        label = {
+            Text("New role code")
+        },
+        singleLine = true,
+    )
+    OutlinedTextField(
+        value = proposedRoleLabel,
+        onValueChange = {
+            proposedRoleLabel = it
+            confirming = false
+        },
+        label = {
+            Text("New role label")
+        },
+        singleLine = true,
+    )
+
+    Text("New reporting manager")
+    managerCandidates.forEach {
+        manager ->
+        OutlinedButton(
+            onClick = {
+                proposedManagerId =
+                    manager.employeeId
+                confirming = false
+            },
+        ) {
+            Text(
+                if (
+                    proposedManagerId ==
+                    manager.employeeId
+                ) {
+                    "✓ " +
+                        manager.employeeDisplayName
+                } else {
+                    manager.employeeDisplayName
+                },
+            )
+        }
+    }
+    OutlinedButton(
+        onClick = {
+            proposedManagerId = null
+            confirming = false
+        },
+    ) {
+        Text(
+            if (
+                proposedManagerId == null
+            ) {
+                "✓ No reporting manager"
+            } else {
+                "No reporting manager"
+            },
+        )
+    }
+
+    if (!confirming) {
+        Button(
+            onClick = {
+                confirming = true
+            },
+            enabled =
+                proposedRoleCode
+                    .isNotBlank(),
+        ) {
+            Text("Review assignment change")
+        }
+    } else {
+        val proposedTeamName =
+            knownTeams
+                .firstOrNull {
+                    it.first ==
+                        proposedTeamId
+                }
+                ?.second
+                ?: if (
+                    proposedTeamId == null
+                ) {
+                    "No team"
+                } else {
+                    proposedTeamId
+                        ?.take(8)
+                        ?: "No team"
+                }
+        val proposedManagerName =
+            managerCandidates
+                .firstOrNull {
+                    it.employeeId ==
+                        proposedManagerId
+                }
+                ?.employeeDisplayName
+                ?: if (
+                    proposedManagerId == null
+                ) {
+                    "Nobody"
+                } else {
+                    proposedManagerId
+                        ?.take(8)
+                        ?: "Nobody"
+                }
+
+        Text(
+            "Review before confirming",
+            style =
+                MaterialTheme.typography.titleSmall,
+        )
+        Text(
+            "Current: " +
+                (
+                    current.teamName
+                        ?: "No team"
+                ) +
+                " · " +
+                (
+                    current.roleLabel
+                        ?: current.roleCode
+                ) +
+                " · " +
+                (
+                    current.reportsToDisplayName
+                        ?: "Nobody"
+                ),
+        )
+        Text(
+            "Proposed: " +
+                proposedTeamName +
+                " · " +
+                (
+                    proposedRoleLabel
+                        .trim()
+                        .takeIf {
+                            it.isNotEmpty()
+                        }
+                        ?: proposedRoleCode
+                ) +
+                " · " +
+                proposedManagerName,
+        )
+        Text(
+            "Previous assignment history will be preserved. " +
+                "Project / Site / Work assignments will stay unchanged.",
+        )
+        Button(
+            onClick = {
+                onChange(
+                    employee.employeeId,
+                    current.assignmentId,
+                    current.version,
+                    proposedTeamId,
+                    proposedRoleCode.trim(),
+                    proposedRoleLabel
+                        .trim()
+                        .takeIf {
+                            it.isNotEmpty()
+                        },
+                    proposedManagerId,
+                )
+                confirming = false
+            },
+        ) {
+            Text("Confirm assignment change")
+        }
+        OutlinedButton(
+            onClick = {
+                confirming = false
+            },
+        ) {
+            Text("Back")
+        }
+    }
+
+    history?.let {
+        assignmentHistory ->
+        Text(
+            "Assignment history",
+            style =
+                MaterialTheme.typography.titleSmall,
+        )
+        assignmentHistory.items
+            .forEach {
+                assignment ->
+                Text(
+                    buildString {
+                        append(
+                            assignment.roleLabel
+                                ?: assignment.roleCode,
+                        )
+                        append(" · ")
+                        append(
+                            assignment.teamName
+                                ?: "No team",
+                        )
+                        append(" · ")
+                        append(
+                            assignment.state,
+                        )
+                        append(" · ")
+                        append(
+                            assignment.effectiveFrom,
+                        )
+                        assignment.effectiveTo
+                            ?.let {
+                                append(" → ")
+                                append(it)
+                            }
+                    },
+                )
+            }
     }
 }
 

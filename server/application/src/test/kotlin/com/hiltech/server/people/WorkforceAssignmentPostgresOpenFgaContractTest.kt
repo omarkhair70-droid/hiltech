@@ -781,6 +781,345 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
                 ),
             )
 
+            val noChange =
+                assertThrows<
+                    ProductApiException
+                > {
+                    service.change(
+                        ChangeWorkforceAssignmentCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            employeeId =
+                                ids.workerEmployee,
+                            currentAssignmentId =
+                                created.assignment
+                                    .assignmentId,
+                            baseAssignmentVersion =
+                                created.assignment
+                                    .version,
+                            teamId =
+                                ids.fieldTeam,
+                            roleCode =
+                                "TECHNICIAN",
+                            roleLabel =
+                                "Field Technician",
+                            reportsToEmployeeId =
+                                ids.managerEmployee,
+                            actorUserId =
+                                ids.adminIdentity,
+                            correlationId =
+                                "corr-workforce-no-change",
+                        ),
+                    )
+                }
+            assertEquals(
+                "WORKFORCE_ASSIGNMENT_NO_CHANGE",
+                noChange.code,
+            )
+
+            val sameTeamChangeOperation =
+                UUID.randomUUID()
+            val sameTeamChanged =
+                service.change(
+                    ChangeWorkforceAssignmentCommand(
+                        operationId =
+                            sameTeamChangeOperation,
+                        employeeId =
+                            ids.workerEmployee,
+                        currentAssignmentId =
+                            created.assignment
+                                .assignmentId,
+                        baseAssignmentVersion =
+                            created.assignment
+                                .version,
+                        teamId =
+                            ids.fieldTeam,
+                        roleCode =
+                            "SENIOR_TECHNICIAN",
+                        roleLabel =
+                            "Senior Technician",
+                        reportsToEmployeeId =
+                            ids.managerEmployee,
+                        actorUserId =
+                            ids.adminIdentity,
+                        correlationId =
+                            "corr-workforce-same-team-change",
+                    ),
+                )
+
+            assertEquals(
+                created.assignment
+                    .assignmentId,
+                sameTeamChanged.assignment
+                    .supersedesAssignmentId,
+            )
+            assertEquals(
+                ids.fieldTeam,
+                sameTeamChanged.assignment
+                    .teamId,
+            )
+
+            drain(
+                projectionProcessor,
+                now.plusSeconds(6),
+            )
+            assertTrue(
+                RoleTeamAuthorizationService(
+                    authorization =
+                        authorization,
+                    sourceAuthority =
+                        sourceAuthority,
+                    clock =
+                        Clock.fixed(
+                            now.plusSeconds(7),
+                            ZoneOffset.UTC,
+                        ),
+                ).canViewTeam(
+                    ids.workerIdentity,
+                    ids.fieldTeam,
+                ),
+                "Same-Team role change must keep Team authority present while the People-owned source revision is replaced.",
+            )
+
+            val changeOperation =
+                UUID.randomUUID()
+            val changed =
+                service.change(
+                    ChangeWorkforceAssignmentCommand(
+                        operationId =
+                            changeOperation,
+                        employeeId =
+                            ids.workerEmployee,
+                        currentAssignmentId =
+                            sameTeamChanged.assignment
+                                .assignmentId,
+                        baseAssignmentVersion =
+                            sameTeamChanged.assignment
+                                .version,
+                        teamId =
+                            ids.supportTeam,
+                        roleCode =
+                            "LEAD_TECHNICIAN",
+                        roleLabel =
+                            "Lead Technician",
+                        reportsToEmployeeId =
+                            null,
+                        actorUserId =
+                            ids.adminIdentity,
+                        correlationId =
+                            "corr-workforce-change",
+                    ),
+                )
+
+            assertFalse(changed.replayed)
+            assertEquals(
+                sameTeamChanged.assignment
+                    .assignmentId,
+                changed.assignment
+                    .supersedesAssignmentId,
+            )
+            assertEquals(
+                ids.supportTeam,
+                changed.assignment.teamId,
+            )
+            assertEquals(
+                "LEAD_TECHNICIAN",
+                changed.assignment.roleCode,
+            )
+            assertNull(
+                changed.assignment
+                    .reportsToEmployeeId,
+            )
+
+            val changedReplay =
+                service.change(
+                    ChangeWorkforceAssignmentCommand(
+                        operationId =
+                            changeOperation,
+                        employeeId =
+                            ids.workerEmployee,
+                        currentAssignmentId =
+                            sameTeamChanged.assignment
+                                .assignmentId,
+                        baseAssignmentVersion =
+                            sameTeamChanged.assignment
+                                .version,
+                        teamId =
+                            ids.supportTeam,
+                        roleCode =
+                            "LEAD_TECHNICIAN",
+                        roleLabel =
+                            "Lead Technician",
+                        reportsToEmployeeId =
+                            null,
+                        actorUserId =
+                            ids.adminIdentity,
+                        correlationId =
+                            "corr-workforce-change",
+                    ),
+                )
+            assertTrue(changedReplay.replayed)
+            assertEquals(
+                changed.assignment
+                    .assignmentId,
+                changedReplay.assignment
+                    .assignmentId,
+            )
+
+            assertEquals(
+                "ENDED",
+                jdbc.queryForObject(
+                    """
+                    SELECT state
+                    FROM workforce_assignment
+                    WHERE id = ?
+                    """.trimIndent(),
+                    String::class.java,
+                    created.assignment
+                        .assignmentId,
+                ),
+            )
+            assertNotNull(
+                jdbc.queryForObject(
+                    """
+                    SELECT effective_to
+                    FROM workforce_assignment
+                    WHERE id = ?
+                    """.trimIndent(),
+                    java.time.OffsetDateTime::class.java,
+                    created.assignment
+                        .assignmentId,
+                ),
+            )
+            assertEquals(
+                1,
+                jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM workforce_assignment
+                    WHERE employee_id = ?
+                      AND state = 'ACTIVE'
+                    """.trimIndent(),
+                    Int::class.java,
+                    ids.workerEmployee,
+                ),
+            )
+
+            val history =
+                service.historyForEmployee(
+                    actorUserId =
+                        ids.adminIdentity,
+                    employeeId =
+                        ids.workerEmployee,
+                )
+            assertEquals(3, history.size)
+            assertEquals(
+                changed.assignment
+                    .assignmentId,
+                history.first()
+                    .assignmentId,
+            )
+            assertEquals(
+                sameTeamChanged.assignment
+                    .assignmentId,
+                history[1].assignmentId,
+            )
+            assertEquals(
+                created.assignment
+                    .assignmentId,
+                history.last()
+                    .assignmentId,
+            )
+            assertEquals(
+                1,
+                peopleMembershipCount(
+                    jdbc,
+                    changed.assignment
+                        .assignmentId,
+                ),
+            )
+            assertNotNull(
+                jdbc.queryForObject(
+                    """
+                    SELECT valid_until
+                    FROM team_membership
+                    WHERE source_workforce_assignment_id = ?
+                    """.trimIndent(),
+                    java.time.OffsetDateTime::class.java,
+                    created.assignment
+                        .assignmentId,
+                ),
+            )
+
+            drain(
+                projectionProcessor,
+                now.plusSeconds(8),
+            )
+
+            val roleTeamAfterChange =
+                RoleTeamAuthorizationService(
+                    authorization =
+                        authorization,
+                    sourceAuthority =
+                        sourceAuthority,
+                    clock =
+                        Clock.fixed(
+                            now.plusSeconds(9),
+                            ZoneOffset.UTC,
+                        ),
+                )
+            assertFalse(
+                roleTeamAfterChange
+                    .canViewTeam(
+                        ids.workerIdentity,
+                        ids.fieldTeam,
+                    ),
+                "Changing Team must remove the old People-owned Team authority when no other source remains.",
+            )
+            assertTrue(
+                roleTeamAfterChange
+                    .canViewTeam(
+                        ids.workerIdentity,
+                        ids.supportTeam,
+                    ),
+                "Changing Team must project the new People-owned Team authority.",
+            )
+
+            val staleCurrent =
+                assertThrows<
+                    ProductApiException
+                > {
+                    service.change(
+                        ChangeWorkforceAssignmentCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            employeeId =
+                                ids.workerEmployee,
+                            currentAssignmentId =
+                                created.assignment
+                                    .assignmentId,
+                            baseAssignmentVersion =
+                                created.assignment
+                                    .version,
+                            teamId =
+                                ids.fieldTeam,
+                            roleCode =
+                                "TECHNICIAN",
+                            roleLabel = null,
+                            reportsToEmployeeId =
+                                null,
+                            actorUserId =
+                                ids.adminIdentity,
+                            correlationId =
+                                "corr-stale-current",
+                        ),
+                    )
+                }
+            assertEquals(
+                "WORKFORCE_ASSIGNMENT_CURRENT_MISMATCH",
+                staleCurrent.code,
+            )
+
             proveSharedTupleAggregate(
                 jdbc = jdbc,
                 transaction = transaction,
@@ -793,14 +1132,14 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
                 authorization =
                     authorization,
                 teamId =
-                    ids.fieldTeam,
+                    ids.supportTeam,
                 identityId =
                     ids.workerIdentity,
                 peopleMembershipId =
                     requireNotNull(
                         peopleMembershipId(
                             jdbc,
-                            created.assignment
+                            changed.assignment
                                 .assignmentId,
                         ),
                     ),
@@ -828,6 +1167,12 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
                 published.any {
                     it is
                         WorkforceAssignmentSecuritySynchronized
+                },
+            )
+            assertTrue(
+                published.any {
+                    it is
+                        WorkforceAssignmentChanged
                 },
             )
 
@@ -1432,6 +1777,32 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
             orgOne,
         )
 
+        val supportTeam =
+            UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO team (
+                id,
+                organization_id,
+                code,
+                name,
+                parent_team_id,
+                manager_user_identity_id,
+                active,
+                version
+            )
+            VALUES (
+                ?, ?,
+                'SUPPORT-A',
+                'Support Crew A',
+                NULL, NULL,
+                true, 1
+            )
+            """.trimIndent(),
+            supportTeam,
+            orgOne,
+        )
+
         val otherTeam =
             UUID.randomUUID()
         jdbc.update(
@@ -1486,6 +1857,7 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
             unlinkedPerson =
                 unlinkedPerson,
             fieldTeam = fieldTeam,
+            supportTeam = supportTeam,
             otherTeam = otherTeam,
         )
     }
@@ -1748,6 +2120,7 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
         val crossOrgEmployee: UUID,
         val unlinkedPerson: UUID,
         val fieldTeam: UUID,
+        val supportTeam: UUID,
         val otherTeam: UUID,
     )
 }
