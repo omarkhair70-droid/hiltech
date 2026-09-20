@@ -291,6 +291,12 @@ fun main() {
                                 selectedEmployee =
                                     current.people
                                         ?.selectedEmployee,
+                                selectedWorkforceAssignment =
+                                    current.people
+                                        ?.selectedWorkforceAssignment,
+                                selectedWorkforceHistory =
+                                    current.people
+                                        ?.selectedWorkforceHistory,
                                 errorMessage =
                                     messages
                                         .takeIf {
@@ -441,12 +447,169 @@ fun main() {
                 HiltechShellState.SignedIn
                 ?: return
 
+        setState(
+            signed.copy(
+                people =
+                    (signed.people
+                        ?: HiltechPeopleState())
+                        .copy(
+                            loading = true,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+
+        scope.launch {
+            val detailResult =
+                runCatching {
+                    runtime.employeeDetail(
+                        employeeId,
+                    )
+                }
+            val assignmentResult =
+                runCatching {
+                    runtime
+                        .employeeWorkforceAssignment(
+                            employeeId,
+                        )
+                }
+            val historyResult =
+                runCatching {
+                    runtime
+                        .employeeWorkforceHistory(
+                            employeeId,
+                        )
+                }
+
+            val current =
+                shellState.value as?
+                    HiltechShellState.SignedIn
+            if (current == null) {
+                return@launch
+            }
+
+            val detail =
+                detailResult.getOrElse {
+                    failure ->
+                    setState(
+                        current.copy(
+                            people =
+                                (current.people
+                                    ?: HiltechPeopleState())
+                                    .copy(
+                                        loading = false,
+                                        errorMessage =
+                                            failure.message
+                                                ?: "Employee detail could not be loaded.",
+                                    ),
+                        ),
+                    )
+                    return@launch
+                }
+
+            val assignmentFailure =
+                assignmentResult
+                    .exceptionOrNull()
+            val assignmentMessage =
+                if (
+                    assignmentFailure is
+                    HiltechApiException &&
+                    assignmentFailure.code ==
+                    "WORKFORCE_ASSIGNMENT_NOT_FOUND"
+                ) {
+                    null
+                } else {
+                    assignmentFailure
+                        ?.message
+                }
+
+            val historyMessage =
+                historyResult
+                    .exceptionOrNull()
+                    ?.message
+
+            setState(
+                current.copy(
+                    people =
+                        (current.people
+                            ?: HiltechPeopleState())
+                            .copy(
+                                loading = false,
+                                selectedEmployee =
+                                    detail,
+                                selectedWorkforceAssignment =
+                                    assignmentResult
+                                        .getOrNull(),
+                                selectedWorkforceHistory =
+                                    historyResult
+                                        .getOrNull(),
+                                errorMessage =
+                                    listOfNotNull(
+                                        assignmentMessage,
+                                        historyMessage,
+                                    ).takeIf {
+                                        it.isNotEmpty()
+                                    }?.joinToString(" "),
+                            ),
+                ),
+            )
+            refreshOnboarding()
+        }
+    }
+
+    fun changeWorkforceAssignment(
+        employeeId: String,
+        currentAssignmentId: String,
+        baseAssignmentVersion: Long,
+        teamId: String?,
+        roleCode: String,
+        roleLabel: String?,
+        reportsToEmployeeId: String?,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+
+        setState(
+            signed.copy(
+                people =
+                    (signed.people
+                        ?: HiltechPeopleState())
+                        .copy(
+                            loading = true,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+
         scope.launch {
             runCatching {
-                runtime.employeeDetail(
-                    employeeId,
+                runtime.changeWorkforceAssignment(
+                    employeeId =
+                        employeeId,
+                    currentAssignmentId =
+                        currentAssignmentId,
+                    baseAssignmentVersion =
+                        baseAssignmentVersion,
+                    teamId =
+                        teamId,
+                    roleCode =
+                        roleCode,
+                    roleLabel =
+                        roleLabel,
+                    reportsToEmployeeId =
+                        reportsToEmployeeId,
                 )
-            }.onSuccess { detail ->
+            }.onSuccess { changed ->
+                val history =
+                    runCatching {
+                        runtime
+                            .employeeWorkforceHistory(
+                                employeeId,
+                            )
+                    }.getOrNull()
+
                 val current =
                     shellState.value as?
                         HiltechShellState.SignedIn
@@ -458,12 +621,16 @@ fun main() {
                                     ?: HiltechPeopleState())
                                     .copy(
                                         loading = false,
-                                        selectedEmployee =
-                                            detail,
-                                        errorMessage = null,
+                                        selectedWorkforceAssignment =
+                                            changed,
+                                        selectedWorkforceHistory =
+                                            history,
+                                        errorMessage =
+                                            null,
                                     ),
                         ),
                     )
+                    refreshPeople()
                     refreshOnboarding()
                 }
             }.onFailure { failure ->
@@ -480,7 +647,7 @@ fun main() {
                                         loading = false,
                                         errorMessage =
                                             failure.message
-                                                ?: "Employee detail could not be loaded.",
+                                                ?: "Workforce assignment could not be changed.",
                                     ),
                         ),
                     )
@@ -564,6 +731,10 @@ fun main() {
                                                 ?.workforceStructure,
                                         selectedEmployee =
                                             created.employee,
+                                        selectedWorkforceAssignment =
+                                            null,
+                                        selectedWorkforceHistory =
+                                            null,
                                     ),
                             ),
                         )
@@ -709,6 +880,8 @@ fun main() {
                 onRefreshOnboarding =
                     ::refreshOnboarding,
                 onSelectEmployee = ::selectEmployee,
+                onChangeWorkforceAssignment =
+                    ::changeWorkforceAssignment,
                 onCreateEmployee = ::createEmployee,
             )
         }
