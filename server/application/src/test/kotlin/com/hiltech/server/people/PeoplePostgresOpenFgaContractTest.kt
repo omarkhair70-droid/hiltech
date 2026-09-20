@@ -3,11 +3,14 @@ package com.hiltech.server.people
 import com.hiltech.server.audit.JdbcAuditEventWriter
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
-import com.hiltech.server.security.AuthorizationCheckRequest
 import com.hiltech.server.security.AuthorizationDesiredState
+import com.hiltech.server.security.AuthorizationProjectionProcessor
+import com.hiltech.server.security.AuthorizationProjectionRetryPolicy
 import com.hiltech.server.security.FailClosedAuthorizationAdapter
 import com.hiltech.server.security.HiltechOpenFgaProperties
 import com.hiltech.server.security.JdbcAuthorizationProjectionGuard
+import com.hiltech.server.security.JdbcAuthorizationProjectionIntentWriter
+import com.hiltech.server.security.JdbcAuthorizationProjectionStore
 import com.hiltech.server.security.JdbcRoleTeamSourceAuthority
 import com.hiltech.server.security.JdkOpenFgaHttpTransport
 import com.hiltech.server.security.OpenFgaGateway
@@ -25,11 +28,12 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.beans.factory.support.StaticListableBeanFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
 import org.springframework.jdbc.datasource.DriverManagerDataSource
-import java.sql.SQLException
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -141,144 +145,170 @@ class PeoplePostgresOpenFgaContractTest {
                 jdbc,
             )
 
-        applyTuple(
-            gateway,
-            RoleTeamAuthorizationRelations
-                .organizationMember(
+        listOf(
+            ids.adminOne to
+                ids.organizationOne,
+            ids.workerOne to
+                ids.organizationOne,
+            ids.adminTwo to
+                ids.organizationTwo,
+            ids.outsider to
+                ids.organizationTwo,
+        ).forEach {
+                (identityId, organizationId) ->
+            applyTuple(
+                gateway,
+                RoleTeamAuthorizationRelations
+                    .organizationMember(
+                        identityId,
+                        organizationId,
+                    ),
+            )
+        }
+
+        val projectionWriter =
+            JdbcAuthorizationProjectionIntentWriter(
+                jdbc = jdbc,
+                properties =
+                    fgaProperties,
+            )
+        val peopleProjectionBridge =
+            JdbcPeopleAuthorizationProjectionBridge(
+                jdbc = jdbc,
+                projectionWriter =
+                    projectionWriter,
+            )
+        val adminOneBinding =
+            insertPeopleAdminBinding(
+                jdbc = jdbc,
+                organizationId =
+                    ids.organizationOne,
+                principalUserId =
+                    ids.adminOne,
+                createdBy =
+                    ids.adminOne,
+                at =
+                    clock.instant()
+                        .minusSeconds(120),
+            )
+        val adminTwoBinding =
+            insertPeopleAdminBinding(
+                jdbc = jdbc,
+                organizationId =
+                    ids.organizationTwo,
+                principalUserId =
+                    ids.adminTwo,
+                createdBy =
+                    ids.adminTwo,
+                at =
+                    clock.instant()
+                        .minusSeconds(120),
+            )
+
+        val transaction =
+            TransactionTemplate(
+                txManager,
+            )
+        transaction
+            .executeWithoutResult {
+                peopleProjectionBridge
+                    .syncBinding(
+                        bindingId =
+                            adminOneBinding,
+                        occurredAt =
+                            clock.instant()
+                                .minusSeconds(60),
+                    )
+                peopleProjectionBridge
+                    .syncBinding(
+                        bindingId =
+                            adminTwoBinding,
+                        occurredAt =
+                            clock.instant()
+                                .minusSeconds(60),
+                    )
+            }
+
+        val authorizationProvider =
+            StaticListableBeanFactory()
+                .also {
+                    it.addBean(
+                        "authorizationCheckPort",
+                        authorization,
+                    )
+                }
+                .getBeanProvider(
+                    com.hiltech.server.security
+                        .AuthorizationCheckPort::class.java,
+                )
+
+        val peopleAuthorization =
+            SpringPeopleAuthorization(
+                authorizationProvider =
+                    authorizationProvider,
+                sourceAuthority =
+                    sourceAuthority,
+                peopleAuthoritySource =
+                    JdbcPeopleAuthoritySource(
+                        jdbc,
+                    ),
+                clock = clock,
+            )
+
+        assertFalse(
+            peopleAuthorization
+                .canManagePeople(
+                    ids.adminOne,
+                    ids.organizationOne,
+                ),
+            "Pending People authority projection must fail closed.",
+        )
+
+        val projectionProcessor =
+            AuthorizationProjectionProcessor(
+                store =
+                    JdbcAuthorizationProjectionStore(
+                        jdbc = jdbc,
+                        transactionManager =
+                            txManager,
+                        properties =
+                            fgaProperties,
+                        retryPolicy =
+                            AuthorizationProjectionRetryPolicy(),
+                    ),
+                openFga = gateway,
+                properties =
+                    fgaProperties,
+            )
+
+        repeat(4) {
+            projectionProcessor.processOne(
+                clock.instant(),
+            )
+        }
+
+        assertTrue(
+            peopleAuthorization
+                .canManagePeople(
                     ids.adminOne,
                     ids.organizationOne,
                 ),
         )
-        applyTuple(
-            gateway,
-            OpenFgaTuple(
-                subjectType = "user",
-                subjectId =
-                    ids.adminOne.toString(),
-                relation = "admin",
-                objectType = "organization",
-                objectId =
-                    ids.organizationOne
-                        .toString(),
-            ),
-        )
-        applyTuple(
-            gateway,
-            RoleTeamAuthorizationRelations
-                .organizationMember(
-                    ids.workerOne,
-                    ids.organizationOne,
-                ),
-        )
-        applyTuple(
-            gateway,
-            RoleTeamAuthorizationRelations
-                .organizationMember(
+        assertTrue(
+            peopleAuthorization
+                .canManagePeople(
                     ids.adminTwo,
                     ids.organizationTwo,
                 ),
         )
-        applyTuple(
-            gateway,
-            OpenFgaTuple(
-                subjectType = "user",
-                subjectId =
-                    ids.adminTwo.toString(),
-                relation = "admin",
-                objectType = "organization",
-                objectId =
-                    ids.organizationTwo
-                        .toString(),
-            ),
-        )
-        applyTuple(
-            gateway,
-            RoleTeamAuthorizationRelations
-                .organizationMember(
-                    ids.outsider,
-                    ids.organizationTwo,
+        assertFalse(
+            peopleAuthorization
+                .canManagePeople(
+                    ids.workerOne,
+                    ids.organizationOne,
                 ),
+            "Ordinary organization membership must not imply People administration.",
         )
-
-        val peopleAuthorization =
-            object : PeopleAuthorizationPort {
-                override fun canManagePeople(
-                    actorUserId: UUID,
-                    organizationId: UUID,
-                ): Boolean {
-                    val now = clock.instant()
-                    if (
-                        !sourceAuthority
-                            .isOrganizationMemberCurrent(
-                                actorUserId,
-                                organizationId,
-                                now,
-                            )
-                    ) {
-                        return false
-                    }
-                    val member =
-                        RoleTeamAuthorizationRelations
-                            .organizationMember(
-                                actorUserId,
-                                organizationId,
-                            )
-                    return authorization
-                        .isAllowed(
-                            AuthorizationCheckRequest(
-                                checkTuple =
-                                    OpenFgaTuple(
-                                        subjectType =
-                                            "user",
-                                        subjectId =
-                                            actorUserId
-                                                .toString(),
-                                        relation =
-                                            "admin",
-                                        objectType =
-                                            "organization",
-                                        objectId =
-                                            organizationId
-                                                .toString(),
-                                    ),
-                                failClosedGuardTuples =
-                                    listOf(member),
-                            ),
-                        )
-                }
-
-                override fun canViewDirectory(
-                    actorUserId: UUID,
-                    organizationId: UUID,
-                ): Boolean {
-                    val now = clock.instant()
-                    if (
-                        !sourceAuthority
-                            .isOrganizationMemberCurrent(
-                                actorUserId,
-                                organizationId,
-                                now,
-                            )
-                    ) {
-                        return false
-                    }
-                    val member =
-                        RoleTeamAuthorizationRelations
-                            .organizationMember(
-                                actorUserId,
-                                organizationId,
-                            )
-                    return authorization
-                        .isAllowed(
-                            AuthorizationCheckRequest(
-                                checkTuple =
-                                    member,
-                                failClosedGuardTuples =
-                                    listOf(member),
-                            ),
-                        )
-                }
-            }
 
         val published =
             mutableListOf<Any>()
@@ -1009,6 +1039,51 @@ class PeoplePostgresOpenFgaContractTest {
             userId,
             at.atOffset(ZoneOffset.UTC),
         )
+    }
+
+    private fun insertPeopleAdminBinding(
+        jdbc: JdbcTemplate,
+        organizationId: UUID,
+        principalUserId: UUID,
+        createdBy: UUID,
+        at: Instant,
+    ): UUID {
+        val id =
+            UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO people_authority_binding (
+                id,
+                organization_id,
+                authority_key,
+                principal_type,
+                principal_user_id,
+                principal_team_id,
+                effective_from,
+                effective_to,
+                active,
+                created_by_user_id,
+                created_at,
+                version
+            )
+            VALUES (
+                ?, ?,
+                'PEOPLE_ADMIN',
+                'USER',
+                ?, NULL,
+                ?, NULL,
+                true,
+                ?, ?, 1
+            )
+            """.trimIndent(),
+            id,
+            organizationId,
+            principalUserId,
+            at.atOffset(ZoneOffset.UTC),
+            createdBy,
+            at.atOffset(ZoneOffset.UTC),
+        )
+        return id
     }
 
     private fun applyTuple(
