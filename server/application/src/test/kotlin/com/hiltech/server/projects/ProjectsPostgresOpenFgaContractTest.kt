@@ -26,12 +26,15 @@ import com.hiltech.server.work.CreateWorkOrderCommand
 import com.hiltech.server.work.CreateWorkTaskCommand
 import com.hiltech.server.work.JdbcWorkPersistence
 import com.hiltech.server.work.PlanWorkCommand
+import com.hiltech.server.work.RemoveWorkDependencyCommand
 import com.hiltech.server.work.ReviseWorkInstructionCommand
+import com.hiltech.server.work.UpdateWorkTaskCommand
 import com.hiltech.server.work.WorkAuthorizationProjectionBridge
 import com.hiltech.server.work.WorkDependencyType
 import com.hiltech.server.work.WorkOrderLifecycle
 import com.hiltech.server.work.WorkReadiness
 import com.hiltech.server.work.WorkService
+import com.hiltech.server.work.WorkTaskState
 import io.opentelemetry.api.OpenTelemetry
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -1679,6 +1682,44 @@ class ProjectsPostgresOpenFgaContractTest {
                 withTask.workOrder.tasks.single().state.name,
             )
 
+            val taskBeforeUpdate = withTask.workOrder.tasks.single()
+            val taskUpdateOperation = UUID.randomUUID()
+            val taskUpdateCommand =
+                UpdateWorkTaskCommand(
+                    operationId = taskUpdateOperation,
+                    taskId = withTask.taskId,
+                    taskCode = "T-01",
+                    title = "Verify and label rack position",
+                    description = "Planning-only task update",
+                    sortOrder = 20,
+                    mandatory = true,
+                    estimatedDurationMinutes = 25,
+                    evidenceRequirementKey = "PHOTO-FINAL",
+                    state = WorkTaskState.PLANNED,
+                    baseTaskVersion = taskBeforeUpdate.version,
+                    baseWorkOrderVersion = withTask.workOrder.version,
+                    clientOccurredAt = clock.instant(),
+                    actorUserId = ids.teamUser,
+                    correlationId = "corr-work-task-update",
+                )
+            val withUpdatedTask =
+                workService.updateTask(taskUpdateCommand)
+            assertEquals(
+                "Verify and label rack position",
+                withUpdatedTask.workOrder.tasks.single().title,
+            )
+            assertEquals(
+                taskBeforeUpdate.version + 1,
+                withUpdatedTask.workOrder.tasks.single().version,
+            )
+            val taskUpdateReplay =
+                workService.updateTask(taskUpdateCommand)
+            assertTrue(taskUpdateReplay.replayed)
+            assertEquals(
+                withUpdatedTask.workOrder.version,
+                taskUpdateReplay.workOrder.version,
+            )
+
             val projectForSecond =
                 requireNotNull(
                     JdbcProjectsPersistence(jdbc)
@@ -1829,6 +1870,39 @@ class ProjectsPostgresOpenFgaContractTest {
                 cycleRejected.code,
             )
 
+            val linkedDependency =
+                linked.workOrder.dependencies.single {
+                    it.dependencyId == linked.dependencyId
+                }
+            val removeDependencyOperation = UUID.randomUUID()
+            val removeDependencyCommand =
+                RemoveWorkDependencyCommand(
+                    operationId = removeDependencyOperation,
+                    workOrderId = linked.workOrder.workOrderId,
+                    dependencyId = linked.dependencyId,
+                    baseVersion = linked.workOrder.version,
+                    baseDependencyVersion = linkedDependency.version,
+                    clientOccurredAt = clock.instant(),
+                    actorUserId = ids.teamUser,
+                    correlationId = "corr-work-dependency-remove",
+                )
+            val unlinked =
+                workService.removeDependency(removeDependencyCommand)
+            assertEquals(
+                0,
+                unlinked.workOrder.dependencies.count {
+                    it.successorWorkOrderId ==
+                        unlinked.workOrder.workOrderId
+                },
+            )
+            val removeDependencyReplay =
+                workService.removeDependency(removeDependencyCommand)
+            assertTrue(removeDependencyReplay.replayed)
+            assertEquals(
+                unlinked.workOrder.version,
+                removeDependencyReplay.workOrder.version,
+            )
+
             drain(
                 processor,
                 clock.instant(),
@@ -1887,6 +1961,20 @@ class ProjectsPostgresOpenFgaContractTest {
                     jdbc,
                     "PROJECT_ACTIVATED",
                     readyProject.projectId,
+                ) >= 1,
+            )
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "WORK_TASK_UPDATED",
+                    withTask.workOrder.workOrderId,
+                ) >= 1,
+            )
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "WORK_DEPENDENCY_REMOVED",
+                    linked.workOrder.workOrderId,
                 ) >= 1,
             )
 
