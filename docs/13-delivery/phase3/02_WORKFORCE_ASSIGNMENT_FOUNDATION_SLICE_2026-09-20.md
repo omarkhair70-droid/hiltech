@@ -1,7 +1,7 @@
 # Phase 3 / Slice 02 — Workforce Assignment / Reporting Structure
 
 Date: 2026-09-20  
-Status: **VERIFIED / READY TO MERGE**
+Status: **VERIFIED / MERGED**
 
 ## Reality basis
 
@@ -315,6 +315,13 @@ No assignment-change workflow, Project/Site/Work assignment, attendance, payroll
 
 ## Contract conclusion
 
-**VERIFIED / READY TO MERGE.**
+**VERIFIED / MERGED.**
 
-Merge only the verified closure head after docs-only closure checks. After merge, require post-merge `main` Bootstrap PASS before opening Slice 03 implementation.
+PR #42 merged at:
+
+`9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`
+
+Post-merge Bootstrap:
+- `35480853486` — **PASS**
+
+Slice 02 is closed. Phase 3 proceeds to Slice 03 — HR Documents / Certifications.

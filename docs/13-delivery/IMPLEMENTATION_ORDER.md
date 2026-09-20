@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 VERIFIED / COMPLETE / PHASE 3 ACTIVE — SLICE 01 MERGED / SLICE 02 VERIFIED / READY TO MERGE**
+Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 VERIFIED / COMPLETE / PHASE 3 ACTIVE — SLICE 01/02 MERGED / SLICE 03 IMPLEMENTATION AUTHORIZED**
 
 ## Core Rule
 
@@ -453,9 +453,9 @@ Closed:
 Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
 
 Immediate next execution:
-**PHASE 3 / SLICE 02 — closure, merge, and post-merge verification.**
+**PHASE 3 / SLICE 03 — HR Documents / Certifications implementation.**
 
-Phase 0 engineering foundation, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are verified and complete. Phase 3 Slice 01 is merged/post-merge verified. Slice 02 is implementation-complete and exact-head verified; Slice 03 remains closed until Slice 02 merge/post-merge verification.
+Phase 0 engineering foundation, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are verified and complete. Phase 3 Slice 01 and Slice 02 are merged/post-merge verified. Slice 03 HR Documents / Certifications has a frozen reality/implementation contract and is the immediate production-code target.
 
 
 ---
