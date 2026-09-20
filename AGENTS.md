@@ -11,7 +11,7 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
 - Phase 2 — Shared Product Infrastructure: **VERIFIED / COMPLETE**
-- Current execution phase: **Phase 3 — People / Internal Workforce Core / Slice 02 — Workforce Assignment / Reporting Structure — VERIFIED / READY TO MERGE**
+- Current execution phase: **Phase 3 — People / Internal Workforce Core / Slice 03 — HR Documents / Certifications — IMPLEMENTATION AUTHORIZED**
 - Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
 - Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
 - Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
@@ -50,10 +50,13 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 01 verification runs: OpenFGA `35477856791` / Bootstrap `35477856788` / Phase 1 OIDC `35477856782` / Phase 2 runtime `35477856796` — **PASS**
 - Slice 01 merge commit: `0183a273f1a01d3b9d0277df2ac2e8bbe2f98390`; post-merge Bootstrap `35478418690` and OpenFGA `35478418692` — **PASS**
 - Slice 02 reality closure: `docs/13-delivery/phase3/02_WORKFORCE_ASSIGNMENT_REALITY_CLOSURE_2026-09-20.md` — **PASS**
-- Slice 02 implementation contract: `docs/13-delivery/phase3/02_WORKFORCE_ASSIGNMENT_FOUNDATION_SLICE_2026-09-20.md` — **VERIFIED / READY TO MERGE**
+- Slice 02 implementation contract: `docs/13-delivery/phase3/02_WORKFORCE_ASSIGNMENT_FOUNDATION_SLICE_2026-09-20.md` — **VERIFIED / MERGED**
 - Slice 02 canonical tested code head: `b838e92f1126ebf1081c81568d5abb90d0c17edd`
 - Slice 02 verification: Bootstrap `35479675064` / Phase 2 runtime `35479675067` / Phase 1 OIDC `35479675062` attempt 2 — **PASS**
-- Current rule: close/merge Slice 02 only; do not start Slice 03 HR Documents/Certifications until post-merge verification and the Slice 03 contract gate.
+- Slice 02 merge commit: `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` — **PASS**
+- Slice 03 reality closure: `docs/13-delivery/phase3/03_HR_DOCUMENTS_CERTIFICATIONS_REALITY_CLOSURE_2026-09-20.md` — **PASS**
+- Slice 03 implementation contract: `docs/13-delivery/phase3/03_HR_DOCUMENTS_CERTIFICATIONS_SLICE_2026-09-20.md` — **IMPLEMENTATION AUTHORIZED**
+- Current rule: implement EmployeeDocument/Certification + EMPLOYEE_DOCUMENT Evidence target only; do not pull onboarding/self-service policy into Slice 03.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
