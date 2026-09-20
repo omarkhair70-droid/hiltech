@@ -1,7 +1,7 @@
 # Phase 3 / Slice 01 — Employee / Employment Core
 
 Date: 2026-09-20  
-Status: **VERIFIED / READY TO MERGE**
+Status: **VERIFIED / MERGED**
 
 ## Reality basis
 
@@ -370,6 +370,14 @@ No Team/Manager, onboarding, certification/document, attendance, leave, payroll,
 
 ## Contract conclusion
 
-**VERIFIED / READY TO MERGE.**
+**VERIFIED / MERGED.**
 
-Merge only the verified closure head after docs-only closure checks. After merge, require post-merge `main` Bootstrap PASS before opening Phase 3 Slice 02 implementation.
+PR #40 merged at:
+
+`0183a273f1a01d3b9d0277df2ac2e8bbe2f98390`
+
+Post-merge evidence:
+- Bootstrap Phase 0 `35478418690` — **PASS**
+- Contract — OpenFGA First Slice `35478418692` — **PASS**
+
+Slice 01 is closed. Phase 3 may proceed to Slice 02 contract/reality closure.
