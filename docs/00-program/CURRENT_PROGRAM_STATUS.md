@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 3 ACTIVE — SLICE 01 MERGED — SLICE 02 WORKFORCE ASSIGNMENT VERIFIED / READY TO MERGE**
+**PHASE 3 ACTIVE — SLICE 01/02 MERGED — SLICE 03 HR DOCUMENTS / CERTIFICATIONS IMPLEMENTATION AUTHORIZED**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -52,7 +52,7 @@ Final full regression evidence on that code head:
 
 Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Final Phase 2 closure PR #37 merged at `624bd6c50f8d17535316ae450a8a780bc756a108` with post-merge Bootstrap `35474921624` PASS.
 
-Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED / MERGED. **Slice 02 — Workforce Assignment / Reporting Structure is VERIFIED / READY TO MERGE** on canonical tested code head `b838e92f1126ebf1081c81568d5abb90d0c17edd`. Bootstrap `35479675064`, Phase 2 runtime `35479675067`, and Phase 1 Native OIDC `35479675062` attempt 2 are PASS. Slice 02 implements effective-dated workforce structure, safe reporting hierarchy, Team reuse, People-owned Team membership with Identity-link backfill, and aggregate shared Team authority so manual + People membership sources cannot stale-revoke one another.
+Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED / MERGED. Slice 02 — Workforce Assignment / Reporting Structure — is VERIFIED / MERGED through PR #42 at `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` PASS. Slice 03 — HR Documents / Certifications — has completed reality/contract closure and is IMPLEMENTATION AUTHORIZED. It will add private EmployeeDocument metadata, Certification facts/eligibility, and one EMPLOYEE_DOCUMENT Evidence target adapter over the existing private Evidence lifecycle.
 
 ---
 
@@ -83,8 +83,8 @@ Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 3 ACTIVE | Slice 01 merged; Slice 02 verified/ready to merge; Slice 03 remains closed |
-| Production code | PHASE 3 SLICE 02 VERIFIED / READY TO MERGE | PostgreSQL/OpenFGA/shared client/Android/Windows/inherited regressions PASS |
+| Implementation order | PHASE 3 ACTIVE | Slice 01/02 merged; Slice 03 implementation authorized |
+| Production code | PHASE 3 SLICE 03 AUTHORIZED | EmployeeDocument/Certification + EMPLOYEE_DOCUMENT Evidence target only |
 
 ---
 
@@ -239,7 +239,8 @@ Immediate continuation:
 1. Phase 0, Phase 1 and Phase 2 are VERIFIED / COMPLETE; do not reopen them without a genuine cross-cutting contradiction.
 2. Phase 3 scope/slice plan is frozen in `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md`.
 3. Phase 3 / Slice 01 — Employee / Employment Core is **VERIFIED / MERGED** at `0183a273f1a01d3b9d0277df2ac2e8bbe2f98390`; post-merge Bootstrap `35478418690` PASS.
-4. Slice 02 Workforce Assignment is **VERIFIED / READY TO MERGE** on `b838e92f1126ebf1081c81568d5abb90d0c17edd`; after closure checks merge it, then require post-merge Bootstrap PASS before Slice 03 contract/implementation work.
+4. Slice 02 is **VERIFIED / MERGED** at `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` PASS.
+5. Slice 03 HR Documents / Certifications is **IMPLEMENTATION AUTHORIZED**. Keep catalogs configurable and reuse the existing Evidence/object-storage lifecycle through EMPLOYEE_DOCUMENT target dispatch.
 5. Continue consuming Reality Evidence/Facts by phase; current employee-master/import/legal HR unknowns are scoped out rather than guessed.
 6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 
