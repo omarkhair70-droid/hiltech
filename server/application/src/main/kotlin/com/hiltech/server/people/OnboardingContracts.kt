@@ -223,3 +223,28 @@ data class OnboardingActivated(
     val occurredAt: Instant,
     val correlationId: String,
 )
+
+
+interface OnboardingSelfServicePolicyPort {
+    fun ownEmployee(
+        identityId: UUID,
+        organizationId: UUID,
+        at: Instant,
+    ): OnboardingEmployeeContext?
+
+    fun canViewEmployeeDocument(
+        identityId: UUID,
+        organizationId: UUID,
+        employeeId: UUID,
+        documentTypeCode: String,
+        at: Instant,
+    ): Boolean
+
+    fun canSubmitEmployeeDocument(
+        identityId: UUID,
+        organizationId: UUID,
+        employeeId: UUID,
+        documentTypeCode: String,
+        at: Instant,
+    ): Boolean
+}

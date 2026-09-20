@@ -449,11 +449,10 @@ class EvidenceLifecycleService(
             target.verificationState ==
             "REJECTED" ||
             !employeeDocumentTarget
-                .canManage(
+                .canReserve(
                     identityId =
                         actorIdentityId,
-                    organizationId =
-                        target.organizationId,
+                    target = target,
                 )
         ) {
             throw ProductApiException(
@@ -531,11 +530,10 @@ class EvidenceLifecycleService(
                     fresh.verificationState ==
                     "REJECTED" ||
                     !employeeDocumentTarget
-                        .canManage(
+                        .canReserve(
                             identityId =
                                 actorIdentityId,
-                            organizationId =
-                                fresh.organizationId,
+                            target = fresh,
                         )
                 ) {
                     throw ProductApiException(
@@ -1200,11 +1198,10 @@ class EvidenceLifecycleService(
                     target.verificationState !=
                     "REJECTED" &&
                     employeeDocumentTarget
-                        .canManage(
+                        .canAccess(
                             identityId =
                                 actorIdentityId,
-                            organizationId =
-                                target.organizationId,
+                            target = target,
                         )
             }
 

@@ -100,13 +100,46 @@ interface OnboardingPersistencePort {
 @Component
 class JdbcOnboardingPersistence(
     private val jdbc: JdbcTemplate,
-) : OnboardingPersistencePort {
+) : OnboardingPersistencePort,
+    OnboardingSelfServicePolicyPort {
     override fun employee(
         employeeId: UUID,
     ): OnboardingEmployeeContext? =
         queryEmployee(
             "WHERE e.id = ?",
             arrayOf(employeeId),
+        )
+
+    override fun canViewEmployeeDocument(
+        identityId: UUID,
+        organizationId: UUID,
+        employeeId: UUID,
+        documentTypeCode: String,
+        at: Instant,
+    ): Boolean =
+        employeeDocumentRequirementAllows(
+            identityId = identityId,
+            organizationId = organizationId,
+            employeeId = employeeId,
+            documentTypeCode = documentTypeCode,
+            requireSubmit = false,
+            at = at,
+        )
+
+    override fun canSubmitEmployeeDocument(
+        identityId: UUID,
+        organizationId: UUID,
+        employeeId: UUID,
+        documentTypeCode: String,
+        at: Instant,
+    ): Boolean =
+        employeeDocumentRequirementAllows(
+            identityId = identityId,
+            organizationId = organizationId,
+            employeeId = employeeId,
+            documentTypeCode = documentTypeCode,
+            requireSubmit = true,
+            at = at,
         )
 
     override fun ownEmployee(
@@ -749,4 +782,57 @@ class JdbcOnboardingPersistence(
             },
             *args,
         )
+    private fun employeeDocumentRequirementAllows(
+        identityId: UUID,
+        organizationId: UUID,
+        employeeId: UUID,
+        documentTypeCode: String,
+        requireSubmit: Boolean,
+        at: Instant,
+    ): Boolean {
+        val own =
+            ownEmployee(
+                identityId = identityId,
+                organizationId = organizationId,
+                at = at,
+            ) ?: return false
+
+        if (own.employeeId != employeeId) {
+            return false
+        }
+
+        val latest =
+            latestCaseForEmployee(employeeId)
+                ?: return false
+
+        if (
+            requireSubmit &&
+            latest.state != OnboardingCaseState.OPEN
+        ) {
+            return false
+        }
+
+        return jdbc.queryForObject(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM onboarding_policy_requirement opr
+                WHERE opr.config_revision_id = ?
+                  AND opr.requirement_type =
+                      'EMPLOYEE_DOCUMENT'
+                  AND opr.document_type_code = ?
+                  AND opr.self_service_visible = true
+                  AND (
+                      ? = false
+                      OR opr.employee_may_submit = true
+                  )
+            )
+            """.trimIndent(),
+            Boolean::class.java,
+            latest.policyConfigRevisionId,
+            documentTypeCode,
+            requireSubmit,
+        ) == true
+    }
+
 }

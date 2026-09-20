@@ -12,6 +12,9 @@ class PeopleEmployeeDocumentEvidenceTargetAdapter(
         HrDocumentsPersistencePort,
     private val authorization:
         PeopleAuthorizationPort,
+    private val selfServicePolicy:
+        OnboardingSelfServicePolicyPort,
+    private val clock: java.time.Clock,
 ) : EmployeeDocumentEvidenceTargetPort {
     override fun loadTarget(
         documentId: UUID,
@@ -26,6 +29,11 @@ class PeopleEmployeeDocumentEvidenceTargetAdapter(
                     it.organizationId,
                 employeeId =
                     it.employeeId,
+                documentTypeCode =
+                    persistence
+                        .loadDocument(
+                            it.documentId,
+                        )!!.documentTypeCode,
                 verificationState =
                     it.verificationState.name,
                 evidenceId =
@@ -35,16 +43,53 @@ class PeopleEmployeeDocumentEvidenceTargetAdapter(
             )
         }
 
-    override fun canManage(
+    override fun canReserve(
         identityId: UUID,
-        organizationId: UUID,
+        target:
+            EmployeeDocumentEvidenceTargetSnapshot,
     ): Boolean =
         authorization.canManagePeople(
             actorUserId =
                 identityId,
             organizationId =
-                organizationId,
-        )
+                target.organizationId,
+        ) ||
+            selfServicePolicy
+                .canSubmitEmployeeDocument(
+                    identityId =
+                        identityId,
+                    organizationId =
+                        target.organizationId,
+                    employeeId =
+                        target.employeeId,
+                    documentTypeCode =
+                        target.documentTypeCode,
+                    at = clock.instant(),
+                )
+
+    override fun canAccess(
+        identityId: UUID,
+        target:
+            EmployeeDocumentEvidenceTargetSnapshot,
+    ): Boolean =
+        authorization.canManagePeople(
+            actorUserId =
+                identityId,
+            organizationId =
+                target.organizationId,
+        ) ||
+            selfServicePolicy
+                .canViewEmployeeDocument(
+                    identityId =
+                        identityId,
+                    organizationId =
+                        target.organizationId,
+                    employeeId =
+                        target.employeeId,
+                    documentTypeCode =
+                        target.documentTypeCode,
+                    at = clock.instant(),
+                )
 
     override fun attachEvidence(
         documentId: UUID,
