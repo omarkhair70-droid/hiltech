@@ -264,8 +264,9 @@ This is a boundary decision, not removal of later lifecycle states from the data
 
 Site is durable physical/client location truth and survives Project closure.
 
-Authoritative Slice 01 fields remain the V0004 shape:
+Authoritative Slice 01 fields refine the V0004 shape with explicit HILTECH tenancy:
 - id
+- organizationId — owning HILTECH organization
 - clientOrganizationId
 - siteCode
 - name
@@ -279,7 +280,8 @@ Authoritative Slice 01 fields remain the V0004 shape:
 - version.
 
 Rules:
-- unique `clientOrganizationId + siteCode`.
+- unique `organizationId + clientOrganizationId + siteCode`.
+- Site HILTECH tenancy is explicit; clientOrganizationId alone is not an internal tenant boundary.
 - Site may be reused by multiple Projects for the same client.
 - Site must not be recreated merely because a new Project starts.
 - address/geolocation are RESTRICTED fields and projected only to authorized users.
@@ -565,8 +567,9 @@ Expected Slice 01 migration responsibilities:
 - source_type/source_external_reference;
 - authoritative project_responsibility history;
 - remove non-authoritative project_manager_id;
+- explicit HILTECH organization ownership on Site and ProjectSite;
 - indexes/checks/uniqueness for responsibility/source semantics;
-- any composite organization integrity keys needed to reject cross-organization responsibility safely.
+- composite organization integrity keys that reject cross-organization responsibility and ProjectSite links.
 
 Do not modify V0001–V0020.
 
@@ -772,3 +775,40 @@ This amendment preserves the previously frozen business intent — explicit auth
 `CONTROLLED_AMENDMENT_01 = PASS`
 
 `PROJECT_ADMIN_AUTHORITY_SOURCE = PROJECT_AUTHORITY_BINDING`
+
+
+---
+
+# Controlled Amendment 02 — explicit HILTECH tenancy for Site / ProjectSite
+
+Date: 2026-09-20  
+Status: **ACCEPTED BEFORE SITE PRODUCTION CODE**
+
+Implementation inspection found a security/data-integrity gap in the pre-code V0004 Site scaffold:
+
+- Site has `client_organization_id`, but no owning HILTECH `organization_id`;
+- `client_organization_id` answers whose physical/client Site it is, not which HILTECH tenant owns the internal record;
+- an unattached reusable Site therefore cannot be safely scoped to one HILTECH organization;
+- ProjectSite's two independent foreign keys do not by themselves prove that Project and Site belong to the same HILTECH tenant.
+
+Slice 01 refines the physical contract:
+
+`site` adds:
+- `organization_id uuid NOT NULL -> organization`;
+- uniqueness becomes `(organization_id, client_organization_id, site_code)`;
+- `UNIQUE (id, organization_id)` supports composite integrity.
+
+`project_site` adds:
+- `organization_id uuid NOT NULL`;
+- composite FK `(project_id, organization_id) -> project(id, organization_id)`;
+- composite FK `(site_id, organization_id) -> site(id, organization_id)`.
+
+The existing `project_id` / `site_id` identities and unique `(project_id, site_id)` relation remain.
+
+This does not make Site equal Project. Site stays durable/reusable. It adds the missing internal tenant boundary required for safe Site creation, reuse and authorization.
+
+`CONTROLLED_AMENDMENT_02 = PASS`
+
+`SITE_TENANCY = EXPLICIT_HILTECH_ORGANIZATION`
+
+`PROJECT_SITE_CROSS_TENANT_LINK = DB_REJECTED`
