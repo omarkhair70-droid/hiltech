@@ -1,7 +1,7 @@
 # Phase 3 / Slice 06 — Offboarding Skeleton
 
 Date: 2026-09-20  
-Status: **IMPLEMENTATION AUTHORIZED / CONTRACT FROZEN**
+Status: **VERIFIED / READY TO MERGE**
 
 ## Reality basis
 
@@ -459,10 +459,56 @@ No rehire.
 
 ---
 
+# Verification closure
+
+Canonical tested code head:
+
+`d88f5234bc100c5541c7d27608435e59c5fd986f`
+
+Exact-head verification:
+
+- Bootstrap Phase 0 `35494892676` attempt 2 — **PASS**
+  - database-contract — PASS
+  - foundation — PASS
+  - evidence-storage-contract — PASS
+  - supply-chain-contract — PASS
+  - terraform-contract — PASS
+  - dependency-review — PASS
+  - local-platform-contract — PASS
+- Phase 2 Shared Command Runtime `35494892627` — **PASS**
+- Phase 1 Native OIDC Production Smoke `35494892665` — **PASS**
+- Phase 3 Onboarding Human Proof `35494892659` — **PASS**
+- Phase 3 Assignment Change Human Proof `35494892649` — **PASS**
+- Phase 3 Offboarding Human Proof `35494892672` — **PASS**
+
+The first local-platform attempt exposed an inherited Activity projection contract flake; the exact same Slice 06 head passed the full local-platform contract on rerun. The dedicated Offboarding PostgreSQL contract itself passed and proves the Slice 06 access/history invariants.
+
+Verified implementation includes:
+
+- V0020 `offboarding_case` + typed six-slot clearance schema;
+- ACTIVE -> OFFBOARDING -> FORMER lifecycle without deleting Employee/Employment history;
+- Start Offboarding leaves active Employment intact;
+- real HILTECH organization-membership and session revocation through an internal Identity-owned boundary;
+- organization membership revocation projected to OpenFGA rather than leaving stale provider authority;
+- current WorkforceAssignment + People-owned Team authority safely closed without fake replacement assignment;
+- ACCESS clearance derived from authoritative Identity/People facts and not manually spoofable;
+- HR clearance + Project/Asset/Finance/Payroll coordination clearances with explicit source/boundary semantics;
+- completion date/version/blocker gates;
+- Employment ENDED + Employee FORMER with preserved history;
+- provider/Keycloak identity preserved; device history is not blindly wiped;
+- no Project, Asset, Finance or Payroll business transaction engine pulled into People;
+- shared KMP contracts/client;
+- Windows People/Admin offboarding surface;
+- dedicated PostgreSQL contract proof;
+- rendered Windows human-flow proof for access pending, system-verified access clear and completed former state;
+- inherited Slice 01–05 / Phase 0–2 / OIDC/OpenFGA regressions preserved.
+
 # Contract conclusion
 
-**IMPLEMENTATION AUTHORIZED.**
+**VERIFIED / READY TO MERGE.**
 
-Implement only the Offboarding Skeleton contract above.
+PR #51 may move from Draft to Ready only while this closure lineage remains verified.
 
-After Slice 06 is verified/merged, run Phase 3 final gap review before Phase 4.
+After merge, require post-merge Bootstrap before Slice 06 is called **MERGED / CLOSED**.
+
+Then run the Phase 3 final gap review. Do not start Phase 4 production code before that review is closed and the owner has reviewed the Phase 4 entry plan.

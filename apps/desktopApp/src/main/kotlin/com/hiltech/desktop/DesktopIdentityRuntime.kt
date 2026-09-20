@@ -22,6 +22,12 @@ import com.hiltech.shared.core.people.CertificationListDto
 import com.hiltech.shared.core.people.EmployeeDocumentListDto
 import com.hiltech.shared.core.people.HrDocumentsApiClient
 import com.hiltech.shared.core.people.OnboardingApiClient
+import com.hiltech.shared.core.people.StartEmployeeOffboardingRequestDto
+import com.hiltech.shared.core.people.RevokeEmployeeOffboardingAccessRequestDto
+import com.hiltech.shared.core.people.ResolveOffboardingClearanceRequestDto
+import com.hiltech.shared.core.people.OffboardingCaseDto
+import com.hiltech.shared.core.people.OffboardingApiClient
+import com.hiltech.shared.core.people.CompleteEmployeeOffboardingRequestDto
 import com.hiltech.shared.core.people.OnboardingCaseDto
 import com.hiltech.shared.core.people.PeopleApiClient
 import com.hiltech.shared.core.people.WorkforceAssignmentApiClient
@@ -108,6 +114,9 @@ class DesktopIdentityRuntime(
 
     private val hrDocumentsApi =
         HrDocumentsApiClient(productApi)
+
+    private val offboardingApi =
+        OffboardingApiClient(productApi)
 
     suspend fun signIn(
         forceReauthentication: Boolean = false,
@@ -429,6 +438,146 @@ class DesktopIdentityRuntime(
             installationId =
                 installationId,
         )
+    }
+
+    suspend fun employeeOffboarding(
+        employeeId: String,
+    ): OffboardingCaseDto {
+        ensureConfigured()
+        return offboardingApi.read(
+            employeeId =
+                employeeId,
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun startEmployeeOffboarding(
+        employeeId: String,
+        baseEmployeeVersion: Long,
+        lastWorkingDate: String,
+        reasonCategoryCode: String,
+        note: String?,
+    ): OffboardingCaseDto {
+        ensureConfigured()
+        return offboardingApi.start(
+            employeeId =
+                employeeId,
+            request =
+                StartEmployeeOffboardingRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    baseEmployeeVersion =
+                        baseEmployeeVersion,
+                    lastWorkingDate =
+                        lastWorkingDate,
+                    reasonCategoryCode =
+                        reasonCategoryCode,
+                    note = note,
+                ),
+            installationId =
+                installationId,
+        ).offboarding
+    }
+
+    suspend fun revokeEmployeeOffboardingAccess(
+        caseId: String,
+        baseCaseVersion: Long,
+    ): OffboardingCaseDto {
+        ensureConfigured()
+        return offboardingApi.revokeAccess(
+            caseId = caseId,
+            request =
+                RevokeEmployeeOffboardingAccessRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    baseCaseVersion =
+                        baseCaseVersion,
+                ),
+            installationId =
+                installationId,
+        ).offboarding
+    }
+
+    suspend fun resolveEmployeeOffboardingHr(
+        caseId: String,
+        baseCaseVersion: Long,
+        resolution: String,
+        reason: String?,
+    ): OffboardingCaseDto {
+        ensureConfigured()
+        return offboardingApi.resolveHr(
+            caseId = caseId,
+            request =
+                ResolveOffboardingClearanceRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    baseCaseVersion =
+                        baseCaseVersion,
+                    resolution =
+                        resolution,
+                    reason = reason,
+                ),
+            installationId =
+                installationId,
+        ).offboarding
+    }
+
+    suspend fun resolveEmployeeOffboardingExternal(
+        caseId: String,
+        baseCaseVersion: Long,
+        clearanceType: String,
+        resolution: String,
+        reason: String?,
+    ): OffboardingCaseDto {
+        ensureConfigured()
+        return offboardingApi.resolveExternal(
+            caseId = caseId,
+            clearanceType =
+                clearanceType,
+            request =
+                ResolveOffboardingClearanceRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    baseCaseVersion =
+                        baseCaseVersion,
+                    resolution =
+                        resolution,
+                    reason = reason,
+                ),
+            installationId =
+                installationId,
+        ).offboarding
+    }
+
+    suspend fun completeEmployeeOffboarding(
+        caseId: String,
+        baseCaseVersion: Long,
+        baseEmployeeVersion: Long,
+        baseEmploymentVersion: Long,
+    ): OffboardingCaseDto {
+        ensureConfigured()
+        return offboardingApi.complete(
+            caseId = caseId,
+            request =
+                CompleteEmployeeOffboardingRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    baseCaseVersion =
+                        baseCaseVersion,
+                    baseEmployeeVersion =
+                        baseEmployeeVersion,
+                    baseEmploymentVersion =
+                        baseEmploymentVersion,
+                ),
+            installationId =
+                installationId,
+        ).offboarding
     }
 
     suspend fun logout() {

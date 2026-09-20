@@ -28,6 +28,7 @@ import com.hiltech.shared.core.identity.IdentitySecuritySnapshot
 import com.hiltech.shared.core.people.EmployeeDetailDto
 import com.hiltech.shared.core.people.OnboardingRequirementDto
 import com.hiltech.shared.core.people.OnboardingCaseDto
+import com.hiltech.shared.core.people.OffboardingCaseDto
 import com.hiltech.shared.core.people.EmployeeDocumentListDto
 import com.hiltech.shared.core.people.CertificationListDto
 import com.hiltech.shared.core.people.EmployeeDirectoryDto
@@ -80,6 +81,8 @@ data class HiltechPeopleState(
         WorkforceAssignmentDto? = null,
     val selectedWorkforceHistory:
         WorkforceStructureDto? = null,
+    val selectedOffboarding:
+        OffboardingCaseDto? = null,
     val errorMessage: String? = null,
 )
 
@@ -107,6 +110,40 @@ fun HiltechShell(
             reportsToEmployeeId: String?,
         ) -> Unit = {
             _, _, _, _, _, _, _ -> Unit
+        },
+    onStartOffboarding:
+        (
+            employeeId: String,
+            baseEmployeeVersion: Long,
+            lastWorkingDate: String,
+            reasonCategoryCode: String,
+            note: String?,
+        ) -> Unit = {
+            _, _, _, _, _ -> Unit
+        },
+    onRevokeOffboardingAccess:
+        (
+            caseId: String,
+            baseCaseVersion: Long,
+        ) -> Unit = { _, _ -> },
+    onResolveOffboardingClearance:
+        (
+            caseId: String,
+            baseCaseVersion: Long,
+            clearanceType: String,
+            resolution: String,
+            reason: String?,
+        ) -> Unit = {
+            _, _, _, _, _ -> Unit
+        },
+    onCompleteOffboarding:
+        (
+            caseId: String,
+            baseCaseVersion: Long,
+            baseEmployeeVersion: Long,
+            baseEmploymentVersion: Long,
+        ) -> Unit = {
+            _, _, _, _ -> Unit
         },
     onCreateEmployee:
         (
@@ -301,6 +338,14 @@ fun HiltechShell(
                                 onSelectEmployee,
                             onChangeWorkforceAssignment =
                                 onChangeWorkforceAssignment,
+                            onStartOffboarding =
+                                onStartOffboarding,
+                            onRevokeOffboardingAccess =
+                                onRevokeOffboardingAccess,
+                            onResolveOffboardingClearance =
+                                onResolveOffboardingClearance,
+                            onCompleteOffboarding =
+                                onCompleteOffboarding,
                             onCreateEmployee =
                                 onCreateEmployee,
                         )
@@ -622,6 +667,34 @@ private fun PeopleSection(
             roleLabel: String?,
             reportsToEmployeeId: String?,
         ) -> Unit,
+    onStartOffboarding:
+        (
+            employeeId: String,
+            baseEmployeeVersion: Long,
+            lastWorkingDate: String,
+            reasonCategoryCode: String,
+            note: String?,
+        ) -> Unit,
+    onRevokeOffboardingAccess:
+        (
+            caseId: String,
+            baseCaseVersion: Long,
+        ) -> Unit,
+    onResolveOffboardingClearance:
+        (
+            caseId: String,
+            baseCaseVersion: Long,
+            clearanceType: String,
+            resolution: String,
+            reason: String?,
+        ) -> Unit,
+    onCompleteOffboarding:
+        (
+            caseId: String,
+            baseCaseVersion: Long,
+            baseEmployeeVersion: Long,
+            baseEmploymentVersion: Long,
+        ) -> Unit,
     onCreateEmployee:
         (
             displayName: String,
@@ -803,12 +876,369 @@ private fun PeopleSection(
                         onChangeWorkforceAssignment,
                 )
             }
+
+        OffboardingAdminSection(
+            employee = employee,
+            offboarding =
+                state.selectedOffboarding,
+            onStart =
+                onStartOffboarding,
+            onRevokeAccess =
+                onRevokeOffboardingAccess,
+            onResolveClearance =
+                onResolveOffboardingClearance,
+            onComplete =
+                onCompleteOffboarding,
+        )
     }
 
     OutlinedButton(
         onClick = onRefresh,
     ) {
         Text("Refresh People")
+    }
+}
+
+
+@Composable
+private fun OffboardingAdminSection(
+    employee: EmployeeDetailDto,
+    offboarding: OffboardingCaseDto?,
+    onStart:
+        (
+            employeeId: String,
+            baseEmployeeVersion: Long,
+            lastWorkingDate: String,
+            reasonCategoryCode: String,
+            note: String?,
+        ) -> Unit,
+    onRevokeAccess:
+        (
+            caseId: String,
+            baseCaseVersion: Long,
+        ) -> Unit,
+    onResolveClearance:
+        (
+            caseId: String,
+            baseCaseVersion: Long,
+            clearanceType: String,
+            resolution: String,
+            reason: String?,
+        ) -> Unit,
+    onComplete:
+        (
+            caseId: String,
+            baseCaseVersion: Long,
+            baseEmployeeVersion: Long,
+            baseEmploymentVersion: Long,
+        ) -> Unit,
+) {
+    Text(
+        "Offboarding",
+        style =
+            MaterialTheme.typography.titleSmall,
+    )
+
+    if (
+        employee.employeeState ==
+            "ACTIVE" &&
+        offboarding == null
+    ) {
+        var lastWorkingDate by
+            remember(employee.employeeId) {
+                mutableStateOf("")
+            }
+        var reasonCode by
+            remember(employee.employeeId) {
+                mutableStateOf("")
+            }
+        var note by
+            remember(employee.employeeId) {
+                mutableStateOf("")
+            }
+
+        Text(
+            "Start only when the employee is actually leaving HILTECH. " +
+                "Starting offboarding does not erase employment history or automatically settle other modules.",
+        )
+        OutlinedTextField(
+            value = lastWorkingDate,
+            onValueChange = {
+                lastWorkingDate = it
+            },
+            label = {
+                Text(
+                    "Last working date (YYYY-MM-DD)",
+                )
+            },
+            singleLine = true,
+        )
+        OutlinedTextField(
+            value = reasonCode,
+            onValueChange = {
+                reasonCode = it
+            },
+            label = {
+                Text(
+                    "Reason category code",
+                )
+            },
+            singleLine = true,
+        )
+        OutlinedTextField(
+            value = note,
+            onValueChange = {
+                note = it
+            },
+            label = {
+                Text("Safe note (optional)")
+            },
+        )
+        Button(
+            onClick = {
+                onStart(
+                    employee.employeeId,
+                    employee.version,
+                    lastWorkingDate.trim(),
+                    reasonCode.trim(),
+                    note.trim()
+                        .takeIf {
+                            it.isNotEmpty()
+                        },
+                )
+            },
+            enabled =
+                lastWorkingDate.isNotBlank() &&
+                    reasonCode.isNotBlank(),
+        ) {
+            Text("Start offboarding")
+        }
+        return
+    }
+
+    if (offboarding == null) {
+        if (
+            employee.employeeState ==
+            "FORMER"
+        ) {
+            Text(
+                "Former employee. Historical People records remain preserved.",
+            )
+        } else {
+            Text(
+                "No offboarding case is available for this employee.",
+            )
+        }
+        return
+    }
+
+    Text(
+        offboarding.employeeDisplayName +
+            " · " +
+            offboarding.state +
+            " · last working " +
+            offboarding.lastWorkingDate,
+    )
+    Text(
+        "Reason: " +
+            offboarding.reasonCategoryCode,
+    )
+    offboarding.note?.let {
+        Text("Note: $it")
+    }
+
+    Text(
+        "Project / Asset / Finance / Payroll clearances are coordination records here; " +
+            "their business transactions remain in their own HILTECH modules.",
+    )
+
+    Text(
+        "Access facts: memberships " +
+            offboarding.accessFacts
+                .activeOrganizationMemberships +
+            " · sessions " +
+            offboarding.accessFacts
+                .activeSessions +
+            " · current assignment " +
+            if (
+                offboarding.accessFacts
+                    .currentWorkforceAssignmentPresent
+            ) {
+                "yes"
+            } else {
+                "no"
+            },
+    )
+
+    if (
+        !offboarding.accessFacts.clear &&
+        offboarding.state == "OPEN"
+    ) {
+        Button(
+            onClick = {
+                onRevokeAccess(
+                    offboarding.caseId,
+                    offboarding.caseVersion,
+                )
+            },
+        ) {
+            Text("Revoke HILTECH access")
+        }
+    } else if (
+        offboarding.accessFacts.clear
+    ) {
+        Text("ACCESS · system verified CLEAR")
+    }
+
+    var exceptionReason by
+        remember(offboarding.caseId) {
+            mutableStateOf("")
+        }
+
+    offboarding.clearances
+        .forEach {
+            clearance ->
+            Text(
+                clearance.type +
+                    " · " +
+                    clearance.state +
+                    " · source " +
+                    clearance.source,
+            )
+
+            if (
+                offboarding.state == "OPEN" &&
+                clearance.type != "ACCESS" &&
+                clearance.state == "PENDING"
+            ) {
+                Row(
+                    horizontalArrangement =
+                        Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = {
+                            onResolveClearance(
+                                offboarding.caseId,
+                                offboarding.caseVersion,
+                                clearance.type,
+                                "CLEAR",
+                                null,
+                            )
+                        },
+                    ) {
+                        Text("Clear")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            onResolveClearance(
+                                offboarding.caseId,
+                                offboarding.caseVersion,
+                                clearance.type,
+                                "NOT_APPLICABLE",
+                                null,
+                            )
+                        },
+                    ) {
+                        Text("Not applicable")
+                    }
+                }
+            }
+        }
+
+    if (
+        offboarding.state == "OPEN" &&
+        offboarding.clearances.any {
+            it.type != "ACCESS" &&
+                it.state == "PENDING"
+        }
+    ) {
+        OutlinedTextField(
+            value = exceptionReason,
+            onValueChange = {
+                exceptionReason = it
+            },
+            label = {
+                Text(
+                    "Exception reason (for the selected pending clearance)",
+                )
+            },
+        )
+        val firstPending =
+            offboarding.clearances
+                .firstOrNull {
+                    it.type != "ACCESS" &&
+                        it.state == "PENDING"
+                }
+        if (firstPending != null) {
+            OutlinedButton(
+                onClick = {
+                    onResolveClearance(
+                        offboarding.caseId,
+                        offboarding.caseVersion,
+                        firstPending.type,
+                        "EXCEPTION_ACCEPTED",
+                        exceptionReason
+                            .trim(),
+                    )
+                },
+                enabled =
+                    exceptionReason.isNotBlank(),
+            ) {
+                Text(
+                    "Accept exception for " +
+                        firstPending.type,
+                )
+            }
+        }
+    }
+
+    if (offboarding.blockers.isNotEmpty()) {
+        Text(
+            "Completion blockers",
+            style =
+                MaterialTheme.typography.titleSmall,
+        )
+        offboarding.blockers.forEach {
+            Text("• $it")
+        }
+    }
+
+    val employmentVersion =
+        offboarding.employmentVersion
+    Button(
+        onClick = {
+            if (employmentVersion != null) {
+                onComplete(
+                    offboarding.caseId,
+                    offboarding.caseVersion,
+                    offboarding.employeeVersion,
+                    employmentVersion,
+                )
+            }
+        },
+        enabled =
+            offboarding.state == "OPEN" &&
+                offboarding.canComplete &&
+                employmentVersion != null,
+    ) {
+        Text(
+            if (
+                offboarding.state ==
+                "COMPLETED"
+            ) {
+                "Offboarding completed"
+            } else {
+                "Complete offboarding"
+            },
+        )
+    }
+
+    if (
+        offboarding.state == "COMPLETED"
+    ) {
+        Text(
+            "Employee is FORMER. Employment and assignment history remain preserved.",
+        )
     }
 }
 

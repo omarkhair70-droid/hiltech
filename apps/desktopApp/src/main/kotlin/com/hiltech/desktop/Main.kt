@@ -480,6 +480,13 @@ fun main() {
                             employeeId,
                         )
                 }
+            val offboardingResult =
+                runCatching {
+                    runtime
+                        .employeeOffboarding(
+                            employeeId,
+                        )
+                }
 
             val current =
                 shellState.value as?
@@ -528,6 +535,22 @@ fun main() {
                     .exceptionOrNull()
                     ?.message
 
+            val offboardingFailure =
+                offboardingResult
+                    .exceptionOrNull()
+            val offboardingMessage =
+                if (
+                    offboardingFailure is
+                    HiltechApiException &&
+                    offboardingFailure.code ==
+                    "OFFBOARDING_CASE_NOT_FOUND"
+                ) {
+                    null
+                } else {
+                    offboardingFailure
+                        ?.message
+                }
+
             setState(
                 current.copy(
                     people =
@@ -543,10 +566,14 @@ fun main() {
                                 selectedWorkforceHistory =
                                     historyResult
                                         .getOrNull(),
+                                selectedOffboarding =
+                                    offboardingResult
+                                        .getOrNull(),
                                 errorMessage =
                                     listOfNotNull(
                                         assignmentMessage,
                                         historyMessage,
+                                        offboardingMessage,
                                     ).takeIf {
                                         it.isNotEmpty()
                                     }?.joinToString(" "),
@@ -648,6 +675,220 @@ fun main() {
                                         errorMessage =
                                             failure.message
                                                 ?: "Workforce assignment could not be changed.",
+                                    ),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun startOffboarding(
+        employeeId: String,
+        baseEmployeeVersion: Long,
+        lastWorkingDate: String,
+        reasonCategoryCode: String,
+        note: String?,
+    ) {
+        scope.launch {
+            runCatching {
+                runtime.startEmployeeOffboarding(
+                    employeeId =
+                        employeeId,
+                    baseEmployeeVersion =
+                        baseEmployeeVersion,
+                    lastWorkingDate =
+                        lastWorkingDate,
+                    reasonCategoryCode =
+                        reasonCategoryCode,
+                    note = note,
+                )
+            }.onSuccess {
+                selectEmployee(employeeId)
+                refreshPeople()
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                if (current != null) {
+                    setState(
+                        current.copy(
+                            people =
+                                (current.people
+                                    ?: HiltechPeopleState())
+                                    .copy(
+                                        loading = false,
+                                        errorMessage =
+                                            failure.message
+                                                ?: "Offboarding could not be started.",
+                                    ),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun revokeOffboardingAccess(
+        caseId: String,
+        baseCaseVersion: Long,
+    ) {
+        val employeeId =
+            (
+                shellState.value as?
+                    HiltechShellState.SignedIn
+            )?.people
+                ?.selectedEmployee
+                ?.employeeId
+                ?: return
+
+        scope.launch {
+            runCatching {
+                runtime
+                    .revokeEmployeeOffboardingAccess(
+                        caseId = caseId,
+                        baseCaseVersion =
+                            baseCaseVersion,
+                    )
+            }.onSuccess {
+                selectEmployee(employeeId)
+                refreshPeople()
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                if (current != null) {
+                    setState(
+                        current.copy(
+                            people =
+                                (current.people
+                                    ?: HiltechPeopleState())
+                                    .copy(
+                                        loading = false,
+                                        errorMessage =
+                                            failure.message
+                                                ?: "HILTECH access could not be revoked.",
+                                    ),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun resolveOffboardingClearance(
+        caseId: String,
+        baseCaseVersion: Long,
+        clearanceType: String,
+        resolution: String,
+        reason: String?,
+    ) {
+        val employeeId =
+            (
+                shellState.value as?
+                    HiltechShellState.SignedIn
+            )?.people
+                ?.selectedEmployee
+                ?.employeeId
+                ?: return
+
+        scope.launch {
+            runCatching {
+                if (
+                    clearanceType == "HR"
+                ) {
+                    runtime
+                        .resolveEmployeeOffboardingHr(
+                            caseId = caseId,
+                            baseCaseVersion =
+                                baseCaseVersion,
+                            resolution =
+                                resolution,
+                            reason = reason,
+                        )
+                } else {
+                    runtime
+                        .resolveEmployeeOffboardingExternal(
+                            caseId = caseId,
+                            baseCaseVersion =
+                                baseCaseVersion,
+                            clearanceType =
+                                clearanceType,
+                            resolution =
+                                resolution,
+                            reason = reason,
+                        )
+                }
+            }.onSuccess {
+                selectEmployee(employeeId)
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                if (current != null) {
+                    setState(
+                        current.copy(
+                            people =
+                                (current.people
+                                    ?: HiltechPeopleState())
+                                    .copy(
+                                        loading = false,
+                                        errorMessage =
+                                            failure.message
+                                                ?: "Offboarding clearance could not be resolved.",
+                                    ),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun completeOffboarding(
+        caseId: String,
+        baseCaseVersion: Long,
+        baseEmployeeVersion: Long,
+        baseEmploymentVersion: Long,
+    ) {
+        val employeeId =
+            (
+                shellState.value as?
+                    HiltechShellState.SignedIn
+            )?.people
+                ?.selectedEmployee
+                ?.employeeId
+                ?: return
+
+        scope.launch {
+            runCatching {
+                runtime
+                    .completeEmployeeOffboarding(
+                        caseId = caseId,
+                        baseCaseVersion =
+                            baseCaseVersion,
+                        baseEmployeeVersion =
+                            baseEmployeeVersion,
+                        baseEmploymentVersion =
+                            baseEmploymentVersion,
+                    )
+            }.onSuccess {
+                selectEmployee(employeeId)
+                refreshPeople()
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                if (current != null) {
+                    setState(
+                        current.copy(
+                            people =
+                                (current.people
+                                    ?: HiltechPeopleState())
+                                    .copy(
+                                        loading = false,
+                                        errorMessage =
+                                            failure.message
+                                                ?: "Offboarding could not be completed.",
                                     ),
                         ),
                     )
@@ -882,6 +1123,14 @@ fun main() {
                 onSelectEmployee = ::selectEmployee,
                 onChangeWorkforceAssignment =
                     ::changeWorkforceAssignment,
+                onStartOffboarding =
+                    ::startOffboarding,
+                onRevokeOffboardingAccess =
+                    ::revokeOffboardingAccess,
+                onResolveOffboardingClearance =
+                    ::resolveOffboardingClearance,
+                onCompleteOffboarding =
+                    ::completeOffboarding,
                 onCreateEmployee = ::createEmployee,
             )
         }

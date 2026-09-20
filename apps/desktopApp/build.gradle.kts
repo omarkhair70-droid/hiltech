@@ -86,3 +86,14 @@ tasks.register<JavaExec>("renderPhase3AssignmentChangeEvidence") {
         "com.hiltech.desktop.evidence.Phase3AssignmentChangeRenderEvidenceKt",
     )
 }
+
+
+tasks.register<JavaExec>("renderPhase3OffboardingEvidence") {
+    group = "verification"
+    description = "Renders Phase 3 offboarding Desktop human-flow evidence."
+    dependsOn(tasks.named("testClasses"))
+    classpath = testRuntimeClasspath
+    mainClass.set(
+        "com.hiltech.desktop.evidence.Phase3OffboardingRenderEvidenceKt",
+    )
+}
