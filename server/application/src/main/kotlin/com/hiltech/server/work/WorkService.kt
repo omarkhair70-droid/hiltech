@@ -127,7 +127,7 @@ class WorkService(
             val requirements=buildList{
                 work.readinessRequirements(definition.readiness.ref.id).forEach{add(MaterializedRequirement("READINESS",it,definition.readiness.ref))}
                 work.evidenceRequirements(definition.evidence.ref.id).forEach{add(MaterializedRequirement("EVIDENCE",it,definition.evidence.ref))}
-                addAll(parseTemplateRequirements("ASSET",definition.assetTemplate)); addAll(parseTemplateRequirements("MATERIAL",definition.materialTemplate))
+                addAll(parseTemplateRequirements("ASSET",definition.assetTemplate)); addAll(parseTemplateRequirements("MATERIAL",definition.materialTemplate)); addAll(parseTemplateRequirements("DOCUMENT",definition.documentTemplate))
             }
             work.materializeRequirements(current.workOrderId,requirements,now)
             if(!work.markPlanned(current.workOrderId,current.version,bindingId,instructionId,definition,now))version()
