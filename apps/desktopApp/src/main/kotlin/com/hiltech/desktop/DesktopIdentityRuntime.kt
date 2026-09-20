@@ -40,6 +40,7 @@ import com.hiltech.shared.core.projects.CreateSiteRequestDto
 import com.hiltech.shared.core.projects.ProjectCommandResponseDto
 import com.hiltech.shared.core.projects.ProjectListDto
 import com.hiltech.shared.core.projects.ProjectPrincipalDto
+import com.hiltech.shared.core.projects.ProjectSiteCommandResponseDto
 import com.hiltech.shared.core.projects.ProjectSiteListDto
 import com.hiltech.shared.core.projects.ProjectSummaryDto
 import com.hiltech.shared.core.projects.ProjectTransitionRequestDto
@@ -810,9 +811,9 @@ class DesktopIdentityRuntime(
         projectSiteCode: String?,
         accessInstructions: String?,
         projectSpecificNotes: String?,
-    ) {
+    ): ProjectSiteCommandResponseDto {
         ensureConfigured()
-        projectsApi.attachSite(
+        return projectsApi.attachSite(
             projectId = projectId,
             request =
                 AttachProjectSiteRequestDto(
