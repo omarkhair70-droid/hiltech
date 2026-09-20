@@ -141,7 +141,7 @@ class JdbcOffboardingPersistence(
               ON em.employee_id = e.id
              AND em.state = 'ACTIVE'
             WHERE e.id = ?
-            ${if (forUpdate) "FOR UPDATE OF e, em" else ""}
+            ${if (forUpdate) "FOR UPDATE OF e" else ""}
             """.trimIndent(),
             { rs, _ ->
                 OffboardingEmployeeContext(
