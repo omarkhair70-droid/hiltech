@@ -178,83 +178,123 @@ fun main() {
         )
 
         scope.launch {
-            val ownResult =
+            val ownEmployeeResult =
                 runCatching {
                     runtime.ownEmployee(
                         organizationId,
                     )
                 }
-            runCatching {
-                runtime.peopleDirectory(
-                    organizationId,
-                )
-            }.onSuccess { directory ->
-                val current =
-                    shellState.value as?
-                        HiltechShellState.SignedIn
-                if (
-                    current != null &&
-                    current.identity.identityId ==
-                    signed.identity.identityId
-                ) {
-                    val ownFailure =
-                        ownResult.exceptionOrNull()
-                    val ownMessage =
-                        when {
-                            ownFailure == null ->
-                                null
+            val ownAssignmentResult =
+                runCatching {
+                    runtime
+                        .ownWorkforceAssignment(
+                            organizationId,
+                        )
+                }
+            val directoryResult =
+                runCatching {
+                    runtime.peopleDirectory(
+                        organizationId,
+                    )
+                }
+            val structureResult =
+                runCatching {
+                    runtime.workforceStructure(
+                        organizationId,
+                    )
+                }
 
-                            ownFailure is HiltechApiException &&
-                                ownFailure.code ==
-                                "EMPLOYEE_PROFILE_NOT_FOUND" ->
+            val current =
+                shellState.value as?
+                    HiltechShellState.SignedIn
+            if (
+                current != null &&
+                current.identity.identityId ==
+                signed.identity.identityId
+            ) {
+                val messages =
+                    mutableListOf<String>()
+
+                ownEmployeeResult
+                    .exceptionOrNull()
+                    ?.let { failure ->
+                        messages +=
+                            if (
+                                failure is HiltechApiException &&
+                                failure.code ==
+                                "EMPLOYEE_PROFILE_NOT_FOUND"
+                            ) {
                                 "No employee profile is linked to this identity yet."
-
-                            else ->
-                                ownFailure.message
+                            } else {
+                                failure.message
                                     ?: "Own employee profile could not be loaded."
-                        }
+                            }
+                    }
 
-                    setState(
-                        current.copy(
-                            people =
-                                HiltechPeopleState(
-                                    ownProfile =
-                                        ownResult
-                                            .getOrNull(),
-                                    directory =
-                                        directory,
-                                    selectedEmployee =
-                                        current.people
-                                            ?.selectedEmployee,
-                                    errorMessage =
-                                        ownMessage,
-                                ),
-                        ),
-                    )
-                }
-            }.onFailure { failure ->
-                val current =
-                    shellState.value as?
-                        HiltechShellState.SignedIn
-                if (
-                    current != null &&
-                    current.identity.identityId ==
-                    signed.identity.identityId
-                ) {
-                    setState(
-                        current.copy(
-                            people =
-                                (current.people
-                                    ?: HiltechPeopleState())
-                                    .copy(
-                                        loading = false,
-                                        errorMessage =
-                                            failure.message
-                                                ?: "People directory could not be loaded.",
-                                    ),
-                        ),
-                    )
-                }
+                ownAssignmentResult
+                    .exceptionOrNull()
+                    ?.let { failure ->
+                        if (
+                            ownEmployeeResult.isSuccess
+                        ) {
+                            messages +=
+                                if (
+                                    failure is HiltechApiException &&
+                                    failure.code ==
+                                    "WORKFORCE_ASSIGNMENT_NOT_FOUND"
+                                ) {
+                                    "No current workforce assignment yet."
+                                } else {
+                                    failure.message
+                                        ?: "Own workforce assignment could not be loaded."
+                                }
+                        }
+                    }
+
+                directoryResult
+                    .exceptionOrNull()
+                    ?.let { failure ->
+                        messages +=
+                            failure.message
+                                ?: "People directory could not be loaded."
+                    }
+
+                structureResult
+                    .exceptionOrNull()
+                    ?.let { failure ->
+                        messages +=
+                            failure.message
+                                ?: "Organization structure could not be loaded."
+                    }
+
+                setState(
+                    current.copy(
+                        people =
+                            HiltechPeopleState(
+                                ownProfile =
+                                    ownEmployeeResult
+                                        .getOrNull(),
+                                ownWorkforceAssignment =
+                                    ownAssignmentResult
+                                        .getOrNull(),
+                                directory =
+                                    directoryResult
+                                        .getOrNull(),
+                                workforceStructure =
+                                    structureResult
+                                        .getOrNull(),
+                                selectedEmployee =
+                                    current.people
+                                        ?.selectedEmployee,
+                                errorMessage =
+                                    messages
+                                        .takeIf {
+                                            it.isNotEmpty()
+                                        }
+                                        ?.joinToString(" "),
+                            ),
+                    ),
+                )
             }
         }
     }
