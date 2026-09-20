@@ -807,6 +807,28 @@ class ProjectsPostgresOpenFgaContractTest {
                     clock = clock,
                 )
 
+            val unauthorizedPlanMutation =
+                assertThrows<ProductApiException> {
+                    planningService.createMilestone(
+                        CreateMilestoneCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = planning.project.projectId,
+                            code = "M-DENIED",
+                            name = "Unauthorized planning mutation",
+                            plannedDate = null,
+                            sequence = null,
+                            clientVisible = false,
+                            acceptanceRequirement = null,
+                            baseProjectVersion = planning.project.version,
+                            expectedBaselineVersion = planning.project.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.ordinaryMember,
+                            correlationId = "corr-plan-unauthorized-mutation",
+                        ),
+                    )
+                }
+            assertEquals("OBJECT_NOT_VISIBLE", unauthorizedPlanMutation.code)
+
             val foreignOrganization = UUID.randomUUID()
             val foreignSite = UUID.randomUUID()
             val foreignArea = UUID.randomUUID()
@@ -1124,9 +1146,9 @@ class ProjectsPostgresOpenFgaContractTest {
                             name = "Stale Building A",
                             sequence = 10,
                             restrictedAccess = false,
-                            baseProjectVersion = area.plan.project.version,
-                            baseObjectVersion = 1,
-                            expectedBaselineVersion = area.plan.project.baselineVersion,
+                            baseProjectVersion = dependency.plan.project.version,
+                            baseObjectVersion = area.plan.areas.single().version + 1,
+                            expectedBaselineVersion = dependency.plan.project.baselineVersion,
                             clientOccurredAt = clock.instant(),
                             actorUserId = ids.admin,
                             correlationId = "corr-plan-stale",
