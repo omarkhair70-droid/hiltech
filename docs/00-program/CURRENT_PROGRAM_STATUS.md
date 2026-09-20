@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 2 VERIFIED / COMPLETE — PHASE 3 PEOPLE / INTERNAL WORKFORCE REALITY & CONTRACT CLOSURE NEXT**
+**PHASE 3 ACTIVE — SLICE 01 EMPLOYEE / EMPLOYMENT CORE VERIFIED / READY TO MERGE**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -50,7 +50,9 @@ Final full regression evidence on that code head:
 - Contract — OpenFGA First Slice run `35424990060` — PASS.
 - Phase 1 — Native OIDC Production Smoke run `35424990023` — PASS.
 
-Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Slice 06 merged through PR #35 at `a24715e9d792672a0a33fbebaf2e16a1acafadc9`; post-merge Bootstrap `35474093059` PASS. Final Phase 2 closure PR #37 merged at `624bd6c50f8d17535316ae450a8a780bc756a108`; post-merge Bootstrap `35474921624` PASS. Phase 3 — People / Internal Workforce Core — is now ACTIVE. Its scope/slice plan is frozen in `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md`, and **Slice 01 — Employee / Employment Core is IMPLEMENTATION AUTHORIZED**.
+Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Final Phase 2 closure PR #37 merged at `624bd6c50f8d17535316ae450a8a780bc756a108` with post-merge Bootstrap `35474921624` PASS.
+
+Phase 3 — People / Internal Workforce Core — is ACTIVE. **Slice 01 — Employee / Employment Core is VERIFIED / READY TO MERGE** on canonical tested code head `59c5cb9fb4d859260ba48a9f8edd5ecce5a97e96`. Exact-head evidence: OpenFGA `35477856791`, Bootstrap `35477856788`, Phase 1 Native OIDC `35477856782`, and Phase 2 Shared Command Runtime `35477856796` — all PASS. The slice implements Person/Employee/historical Employment, explicit People authority bindings with fail-closed OpenFGA projection, safe directory/private detail/own-profile reads, idempotent commands, audit/events, shared KMP client contracts, Android own-profile proof and Windows directory/detail/create proof. Later People slices remain closed until merge + post-merge verification.
 
 ---
 
@@ -81,8 +83,8 @@ Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Slice 
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 3 ACTIVE | Scope/slice plan frozen; Slice 01 Employee / Employment Core implementation authorized |
-| Production code | PHASE 3 SLICE 01 AUTHORIZED | Employee / Employment Core may implement; later People slices remain closed until Slice 01 verification |
+| Implementation order | PHASE 3 ACTIVE | Slice 01 Employee / Employment Core verified/ready to merge; Slice 02 remains closed pending merge verification |
+| Production code | PHASE 3 SLICE 01 VERIFIED / READY TO MERGE | Exact-head PostgreSQL/OpenFGA/client/Android/Windows/inherited regressions PASS |
 
 ---
 
@@ -236,8 +238,8 @@ Final stack/version review:
 Immediate continuation:
 1. Phase 0, Phase 1 and Phase 2 are VERIFIED / COMPLETE; do not reopen them without a genuine cross-cutting contradiction.
 2. Phase 3 scope/slice plan is frozen in `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md`.
-3. Execute **Phase 3 / Slice 01 — Employee / Employment Core** only against `docs/13-delivery/phase3/01_EMPLOYEE_EMPLOYMENT_CORE_SLICE_2026-09-20.md`.
-4. Do not pull Team/Manager assignment, HR docs/certifications, onboarding, role/team change, offboarding, attendance, leave, expenses, advances or payroll into Slice 01.
+3. Phase 3 / Slice 01 — Employee / Employment Core is **VERIFIED / READY TO MERGE** on `59c5cb9fb4d859260ba48a9f8edd5ecce5a97e96`; merge only after docs-only closure checks, then require post-merge Bootstrap PASS.
+4. Do not begin Slice 02 production code until Slice 01 is merged/post-merge verified and Slice 02's implementation contract is frozen.
 5. Continue consuming Reality Evidence/Facts by phase; current employee-master/import/legal HR unknowns are scoped out rather than guessed.
 6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 
