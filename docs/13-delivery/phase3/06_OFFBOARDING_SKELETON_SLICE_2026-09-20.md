@@ -1,7 +1,7 @@
 # Phase 3 / Slice 06 — Offboarding Skeleton
 
 Date: 2026-09-20  
-Status: **VERIFIED / READY TO MERGE**
+Status: **VERIFIED / MERGED**
 
 ## Reality basis
 
@@ -503,12 +503,45 @@ Verified implementation includes:
 - rendered Windows human-flow proof for access pending, system-verified access clear and completed former state;
 - inherited Slice 01–05 / Phase 0–2 / OIDC/OpenFGA regressions preserved.
 
+# Merge closure
+
+Final closure head:
+
+`4d941970563b84245061d5ab80101550243b6000`
+
+Exact-head verification:
+
+- Bootstrap Phase 0 `35495373713` attempt 2 — **PASS**
+- Phase 2 Shared Command Runtime `35495373785` — **PASS**
+- Phase 1 Native OIDC Production Smoke `35495373737` — **PASS**
+- Phase 3 Onboarding Human Proof `35495373800` — **PASS**
+- Phase 3 Assignment Change Human Proof `35495373780` — **PASS**
+- Phase 3 Offboarding Human Proof `35495373723` — **PASS**
+
+PR #51 merged at:
+
+`bc6b61cca744c17814e58d5e212812339cd96409`
+
+Post-merge Bootstrap:
+
+- `35495676983` — **PASS**
+  - foundation — PASS
+  - database-contract — PASS
+  - local-platform-contract — PASS
+  - evidence-storage-contract — PASS
+  - terraform-contract — PASS
+  - supply-chain-contract — PASS
+  - dependency-review intentionally skipped on main push; exact-head PR review already passed.
+
 # Contract conclusion
 
-**VERIFIED / READY TO MERGE.**
+**VERIFIED / MERGED.**
 
-PR #51 may move from Draft to Ready only while this closure lineage remains verified.
+Slice 06 is closed.
 
-After merge, require post-merge Bootstrap before Slice 06 is called **MERGED / CLOSED**.
+Phase 3 final gap review:
+`docs/13-delivery/phase3/07_PHASE3_FINAL_GAP_REVIEW_2026-09-20.md` — **PASS / NO ADDITIONAL PHASE 3 SLICE REQUIRED**.
 
-Then run the Phase 3 final gap review. Do not start Phase 4 production code before that review is closed and the owner has reviewed the Phase 4 entry plan.
+Phase 3 is VERIFIED / COMPLETE.
+
+Do not start Phase 4 production code before the owner-facing Phase 4 entry review is discussed and frozen.
