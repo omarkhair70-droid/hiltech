@@ -233,63 +233,97 @@ class MainActivity : ComponentActivity() {
             )
 
         scope.launch {
-            runCatching {
-                hiltechApplication.peopleApi
-                    .own(
-                        organizationId =
-                            organizationId,
-                        installationId =
-                            hiltechApplication
-                                .installationId,
-                    )
-            }.onSuccess { own ->
-                val current =
-                    shellState as?
-                        HiltechShellState.SignedIn
-                if (
-                    current != null &&
-                    current.identity.identityId ==
-                    signed.identity.identityId
-                ) {
-                    shellState =
-                        current.copy(
-                            people =
-                                HiltechPeopleState(
-                                    ownProfile =
-                                        own,
-                                ),
+            val ownProfileResult =
+                runCatching {
+                    hiltechApplication.peopleApi
+                        .own(
+                            organizationId =
+                                organizationId,
+                            installationId =
+                                hiltechApplication
+                                    .installationId,
                         )
                 }
-            }.onFailure { failure ->
-                val current =
-                    shellState as?
-                        HiltechShellState.SignedIn
-                if (
-                    current != null &&
-                    current.identity.identityId ==
-                    signed.identity.identityId
-                ) {
-                    val message =
-                        if (
-                            failure is HiltechApiException &&
-                            failure.code ==
-                            "EMPLOYEE_PROFILE_NOT_FOUND"
-                        ) {
-                            "No employee profile is linked to this identity yet."
-                        } else {
-                            failure.message
-                                ?: "People profile could not be loaded."
-                        }
+            val ownAssignmentResult =
+                runCatching {
+                    hiltechApplication
+                        .workforceAssignmentApi
+                        .own(
+                            organizationId =
+                                organizationId,
+                            installationId =
+                                hiltechApplication
+                                    .installationId,
+                        )
+                }
 
-                    shellState =
-                        current.copy(
-                            people =
-                                HiltechPeopleState(
-                                    errorMessage =
-                                        message,
-                                ),
-                        )
-                }
+            val current =
+                shellState as?
+                    HiltechShellState.SignedIn
+            if (
+                current != null &&
+                current.identity.identityId ==
+                signed.identity.identityId
+            ) {
+                val profileFailure =
+                    ownProfileResult
+                        .exceptionOrNull()
+                val assignmentFailure =
+                    ownAssignmentResult
+                        .exceptionOrNull()
+
+                val profileMessage =
+                    when {
+                        profileFailure == null ->
+                            null
+
+                        profileFailure is HiltechApiException &&
+                            profileFailure.code ==
+                            "EMPLOYEE_PROFILE_NOT_FOUND" ->
+                            "No employee profile is linked to this identity yet."
+
+                        else ->
+                            profileFailure.message
+                                ?: "People profile could not be loaded."
+                    }
+
+                val assignmentMessage =
+                    when {
+                        assignmentFailure == null ->
+                            null
+
+                        ownProfileResult.isFailure ->
+                            null
+
+                        assignmentFailure is HiltechApiException &&
+                            assignmentFailure.code ==
+                            "WORKFORCE_ASSIGNMENT_NOT_FOUND" ->
+                            "No current workforce assignment yet."
+
+                        else ->
+                            assignmentFailure.message
+                                ?: "Workforce assignment could not be loaded."
+                    }
+
+                shellState =
+                    current.copy(
+                        people =
+                            HiltechPeopleState(
+                                ownProfile =
+                                    ownProfileResult
+                                        .getOrNull(),
+                                ownWorkforceAssignment =
+                                    ownAssignmentResult
+                                        .getOrNull(),
+                                errorMessage =
+                                    listOfNotNull(
+                                        profileMessage,
+                                        assignmentMessage,
+                                    ).takeIf {
+                                        it.isNotEmpty()
+                                    }?.joinToString(" "),
+                            ),
+                    )
             }
         }
     }
