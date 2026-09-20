@@ -315,7 +315,7 @@ If AssignmentPolicy requires internal role/certification evidence that HILTECH c
 
 Phase 4 may evaluate only sources it actually owns/has.
 
-- ASSIGNEE: Phase 3 People + Slice 04 assignment.
+- ASSIGNEE: Phase 3 People + Slice 04 eligibility/assignment; before assignment it means the minimum eligible executable target set exists, after assignment it verifies the active assignment remains eligible.
 - DEPENDENCY: Work dependency state.
 - SITE_ACCESS: explicit current ProjectSite/Area/manual confirmation when policy allows.
 - DRAWING_REVISION: only when an authoritative current document revision exists; otherwise unresolved.
