@@ -13,6 +13,7 @@ import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.identity.auth.NativeOidcSessionManager
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
+import com.hiltech.shared.core.people.ChangeWorkforceAssignmentRequestDto
 import com.hiltech.shared.core.people.CreateEmployeeRequestDto
 import com.hiltech.shared.core.people.EmployeeCommandResponseDto
 import com.hiltech.shared.core.people.EmployeeDetailDto
@@ -294,6 +295,67 @@ class DesktopIdentityRuntime(
             installationId =
                 installationId,
         )
+    }
+
+    suspend fun employeeWorkforceAssignment(
+        employeeId: String,
+    ): WorkforceAssignmentDto {
+        ensureConfigured()
+        return workforceAssignmentApi
+            .currentForEmployee(
+                employeeId =
+                    employeeId,
+                installationId =
+                    installationId,
+            )
+    }
+
+    suspend fun employeeWorkforceHistory(
+        employeeId: String,
+    ): WorkforceStructureDto {
+        ensureConfigured()
+        return workforceAssignmentApi.history(
+            employeeId =
+                employeeId,
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun changeWorkforceAssignment(
+        employeeId: String,
+        currentAssignmentId: String,
+        baseAssignmentVersion: Long,
+        teamId: String?,
+        roleCode: String,
+        roleLabel: String?,
+        reportsToEmployeeId: String?,
+    ): WorkforceAssignmentDto {
+        ensureConfigured()
+        return workforceAssignmentApi.change(
+            employeeId =
+                employeeId,
+            request =
+                ChangeWorkforceAssignmentRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    currentAssignmentId =
+                        currentAssignmentId,
+                    baseAssignmentVersion =
+                        baseAssignmentVersion,
+                    teamId =
+                        teamId,
+                    roleCode =
+                        roleCode,
+                    roleLabel =
+                        roleLabel,
+                    reportsToEmployeeId =
+                        reportsToEmployeeId,
+                ),
+            installationId =
+                installationId,
+        ).assignment
     }
 
     suspend fun ownWorkforceAssignment(
