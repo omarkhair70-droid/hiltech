@@ -127,7 +127,7 @@ class JdbcPlanningPersistence(
 
     override fun areas(projectId: UUID): List<AreaSnapshot> =
         jdbc.query(
-            areaSelect +
+            areaSelect + "\n" +
                 """
                 JOIN project_site ps
                   ON ps.organization_id = a.organization_id
@@ -222,7 +222,7 @@ class JdbcPlanningPersistence(
 
     override fun milestones(projectId: UUID): List<MilestoneSnapshot> =
         jdbc.query(
-            milestoneSelect +
+            milestoneSelect + "\n" +
                 """
                 WHERE m.project_id = ?
                 ORDER BY m.sequence NULLS LAST, m.planned_date NULLS LAST, m.code, m.id
@@ -316,7 +316,7 @@ class JdbcPlanningPersistence(
 
     override fun workPackages(projectId: UUID): List<WorkPackageSnapshot> =
         jdbc.query(
-            workPackageSelect +
+            workPackageSelect + "\n" +
                 """
                 WHERE wp.project_id = ?
                 ORDER BY wp.sequence NULLS LAST, wp.planned_start NULLS LAST, wp.code, wp.id
@@ -451,7 +451,7 @@ class JdbcPlanningPersistence(
 
     override fun dependencies(projectId: UUID): List<PlanDependencySnapshot> =
         jdbc.query(
-            dependencySelect +
+            dependencySelect + "\n" +
                 """
                 WHERE d.project_id = ?
                 ORDER BY d.created_at, d.id
