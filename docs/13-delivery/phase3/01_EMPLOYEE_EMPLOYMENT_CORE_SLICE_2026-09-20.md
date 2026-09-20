@@ -225,9 +225,13 @@ Minimum relations/capabilities:
 - operational users can read only safe directory fields where policy allows;
 - cross-organization reads/writes fail closed.
 
-Do not infer People admin purely from job-title text.
+Do not infer People admin from job-title text or from the broad `organization.admin` relation.
 
-Use existing role/team/OpenFGA authorization relationships and explicit People permissions.
+Slice 01 introduces an explicit effective-dated `PeopleAuthorityBinding` source in PostgreSQL and a scoped OpenFGA `organization.people_admin -> can_manage_people` projection. USER and TEAM principals are supported by the authority binding shape. Current organization/team membership is revalidated at decision time.
+
+Grant/revoke projection uses the existing transactional authorization projection outbox and fail-closed guard. A revoked/expired binding must deny immediately from current PostgreSQL source even before OpenFGA tuple cleanup converges.
+
+Initial real environment seeding of People admin authority is activation/configuration data; do not hard-code Mohamed, Ahmed, titles, or identity IDs in product code.
 
 ## Events
 
@@ -321,8 +325,11 @@ Do not implement:
 16. shared error/idempotency/correlation conventions are reused.
 17. real PostgreSQL contract test passes.
 18. OpenFGA/authorization contract test passes.
-19. inherited Phase 0–2 regression suites remain green.
-20. Android/Windows shared-client compile remains green if DTO/client surface is added.
+19. People admin grant is sourced by current PostgreSQL PeopleAuthorityBinding and projected through the authorization outbox; pending grant fails closed.
+20. revoked/expired People authority denies immediately and converges to OpenFGA tuple removal.
+21. broad organization admin/title text is not used as People authority.
+22. inherited Phase 0–2 regression suites remain green.
+23. Android/Windows shared-client compile remains green if DTO/client surface is added.
 
 ## Contract conclusion
 
