@@ -64,10 +64,10 @@ data class EvidenceMetadataResponse(
     val uploadSessionId: String,
     val targetType: String,
     val targetId: String,
-    val workOrderId: String,
-    val evidenceRequirementKey: String,
-    val evidencePolicyId: String,
-    val evidencePolicyRevision: Int,
+    val workOrderId: String?,
+    val evidenceRequirementKey: String?,
+    val evidencePolicyId: String?,
+    val evidencePolicyRevision: Int?,
     val evidenceTypeCode: String,
     val contentType: String,
     val sizeBytes: Long,
@@ -113,6 +113,8 @@ class SpringEvidenceStorageAccess(
 class EvidenceLifecycleService(
     private val persistence: EvidencePersistencePort,
     private val targetAuthorization: EvidenceTargetAuthorizationPort,
+    private val employeeDocumentTarget:
+        EmployeeDocumentEvidenceTargetPort,
     private val idempotency: IdempotentCommandExecutor,
     private val projectionWriter: AuthorizationProjectionIntentWriter,
     private val audit: AuditEventWriter,
@@ -810,7 +812,8 @@ class EvidenceLifecycleService(
             "GENERATED_TRUSTED_FORMAT" ->
                 "READY"
 
-            "NATIVE_MEDIA" -> {
+            "NATIVE_MEDIA",
+            "SIGNED_DOCUMENT" -> {
                 val detected =
                     verification.detectedContentType
                         ?.lowercase()
