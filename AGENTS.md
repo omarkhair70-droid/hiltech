@@ -11,7 +11,7 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
 - Phase 2 — Shared Product Infrastructure: **VERIFIED / COMPLETE**
-- Current execution phase: **Phase 3 — People / Internal Workforce Core / Slice 05 — Workforce Assignment Change Workflow — VERIFIED / READY TO MERGE**
+- Current execution phase: **Phase 3 — People / Internal Workforce Core / Slice 06 — Offboarding Skeleton — IMPLEMENTATION AUTHORIZED**
 - Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
 - Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
 - Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
@@ -65,10 +65,12 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 04 exact-head verification: Bootstrap `35488578970` / Phase 2 runtime `35488578980` / Phase 1 OIDC `35488578992` / Onboarding Human Proof `35488579082` — **PASS**
 - Slice 04 merge commit: `f7d7460718f43e634a180734623dabe5260b0224`; post-merge Bootstrap `35489327649` — **PASS**
 - Slice 05 reality closure: `docs/13-delivery/phase3/05_WORKFORCE_ASSIGNMENT_CHANGE_REALITY_CLOSURE_2026-09-20.md` — **PASS**
-- Slice 05 implementation contract: `docs/13-delivery/phase3/05_WORKFORCE_ASSIGNMENT_CHANGE_SLICE_2026-09-20.md` — **VERIFIED / READY TO MERGE**
+- Slice 05 implementation contract: `docs/13-delivery/phase3/05_WORKFORCE_ASSIGNMENT_CHANGE_SLICE_2026-09-20.md` — **VERIFIED / MERGED**
 - Slice 05 canonical tested code head: `1c9986ef369cdd40b16cea53726d19f7fb10e799`
-- Slice 05 exact-head verification: Bootstrap `35491516650` / Phase 2 runtime `35491516664` / Phase 1 OIDC `35491516653` / Onboarding proof `35491516654` / Assignment Change Human Proof `35491516648` — **PASS**
-- Current rule: merge only the exact verified head/closure lineage; preserve assignment history and authorization truth; no Project reassignment and no Slice 06 scope before post-merge verification.
+- Slice 05 merge commit: `51648418a69df285334f76f5b1b4cfca9ec3cc43`; post-merge Bootstrap `35492558129` — **PASS**
+- Slice 06 reality closure: `docs/13-delivery/phase3/06_OFFBOARDING_SKELETON_REALITY_CLOSURE_2026-09-20.md` — **PASS**
+- Slice 06 implementation contract: `docs/13-delivery/phase3/06_OFFBOARDING_SKELETON_SLICE_2026-09-20.md` — **IMPLEMENTATION AUTHORIZED**
+- Current rule: build the People-owned offboarding coordinator + real HILTECH access/session revocation + typed external clearance slots only; no Project/Asset/Finance/Payroll engine and no Phase 4 scope.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
