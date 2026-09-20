@@ -59,12 +59,13 @@ class DatabaseMigrationContractTest {
                         'approval_step','approval_assignment','approval_decision',
                         'inbox_item','inbox_user_state',
                         'notification_intent','notification_delivery_attempt',
-                        'person','employee','employment'
+                        'person','employee','employment',
+                        'people_authority_binding'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(27, tables.getInt(1))
+                assertEquals(28, tables.getInt(1))
             }
 
             val orgId = UUID.randomUUID()
