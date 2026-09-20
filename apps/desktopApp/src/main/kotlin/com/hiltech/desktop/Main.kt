@@ -5,6 +5,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
+import com.hiltech.shared.core.HiltechProjectsState
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.identity.IdentityApiException
@@ -146,6 +147,10 @@ fun main() {
                     ),
                 onboarding =
                     HiltechOnboardingState(
+                        loading = true,
+                    ),
+                projects =
+                    HiltechProjectsState(
                         loading = true,
                     ),
             ),
@@ -1004,6 +1009,650 @@ fun main() {
         }
     }
 
+    fun refreshProjects() {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+        val organizationId =
+            signed.identity.organizations
+                .firstOrNull {
+                    it.primary
+                }
+                ?.organizationId
+                ?: signed.identity
+                    .organizations
+                    .firstOrNull()
+                    ?.organizationId
+                ?: return
+        val selectedId =
+            signed.projects
+                ?.selectedProject
+                ?.projectId
+
+        setState(
+            signed.copy(
+                projects =
+                    (signed.projects
+                        ?: HiltechProjectsState())
+                        .copy(
+                            loading = true,
+                            errorCode = null,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+
+        scope.launch {
+            val listResult =
+                runCatching {
+                    runtime.projects(
+                        organizationId,
+                    )
+                }
+            val detailResult =
+                selectedId?.let {
+                    runCatching {
+                        runtime.projectDetail(it)
+                    }
+                }
+            val sitesResult =
+                selectedId?.let {
+                    runCatching {
+                        runtime.projectSites(it)
+                    }
+                }
+
+            val current =
+                shellState.value as?
+                    HiltechShellState.SignedIn
+                ?: return@launch
+            val failure =
+                listResult.exceptionOrNull()
+                    ?: detailResult
+                        ?.exceptionOrNull()
+                    ?: sitesResult
+                        ?.exceptionOrNull()
+
+            setState(
+                current.copy(
+                    projects =
+                        HiltechProjectsState(
+                            loading = false,
+                            list =
+                                listResult.getOrNull()
+                                    ?: current.projects
+                                        ?.list,
+                            selectedProject =
+                                detailResult
+                                    ?.getOrNull()
+                                    ?: current.projects
+                                        ?.selectedProject,
+                            selectedSites =
+                                sitesResult
+                                    ?.getOrNull()
+                                    ?: current.projects
+                                        ?.selectedSites,
+                            lastCreatedSite =
+                                current.projects
+                                    ?.lastCreatedSite,
+                            errorCode =
+                                (failure as?
+                                    HiltechApiException)
+                                    ?.code,
+                            errorMessage =
+                                failure?.message,
+                        ),
+                ),
+            )
+        }
+    }
+
+    fun selectProject(
+        projectId: String,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+
+        setState(
+            signed.copy(
+                projects =
+                    (signed.projects
+                        ?: HiltechProjectsState())
+                        .copy(
+                            loading = true,
+                            errorCode = null,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+
+        scope.launch {
+            val detailResult =
+                runCatching {
+                    runtime.projectDetail(
+                        projectId,
+                    )
+                }
+            val sitesResult =
+                runCatching {
+                    runtime.projectSites(
+                        projectId,
+                    )
+                }
+            val current =
+                shellState.value as?
+                    HiltechShellState.SignedIn
+                ?: return@launch
+            val failure =
+                detailResult.exceptionOrNull()
+                    ?: sitesResult.exceptionOrNull()
+
+            setState(
+                current.copy(
+                    projects =
+                        (current.projects
+                            ?: HiltechProjectsState())
+                            .copy(
+                                loading = false,
+                                selectedProject =
+                                    detailResult
+                                        .getOrNull(),
+                                selectedSites =
+                                    sitesResult
+                                        .getOrNull(),
+                                errorCode =
+                                    (failure as?
+                                        HiltechApiException)
+                                        ?.code,
+                                errorMessage =
+                                    failure?.message,
+                            ),
+                ),
+            )
+        }
+    }
+
+    fun createProject(
+        name: String,
+        clientOrganizationId: String,
+        sourceType: String,
+        sourceExternalReference: String?,
+        explicitProjectCode: String?,
+        principalType: String?,
+        principalId: String?,
+        startDatePlanned: String?,
+        endDatePlanned: String?,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+        val organizationId =
+            signed.identity.organizations
+                .firstOrNull {
+                    it.primary
+                }
+                ?.organizationId
+                ?: signed.identity
+                    .organizations
+                    .firstOrNull()
+                    ?.organizationId
+                ?: return
+
+        setState(
+            signed.copy(
+                projects =
+                    (signed.projects
+                        ?: HiltechProjectsState())
+                        .copy(
+                            loading = true,
+                            errorCode = null,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+
+        scope.launch {
+            runCatching {
+                runtime.createProject(
+                    organizationId =
+                        organizationId,
+                    clientOrganizationId =
+                        clientOrganizationId,
+                    name = name,
+                    sourceType =
+                        sourceType,
+                    sourceExternalReference =
+                        sourceExternalReference,
+                    explicitProjectCode =
+                        explicitProjectCode,
+                    principalType =
+                        principalType,
+                    principalId =
+                        principalId,
+                    startDatePlanned =
+                        startDatePlanned,
+                    endDatePlanned =
+                        endDatePlanned,
+                )
+            }.onSuccess { created ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                    ?: return@onSuccess
+                val previous =
+                    current.projects
+                        ?.list
+                val nextList =
+                    previous?.copy(
+                        items =
+                            (
+                                previous.items
+                                    .filterNot {
+                                        it.projectId ==
+                                            created.project
+                                                .projectId
+                                    } +
+                                    created.project
+                            ),
+                    )
+                setState(
+                    current.copy(
+                        projects =
+                            HiltechProjectsState(
+                                loading = false,
+                                list = nextList,
+                                selectedProject =
+                                    created.project,
+                                selectedSites =
+                                    null,
+                                lastCreatedSite =
+                                    current.projects
+                                        ?.lastCreatedSite,
+                            ),
+                    ),
+                )
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                    ?: return@onFailure
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects
+                                ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    errorCode =
+                                        (failure as?
+                                            HiltechApiException)
+                                            ?.code,
+                                    errorMessage =
+                                        failure.message,
+                                ),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun changeProjectManager(
+        projectId: String,
+        baseVersion: Long,
+        principalType: String,
+        principalId: String,
+        reason: String?,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+        setState(
+            signed.copy(
+                projects =
+                    (signed.projects
+                        ?: HiltechProjectsState())
+                        .copy(
+                            loading = true,
+                            errorCode = null,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+        scope.launch {
+            runCatching {
+                runtime.changeProjectManager(
+                    projectId =
+                        projectId,
+                    baseVersion =
+                        baseVersion,
+                    principalType =
+                        principalType,
+                    principalId =
+                        principalId,
+                    reason = reason,
+                )
+            }.onSuccess { changed ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                    ?: return@onSuccess
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects
+                                ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    selectedProject =
+                                        changed.project,
+                                    errorCode = null,
+                                    errorMessage = null,
+                                ),
+                    ),
+                )
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                    ?: return@onFailure
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects
+                                ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    errorCode =
+                                        (failure as?
+                                            HiltechApiException)
+                                            ?.code,
+                                    errorMessage =
+                                        failure.message,
+                                ),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun runProjectTransition(
+        projectId: String,
+        baseVersion: Long,
+        completeKickoff: Boolean,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+        setState(
+            signed.copy(
+                projects =
+                    (signed.projects
+                        ?: HiltechProjectsState())
+                        .copy(
+                            loading = true,
+                            errorCode = null,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+        scope.launch {
+            runCatching {
+                if (completeKickoff) {
+                    runtime.completeProjectKickoff(
+                        projectId,
+                        baseVersion,
+                    )
+                } else {
+                    runtime.startProjectKickoff(
+                        projectId,
+                        baseVersion,
+                    )
+                }
+            }.onSuccess { result ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                    ?: return@onSuccess
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects
+                                ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    selectedProject =
+                                        result.project,
+                                    errorCode = null,
+                                    errorMessage = null,
+                                ),
+                    ),
+                )
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                    ?: return@onFailure
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects
+                                ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    errorCode =
+                                        (failure as?
+                                            HiltechApiException)
+                                            ?.code,
+                                    errorMessage =
+                                        failure.message,
+                                ),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun createSite(
+        clientOrganizationId: String,
+        siteCode: String,
+        name: String,
+        addressText: String?,
+        timezone: String?,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+        val organizationId =
+            signed.identity.organizations
+                .firstOrNull {
+                    it.primary
+                }
+                ?.organizationId
+                ?: signed.identity
+                    .organizations
+                    .firstOrNull()
+                    ?.organizationId
+                ?: return
+        setState(
+            signed.copy(
+                projects =
+                    (signed.projects
+                        ?: HiltechProjectsState())
+                        .copy(
+                            loading = true,
+                            errorCode = null,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+        scope.launch {
+            runCatching {
+                runtime.createSite(
+                    organizationId =
+                        organizationId,
+                    clientOrganizationId =
+                        clientOrganizationId,
+                    siteCode = siteCode,
+                    name = name,
+                    addressText =
+                        addressText,
+                    timezone =
+                        timezone,
+                )
+            }.onSuccess { created ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                    ?: return@onSuccess
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects
+                                ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    lastCreatedSite =
+                                        created.site,
+                                    errorCode = null,
+                                    errorMessage = null,
+                                ),
+                    ),
+                )
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                    ?: return@onFailure
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects
+                                ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    errorCode =
+                                        (failure as?
+                                            HiltechApiException)
+                                            ?.code,
+                                    errorMessage =
+                                        failure.message,
+                                ),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun attachProjectSite(
+        projectId: String,
+        baseProjectVersion: Long,
+        siteId: String,
+        projectSiteCode: String?,
+        accessInstructions: String?,
+        projectSpecificNotes: String?,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+        setState(
+            signed.copy(
+                projects =
+                    (signed.projects
+                        ?: HiltechProjectsState())
+                        .copy(
+                            loading = true,
+                            errorCode = null,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+        scope.launch {
+            runCatching {
+                runtime.attachProjectSite(
+                    projectId =
+                        projectId,
+                    baseProjectVersion =
+                        baseProjectVersion,
+                    siteId = siteId,
+                    projectSiteCode =
+                        projectSiteCode,
+                    accessInstructions =
+                        accessInstructions,
+                    projectSpecificNotes =
+                        projectSpecificNotes,
+                )
+            }.onSuccess { attached ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                    ?: return@onSuccess
+                val previousItems =
+                    current.projects
+                        ?.selectedSites
+                        ?.items
+                        .orEmpty()
+                val nextSites =
+                    current.projects
+                        ?.selectedSites
+                        ?.copy(
+                            items =
+                                previousItems
+                                    .filterNot {
+                                        it.projectSiteId ==
+                                            attached.projectSite
+                                                .projectSiteId
+                                    } +
+                                    attached.projectSite,
+                        )
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects
+                                ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    selectedProject =
+                                        attached.project,
+                                    selectedSites =
+                                        nextSites,
+                                    errorCode = null,
+                                    errorMessage = null,
+                                ),
+                    ),
+                )
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                    ?: return@onFailure
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects
+                                ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    errorCode =
+                                        (failure as?
+                                            HiltechApiException)
+                                            ?.code,
+                                    errorMessage =
+                                        failure.message,
+                                ),
+                    ),
+                )
+            }
+        }
+    }
+
     fun signIn(
         forceReauthentication: Boolean = false,
     ) {
@@ -1035,6 +1684,7 @@ fun main() {
                 showSignedIn(identity)
                 refreshPeople()
                 refreshOnboarding()
+                refreshProjects()
             }.onFailure(::showFailure)
         }
     }
@@ -1132,6 +1782,37 @@ fun main() {
                 onCompleteOffboarding =
                     ::completeOffboarding,
                 onCreateEmployee = ::createEmployee,
+                onRefreshProjects =
+                    ::refreshProjects,
+                onSelectProject =
+                    ::selectProject,
+                onCreateProject =
+                    ::createProject,
+                onChangeProjectManager =
+                    ::changeProjectManager,
+                onStartProjectKickoff = {
+                    projectId,
+                    baseVersion,
+                    ->
+                    runProjectTransition(
+                        projectId,
+                        baseVersion,
+                        false,
+                    )
+                },
+                onCompleteProjectKickoff = {
+                    projectId,
+                    baseVersion,
+                    ->
+                    runProjectTransition(
+                        projectId,
+                        baseVersion,
+                        true,
+                    )
+                },
+                onCreateSite = ::createSite,
+                onAttachProjectSite =
+                    ::attachProjectSite,
             )
         }
     }
