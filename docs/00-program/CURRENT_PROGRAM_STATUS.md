@@ -3,7 +3,7 @@
 Updated: 2026-09-20
 
 ## Overall Stage
-**PHASE 3 VERIFIED / COMPLETE — PHASE 4 PROJECTS / SITES / WORK OWNER-FACING ENTRY REVIEW NEXT**
+**PHASE 4 ACTIVE — SLICE 01 PROJECT + SITE / PROJECTSITE CONTRACT FROZEN — PRODUCTION IMPLEMENTATION NEXT**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -54,6 +54,8 @@ Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Final 
 
 Phase 3 — People / Internal Workforce Core — is **VERIFIED / COMPLETE**. Slice 01–05 are VERIFIED / MERGED. Slice 06 — Offboarding Skeleton — merged through PR #51 at `bc6b61cca744c17814e58d5e212812339cd96409`; final closure head `4d941970563b84245061d5ab80101550243b6000` passed Bootstrap `35495373713` attempt 2, Phase 2 runtime `35495373785`, Phase 1 OIDC `35495373737`, Onboarding Human Proof `35495373800`, Assignment Change Human Proof `35495373780`, and Offboarding Human Proof `35495373723`. Post-merge Bootstrap `35495676983` PASS. Final Phase 3 gap review: `docs/13-delivery/phase3/07_PHASE3_FINAL_GAP_REVIEW_2026-09-20.md` — PASS / no additional Phase 3 slice required.
 
+Phase 4 — Projects / Sites / Work Core — has an accepted owner-entry reconstruction and a frozen six-slice plan. Slice 01 — Project + Site / ProjectSite Core — is now reality-closed and implementation-frozen in `docs/13-delivery/phase4/02_PROJECT_SITE_CORE_REALITY_AND_IMPLEMENTATION_CONTRACT_2026-09-20.md`. The inherited Approval cursor flake prerequisite was closed through PR #54 at `b9eee0ee5af61ffb960b3b4baa142b2896a9ac59`; exact-head Approval Stability `35511034523`, Bootstrap `35511034711`, Native OIDC `35511034539`, and post-merge Bootstrap `35511320336` all PASS. Slice 01 production implementation is authorized; later Phase 4 slices and Phase 5/6 boundaries remain unchanged.
+
 ---
 
 # Progress by Layer
@@ -83,8 +85,8 @@ Phase 3 — People / Internal Workforce Core — is **VERIFIED / COMPLETE**. Sli
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 4 SCOPE FROZEN / SLICE 01 CONTRACT CLOSURE NEXT | 6-slice Project/Site/Work plan frozen; no Slice 01 production code yet |
-| Production code | PHASE 4 NOT YET AUTHORIZED | Scope/slice plan frozen; Slice 01 reality/contract closure required first |
+| Implementation order | PHASE 4 SLICE 01 CONTRACT FROZEN / IMPLEMENTATION NEXT | Project + Site / ProjectSite vertical only; later slice and Phase 5/6 boundaries preserved |
+| Production code | SLICE 01 AUTHORIZED / NOT YET VERIFIED | Implement frozen Project + Site / ProjectSite contract, then exact-head CI + human proof before merge |
 
 ---
 
