@@ -59,7 +59,19 @@ interface WorkforceAssignmentPersistencePort {
         reportsToEmployeeId: UUID?,
         effectiveFrom: Instant,
         createdAt: Instant,
+        supersedesAssignmentId: UUID? = null,
     )
+
+    fun lockActiveAssignment(
+        assignmentId: UUID,
+        employeeId: UUID,
+    ): WorkforceAssignmentSnapshot?
+
+    fun endAssignment(
+        assignmentId: UUID,
+        expectedVersion: Long,
+        effectiveTo: Instant,
+    ): Boolean
 
     fun loadAssignment(
         assignmentId: UUID,
@@ -84,6 +96,11 @@ interface WorkforceAssignmentPersistencePort {
     fun organizationStructure(
         organizationId: UUID,
         at: Instant,
+        limit: Int,
+    ): List<WorkforceAssignmentSnapshot>
+
+    fun historyForEmployee(
+        employeeId: UUID,
         limit: Int,
     ): List<WorkforceAssignmentSnapshot>
 }
@@ -281,6 +298,7 @@ class JdbcWorkforceAssignmentPersistence(
         reportsToEmployeeId: UUID?,
         effectiveFrom: Instant,
         createdAt: Instant,
+        supersedesAssignmentId: UUID?,
     ) {
         jdbc.update(
             """
@@ -292,6 +310,7 @@ class JdbcWorkforceAssignmentPersistence(
                 role_code,
                 role_label,
                 reports_to_employee_id,
+                supersedes_assignment_id,
                 state,
                 effective_from,
                 effective_to,
@@ -302,6 +321,7 @@ class JdbcWorkforceAssignmentPersistence(
             VALUES (
                 ?, ?, ?, ?,
                 ?, ?, ?,
+                ?,
                 'ACTIVE',
                 ?, NULL,
                 ?, ?, 1
@@ -314,6 +334,7 @@ class JdbcWorkforceAssignmentPersistence(
             roleCode,
             roleLabel,
             reportsToEmployeeId,
+            supersedesAssignmentId,
             effectiveFrom.atOffset(
                 ZoneOffset.UTC,
             ),
@@ -333,6 +354,51 @@ class JdbcWorkforceAssignmentPersistence(
             whereSql = "wa.id = ?",
             args = arrayOf(assignmentId),
         )
+
+    override fun lockActiveAssignment(
+        assignmentId: UUID,
+        employeeId: UUID,
+    ): WorkforceAssignmentSnapshot? =
+        loadBy(
+            whereSql =
+                """
+                wa.id = ?
+                AND wa.employee_id = ?
+                AND wa.state = 'ACTIVE'
+                """.trimIndent(),
+            args =
+                arrayOf(
+                    assignmentId,
+                    employeeId,
+                ),
+            suffix = "FOR UPDATE OF wa",
+        )
+
+    override fun endAssignment(
+        assignmentId: UUID,
+        expectedVersion: Long,
+        effectiveTo: Instant,
+    ): Boolean =
+        jdbc.update(
+            """
+            UPDATE workforce_assignment
+            SET state = 'ENDED',
+                effective_to = ?,
+                updated_at = ?,
+                version = version + 1
+            WHERE id = ?
+              AND state = 'ACTIVE'
+              AND version = ?
+            """.trimIndent(),
+            effectiveTo.atOffset(
+                ZoneOffset.UTC,
+            ),
+            effectiveTo.atOffset(
+                ZoneOffset.UTC,
+            ),
+            assignmentId,
+            expectedVersion,
+        ) == 1
 
     override fun currentForEmployee(
         employeeId: UUID,
@@ -459,14 +525,35 @@ class JdbcWorkforceAssignmentPersistence(
         )
     }
 
+
+    override fun historyForEmployee(
+        employeeId: UUID,
+        limit: Int,
+    ): List<WorkforceAssignmentSnapshot> =
+        queryMany(
+            whereSql =
+                "wa.employee_id = ?",
+            args =
+                arrayOf(employeeId),
+            orderAndLimit =
+                """
+                ORDER BY
+                    wa.effective_from DESC,
+                    wa.created_at DESC,
+                    wa.id DESC
+                LIMIT ${limit.coerceIn(1, 200)}
+                """.trimIndent(),
+        )
+
     private fun loadBy(
         whereSql: String,
         args: Array<out Any>,
+        suffix: String = "LIMIT 2",
     ): WorkforceAssignmentSnapshot? =
         queryMany(
             whereSql = whereSql,
             args = args,
-            orderAndLimit = "LIMIT 2",
+            orderAndLimit = suffix,
         ).singleOrNull()
 
     private fun queryMany(
@@ -496,7 +583,8 @@ class JdbcWorkforceAssignmentPersistence(
                 wa.state,
                 wa.effective_from,
                 wa.effective_to,
-                wa.version
+                wa.version,
+                wa.supersedes_assignment_id
             FROM workforce_assignment wa
             JOIN employee e
               ON e.id = wa.employee_id
@@ -586,6 +674,11 @@ class JdbcWorkforceAssignmentPersistence(
                     )?.toInstant(),
                 version =
                     rs.getLong("version"),
+                supersedesAssignmentId =
+                    rs.getObject(
+                        "supersedes_assignment_id",
+                        UUID::class.java,
+                    ),
             )
         }
 }
