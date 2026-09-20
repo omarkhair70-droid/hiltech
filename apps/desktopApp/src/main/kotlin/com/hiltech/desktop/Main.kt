@@ -8,6 +8,7 @@ import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechProjectsState
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
+import com.hiltech.shared.core.PlanningUiAction
 import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
@@ -1062,6 +1063,12 @@ fun main() {
                         runtime.projectSites(it)
                     }
                 }
+            val planResult =
+                selectedId?.let {
+                    runCatching {
+                        runtime.projectPlan(it)
+                    }
+                }
 
             val current =
                 shellState.value as?
@@ -1072,6 +1079,8 @@ fun main() {
                     ?: detailResult
                         ?.exceptionOrNull()
                     ?: sitesResult
+                        ?.exceptionOrNull()
+                    ?: planResult
                         ?.exceptionOrNull()
 
             setState(
@@ -1093,6 +1102,11 @@ fun main() {
                                     ?.getOrNull()
                                     ?: current.projects
                                         ?.selectedSites,
+                            plan =
+                                planResult
+                                    ?.getOrNull()
+                                    ?: current.projects
+                                        ?.plan,
                             lastCreatedSite =
                                 current.projects
                                     ?.lastCreatedSite,
@@ -1142,6 +1156,12 @@ fun main() {
                         projectId,
                     )
                 }
+            val planResult =
+                runCatching {
+                    runtime.projectPlan(
+                        projectId,
+                    )
+                }
             val current =
                 shellState.value as?
                     HiltechShellState.SignedIn
@@ -1149,6 +1169,7 @@ fun main() {
             val failure =
                 detailResult.exceptionOrNull()
                     ?: sitesResult.exceptionOrNull()
+                    ?: planResult.exceptionOrNull()
 
             setState(
                 current.copy(
@@ -1162,6 +1183,9 @@ fun main() {
                                         .getOrNull(),
                                 selectedSites =
                                     sitesResult
+                                        .getOrNull(),
+                                plan =
+                                    planResult
                                         .getOrNull(),
                                 errorCode =
                                     (failure as?
@@ -1653,6 +1677,130 @@ fun main() {
         }
     }
 
+    fun runPlanningAction(
+        action: PlanningUiAction,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+        val projectId =
+            when (action) {
+                is PlanningUiAction.CreateArea -> action.projectId
+                is PlanningUiAction.UpdateArea -> action.projectId
+                is PlanningUiAction.CreateMilestone -> action.projectId
+                is PlanningUiAction.UpdateMilestone -> action.projectId
+                is PlanningUiAction.CreateWorkPackage -> action.projectId
+                is PlanningUiAction.UpdateWorkPackage -> action.projectId
+                is PlanningUiAction.AddDependency -> action.projectId
+                is PlanningUiAction.RemoveDependency -> action.projectId
+                is PlanningUiAction.MarkReady -> action.projectId
+            }
+        setState(
+            signed.copy(
+                projects =
+                    (signed.projects ?: HiltechProjectsState())
+                        .copy(
+                            loading = true,
+                            errorCode = null,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+        scope.launch {
+            runCatching {
+                when (action) {
+                    is PlanningUiAction.CreateArea -> runtime.createArea(
+                        action.projectId, action.projectSiteId, action.parentAreaId,
+                        action.typeCode, action.code, action.name, action.sequence,
+                        action.restrictedAccess, action.baseProjectVersion,
+                        action.expectedBaselineVersion,
+                    )
+                    is PlanningUiAction.UpdateArea -> runtime.updateArea(
+                        action.projectId, action.areaId, action.parentAreaId, action.typeCode,
+                        action.code, action.name, action.sequence, action.restrictedAccess,
+                        action.baseProjectVersion, action.baseObjectVersion,
+                        action.expectedBaselineVersion,
+                    )
+                    is PlanningUiAction.CreateMilestone -> runtime.createMilestone(
+                        action.projectId, action.code, action.name, action.plannedDate,
+                        action.sequence, action.clientVisible, action.acceptanceRequirement,
+                        action.baseProjectVersion, action.expectedBaselineVersion,
+                    )
+                    is PlanningUiAction.UpdateMilestone -> runtime.updateMilestone(
+                        action.projectId, action.milestoneId, action.code, action.name,
+                        action.plannedDate, action.sequence, action.clientVisible,
+                        action.acceptanceRequirement, action.baseProjectVersion,
+                        action.baseObjectVersion, action.expectedBaselineVersion,
+                    )
+                    is PlanningUiAction.CreateWorkPackage -> runtime.createWorkPackage(
+                        action.projectId, action.projectSiteId, action.siteId, action.milestoneId,
+                        action.code, action.name, action.description, action.ownerType, action.ownerId,
+                        action.plannedStart, action.plannedEnd, action.sequence,
+                        action.baseProjectVersion, action.expectedBaselineVersion,
+                    )
+                    is PlanningUiAction.UpdateWorkPackage -> runtime.updateWorkPackage(
+                        action.projectId, action.workPackageId, action.projectSiteId, action.siteId,
+                        action.milestoneId, action.code, action.name, action.description,
+                        action.ownerType, action.ownerId, action.plannedStart, action.plannedEnd,
+                        action.sequence, action.baseProjectVersion, action.baseObjectVersion,
+                        action.expectedBaselineVersion,
+                    )
+                    is PlanningUiAction.AddDependency -> runtime.addPlanDependency(
+                        action.projectId, action.predecessorType, action.predecessorId,
+                        action.successorType, action.successorId, action.dependencyType,
+                        action.lagMinutes, action.baseProjectVersion,
+                        action.expectedBaselineVersion,
+                    )
+                    is PlanningUiAction.RemoveDependency -> runtime.removePlanDependency(
+                        action.projectId, action.dependencyId, action.baseProjectVersion,
+                        action.baseObjectVersion, action.expectedBaselineVersion,
+                    )
+                    is PlanningUiAction.MarkReady -> runtime.markProjectReady(
+                        action.projectId, action.baseProjectVersion,
+                        action.expectedBaselineVersion,
+                    )
+                }
+            }.onSuccess { result ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                        ?: return@onSuccess
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    plan = result.plan,
+                                    errorCode = null,
+                                    errorMessage = null,
+                                ),
+                    ),
+                )
+                selectProject(projectId)
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                        ?: return@onFailure
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    errorCode =
+                                        (failure as? HiltechApiException)
+                                            ?.code,
+                                    errorMessage = failure.message,
+                                ),
+                    ),
+                )
+            }
+        }
+    }
+
     fun signIn(
         forceReauthentication: Boolean = false,
     ) {
@@ -1813,6 +1961,8 @@ fun main() {
                 onCreateSite = ::createSite,
                 onAttachProjectSite =
                     ::attachProjectSite,
+                onPlanningAction =
+                    ::runPlanningAction,
             )
         }
     }

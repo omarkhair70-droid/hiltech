@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.projects.ProjectListDto
+import com.hiltech.shared.core.projects.ProjectPlanDto
 import com.hiltech.shared.core.projects.ProjectSiteListDto
 import com.hiltech.shared.core.projects.ProjectSummaryDto
 import com.hiltech.shared.core.projects.SiteDto
@@ -28,6 +29,7 @@ data class HiltechProjectsState(
     val list: ProjectListDto? = null,
     val selectedProject: ProjectSummaryDto? = null,
     val selectedSites: ProjectSiteListDto? = null,
+    val plan: ProjectPlanDto? = null,
     val lastCreatedSite: SiteDto? = null,
     val errorCode: String? = null,
     val errorMessage: String? = null,
@@ -93,6 +95,7 @@ fun ProjectControlSection(
         ) -> Unit = {
             _, _, _, _, _, _ -> Unit
         },
+    onPlanningAction: (PlanningUiAction) -> Unit = {},
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -366,6 +369,13 @@ fun ProjectControlSection(
                     onAttachSite =
                         onAttachSite,
                 )
+
+                state.plan?.let { plan ->
+                    ProjectPlanningSection(
+                        plan = plan,
+                        onAction = onPlanningAction,
+                    )
+                }
             }
 
             state.lastCreatedSite?.let {
