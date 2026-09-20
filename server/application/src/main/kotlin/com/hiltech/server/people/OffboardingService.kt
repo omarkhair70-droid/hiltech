@@ -22,6 +22,7 @@ import java.time.LocalDate
 import java.util.Locale
 import java.util.UUID
 
+// Slice 06 closure trigger: runtime semantics unchanged; exact-head CI proves the closure lineage.
 @Component
 class OffboardingService(
     private val persistence:
