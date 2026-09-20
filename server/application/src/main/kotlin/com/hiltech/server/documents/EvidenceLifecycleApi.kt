@@ -1657,13 +1657,7 @@ class EvidenceLifecycleService(
 
         private val CONTENT_TYPE_PATTERN =
             Regex(
-                "^[a-z0-9!#        private val CONTENT_TYPE_PATTERN =
-            Regex(
                 "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$",
-            )^_.+-]+/[a-z0-9!#        private val CONTENT_TYPE_PATTERN =
-            Regex(
-                "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$",
-            )^_.+-]+$",
             )
 
         private const val
