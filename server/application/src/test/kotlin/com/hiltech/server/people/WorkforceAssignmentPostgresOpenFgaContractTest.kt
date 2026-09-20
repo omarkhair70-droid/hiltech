@@ -212,7 +212,7 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
                 testPeopleAuthorization(
                     adminIdentityId =
                         ids.adminIdentity,
-                    organizationId =
+                    expectedOrganizationId =
                         ids.organizationOne,
                     sourceAuthority =
                         sourceAuthority,
