@@ -18,6 +18,7 @@ import java.time.Clock
 import java.util.Locale
 import java.util.UUID
 
+// Slice 05 closure trigger: semantics are unchanged; exact-head CI must prove the closure lineage.
 @Component
 class WorkforceAssignmentService(
     private val persistence:
