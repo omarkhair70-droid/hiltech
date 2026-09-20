@@ -1494,12 +1494,16 @@ class EvidenceLifecycleService(
         EvidenceMetadataResponse(
             evidenceId = evidenceId.toString(),
             uploadSessionId = uploadSessionId.toString(),
-            targetType = "WORK_ORDER",
-            targetId = workOrderId.toString(),
-            workOrderId = workOrderId.toString(),
-            evidenceRequirementKey = evidenceRequirementKey,
-            evidencePolicyId = evidencePolicyId.toString(),
-            evidencePolicyRevision = evidencePolicyRevision,
+            targetType = targetType,
+            targetId = targetId.toString(),
+            workOrderId =
+                workOrderId?.toString(),
+            evidenceRequirementKey =
+                evidenceRequirementKey,
+            evidencePolicyId =
+                evidencePolicyId?.toString(),
+            evidencePolicyRevision =
+                evidencePolicyRevision,
             evidenceTypeCode = evidenceTypeCode,
             contentType = contentType,
             sizeBytes = sizeBytes,
@@ -1514,12 +1518,16 @@ class EvidenceLifecycleService(
         EvidenceMetadataResponse(
             evidenceId = evidenceId.toString(),
             uploadSessionId = uploadSessionId.toString(),
-            targetType = "WORK_ORDER",
-            targetId = workOrderId.toString(),
-            workOrderId = workOrderId.toString(),
-            evidenceRequirementKey = evidenceRequirementKey,
-            evidencePolicyId = evidencePolicyId.toString(),
-            evidencePolicyRevision = evidencePolicyRevision,
+            targetType = targetType,
+            targetId = targetId.toString(),
+            workOrderId =
+                workOrderId?.toString(),
+            evidenceRequirementKey =
+                evidenceRequirementKey,
+            evidencePolicyId =
+                evidencePolicyId?.toString(),
+            evidencePolicyRevision =
+                evidencePolicyRevision,
             evidenceTypeCode = evidenceTypeCode,
             contentType = contentType,
             sizeBytes = expectedSizeBytes,
