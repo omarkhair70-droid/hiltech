@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.0 / PHASE 0–3 VERIFIED / COMPLETE / PHASE 4 SLICE 01 CONTRACT FROZEN / IMPLEMENTATION NEXT**
+Status: **FROZEN v1.1 / PHASE 0–3 VERIFIED / COMPLETE / PHASE 4 SLICE 01 VERIFIED / SLICE 02–06 PLANNING FROZEN**
 
 ## Core Rule
 
@@ -453,41 +453,41 @@ Closed:
 Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
 
 Immediate next execution:
-**PHASE 4 / SLICE 02 — Project Planning Structure — REALITY + IMPLEMENTATION CONTRACT CLOSURE.**
+**PHASE 4 / SLICE 02 — Project Planning Structure — PRODUCTION IMPLEMENTATION.**
 
 Phase 0–3 are verified and complete.
 
-Phase 4 owner entry review and six-slice plan are frozen:
-`docs/13-delivery/phase4/01_PHASE4_SCOPE_AND_SLICE_PLAN_2026-09-20.md`
+Phase 4 Slice 01 is VERIFIED / MERGED.
 
-Slice 01 — Project + Site / ProjectSite Core — is **VERIFIED / MERGED**:
-- frozen contract: `docs/13-delivery/phase4/02_PROJECT_SITE_CORE_REALITY_AND_IMPLEMENTATION_CONTRACT_2026-09-20.md`;
-- final gap review: `docs/13-delivery/phase4/03_PROJECT_SITE_CORE_FINAL_GAP_REVIEW_2026-09-20.md` — PASS;
-- final tested head: `89c19605405dad912457dc22286751c2eb379752`;
-- final merge: `e6b87dd4a6a4f66e72190a5d1d3c632b414f359e`;
-- post-merge Bootstrap: `35515882737` — PASS.
+Before further Phase 4 coding, the remaining phase was deliberately planned as a whole and frozen:
 
-Before any Slice 02 production implementation, close and freeze the exact Project Planning Structure contract from current reality evidence and existing frozen Project planning contracts.
+- master implementation map:
+  `docs/13-delivery/phase4/04_PHASE4_MASTER_IMPLEMENTATION_MAP_2026-09-20.md`
+- Slice 02:
+  `docs/13-delivery/phase4/05_SLICE02_PROJECT_PLANNING_STRUCTURE_CONTRACT_2026-09-20.md`
+- Slice 03:
+  `docs/13-delivery/phase4/06_SLICE03_WORKORDER_POLICY_BINDING_CONTRACT_2026-09-20.md`
+- Slice 04:
+  `docs/13-delivery/phase4/07_SLICE04_READINESS_ASSIGNMENT_CONTRACT_2026-09-20.md`
+- Slice 05:
+  `docs/13-delivery/phase4/08_SLICE05_REVIEW_PROGRESS_HEALTH_CONTRACT_2026-09-20.md`
+- Slice 06:
+  `docs/13-delivery/phase4/09_SLICE06_ASSIGNED_WORK_MOBILE_HANDOFF_CONTRACT_2026-09-20.md`
+- completion gates / Codex handoff:
+  `docs/13-delivery/phase4/10_PHASE4_COMPLETION_GATES_AND_CODEX_HANDOFF_2026-09-20.md`
 
-Slice 02 owns:
-- optional Areas;
-- Milestones;
-- WorkPackages;
-- baseline-version-safe planning;
-- dependency/reference shape;
-- planning-tree Windows surface;
-- lifecycle/authorization/audit/version proof required for planning.
+Execution order is fixed:
 
-Slice 02 must not invent or pull forward:
-- WorkOrder / WorkType runtime (Slice 03);
-- readiness / assignment (Slice 04);
-- Project health / accepted progress (Slice 05);
-- Warehouse/material/tool truth (Phase 5);
-- technician field/offline execution (Phase 6);
-- commercial claims (later Commercial/Finance phases).
+`Slice 02 -> Slice 03 -> Slice 04 -> Slice 05 -> Slice 06 -> Phase 4 Final Gap Review`
 
-READY/ACTIVE remains unavailable until Slice 02 closes the real baseline-planning preconditions.
+Do not reopen product planning between slices merely because implementation is difficult.
 
+Do not pull forward:
+- Phase 5 Warehouse/Assets/Materials/Tools authoritative state;
+- Phase 6 field/offline execution, durable command queue, evidence capture/sync or process-death recovery;
+- later commercial/finance claim truth.
+
+Each Slice still closes independently on exact-head CI + human proof + final gap review + merge + post-merge Bootstrap.
 
 ---
 
