@@ -64,6 +64,13 @@ jobs:
               target.write(f"HILTECH_FGA_MODEL_ID={payload['model']['authorization_model_id']}\n")
           PY
 
+      - name: Verify Approval cursor canonicalization
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.approval.ApprovalCursorCodecTest \
+            --rerun-tasks \
+            --console=plain
+
       - name: Repeat Approval contract
         env:
           HILTECH_APPROVAL_CONTRACT_TEST: "1"
