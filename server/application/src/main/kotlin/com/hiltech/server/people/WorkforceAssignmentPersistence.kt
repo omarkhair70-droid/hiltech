@@ -24,9 +24,17 @@ data class WorkforceAssignmentTeamContext(
 )
 
 interface WorkforceAssignmentPersistencePort {
+    fun employee(
+        employeeId: UUID,
+    ): WorkforceAssignmentEmployeeContext?
+
     fun lockEmployee(
         employeeId: UUID,
     ): WorkforceAssignmentEmployeeContext?
+
+    fun lockOrganization(
+        organizationId: UUID,
+    ): Boolean
 
     fun team(
         teamId: UUID,
@@ -84,8 +92,25 @@ interface WorkforceAssignmentPersistencePort {
 class JdbcWorkforceAssignmentPersistence(
     private val jdbc: JdbcTemplate,
 ) : WorkforceAssignmentPersistencePort {
+    override fun employee(
+        employeeId: UUID,
+    ): WorkforceAssignmentEmployeeContext? =
+        loadEmployeeContext(
+            employeeId = employeeId,
+            forUpdate = false,
+        )
+
     override fun lockEmployee(
         employeeId: UUID,
+    ): WorkforceAssignmentEmployeeContext? =
+        loadEmployeeContext(
+            employeeId = employeeId,
+            forUpdate = true,
+        )
+
+    private fun loadEmployeeContext(
+        employeeId: UUID,
+        forUpdate: Boolean,
     ): WorkforceAssignmentEmployeeContext? =
         jdbc.query(
             """
@@ -97,7 +122,7 @@ class JdbcWorkforceAssignmentPersistence(
                 e.version
             FROM employee e
             WHERE e.id = ?
-            FOR UPDATE OF e
+            ${if (forUpdate) "FOR UPDATE OF e" else ""}
             """.trimIndent(),
             { rs, _ ->
                 WorkforceAssignmentEmployeeContext(
@@ -126,6 +151,26 @@ class JdbcWorkforceAssignmentPersistence(
             },
             employeeId,
         ).singleOrNull()
+
+    override fun lockOrganization(
+        organizationId: UUID,
+    ): Boolean =
+        jdbc.query(
+            """
+            SELECT id
+            FROM organization
+            WHERE id = ?
+              AND status = 'ACTIVE'
+            FOR UPDATE
+            """.trimIndent(),
+            { rs, _ ->
+                rs.getObject(
+                    "id",
+                    UUID::class.java,
+                )
+            },
+            organizationId,
+        ).singleOrNull() != null
 
     override fun team(
         teamId: UUID,
