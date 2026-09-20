@@ -65,8 +65,10 @@ import com.hiltech.shared.core.work.AddWorkDependencyRequestDto
 import com.hiltech.shared.core.work.CreateWorkOrderRequestDto
 import com.hiltech.shared.core.work.CreateWorkTaskRequestDto
 import com.hiltech.shared.core.work.PlanWorkRequestDto
+import com.hiltech.shared.core.work.RemoveWorkDependencyRequestDto
 import com.hiltech.shared.core.work.ReviseInstructionRequestDto
 import com.hiltech.shared.core.work.UpdateWorkOrderRequestDto
+import com.hiltech.shared.core.work.UpdateWorkTaskRequestDto
 import com.hiltech.shared.core.work.WorkApiClient
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
@@ -1105,12 +1107,15 @@ class DesktopIdentityRuntime(
 
     suspend fun createWorkOrder(
         projectId:String,siteId:String,projectSiteId:String,areaId:String?,workPackageId:String?,
-        workTypeCode:String,workTypeRevision:Int,title:String,description:String?,priorityCode:String?,
+        workTypeCode:String,workTypeRevision:Int,title:String,description:String?,
+        plannedStart:String?,plannedEnd:String?,priorityCode:String?,
         baseProjectVersion:Long,baselineVersion:Int,
-    ) = workApi.create(projectId,CreateWorkOrderRequestDto(operationId(),siteId,projectSiteId,areaId,workPackageId,null,workTypeCode,workTypeRevision,title,description,null,null,priorityCode,baseProjectVersion,baselineVersion,occurredAt()),installationId)
+    ) = workApi.create(projectId,CreateWorkOrderRequestDto(operationId(),siteId,projectSiteId,areaId,workPackageId,null,workTypeCode,workTypeRevision,title,description,plannedStart,plannedEnd,priorityCode,baseProjectVersion,baselineVersion,occurredAt()),installationId)
 
-    suspend fun updateWorkOrder(workOrderId:String,areaId:String?,workPackageId:String?,title:String,description:String?,priorityCode:String,baseVersion:Long)=
-        workApi.update(workOrderId,UpdateWorkOrderRequestDto(operationId(),areaId,workPackageId,title,description,null,null,priorityCode,baseVersion,occurredAt()),installationId)
+    suspend fun updateWorkOrder(
+        workOrderId:String,areaId:String?,workPackageId:String?,title:String,description:String?,
+        plannedStart:String?,plannedEnd:String?,priorityCode:String,baseVersion:Long,
+    ) = workApi.update(workOrderId,UpdateWorkOrderRequestDto(operationId(),areaId,workPackageId,title,description,plannedStart,plannedEnd,priorityCode,baseVersion,occurredAt()),installationId)
 
     suspend fun planWork(workOrderId:String,workTypeCode:String,workTypeRevision:Int,instructionJson:String?,summary:String?,baseVersion:Long,baselineVersion:Int)=
         workApi.plan(workOrderId,PlanWorkRequestDto(operationId(),workTypeCode,workTypeRevision,1,instructionJson,summary,baseVersion,baselineVersion,occurredAt()),installationId)
@@ -1121,8 +1126,17 @@ class DesktopIdentityRuntime(
     suspend fun createWorkTask(workOrderId:String,taskCode:String?,title:String,sortOrder:Int,mandatory:Boolean,baseVersion:Long)=
         workApi.createTask(workOrderId,CreateWorkTaskRequestDto(operationId(),taskCode,title,null,sortOrder,mandatory,null,null,baseVersion,occurredAt()),installationId)
 
+    suspend fun updateWorkTask(
+        taskId:String,taskCode:String?,title:String,description:String?,sortOrder:Int,mandatory:Boolean,
+        estimatedDurationMinutes:Int?,evidenceRequirementKey:String?,state:String,
+        baseTaskVersion:Long,baseWorkOrderVersion:Long,
+    ) = workApi.updateTask(taskId,UpdateWorkTaskRequestDto(operationId(),taskCode,title,description,sortOrder,mandatory,estimatedDurationMinutes,evidenceRequirementKey,state,baseTaskVersion,baseWorkOrderVersion,occurredAt()),installationId)
+
     suspend fun addWorkDependency(workOrderId:String,predecessorId:String,lagMinutes:Long,baseVersion:Long)=
         workApi.addDependency(workOrderId,AddWorkDependencyRequestDto(operationId(),predecessorId,"FINISH_TO_START",lagMinutes,baseVersion,occurredAt()),installationId)
+
+    suspend fun removeWorkDependency(workOrderId:String,dependencyId:String,baseVersion:Long,baseDependencyVersion:Long)=
+        workApi.removeDependency(workOrderId,dependencyId,RemoveWorkDependencyRequestDto(operationId(),baseVersion,baseDependencyVersion,occurredAt()),installationId)
 
     suspend fun activateProject(projectId:String,baseVersion:Long,baselineVersion:Int)=
         workApi.activate(projectId,ActivateProjectRequestDto(operationId(),baseVersion,baselineVersion,occurredAt()),installationId)
