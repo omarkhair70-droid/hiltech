@@ -367,16 +367,13 @@ class ActivityProjectionPostgresOpenFgaContractTest {
         )
 
         val tampered =
-            requireNotNull(
-                first.nextCursor,
-            ).dropLast(1) +
-                if (
-                    first.nextCursor
-                        .last() == 'A'
-                ) {
-                    "B"
-                } else {
-                    "A"
+            requireNotNull(first.nextCursor)
+                .split('.', limit = 2)
+                .let { parts ->
+                    val signature = parts.getOrNull(1)
+                        ?: error("Expected a signed Activity cursor.")
+                    val replacement = if (signature.first() == 'A') 'B' else 'A'
+                    "${parts[0]}.$replacement${signature.drop(1)}"
                 }
         val invalidCursor =
             assertThrows<

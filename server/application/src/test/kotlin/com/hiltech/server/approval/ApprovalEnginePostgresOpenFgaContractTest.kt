@@ -648,16 +648,13 @@ class ApprovalEnginePostgresOpenFgaContractTest {
             )
 
             val tamperedCursor =
-                requireNotNull(
-                    firstPage.nextCursor,
-                ).dropLast(1) +
-                    if (
-                        firstPage.nextCursor
-                            .last() == 'A'
-                    ) {
-                        "B"
-                    } else {
-                        "A"
+                requireNotNull(firstPage.nextCursor)
+                    .split('.', limit = 2)
+                    .let { parts ->
+                        val signature = parts.getOrNull(1)
+                            ?: error("Expected a signed Approval cursor.")
+                        val replacement = if (signature.first() == 'A') 'B' else 'A'
+                        "${parts[0]}.$replacement${signature.drop(1)}"
                     }
             val invalidCursor =
                 assertThrows<

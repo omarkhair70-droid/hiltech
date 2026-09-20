@@ -524,16 +524,14 @@ class InboxWorkQueuePostgresOpenFgaContractTest {
             )
 
             val tampered =
-                requireNotNull(
-                    inbox1.nextCursor,
-                ).let {
-                    it.dropLast(1) +
-                        if (it.last() == 'A') {
-                            "B"
-                        } else {
-                            "A"
-                        }
-                }
+                requireNotNull(inbox1.nextCursor)
+                    .split('.', limit = 2)
+                    .let { parts ->
+                        val signature = parts.getOrNull(1)
+                            ?: error("Expected a signed Inbox cursor.")
+                        val replacement = if (signature.first() == 'A') 'B' else 'A'
+                        "${parts[0]}.$replacement${signature.drop(1)}"
+                    }
             assertThrows<
                 ProductApiException
             > {
