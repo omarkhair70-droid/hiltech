@@ -23,6 +23,8 @@ import com.hiltech.shared.core.projects.ProjectPlanDto
 import com.hiltech.shared.core.projects.ProjectSiteListDto
 import com.hiltech.shared.core.projects.ProjectSummaryDto
 import com.hiltech.shared.core.projects.SiteDto
+import com.hiltech.shared.core.work.WorkOrderDto
+import com.hiltech.shared.core.work.WorkTypeChoiceDto
 
 data class HiltechProjectsState(
     val loading: Boolean = false,
@@ -30,6 +32,8 @@ data class HiltechProjectsState(
     val selectedProject: ProjectSummaryDto? = null,
     val selectedSites: ProjectSiteListDto? = null,
     val plan: ProjectPlanDto? = null,
+    val workOrders: List<WorkOrderDto> = emptyList(),
+    val workTypes: List<WorkTypeChoiceDto> = emptyList(),
     val lastCreatedSite: SiteDto? = null,
     val errorCode: String? = null,
     val errorMessage: String? = null,
@@ -96,6 +100,7 @@ fun ProjectControlSection(
             _, _, _, _, _, _ -> Unit
         },
     onPlanningAction: (PlanningUiAction) -> Unit = {},
+    onWorkPlanningAction: (WorkPlanningUiAction) -> Unit = {},
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -374,6 +379,12 @@ fun ProjectControlSection(
                     ProjectPlanningSection(
                         plan = plan,
                         onAction = onPlanningAction,
+                    )
+                    WorkPlanningSection(
+                        plan = plan,
+                        workTypes = state.workTypes,
+                        orders = state.workOrders,
+                        onAction = onWorkPlanningAction,
                     )
                 }
             }

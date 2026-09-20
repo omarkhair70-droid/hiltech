@@ -1,0 +1,78 @@
+package com.hiltech.server.work
+
+import com.hiltech.server.platform.HiltechRequestContext
+import com.hiltech.server.platform.HiltechRequestContextSnapshot
+import com.hiltech.server.platform.IdempotencyKeyContract
+import com.hiltech.server.platform.ProductApiException
+import jakarta.servlet.http.HttpServletRequest
+import org.springframework.http.HttpStatus
+import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RestController
+import java.time.Instant
+import java.util.UUID
+
+data class CreateWorkOrderRequest(val operationId:String,val siteId:String,val projectSiteId:String,val areaId:String?=null,val workPackageId:String?=null,val explicitCode:String?=null,val workTypeCode:String,val workTypeRevision:Int?=null,val title:String,val description:String?=null,val plannedStart:String?=null,val plannedEnd:String?=null,val priorityCode:String?=null,val baseProjectVersion:Long,val expectedBaselineVersion:Int,val clientOccurredAt:String)
+data class UpdateWorkOrderRequest(val operationId:String,val areaId:String?=null,val workPackageId:String?=null,val title:String,val description:String?=null,val plannedStart:String?=null,val plannedEnd:String?=null,val priorityCode:String,val baseVersion:Long,val clientOccurredAt:String)
+data class PlanWorkRequest(val operationId:String,val workTypeCode:String,val workTypeRevision:Int?=null,val payloadSchemaVersion:Int=1,val structuredInstructionJson:String?=null,val instructionSummary:String?=null,val baseVersion:Long,val expectedBaselineVersion:Int,val clientOccurredAt:String)
+data class ReviseInstructionRequest(val operationId:String,val payloadSchemaVersion:Int,val structuredInstructionJson:String,val summary:String?=null,val changeReason:String,val baseVersion:Long,val clientOccurredAt:String)
+data class CreateWorkTaskRequest(val operationId:String,val taskCode:String?=null,val title:String,val description:String?=null,val sortOrder:Int=0,val mandatory:Boolean=true,val estimatedDurationMinutes:Int?=null,val evidenceRequirementKey:String?=null,val baseVersion:Long,val clientOccurredAt:String)
+data class UpdateWorkTaskRequest(val operationId:String,val taskCode:String?=null,val title:String,val description:String?=null,val sortOrder:Int=0,val mandatory:Boolean=true,val estimatedDurationMinutes:Int?=null,val evidenceRequirementKey:String?=null,val state:String,val baseTaskVersion:Long,val baseWorkOrderVersion:Long,val clientOccurredAt:String)
+data class AddWorkDependencyRequest(val operationId:String,val predecessorWorkOrderId:String,val dependencyType:String="FINISH_TO_START",val lagMinutes:Long=0,val baseVersion:Long,val clientOccurredAt:String)
+data class RemoveWorkDependencyRequest(val operationId:String,val baseVersion:Long,val baseDependencyVersion:Long,val clientOccurredAt:String)
+data class ActivateProjectRequest(val operationId:String,val baseVersion:Long,val expectedBaselineVersion:Int,val clientOccurredAt:String)
+
+data class ConfigRefResponse(val id:String,val code:String,val name:String,val revision:Int)
+data class WorkBindingResponse(val bindingId:String,val bindingRevision:Int,val workType:ConfigRefResponse,val assignmentPolicy:ConfigRefResponse,val readinessPolicy:ConfigRefResponse,val evidencePolicy:ConfigRefResponse,val reviewPolicy:ConfigRefResponse,val trackingPolicy:ConfigRefResponse?,val checklistTemplate:ConfigRefResponse?,val instructionTemplate:ConfigRefResponse?,val createdAt:String)
+data class WorkInstructionResponse(val instructionRevisionId:String,val revision:Int,val sourceTemplate:ConfigRefResponse?,val payloadSchemaVersion:Int,val structuredPayloadJson:String,val summary:String?,val changeReason:String?,val createdAt:String,val correlationId:String)
+data class ChecklistItemResponse(val itemId:String,val itemKey:String,val label:String,val required:Boolean,val sortOrder:Int,val completionState:String,val evidenceRequirementKey:String?,val version:Long)
+data class RequirementResponse(val requirementId:String,val family:String,val key:String,val sourceConfig:ConfigRefResponse?,val required:Boolean,val satisfactionState:String,val version:Long)
+data class WorkTaskResponse(val taskId:String,val taskCode:String?,val title:String,val description:String?,val sortOrder:Int,val mandatory:Boolean,val estimatedDurationMinutes:Int?,val evidenceRequirementKey:String?,val state:String,val version:Long)
+data class WorkDependencyResponse(val dependencyId:String,val predecessorWorkOrderId:String,val successorWorkOrderId:String,val dependencyType:String,val lagMinutes:Long,val version:Long)
+data class WorkOrderResponse(val workOrderId:String,val organizationId:String,val workOrderCode:String,val projectId:String,val siteId:String,val projectSiteId:String,val areaId:String?,val workPackageId:String?,val title:String,val description:String?,val lifecycleState:String,val readinessState:String,val plannedStart:String?,val plannedEnd:String?,val priorityCode:String,val countsTowardProjectProgress:Boolean,val progressWeight:String,val baselineVersion:Int,val createdAt:String,val updatedAt:String,val version:Long,val binding:WorkBindingResponse?,val instruction:WorkInstructionResponse?,val checklist:List<ChecklistItemResponse>,val requirements:List<RequirementResponse>,val tasks:List<WorkTaskResponse>,val dependencies:List<WorkDependencyResponse>)
+data class WorkOrderMutationResponse(val workOrder:WorkOrderResponse,val replayed:Boolean,val correlationId:String)
+data class WorkTaskMutationResponse(val workOrder:WorkOrderResponse,val taskId:String,val replayed:Boolean,val correlationId:String)
+data class WorkDependencyMutationResponse(val workOrder:WorkOrderResponse,val dependencyId:String,val replayed:Boolean,val correlationId:String)
+data class WorkTypeChoiceResponse(val workType:ConfigRefResponse,val description:String?,val defaultPriorityCode:String?,val defaultProgressWeight:String,val countsTowardProjectProgress:Boolean)
+data class ProjectActivationResponse(val projectId:String,val lifecycleState:String,val version:Long,val replayed:Boolean,val correlationId:String)
+
+@RestController
+@RequestMapping("/v1/projects")
+class ProjectWorkController(private val service:WorkService){
+    @GetMapping("/{projectId}/work-orders") fun list(req:HttpServletRequest,@PathVariable projectId:String):List<WorkOrderResponse>{val c=HiltechRequestContext.current(req);return service.list(c.identity(),projectId.uuid()).map{it.response()}}
+    @GetMapping("/{projectId}/work-types") fun types(req:HttpServletRequest,@PathVariable projectId:String):List<WorkTypeChoiceResponse>{val c=HiltechRequestContext.current(req);return service.workTypes(c.identity(),projectId.uuid()).map{WorkTypeChoiceResponse(it.workType.response(),it.description,it.defaultPriorityCode,it.defaultProgressWeight.toPlainString(),it.countsTowardProjectProgress)}}
+    @PostMapping("/{projectId}/work-orders") fun create(req:HttpServletRequest,@RequestHeader("Idempotency-Key") key:String,@PathVariable projectId:String,@RequestBody b:CreateWorkOrderRequest)=command(req,key,b.operationId){c,op->service.create(CreateWorkOrderCommand(op,projectId.uuid(),b.siteId.uuid(),b.projectSiteId.uuid(),b.areaId?.uuid(),b.workPackageId?.uuid(),b.explicitCode,b.workTypeCode,b.workTypeRevision,b.title,b.description,b.plannedStart?.instant(),b.plannedEnd?.instant(),b.priorityCode,b.baseProjectVersion,b.expectedBaselineVersion,b.clientOccurredAt.instant(),c.identity(),c.correlationId)).let{WorkOrderMutationResponse(it.workOrder.response(),it.replayed,c.correlationId)}}
+    @PostMapping("/{projectId}/activate") fun activate(req:HttpServletRequest,@RequestHeader("Idempotency-Key") key:String,@PathVariable projectId:String,@RequestBody b:ActivateProjectRequest)=command(req,key,b.operationId){c,op->service.activate(ActivateProjectCommand(op,projectId.uuid(),b.baseVersion,b.expectedBaselineVersion,b.clientOccurredAt.instant(),c.identity(),c.correlationId)).let{ProjectActivationResponse(it.projectId.toString(),it.lifecycleState,it.version,it.replayed,c.correlationId)}}
+}
+
+@RestController
+@RequestMapping("/v1/work-orders")
+class WorkOrderController(private val service:WorkService){
+    @GetMapping("/{id}") fun get(req:HttpServletRequest,@PathVariable id:String):WorkOrderResponse{val c=HiltechRequestContext.current(req);return service.get(c.identity(),id.uuid()).response()}
+    @PutMapping("/{id}/details") fun update(req:HttpServletRequest,@RequestHeader("Idempotency-Key") key:String,@PathVariable id:String,@RequestBody b:UpdateWorkOrderRequest)=command(req,key,b.operationId){c,op->service.update(UpdateWorkOrderDetailsCommand(op,id.uuid(),b.areaId?.uuid(),b.workPackageId?.uuid(),b.title,b.description,b.plannedStart?.instant(),b.plannedEnd?.instant(),b.priorityCode,b.baseVersion,b.clientOccurredAt.instant(),c.identity(),c.correlationId)).let{WorkOrderMutationResponse(it.workOrder.response(),it.replayed,c.correlationId)}}
+    @PostMapping("/{id}/plan") fun plan(req:HttpServletRequest,@RequestHeader("Idempotency-Key") key:String,@PathVariable id:String,@RequestBody b:PlanWorkRequest)=command(req,key,b.operationId){c,op->service.plan(PlanWorkCommand(op,id.uuid(),b.workTypeCode,b.workTypeRevision,b.payloadSchemaVersion,b.structuredInstructionJson,b.instructionSummary,b.baseVersion,b.expectedBaselineVersion,b.clientOccurredAt.instant(),c.identity(),c.correlationId)).let{WorkOrderMutationResponse(it.workOrder.response(),it.replayed,c.correlationId)}}
+    @PostMapping("/{id}/instruction-revisions") fun revise(req:HttpServletRequest,@RequestHeader("Idempotency-Key") key:String,@PathVariable id:String,@RequestBody b:ReviseInstructionRequest)=command(req,key,b.operationId){c,op->service.revise(ReviseWorkInstructionCommand(op,id.uuid(),b.payloadSchemaVersion,b.structuredInstructionJson,b.summary,b.changeReason,b.baseVersion,b.clientOccurredAt.instant(),c.identity(),c.correlationId)).let{WorkOrderMutationResponse(it.workOrder.response(),it.replayed,c.correlationId)}}
+    @PostMapping("/{id}/tasks") fun task(req:HttpServletRequest,@RequestHeader("Idempotency-Key") key:String,@PathVariable id:String,@RequestBody b:CreateWorkTaskRequest)=command(req,key,b.operationId){c,op->service.createTask(CreateWorkTaskCommand(op,id.uuid(),b.taskCode,b.title,b.description,b.sortOrder,b.mandatory,b.estimatedDurationMinutes,b.evidenceRequirementKey,b.baseVersion,b.clientOccurredAt.instant(),c.identity(),c.correlationId)).let{WorkTaskMutationResponse(it.workOrder.response(),it.taskId.toString(),it.replayed,c.correlationId)}}
+    @PostMapping("/{id}/dependencies") fun dependency(req:HttpServletRequest,@RequestHeader("Idempotency-Key") key:String,@PathVariable id:String,@RequestBody b:AddWorkDependencyRequest)=command(req,key,b.operationId){c,op->service.addDependency(AddWorkDependencyCommand(op,id.uuid(),b.predecessorWorkOrderId.uuid(),enum(b.dependencyType),b.lagMinutes,b.baseVersion,b.clientOccurredAt.instant(),c.identity(),c.correlationId)).let{WorkDependencyMutationResponse(it.workOrder.response(),it.dependencyId.toString(),it.replayed,c.correlationId)}}
+    @DeleteMapping("/{id}/dependencies/{dependencyId}") fun removeDependency(req:HttpServletRequest,@RequestHeader("Idempotency-Key") key:String,@PathVariable id:String,@PathVariable dependencyId:String,@RequestBody b:RemoveWorkDependencyRequest)=command(req,key,b.operationId){c,op->service.removeDependency(RemoveWorkDependencyCommand(op,id.uuid(),dependencyId.uuid(),b.baseVersion,b.baseDependencyVersion,b.clientOccurredAt.instant(),c.identity(),c.correlationId)).let{WorkDependencyMutationResponse(it.workOrder.response(),it.dependencyId.toString(),it.replayed,c.correlationId)}}
+}
+
+@RestController
+@RequestMapping("/v1/work-tasks")
+class WorkTaskController(private val service:WorkService){
+    @PutMapping("/{id}") fun update(req:HttpServletRequest,@RequestHeader("Idempotency-Key") key:String,@PathVariable id:String,@RequestBody b:UpdateWorkTaskRequest)=command(req,key,b.operationId){c,op->service.updateTask(UpdateWorkTaskCommand(op,id.uuid(),b.taskCode,b.title,b.description,b.sortOrder,b.mandatory,b.estimatedDurationMinutes,b.evidenceRequirementKey,enum(b.state),b.baseTaskVersion,b.baseWorkOrderVersion,b.clientOccurredAt.instant(),c.identity(),c.correlationId)).let{WorkTaskMutationResponse(it.workOrder.response(),it.taskId.toString(),it.replayed,c.correlationId)}}
+}
+
+private fun WorkOrderSnapshot.response()=WorkOrderResponse(workOrderId.toString(),organizationId.toString(),workOrderCode,projectId.toString(),siteId.toString(),projectSiteId.toString(),areaId?.toString(),workPackageId?.toString(),title,description,lifecycleState.name,readinessState.name,plannedStart?.toString(),plannedEnd?.toString(),priorityCode,countsTowardProjectProgress,progressWeight.toPlainString(),baselineVersion,createdAt.toString(),updatedAt.toString(),version,binding?.let{WorkBindingResponse(it.bindingId.toString(),it.bindingRevision,it.workType.response(),it.assignmentPolicy.response(),it.readinessPolicy.response(),it.evidencePolicy.response(),it.reviewPolicy.response(),it.trackingPolicy?.response(),it.checklistTemplate?.response(),it.instructionTemplate?.response(),it.createdAt.toString())},instruction?.let{WorkInstructionResponse(it.instructionRevisionId.toString(),it.revision,it.sourceTemplate?.response(),it.payloadSchemaVersion,it.structuredPayloadJson,it.summary,it.changeReason,it.createdAt.toString(),it.correlationId)},checklist.map{ChecklistItemResponse(it.itemId.toString(),it.itemKey,it.label,it.required,it.sortOrder,it.completionState,it.evidenceRequirementKey,it.version)},requirements.map{RequirementResponse(it.requirementId.toString(),it.family,it.key,it.sourceConfig?.response(),it.required,it.satisfactionState,it.version)},tasks.map{WorkTaskResponse(it.taskId.toString(),it.taskCode,it.title,it.description,it.sortOrder,it.mandatory,it.estimatedDurationMinutes,it.evidenceRequirementKey,it.state.name,it.version)},dependencies.map{WorkDependencyResponse(it.dependencyId.toString(),it.predecessorWorkOrderId.toString(),it.successorWorkOrderId.toString(),it.type.name,it.lagMinutes,it.version)})
+private fun ConfigRef.response()=ConfigRefResponse(id.toString(),code,name,revision)
+private inline fun <reified T:Enum<T>> enum(value:String):T=runCatching{enumValueOf<T>(value)}.getOrElse{throw ProductApiException("INVALID_ENUM","A work command enum value is invalid.",HttpStatus.BAD_REQUEST)}
+private fun String.uuid()=runCatching{UUID.fromString(this)}.getOrElse{throw ProductApiException("INVALID_ID","A work command identifier is invalid.",HttpStatus.BAD_REQUEST)}
+private fun String.instant()=runCatching{Instant.parse(this)}.getOrElse{throw ProductApiException("INVALID_INSTANT","A work command timestamp is invalid.",HttpStatus.BAD_REQUEST)}
+private fun HiltechRequestContextSnapshot.identity()=identityId?.let { runCatching { UUID.fromString(it) }.getOrNull() }?:throw ProductApiException("AUTHENTICATION_REQUIRED","An authenticated identity is required.",HttpStatus.UNAUTHORIZED)
+private inline fun <T> command(req:HttpServletRequest,key:String,raw:String,block:(HiltechRequestContextSnapshot,UUID)->T):T{val context=HiltechRequestContext.current(req);val operation=raw.uuid();IdempotencyKeyContract.requireMatches(key,operation);return block(context,operation)}
