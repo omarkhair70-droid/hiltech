@@ -101,7 +101,10 @@ WorkOrder.readinessState is derived from current WorkRequirementInstance truth.
 ### Source behavior
 
 ASSIGNEE:
-- satisfied by valid active assignment/eligible target rules as policy defines.
+- **pre-assignment readiness must not be circular**;
+- before lifecycle ASSIGNED, this requirement means the policy's minimum executable eligible-target set exists now;
+- after assignment, it also verifies the active assignment still resolves to an eligible current target;
+- therefore `EvaluateReadiness` can produce READY before `AssignWork` without pretending an assignment already exists.
 
 DEPENDENCY:
 - predecessor WorkOrders satisfy the bound rule.
@@ -152,6 +155,8 @@ Assignment:
 
 Lifecycle:
 `PLANNED + readiness READY -> ASSIGNED`.
+
+Project may be READY or ACTIVE according to current Project scheduling context; StartWork remains a Phase-6 execution concern and requires the later execution gate.
 
 An explicit valid waiver may satisfy the policy path where allowed.
 
@@ -226,6 +231,8 @@ Warehouse-dependent requirements visibly say authoritative availability is pendi
 ## 13. Tests
 
 - lifecycle/readiness separation.
+- ASSIGNEE readiness is satisfiable from an eligible-target set before assignment; no circular dependency.
+- after assignment, loss of target eligibility makes the ASSIGNEE requirement fail on reevaluation.
 - cannot assign BLOCKED work without valid policy waiver.
 - AUTO exactly-one behavior.
 - AUTO ambiguous set routes confirmation.
