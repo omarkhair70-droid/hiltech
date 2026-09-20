@@ -114,3 +114,75 @@ CREATE INDEX idx_employment_employee_history
         start_date DESC,
         id DESC
     );
+
+
+-- People administration authority is explicit data, not a job title or a broad
+-- organization-admin shortcut. It is projected to OpenFGA and revalidated
+-- against current organization/team membership before use.
+CREATE TABLE people_authority_binding (
+    id uuid PRIMARY KEY,
+    organization_id uuid NOT NULL
+        REFERENCES organization(id) ON DELETE RESTRICT,
+    authority_key varchar(64) NOT NULL
+        CHECK (authority_key = 'PEOPLE_ADMIN'),
+    principal_type varchar(16) NOT NULL
+        CHECK (principal_type IN ('USER', 'TEAM')),
+    principal_user_id uuid NULL
+        REFERENCES user_identity(id) ON DELETE RESTRICT,
+    principal_team_id uuid NULL
+        REFERENCES team(id) ON DELETE RESTRICT,
+    effective_from timestamptz NOT NULL,
+    effective_to timestamptz NULL,
+    active boolean NOT NULL DEFAULT true,
+    created_by_user_id uuid NOT NULL
+        REFERENCES user_identity(id) ON DELETE RESTRICT,
+    created_at timestamptz NOT NULL,
+    version bigint NOT NULL DEFAULT 1
+        CHECK (version >= 1),
+    CHECK (
+        (
+            principal_type = 'USER'
+            AND principal_user_id IS NOT NULL
+            AND principal_team_id IS NULL
+        )
+        OR
+        (
+            principal_type = 'TEAM'
+            AND principal_team_id IS NOT NULL
+            AND principal_user_id IS NULL
+        )
+    ),
+    CHECK (
+        effective_to IS NULL
+        OR effective_to >= effective_from
+    )
+);
+
+CREATE UNIQUE INDEX uq_people_authority_binding_current_user
+    ON people_authority_binding (
+        organization_id,
+        authority_key,
+        principal_user_id
+    )
+    WHERE active = true
+      AND principal_type = 'USER'
+      AND effective_to IS NULL;
+
+CREATE UNIQUE INDEX uq_people_authority_binding_current_team
+    ON people_authority_binding (
+        organization_id,
+        authority_key,
+        principal_team_id
+    )
+    WHERE active = true
+      AND principal_type = 'TEAM'
+      AND effective_to IS NULL;
+
+CREATE INDEX idx_people_authority_binding_org_current
+    ON people_authority_binding (
+        organization_id,
+        authority_key,
+        active,
+        effective_from,
+        effective_to
+    );
