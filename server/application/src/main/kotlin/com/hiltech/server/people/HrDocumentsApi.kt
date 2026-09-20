@@ -27,6 +27,16 @@ data class CreateEmployeeDocumentRequest(
     val retentionPolicyCode: String? = null,
 )
 
+data class CreateOwnEmployeeDocumentRequest(
+    val operationId: String,
+    val organizationId: String,
+    val baseEmployeeVersion: Long,
+    val documentTypeCode: String,
+    val documentLabel: String? = null,
+    val issueDate: String? = null,
+    val expiryDate: String? = null,
+)
+
 data class VerifyHrRecordRequest(
     val operationId: String,
     val baseVersion: Long,
@@ -121,6 +131,145 @@ data class CertificationEligibilityListResponse(
     val items: List<CertificationEligibilityResponse>,
     val correlationId: String,
 )
+
+@RestController
+class OwnHrDocumentsController(
+    private val service: HrDocumentsService,
+) {
+    @GetMapping("/v1/me/employee-documents")
+    fun documents(
+        servletRequest:
+            HttpServletRequest,
+        @RequestParam
+        organizationId: String,
+    ): EmployeeDocumentListResponse {
+        val context =
+            HiltechRequestContext.current(
+                servletRequest,
+            )
+
+        return EmployeeDocumentListResponse(
+            items =
+                service.ownDocuments(
+                    actorUserId =
+                        context
+                            .requireHrIdentityId(),
+                    organizationId =
+                        organizationId
+                            .toHrUuid(
+                                "INVALID_ORGANIZATION_ID",
+                            ),
+                ).map {
+                    it.toResponse()
+                },
+            correlationId =
+                context.correlationId,
+        )
+    }
+
+    @PostMapping("/v1/me/employee-documents")
+    fun createDocument(
+        servletRequest:
+            HttpServletRequest,
+        @RequestHeader(
+            name = "Idempotency-Key",
+        )
+        idempotencyKey: String,
+        @RequestBody
+        request:
+            CreateOwnEmployeeDocumentRequest,
+    ): EmployeeDocumentCommandResponse {
+        val context =
+            HiltechRequestContext.current(
+                servletRequest,
+            )
+        val operationId =
+            request.operationId
+                .toHrUuid(
+                    "INVALID_OPERATION_ID",
+                )
+        IdempotencyKeyContract
+            .requireMatches(
+                idempotencyKey,
+                operationId,
+            )
+
+        val result =
+            service.createOwnDocument(
+                CreateOwnEmployeeDocumentCommand(
+                    operationId =
+                        operationId,
+                    organizationId =
+                        request.organizationId
+                            .toHrUuid(
+                                "INVALID_ORGANIZATION_ID",
+                            ),
+                    baseEmployeeVersion =
+                        request
+                            .baseEmployeeVersion,
+                    documentTypeCode =
+                        request.documentTypeCode,
+                    documentLabel =
+                        request.documentLabel,
+                    issueDate =
+                        request.issueDate
+                            ?.toHrLocalDate(
+                                "INVALID_ISSUE_DATE",
+                            ),
+                    expiryDate =
+                        request.expiryDate
+                            ?.toHrLocalDate(
+                                "INVALID_EXPIRY_DATE",
+                            ),
+                    actorUserId =
+                        context
+                            .requireHrIdentityId(),
+                    correlationId =
+                        context.correlationId,
+                ),
+            )
+
+        return EmployeeDocumentCommandResponse(
+            document =
+                result.document.toResponse(),
+            replayed =
+                result.replayed,
+            correlationId =
+                context.correlationId,
+        )
+    }
+
+    @GetMapping("/v1/me/certifications")
+    fun certifications(
+        servletRequest:
+            HttpServletRequest,
+        @RequestParam
+        organizationId: String,
+    ): CertificationListResponse {
+        val context =
+            HiltechRequestContext.current(
+                servletRequest,
+            )
+
+        return CertificationListResponse(
+            items =
+                service.ownCertifications(
+                    actorUserId =
+                        context
+                            .requireHrIdentityId(),
+                    organizationId =
+                        organizationId
+                            .toHrUuid(
+                                "INVALID_ORGANIZATION_ID",
+                            ),
+                ).map {
+                    it.toResponse()
+                },
+            correlationId =
+                context.correlationId,
+        )
+    }
+}
 
 @RestController
 @RequestMapping("/v1/employees")
