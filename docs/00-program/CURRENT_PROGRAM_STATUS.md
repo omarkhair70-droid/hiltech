@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 3 ACTIVE — SLICE 01/02 MERGED — SLICE 03 HR DOCUMENTS / CERTIFICATIONS IMPLEMENTATION AUTHORIZED**
+**PHASE 3 ACTIVE — SLICE 01/02 MERGED — SLICE 03 HR DOCUMENTS / CERTIFICATIONS VERIFIED / READY TO MERGE**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -240,7 +240,7 @@ Immediate continuation:
 2. Phase 3 scope/slice plan is frozen in `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md`.
 3. Phase 3 / Slice 01 — Employee / Employment Core is **VERIFIED / MERGED** at `0183a273f1a01d3b9d0277df2ac2e8bbe2f98390`; post-merge Bootstrap `35478418690` PASS.
 4. Slice 02 is **VERIFIED / MERGED** at `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` PASS.
-5. Slice 03 HR Documents / Certifications is **IMPLEMENTATION AUTHORIZED**. Keep catalogs configurable and reuse the existing Evidence/object-storage lifecycle through EMPLOYEE_DOCUMENT target dispatch.
+5. Slice 03 HR Documents / Certifications is **VERIFIED / READY TO MERGE**. Canonical tested code head `9fa0b95de549bd92cc7d3a554cd7cdcf941ef35f`; Bootstrap `35482995671`, Phase 2 runtime `35482995728`, Phase 1 OIDC `35482995573` PASS. Keep catalogs configurable and reuse the existing Evidence/object-storage lifecycle through EMPLOYEE_DOCUMENT target dispatch.
 5. Continue consuming Reality Evidence/Facts by phase; current employee-master/import/legal HR unknowns are scoped out rather than guessed.
 6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 
