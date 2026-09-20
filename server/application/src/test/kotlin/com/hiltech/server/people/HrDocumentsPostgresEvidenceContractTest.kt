@@ -143,6 +143,8 @@ class HrDocumentsPostgresEvidenceContractTest {
                         persistence,
                     peopleAuthorization =
                         authorization,
+                    selfServicePolicy =
+                        denySelfServicePolicy(),
                     idempotency =
                         idempotency,
                     audit =
@@ -251,6 +253,9 @@ class HrDocumentsPostgresEvidenceContractTest {
                         persistence,
                     authorization =
                         authorization,
+                    selfServicePolicy =
+                        denySelfServicePolicy(),
+                    clock = clock,
                 )
             val fakeStorage =
                 FixtureEvidenceStorage(
@@ -1263,4 +1268,34 @@ class HrDocumentsPostgresEvidenceContractTest {
             )
         }
     }
+    private fun denySelfServicePolicy():
+        OnboardingSelfServicePolicyPort =
+        object :
+            OnboardingSelfServicePolicyPort {
+            override fun ownEmployee(
+                identityId: UUID,
+                organizationId: UUID,
+                at: Instant,
+            ): OnboardingEmployeeContext? =
+                null
+
+            override fun canViewEmployeeDocument(
+                identityId: UUID,
+                organizationId: UUID,
+                employeeId: UUID,
+                documentTypeCode: String,
+                at: Instant,
+            ): Boolean =
+                false
+
+            override fun canSubmitEmployeeDocument(
+                identityId: UUID,
+                organizationId: UUID,
+                employeeId: UUID,
+                documentTypeCode: String,
+                at: Instant,
+            ): Boolean =
+                false
+        }
+
 }

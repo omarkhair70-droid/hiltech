@@ -1376,9 +1376,17 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                         ): EmployeeDocumentEvidenceTargetSnapshot? =
                             null
 
-                        override fun canManage(
+                        override fun canReserve(
                             identityId: UUID,
-                            organizationId: UUID,
+                            target:
+                                EmployeeDocumentEvidenceTargetSnapshot,
+                        ): Boolean =
+                            false
+
+                        override fun canAccess(
+                            identityId: UUID,
+                            target:
+                                EmployeeDocumentEvidenceTargetSnapshot,
                         ): Boolean =
                             false
 
