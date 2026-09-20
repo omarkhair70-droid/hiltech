@@ -146,7 +146,6 @@ fun main() {
             ),
         )
         refreshSecurity()
-        refreshPeople()
     }
 
     fun refreshPeople() {
@@ -441,6 +440,7 @@ fun main() {
                 )
             }.onSuccess { identity ->
                 showSignedIn(identity)
+                refreshPeople()
             }.onFailure(::showFailure)
         }
     }
