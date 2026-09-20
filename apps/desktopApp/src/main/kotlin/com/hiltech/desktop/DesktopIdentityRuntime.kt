@@ -18,6 +18,9 @@ import com.hiltech.shared.core.people.EmployeeCommandResponseDto
 import com.hiltech.shared.core.people.EmployeeDetailDto
 import com.hiltech.shared.core.people.EmployeeDirectoryDto
 import com.hiltech.shared.core.people.PeopleApiClient
+import com.hiltech.shared.core.people.WorkforceAssignmentApiClient
+import com.hiltech.shared.core.people.WorkforceAssignmentDto
+import com.hiltech.shared.core.people.WorkforceStructureDto
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.Dispatchers
@@ -74,18 +77,24 @@ class DesktopIdentityRuntime(
         },
     )
 
+    private val productApi =
+        HiltechApiClient(
+            client = httpClient,
+            baseUrl = apiBaseUrl,
+            accessTokenProvider = {
+                session?.currentAccessToken()
+            },
+            correlationIdProvider = {
+                UUID.randomUUID().toString()
+            },
+        )
+
     private val peopleApi =
-        PeopleApiClient(
-            HiltechApiClient(
-                client = httpClient,
-                baseUrl = apiBaseUrl,
-                accessTokenProvider = {
-                    session?.currentAccessToken()
-                },
-                correlationIdProvider = {
-                    UUID.randomUUID().toString()
-                },
-            ),
+        PeopleApiClient(productApi)
+
+    private val workforceAssignmentApi =
+        WorkforceAssignmentApiClient(
+            productApi,
         )
 
     suspend fun signIn(
@@ -274,6 +283,31 @@ class DesktopIdentityRuntime(
             installationId =
                 installationId,
         )
+    }
+
+    suspend fun ownWorkforceAssignment(
+        organizationId: String,
+    ): WorkforceAssignmentDto {
+        ensureConfigured()
+        return workforceAssignmentApi.own(
+            organizationId =
+                organizationId,
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun workforceStructure(
+        organizationId: String,
+    ): WorkforceStructureDto {
+        ensureConfigured()
+        return workforceAssignmentApi
+            .structure(
+                organizationId =
+                    organizationId,
+                installationId =
+                    installationId,
+            )
     }
 
     suspend fun logout() {
