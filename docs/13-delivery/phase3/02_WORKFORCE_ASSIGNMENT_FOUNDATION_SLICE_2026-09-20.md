@@ -1,7 +1,7 @@
 # Phase 3 / Slice 02 — Workforce Assignment / Reporting Structure
 
 Date: 2026-09-20  
-Status: **IMPLEMENTATION AUTHORIZED / CONTRACT FROZEN**
+Status: **VERIFIED / READY TO MERGE**
 
 ## Reality basis
 
@@ -275,8 +275,46 @@ Require:
 - inherited People Slice 01 regression;
 - exact-head CI.
 
+## Verification closure
+
+Canonical tested code head:
+
+`b838e92f1126ebf1081c81568d5abb90d0c17edd`
+
+Exact-head verification:
+
+- Bootstrap Phase 0 `35479675064` — **PASS**
+  - V0016 migration + jOOQ generation — PASS
+  - WorkforceAssignment PostgreSQL/OpenFGA contract — PASS
+  - TeamMembershipAuthority aggregate/manual+People shared tuple convergence — PASS
+  - inherited Slice 01/Phase 0–2 local-platform regressions — PASS
+- Phase 2 Shared Command Runtime `35479675067` — **PASS**
+- Phase 1 Native OIDC Production Smoke `35479675062`, attempt 2 — **PASS**
+  - Android production shell render — PASS
+  - Windows/Desktop production shell render — PASS
+  - provider/browser smoke — PASS
+
+Verified implementation includes:
+
+- effective-dated WorkforceAssignment persistence and safe reads;
+- one-current-assignment baseline with historical rows representable;
+- same-organization Employee/Team/reporting-manager invariants;
+- self-reference and reporting-cycle rejection;
+- future activation deliberately deferred to Slice 05;
+- People-authorized idempotent assignment creation;
+- explicit role metadata with no permission inference;
+- People-owned Team membership linked to source WorkforceAssignment;
+- EmployeeIdentityLinked backfill for previously unlinked Employees;
+- aggregate `(team,user)` authority generation preventing stale OpenFGA revoke across manual + People membership sources;
+- manual Team membership preservation;
+- shared KMP WorkforceAssignment client contracts;
+- Android own Team/role/manager proof surface;
+- Windows own assignment + organization-structure proof surface.
+
+No assignment-change workflow, Project/Site/Work assignment, attendance, payroll, Team redesign or role-derived permission scope was introduced.
+
 ## Contract conclusion
 
-**IMPLEMENTATION AUTHORIZED.**
+**VERIFIED / READY TO MERGE.**
 
-Slice 01 merge/post-merge closure is durably recorded on `main`. Implement only the Slice 02 scope above. Do not open Slice 03 scope until Slice 02 is verified/merged.
+Merge only the verified closure head after docs-only closure checks. After merge, require post-merge `main` Bootstrap PASS before opening Slice 03 implementation.
