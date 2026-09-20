@@ -367,6 +367,14 @@ class S3CompatibleEvidenceObjectStorage(
             return "image/webp"
         }
 
+        if (
+            bytes.size >= 5 &&
+            bytes.copyOfRange(0, 5)
+                .decodeToString() == "%PDF-"
+        ) {
+            return "application/pdf"
+        }
+
         return null
     }
 

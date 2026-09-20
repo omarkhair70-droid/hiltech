@@ -1368,6 +1368,27 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                     persistence,
                 targetAuthorization =
                     targetAuthorization,
+                employeeDocumentTarget =
+                    object :
+                        EmployeeDocumentEvidenceTargetPort {
+                        override fun loadTarget(
+                            documentId: UUID,
+                        ): EmployeeDocumentEvidenceTargetSnapshot? =
+                            null
+
+                        override fun canManage(
+                            identityId: UUID,
+                            organizationId: UUID,
+                        ): Boolean =
+                            false
+
+                        override fun attachEvidence(
+                            documentId: UUID,
+                            evidenceId: UUID,
+                            at: Instant,
+                        ): Boolean =
+                            false
+                    },
                 idempotency =
                     idempotency,
                 projectionWriter =

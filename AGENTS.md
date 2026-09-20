@@ -11,7 +11,7 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
 - Phase 2 — Shared Product Infrastructure: **VERIFIED / COMPLETE**
-- Current execution phase: **Phase 3 — People / Internal Workforce Core / Slice 03 — HR Documents / Certifications — IMPLEMENTATION AUTHORIZED**
+- Current execution phase: **Phase 3 — People / Internal Workforce Core / Slice 03 — HR Documents / Certifications — VERIFIED / READY TO MERGE**
 - Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
 - Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
 - Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
@@ -55,12 +55,14 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 02 verification: Bootstrap `35479675064` / Phase 2 runtime `35479675067` / Phase 1 OIDC `35479675062` attempt 2 — **PASS**
 - Slice 02 merge commit: `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` — **PASS**
 - Slice 03 reality closure: `docs/13-delivery/phase3/03_HR_DOCUMENTS_CERTIFICATIONS_REALITY_CLOSURE_2026-09-20.md` — **PASS**
-- Slice 03 implementation contract: `docs/13-delivery/phase3/03_HR_DOCUMENTS_CERTIFICATIONS_SLICE_2026-09-20.md` — **IMPLEMENTATION AUTHORIZED**
-- Current rule: implement EmployeeDocument/Certification + EMPLOYEE_DOCUMENT Evidence target only; do not pull onboarding/self-service policy into Slice 03.
+- Slice 03 implementation contract: `docs/13-delivery/phase3/03_HR_DOCUMENTS_CERTIFICATIONS_SLICE_2026-09-20.md` — **VERIFIED / READY TO MERGE**
+- Slice 03 canonical tested code head: `9fa0b95de549bd92cc7d3a554cd7cdcf941ef35f`
+- Slice 03 exact-head verification: Bootstrap `35482995671` / Phase 2 runtime `35482995728` / Phase 1 OIDC `35482995573` — **PASS**
+- Current rule: merge only after closure metadata remains consistent; do not pull onboarding/self-service policy into Slice 03.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
-- Infrastructure baseline: **OCI**, provider architecture already selected
+- Infrastructure provider baseline: **OCI research/contract selected; activation/purchase remains separately gated**
 
 Canonical current status:
 `docs/00-program/CURRENT_PROGRAM_STATUS.md`
@@ -74,12 +76,13 @@ Canonical first-slice stack:
 ## Mandatory read order before changing code
 
 1. `AGENTS.md`
-2. `docs/00-program/CURRENT_PROGRAM_STATUS.md`
-3. `docs/13-delivery/IMPLEMENTATION_ORDER.md`
-4. the relevant phase/domain/workflow/object contract
-5. `docs/12-stack/FINAL_STACK.md` when technology/runtime is involved
-6. first-slice Freeze pack when touching Project / Site / Work / Warehouse / Evidence / Offline / Authorization contracts
-7. `docs/01-reality/REALITY_EVIDENCE_REGISTER.md` when a phase depends on real HILTECH operating facts
+2. `docs/00-program/HILTECH_PRODUCT_OWNERSHIP_PRINCIPLES.md`
+3. `docs/00-program/CURRENT_PROGRAM_STATUS.md`
+4. `docs/13-delivery/IMPLEMENTATION_ORDER.md`
+5. the relevant phase/domain/workflow/object contract
+6. `docs/12-stack/FINAL_STACK.md` when technology/runtime is involved
+7. first-slice Freeze pack when touching Project / Site / Work / Warehouse / Evidence / Offline / Authorization contracts
+8. `docs/01-reality/REALITY_EVIDENCE_REGISTER.md` when a phase depends on real HILTECH operating facts
 
 Do not start by rediscovering architecture already frozen in these documents.
 
@@ -178,21 +181,43 @@ Canonical policy:
 Canonical durable reality notes:
 `docs/01-reality/REALITY_EVIDENCE_REGISTER.md`
 
+## Product ownership / external dependency rule
+
+Canonical owner intent:
+`docs/00-program/HILTECH_PRODUCT_OWNERSHIP_PRINCIPLES.md`
+
+Apply it as a governance layer, not as permission to reopen verified phases.
+
+Required interpretation:
+- distinguish **required capability** from a specific provider implementation;
+- architecture-ready / adapter-ready does **not** authorize purchase, subscription, certificate issuance, provider activation, new server procurement, or hardware procurement;
+- paid/managed services are allowed when their reliability/security/operational value justifies their cost — HILTECH is cost-aware, not "cheap at any risk";
+- keep optional external integrations behind explicit adapters/contracts and preserve honest disabled/`NO_PROVIDER` behavior where applicable;
+- do not let SMS/email/bank/camera/access-control/MDM/other optional integrations become accidental blockers for the internal core when a safe internal/manual path exists;
+- backup/restore, authorization, audit, migration safety, secret hygiene and other real reliability controls are not optional merely because they are invisible;
+- research real HILTECH reality, mature patterns and official provider/device documentation before inventing important workflow/integration behavior;
+- human-facing slices require representative flow review, not CI alone.
+
+If this governance intent exposes a true contradiction with a frozen ADR/contract, use explicit change control and preserve the prior research/history.
+
 ## Infrastructure rule
 
 Do not reselect hosting during feature work.
 
-Frozen direction:
-- OCI production baseline,
-- Container Instances preferred,
-- Compute fallback,
-- OCI Database with PostgreSQL,
-- OCI Object Storage/KMS/Secrets,
-- OpenTelemetry remains vendor-neutral in application code.
+Provider architecture direction:
+- OCI remains the accepted researched first production baseline;
+- Container Instances preferred / Compute fallback remain deployment candidates;
+- OCI Database with PostgreSQL and OCI Object Storage/KMS/Secrets remain researched managed implementations;
+- OpenTelemetry and application/domain contracts remain provider-neutral.
 
-Existing infrastructure may be reused only when it satisfies the frozen isolation/security/operability contract.
+Interpretation:
+- this is **not** automatic purchase/activation authorization;
+- production cutover may activate managed services when cost/risk/reliability review justifies them;
+- existing infrastructure may be reused when it satisfies the frozen isolation/security/operability contract;
+- do not create a new VM/server, buy on-prem hardware, or activate a paid provider merely because a feature phase starts;
+- do not weaken backup/restore/security merely to avoid cost.
 
-Do not create a new VM/server or buy on-prem hardware just because a feature phase starts.
+Do not reselect hosting casually during feature work. If provider economics or operational evidence materially contradict the baseline, use explicit change control.
 
 ## Security / secrets
 

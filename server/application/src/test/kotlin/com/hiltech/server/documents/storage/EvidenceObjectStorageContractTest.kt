@@ -165,6 +165,78 @@ class EvidenceObjectStorageContractTest {
     }
 
     @Test
+    fun pdfSignatureIsDetectedForSignedDocumentEvidence() {
+        assumeTrue(enabled)
+
+        val storage =
+            S3CompatibleEvidenceObjectStorage(
+                properties =
+                    EvidenceStorageProperties(
+                        enabled = true,
+                        endpoint = endpoint,
+                        region = region,
+                        accessKey = accessKey,
+                        secretKey = secretKey,
+                        bucket = bucket,
+                        uploadExpirySeconds = 600,
+                        downloadExpirySeconds = 300,
+                    ),
+            )
+
+        storage.use {
+            val bytes =
+                (
+                    "%PDF-1.7\n" +
+                        "HILTECH HR document fixture\n" +
+                        "%%EOF\n"
+                ).toByteArray()
+            val spec =
+                evidenceSpec(
+                    bytes = bytes,
+                    evidenceId =
+                        UUID.randomUUID(),
+                    contentType =
+                        "application/pdf",
+                )
+            val upload =
+                storage.createUploadTarget(
+                    spec,
+                )
+
+            val status =
+                httpPut(
+                    upload = upload,
+                    contentType =
+                        spec.contentType,
+                    bytes = bytes,
+                )
+            assertTrue(
+                status in 200..299,
+            )
+
+            val finalized =
+                storage.verifyUploadedObject(
+                    spec,
+                )
+            assertTrue(
+                finalized is
+                    EvidenceFinalizeVerification.Verified,
+            )
+            finalized as
+                EvidenceFinalizeVerification.Verified
+
+            assertEquals(
+                "application/pdf",
+                finalized.detectedContentType,
+            )
+            assertEquals(
+                spec.expectedSha256Hex,
+                finalized.sha256Hex,
+            )
+        }
+    }
+
+    @Test
     fun evidenceSpecRejectsObjectsBeyondFrozenSixteenMiBLimit() {
         val digest = "a".repeat(64)
 
@@ -189,12 +261,14 @@ class EvidenceObjectStorageContractTest {
     private fun evidenceSpec(
         bytes: ByteArray,
         evidenceId: UUID,
+        contentType: String =
+            "application/octet-stream",
     ): EvidenceUploadSpec =
         EvidenceUploadSpec(
             evidenceId = evidenceId,
             organizationId = UUID.randomUUID(),
             objectVersionId = UUID.randomUUID(),
-            contentType = "application/octet-stream",
+            contentType = contentType,
             expectedSizeBytes = bytes.size.toLong(),
             expectedSha256Hex = sha256Hex(bytes),
         )
