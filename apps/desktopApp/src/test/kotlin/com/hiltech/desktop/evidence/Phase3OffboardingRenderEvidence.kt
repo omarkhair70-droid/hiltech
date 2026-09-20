@@ -61,7 +61,8 @@ fun main() = application {
         )
 
         LaunchedEffect(Unit) {
-            withFrameNanos { }
+            try {
+                withFrameNanos { }
             withFrameNanos { }
             delay(450)
             captureWindow(
@@ -102,7 +103,9 @@ fun main() = application {
                     "coordination_boundary=PASS " +
                     "former_history=PASS",
             )
-            exitApplication()
+            } finally {
+                exitApplication()
+            }
         }
     }
 }
