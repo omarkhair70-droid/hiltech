@@ -95,6 +95,35 @@ object RoleTeamAuthorizationProjectionFactory {
             occurredAt = occurredAt,
         )
 
+    fun teamMembershipAggregate(
+        eventId: UUID,
+        identityId: UUID,
+        teamId: UUID,
+        aggregateVersion: Long,
+        desiredState: AuthorizationDesiredState,
+        occurredAt: Instant,
+    ): AuthorizationProjectionIntent =
+        AuthorizationProjectionIntent(
+            eventId = eventId,
+            tuple =
+                RoleTeamAuthorizationRelations
+                    .teamMember(
+                        identityId =
+                            identityId,
+                        teamId = teamId,
+                    ),
+            desiredState = desiredState,
+            sourceType =
+                "TeamMembershipAuthority",
+            sourceId =
+                "$teamId:$identityId",
+            sourceVersion =
+                aggregateVersion,
+            eventType =
+                "TEAM_MEMBERSHIP_AUTHORITY_CHANGED",
+            occurredAt = occurredAt,
+        )
+
     fun teamManager(
         eventId: UUID,
         managerIdentityId: UUID,
