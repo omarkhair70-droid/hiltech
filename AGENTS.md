@@ -11,7 +11,7 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
 - Phase 2 — Shared Product Infrastructure: **VERIFIED / COMPLETE**
-- Current execution phase: **Phase 3 — People / Internal Workforce Core / Slice 06 — Offboarding Skeleton — VERIFIED / READY TO MERGE**
+- Current execution phase: **Phase 3 — People / Internal Workforce Core — VERIFIED / COMPLETE; Phase 4 owner-facing entry review is next (NO PHASE 4 PRODUCTION CODE YET)**
 - Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
 - Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
 - Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
@@ -69,10 +69,12 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 05 canonical tested code head: `1c9986ef369cdd40b16cea53726d19f7fb10e799`
 - Slice 05 merge commit: `51648418a69df285334f76f5b1b4cfca9ec3cc43`; post-merge Bootstrap `35492558129` — **PASS**
 - Slice 06 reality closure: `docs/13-delivery/phase3/06_OFFBOARDING_SKELETON_REALITY_CLOSURE_2026-09-20.md` — **PASS**
-- Slice 06 implementation contract: `docs/13-delivery/phase3/06_OFFBOARDING_SKELETON_SLICE_2026-09-20.md` — **VERIFIED / READY TO MERGE**
-- Slice 06 canonical tested code head: `d88f5234bc100c5541c7d27608435e59c5fd986f`
-- Slice 06 exact-head verification: Bootstrap `35494892676` attempt 2 / Phase 2 runtime `35494892627` / Phase 1 OIDC `35494892665` / Onboarding proof `35494892659` / Assignment Change proof `35494892649` / Offboarding Human Proof `35494892672` — **PASS**
-- Current rule: merge only the verified Slice 06 closure lineage; then post-merge Bootstrap + Phase 3 final gap review. Do not start Phase 4 production code before that closure/review.
+- Slice 06 implementation contract: `docs/13-delivery/phase3/06_OFFBOARDING_SKELETON_SLICE_2026-09-20.md` — **VERIFIED / MERGED**
+- Slice 06 final closure head: `4d941970563b84245061d5ab80101550243b6000`
+- Slice 06 final exact-head verification: Bootstrap `35495373713` attempt 2 / Phase 2 runtime `35495373785` / Phase 1 OIDC `35495373737` / Onboarding proof `35495373800` / Assignment Change proof `35495373780` / Offboarding Human Proof `35495373723` — **PASS**
+- Slice 06 merge commit: `bc6b61cca744c17814e58d5e212812339cd96409`; post-merge Bootstrap `35495676983` — **PASS**
+- Phase 3 final gap review: `docs/13-delivery/phase3/07_PHASE3_FINAL_GAP_REVIEW_2026-09-20.md` — **PASS / NO ADDITIONAL PHASE 3 SLICE REQUIRED**
+- Current rule: Phase 3 is closed. Next perform the owner-facing Phase 4 Projects / Sites / Work entry review over repository reality/research/contracts; do not start Phase 4 production code before that owner review is frozen.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
