@@ -538,6 +538,7 @@ class JdbcWorkforceAssignmentPersistence(
             orderAndLimit =
                 """
                 ORDER BY
+                    (wa.state = 'ACTIVE') DESC,
                     wa.effective_from DESC,
                     wa.created_at DESC,
                     wa.id DESC
