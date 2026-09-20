@@ -640,36 +640,67 @@ class ActivityProjectionPostgresOpenFgaContractTest {
             at,
         )
 
+        val slice03ProjectSiteId =
+            UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO project_site (
+                id,
+                project_id,
+                site_id,
+                lifecycle_state,
+                version,
+                organization_id
+            )
+            VALUES (
+                ?, ?, ?,
+                'ACTIVE',
+                1,
+                ?
+            )
+            """.trimIndent(),
+            slice03ProjectSiteId,
+            projectId,
+            siteId,
+            organizationId,
+        )
+
         jdbc.update(
             """
             INSERT INTO work_order (
-                id, work_order_code,
+                id, organization_id,
+                work_order_code,
                 project_id, site_id,
+                project_site_id,
                 title,
                 lifecycle_state,
                 readiness_state,
                 priority_code,
+                baseline_version,
                 created_at,
                 created_by,
                 updated_at,
                 version
             )
             VALUES (
-                ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?,
                 'Activity WorkOrder',
                 'DRAFT',
                 'READY',
                 'NORMAL',
+                1,
                 ?, ?, ?, 1
             )
             """.trimIndent(),
             workOrderId,
+            organizationId,
             "WO-" +
                 UUID.randomUUID()
                     .toString()
                     .take(8),
             projectId,
             siteId,
+            slice03ProjectSiteId,
             at,
             actorId,
             at,
