@@ -1,0 +1,100 @@
+name: Contract — Approval Stability
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "server/application/src/main/kotlin/com/hiltech/server/approval/**"
+      - "server/application/src/test/kotlin/com/hiltech/server/approval/**"
+      - ".github/workflows/approval-contract-stability.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  approval-stability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Start PostgreSQL and OpenFGA
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            up -d postgres openfga-migrate openfga
+
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8082/healthz >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8082/healthz >/dev/null
+
+      - name: Load canonical OpenFGA model
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            --profile tools run --rm openfga-cli \
+            store create --model /contracts/first-slice-model.fga \
+            | tee /tmp/hiltech-openfga-create.json
+
+          python3 - <<'PY'
+          import json
+          import os
+          with open("/tmp/hiltech-openfga-create.json", encoding="utf-8") as source:
+              payload = json.load(source)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as target:
+              target.write(f"HILTECH_FGA_STORE_ID={payload['store']['id']}\n")
+              target.write(f"HILTECH_FGA_MODEL_ID={payload['model']['authorization_model_id']}\n")
+          PY
+
+      - name: Repeat Approval contract
+        env:
+          HILTECH_APPROVAL_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://127.0.0.1:5432/hiltech
+          HILTECH_DB_USER: hiltech_app
+          HILTECH_DB_PASSWORD: hiltech-app-local
+          HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+          HILTECH_FGA_ENABLED: "true"
+          HILTECH_FGA_API_URL: http://127.0.0.1:8082
+        run: |
+          set -euo pipefail
+          for run in $(seq 1 12); do
+            echo "APPROVAL_STABILITY_RUN=${run}"
+            ./gradlew :server:application:test \
+              --tests com.hiltech.server.approval.ApprovalEnginePostgresOpenFgaContractTest \
+              --rerun-tasks \
+              --console=plain
+          done
+          echo "HILTECH_APPROVAL_STABILITY_PASS runs=12"
+
+      - name: Test report on failure
+        if: failure()
+        run: |
+          find server/application/build/test-results/test \
+            -type f -name '*.xml' -print -exec cat {} \; \
+            || true
+
+      - name: Stop local platform
+        if: always()
+        run: |
+          docker compose \
+            --env-file infrastructure/local/.env.example \
+            -f infrastructure/local/docker-compose.yml \
+            down -v --remove-orphans
