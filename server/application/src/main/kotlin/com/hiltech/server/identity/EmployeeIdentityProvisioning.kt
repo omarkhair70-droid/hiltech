@@ -136,7 +136,7 @@ internal class KeycloakProvisioningException(
 ) : RuntimeException(message)
 
 @Component
-class JdbcEmployeeIdentityProvisioning(
+internal class JdbcEmployeeIdentityProvisioning(
     private val jdbc: JdbcTemplate,
     transactionManager:
         PlatformTransactionManager,
