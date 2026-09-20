@@ -180,6 +180,7 @@ tasks.register("verifyJooqGeneration") {
             "Person.kt",
             "Employee.kt",
             "Employment.kt",
+            "PeopleAuthorityBinding.kt",
         ).forEach { expected ->
             check(expected in generatedFileNames) {
                 "Generated jOOQ schema is missing required first-slice table source: $expected"
