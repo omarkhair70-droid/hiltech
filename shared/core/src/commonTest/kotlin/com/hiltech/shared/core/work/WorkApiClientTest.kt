@@ -23,6 +23,10 @@ class WorkApiClientTest {
         val createOperation = "66666666-6666-4666-8666-666666666666"
         val planOperation = "77777777-7777-4777-8777-777777777777"
         val activateOperation = "88888888-8888-4888-8888-888888888888"
+        val taskId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val taskOperation = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val dependencyId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        val removeDependencyOperation = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
         val seen = mutableListOf<Triple<HttpMethod, String, String?>>()
 
         val workMutation =
@@ -61,6 +65,24 @@ class WorkApiClientTest {
               "correlationId":"corr-server"
             }
             """.trimIndent()
+        val taskMutation =
+            """
+            {
+              "workOrder": ${workMutation.substringAfter("\"workOrder\": ").substringBeforeLast(",\n  \"replayed\"")},
+              "taskId":"$taskId",
+              "replayed":false,
+              "correlationId":"corr-server"
+            }
+            """.trimIndent()
+        val dependencyMutation =
+            """
+            {
+              "workOrder": ${workMutation.substringAfter("\"workOrder\": ").substringBeforeLast(",\n  \"replayed\"")},
+              "dependencyId":"$dependencyId",
+              "replayed":false,
+              "correlationId":"corr-server"
+            }
+            """.trimIndent()
         val activation =
             """
             {
@@ -89,10 +111,16 @@ class WorkApiClientTest {
                 )
                 respond(
                     content =
-                        if (request.url.encodedPath.endsWith("/activate")) {
-                            activation
-                        } else {
-                            workMutation
+                        when {
+                            request.url.encodedPath.endsWith("/activate") ->
+                                activation
+                            request.url.encodedPath.startsWith("/v1/work-tasks/") ->
+                                taskMutation
+                            request.method == HttpMethod.Delete &&
+                                request.url.encodedPath.contains("/dependencies/") ->
+                                dependencyMutation
+                            else ->
+                                workMutation
                         },
                     status = HttpStatusCode.OK,
                     headers =
@@ -160,6 +188,40 @@ class WorkApiClientTest {
             )
         assertEquals("ACTIVE", active.lifecycleState)
 
+        val taskUpdated =
+            client.updateTask(
+                taskId,
+                UpdateWorkTaskRequestDto(
+                    operationId = taskOperation,
+                    title = "Verify rack position",
+                    sortOrder = 10,
+                    mandatory = true,
+                    state = "CANCELLED",
+                    baseTaskVersion = 1,
+                    baseWorkOrderVersion = 2,
+                    clientOccurredAt = "2026-09-21T00:03:00Z",
+                ),
+                installationId,
+            )
+        assertEquals(taskId, taskUpdated.taskId)
+
+        val dependencyRemoved =
+            client.removeDependency(
+                workOrderId,
+                dependencyId,
+                RemoveWorkDependencyRequestDto(
+                    operationId = removeDependencyOperation,
+                    baseVersion = 3,
+                    baseDependencyVersion = 1,
+                    clientOccurredAt = "2026-09-21T00:04:00Z",
+                ),
+                installationId,
+            )
+        assertEquals(
+            dependencyId,
+            dependencyRemoved.dependencyId,
+        )
+
         val expected: List<Triple<HttpMethod, String, String?>> =
             listOf(
                 Triple(
@@ -176,6 +238,16 @@ class WorkApiClientTest {
                     HttpMethod.Post,
                     "/v1/projects/$projectId/activate",
                     activateOperation,
+                ),
+                Triple(
+                    HttpMethod.Put,
+                    "/v1/work-tasks/$taskId",
+                    taskOperation,
+                ),
+                Triple(
+                    HttpMethod.Delete,
+                    "/v1/work-orders/$workOrderId/dependencies/$dependencyId",
+                    removeDependencyOperation,
                 ),
             )
         assertEquals(expected, seen)
