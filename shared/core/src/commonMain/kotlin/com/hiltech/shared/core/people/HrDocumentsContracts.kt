@@ -14,6 +14,17 @@ data class CreateEmployeeDocumentRequestDto(
 )
 
 @Serializable
+data class CreateOwnEmployeeDocumentRequestDto(
+    val operationId: String,
+    val organizationId: String,
+    val baseEmployeeVersion: Long,
+    val documentTypeCode: String,
+    val documentLabel: String? = null,
+    val issueDate: String? = null,
+    val expiryDate: String? = null,
+)
+
+@Serializable
 data class VerifyHrRecordRequestDto(
     val operationId: String,
     val baseVersion: Long,

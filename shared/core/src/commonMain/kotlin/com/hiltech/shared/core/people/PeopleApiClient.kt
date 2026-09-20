@@ -95,6 +95,46 @@ class PeopleApiClient(
         )
     }
 
+    suspend fun updateOwnContact(
+        request:
+            UpdateOwnEmployeeContactRequestDto,
+        installationId: String,
+    ): EmployeeCommandResponseDto {
+        requireId(request.operationId)
+        requireId(request.organizationId)
+        require(
+            request.employeeBaseVersion >= 1,
+        )
+        require(
+            request.personBaseVersion >= 1,
+        )
+
+        return api.request(
+            method = HttpMethod.Put,
+            path = "/v1/me/employee/profile",
+            options =
+                HiltechRequestOptions(
+                    installationId =
+                        installationId,
+                    idempotencyKey =
+                        request.operationId,
+                ),
+            requestBody =
+                json.encodeToString(
+                    UpdateOwnEmployeeContactRequestDto
+                        .serializer(),
+                    request,
+                ),
+            decode = {
+                json.decodeFromString(
+                    EmployeeCommandResponseDto
+                        .serializer(),
+                    it,
+                )
+            },
+        )
+    }
+
     suspend fun create(
         request:
             CreateEmployeeRequestDto,
