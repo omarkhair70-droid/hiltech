@@ -419,8 +419,14 @@ fun main() {
                                         ownProfile =
                                             current.people
                                                 ?.ownProfile,
+                                        ownWorkforceAssignment =
+                                            current.people
+                                                ?.ownWorkforceAssignment,
                                         directory =
                                             directory,
+                                        workforceStructure =
+                                            current.people
+                                                ?.workforceStructure,
                                         selectedEmployee =
                                             created.employee,
                                     ),
