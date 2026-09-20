@@ -1049,7 +1049,7 @@ class ProjectsPostgresOpenFgaContractTest {
                     ),
                 )
             assertEquals(1, workPackage.plan.workPackages.size)
-            assertEquals("Delivery Team", workPackage.plan.workPackages.single().owner?.principalLabel)
+            assertEquals("Delivery A", workPackage.plan.workPackages.single().owner?.principalLabel)
 
             val dependency =
                 planningService.addDependency(
