@@ -136,6 +136,19 @@ class EvidenceLifecycleService(
             operationId = command.operationId,
         )
 
+        if (
+            command.targetType ==
+            "EMPLOYEE_DOCUMENT"
+        ) {
+            return reserveEmployeeDocument(
+                actorIdentityId =
+                    actorIdentityId,
+                correlationId =
+                    correlationId,
+                command = command,
+            )
+        }
+
         if (command.targetType != "WORK_ORDER") {
             throw ProductApiException(
                 code = "EVIDENCE_TARGET_UNSUPPORTED",
@@ -346,6 +359,370 @@ class EvidenceLifecycleService(
                 ),
             correlationId = correlationId,
             replayed = execution.replayed,
+        )
+    }
+
+    private fun reserveEmployeeDocument(
+        actorIdentityId: UUID,
+        correlationId: String,
+        command: ReserveCommand,
+    ): ReserveEvidenceUploadResponse {
+        if (command.workOrderId != null) {
+            throw ProductApiException(
+                code =
+                    "EVIDENCE_WORK_ORDER_TARGET_MISMATCH",
+                message =
+                    "workOrderId must be absent for EmployeeDocument Evidence.",
+                status =
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+            )
+        }
+
+        if (
+            command.requirementKey !=
+            EMPLOYEE_DOCUMENT_REQUIREMENT_KEY ||
+            command.assertedEvidenceTypeCode !=
+            EMPLOYEE_DOCUMENT_EVIDENCE_TYPE
+        ) {
+            throw ProductApiException(
+                code =
+                    "EVIDENCE_EMPLOYEE_DOCUMENT_CONTRACT_MISMATCH",
+                message =
+                    "EmployeeDocument Evidence must use the fixed HR document requirement/type.",
+                status =
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+            )
+        }
+
+        if (command.supersedesEvidenceId != null) {
+            throw ProductApiException(
+                code =
+                    "EVIDENCE_SUPERSEDES_UNSUPPORTED",
+                message =
+                    "EmployeeDocument Evidence superseding is not supported in this slice.",
+                status =
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+            )
+        }
+
+        val securityScanClass =
+            employeeDocumentScanClass(
+                command.contentType,
+            )
+                ?: throw ProductApiException(
+                    code =
+                        "EVIDENCE_CONTENT_TYPE_NOT_ALLOWED",
+                    message =
+                        "This content type is not allowed for EmployeeDocument Evidence.",
+                    status =
+                        HttpStatus.UNPROCESSABLE_ENTITY,
+                )
+
+        if (
+            command.sizeBytes !in
+            1..EvidenceUploadSpec.MAX_EVIDENCE_OBJECT_BYTES
+        ) {
+            throw ProductApiException(
+                code =
+                    "EVIDENCE_SIZE_NOT_ALLOWED",
+                message =
+                    "Evidence size exceeds the EmployeeDocument limit.",
+                status =
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+            )
+        }
+
+        val target =
+            employeeDocumentTarget
+                .loadTarget(
+                    command.targetId,
+                )
+                ?: throw ProductApiException(
+                    code = "OBJECT_NOT_VISIBLE",
+                    message =
+                        "The requested EmployeeDocument is not available.",
+                    status =
+                        HttpStatus.NOT_FOUND,
+                )
+
+        if (
+            target.verificationState ==
+            "REJECTED" ||
+            !employeeDocumentTarget
+                .canManage(
+                    identityId =
+                        actorIdentityId,
+                    organizationId =
+                        target.organizationId,
+                )
+        ) {
+            throw ProductApiException(
+                code = "OBJECT_NOT_VISIBLE",
+                message =
+                    "The requested EmployeeDocument is not available.",
+                status =
+                    HttpStatus.NOT_FOUND,
+            )
+        }
+
+        val storage =
+            requireStorage()
+        val now =
+            clock.instant()
+        val evidenceId =
+            UUID.randomUUID()
+        val uploadSessionId =
+            UUID.randomUUID()
+        val spec =
+            EvidenceUploadSpec(
+                evidenceId = evidenceId,
+                organizationId =
+                    target.organizationId,
+                objectVersionId =
+                    UUID.randomUUID(),
+                contentType =
+                    command.contentType,
+                expectedSizeBytes =
+                    command.sizeBytes,
+                expectedSha256Hex =
+                    command.sha256,
+            )
+        val expiresAt =
+            now.plusSeconds(
+                storageProperties
+                    .uploadExpirySeconds,
+            )
+
+        val execution =
+            idempotency.execute(
+                spec =
+                    IdempotentCommandSpec(
+                        operationId =
+                            command.operationId,
+                        actorUserId =
+                            actorIdentityId,
+                        commandType =
+                            "ReserveEvidenceUpload",
+                        targetType =
+                            "EmployeeDocument",
+                        targetId =
+                            target.documentId,
+                        requestFingerprint =
+                            command.fingerprint(),
+                        correlationId =
+                            correlationId,
+                    ),
+            ) {
+                val fresh =
+                    employeeDocumentTarget
+                        .loadTarget(
+                            command.targetId,
+                        )
+                        ?: throw ProductApiException(
+                            code =
+                                "OBJECT_NOT_VISIBLE",
+                            message =
+                                "The requested EmployeeDocument is not available.",
+                            status =
+                                HttpStatus.NOT_FOUND,
+                        )
+
+                if (
+                    fresh.verificationState ==
+                    "REJECTED" ||
+                    !employeeDocumentTarget
+                        .canManage(
+                            identityId =
+                                actorIdentityId,
+                            organizationId =
+                                fresh.organizationId,
+                        )
+                ) {
+                    throw ProductApiException(
+                        code =
+                            "OBJECT_NOT_VISIBLE",
+                        message =
+                            "The requested EmployeeDocument is not available.",
+                        status =
+                            HttpStatus.NOT_FOUND,
+                    )
+                }
+
+                if (fresh.evidenceId != null) {
+                    throw ProductApiException(
+                        code =
+                            "EMPLOYEE_DOCUMENT_EVIDENCE_EXISTS",
+                        message =
+                            "This EmployeeDocument already has Evidence attached.",
+                        status =
+                            HttpStatus.CONFLICT,
+                    )
+                }
+
+                persistence
+                    .insertEmployeeDocumentReservation(
+                        EmployeeDocumentEvidenceReservationInsert(
+                            evidenceId =
+                                evidenceId,
+                            uploadSessionId =
+                                uploadSessionId,
+                            operationId =
+                                command.operationId,
+                            objectKey =
+                                spec.objectKey,
+                            organizationId =
+                                fresh.organizationId,
+                            employeeDocumentId =
+                                fresh.documentId,
+                            evidenceTypeCode =
+                                EMPLOYEE_DOCUMENT_EVIDENCE_TYPE,
+                            contentType =
+                                command.contentType,
+                            originalFileName =
+                                command.originalFileName,
+                            sizeBytes =
+                                command.sizeBytes,
+                            sha256 =
+                                command.sha256,
+                            capturedAt =
+                                command.capturedAt,
+                            clientOccurredAt =
+                                command.clientOccurredAt,
+                            capturedByUserId =
+                                actorIdentityId,
+                            securityScanClass =
+                                securityScanClass,
+                            uploadExpiresAt =
+                                expiresAt,
+                            createdAt = now,
+                        ),
+                    )
+
+                if (
+                    !employeeDocumentTarget
+                        .attachEvidence(
+                            documentId =
+                                fresh.documentId,
+                            evidenceId =
+                                evidenceId,
+                            at = now,
+                        )
+                ) {
+                    throw ProductApiException(
+                        code =
+                            "EMPLOYEE_DOCUMENT_EVIDENCE_CONFLICT",
+                        message =
+                            "EmployeeDocument Evidence attachment changed concurrently.",
+                        status =
+                            HttpStatus.CONFLICT,
+                    )
+                }
+
+                audit.append(
+                    AuditEventRecord(
+                        actorUserId =
+                            actorIdentityId,
+                        action =
+                            "EVIDENCE_UPLOAD_RESERVED",
+                        targetType =
+                            "Evidence",
+                        targetId =
+                            evidenceId,
+                        newStateRef =
+                            "evidence:RESERVED",
+                        occurredAt = now,
+                        correlationId =
+                            correlationId,
+                        reason =
+                            "EMPLOYEE_DOCUMENT_EVIDENCE_RESERVE",
+                        configRevisionRefsJson =
+                            """{"targetType":"EMPLOYEE_DOCUMENT"}""",
+                    ),
+                )
+
+                IdempotentCommandOutcome(
+                    resultCode =
+                        "EVIDENCE_RESERVED",
+                )
+            }
+
+        val reservation =
+            persistence
+                .findReservationByOperationId(
+                    command.operationId,
+                )
+                ?: throw ProductApiException(
+                    code =
+                        "EVIDENCE_RESERVATION_UNAVAILABLE",
+                    message =
+                        "The Evidence reservation is unavailable.",
+                    status =
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                    retryable = true,
+                )
+
+        if (
+            !clock.instant().isBefore(
+                reservation.uploadExpiresAt,
+            )
+        ) {
+            throw ProductApiException(
+                code =
+                    "EVIDENCE_UPLOAD_SESSION_EXPIRED",
+                message =
+                    "The Evidence upload session has expired.",
+                status =
+                    HttpStatus.CONFLICT,
+            )
+        }
+
+        val signed =
+            runCatching {
+                storage.createUploadTarget(
+                    reservation.toStorageSpec(),
+                )
+            }.getOrElse {
+                throw ProductApiException(
+                    code =
+                        "EVIDENCE_STORAGE_UNAVAILABLE",
+                    message =
+                        "Evidence storage is temporarily unavailable.",
+                    status =
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                    retryable = true,
+                )
+            }
+
+        val effectiveExpiry =
+            if (
+                signed.expiresAt.isBefore(
+                    reservation.uploadExpiresAt,
+                )
+            ) {
+                signed.expiresAt
+            } else {
+                reservation.uploadExpiresAt
+            }
+
+        return ReserveEvidenceUploadResponse(
+            evidence =
+                reservation.toMetadata(),
+            upload =
+                EvidenceUploadTargetResponse(
+                    uploadUrl =
+                        signed.uploadUrl,
+                    requiredHeaders =
+                        signed.requiredHeaders,
+                    expiresAt =
+                        effectiveExpiry
+                            .toString(),
+                    expectedSizeBytes =
+                        reservation.sizeBytes,
+                ),
+            correlationId =
+                correlationId,
+            replayed =
+                execution.replayed,
         )
     }
 
@@ -1050,6 +1427,21 @@ class EvidenceLifecycleService(
             evidenceVersion = evidenceVersion,
         )
 
+    private fun employeeDocumentScanClass(
+        contentType: String,
+    ): String? =
+        when (contentType) {
+            "image/jpeg",
+            "image/png",
+            "image/webp" ->
+                "NATIVE_MEDIA"
+
+            "application/pdf" ->
+                "SIGNED_DOCUMENT"
+
+            else -> null
+        }
+
     private fun normalizeContentType(
         value: String,
     ): String =
@@ -1154,8 +1546,22 @@ class EvidenceLifecycleService(
 
         private val CONTENT_TYPE_PATTERN =
             Regex(
+                "^[a-z0-9!#        private val CONTENT_TYPE_PATTERN =
+            Regex(
                 "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$",
+            )^_.+-]+/[a-z0-9!#        private val CONTENT_TYPE_PATTERN =
+            Regex(
+                "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$",
+            )^_.+-]+$",
             )
+
+        private const val
+            EMPLOYEE_DOCUMENT_REQUIREMENT_KEY =
+            "EMPLOYEE_DOCUMENT_BINARY"
+
+        private const val
+            EMPLOYEE_DOCUMENT_EVIDENCE_TYPE =
+            "HR_DOCUMENT"
     }
 }
 
