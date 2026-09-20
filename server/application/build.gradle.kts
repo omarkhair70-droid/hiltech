@@ -180,6 +180,8 @@ tasks.register("verifyJooqGeneration") {
             "Person.kt",
             "Employee.kt",
             "Employment.kt",
+            "WorkforceAssignment.kt",
+            "TeamMembershipAuthorityAggregate.kt",
             "PeopleAuthorityBinding.kt",
         ).forEach { expected ->
             check(expected in generatedFileNames) {
