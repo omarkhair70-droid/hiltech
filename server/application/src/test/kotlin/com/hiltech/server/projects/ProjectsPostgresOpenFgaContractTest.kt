@@ -28,6 +28,7 @@ import com.hiltech.server.work.JdbcWorkPersistence
 import com.hiltech.server.work.PlanWorkCommand
 import com.hiltech.server.work.RemoveWorkDependencyCommand
 import com.hiltech.server.work.ReviseWorkInstructionCommand
+import com.hiltech.server.work.UpdateWorkOrderDetailsCommand
 import com.hiltech.server.work.UpdateWorkTaskCommand
 import com.hiltech.server.work.WorkAuthorizationProjectionBridge
 import com.hiltech.server.work.WorkDependencyType
@@ -1444,6 +1445,40 @@ class ProjectsPostgresOpenFgaContractTest {
                 manualCodeDenied.code,
             )
 
+            val invalidWorkContext =
+                assertThrows<ProductApiException> {
+                    workService.create(
+                        CreateWorkOrderCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = readyProject.projectId,
+                            siteId = otherClientSite.site.siteId,
+                            projectSiteId =
+                                attached.projectSite.projectSiteId,
+                            areaId = area.targetId,
+                            workPackageId = workPackage.targetId,
+                            explicitCode = null,
+                            workTypeCode = "INSTALL",
+                            workTypeRevision = 1,
+                            title = "Invalid WorkOrder context",
+                            description = null,
+                            plannedStart = null,
+                            plannedEnd = null,
+                            priorityCode = null,
+                            baseProjectVersion = readyProject.version,
+                            expectedBaselineVersion =
+                                readyProject.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.teamUser,
+                            correlationId =
+                                "corr-work-context-invalid",
+                        ),
+                    )
+                }
+            assertEquals(
+                "WORK_CONTEXT_INVALID",
+                invalidWorkContext.code,
+            )
+
             val firstCreateOperation = UUID.randomUUID()
             val firstCreateCommand =
                 CreateWorkOrderCommand(
@@ -1493,20 +1528,72 @@ class ProjectsPostgresOpenFgaContractTest {
                 firstReplay.workOrder.workOrderId,
             )
 
+            val firstUpdated =
+                workService.update(
+                    UpdateWorkOrderDetailsCommand(
+                        operationId = UUID.randomUUID(),
+                        workOrderId =
+                            firstCreated.workOrder.workOrderId,
+                        areaId = area.targetId,
+                        workPackageId = workPackage.targetId,
+                        title = "Install backbone rack — planned",
+                        description =
+                            "Authoritative Slice 03 planning fixture updated",
+                        plannedStart = firstCreated.workOrder.plannedStart,
+                        plannedEnd = firstCreated.workOrder.plannedEnd,
+                        priorityCode = firstCreated.workOrder.priorityCode,
+                        baseVersion = firstCreated.workOrder.version,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.teamUser,
+                        correlationId = "corr-work-update-1",
+                    ),
+                )
+            assertEquals(
+                "Install backbone rack — planned",
+                firstUpdated.workOrder.title,
+            )
+            val staleUpdate =
+                assertThrows<ProductApiException> {
+                    workService.update(
+                        UpdateWorkOrderDetailsCommand(
+                            operationId = UUID.randomUUID(),
+                            workOrderId =
+                                firstUpdated.workOrder.workOrderId,
+                            areaId = area.targetId,
+                            workPackageId = workPackage.targetId,
+                            title = "Stale update",
+                            description = null,
+                            plannedStart =
+                                firstUpdated.workOrder.plannedStart,
+                            plannedEnd =
+                                firstUpdated.workOrder.plannedEnd,
+                            priorityCode =
+                                firstUpdated.workOrder.priorityCode,
+                            baseVersion =
+                                firstCreated.workOrder.version,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.teamUser,
+                            correlationId =
+                                "corr-work-update-stale",
+                        ),
+                    )
+                }
+            assertEquals("VERSION_CONFLICT", staleUpdate.code)
+
             val unauthorizedPlan =
                 assertThrows<ProductApiException> {
                     workService.plan(
                         PlanWorkCommand(
                             operationId = UUID.randomUUID(),
                             workOrderId =
-                                firstCreated.workOrder.workOrderId,
+                                firstUpdated.workOrder.workOrderId,
                             workTypeCode = "INSTALL",
                             workTypeRevision = 1,
                             payloadSchemaVersion = 1,
                             structuredInstructionJson = null,
                             instructionSummary = null,
                             baseVersion =
-                                firstCreated.workOrder.version,
+                                firstUpdated.workOrder.version,
                             expectedBaselineVersion =
                                 readyProject.baselineVersion,
                             clientOccurredAt = clock.instant(),
@@ -1527,14 +1614,14 @@ class ProjectsPostgresOpenFgaContractTest {
                         PlanWorkCommand(
                             operationId = UUID.randomUUID(),
                             workOrderId =
-                                firstCreated.workOrder.workOrderId,
+                                firstUpdated.workOrder.workOrderId,
                             workTypeCode = "INSTALL",
                             workTypeRevision = 1,
                             payloadSchemaVersion = 1,
                             structuredInstructionJson = null,
                             instructionSummary = null,
                             baseVersion =
-                                firstCreated.workOrder.version + 1,
+                                firstUpdated.workOrder.version + 1,
                             expectedBaselineVersion =
                                 readyProject.baselineVersion,
                             clientOccurredAt = clock.instant(),
@@ -1551,7 +1638,7 @@ class ProjectsPostgresOpenFgaContractTest {
                 PlanWorkCommand(
                     operationId = firstPlanOperation,
                     workOrderId =
-                        firstCreated.workOrder.workOrderId,
+                        firstUpdated.workOrder.workOrderId,
                     workTypeCode = "INSTALL",
                     workTypeRevision = 1,
                     payloadSchemaVersion = 1,
@@ -1559,7 +1646,7 @@ class ProjectsPostgresOpenFgaContractTest {
                     instructionSummary =
                         "Use the bound installation instruction",
                     baseVersion =
-                        firstCreated.workOrder.version,
+                        firstUpdated.workOrder.version,
                     expectedBaselineVersion =
                         readyProject.baselineVersion,
                     clientOccurredAt = clock.instant(),
