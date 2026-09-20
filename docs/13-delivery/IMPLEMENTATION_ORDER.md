@@ -453,19 +453,25 @@ Closed:
 Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
 
 Immediate next execution:
-**PHASE 4 — Projects / Sites / Work Core — OWNER-FACING ENTRY REVIEW ONLY.**
+**PHASE 4 / SLICE 01 — Project + Site / ProjectSite Core — REALITY + IMPLEMENTATION CONTRACT CLOSURE.**
 
-Phase 0–3 are verified and complete. Phase 3 final gap review is PASS and no additional People slice is required.
+Phase 0–3 are verified and complete.
 
-Before any Phase 4 production code:
-- review HILTECH Project / Site / Work reality with the owner;
-- read the existing Project lifecycle, object specs, transitions, PM experience, wireflow and first-slice contract;
-- compare the frozen pre-code model against real HILTECH practice and mature product/reference patterns;
-- decide the Phase 4 slice plan and representative Windows + Android flows;
-- use controlled amendment for any genuine contradiction;
-- freeze the Phase 4 reality/contract entry pack.
+Phase 4 owner entry review is accepted and the 6-slice plan is frozen:
+`docs/13-delivery/phase4/01_PHASE4_SCOPE_AND_SLICE_PLAN_2026-09-20.md`
 
-Do not start Phase 4 implementation until this owner-facing entry review is discussed and frozen.
+Do not collapse Phase 5 Warehouse or Phase 6 Field/Offline into Phase 4 for speed.
+
+Before Slice 01 production code:
+- inspect current Project/Site contract and related first-slice Freeze pack;
+- close exact Project creation/source semantics;
+- close Project responsibility/PM relation policy boundary;
+- close Site/ProjectSite DDL/API/authorization/history;
+- close Windows My Projects / Project header representative flow;
+- define exact required regression/human proof;
+- freeze the Slice 01 implementation contract.
+
+Only then authorize production implementation.
 
 
 ---
