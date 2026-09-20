@@ -196,7 +196,7 @@ class ProjectsApiClientTest {
             )
 
             assertEquals(
-                listOf(
+                listOf<Pair<String, String?>>(
                     "/v1/projects/$projectId/sites" to
                         existingOperation,
                     "/v1/projects/$projectId/sites" to
