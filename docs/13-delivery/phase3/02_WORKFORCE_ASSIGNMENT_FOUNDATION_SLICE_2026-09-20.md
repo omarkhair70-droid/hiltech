@@ -58,6 +58,8 @@ Rules:
 - effective_to >= effective_from;
 - ACTIVE requires effective_to NULL;
 - one ACTIVE assignment per Employee in the current baseline;
+- Slice 02 creates only already-effective/current assignments: `effective_from` must not be in the future at command time;
+- future-dated scheduling/change activation belongs to Slice 05;
 - history remains in ended rows.
 
 ## Existing Team membership integration
