@@ -453,30 +453,40 @@ Closed:
 Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
 
 Immediate next execution:
-**PHASE 4 / SLICE 01 — Project + Site / ProjectSite Core — PRODUCTION IMPLEMENTATION.**
+**PHASE 4 / SLICE 02 — Project Planning Structure — REALITY + IMPLEMENTATION CONTRACT CLOSURE.**
 
 Phase 0–3 are verified and complete.
 
 Phase 4 owner entry review and six-slice plan are frozen:
 `docs/13-delivery/phase4/01_PHASE4_SCOPE_AND_SLICE_PLAN_2026-09-20.md`
 
-Slice 01 reality + implementation contract is frozen:
-`docs/13-delivery/phase4/02_PROJECT_SITE_CORE_REALITY_AND_IMPLEMENTATION_CONTRACT_2026-09-20.md`
+Slice 01 — Project + Site / ProjectSite Core — is **VERIFIED / MERGED**:
+- frozen contract: `docs/13-delivery/phase4/02_PROJECT_SITE_CORE_REALITY_AND_IMPLEMENTATION_CONTRACT_2026-09-20.md`;
+- final gap review: `docs/13-delivery/phase4/03_PROJECT_SITE_CORE_FINAL_GAP_REVIEW_2026-09-20.md` — PASS;
+- final tested head: `89c19605405dad912457dc22286751c2eb379752`;
+- final merge: `e6b87dd4a6a4f66e72190a5d1d3c632b414f359e`;
+- post-merge Bootstrap: `35515882737` — PASS.
 
-Implement only the frozen Slice 01 vertical:
-- forward-only Project schema amendment after V0020;
-- CodePolicy-driven Project creation/source provenance;
-- effective-dated Employee/Team Project responsibility history;
-- durable Site + ProjectSite commands/read models;
-- DRAFT -> KICKOFF -> PLANNING lifecycle only;
-- authorization projection, audit/activity/idempotency/version protection;
-- Windows My Projects + Project header/detail;
-- exact automated and rendered human proof.
+Before any Slice 02 production implementation, close and freeze the exact Project Planning Structure contract from current reality evidence and existing frozen Project planning contracts.
 
-Do not implement READY/ACTIVE until Slice 02 provides real baseline planning.
-Do not pull WorkOrder, Warehouse or Field/Offline implementation forward.
+Slice 02 owns:
+- optional Areas;
+- Milestones;
+- WorkPackages;
+- baseline-version-safe planning;
+- dependency/reference shape;
+- planning-tree Windows surface;
+- lifecycle/authorization/audit/version proof required for planning.
 
-Slice 01 closes only after exact-head regressions + human proof pass, the exact tested head is merged, post-merge Bootstrap passes, and a Slice 01 gap review finds no additional required Slice 01 work.
+Slice 02 must not invent or pull forward:
+- WorkOrder / WorkType runtime (Slice 03);
+- readiness / assignment (Slice 04);
+- Project health / accepted progress (Slice 05);
+- Warehouse/material/tool truth (Phase 5);
+- technician field/offline execution (Phase 6);
+- commercial claims (later Commercial/Finance phases).
+
+READY/ACTIVE remains unavailable until Slice 02 closes the real baseline-planning preconditions.
 
 
 ---
