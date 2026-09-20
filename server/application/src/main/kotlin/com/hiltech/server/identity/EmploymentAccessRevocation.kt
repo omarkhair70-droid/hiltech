@@ -1,5 +1,6 @@
 package com.hiltech.server.identity
 
+import com.hiltech.server.security.JdbcRoleTeamAuthorizationProjectionBridge
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import java.time.Instant
@@ -34,6 +35,8 @@ interface EmploymentAccessRevocationPort {
 @Component
 class JdbcEmploymentAccessRevocation(
     private val jdbc: JdbcTemplate,
+    private val roleTeamProjection:
+        JdbcRoleTeamAuthorizationProjectionBridge,
 ) : EmploymentAccessRevocationPort {
     override fun snapshot(
         personId: UUID,
@@ -137,6 +140,14 @@ class JdbcEmploymentAccessRevocation(
 
         val timestamp =
             at.atOffset(ZoneOffset.UTC)
+        val membershipIds =
+            activeMembershipIds(
+                personId =
+                    personId,
+                organizationId =
+                    organizationId,
+                at = at,
+            )
 
         jdbc.update(
             """
@@ -169,6 +180,17 @@ class JdbcEmploymentAccessRevocation(
             timestamp,
         )
 
+        membershipIds.forEach {
+            membershipId ->
+            roleTeamProjection
+                .syncOrganizationMembership(
+                    membershipId =
+                        membershipId,
+                    occurredAt =
+                        at.plusMillis(1),
+                )
+        }
+
         jdbc.update(
             """
             UPDATE identity_session s
@@ -195,6 +217,44 @@ class JdbcEmploymentAccessRevocation(
             organizationId =
                 organizationId,
             at = at,
+        )
+    }
+
+    private fun activeMembershipIds(
+        personId: UUID,
+        organizationId: UUID,
+        at: Instant,
+    ): List<UUID> {
+        val timestamp =
+            at.atOffset(ZoneOffset.UTC)
+
+        return jdbc.query(
+            """
+            SELECT om.id
+            FROM organization_membership om
+            JOIN user_identity ui
+              ON ui.id = om.user_identity_id
+            WHERE ui.person_id = ?
+              AND om.organization_id = ?
+              AND om.state = 'ACTIVE'
+              AND om.valid_from <= ?
+              AND (
+                  om.valid_until IS NULL
+                  OR om.valid_until >= ?
+              )
+            ORDER BY om.id
+            FOR UPDATE OF om
+            """.trimIndent(),
+            { rs, _ ->
+                rs.getObject(
+                    "id",
+                    UUID::class.java,
+                )
+            },
+            personId,
+            organizationId,
+            timestamp,
+            timestamp,
         )
     }
 
