@@ -1,0 +1,77 @@
+name: Spike — Keycloak Native OIDC
+
+on:
+  push:
+    branches:
+      - "spike/keycloak-native-oidc-20260918"
+    paths:
+      - "spikes/keycloak-native-oidc/**"
+      - ".github/workflows/spike-keycloak-native-oidc.yml"
+  pull_request:
+    paths:
+      - "spikes/keycloak-native-oidc/**"
+      - ".github/workflows/spike-keycloak-native-oidc.yml"
+  workflow_dispatch:
+
+jobs:
+  native-oidc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --disable-pip-version-check requests beautifulsoup4 playwright==1.63.0
+          python -m playwright install --with-deps chromium
+
+      - name: Generate disposable localhost TLS certificate
+        run: |
+          mkdir -p "$RUNNER_TEMP/keycloak-tls"
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout "$RUNNER_TEMP/keycloak-tls/key.pem" \
+            -out "$RUNNER_TEMP/keycloak-tls/cert.pem" \
+            -days 1 \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+          chmod 644 "$RUNNER_TEMP/keycloak-tls/cert.pem"
+          chmod 644 "$RUNNER_TEMP/keycloak-tls/key.pem"
+
+      - name: Start Keycloak 26.7.4 over HTTPS
+        run: |
+          docker run -d --name keycloak \
+            -p 8443:8443 \
+            -v "$RUNNER_TEMP/keycloak-tls:/certs:ro" \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+            -e KC_HTTPS_CERTIFICATE_FILE=/certs/cert.pem \
+            -e KC_HTTPS_CERTIFICATE_KEY_FILE=/certs/key.pem \
+            quay.io/keycloak/keycloak:26.7.4 \
+            start-dev --https-port=8443 --http-enabled=false
+
+      - name: Wait for Keycloak HTTPS
+        run: |
+          for i in $(seq 1 90); do
+            if curl -kfsS https://127.0.0.1:8443/realms/master/.well-known/openid-configuration >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs keycloak
+          exit 1
+
+      - name: Run HILTECH native OIDC proof
+        env:
+          KEYCLOAK_URL: https://127.0.0.1:8443
+          KEYCLOAK_ADMIN: admin
+          KEYCLOAK_ADMIN_PASSWORD: admin
+          REQUESTS_CA_BUNDLE: ${{ runner.temp }}/keycloak-tls/cert.pem
+        run: python spikes/keycloak-native-oidc/test_native_oidc_browser.py
+
+      - name: Keycloak logs on failure
+        if: failure()
+        run: docker logs keycloak
