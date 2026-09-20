@@ -107,7 +107,7 @@ class HrDocumentsPostgresEvidenceContractTest {
                     ids.adminIdentity,
                 memberIdentityId =
                     ids.memberIdentity,
-                organizationId =
+                expectedOrganizationId =
                     ids.organizationId,
             )
         val persistence =
@@ -860,7 +860,7 @@ class HrDocumentsPostgresEvidenceContractTest {
     private fun fixtureAuthorization(
         adminIdentityId: UUID,
         memberIdentityId: UUID,
-        organizationId: UUID,
+        expectedOrganizationId: UUID,
     ): PeopleAuthorizationPort =
         object : PeopleAuthorizationPort {
             override fun canManagePeople(
@@ -871,7 +871,7 @@ class HrDocumentsPostgresEvidenceContractTest {
                 actorUserId ==
                     adminIdentityId &&
                     organizationId ==
-                    organizationId
+                    expectedOrganizationId
 
             override fun canViewDirectory(
                 actorUserId: UUID,
@@ -879,7 +879,7 @@ class HrDocumentsPostgresEvidenceContractTest {
                     UUID,
             ): Boolean =
                 organizationId ==
-                    organizationId &&
+                    expectedOrganizationId &&
                     actorUserId in setOf(
                         adminIdentityId,
                         memberIdentityId,
