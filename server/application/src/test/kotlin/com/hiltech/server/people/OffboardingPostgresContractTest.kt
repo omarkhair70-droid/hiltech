@@ -914,8 +914,7 @@ class OffboardingPostgresContractTest {
             """.trimIndent(),
             deviceId,
             workerIdentity,
-            "offboarding-install-" +
-                UUID.randomUUID(),
+            UUID.randomUUID(),
             timestamp,
             timestamp,
         )
