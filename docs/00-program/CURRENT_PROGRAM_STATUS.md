@@ -83,8 +83,8 @@ Phase 3 — People / Internal Workforce Core — is **VERIFIED / COMPLETE**. Sli
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 3 COMPLETE / PHASE 4 ENTRY REVIEW | No additional Phase 3 slice; owner-facing Phase 4 review before production code |
-| Production code | PHASE 3 VERIFIED / COMPLETE | People lifecycle through offboarding merged; Phase 4 code not yet authorized |
+| Implementation order | PHASE 4 SCOPE FROZEN / SLICE 01 CONTRACT CLOSURE NEXT | 6-slice Project/Site/Work plan frozen; no Slice 01 production code yet |
+| Production code | PHASE 4 NOT YET AUTHORIZED | Scope/slice plan frozen; Slice 01 reality/contract closure required first |
 
 ---
 
