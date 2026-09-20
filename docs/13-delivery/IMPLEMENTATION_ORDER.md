@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 VERIFIED / COMPLETE / PHASE 3 VERIFIED / COMPLETE / PHASE 4 ENTRY REVIEW NEXT**
+Status: **FROZEN v1.0 / PHASE 0–3 VERIFIED / COMPLETE / PHASE 4 SLICE 01 CONTRACT FROZEN / IMPLEMENTATION NEXT**
 
 ## Core Rule
 
@@ -453,25 +453,30 @@ Closed:
 Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
 
 Immediate next execution:
-**PHASE 4 / SLICE 01 — Project + Site / ProjectSite Core — REALITY + IMPLEMENTATION CONTRACT CLOSURE.**
+**PHASE 4 / SLICE 01 — Project + Site / ProjectSite Core — PRODUCTION IMPLEMENTATION.**
 
 Phase 0–3 are verified and complete.
 
-Phase 4 owner entry review is accepted and the 6-slice plan is frozen:
+Phase 4 owner entry review and six-slice plan are frozen:
 `docs/13-delivery/phase4/01_PHASE4_SCOPE_AND_SLICE_PLAN_2026-09-20.md`
 
-Do not collapse Phase 5 Warehouse or Phase 6 Field/Offline into Phase 4 for speed.
+Slice 01 reality + implementation contract is frozen:
+`docs/13-delivery/phase4/02_PROJECT_SITE_CORE_REALITY_AND_IMPLEMENTATION_CONTRACT_2026-09-20.md`
 
-Before Slice 01 production code:
-- inspect current Project/Site contract and related first-slice Freeze pack;
-- close exact Project creation/source semantics;
-- close Project responsibility/PM relation policy boundary;
-- close Site/ProjectSite DDL/API/authorization/history;
-- close Windows My Projects / Project header representative flow;
-- define exact required regression/human proof;
-- freeze the Slice 01 implementation contract.
+Implement only the frozen Slice 01 vertical:
+- forward-only Project schema amendment after V0020;
+- CodePolicy-driven Project creation/source provenance;
+- effective-dated Employee/Team Project responsibility history;
+- durable Site + ProjectSite commands/read models;
+- DRAFT -> KICKOFF -> PLANNING lifecycle only;
+- authorization projection, audit/activity/idempotency/version protection;
+- Windows My Projects + Project header/detail;
+- exact automated and rendered human proof.
 
-Only then authorize production implementation.
+Do not implement READY/ACTIVE until Slice 02 provides real baseline planning.
+Do not pull WorkOrder, Warehouse or Field/Offline implementation forward.
+
+Slice 01 closes only after exact-head regressions + human proof pass, the exact tested head is merged, post-merge Bootstrap passes, and a Slice 01 gap review finds no additional required Slice 01 work.
 
 
 ---
