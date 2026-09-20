@@ -317,6 +317,47 @@ class WorkforceAssignmentSecuritySynchronizer(
         }
     }
 
+    @Transactional
+    fun endAssignmentAuthority(
+        assignmentId: UUID,
+        occurredAt: Instant,
+        correlationId: String?,
+    ) {
+        val membership =
+            existingMembership(
+                assignmentId,
+            ) ?: return
+
+        jdbc.update(
+            """
+            UPDATE team_membership
+            SET valid_until =
+                    CASE
+                        WHEN valid_until IS NULL
+                             OR valid_until > ?
+                        THEN ?
+                        ELSE valid_until
+                    END,
+                version = version + 1
+            WHERE id = ?
+            """.trimIndent(),
+            occurredAt.atOffset(
+                ZoneOffset.UTC,
+            ),
+            occurredAt.atOffset(
+                ZoneOffset.UTC,
+            ),
+            membership.membershipId,
+        )
+
+        roleTeamProjection.syncTeamMembership(
+            teamMembershipId =
+                membership.membershipId,
+            occurredAt =
+                occurredAt.plusMillis(1),
+        )
+    }
+
     private fun loadContext(
         assignmentId: UUID,
         occurredAt: Instant,
