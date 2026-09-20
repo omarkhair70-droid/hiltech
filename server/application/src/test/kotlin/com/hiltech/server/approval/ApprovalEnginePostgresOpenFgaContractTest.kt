@@ -410,7 +410,9 @@ class ApprovalEnginePostgresOpenFgaContractTest {
             val outsider =
                 assertThrows<
                     ProductApiException
-                > {
+                >(
+                    "outsider decision must be hidden",
+                ) {
                     service.decide(
                         actorUserId =
                             ids.outsiderUserId,
@@ -435,7 +437,9 @@ class ApprovalEnginePostgresOpenFgaContractTest {
             val outsiderRead =
                 assertThrows<
                     ProductApiException
-                > {
+                >(
+                    "outsider read must be hidden",
+                ) {
                     readService.one(
                         actorUserId =
                             ids.outsiderUserId,
@@ -460,7 +464,9 @@ class ApprovalEnginePostgresOpenFgaContractTest {
             val staleAuthority =
                 assertThrows<
                     ProductApiException
-                > {
+                >(
+                    "stale approval authority must be rejected",
+                ) {
                     service.decide(
                         actorUserId =
                             ids.ownerOneUserId,
@@ -486,7 +492,9 @@ class ApprovalEnginePostgresOpenFgaContractTest {
             val staleRead =
                 assertThrows<
                     ProductApiException
-                > {
+                >(
+                    "stale approval authority read must disappear",
+                ) {
                     readService.one(
                         actorUserId =
                             ids.ownerOneUserId,
@@ -654,7 +662,9 @@ class ApprovalEnginePostgresOpenFgaContractTest {
             val invalidCursor =
                 assertThrows<
                     ProductApiException
-                > {
+                >(
+                    "tampered approval cursor must be rejected",
+                ) {
                     readService.assigned(
                         actorUserId =
                             ids.ownerTwoUserId,
@@ -728,7 +738,9 @@ class ApprovalEnginePostgresOpenFgaContractTest {
             val conflicting =
                 assertThrows<
                     ProductApiException
-                > {
+                >(
+                    "second approval decision must be rejected",
+                ) {
                     service.decide(
                         actorUserId =
                             ids.ownerTwoUserId,
@@ -1015,7 +1027,9 @@ class ApprovalEnginePostgresOpenFgaContractTest {
             val superseded =
                 assertThrows<
                     ProductApiException
-                > {
+                >(
+                    "stale approval subject must be superseded",
+                ) {
                     service.decide(
                         actorUserId =
                             ids.ownerTwoUserId,
@@ -1059,7 +1073,9 @@ class ApprovalEnginePostgresOpenFgaContractTest {
             val missingReason =
                 assertThrows<
                     ProductApiException
-                > {
+                >(
+                    "change request without reason must be rejected",
+                ) {
                     service.decide(
                         actorUserId =
                             ids.ownerTwoUserId,
