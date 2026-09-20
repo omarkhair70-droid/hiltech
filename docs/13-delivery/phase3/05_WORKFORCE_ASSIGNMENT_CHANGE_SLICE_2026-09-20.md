@@ -1,7 +1,7 @@
 # Phase 3 / Slice 05 — Workforce Assignment Change Workflow
 
 Date: 2026-09-20  
-Status: **IMPLEMENTATION AUTHORIZED / CONTRACT FROZEN**
+Status: **VERIFIED / READY TO MERGE**
 
 ## Reality basis
 
@@ -306,10 +306,46 @@ Do not implement:
 
 ---
 
+# Verification closure
+
+Canonical tested code head:
+
+`1c9986ef369cdd40b16cea53726d19f7fb10e799`
+
+Exact-head verification:
+
+- Bootstrap Phase 0 `35491516650` — **PASS**
+- Phase 2 Shared Command Runtime `35491516664` — **PASS**
+- Phase 1 Native OIDC Production Smoke `35491516653` — **PASS**
+- Phase 3 Onboarding Human Proof `35491516654` — **PASS**
+- Phase 3 Assignment Change Human Proof `35491516648` — **PASS**
+
+Verified implementation includes:
+
+- V0019 assignment revision chain with constrained `supersedes_assignment_id`;
+- exact-version/idempotent `ChangeWorkforceAssignment`;
+- no-op rejection;
+- old ACTIVE revision closed as ENDED and new revision becomes the only ACTIVE assignment;
+- same-organization/active Team validation;
+- reporting-manager/self/cycle validation;
+- People-owned Team membership replacement and OpenFGA aggregate reconciliation;
+- same-Team role changes retain valid Team authority;
+- reporting-manager changes do not mutate Team-manager authorization truth;
+- People/Admin assignment history read;
+- `WorkforceAssignmentChanged` event + safe audit;
+- shared KMP change/history client contracts;
+- Windows current/change/history flow with visible Project/Site/Work non-impact warning;
+- employee current assignment remains the existing own-current source;
+- inherited Slice 01–04 / Phase 0–2 / OIDC / OpenFGA regressions preserved.
+
+No Project/Site/Work reassignment, Payroll mutation, future-effective scheduler, mass transfer engine, Team manager rewrite, duplicate Employee role/team/manager fields, or Slice 06 offboarding was introduced.
+
 # Contract conclusion
 
-**IMPLEMENTATION AUTHORIZED.**
+**VERIFIED / READY TO MERGE.**
 
-Implement only the Workforce Assignment Change Workflow contract above.
+PR #49 may move from Draft to Ready only while this verified implementation remains unchanged or after any later head is re-verified.
 
-Do not open Slice 06 Offboarding before Slice 05 is verified/merged.
+After merge, require post-merge Bootstrap before Slice 05 is called **MERGED / CLOSED**.
+
+Do not open Slice 06 Offboarding before that post-merge gate passes.
