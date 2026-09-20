@@ -11,7 +11,7 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
 - Phase 2 — Shared Product Infrastructure: **VERIFIED / COMPLETE**
-- Current execution phase: **Phase 4 — Projects / Sites / Work Core — Slice 01 VERIFIED / MERGED; Slice 02 Project Planning Structure reality + implementation contract closure next**
+- Current execution phase: **Phase 4 — Projects / Sites / Work Core — Slice 01 VERIFIED / MERGED; Slice 02–06 planning FROZEN; production execution resumes at Slice 02**
 - Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
 - Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
 - Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
@@ -82,7 +82,14 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 01 final tested head: `89c19605405dad912457dc22286751c2eb379752`
 - Slice 01 exact-head verification: Phase 4 Project Site Core `35515218944` / Bootstrap `35515218905` / Native OIDC `35515218910` / Onboarding `35515218926` / Assignment Change `35515218940` / Offboarding `35515218945` — **PASS**
 - Slice 01 final merge commit: `e6b87dd4a6a4f66e72190a5d1d3c632b414f359e`; post-merge Bootstrap `35515882737` — **PASS**
-- Current rule: Slice 01 is closed. Before any Slice 02 production code, close and freeze the Slice 02 Project Planning Structure reality + implementation contract. Preserve Slice 03 WorkOrder, Phase 5 Warehouse and Phase 6 Field/Offline boundaries.
+- Phase 4 full implementation map: `docs/13-delivery/phase4/04_PHASE4_MASTER_IMPLEMENTATION_MAP_2026-09-20.md` — **FROZEN**
+- Slice 02 contract: `docs/13-delivery/phase4/05_SLICE02_PROJECT_PLANNING_STRUCTURE_CONTRACT_2026-09-20.md` — **FROZEN**
+- Slice 03 contract: `docs/13-delivery/phase4/06_SLICE03_WORKORDER_POLICY_BINDING_CONTRACT_2026-09-20.md` — **FROZEN**
+- Slice 04 contract: `docs/13-delivery/phase4/07_SLICE04_READINESS_ASSIGNMENT_CONTRACT_2026-09-20.md` — **FROZEN**
+- Slice 05 contract: `docs/13-delivery/phase4/08_SLICE05_REVIEW_PROGRESS_HEALTH_CONTRACT_2026-09-20.md` — **FROZEN**
+- Slice 06 contract: `docs/13-delivery/phase4/09_SLICE06_ASSIGNED_WORK_MOBILE_HANDOFF_CONTRACT_2026-09-20.md` — **FROZEN**
+- Phase 4 completion/Codex handoff: `docs/13-delivery/phase4/10_PHASE4_COMPLETION_GATES_AND_CODEX_HANDOFF_2026-09-20.md` — **FROZEN**
+- Current rule: Phase 4 product planning is closed before coding resumes. Execute Slice 02 -> 03 -> 04 -> 05 -> 06 sequentially from these contracts. Do not redesign the phase per slice; stop only for a genuine repository contradiction.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
