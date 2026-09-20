@@ -77,10 +77,21 @@ data class UpdateSiteRequestDto(
 )
 
 @Serializable
+data class CreateProjectSiteSiteRequestDto(
+    val siteCode: String,
+    val name: String,
+    val addressText: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val timezone: String? = null,
+)
+
+@Serializable
 data class AttachProjectSiteRequestDto(
     val operationId: String,
     val baseProjectVersion: Long,
-    val siteId: String,
+    val siteId: String? = null,
+    val createSite: CreateProjectSiteSiteRequestDto? = null,
     val projectSiteCode: String? = null,
     val accessInstructions: String? = null,
     val projectSpecificNotes: String? = null,
