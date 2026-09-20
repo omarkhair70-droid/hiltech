@@ -3,7 +3,7 @@
 Updated: 2026-09-20
 
 ## Overall Stage
-**PHASE 3 ACTIVE — SLICE 01/02/03/04 MERGED — SLICE 05 WORKFORCE ASSIGNMENT CHANGE VERIFIED / READY TO MERGE**
+**PHASE 3 ACTIVE — SLICE 01/02/03/04/05 MERGED — SLICE 06 OFFBOARDING SKELETON IMPLEMENTATION AUTHORIZED**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -52,7 +52,7 @@ Final full regression evidence on that code head:
 
 Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Final Phase 2 closure PR #37 merged at `624bd6c50f8d17535316ae450a8a780bc756a108` with post-merge Bootstrap `35474921624` PASS.
 
-Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED / MERGED. Slice 02 — Workforce Assignment / Reporting Structure — is VERIFIED / MERGED through PR #42 at `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` PASS. Slice 03 — HR Documents / Certifications — is VERIFIED / MERGED through PR #44 at `d5d0cb256e68cf7b30978434aa6ba241c7500df1`; post-merge Bootstrap `35485263189` PASS. Slice 04 — Onboarding + Basic Self-Service — is VERIFIED / MERGED through PR #47 at `f7d7460718f43e634a180734623dabe5260b0224`; post-merge Bootstrap `35489327649` PASS. Slice 05 — Workforce Assignment Change Workflow — is VERIFIED / READY TO MERGE at canonical tested code head `1c9986ef369cdd40b16cea53726d19f7fb10e799`. Exact-head Bootstrap `35491516650`, Phase 2 runtime `35491516664`, Phase 1 OIDC `35491516653`, Onboarding Human Proof `35491516654`, and Assignment Change Human Proof `35491516648` are PASS.
+Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED / MERGED. Slice 02 — Workforce Assignment / Reporting Structure — is VERIFIED / MERGED through PR #42 at `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` PASS. Slice 03 — HR Documents / Certifications — is VERIFIED / MERGED through PR #44 at `d5d0cb256e68cf7b30978434aa6ba241c7500df1`; post-merge Bootstrap `35485263189` PASS. Slice 04 — Onboarding + Basic Self-Service — is VERIFIED / MERGED through PR #47 at `f7d7460718f43e634a180734623dabe5260b0224`; post-merge Bootstrap `35489327649` PASS. Slice 05 — Workforce Assignment Change Workflow — is VERIFIED / MERGED through PR #49 at `51648418a69df285334f76f5b1b4cfca9ec3cc43`; post-merge Bootstrap `35492558129` PASS. Slice 06 — Offboarding Skeleton — has PASS reality closure and a frozen implementation contract; implementation is AUTHORIZED.
 
 ---
 
@@ -83,8 +83,8 @@ Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 3 ACTIVE | Slice 01/02/03/04 merged; Slice 05 verified / ready to merge |
-| Production code | PHASE 3 SLICE 05 VERIFIED | Effective-history WorkforceAssignment change exact-head green with Windows human proof |
+| Implementation order | PHASE 3 ACTIVE | Slice 01/02/03/04/05 merged; Slice 06 implementation authorized |
+| Production code | PHASE 3 SLICE 06 AUTHORIZED | Offboarding case + access/session revocation + typed external clearance coordination only |
 
 ---
 

@@ -1,7 +1,7 @@
 # Phase 3 / Slice 05 — Workforce Assignment Change Workflow
 
 Date: 2026-09-20  
-Status: **VERIFIED / READY TO MERGE**
+Status: **VERIFIED / MERGED**
 
 ## Reality basis
 
@@ -340,12 +340,37 @@ Verified implementation includes:
 
 No Project/Site/Work reassignment, Payroll mutation, future-effective scheduler, mass transfer engine, Team manager rewrite, duplicate Employee role/team/manager fields, or Slice 06 offboarding was introduced.
 
+# Merge closure
+
+PR #49 merged at:
+
+`51648418a69df285334f76f5b1b4cfca9ec3cc43`
+
+Closure head re-verification:
+
+- Bootstrap Phase 0 `35492315728` — **PASS**
+- Phase 2 Shared Command Runtime `35492315714` — **PASS**
+- Phase 1 Native OIDC Production Smoke `35492315740` — **PASS**
+- Phase 3 Onboarding Human Proof `35492315712` — **PASS**
+- Phase 3 Assignment Change Human Proof `35492315746` — **PASS**
+
+Post-merge Bootstrap:
+
+- `35492558129` — **PASS**
+  - foundation — PASS
+  - database-contract — PASS
+  - local-platform-contract — PASS
+  - evidence-storage-contract — PASS
+  - terraform-contract — PASS
+  - supply-chain-contract — PASS
+  - dependency review intentionally skipped on main push; PR exact-head dependency review already passed.
+
 # Contract conclusion
 
-**VERIFIED / READY TO MERGE.**
+**VERIFIED / MERGED.**
 
-PR #49 may move from Draft to Ready only while this verified implementation remains unchanged or after any later head is re-verified.
+Slice 05 is closed.
 
-After merge, require post-merge Bootstrap before Slice 05 is called **MERGED / CLOSED**.
+Proceed to Slice 06 — Offboarding Skeleton.
 
-Do not open Slice 06 Offboarding before that post-merge gate passes.
+Do not reopen Slice 05 unless later evidence exposes a genuine contract contradiction.
