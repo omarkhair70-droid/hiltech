@@ -788,6 +788,499 @@ class ProjectsPostgresOpenFgaContractTest {
                 planning.project.lifecycleState,
             )
 
+            val planningService =
+                PlanningService(
+                    projects = JdbcProjectsPersistence(jdbc),
+                    planning = JdbcPlanningPersistence(jdbc),
+                    authorization = projectAuthorization,
+                    idempotency =
+                        JdbcIdempotentCommandExecutor(
+                            jdbc = jdbc,
+                            transactionManager = txManager,
+                            clock = clock,
+                            telemetry = telemetry,
+                        ),
+                    audit = JdbcAuditEventWriter(jdbc),
+                    events = ApplicationEventPublisher { event ->
+                        published += event
+                    },
+                    clock = clock,
+                )
+
+            val unauthorizedPlanMutation =
+                assertThrows<ProductApiException> {
+                    planningService.createMilestone(
+                        CreateMilestoneCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = planning.project.projectId,
+                            code = "M-DENIED",
+                            name = "Unauthorized planning mutation",
+                            plannedDate = null,
+                            sequence = null,
+                            clientVisible = false,
+                            acceptanceRequirement = null,
+                            baseProjectVersion = planning.project.version,
+                            expectedBaselineVersion = planning.project.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.ordinaryMember,
+                            correlationId = "corr-plan-unauthorized-mutation",
+                        ),
+                    )
+                }
+            assertEquals("OBJECT_NOT_VISIBLE", unauthorizedPlanMutation.code)
+
+            val foreignOrganization = UUID.randomUUID()
+            val foreignSite = UUID.randomUUID()
+            val foreignArea = UUID.randomUUID()
+            val foreignTimestamp = clock.instant().atOffset(ZoneOffset.UTC)
+            jdbc.update(
+                """
+                INSERT INTO organization
+                    (id, organization_code, legal_name, display_name, organization_type, status, created_at, version)
+                VALUES (?, ?, 'Foreign Organization', 'Foreign', 'HILTECH', 'ACTIVE', ?, 1)
+                """.trimIndent(),
+                foreignOrganization,
+                "FOREIGN-${foreignOrganization.toString().take(8)}",
+                foreignTimestamp,
+            )
+            jdbc.update(
+                """
+                INSERT INTO site
+                    (id, organization_id, client_organization_id, site_code, name, status,
+                     created_at, created_by, updated_at, version)
+                VALUES (?, ?, ?, 'FOREIGN-SITE', 'Foreign Site', 'ACTIVE', ?, ?, ?, 1)
+                """.trimIndent(),
+                foreignSite,
+                foreignOrganization,
+                ids.clientA,
+                foreignTimestamp,
+                ids.admin,
+                foreignTimestamp,
+            )
+            jdbc.update(
+                """
+                INSERT INTO area
+                    (id, organization_id, site_id, type_code, code, name, restricted_access,
+                     created_at, created_by, updated_at, version)
+                VALUES (?, ?, ?, 'ZONE', 'FOREIGN', 'Foreign Area', false, ?, ?, ?, 1)
+                """.trimIndent(),
+                foreignArea,
+                foreignOrganization,
+                foreignSite,
+                foreignTimestamp,
+                ids.admin,
+                foreignTimestamp,
+            )
+            val crossTenantArea =
+                assertThrows<ProductApiException> {
+                    planningService.updateArea(
+                        UpdateAreaCommand(
+                            operationId = UUID.randomUUID(),
+                            areaId = foreignArea,
+                            projectId = planning.project.projectId,
+                            parentAreaId = null,
+                            typeCode = "ZONE",
+                            code = "FOREIGN",
+                            name = "Foreign Area",
+                            sequence = null,
+                            restrictedAccess = false,
+                            baseProjectVersion = planning.project.version,
+                            baseObjectVersion = 1,
+                            expectedBaselineVersion = planning.project.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.admin,
+                            correlationId = "corr-plan-cross-tenant-area",
+                        ),
+                    )
+                }
+            assertEquals("OBJECT_NOT_VISIBLE", crossTenantArea.code)
+
+            val areaCommand =
+                CreateAreaCommand(
+                    operationId = UUID.randomUUID(),
+                    projectId = planning.project.projectId,
+                    projectSiteId = attached.projectSite.projectSiteId,
+                    parentAreaId = null,
+                    typeCode = "BUILDING",
+                    code = "BLDG-A",
+                    name = "Building A",
+                    sequence = 10,
+                    restrictedAccess = false,
+                    baseProjectVersion = planning.project.version,
+                    expectedBaselineVersion = planning.project.baselineVersion,
+                    clientOccurredAt = clock.instant(),
+                    actorUserId = ids.admin,
+                    correlationId = "corr-plan-area",
+                )
+            val area = planningService.createArea(areaCommand)
+            assertFalse(area.replayed)
+            assertEquals(1, area.plan.areas.size)
+
+            val areaReplay = planningService.createArea(areaCommand)
+            assertTrue(areaReplay.replayed)
+            assertEquals(area.targetId, areaReplay.targetId)
+            assertEquals(
+                1,
+                jdbc.queryForObject(
+                    "SELECT count(*) FROM area WHERE organization_id = ? AND site_id = ?",
+                    Int::class.java,
+                    ids.organization,
+                    site.site.siteId,
+                ),
+            )
+
+            val childArea =
+                planningService.createArea(
+                    areaCommand.copy(
+                        operationId = UUID.randomUUID(),
+                        parentAreaId = area.targetId,
+                        code = "BLDG-A-F1",
+                        name = "Building A Floor 1",
+                        baseProjectVersion = area.plan.project.version,
+                        correlationId = "corr-plan-area-child",
+                    ),
+                )
+            val duplicateArea =
+                assertThrows<ProductApiException> {
+                    planningService.createArea(
+                        areaCommand.copy(
+                            operationId = UUID.randomUUID(),
+                            baseProjectVersion = childArea.plan.project.version,
+                            correlationId = "corr-plan-area-duplicate",
+                        ),
+                    )
+                }
+            assertEquals("PLANNING_CONSTRAINT_CONFLICT", duplicateArea.code)
+
+            val areaCycle =
+                assertThrows<ProductApiException> {
+                    planningService.updateArea(
+                        UpdateAreaCommand(
+                            operationId = UUID.randomUUID(),
+                            areaId = area.targetId,
+                            projectId = planning.project.projectId,
+                            parentAreaId = childArea.targetId,
+                            typeCode = "BUILDING",
+                            code = "BLDG-A",
+                            name = "Building A",
+                            sequence = 10,
+                            restrictedAccess = false,
+                            baseProjectVersion = childArea.plan.project.version,
+                            baseObjectVersion = 1,
+                            expectedBaselineVersion = planning.project.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.admin,
+                            correlationId = "corr-plan-area-cycle",
+                        ),
+                    )
+                }
+            assertEquals("AREA_CYCLE", areaCycle.code)
+
+            val milestone =
+                planningService.createMilestone(
+                    CreateMilestoneCommand(
+                        operationId = UUID.randomUUID(),
+                        projectId = planning.project.projectId,
+                        code = "M-FOUNDATION",
+                        name = "Foundation complete",
+                        plannedDate = LocalDate.parse("2026-10-31"),
+                        sequence = 20,
+                        clientVisible = true,
+                        acceptanceRequirement = "Signed structural review",
+                        baseProjectVersion = childArea.plan.project.version,
+                        expectedBaselineVersion = area.plan.project.baselineVersion,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.admin,
+                        correlationId = "corr-plan-milestone",
+                    ),
+                )
+            assertEquals(1, milestone.plan.milestones.size)
+
+            val mismatchedSitePackage =
+                assertThrows<ProductApiException> {
+                    planningService.createWorkPackage(
+                        CreateWorkPackageCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = planning.project.projectId,
+                            projectSiteId = attached.projectSite.projectSiteId,
+                            siteId = otherClientSite.site.siteId,
+                            milestoneId = milestone.targetId,
+                            code = "WP-BAD-SITE",
+                            name = "Invalid site context",
+                            description = null,
+                            owner = null,
+                            plannedStart = null,
+                            plannedEnd = null,
+                            sequence = null,
+                            baseProjectVersion = milestone.plan.project.version,
+                            expectedBaselineVersion = milestone.plan.project.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.admin,
+                            correlationId = "corr-plan-package-site-mismatch",
+                        ),
+                    )
+                }
+            assertEquals("WORK_PACKAGE_SITE_CONTEXT_INVALID", mismatchedSitePackage.code)
+
+            val staleBaseline =
+                assertThrows<ProductApiException> {
+                    planningService.createMilestone(
+                        CreateMilestoneCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = planning.project.projectId,
+                            code = "M-STALE",
+                            name = "Stale baseline",
+                            plannedDate = null,
+                            sequence = null,
+                            clientVisible = false,
+                            acceptanceRequirement = null,
+                            baseProjectVersion = milestone.plan.project.version,
+                            expectedBaselineVersion = milestone.plan.project.baselineVersion + 1,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.admin,
+                            correlationId = "corr-plan-stale-baseline",
+                        ),
+                    )
+                }
+            assertEquals("VERSION_CONFLICT", staleBaseline.code)
+
+            val workPackage =
+                planningService.createWorkPackage(
+                    CreateWorkPackageCommand(
+                        operationId = UUID.randomUUID(),
+                        projectId = planning.project.projectId,
+                        projectSiteId = attached.projectSite.projectSiteId,
+                        siteId = site.site.siteId,
+                        milestoneId = milestone.targetId,
+                        code = "WP-FOUNDATION",
+                        name = "Foundation package",
+                        description = "Planning structure only",
+                        owner =
+                            ProjectPrincipalInput(
+                                principalType = ProjectResponsibilityPrincipalType.TEAM,
+                                principalId = ids.team,
+                            ),
+                        plannedStart = LocalDate.parse("2026-10-01"),
+                        plannedEnd = LocalDate.parse("2026-10-25"),
+                        sequence = 30,
+                        baseProjectVersion = milestone.plan.project.version,
+                        expectedBaselineVersion = milestone.plan.project.baselineVersion,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.admin,
+                        correlationId = "corr-plan-package",
+                    ),
+                )
+            assertEquals(1, workPackage.plan.workPackages.size)
+            assertEquals("Delivery A", workPackage.plan.workPackages.single().owner?.principalLabel)
+
+            val dependency =
+                planningService.addDependency(
+                    AddPlanDependencyCommand(
+                        operationId = UUID.randomUUID(),
+                        projectId = planning.project.projectId,
+                        predecessor = PlanNodeRef(PlanNodeType.MILESTONE, milestone.targetId),
+                        successor = PlanNodeRef(PlanNodeType.WORK_PACKAGE, workPackage.targetId),
+                        dependencyType = PlanDependencyType.FINISH_TO_START,
+                        lagMinutes = 60,
+                        baseProjectVersion = workPackage.plan.project.version,
+                        expectedBaselineVersion = workPackage.plan.project.baselineVersion,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.admin,
+                        correlationId = "corr-plan-dependency",
+                    ),
+                )
+            assertEquals(1, dependency.plan.dependencies.size)
+            assertTrue(dependency.plan.validation.valid)
+            assertTrue(dependency.plan.readyGate.ready)
+
+            val selfEdge =
+                assertThrows<ProductApiException> {
+                    planningService.addDependency(
+                        AddPlanDependencyCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = planning.project.projectId,
+                            predecessor = PlanNodeRef(PlanNodeType.MILESTONE, milestone.targetId),
+                            successor = PlanNodeRef(PlanNodeType.MILESTONE, milestone.targetId),
+                            dependencyType = PlanDependencyType.FINISH_TO_START,
+                            lagMinutes = 0,
+                            baseProjectVersion = dependency.plan.project.version,
+                            expectedBaselineVersion = dependency.plan.project.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.admin,
+                            correlationId = "corr-plan-self-edge",
+                        ),
+                    )
+                }
+            assertEquals("PLAN_DEPENDENCY_SELF_EDGE", selfEdge.code)
+
+            val cycle =
+                assertThrows<ProductApiException> {
+                    planningService.addDependency(
+                        AddPlanDependencyCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = planning.project.projectId,
+                            predecessor = PlanNodeRef(PlanNodeType.WORK_PACKAGE, workPackage.targetId),
+                            successor = PlanNodeRef(PlanNodeType.MILESTONE, milestone.targetId),
+                            dependencyType = PlanDependencyType.FINISH_TO_START,
+                            lagMinutes = 0,
+                            baseProjectVersion = dependency.plan.project.version,
+                            expectedBaselineVersion = dependency.plan.project.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.admin,
+                            correlationId = "corr-plan-cycle",
+                        ),
+                    )
+                }
+            assertEquals("PLAN_DEPENDENCY_CYCLE", cycle.code)
+
+            val staleArea =
+                assertThrows<ProductApiException> {
+                    planningService.updateArea(
+                        UpdateAreaCommand(
+                            operationId = UUID.randomUUID(),
+                            areaId = area.targetId,
+                            projectId = planning.project.projectId,
+                            parentAreaId = null,
+                            typeCode = "BUILDING",
+                            code = "BLDG-A",
+                            name = "Stale Building A",
+                            sequence = 10,
+                            restrictedAccess = false,
+                            baseProjectVersion = dependency.plan.project.version,
+                            baseObjectVersion = area.plan.areas.single().version + 1,
+                            expectedBaselineVersion = dependency.plan.project.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.admin,
+                            correlationId = "corr-plan-stale",
+                        ),
+                    )
+                }
+            assertEquals("VERSION_CONFLICT", staleArea.code)
+
+            val deniedPlan =
+                assertThrows<ProductApiException> {
+                    planningService.plan(ids.ordinaryMember, planning.project.projectId)
+                }
+            assertEquals("OBJECT_NOT_VISIBLE", deniedPlan.code)
+
+            val importedSite =
+                service.attachSite(
+                    AttachProjectSiteCommand(
+                        operationId = UUID.randomUUID(),
+                        projectId = imported.project.projectId,
+                        baseProjectVersion = imported.project.version,
+                        siteId = site.site.siteId,
+                        projectSiteCode = "IMPORTED-MAIN",
+                        accessInstructions = null,
+                        projectSpecificNotes = null,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.admin,
+                        correlationId = "corr-plan-empty-site",
+                    ),
+                )
+            val importedKickoff =
+                service.startKickoff(
+                    ProjectLifecycleCommand(
+                        operationId = UUID.randomUUID(),
+                        projectId = imported.project.projectId,
+                        baseVersion = importedSite.project.version,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.admin,
+                        correlationId = "corr-plan-empty-kickoff",
+                    ),
+                )
+            val importedPlanning =
+                service.completeKickoff(
+                    ProjectLifecycleCommand(
+                        operationId = UUID.randomUUID(),
+                        projectId = imported.project.projectId,
+                        baseVersion = importedKickoff.project.version,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.admin,
+                        correlationId = "corr-plan-empty-planning",
+                    ),
+                )
+
+            val emptyReadyGate =
+                assertThrows<ProductApiException> {
+                    planningService.markReady(
+                        MarkProjectReadyCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = imported.project.projectId,
+                            baseProjectVersion = importedPlanning.project.version,
+                            expectedBaselineVersion = importedPlanning.project.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.admin,
+                            correlationId = "corr-plan-empty-ready",
+                        ),
+                    )
+                }
+            assertEquals("PROJECT_READY_GATE_BLOCKED", emptyReadyGate.code)
+
+            val crossProjectMilestone =
+                assertThrows<ProductApiException> {
+                    planningService.createWorkPackage(
+                        CreateWorkPackageCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = imported.project.projectId,
+                            projectSiteId = importedSite.projectSite.projectSiteId,
+                            siteId = site.site.siteId,
+                            milestoneId = milestone.targetId,
+                            code = "WP-CROSS-PROJECT",
+                            name = "Invalid cross Project package",
+                            description = null,
+                            owner = null,
+                            plannedStart = null,
+                            plannedEnd = null,
+                            sequence = null,
+                            baseProjectVersion = importedPlanning.project.version,
+                            expectedBaselineVersion = importedPlanning.project.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.admin,
+                            correlationId = "corr-plan-cross-project",
+                        ),
+                    )
+                }
+            assertEquals("WORK_PACKAGE_MILESTONE_INVALID", crossProjectMilestone.code)
+
+            val ready =
+                planningService.markReady(
+                    MarkProjectReadyCommand(
+                        operationId = UUID.randomUUID(),
+                        projectId = planning.project.projectId,
+                        baseProjectVersion = dependency.plan.project.version,
+                        expectedBaselineVersion = dependency.plan.project.baselineVersion,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.admin,
+                        correlationId = "corr-plan-ready",
+                    ),
+                )
+            assertEquals(ProjectLifecycleState.READY, ready.plan.project.lifecycleState)
+            assertFalse(ready.plan.canEditPlan)
+            assertTrue(published.any { it is ProjectPlanChanged })
+
+            val frozenMutation =
+                assertThrows<ProductApiException> {
+                    planningService.createMilestone(
+                        CreateMilestoneCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = planning.project.projectId,
+                            code = "M-AFTER-READY",
+                            name = "Must remain frozen",
+                            plannedDate = null,
+                            sequence = null,
+                            clientVisible = false,
+                            acceptanceRequirement = null,
+                            baseProjectVersion = ready.plan.project.version,
+                            expectedBaselineVersion = ready.plan.project.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.admin,
+                            correlationId = "corr-plan-frozen",
+                        ),
+                    )
+                }
+            assertEquals("PLAN_FROZEN", frozenMutation.code)
+
             val stale =
                 assertThrows<ProductApiException> {
                     service.updateProjectDetails(

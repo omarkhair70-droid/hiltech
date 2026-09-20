@@ -211,6 +211,7 @@ fun HiltechShell(
         ) -> Unit = {
             _, _, _, _, _, _ -> Unit
         },
+    onPlanningAction: (PlanningUiAction) -> Unit = {},
 ) {
     MaterialTheme {
         Column(
@@ -429,6 +430,8 @@ fun HiltechShell(
                                 onCreateSite,
                             onAttachSite =
                                 onAttachProjectSite,
+                            onPlanningAction =
+                                onPlanningAction,
                         )
                     }
 

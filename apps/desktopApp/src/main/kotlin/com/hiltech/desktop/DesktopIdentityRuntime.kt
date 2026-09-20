@@ -34,9 +34,19 @@ import com.hiltech.shared.core.people.WorkforceAssignmentApiClient
 import com.hiltech.shared.core.people.WorkforceAssignmentDto
 import com.hiltech.shared.core.people.WorkforceStructureDto
 import com.hiltech.shared.core.projects.AttachProjectSiteRequestDto
+import com.hiltech.shared.core.projects.AddPlanDependencyRequestDto
+import com.hiltech.shared.core.projects.CreateAreaRequestDto
+import com.hiltech.shared.core.projects.CreateMilestoneRequestDto
 import com.hiltech.shared.core.projects.ChangeProjectManagerRequestDto
 import com.hiltech.shared.core.projects.CreateProjectRequestDto
 import com.hiltech.shared.core.projects.CreateSiteRequestDto
+import com.hiltech.shared.core.projects.CreateWorkPackageRequestDto
+import com.hiltech.shared.core.projects.MarkProjectReadyRequestDto
+import com.hiltech.shared.core.projects.PlanNodeDto
+import com.hiltech.shared.core.projects.PlanningApiClient
+import com.hiltech.shared.core.projects.PlanningMutationResponseDto
+import com.hiltech.shared.core.projects.PlanningOwnerDto
+import com.hiltech.shared.core.projects.ProjectPlanDto
 import com.hiltech.shared.core.projects.ProjectCommandResponseDto
 import com.hiltech.shared.core.projects.ProjectListDto
 import com.hiltech.shared.core.projects.ProjectPrincipalDto
@@ -45,7 +55,11 @@ import com.hiltech.shared.core.projects.ProjectSiteListDto
 import com.hiltech.shared.core.projects.ProjectSummaryDto
 import com.hiltech.shared.core.projects.ProjectTransitionRequestDto
 import com.hiltech.shared.core.projects.ProjectsApiClient
+import com.hiltech.shared.core.projects.RemovePlanDependencyRequestDto
 import com.hiltech.shared.core.projects.SiteCommandResponseDto
+import com.hiltech.shared.core.projects.UpdateAreaRequestDto
+import com.hiltech.shared.core.projects.UpdateMilestoneRequestDto
+import com.hiltech.shared.core.projects.UpdateWorkPackageRequestDto
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.Dispatchers
@@ -133,6 +147,9 @@ class DesktopIdentityRuntime(
 
     private val projectsApi =
         ProjectsApiClient(productApi)
+
+    private val planningApi =
+        PlanningApiClient(productApi)
 
     suspend fun signIn(
         forceReauthentication: Boolean = false,
@@ -838,6 +855,246 @@ class DesktopIdentityRuntime(
                 installationId,
         )
     }
+
+    suspend fun projectPlan(
+        projectId: String,
+    ): ProjectPlanDto {
+        ensureConfigured()
+        return planningApi.plan(projectId, installationId)
+    }
+
+    suspend fun createArea(
+        projectId: String,
+        projectSiteId: String,
+        parentAreaId: String?,
+        typeCode: String,
+        code: String,
+        name: String,
+        sequence: Int?,
+        restrictedAccess: Boolean,
+        baseProjectVersion: Long,
+        expectedBaselineVersion: Int,
+    ): PlanningMutationResponseDto {
+        ensureConfigured()
+        return planningApi.createArea(
+            projectId,
+            CreateAreaRequestDto(
+                operationId = operationId(), projectSiteId = projectSiteId,
+                parentAreaId = parentAreaId, typeCode = typeCode, code = code, name = name,
+                sequence = sequence, restrictedAccess = restrictedAccess,
+                baseProjectVersion = baseProjectVersion,
+                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
+            ),
+            installationId,
+        )
+    }
+
+    suspend fun updateArea(
+        projectId: String,
+        areaId: String,
+        parentAreaId: String?,
+        typeCode: String,
+        code: String,
+        name: String,
+        sequence: Int?,
+        restrictedAccess: Boolean,
+        baseProjectVersion: Long,
+        baseObjectVersion: Long,
+        expectedBaselineVersion: Int,
+    ): PlanningMutationResponseDto {
+        ensureConfigured()
+        return planningApi.updateArea(
+            areaId,
+            UpdateAreaRequestDto(
+                operationId = operationId(), projectId = projectId, parentAreaId = parentAreaId,
+                typeCode = typeCode, code = code, name = name, sequence = sequence,
+                restrictedAccess = restrictedAccess, baseProjectVersion = baseProjectVersion,
+                baseObjectVersion = baseObjectVersion,
+                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
+            ),
+            installationId,
+        )
+    }
+
+    suspend fun createMilestone(
+        projectId: String,
+        code: String,
+        name: String,
+        plannedDate: String?,
+        sequence: Int?,
+        clientVisible: Boolean,
+        acceptanceRequirement: String?,
+        baseProjectVersion: Long,
+        expectedBaselineVersion: Int,
+    ): PlanningMutationResponseDto {
+        ensureConfigured()
+        return planningApi.createMilestone(
+            projectId,
+            CreateMilestoneRequestDto(
+                operationId = operationId(), code = code, name = name, plannedDate = plannedDate,
+                sequence = sequence, clientVisible = clientVisible,
+                acceptanceRequirement = acceptanceRequirement, baseProjectVersion = baseProjectVersion,
+                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
+            ),
+            installationId,
+        )
+    }
+
+    suspend fun updateMilestone(
+        projectId: String,
+        milestoneId: String,
+        code: String,
+        name: String,
+        plannedDate: String?,
+        sequence: Int?,
+        clientVisible: Boolean,
+        acceptanceRequirement: String?,
+        baseProjectVersion: Long,
+        baseObjectVersion: Long,
+        expectedBaselineVersion: Int,
+    ): PlanningMutationResponseDto {
+        ensureConfigured()
+        return planningApi.updateMilestone(
+            milestoneId,
+            UpdateMilestoneRequestDto(
+                operationId = operationId(), code = code, name = name, plannedDate = plannedDate,
+                sequence = sequence, clientVisible = clientVisible,
+                acceptanceRequirement = acceptanceRequirement, baseProjectVersion = baseProjectVersion,
+                baseObjectVersion = baseObjectVersion,
+                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
+            ),
+            installationId,
+        )
+    }
+
+    suspend fun createWorkPackage(
+        projectId: String,
+        projectSiteId: String?,
+        siteId: String?,
+        milestoneId: String?,
+        code: String,
+        name: String,
+        description: String?,
+        ownerType: String?,
+        ownerId: String?,
+        plannedStart: String?,
+        plannedEnd: String?,
+        sequence: Int?,
+        baseProjectVersion: Long,
+        expectedBaselineVersion: Int,
+    ): PlanningMutationResponseDto {
+        ensureConfigured()
+        return planningApi.createWorkPackage(
+            projectId,
+            CreateWorkPackageRequestDto(
+                operationId = operationId(), projectSiteId = projectSiteId, siteId = siteId,
+                milestoneId = milestoneId, code = code, name = name, description = description,
+                owner = planningOwner(ownerType, ownerId), plannedStart = plannedStart,
+                plannedEnd = plannedEnd, sequence = sequence, baseProjectVersion = baseProjectVersion,
+                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
+            ),
+            installationId,
+        )
+    }
+
+    suspend fun updateWorkPackage(
+        projectId: String,
+        workPackageId: String,
+        projectSiteId: String?,
+        siteId: String?,
+        milestoneId: String?,
+        code: String,
+        name: String,
+        description: String?,
+        ownerType: String?,
+        ownerId: String?,
+        plannedStart: String?,
+        plannedEnd: String?,
+        sequence: Int?,
+        baseProjectVersion: Long,
+        baseObjectVersion: Long,
+        expectedBaselineVersion: Int,
+    ): PlanningMutationResponseDto {
+        ensureConfigured()
+        return planningApi.updateWorkPackage(
+            workPackageId,
+            UpdateWorkPackageRequestDto(
+                operationId = operationId(), projectSiteId = projectSiteId, siteId = siteId,
+                milestoneId = milestoneId, code = code, name = name, description = description,
+                owner = planningOwner(ownerType, ownerId), plannedStart = plannedStart,
+                plannedEnd = plannedEnd, sequence = sequence, baseProjectVersion = baseProjectVersion,
+                baseObjectVersion = baseObjectVersion,
+                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
+            ),
+            installationId,
+        )
+    }
+
+    suspend fun addPlanDependency(
+        projectId: String,
+        predecessorType: String,
+        predecessorId: String,
+        successorType: String,
+        successorId: String,
+        dependencyType: String,
+        lagMinutes: Long,
+        baseProjectVersion: Long,
+        expectedBaselineVersion: Int,
+    ): PlanningMutationResponseDto {
+        ensureConfigured()
+        return planningApi.addDependency(
+            projectId,
+            AddPlanDependencyRequestDto(
+                operationId = operationId(), predecessor = PlanNodeDto(predecessorType, predecessorId),
+                successor = PlanNodeDto(successorType, successorId), dependencyType = dependencyType,
+                lagMinutes = lagMinutes, baseProjectVersion = baseProjectVersion,
+                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
+            ),
+            installationId,
+        )
+    }
+
+    suspend fun removePlanDependency(
+        projectId: String,
+        dependencyId: String,
+        baseProjectVersion: Long,
+        baseObjectVersion: Long,
+        expectedBaselineVersion: Int,
+    ): PlanningMutationResponseDto {
+        ensureConfigured()
+        return planningApi.removeDependency(
+            projectId, dependencyId,
+            RemovePlanDependencyRequestDto(
+                operationId = operationId(), baseProjectVersion = baseProjectVersion,
+                baseObjectVersion = baseObjectVersion,
+                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
+            ),
+            installationId,
+        )
+    }
+
+    suspend fun markProjectReady(
+        projectId: String,
+        baseProjectVersion: Long,
+        expectedBaselineVersion: Int,
+    ): PlanningMutationResponseDto {
+        ensureConfigured()
+        return planningApi.markReady(
+            projectId,
+            MarkProjectReadyRequestDto(
+                operationId = operationId(), baseProjectVersion = baseProjectVersion,
+                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
+            ),
+            installationId,
+        )
+    }
+
+    private fun planningOwner(type: String?, id: String?): PlanningOwnerDto? =
+        if (!type.isNullOrBlank() && !id.isNullOrBlank()) PlanningOwnerDto(type, id) else null
+
+    private fun operationId(): String = UUID.randomUUID().toString()
+
+    private fun occurredAt(): String = java.time.Instant.now().toString()
 
     suspend fun logout() {
         if (!configured) {
