@@ -98,10 +98,15 @@ class JdbcWorkPersistence(private val jdbc: JdbcTemplate) : WorkPersistencePort 
             FROM config_revision wt
             JOIN work_type_definition wtd ON wtd.config_revision_id = wt.id
             JOIN config_revision ap ON ap.id = wtd.assignment_policy_id
+            JOIN assignment_policy apd ON apd.config_revision_id = ap.id
             JOIN config_revision rp ON rp.id = wtd.readiness_policy_id
+            JOIN readiness_policy rpd ON rpd.config_revision_id = rp.id
             JOIN config_revision ep ON ep.id = wtd.evidence_policy_id
+            JOIN evidence_policy epd ON epd.config_revision_id = ep.id
             JOIN config_revision vp ON vp.id = wtd.review_policy_id
+            JOIN review_policy vpd ON vpd.config_revision_id = vp.id
             LEFT JOIN config_revision tp ON tp.id = wtd.tracking_policy_id
+            LEFT JOIN field_tracking_policy tpd ON tpd.config_revision_id = tp.id
             LEFT JOIN config_revision asset ON asset.id = wtd.asset_requirement_template_id
             LEFT JOIN template_definition atd ON atd.config_revision_id = asset.id
             LEFT JOIN config_revision material ON material.id = wtd.material_requirement_template_id
@@ -116,12 +121,22 @@ class JdbcWorkPersistence(private val jdbc: JdbcTemplate) : WorkPersistencePort 
               AND (wt.effective_from IS NULL OR wt.effective_from <= ?) AND (wt.effective_to IS NULL OR wt.effective_to > ?)
               AND ((wt.scope_type = 'ORGANIZATION' AND wt.scope_organization_id = ?) OR wt.scope_type = 'SYSTEM')
               AND ap.lifecycle_state = 'ACTIVE' AND rp.lifecycle_state = 'ACTIVE' AND ep.lifecycle_state = 'ACTIVE' AND vp.lifecycle_state = 'ACTIVE'
-              AND (tp.id IS NULL OR tp.lifecycle_state = 'ACTIVE')
-              AND (asset.id IS NULL OR asset.lifecycle_state = 'ACTIVE')
-              AND (material.id IS NULL OR material.lifecycle_state = 'ACTIVE')
-              AND (document.id IS NULL OR document.lifecycle_state = 'ACTIVE')
-              AND (checklist.id IS NULL OR checklist.lifecycle_state = 'ACTIVE')
-              AND (instruction.id IS NULL OR instruction.lifecycle_state = 'ACTIVE')
+              AND (ap.scope_type = 'SYSTEM' OR (wt.scope_type = 'ORGANIZATION' AND ap.scope_type = 'ORGANIZATION' AND ap.scope_organization_id = wt.scope_organization_id))
+              AND (rp.scope_type = 'SYSTEM' OR (wt.scope_type = 'ORGANIZATION' AND rp.scope_type = 'ORGANIZATION' AND rp.scope_organization_id = wt.scope_organization_id))
+              AND (ep.scope_type = 'SYSTEM' OR (wt.scope_type = 'ORGANIZATION' AND ep.scope_type = 'ORGANIZATION' AND ep.scope_organization_id = wt.scope_organization_id))
+              AND (vp.scope_type = 'SYSTEM' OR (wt.scope_type = 'ORGANIZATION' AND vp.scope_type = 'ORGANIZATION' AND vp.scope_organization_id = wt.scope_organization_id))
+              AND (tp.id IS NULL OR (tp.lifecycle_state = 'ACTIVE' AND tpd.config_revision_id IS NOT NULL
+                   AND (tp.scope_type = 'SYSTEM' OR (wt.scope_type = 'ORGANIZATION' AND tp.scope_type = 'ORGANIZATION' AND tp.scope_organization_id = wt.scope_organization_id))))
+              AND (asset.id IS NULL OR (asset.lifecycle_state = 'ACTIVE' AND atd.config_revision_id IS NOT NULL
+                   AND (asset.scope_type = 'SYSTEM' OR (wt.scope_type = 'ORGANIZATION' AND asset.scope_type = 'ORGANIZATION' AND asset.scope_organization_id = wt.scope_organization_id))))
+              AND (material.id IS NULL OR (material.lifecycle_state = 'ACTIVE' AND mtd.config_revision_id IS NOT NULL
+                   AND (material.scope_type = 'SYSTEM' OR (wt.scope_type = 'ORGANIZATION' AND material.scope_type = 'ORGANIZATION' AND material.scope_organization_id = wt.scope_organization_id))))
+              AND (document.id IS NULL OR (document.lifecycle_state = 'ACTIVE' AND dtd.config_revision_id IS NOT NULL
+                   AND (document.scope_type = 'SYSTEM' OR (wt.scope_type = 'ORGANIZATION' AND document.scope_type = 'ORGANIZATION' AND document.scope_organization_id = wt.scope_organization_id))))
+              AND (checklist.id IS NULL OR (checklist.lifecycle_state = 'ACTIVE' AND ctd.config_revision_id IS NOT NULL
+                   AND (checklist.scope_type = 'SYSTEM' OR (wt.scope_type = 'ORGANIZATION' AND checklist.scope_type = 'ORGANIZATION' AND checklist.scope_organization_id = wt.scope_organization_id))))
+              AND (instruction.id IS NULL OR (instruction.lifecycle_state = 'ACTIVE' AND itd.config_revision_id IS NOT NULL
+                   AND (instruction.scope_type = 'SYSTEM' OR (wt.scope_type = 'ORGANIZATION' AND instruction.scope_type = 'ORGANIZATION' AND instruction.scope_organization_id = wt.scope_organization_id))))
               $extra
             ORDER BY CASE WHEN wt.scope_type = 'ORGANIZATION' THEN 0 ELSE 1 END, wt.code, wt.revision_number DESC
             """.trimIndent(),
@@ -144,7 +159,7 @@ class JdbcWorkPersistence(private val jdbc: JdbcTemplate) : WorkPersistencePort 
             """SELECT cr.id, cr.code, cp.prefix, cp.include_year, cp.separator, cp.sequence_padding, cp.manual_override_allowed, cp.reset_rule
                FROM config_revision cr JOIN code_policy cp ON cp.config_revision_id = cr.id
                WHERE cr.family='code-policies' AND cr.lifecycle_state='ACTIVE' AND cp.target_object_type='WORK_ORDER'
-                 AND cp.sequence_scope='PROJECT'
+                 AND cp.sequence_scope='PROJECT' AND cp.uniqueness_scope='PROJECT'
                  AND ((cr.scope_type='ORGANIZATION' AND cr.scope_organization_id=?) OR cr.scope_type='SYSTEM')
                  AND (cr.effective_from IS NULL OR cr.effective_from<=?) AND (cr.effective_to IS NULL OR cr.effective_to>?)
                ORDER BY CASE WHEN cr.scope_type='ORGANIZATION' THEN 0 ELSE 1 END, cr.code""".trimIndent(),
