@@ -11,7 +11,7 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
 - Phase 2 — Shared Product Infrastructure: **VERIFIED / COMPLETE**
-- Current execution phase: **Phase 4 — Projects / Sites / Work Core — Slice 01 Project + Site / ProjectSite contract FROZEN; Slice 01 production implementation next**
+- Current execution phase: **Phase 4 — Projects / Sites / Work Core — Slice 01 VERIFIED / MERGED; Slice 02 Project Planning Structure reality + implementation contract closure next**
 - Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
 - Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
 - Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
@@ -77,8 +77,12 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 4 owner entry reconstruction: `docs/13-delivery/phase4/00_PHASE4_OWNER_ENTRY_REALITY_RECONSTRUCTION_2026-09-20.md` — **PASS / OWNER ACCEPTED**
 - Phase 4 scope/slice closure: `docs/13-delivery/phase4/01_PHASE4_SCOPE_AND_SLICE_PLAN_2026-09-20.md` — **PASS / SCOPE FROZEN / 6 SLICES**
 - Approval cursor stability prerequisite: PR #54 merged at `b9eee0ee5af61ffb960b3b4baa142b2896a9ac59`; exact-head Approval Stability `35511034523`, Bootstrap `35511034711`, Native OIDC `35511034539`, and post-merge Bootstrap `35511320336` — **PASS**
-- Phase 4 Slice 01 reality + implementation contract: `docs/13-delivery/phase4/02_PROJECT_SITE_CORE_REALITY_AND_IMPLEMENTATION_CONTRACT_2026-09-20.md` — **PASS / FROZEN / PRODUCTION CODE AUTHORIZED FOR SLICE 01 ONLY**
-- Current rule: implement only the frozen Slice 01 Project + Site / ProjectSite vertical. Preserve the DRAFT -> KICKOFF -> PLANNING lifecycle boundary and do not pull WorkOrder, Warehouse, READY/ACTIVE or Field/Offline work forward.
+- Phase 4 Slice 01 reality + implementation contract: `docs/13-delivery/phase4/02_PROJECT_SITE_CORE_REALITY_AND_IMPLEMENTATION_CONTRACT_2026-09-20.md` — **PASS / FROZEN**
+- Phase 4 Slice 01 final gap review: `docs/13-delivery/phase4/03_PROJECT_SITE_CORE_FINAL_GAP_REVIEW_2026-09-20.md` — **PASS / VERIFIED / MERGED / NO ADDITIONAL SLICE 01 WORK REQUIRED**
+- Slice 01 final tested head: `89c19605405dad912457dc22286751c2eb379752`
+- Slice 01 exact-head verification: Phase 4 Project Site Core `35515218944` / Bootstrap `35515218905` / Native OIDC `35515218910` / Onboarding `35515218926` / Assignment Change `35515218940` / Offboarding `35515218945` — **PASS**
+- Slice 01 final merge commit: `e6b87dd4a6a4f66e72190a5d1d3c632b414f359e`; post-merge Bootstrap `35515882737` — **PASS**
+- Current rule: Slice 01 is closed. Before any Slice 02 production code, close and freeze the Slice 02 Project Planning Structure reality + implementation contract. Preserve Slice 03 WorkOrder, Phase 5 Warehouse and Phase 6 Field/Offline boundaries.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
