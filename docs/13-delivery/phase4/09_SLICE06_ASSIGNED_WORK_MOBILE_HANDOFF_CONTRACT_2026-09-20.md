@@ -52,6 +52,7 @@ Includes:
 - current assignment;
 - exact WorkPolicyBinding revision summary;
 - current WorkInstructionRevision;
+- optional WorkTask planning context where present;
 - checklist item definitions/current server state;
 - readiness requirement instances;
 - evidence requirement definitions;
