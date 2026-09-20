@@ -119,6 +119,7 @@ Planned forward migrations:
   - harden existing V0005 Work tables;
   - WorkOrder tenant/baseline consistency;
   - WorkPackage FK;
+  - optional WorkTask planning table;
   - WorkOrder dependency structure;
   - active WorkPolicyBinding uniqueness/indexes;
   - typed instruction/checklist/runtime invariants;
@@ -208,6 +209,8 @@ No new authoritative execution lifecycle transition.
 - PUT `/v1/work-orders/{workOrderId}/details`
 - POST `/v1/work-orders/{workOrderId}/plan`
 - POST `/v1/work-orders/{workOrderId}/instruction-revisions`
+- POST `/v1/work-orders/{workOrderId}/tasks`
+- PUT `/v1/work-tasks/{taskId}`
 - POST `/v1/work-orders/{workOrderId}/dependencies`
 - DELETE `/v1/work-orders/{workOrderId}/dependencies/{dependencyId}`
 - GET `/v1/projects/{projectId}/work-orders`
