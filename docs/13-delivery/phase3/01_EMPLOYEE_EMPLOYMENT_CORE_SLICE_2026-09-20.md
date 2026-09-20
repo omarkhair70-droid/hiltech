@@ -1,7 +1,7 @@
 # Phase 3 / Slice 01 — Employee / Employment Core
 
 Date: 2026-09-20  
-Status: **IMPLEMENTATION AUTHORIZED / CONTRACT FROZEN**
+Status: **VERIFIED / READY TO MERGE**
 
 ## Reality basis
 
@@ -26,7 +26,7 @@ Identity owns:
 Organizations owns:
 - organization scope/membership foundation.
 
-People may reference `user_identity.id`, but employment state must not be derived from authentication state.
+People owns Person/Employee/Employment. Identity links to Person through the existing `user_identity.person_id`; employment state must not be derived from authentication state. Do not add a second Employee→Identity foreign key for the same relationship.
 
 ## Minimum schema
 
@@ -34,7 +34,6 @@ People may reference `user_identity.id`, but employment state must not be derive
 
 Required:
 - `id uuid`;
-- `organization_id uuid`;
 - `display_name varchar`;
 - `legal_name varchar null` — restricted;
 - `mobile varchar null` — restricted;
@@ -44,7 +43,8 @@ Required:
 - `version bigint`.
 
 Rules:
-- organization scoped;
+- Person is the human identity independent of organization/employment;
+- organization/tenant scoping is enforced through Employee, never by exposing Person directly across organization boundaries;
 - display name required and bounded;
 - do not add national ID, bank, salary, medical/emergency fields in Slice 01;
 - later highly restricted fields get their own validated contract.
@@ -56,7 +56,6 @@ Required:
 - `organization_id uuid`;
 - `person_id uuid`;
 - `employee_code varchar`;
-- `linked_user_identity_id uuid null`;
 - `state`;
 - `hire_date date null`;
 - `end_date date null`;
@@ -73,8 +72,8 @@ Initial states:
 Rules:
 - employee code unique per organization;
 - one active employee record per person per HILTECH organization in this minimal model;
-- one linked user identity cannot be linked to two current employees in the same organization;
-- linked identity, when present, must belong to the same organization;
+- identity linkage is derived through `user_identity.person_id`; do not duplicate it on Employee;
+- a linked identity used for HILTECH self-service must have a current membership in the Employee organization;
 - `FORMER` is not created directly through normal create command;
 - state transitions other than initial PREBOARDING/legacy ACTIVE seeding remain later Slice contracts.
 
@@ -116,7 +115,7 @@ Input:
 - employeeCode;
 - startDate;
 - employmentTypeCode nullable;
-- linkedUserIdentityId nullable;
+- linkedUserIdentityId nullable — applied by setting the existing `user_identity.person_id` to the created Person after same-organization/current-membership validation;
 - hireDate nullable;
 - safe optional contact fields.
 
@@ -131,7 +130,7 @@ Behavior:
 ### LinkEmployeeIdentity
 
 Purpose:
-attach an existing HILTECH identity to an employee without conflating the records.
+attach an existing HILTECH identity to the Employee's Person through the existing `user_identity.person_id`, without conflating authentication identity with employment.
 
 Input:
 - operationId;
@@ -140,8 +139,9 @@ Input:
 - userIdentityId.
 
 Rules:
-- same organization;
-- identity membership must be current/valid;
+- target Employee determines the HILTECH organization;
+- identity membership in that organization must be current/valid;
+- identity `person_id` must be NULL or already equal to this Employee's Person;
 - exact version;
 - idempotent;
 - audit;
@@ -170,7 +170,7 @@ Safe operational fields only:
 - employeeCode;
 - displayName;
 - employeeState;
-- linkedIdentity: boolean;
+- linkedIdentity: boolean — derived from current identities whose `person_id = employee.person_id`;
 - currentEmploymentTypeCode nullable;
 - hireDate nullable;
 - version.
@@ -189,14 +189,14 @@ Authorized People/HR view may add:
 - legalName;
 - mobile/email;
 - employment dates/type code;
-- linked identity reference;
+- linked identity reference derived from `user_identity.person_id`;
 - timestamps/version.
 
 Sensitive fields remain permission scoped.
 
 ### OwnEmployeeProfile
 
-If logged-in identity is linked:
+If logged-in identity has `user_identity.person_id` matching an Employee Person in an organization where that identity has current membership:
 - own safe profile/contact fields;
 - own employee/employment state.
 
@@ -225,9 +225,13 @@ Minimum relations/capabilities:
 - operational users can read only safe directory fields where policy allows;
 - cross-organization reads/writes fail closed.
 
-Do not infer People admin purely from job-title text.
+Do not infer People admin from job-title text or from the broad `organization.admin` relation.
 
-Use existing role/team/OpenFGA authorization relationships and explicit People permissions.
+Slice 01 introduces an explicit effective-dated `PeopleAuthorityBinding` source in PostgreSQL and a scoped OpenFGA `organization.people_admin -> can_manage_people` projection. USER and TEAM principals are supported by the authority binding shape. Current organization/team membership is revalidated at decision time.
+
+Grant/revoke projection uses the existing transactional authorization projection outbox and fail-closed guard. A revoked/expired binding must deny immediately from current PostgreSQL source even before OpenFGA tuple cleanup converges.
+
+Initial real environment seeding of People admin authority is activation/configuration data; do not hard-code Mohamed, Ahmed, titles, or identity IDs in product code.
 
 ## Events
 
@@ -309,24 +313,63 @@ Do not implement:
 4. duplicate employee code in same organization is rejected safely.
 5. same code may exist in another organization only if business scope permits by constraint.
 6. multiple historical Employment periods for one Employee are representable, while the current minimal invariant prevents two simultaneously ACTIVE periods.
-7. linked identity must belong to same organization/current membership.
-8. one current identity cannot link to two current employees in same organization.
-9. UpdateEmployeeProfile requires exact version and stale update conflicts.
-10. safe directory never returns restricted legal/contact fields.
-11. own-profile resolves only through linked current identity.
-12. cross-organization reads/writes fail closed.
-13. events contain no restricted field values.
-14. audit exists for material commands.
-15. shared error/idempotency/correlation conventions are reused.
-16. real PostgreSQL contract test passes.
-17. OpenFGA/authorization contract test passes.
-18. inherited Phase 0–2 regression suites remain green.
-19. Android/Windows shared-client compile remains green if DTO/client surface is added.
+7. `user_identity.person_id` is the only Identity↔Person link; no duplicate Employee identity FK exists.
+8. linked identity must have current membership in the Employee organization.
+9. one Person maps to at most one Employee within the same organization.
+10. UpdateEmployeeProfile requires exact version and stale update conflicts.
+11. safe directory never returns restricted legal/contact fields.
+12. own-profile resolves only through linked current identity/person and current organization membership.
+13. cross-organization reads/writes fail closed.
+14. events contain no restricted field values.
+15. audit exists for material commands.
+16. shared error/idempotency/correlation conventions are reused.
+17. real PostgreSQL contract test passes.
+18. OpenFGA/authorization contract test passes.
+19. People admin grant is sourced by current PostgreSQL PeopleAuthorityBinding and projected through the authorization outbox; pending grant fails closed.
+20. revoked/expired People authority denies immediately and converges to OpenFGA tuple removal.
+21. broad organization admin/title text is not used as People authority.
+22. inherited Phase 0–2 regression suites remain green.
+23. Android/Windows shared-client compile remains green if DTO/client surface is added.
+
+## Verification closure
+
+Canonical tested code head:
+
+`59c5cb9fb4d859260ba48a9f8edd5ecce5a97e96`
+
+Exact-head verification:
+
+- Contract — OpenFGA First Slice `35477856791` — **PASS**
+- Bootstrap Phase 0 `35477856788` — **PASS**
+  - database/jOOQ contract — PASS
+  - local PostgreSQL/OpenFGA People contract — PASS
+  - shared/client/foundation regressions — PASS
+  - evidence-storage / Terraform / supply-chain — PASS
+- Phase 1 Native OIDC Production Smoke `35477856782` — **PASS**
+  - browser provider smoke — PASS
+  - Windows production shell render — PASS
+  - Android production shell render — PASS
+- Phase 2 Shared Command Runtime `35477856796` — **PASS**
+
+Verified implementation includes:
+
+- Person / Employee / historical Employment persistence;
+- one current ACTIVE Employment baseline with rehire/history representable;
+- the existing `user_identity.person_id` as the only Identity↔Person link;
+- safe employee directory, privileged detail and own-profile reads;
+- idempotent employee create / identity-link / profile-update commands;
+- exact-version conflict handling;
+- audit + safe domain events;
+- explicit effective-dated People authority binding source;
+- fail-closed OpenFGA People authority projection including grant/revoke convergence;
+- shared KMP People contracts/client;
+- Android own-profile proof surface;
+- Windows People directory/detail/create proof surface.
+
+No Team/Manager, onboarding, certification/document, attendance, leave, payroll, offboarding or legacy-import scope was pulled into Slice 01.
 
 ## Contract conclusion
 
-**IMPLEMENTATION AUTHORIZED.**
+**VERIFIED / READY TO MERGE.**
 
-Build only the Employee / Employment Core described above.
-
-Do not expand into the remaining Phase 3 slices until Slice 01 is verified/merged.
+Merge only the verified closure head after docs-only closure checks. After merge, require post-merge `main` Bootstrap PASS before opening Phase 3 Slice 02 implementation.

@@ -10,10 +10,13 @@ type organization
     define config_viewer: [user]
     define config_editor: [user]
     define config_activator: [user]
+    define people_admin: [user, team#member]
 
     define can_view_config: config_viewer or config_editor or config_activator or admin
     define can_edit_config: config_editor or admin
     define can_activate_config: config_activator or admin
+    define can_view_people_private: people_admin
+    define can_manage_people: people_admin
 
 type team
   relations

@@ -20,12 +20,18 @@ tuples:
   - user: user:config-activator
     relation: member
     object: organization:hiltech
+  - user: user:people-admin
+    relation: member
+    object: organization:hiltech
 
   - user: user:config-editor
     relation: config_editor
     object: organization:hiltech
   - user: user:config-activator
     relation: config_activator
+    object: organization:hiltech
+  - user: user:people-admin
+    relation: people_admin
     object: organization:hiltech
 
   - user: user:tech1
@@ -121,6 +127,17 @@ tuples:
     object: configuration_revision:worktype-r2
 
 tests:
+  - name: People administration is scoped and does not imply config administration
+    check:
+      - user: user:people-admin
+        object: organization:hiltech
+        assertions:
+          member: true
+          can_view_people_private: true
+          can_manage_people: true
+          can_edit_config: false
+          can_activate_config: false
+
   - name: project manager project permissions
     check:
       - user: user:pm1

@@ -5,16 +5,25 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.IdentitySecuritySnapshot
+import com.hiltech.shared.core.people.EmployeeDetailDto
+import com.hiltech.shared.core.people.EmployeeDirectoryDto
 
 sealed interface HiltechShellState {
     data object SignedOut : HiltechShellState
@@ -22,6 +31,7 @@ sealed interface HiltechShellState {
     data class SignedIn(
         val identity: IdentityBootstrapDto,
         val security: IdentitySecuritySnapshot? = null,
+        val people: HiltechPeopleState? = null,
     ) : HiltechShellState
     data class AccessDenied(
         val code: String,
@@ -36,6 +46,14 @@ sealed interface HiltechShellState {
     ) : HiltechShellState
 }
 
+data class HiltechPeopleState(
+    val loading: Boolean = false,
+    val ownProfile: EmployeeDetailDto? = null,
+    val directory: EmployeeDirectoryDto? = null,
+    val selectedEmployee: EmployeeDetailDto? = null,
+    val errorMessage: String? = null,
+)
+
 @Composable
 fun HiltechShell(
     state: HiltechShellState = HiltechShellState.SignedOut,
@@ -46,10 +64,25 @@ fun HiltechShell(
     onReauthenticate: () -> Unit = {},
     onRevokeSession: (String) -> Unit = {},
     onRevokeDevice: (String) -> Unit = {},
+    onRefreshPeople: () -> Unit = {},
+    onSelectEmployee: (String) -> Unit = {},
+    onCreateEmployee:
+        (
+            displayName: String,
+            employeeCode: String,
+            startDate: String,
+            employmentTypeCode: String?,
+        ) -> Unit = { _, _, _, _ -> },
 ) {
     MaterialTheme {
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(
+                        rememberScrollState(),
+                    )
+                    .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
@@ -204,6 +237,18 @@ fun HiltechShell(
                         }
                     }
 
+                    state.people?.let { people ->
+                        PeopleSection(
+                            state = people,
+                            onRefresh =
+                                onRefreshPeople,
+                            onSelectEmployee =
+                                onSelectEmployee,
+                            onCreateEmployee =
+                                onCreateEmployee,
+                        )
+                    }
+
                     OutlinedButton(onClick = onSignOut) {
                         Text("Sign out")
                     }
@@ -245,5 +290,224 @@ fun HiltechShell(
                 }
             }
         }
+    }
+}
+
+
+@Composable
+private fun PeopleSection(
+    state: HiltechPeopleState,
+    onRefresh: () -> Unit,
+    onSelectEmployee: (String) -> Unit,
+    onCreateEmployee:
+        (
+            displayName: String,
+            employeeCode: String,
+            startDate: String,
+            employmentTypeCode: String?,
+        ) -> Unit,
+) {
+    Text(
+        "People",
+        style = MaterialTheme.typography.titleMedium,
+    )
+
+    if (state.loading) {
+        Text("Loading People context…")
+    }
+
+    state.errorMessage?.let {
+        Text(it)
+    }
+
+    state.ownProfile?.let { own ->
+        Text(
+            "My employee profile",
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Text(
+            own.displayName +
+                " · " +
+                own.employeeCode +
+                " · " +
+                own.employeeState,
+        )
+        own.employmentTypeCode?.let {
+            Text("Employment: $it")
+        }
+    }
+
+    state.directory?.let { directory ->
+        Text(
+            "Employees: " +
+                directory.items.size,
+        )
+
+        directory.items.forEach { employee ->
+            if (directory.canManagePeople) {
+                OutlinedButton(
+                    onClick = {
+                        onSelectEmployee(
+                            employee.employeeId,
+                        )
+                    },
+                ) {
+                    Text(
+                        employee.employeeCode +
+                            " · " +
+                            employee.displayName +
+                            " · " +
+                            employee.employeeState,
+                    )
+                }
+            } else {
+                Text(
+                    employee.employeeCode +
+                        " · " +
+                        employee.displayName +
+                        " · " +
+                        employee.employeeState,
+                )
+            }
+        }
+
+        if (directory.canManagePeople) {
+            PeopleCreateForm(
+                onCreateEmployee =
+                    onCreateEmployee,
+            )
+        }
+    }
+
+    state.selectedEmployee?.let { employee ->
+        Text(
+            "Employee detail",
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Text(
+            employee.displayName +
+                " · " +
+                employee.employeeCode,
+        )
+        Text(
+            "State: " +
+                employee.employeeState +
+                " · version " +
+                employee.version,
+        )
+        employee.employmentTypeCode
+            ?.let {
+                Text(
+                    "Employment: $it",
+                )
+            }
+        employee.legalName?.let {
+            Text("Legal name: $it")
+        }
+        employee.mobile?.let {
+            Text("Mobile: $it")
+        }
+        employee.email?.let {
+            Text("Email: $it")
+        }
+    }
+
+    OutlinedButton(
+        onClick = onRefresh,
+    ) {
+        Text("Refresh People")
+    }
+}
+
+@Composable
+private fun PeopleCreateForm(
+    onCreateEmployee:
+        (
+            displayName: String,
+            employeeCode: String,
+            startDate: String,
+            employmentTypeCode: String?,
+        ) -> Unit,
+) {
+    var displayName by
+        remember {
+            mutableStateOf("")
+        }
+    var employeeCode by
+        remember {
+            mutableStateOf("")
+        }
+    var startDate by
+        remember {
+            mutableStateOf("")
+        }
+    var employmentTypeCode by
+        remember {
+            mutableStateOf("")
+        }
+
+    Text(
+        "Create employee",
+        style = MaterialTheme.typography.titleSmall,
+    )
+    OutlinedTextField(
+        value = displayName,
+        onValueChange = {
+            displayName = it
+        },
+        label = {
+            Text("Display name")
+        },
+        singleLine = true,
+    )
+    OutlinedTextField(
+        value = employeeCode,
+        onValueChange = {
+            employeeCode = it
+        },
+        label = {
+            Text("Employee code")
+        },
+        singleLine = true,
+    )
+    OutlinedTextField(
+        value = startDate,
+        onValueChange = {
+            startDate = it
+        },
+        label = {
+            Text("Start date (YYYY-MM-DD)")
+        },
+        singleLine = true,
+    )
+    OutlinedTextField(
+        value = employmentTypeCode,
+        onValueChange = {
+            employmentTypeCode = it
+        },
+        label = {
+            Text("Employment type code")
+        },
+        singleLine = true,
+    )
+    Button(
+        onClick = {
+            onCreateEmployee(
+                displayName.trim(),
+                employeeCode.trim(),
+                startDate.trim(),
+                employmentTypeCode
+                    .trim()
+                    .takeIf {
+                        it.isNotEmpty()
+                    },
+            )
+        },
+        enabled =
+            displayName.isNotBlank() &&
+                employeeCode.isNotBlank() &&
+                startDate.isNotBlank(),
+    ) {
+        Text("Create")
     }
 }

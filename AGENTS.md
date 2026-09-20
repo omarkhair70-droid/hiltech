@@ -11,7 +11,7 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
 - Phase 2 — Shared Product Infrastructure: **VERIFIED / COMPLETE**
-- Current execution phase: **Phase 3 — People / Internal Workforce Core / Slice 01 — Employee / Employment Core**
+- Current execution phase: **Phase 3 — People / Internal Workforce Core / Slice 01 — Employee / Employment Core — VERIFIED / READY TO MERGE**
 - Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
 - Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
 - Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
@@ -45,8 +45,10 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 2 final gap review: `docs/13-delivery/phase2/07_PHASE2_FINAL_GAP_REVIEW_2026-09-20.md` — **PASS / NO ADDITIONAL PHASE 2 SLICE REQUIRED**
 - Phase 2 final closure PR #37 merge commit: `624bd6c50f8d17535316ae450a8a780bc756a108`; post-merge Bootstrap `35474921624` — **PASS**
 - Phase 3 scope closure: `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md` — **PASS / SLICE PLAN FROZEN**
-- Phase 3 Slice 01 contract: `docs/13-delivery/phase3/01_EMPLOYEE_EMPLOYMENT_CORE_SLICE_2026-09-20.md` — **IMPLEMENTATION AUTHORIZED**
-- Current rule: implement only Employee / Employment Core; do not pull Team/Manager, onboarding, certifications, offboarding, attendance, payroll or legacy import into Slice 01.
+- Phase 3 Slice 01 contract: `docs/13-delivery/phase3/01_EMPLOYEE_EMPLOYMENT_CORE_SLICE_2026-09-20.md` — **VERIFIED / READY TO MERGE**
+- Phase 3 Slice 01 canonical tested code head: `59c5cb9fb4d859260ba48a9f8edd5ecce5a97e96`
+- Slice 01 verification runs: OpenFGA `35477856791` / Bootstrap `35477856788` / Phase 1 OIDC `35477856782` / Phase 2 runtime `35477856796` — **PASS**
+- Current rule: close/merge Slice 01 only; do not start Team/Manager, onboarding, certifications, offboarding, attendance, payroll or legacy import until post-merge verification and the next Slice 02 contract gate.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
