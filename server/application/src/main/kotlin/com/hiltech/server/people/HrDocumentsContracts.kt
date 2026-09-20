@@ -78,6 +78,18 @@ data class CreateEmployeeDocumentCommand(
     val correlationId: String,
 )
 
+data class CreateOwnEmployeeDocumentCommand(
+    val operationId: UUID,
+    val organizationId: UUID,
+    val baseEmployeeVersion: Long,
+    val documentTypeCode: String,
+    val documentLabel: String?,
+    val issueDate: LocalDate?,
+    val expiryDate: LocalDate?,
+    val actorUserId: UUID,
+    val correlationId: String,
+)
+
 data class VerifyEmployeeDocumentCommand(
     val operationId: UUID,
     val documentId: UUID,

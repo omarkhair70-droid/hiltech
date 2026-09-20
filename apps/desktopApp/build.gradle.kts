@@ -64,3 +64,14 @@ compose.desktop {
         }
     }
 }
+
+
+tasks.register<JavaExec>("renderPhase3OnboardingEvidence") {
+    group = "verification"
+    description = "Renders Phase 3 onboarding Desktop human-flow evidence."
+    dependsOn(tasks.named("testClasses"))
+    classpath = testRuntimeClasspath
+    mainClass.set(
+        "com.hiltech.desktop.evidence.Phase3OnboardingRenderEvidenceKt",
+    )
+}

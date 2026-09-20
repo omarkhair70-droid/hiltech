@@ -3,6 +3,7 @@ package com.hiltech.desktop
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
@@ -141,6 +142,10 @@ fun main() {
                 identity = identity,
                 people =
                     HiltechPeopleState(
+                        loading = true,
+                    ),
+                onboarding =
+                    HiltechOnboardingState(
                         loading = true,
                     ),
             ),
@@ -299,6 +304,135 @@ fun main() {
         }
     }
 
+    fun refreshOnboarding() {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+        val organizationId =
+            signed.identity.organizations
+                .firstOrNull {
+                    it.primary
+                }
+                ?.organizationId
+                ?: signed.identity
+                    .organizations
+                    .firstOrNull()
+                    ?.organizationId
+                ?: return
+        val selectedEmployeeId =
+            signed.people
+                ?.selectedEmployee
+                ?.employeeId
+
+        setState(
+            signed.copy(
+                onboarding =
+                    (signed.onboarding
+                        ?: HiltechOnboardingState())
+                        .copy(
+                            loading = true,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+
+        scope.launch {
+            val ownCaseResult =
+                runCatching {
+                    runtime.ownOnboarding(
+                        organizationId,
+                    )
+                }
+            val ownDocumentsResult =
+                runCatching {
+                    runtime.ownDocuments(
+                        organizationId,
+                    )
+                }
+            val ownCertificationsResult =
+                runCatching {
+                    runtime.ownCertifications(
+                        organizationId,
+                    )
+                }
+            val selectedResult =
+                selectedEmployeeId?.let {
+                    runCatching {
+                        runtime
+                            .employeeOnboarding(it)
+                    }
+                }
+
+            val current =
+                shellState.value as?
+                    HiltechShellState.SignedIn
+            if (
+                current != null &&
+                current.identity.identityId ==
+                    signed.identity.identityId
+            ) {
+                fun absentCase(
+                    failure: Throwable?,
+                ): Boolean =
+                    failure is HiltechApiException &&
+                        failure.code ==
+                        "ONBOARDING_CASE_NOT_FOUND"
+
+                val ownFailure =
+                    ownCaseResult
+                        .exceptionOrNull()
+                val selectedFailure =
+                    selectedResult
+                        ?.exceptionOrNull()
+
+                val error =
+                    listOfNotNull(
+                        ownFailure
+                            ?.takeUnless {
+                                absentCase(it) ||
+                                    (
+                                        it is
+                                            HiltechApiException &&
+                                            it.code ==
+                                            "OWN_EMPLOYEE_NOT_FOUND"
+                                    )
+                            }
+                            ?.message,
+                        selectedFailure
+                            ?.takeUnless {
+                                absentCase(it)
+                            }
+                            ?.message,
+                    ).takeIf {
+                        it.isNotEmpty()
+                    }?.joinToString(" ")
+
+                setState(
+                    current.copy(
+                        onboarding =
+                            HiltechOnboardingState(
+                                ownCase =
+                                    ownCaseResult
+                                        .getOrNull(),
+                                ownDocuments =
+                                    ownDocumentsResult
+                                        .getOrNull(),
+                                ownCertifications =
+                                    ownCertificationsResult
+                                        .getOrNull(),
+                                selectedEmployeeCase =
+                                    selectedResult
+                                        ?.getOrNull(),
+                                errorMessage =
+                                    error,
+                            ),
+                    ),
+                )
+            }
+        }
+    }
+
     fun selectEmployee(
         employeeId: String,
     ) {
@@ -330,6 +464,7 @@ fun main() {
                                     ),
                         ),
                     )
+                    refreshOnboarding()
                 }
             }.onFailure { failure ->
                 val current =
@@ -487,6 +622,7 @@ fun main() {
             }.onSuccess { identity ->
                 showSignedIn(identity)
                 refreshPeople()
+                refreshOnboarding()
             }.onFailure(::showFailure)
         }
     }
@@ -570,6 +706,8 @@ fun main() {
                 onRevokeSession = ::revokeSession,
                 onRevokeDevice = ::revokeDevice,
                 onRefreshPeople = ::refreshPeople,
+                onRefreshOnboarding =
+                    ::refreshOnboarding,
                 onSelectEmployee = ::selectEmployee,
                 onCreateEmployee = ::createEmployee,
             )

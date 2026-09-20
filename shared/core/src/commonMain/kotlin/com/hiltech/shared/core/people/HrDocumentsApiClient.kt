@@ -13,6 +13,95 @@ class HrDocumentsApiClient(
             explicitNulls = false
         },
 ) {
+    suspend fun ownDocuments(
+        organizationId: String,
+        installationId: String,
+    ): EmployeeDocumentListDto {
+        requireId(organizationId)
+
+        return api.request(
+            method = HttpMethod.Get,
+            path =
+                "/v1/me/employee-documents?organizationId=" +
+                    organizationId,
+            options =
+                HiltechRequestOptions(
+                    installationId =
+                        installationId,
+                ),
+            decode = {
+                json.decodeFromString(
+                    EmployeeDocumentListDto
+                        .serializer(),
+                    it,
+                )
+            },
+        )
+    }
+
+    suspend fun createOwnDocument(
+        request:
+            CreateOwnEmployeeDocumentRequestDto,
+        installationId: String,
+    ): EmployeeDocumentCommandResponseDto {
+        requireId(request.operationId)
+        requireId(request.organizationId)
+        require(
+            request.baseEmployeeVersion >= 1,
+        )
+
+        return api.request(
+            method = HttpMethod.Post,
+            path = "/v1/me/employee-documents",
+            options =
+                HiltechRequestOptions(
+                    installationId =
+                        installationId,
+                    idempotencyKey =
+                        request.operationId,
+                ),
+            requestBody =
+                json.encodeToString(
+                    CreateOwnEmployeeDocumentRequestDto
+                        .serializer(),
+                    request,
+                ),
+            decode = {
+                json.decodeFromString(
+                    EmployeeDocumentCommandResponseDto
+                        .serializer(),
+                    it,
+                )
+            },
+        )
+    }
+
+    suspend fun ownCertifications(
+        organizationId: String,
+        installationId: String,
+    ): CertificationListDto {
+        requireId(organizationId)
+
+        return api.request(
+            method = HttpMethod.Get,
+            path =
+                "/v1/me/certifications?organizationId=" +
+                    organizationId,
+            options =
+                HiltechRequestOptions(
+                    installationId =
+                        installationId,
+                ),
+            decode = {
+                json.decodeFromString(
+                    CertificationListDto
+                        .serializer(),
+                    it,
+                )
+            },
+        )
+    }
+
     suspend fun createDocument(
         employeeId: String,
         request: CreateEmployeeDocumentRequestDto,

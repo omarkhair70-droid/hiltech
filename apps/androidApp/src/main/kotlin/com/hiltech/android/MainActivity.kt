@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hiltech.android.identity.AndroidIdentityRuntime
+import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
@@ -61,6 +62,8 @@ class MainActivity : ComponentActivity() {
                 onRevokeSession = ::revokeSession,
                 onRevokeDevice = ::revokeDevice,
                 onRefreshPeople = ::refreshPeople,
+                onRefreshOnboarding =
+                    ::refreshOnboarding,
             )
         }
 
@@ -174,9 +177,14 @@ class MainActivity : ComponentActivity() {
                     HiltechPeopleState(
                         loading = true,
                     ),
+                onboarding =
+                    HiltechOnboardingState(
+                        loading = true,
+                    ),
             )
         refreshSecurity()
         refreshPeople()
+        refreshOnboarding()
     }
 
     private fun refreshSecurity() {
@@ -322,6 +330,127 @@ class MainActivity : ComponentActivity() {
                                     ).takeIf {
                                         it.isNotEmpty()
                                     }?.joinToString(" "),
+                            ),
+                    )
+            }
+        }
+    }
+
+    private fun refreshOnboarding() {
+        val signed =
+            shellState as?
+                HiltechShellState.SignedIn
+                ?: return
+        val organizationId =
+            signed.identity.organizations
+                .firstOrNull {
+                    it.primary
+                }
+                ?.organizationId
+                ?: signed.identity
+                    .organizations
+                    .firstOrNull()
+                    ?.organizationId
+                ?: return
+
+        shellState =
+            signed.copy(
+                onboarding =
+                    (signed.onboarding
+                        ?: HiltechOnboardingState())
+                        .copy(
+                            loading = true,
+                            errorMessage = null,
+                        ),
+            )
+
+        scope.launch {
+            val onboardingResult =
+                runCatching {
+                    hiltechApplication
+                        .onboardingApi
+                        .own(
+                            organizationId =
+                                organizationId,
+                            installationId =
+                                hiltechApplication
+                                    .installationId,
+                        )
+                }
+            val documentsResult =
+                runCatching {
+                    hiltechApplication
+                        .hrDocumentsApi
+                        .ownDocuments(
+                            organizationId =
+                                organizationId,
+                            installationId =
+                                hiltechApplication
+                                    .installationId,
+                        )
+                }
+            val certificationsResult =
+                runCatching {
+                    hiltechApplication
+                        .hrDocumentsApi
+                        .ownCertifications(
+                            organizationId =
+                                organizationId,
+                            installationId =
+                                hiltechApplication
+                                    .installationId,
+                        )
+                }
+
+            val current =
+                shellState as?
+                    HiltechShellState.SignedIn
+            if (
+                current != null &&
+                current.identity.identityId ==
+                    signed.identity.identityId
+            ) {
+                val onboardingFailure =
+                    onboardingResult
+                        .exceptionOrNull()
+                val onboardingMessage =
+                    when {
+                        onboardingFailure ==
+                            null -> null
+                        onboardingFailure is
+                            HiltechApiException &&
+                            onboardingFailure.code ==
+                            "ONBOARDING_CASE_NOT_FOUND" ->
+                            null
+                        onboardingFailure is
+                            HiltechApiException &&
+                            onboardingFailure.code ==
+                            "OWN_EMPLOYEE_NOT_FOUND" ->
+                            null
+                        else ->
+                            onboardingFailure
+                                ?.message
+                                ?: "Onboarding could not be loaded."
+                    }
+
+                shellState =
+                    current.copy(
+                        onboarding =
+                            HiltechOnboardingState(
+                                ownCase =
+                                    onboardingResult
+                                        .getOrNull(),
+                                ownDocuments =
+                                    documentsResult
+                                        .getOrNull(),
+                                ownCertifications =
+                                    certificationsResult
+                                        .getOrNull(),
+                                selectedEmployeeCase =
+                                    current.onboarding
+                                        ?.selectedEmployeeCase,
+                                errorMessage =
+                                    onboardingMessage,
                             ),
                     )
             }

@@ -760,20 +760,8 @@ class PeopleService(
     fun ownProfile(
         actorUserId: UUID,
         organizationId: UUID,
-    ): EmployeeAggregateSnapshot {
-        if (
-            !authorization
-                .canViewDirectory(
-                    actorUserId =
-                        actorUserId,
-                    organizationId =
-                        organizationId,
-                )
-        ) {
-            throw forbidden()
-        }
-
-        return persistence
+    ): EmployeeAggregateSnapshot =
+        persistence
             .loadOwnEmployee(
                 identityId =
                     actorUserId,
@@ -789,6 +777,212 @@ class PeopleService(
                 status =
                     HttpStatus.NOT_FOUND,
             )
+
+    fun updateOwnContact(
+        command: UpdateOwnEmployeeContactCommand,
+    ): PeopleCommandResult {
+        requirePositiveVersion(
+            command.employeeBaseVersion,
+        )
+        requirePositiveVersion(
+            command.personBaseVersion,
+        )
+
+        val mobile =
+            optionalText(
+                command.mobile,
+                64,
+            )
+        val email =
+            optionalText(
+                command.email,
+                320,
+            )?.lowercase(
+                Locale.ROOT,
+            )
+
+        val current =
+            ownProfile(
+                actorUserId =
+                    command.actorUserId,
+                organizationId =
+                    command.organizationId,
+            )
+
+        if (
+            current.employeeVersion !=
+            command.employeeBaseVersion
+        ) {
+            throw versionConflict(
+                current.employeeVersion,
+            )
+        }
+
+        if (
+            current.personVersion !=
+            command.personBaseVersion
+        ) {
+            throw peopleError(
+                code =
+                    "PERSON_VERSION_CONFLICT",
+                message =
+                    "Your profile changed. Refresh before retrying.",
+                status =
+                    HttpStatus.CONFLICT,
+                currentVersion =
+                    current.personVersion,
+            )
+        }
+
+        val fingerprint =
+            IdempotencyKeyContract.fingerprint(
+                listOf(
+                    current.employeeId,
+                    command.employeeBaseVersion,
+                    command.personBaseVersion,
+                    mobile,
+                    email,
+                ).joinToString("|"),
+            )
+
+        val execution =
+            idempotency.execute(
+                IdempotentCommandSpec(
+                    operationId =
+                        command.operationId,
+                    actorUserId =
+                        command.actorUserId,
+                    commandType =
+                        "PEOPLE_UPDATE_OWN_CONTACT",
+                    targetType = "EMPLOYEE",
+                    targetId =
+                        current.employeeId,
+                    requestFingerprint =
+                        fingerprint,
+                    correlationId =
+                        command.correlationId,
+                ),
+            ) {
+                val fresh =
+                    ownProfile(
+                        actorUserId =
+                            command.actorUserId,
+                        organizationId =
+                            command.organizationId,
+                    )
+
+                if (
+                    fresh.employeeVersion !=
+                    command.employeeBaseVersion
+                ) {
+                    throw versionConflict(
+                        fresh.employeeVersion,
+                    )
+                }
+
+                if (
+                    fresh.personVersion !=
+                    command.personBaseVersion
+                ) {
+                    throw peopleError(
+                        code =
+                            "PERSON_VERSION_CONFLICT",
+                        message =
+                            "Your profile changed. Refresh before retrying.",
+                        status =
+                            HttpStatus.CONFLICT,
+                        currentVersion =
+                            fresh.personVersion,
+                    )
+                }
+
+                val now = clock.instant()
+
+                if (
+                    !persistence.updateOwnContact(
+                        employeeId =
+                            fresh.employeeId,
+                        personId =
+                            fresh.personId,
+                        expectedEmployeeVersion =
+                            command.employeeBaseVersion,
+                        expectedPersonVersion =
+                            command.personBaseVersion,
+                        mobile = mobile,
+                        email = email,
+                        at = now,
+                    )
+                ) {
+                    throw peopleError(
+                        code =
+                            "PERSON_VERSION_CONFLICT",
+                        message =
+                            "Your profile changed. Refresh before retrying.",
+                        status =
+                            HttpStatus.CONFLICT,
+                        currentVersion =
+                            fresh.personVersion,
+                    )
+                }
+
+                audit.append(
+                    AuditEventRecord(
+                        actorUserId =
+                            command.actorUserId,
+                        action =
+                            "EMPLOYEE_OWN_CONTACT_UPDATED",
+                        targetType =
+                            "EMPLOYEE",
+                        targetId =
+                            fresh.employeeId,
+                        safeDiffJson =
+                            """{"fields":["mobile","email"]}""",
+                        occurredAt = now,
+                        correlationId =
+                            command.correlationId,
+                    ),
+                )
+                events.publishEvent(
+                    EmployeeProfileUpdated(
+                        employeeId =
+                            fresh.employeeId,
+                        organizationId =
+                            fresh.organizationId,
+                        sourceVersion =
+                            fresh.employeeVersion + 1,
+                        actorUserId =
+                            command.actorUserId,
+                        occurredAt = now,
+                        correlationId =
+                            command.correlationId,
+                    ),
+                )
+
+                IdempotentCommandOutcome(
+                    resultCode =
+                        "EMPLOYEE_OWN_CONTACT_UPDATED",
+                    resultPayloadJson =
+                        buildJsonObject {
+                            put(
+                                "employeeId",
+                                fresh.employeeId
+                                    .toString(),
+                            )
+                        }.toString(),
+                )
+            }
+
+        return PeopleCommandResult(
+            employee =
+                ownProfile(
+                    actorUserId =
+                        command.actorUserId,
+                    organizationId =
+                        command.organizationId,
+                ),
+            replayed =
+                execution.replayed,
+        )
     }
 
     private fun requireEmployee(

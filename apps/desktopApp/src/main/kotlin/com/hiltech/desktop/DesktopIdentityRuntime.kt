@@ -17,6 +17,11 @@ import com.hiltech.shared.core.people.CreateEmployeeRequestDto
 import com.hiltech.shared.core.people.EmployeeCommandResponseDto
 import com.hiltech.shared.core.people.EmployeeDetailDto
 import com.hiltech.shared.core.people.EmployeeDirectoryDto
+import com.hiltech.shared.core.people.CertificationListDto
+import com.hiltech.shared.core.people.EmployeeDocumentListDto
+import com.hiltech.shared.core.people.HrDocumentsApiClient
+import com.hiltech.shared.core.people.OnboardingApiClient
+import com.hiltech.shared.core.people.OnboardingCaseDto
 import com.hiltech.shared.core.people.PeopleApiClient
 import com.hiltech.shared.core.people.WorkforceAssignmentApiClient
 import com.hiltech.shared.core.people.WorkforceAssignmentDto
@@ -96,6 +101,12 @@ class DesktopIdentityRuntime(
         WorkforceAssignmentApiClient(
             productApi,
         )
+
+    private val onboardingApi =
+        OnboardingApiClient(productApi)
+
+    private val hrDocumentsApi =
+        HrDocumentsApiClient(productApi)
 
     suspend fun signIn(
         forceReauthentication: Boolean = false,
@@ -308,6 +319,54 @@ class DesktopIdentityRuntime(
                 installationId =
                     installationId,
             )
+    }
+
+    suspend fun ownOnboarding(
+        organizationId: String,
+    ): OnboardingCaseDto {
+        ensureConfigured()
+        return onboardingApi.own(
+            organizationId =
+                organizationId,
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun employeeOnboarding(
+        employeeId: String,
+    ): OnboardingCaseDto {
+        ensureConfigured()
+        return onboardingApi.admin(
+            employeeId =
+                employeeId,
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun ownDocuments(
+        organizationId: String,
+    ): EmployeeDocumentListDto {
+        ensureConfigured()
+        return hrDocumentsApi.ownDocuments(
+            organizationId =
+                organizationId,
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun ownCertifications(
+        organizationId: String,
+    ): CertificationListDto {
+        ensureConfigured()
+        return hrDocumentsApi.ownCertifications(
+            organizationId =
+                organizationId,
+            installationId =
+                installationId,
+        )
     }
 
     suspend fun logout() {

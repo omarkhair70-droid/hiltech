@@ -70,6 +70,16 @@ interface PeoplePersistencePort {
         at: Instant,
     ): Boolean
 
+    fun updateOwnContact(
+        employeeId: UUID,
+        personId: UUID,
+        expectedEmployeeVersion: Long,
+        expectedPersonVersion: Long,
+        mobile: String?,
+        email: String?,
+        at: Instant,
+    ): Boolean
+
     fun loadEmployee(
         employeeId: UUID,
         at: Instant,
@@ -335,6 +345,65 @@ class JdbcPeoplePersistence(
 
         check(personUpdated) {
             "Employee Person disappeared during profile update."
+        }
+
+        return true
+    }
+
+    override fun updateOwnContact(
+        employeeId: UUID,
+        personId: UUID,
+        expectedEmployeeVersion: Long,
+        expectedPersonVersion: Long,
+        mobile: String?,
+        email: String?,
+        at: Instant,
+    ): Boolean {
+        val timestamp =
+            at.atOffset(ZoneOffset.UTC)
+
+        val personUpdated =
+            jdbc.update(
+                """
+                UPDATE person
+                SET mobile = ?,
+                    email = ?,
+                    updated_at = ?,
+                    version = version + 1
+                WHERE id = ?
+                  AND version = ?
+                """.trimIndent(),
+                mobile,
+                email,
+                timestamp,
+                personId,
+                expectedPersonVersion,
+            ) == 1
+
+        if (!personUpdated) {
+            return false
+        }
+
+        val employeeUpdated =
+            jdbc.update(
+                """
+                UPDATE employee
+                SET updated_at = ?,
+                    version = version + 1
+                WHERE id = ?
+                  AND person_id = ?
+                  AND version = ?
+                """.trimIndent(),
+                timestamp,
+                employeeId,
+                personId,
+                expectedEmployeeVersion,
+            ) == 1
+
+        if (!employeeUpdated) {
+            error(
+                "Employee changed after own Person contact update inside one command transaction.",
+            )
         }
 
         return true

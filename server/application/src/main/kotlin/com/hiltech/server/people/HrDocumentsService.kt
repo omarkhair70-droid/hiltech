@@ -24,6 +24,8 @@ class HrDocumentsService(
         HrDocumentsPersistencePort,
     private val peopleAuthorization:
         PeopleAuthorizationPort,
+    private val selfServicePolicy:
+        OnboardingSelfServicePolicyPort,
     private val idempotency:
         IdempotentCommandExecutor,
     private val audit:
@@ -837,6 +839,300 @@ class HrDocumentsService(
             replayed =
                 execution.replayed,
         )
+    }
+
+    fun createOwnDocument(
+        command:
+            CreateOwnEmployeeDocumentCommand,
+    ): EmployeeDocumentCommandResult {
+        requirePositiveVersion(
+            command.baseEmployeeVersion,
+        )
+
+        val employee =
+            selfServicePolicy.ownEmployee(
+                identityId =
+                    command.actorUserId,
+                organizationId =
+                    command.organizationId,
+                at = clock.instant(),
+            ) ?: throw forbidden()
+
+        requireVersion(
+            expected =
+                command.baseEmployeeVersion,
+            current =
+                employee.employeeVersion,
+            code =
+                "EMPLOYEE_VERSION_CONFLICT",
+        )
+
+        val documentTypeCode =
+            normalizeCode(
+                command.documentTypeCode,
+                "INVALID_DOCUMENT_TYPE_CODE",
+            )
+
+        if (
+            !selfServicePolicy
+                .canSubmitEmployeeDocument(
+                    identityId =
+                        command.actorUserId,
+                    organizationId =
+                        command.organizationId,
+                    employeeId =
+                        employee.employeeId,
+                    documentTypeCode =
+                        documentTypeCode,
+                    at = clock.instant(),
+                )
+        ) {
+            throw forbidden()
+        }
+
+        val documentLabel =
+            optionalText(
+                command.documentLabel,
+                160,
+                "INVALID_DOCUMENT_LABEL",
+            )
+
+        if (
+            command.issueDate != null &&
+            command.expiryDate != null &&
+            command.expiryDate <
+                command.issueDate
+        ) {
+            throw hrError(
+                code =
+                    "DOCUMENT_DATE_RANGE_INVALID",
+                message =
+                    "Document expiry cannot be before issue date.",
+                status =
+                    HttpStatus.BAD_REQUEST,
+            )
+        }
+
+        val documentId =
+            deterministicId(
+                "own-employee-document",
+                command.operationId,
+            )
+        val fingerprint =
+            IdempotencyKeyContract
+                .fingerprint(
+                    listOf(
+                        employee.employeeId,
+                        command.baseEmployeeVersion,
+                        documentTypeCode,
+                        documentLabel,
+                        command.issueDate,
+                        command.expiryDate,
+                    ).joinToString("|"),
+                )
+
+        val execution =
+            idempotency.execute(
+                IdempotentCommandSpec(
+                    operationId =
+                        command.operationId,
+                    actorUserId =
+                        command.actorUserId,
+                    commandType =
+                        "PEOPLE_CREATE_OWN_EMPLOYEE_DOCUMENT",
+                    targetType =
+                        "EMPLOYEE_DOCUMENT",
+                    targetId =
+                        documentId,
+                    requestFingerprint =
+                        fingerprint,
+                    correlationId =
+                        command.correlationId,
+                ),
+            ) {
+                val fresh =
+                    selfServicePolicy
+                        .ownEmployee(
+                            identityId =
+                                command.actorUserId,
+                            organizationId =
+                                command.organizationId,
+                            at = clock.instant(),
+                        ) ?: throw forbidden()
+
+                requireVersion(
+                    expected =
+                        command.baseEmployeeVersion,
+                    current =
+                        fresh.employeeVersion,
+                    code =
+                        "EMPLOYEE_VERSION_CONFLICT",
+                )
+
+                if (
+                    !selfServicePolicy
+                        .canSubmitEmployeeDocument(
+                            identityId =
+                                command.actorUserId,
+                            organizationId =
+                                command.organizationId,
+                            employeeId =
+                                fresh.employeeId,
+                            documentTypeCode =
+                                documentTypeCode,
+                            at = clock.instant(),
+                        )
+                ) {
+                    throw forbidden()
+                }
+
+                val now = clock.instant()
+
+                try {
+                    persistence.insertDocument(
+                        documentId =
+                            documentId,
+                        organizationId =
+                            fresh.organizationId,
+                        employeeId =
+                            fresh.employeeId,
+                        documentTypeCode =
+                            documentTypeCode,
+                        documentLabel =
+                            documentLabel,
+                        issueDate =
+                            command.issueDate,
+                        expiryDate =
+                            command.expiryDate,
+                        retentionPolicyCode = null,
+                        at = now,
+                    )
+                } catch (
+                    failure:
+                        DataIntegrityViolationException,
+                ) {
+                    throw hrError(
+                        code =
+                            "EMPLOYEE_DOCUMENT_CONFLICT",
+                        message =
+                            "The employee document conflicts with current People state.",
+                        status =
+                            HttpStatus.CONFLICT,
+                    )
+                }
+
+                audit.append(
+                    AuditEventRecord(
+                        actorUserId =
+                            command.actorUserId,
+                        action =
+                            "EMPLOYEE_OWN_DOCUMENT_CREATED",
+                        targetType =
+                            "EMPLOYEE_DOCUMENT",
+                        targetId =
+                            documentId,
+                        newStateRef =
+                            "UNVERIFIED",
+                        safeDiffJson =
+                            """{"fields":["documentTypeCode","issueDate","expiryDate"]}""",
+                        occurredAt = now,
+                        correlationId =
+                            command.correlationId,
+                    ),
+                )
+                events.publishEvent(
+                    EmployeeDocumentCreated(
+                        documentId =
+                            documentId,
+                        organizationId =
+                            fresh.organizationId,
+                        employeeId =
+                            fresh.employeeId,
+                        documentTypeCode =
+                            documentTypeCode,
+                        sourceVersion = 1,
+                        actorUserId =
+                            command.actorUserId,
+                        occurredAt = now,
+                        correlationId =
+                            command.correlationId,
+                    ),
+                )
+
+                IdempotentCommandOutcome(
+                    resultCode =
+                        "EMPLOYEE_OWN_DOCUMENT_CREATED",
+                    resultPayloadJson =
+                        buildJsonObject {
+                            put(
+                                "documentId",
+                                documentId
+                                    .toString(),
+                            )
+                        }.toString(),
+                )
+            }
+
+        return EmployeeDocumentCommandResult(
+            document =
+                requireDocument(
+                    documentId,
+                ),
+            replayed =
+                execution.replayed,
+        )
+    }
+
+    fun ownDocuments(
+        actorUserId: UUID,
+        organizationId: UUID,
+    ): List<EmployeeDocumentSnapshot> {
+        val employee =
+            selfServicePolicy.ownEmployee(
+                identityId =
+                    actorUserId,
+                organizationId =
+                    organizationId,
+                at = clock.instant(),
+            ) ?: throw forbidden()
+
+        return persistence
+            .listDocuments(
+                employee.employeeId,
+            )
+            .filter {
+                selfServicePolicy
+                    .canViewEmployeeDocument(
+                        identityId =
+                            actorUserId,
+                        organizationId =
+                            organizationId,
+                        employeeId =
+                            employee.employeeId,
+                        documentTypeCode =
+                            it.documentTypeCode,
+                        at = clock.instant(),
+                    )
+            }
+    }
+
+    fun ownCertifications(
+        actorUserId: UUID,
+        organizationId: UUID,
+    ): List<CertificationSnapshot> {
+        val employee =
+            selfServicePolicy.ownEmployee(
+                identityId =
+                    actorUserId,
+                organizationId =
+                    organizationId,
+                at = clock.instant(),
+            ) ?: throw forbidden()
+
+        return persistence
+            .listCertifications(
+                employee.employeeId,
+            )
     }
 
     fun documents(

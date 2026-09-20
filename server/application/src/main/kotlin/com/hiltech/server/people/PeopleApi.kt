@@ -46,6 +46,15 @@ data class UpdateEmployeeProfileRequest(
     val email: String? = null,
 )
 
+data class UpdateOwnEmployeeContactRequest(
+    val operationId: String,
+    val organizationId: String,
+    val employeeBaseVersion: Long,
+    val personBaseVersion: Long,
+    val mobile: String? = null,
+    val email: String? = null,
+)
+
 data class EmployeeDirectoryItemResponse(
     val employeeId: String,
     val employeeCode: String,
@@ -80,6 +89,7 @@ data class EmployeeDetailResponse(
     val employmentEndDate: String?,
     val linkedIdentityId: String?,
     val version: Long,
+    val personVersion: Long,
 )
 
 data class EmployeeCommandResponse(
@@ -422,6 +432,70 @@ class OwnEmployeeController(
                     false,
             )
     }
+
+    @PutMapping("/profile")
+    fun updateOwnContact(
+        servletRequest:
+            HttpServletRequest,
+        @RequestHeader(
+            name = "Idempotency-Key",
+        )
+        idempotencyKey: String,
+        @RequestBody
+        request:
+            UpdateOwnEmployeeContactRequest,
+    ): EmployeeCommandResponse {
+        val context =
+            HiltechRequestContext.current(
+                servletRequest,
+            )
+        val operationId =
+            request.operationId.toUuid(
+                "INVALID_OPERATION_ID",
+            )
+        IdempotencyKeyContract
+            .requireMatches(
+                idempotencyKey,
+                operationId,
+            )
+
+        val result =
+            service.updateOwnContact(
+                UpdateOwnEmployeeContactCommand(
+                    operationId =
+                        operationId,
+                    organizationId =
+                        request.organizationId
+                            .toUuid(
+                                "INVALID_ORGANIZATION_ID",
+                            ),
+                    employeeBaseVersion =
+                        request.employeeBaseVersion,
+                    personBaseVersion =
+                        request.personBaseVersion,
+                    mobile = request.mobile,
+                    email = request.email,
+                    actorUserId =
+                        context
+                            .requireIdentityId(),
+                    correlationId =
+                        context.correlationId,
+                ),
+            )
+
+        return EmployeeCommandResponse(
+            employee =
+                result.employee
+                    .toDetailResponse(
+                        includeLinkedIdentityId =
+                            false,
+                    ),
+            replayed =
+                result.replayed,
+            correlationId =
+                context.correlationId,
+        )
+    }
 }
 
 private fun EmployeeAggregateSnapshot
@@ -470,6 +544,8 @@ private fun EmployeeAggregateSnapshot
             },
         version =
             employeeVersion,
+        personVersion =
+            personVersion,
     )
 
 private fun String.toUuid(

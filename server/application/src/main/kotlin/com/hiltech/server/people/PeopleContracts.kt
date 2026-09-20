@@ -88,6 +88,17 @@ data class UpdateEmployeeProfileCommand(
     val correlationId: String,
 )
 
+data class UpdateOwnEmployeeContactCommand(
+    val operationId: UUID,
+    val organizationId: UUID,
+    val employeeBaseVersion: Long,
+    val personBaseVersion: Long,
+    val mobile: String?,
+    val email: String?,
+    val actorUserId: UUID,
+    val correlationId: String,
+)
+
 data class PeopleCommandResult(
     val employee: EmployeeAggregateSnapshot,
     val replayed: Boolean,

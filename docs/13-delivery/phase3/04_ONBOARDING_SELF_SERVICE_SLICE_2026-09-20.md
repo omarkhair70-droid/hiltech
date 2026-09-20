@@ -1,7 +1,7 @@
 # Phase 3 / Slice 04 — Onboarding + Basic Self-Service
 
 Date: 2026-09-20  
-Status: **IMPLEMENTATION AUTHORIZED / CONTRACT FROZEN**
+Status: **VERIFIED / READY TO MERGE**
 
 ## Reality basis
 
@@ -56,6 +56,7 @@ Minimum fields:
 - waiver_allowed;
 - self_service_visible;
 - employee_may_submit;
+- evidence_required;
 - profile_field_code nullable;
 - document_type_code nullable;
 - certification_type_code nullable;
@@ -78,6 +79,22 @@ Initial `responsibility` values:
 - `SHARED`.
 
 Type-specific constraints must prevent irrelevant target columns from being populated.
+
+### Implementation clarification — EmployeeDocument Evidence requirement
+
+Implementation review exposed one ambiguity in the frozen text: an onboarding `EMPLOYEE_DOCUMENT` requirement may legitimately be satisfied by verified metadata without binary Evidence, but the original field list did not carry that policy choice explicitly.
+
+Add `evidence_required boolean` to the typed requirement row.
+
+Rules:
+- meaningful only for `EMPLOYEE_DOCUMENT`;
+- defaults false at the generic schema level;
+- real HILTECH policy explicitly decides whether binary Evidence is required for each document requirement;
+- when true, only VERIFIED + READY Evidence satisfies the requirement;
+- when false, VERIFIED document metadata may satisfy without Evidence;
+- this is policy, not client authority, and does not change Slice 03 Evidence security.
+
+This is a narrow contract clarification, not a scope expansion.
 
 Examples:
 - `EMPLOYEE_DOCUMENT` requires document_type_code;
@@ -224,11 +241,10 @@ For configured document_type_code:
 
 - no current document -> NEEDS_EMPLOYEE when employee_may_submit, otherwise WAITING_HILTECH;
 - document REJECTED -> NEEDS_EMPLOYEE when resubmission is permitted;
-- document exists but required Evidence is not READY -> NEEDS_EMPLOYEE;
+- when `evidence_required=true`, document exists but Evidence is not READY -> NEEDS_EMPLOYEE;
 - Evidence READY but business verification is UNVERIFIED -> WAITING_HILTECH;
-- VERIFIED document with required READY Evidence -> SATISFIED.
-
-If a configured document type does not require binary Evidence, verification may satisfy it without Evidence according to the policy/Document contract.
+- when `evidence_required=true`, VERIFIED + READY Evidence -> SATISFIED;
+- when `evidence_required=false`, VERIFIED document metadata may satisfy without Evidence.
 
 ## CERTIFICATION
 
@@ -337,6 +353,7 @@ Add a durable HILTECH orchestration record such as `employee_identity_invitation
 Minimum business fields:
 
 - id;
+- operation_id;
 - organization_id;
 - employee_id;
 - requested_login/email;
@@ -680,12 +697,60 @@ Do not implement:
 
 ---
 
+# Verification closure
+
+Canonical tested code head:
+
+`d511f1e262e954a2646bd040692d5a6f0e74371e`
+
+Exact-head verification:
+
+- Bootstrap Phase 0 `35488578970` — **PASS**
+  - V0018 migration / PostgreSQL contract — PASS
+  - jOOQ generation and server compile — PASS
+  - local platform + canonical OpenFGA regression — PASS
+  - shared tests / Android debug / Desktop compile / server tests — PASS
+  - inherited Evidence S3-compatible storage contract — PASS
+  - dependency / supply-chain / Terraform gates — PASS
+- Phase 2 Shared Command Runtime `35488578980` — **PASS**
+  - shared Android/Windows HTTP client contracts — PASS
+  - PostgreSQL idempotency contract — PASS
+- Phase 1 Native OIDC Production Smoke `35488578992` — **PASS**
+  - Android shell/private callback — PASS
+  - Keycloak browser/provider smoke — PASS
+  - Windows shell render — PASS
+- Phase 3 Onboarding Human Proof `35488579082` — **PASS**
+  - Arabic-first Android employee preboarding render — PASS
+  - Windows employee + People/Admin onboarding renders — PASS
+  - HILTECH-owned blocker is visibly separated from employee-owned work — PASS
+
+Verified implementation includes:
+
+- typed/versioned `onboarding-policies` configuration without hard-coded real HILTECH checklist values;
+- durable OnboardingCase + manual resolution/waiver lifecycle;
+- derived blocker evaluation from authoritative Person/Employee, Identity, WorkforceAssignment, EmployeeDocument/Evidence and Certification truth;
+- exact-version/idempotent PREBOARDING -> ACTIVE activation with source-backed blockers recomputed at command time;
+- own mobile/email self-service guarded by Employee + Person versions;
+- own policy-scoped EmployeeDocument listing/creation and existing `EMPLOYEE_DOCUMENT` Evidence reserve/access reuse;
+- own Certification read without peer HR exposure;
+- fail-closed employee identity invitation/provisioning boundary;
+- Keycloak Admin REST adapter behind Identity ownership, with public registration/password grant unchanged;
+- honest NOT_CONFIGURED / retryable delivery states when external email delivery is absent;
+- temporary credential path requiring recent re-authentication and no persisted plaintext credential;
+- shared KMP clients for onboarding, self-service and identity invitation;
+- Android/Windows onboarding surfaces and rendered human-flow evidence;
+- inherited Slice 01/02/03, WorkOrder Evidence, OpenFGA, OIDC and shared-runtime regressions preserved.
+
+No Slice 05 assignment-change, Slice 06 offboarding, ATS, Payroll, Assets/PPE, Project/Site assignment, SMTP/SMS provider, alternate file storage or guessed legal checklist was introduced.
+
 # Contract conclusion
 
-**IMPLEMENTATION AUTHORIZED.**
+**VERIFIED / READY TO MERGE.**
 
-Implement only the Onboarding + Basic Self-Service contract above.
+PR #47 may move from Draft to Ready only while the verified implementation remains unchanged or after any later head is re-verified.
+
+After merge, require post-merge Bootstrap before Slice 04 is called **MERGED / CLOSED**.
 
 Unknown real HILTECH checklist values remain configuration/activation data and are not a blocker.
 
-The next code slice must not pull Slice 05 assignment-change or Slice 06 offboarding behavior forward.
+Do not pull Slice 05 assignment-change or Slice 06 offboarding behavior backward into this slice.

@@ -11,7 +11,7 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
 - Phase 2 — Shared Product Infrastructure: **VERIFIED / COMPLETE**
-- Current execution phase: **Phase 3 — People / Internal Workforce Core / Slice 04 — Onboarding + Basic Self-Service — IMPLEMENTATION AUTHORIZED**
+- Current execution phase: **Phase 3 — People / Internal Workforce Core / Slice 04 — Onboarding + Basic Self-Service — VERIFIED / READY TO MERGE**
 - Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
 - Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
 - Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
@@ -60,8 +60,10 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Slice 03 exact-head verification: Bootstrap `35482995671` / Phase 2 runtime `35482995728` / Phase 1 OIDC `35482995573` — **PASS**
 - Slice 03 merge commit: `d5d0cb256e68cf7b30978434aa6ba241c7500df1`; post-merge Bootstrap `35485263189` — **PASS**
 - Slice 04 reality closure: `docs/13-delivery/phase3/04_ONBOARDING_SELF_SERVICE_REALITY_CLOSURE_2026-09-20.md` — **PASS**
-- Slice 04 implementation contract: `docs/13-delivery/phase3/04_ONBOARDING_SELF_SERVICE_SLICE_2026-09-20.md` — **IMPLEMENTATION AUTHORIZED**
-- Current rule: implement onboarding + own-record self-service only; keep real HILTECH checklist values configurable and do not pull Slice 05/06 scope forward.
+- Slice 04 implementation contract: `docs/13-delivery/phase3/04_ONBOARDING_SELF_SERVICE_SLICE_2026-09-20.md` — **VERIFIED / READY TO MERGE**
+- Slice 04 canonical tested code head: `d511f1e262e954a2646bd040692d5a6f0e74371e`
+- Slice 04 exact-head verification: Bootstrap `35488578970` / Phase 2 runtime `35488578980` / Phase 1 OIDC `35488578992` / Onboarding Human Proof `35488579082` — **PASS**
+- Current rule: merge only after closure metadata remains consistent; keep real HILTECH checklist values configurable and do not pull Slice 05/06 scope forward.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**

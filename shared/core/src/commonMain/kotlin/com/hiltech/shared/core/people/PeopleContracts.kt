@@ -35,6 +35,16 @@ data class UpdateEmployeeProfileRequestDto(
 )
 
 @Serializable
+data class UpdateOwnEmployeeContactRequestDto(
+    val operationId: String,
+    val organizationId: String,
+    val employeeBaseVersion: Long,
+    val personBaseVersion: Long,
+    val mobile: String? = null,
+    val email: String? = null,
+)
+
+@Serializable
 data class EmployeeDirectoryItemDto(
     val employeeId: String,
     val employeeCode: String,
@@ -71,6 +81,7 @@ data class EmployeeDetailDto(
     val employmentEndDate: String? = null,
     val linkedIdentityId: String? = null,
     val version: Long,
+    val personVersion: Long = 1,
 )
 
 @Serializable
