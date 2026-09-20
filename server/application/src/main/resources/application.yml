@@ -33,6 +33,12 @@ hiltech:
       issuer-uri: ${HILTECH_OIDC_ISSUER_URI:}
       audience: ${HILTECH_OIDC_AUDIENCE:}
       native-client-id: ${HILTECH_OIDC_NATIVE_CLIENT_ID:hiltech-native}
+    provisioning:
+      keycloak:
+        enabled: ${HILTECH_KEYCLOAK_PROVISIONING_ENABLED:false}
+        admin-client-id: ${HILTECH_KEYCLOAK_ADMIN_CLIENT_ID:}
+        admin-client-secret: ${HILTECH_KEYCLOAK_ADMIN_CLIENT_SECRET:}
+        email-action-link-enabled: ${HILTECH_KEYCLOAK_EMAIL_ACTION_LINK_ENABLED:false}
     session:
       ttl-seconds: ${HILTECH_SESSION_TTL_SECONDS:43200}
       reauth-max-age-seconds: ${HILTECH_REAUTH_MAX_AGE_SECONDS:300}

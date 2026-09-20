@@ -353,6 +353,7 @@ Add a durable HILTECH orchestration record such as `employee_identity_invitation
 Minimum business fields:
 
 - id;
+- operation_id;
 - organization_id;
 - employee_id;
 - requested_login/email;

@@ -243,6 +243,7 @@ CREATE TABLE onboarding_manual_requirement_resolution (
 
 CREATE TABLE employee_identity_invitation (
     id uuid PRIMARY KEY,
+    operation_id uuid NOT NULL UNIQUE,
     organization_id uuid NOT NULL
         REFERENCES organization(id) ON DELETE RESTRICT,
     employee_id uuid NOT NULL,
