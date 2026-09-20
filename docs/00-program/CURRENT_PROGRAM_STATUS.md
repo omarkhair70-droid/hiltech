@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 3 ACTIVE — SLICE 01 EMPLOYEE / EMPLOYMENT CORE VERIFIED / READY TO MERGE**
+**PHASE 3 ACTIVE — SLICE 01 VERIFIED / MERGED — SLICE 02 WORKFORCE ASSIGNMENT CONTRACT CLOSED**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -52,7 +52,7 @@ Final full regression evidence on that code head:
 
 Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Final Phase 2 closure PR #37 merged at `624bd6c50f8d17535316ae450a8a780bc756a108` with post-merge Bootstrap `35474921624` PASS.
 
-Phase 3 — People / Internal Workforce Core — is ACTIVE. **Slice 01 — Employee / Employment Core is VERIFIED / READY TO MERGE** on canonical tested code head `59c5cb9fb4d859260ba48a9f8edd5ecce5a97e96`. Exact-head evidence: OpenFGA `35477856791`, Bootstrap `35477856788`, Phase 1 Native OIDC `35477856782`, and Phase 2 Shared Command Runtime `35477856796` — all PASS. The slice implements Person/Employee/historical Employment, explicit People authority bindings with fail-closed OpenFGA projection, safe directory/private detail/own-profile reads, idempotent commands, audit/events, shared KMP client contracts, Android own-profile proof and Windows directory/detail/create proof. Later People slices remain closed until merge + post-merge verification.
+Phase 3 — People / Internal Workforce Core — is ACTIVE. **Slice 01 — Employee / Employment Core is VERIFIED / MERGED** through PR #40 at `0183a273f1a01d3b9d0277df2ac2e8bbe2f98390`; post-merge Bootstrap `35478418690` and OpenFGA `35478418692` PASS. Slice 02 — Workforce Assignment / Reporting Structure — has completed reality/contract closure. It establishes one effective-dated WorkforceAssignment business source while reusing existing Phase 1 Team/team_membership/OpenFGA foundations; implementation has not started on this docs-only closure branch.
 
 ---
 
@@ -83,8 +83,8 @@ Phase 3 — People / Internal Workforce Core — is ACTIVE. **Slice 01 — Emplo
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 3 ACTIVE | Slice 01 Employee / Employment Core verified/ready to merge; Slice 02 remains closed pending merge verification |
-| Production code | PHASE 3 SLICE 01 VERIFIED / READY TO MERGE | Exact-head PostgreSQL/OpenFGA/client/Android/Windows/inherited regressions PASS |
+| Implementation order | PHASE 3 ACTIVE | Slice 01 merged/post-merge verified; Slice 02 Workforce Assignment reality/contract closed |
+| Production code | PHASE 3 SLICE 01 MERGED | Slice 02 has no production code yet; contract closure only |
 
 ---
 
@@ -238,8 +238,8 @@ Final stack/version review:
 Immediate continuation:
 1. Phase 0, Phase 1 and Phase 2 are VERIFIED / COMPLETE; do not reopen them without a genuine cross-cutting contradiction.
 2. Phase 3 scope/slice plan is frozen in `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md`.
-3. Phase 3 / Slice 01 — Employee / Employment Core is **VERIFIED / READY TO MERGE** on `59c5cb9fb4d859260ba48a9f8edd5ecce5a97e96`; merge only after docs-only closure checks, then require post-merge Bootstrap PASS.
-4. Do not begin Slice 02 production code until Slice 01 is merged/post-merge verified and Slice 02's implementation contract is frozen.
+3. Phase 3 / Slice 01 — Employee / Employment Core is **VERIFIED / MERGED** at `0183a273f1a01d3b9d0277df2ac2e8bbe2f98390`; post-merge Bootstrap `35478418690` PASS.
+4. Slice 02 Workforce Assignment reality/contract closure is frozen. Before implementation, preserve the Team/security ownership boundaries and do not reinterpret role labels as permissions.
 5. Continue consuming Reality Evidence/Facts by phase; current employee-master/import/legal HR unknowns are scoped out rather than guessed.
 6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 
