@@ -31,13 +31,11 @@ Minimize personal data.
 - id
 - personId
 - employeeCode — R unique
-- employmentId
+- currentEmploymentRef — derived/read-only; Employment history is a separate one-to-many timeline
 - status
 - hireDate
 - termination/endDate — O
-- primaryRoleId
-- teamId — O
-- managerEmployeeId — O
+- currentWorkforceAssignmentRef — derived/read-only; role/team/reporting-manager truth belongs to WorkforceAssignment
 - baseOffice/siteRef — O
 - payrollGroupId — O — RESTRICTED
 - activeAccessExpected: Boolean — C
@@ -46,8 +44,8 @@ Minimize personal data.
 ## Invariants
 - employeeCode unique.
 - FORMER should not retain active HILTECH employee access.
-- manager relationship cannot self-reference/cycle in obvious direct case.
-- role/team changes audited.
+- current WorkforceAssignment cannot create a reporting self-reference/cycle.
+- role/team/reporting-manager history is owned by WorkforceAssignment and changes are audited.
 
 ---
 
