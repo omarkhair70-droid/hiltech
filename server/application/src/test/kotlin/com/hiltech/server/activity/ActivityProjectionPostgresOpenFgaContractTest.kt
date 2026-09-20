@@ -590,7 +590,7 @@ class ActivityProjectionPostgresOpenFgaContractTest {
                 project_code, name,
                 client_organization_id,
                 lifecycle_state,
-                project_manager_id,
+                source_type,
                 created_at, created_by,
                 updated_at, version
             )
@@ -598,7 +598,7 @@ class ActivityProjectionPostgresOpenFgaContractTest {
                 ?, ?, ?,
                 'Activity Project',
                 ?, 'ACTIVE',
-                NULL,
+                'INTERNAL',
                 ?, ?, ?, 1
             )
             """.trimIndent(),
@@ -617,20 +617,22 @@ class ActivityProjectionPostgresOpenFgaContractTest {
         jdbc.update(
             """
             INSERT INTO site (
-                id, client_organization_id,
+                id, organization_id,
+                client_organization_id,
                 site_code, name,
                 status,
                 created_at, created_by,
                 updated_at, version
             )
             VALUES (
-                ?, ?, ?,
+                ?, ?, ?, ?,
                 'Activity Site',
                 'ACTIVE',
                 ?, ?, ?, 1
             )
             """.trimIndent(),
             siteId,
+            organizationId,
             organizationId,
             "S-" +
                 UUID.randomUUID()

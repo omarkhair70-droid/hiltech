@@ -1562,14 +1562,14 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                 project_code, name,
                 client_organization_id,
                 lifecycle_state,
-                project_manager_id,
+                source_type,
                 created_at, created_by,
                 updated_at, version
             )
             VALUES (
                 ?, ?, ?, 'Evidence Project',
                 ?, 'ACTIVE',
-                ?, ?, ?, ?, 1
+                'INTERNAL', ?, ?, ?, 1
             )
             """.trimIndent(),
             projectId,
@@ -1579,7 +1579,6 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                     .toString()
                     .take(8),
             organizationId,
-            actorId,
             at.atOffset(
                 ZoneOffset.UTC,
             ),
@@ -1592,20 +1591,22 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
         jdbc.update(
             """
             INSERT INTO site (
-                id, client_organization_id,
+                id, organization_id,
+                client_organization_id,
                 site_code, name,
                 status,
                 created_at, created_by,
                 updated_at, version
             )
             VALUES (
-                ?, ?, ?,
+                ?, ?, ?, ?,
                 'Evidence Site',
                 'ACTIVE',
                 ?, ?, ?, 1
             )
             """.trimIndent(),
             siteId,
+            organizationId,
             organizationId,
             "SITE-" +
                 UUID.randomUUID()

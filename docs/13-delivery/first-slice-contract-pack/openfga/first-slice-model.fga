@@ -11,12 +11,14 @@ type organization
     define config_editor: [user]
     define config_activator: [user]
     define people_admin: [user, team#member]
+    define project_admin: [user, team#member]
 
     define can_view_config: config_viewer or config_editor or config_activator or admin
     define can_edit_config: config_editor or admin
     define can_activate_config: config_activator or admin
     define can_view_people_private: people_admin
     define can_manage_people: people_admin
+    define can_manage_projects: project_admin or admin
 
 type team
   relations
@@ -37,7 +39,8 @@ type project
     define warehouse_context: [user, team#member]
     define explicit_viewer: [user, team#member]
 
-    define can_view: project_manager or engineer or supervisor or technician or warehouse_context or explicit_viewer
+    define can_view: project_manager or engineer or supervisor or technician or warehouse_context or explicit_viewer or can_manage_projects from organization
+    define can_manage: project_manager or can_manage_projects from organization
     define can_create_work: project_manager or supervisor
     define can_assign_work: project_manager or supervisor
     define can_review_work: project_manager or engineer or supervisor
@@ -47,12 +50,14 @@ type project
 
 type site
   relations
+    define organization: [organization]
     define project: [project]
     define explicit_member: [user, team#member]
     define site_supervisor: [user, team#member]
     define site_technician: [user, team#member]
 
-    define can_view: explicit_member or site_supervisor or site_technician or can_view from project
+    define can_view: explicit_member or site_supervisor or site_technician or can_view from project or can_manage_projects from organization
+    define can_manage: can_manage_projects from organization
     define can_access_field_context: explicit_member or site_supervisor or site_technician or project_manager from project or engineer from project or supervisor from project
 
 type work_order

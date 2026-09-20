@@ -33,6 +33,19 @@ import com.hiltech.shared.core.people.PeopleApiClient
 import com.hiltech.shared.core.people.WorkforceAssignmentApiClient
 import com.hiltech.shared.core.people.WorkforceAssignmentDto
 import com.hiltech.shared.core.people.WorkforceStructureDto
+import com.hiltech.shared.core.projects.AttachProjectSiteRequestDto
+import com.hiltech.shared.core.projects.ChangeProjectManagerRequestDto
+import com.hiltech.shared.core.projects.CreateProjectRequestDto
+import com.hiltech.shared.core.projects.CreateSiteRequestDto
+import com.hiltech.shared.core.projects.ProjectCommandResponseDto
+import com.hiltech.shared.core.projects.ProjectListDto
+import com.hiltech.shared.core.projects.ProjectPrincipalDto
+import com.hiltech.shared.core.projects.ProjectSiteCommandResponseDto
+import com.hiltech.shared.core.projects.ProjectSiteListDto
+import com.hiltech.shared.core.projects.ProjectSummaryDto
+import com.hiltech.shared.core.projects.ProjectTransitionRequestDto
+import com.hiltech.shared.core.projects.ProjectsApiClient
+import com.hiltech.shared.core.projects.SiteCommandResponseDto
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.Dispatchers
@@ -117,6 +130,9 @@ class DesktopIdentityRuntime(
 
     private val offboardingApi =
         OffboardingApiClient(productApi)
+
+    private val projectsApi =
+        ProjectsApiClient(productApi)
 
     suspend fun signIn(
         forceReauthentication: Boolean = false,
@@ -578,6 +594,249 @@ class DesktopIdentityRuntime(
             installationId =
                 installationId,
         ).offboarding
+    }
+
+    suspend fun projects(
+        organizationId: String,
+    ): ProjectListDto {
+        ensureConfigured()
+        return projectsApi.list(
+            organizationId =
+                organizationId,
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun projectDetail(
+        projectId: String,
+    ): ProjectSummaryDto {
+        ensureConfigured()
+        return projectsApi.detail(
+            projectId =
+                projectId,
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun projectSites(
+        projectId: String,
+    ): ProjectSiteListDto {
+        ensureConfigured()
+        return projectsApi.sites(
+            projectId =
+                projectId,
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun createProject(
+        organizationId: String,
+        clientOrganizationId: String,
+        name: String,
+        sourceType: String,
+        sourceExternalReference: String?,
+        explicitProjectCode: String?,
+        principalType: String?,
+        principalId: String?,
+        startDatePlanned: String?,
+        endDatePlanned: String?,
+    ): ProjectCommandResponseDto {
+        ensureConfigured()
+        return projectsApi.create(
+            request =
+                CreateProjectRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    organizationId =
+                        organizationId,
+                    sourceType =
+                        sourceType,
+                    sourceExternalReference =
+                        sourceExternalReference,
+                    explicitProjectCode =
+                        explicitProjectCode,
+                    name = name,
+                    clientOrganizationId =
+                        clientOrganizationId,
+                    initialResponsibility =
+                        if (
+                            !principalType.isNullOrBlank() &&
+                            !principalId.isNullOrBlank()
+                        ) {
+                            ProjectPrincipalDto(
+                                principalType =
+                                    principalType,
+                                principalId =
+                                    principalId,
+                            )
+                        } else {
+                            null
+                        },
+                    startDatePlanned =
+                        startDatePlanned,
+                    endDatePlanned =
+                        endDatePlanned,
+                    clientOccurredAt =
+                        java.time.Instant.now()
+                            .toString(),
+                ),
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun changeProjectManager(
+        projectId: String,
+        baseVersion: Long,
+        principalType: String,
+        principalId: String,
+        reason: String?,
+    ): ProjectCommandResponseDto {
+        ensureConfigured()
+        return projectsApi.changeManager(
+            projectId = projectId,
+            request =
+                ChangeProjectManagerRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    baseVersion =
+                        baseVersion,
+                    principal =
+                        ProjectPrincipalDto(
+                            principalType =
+                                principalType,
+                            principalId =
+                                principalId,
+                        ),
+                    reason = reason,
+                    clientOccurredAt =
+                        java.time.Instant.now()
+                            .toString(),
+                ),
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun startProjectKickoff(
+        projectId: String,
+        baseVersion: Long,
+    ): ProjectCommandResponseDto {
+        ensureConfigured()
+        return projectsApi.startKickoff(
+            projectId = projectId,
+            request =
+                ProjectTransitionRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    baseVersion =
+                        baseVersion,
+                    clientOccurredAt =
+                        java.time.Instant.now()
+                            .toString(),
+                ),
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun completeProjectKickoff(
+        projectId: String,
+        baseVersion: Long,
+    ): ProjectCommandResponseDto {
+        ensureConfigured()
+        return projectsApi.completeKickoff(
+            projectId = projectId,
+            request =
+                ProjectTransitionRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    baseVersion =
+                        baseVersion,
+                    clientOccurredAt =
+                        java.time.Instant.now()
+                            .toString(),
+                ),
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun createSite(
+        organizationId: String,
+        clientOrganizationId: String,
+        siteCode: String,
+        name: String,
+        addressText: String?,
+        timezone: String?,
+    ): SiteCommandResponseDto {
+        ensureConfigured()
+        return projectsApi.createSite(
+            request =
+                CreateSiteRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    organizationId =
+                        organizationId,
+                    clientOrganizationId =
+                        clientOrganizationId,
+                    siteCode =
+                        siteCode,
+                    name = name,
+                    addressText =
+                        addressText,
+                    timezone =
+                        timezone,
+                    clientOccurredAt =
+                        java.time.Instant.now()
+                            .toString(),
+                ),
+            installationId =
+                installationId,
+        )
+    }
+
+    suspend fun attachProjectSite(
+        projectId: String,
+        baseProjectVersion: Long,
+        siteId: String,
+        projectSiteCode: String?,
+        accessInstructions: String?,
+        projectSpecificNotes: String?,
+    ): ProjectSiteCommandResponseDto {
+        ensureConfigured()
+        return projectsApi.attachSite(
+            projectId = projectId,
+            request =
+                AttachProjectSiteRequestDto(
+                    operationId =
+                        UUID.randomUUID()
+                            .toString(),
+                    baseProjectVersion =
+                        baseProjectVersion,
+                    siteId =
+                        siteId,
+                    projectSiteCode =
+                        projectSiteCode,
+                    accessInstructions =
+                        accessInstructions,
+                    projectSpecificNotes =
+                        projectSpecificNotes,
+                    clientOccurredAt =
+                        java.time.Instant.now()
+                            .toString(),
+                ),
+            installationId =
+                installationId,
+        )
     }
 
     suspend fun logout() {

@@ -264,8 +264,9 @@ This is a boundary decision, not removal of later lifecycle states from the data
 
 Site is durable physical/client location truth and survives Project closure.
 
-Authoritative Slice 01 fields remain the V0004 shape:
+Authoritative Slice 01 fields refine the V0004 shape with explicit HILTECH tenancy:
 - id
+- organizationId — owning HILTECH organization
 - clientOrganizationId
 - siteCode
 - name
@@ -279,7 +280,8 @@ Authoritative Slice 01 fields remain the V0004 shape:
 - version.
 
 Rules:
-- unique `clientOrganizationId + siteCode`.
+- unique `organizationId + clientOrganizationId + siteCode`.
+- Site HILTECH tenancy is explicit; clientOrganizationId alone is not an internal tenant boundary.
 - Site may be reused by multiple Projects for the same client.
 - Site must not be recreated merely because a new Project starts.
 - address/geolocation are RESTRICTED fields and projected only to authorized users.
@@ -449,7 +451,7 @@ Restricted address/geolocation/access instructions/notes are field-projected sep
 Authentication and organization membership come from Phase 1.
 
 Project read/action authority uses:
-- explicit organization administration authority for creation/bootstrap administration;
+- explicit Phase-4-owned Project administration authority for organization-scoped creation/bootstrap administration;
 - Project OpenFGA relationships for existing Project operational access;
 - current Project responsibility projection;
 - application lifecycle/version/field obligations.
@@ -463,9 +465,11 @@ Rules:
 - a pending new Project relationship does not grant until authorization projection is APPLIED.
 - a revoked/ended responsibility denies immediately even while a stale tuple exists.
 
-CreateProject/CreateSite/attach administration in Slice 01 uses explicit HILTECH organization admin authority plus application policy. This is a bootstrap-safe authority already represented in the Phase 1 model; a new permanent job-title role is not invented.
+CreateProject/CreateSite administration in Slice 01 uses an explicit organization-scoped Project authority binding owned by the Projects module. It must not infer authority from membershipType, roleLabel, WorkforceAssignment.roleCode or a named person.
 
-Future Project-specific creator/delegation policy may narrow this without replacing the domain schema.
+The binding uses USER / TEAM principals, is effective-dated/audited, projects to OpenFGA through the existing authorization outbox, and derives the organization-level `can_manage_projects` action. ProjectSite attachment on an existing Project additionally requires current Project operational authority.
+
+This is a controlled contract refinement recorded below; it does not reopen Phase 1 or make Project authority a generic organization-membership permission.
 
 ---
 
@@ -563,8 +567,9 @@ Expected Slice 01 migration responsibilities:
 - source_type/source_external_reference;
 - authoritative project_responsibility history;
 - remove non-authoritative project_manager_id;
+- explicit HILTECH organization ownership on Site and ProjectSite;
 - indexes/checks/uniqueness for responsibility/source semantics;
-- any composite organization integrity keys needed to reject cross-organization responsibility safely.
+- composite organization integrity keys that reject cross-organization responsibility and ProjectSite links.
 
 Do not modify V0001–V0020.
 
@@ -715,3 +720,95 @@ The one production-schema refinement is expected and justified by verified Phase
 `SLICE_01_PRODUCTION_CODE_AUTHORIZED = YES`
 
 `NEXT = IMPLEMENT_PHASE4_SLICE01_PROJECT_SITE_CORE_VERTICAL`
+
+
+---
+
+# Controlled Amendment 01 — explicit Project administration source truth
+
+Date: 2026-09-20  
+Status: **ACCEPTED BEFORE PRODUCTION CODE**
+
+Implementation inspection after contract merge found one cross-cutting ambiguity:
+
+- the OpenFGA model contains a generic `organization#admin` relation;
+- verified Phase 1 production source truth intentionally projects only structural organization membership, Team membership and Team manager relations;
+- no authoritative PostgreSQL source currently exists for a generic organization-admin grant;
+- `membership_type` / `role_label` are explicitly forbidden as permission truth.
+
+Therefore Slice 01 must not pretend that a generic organization-admin tuple has a production source.
+
+The implementation contract is refined as follows:
+
+Create `project_authority_binding` as Projects-owned organization-scoped authority truth.
+
+Minimum fields:
+- id
+- organization_id
+- authority_key = `PROJECT_ADMIN`
+- principal_type = `USER | TEAM`
+- principal_user_id?
+- principal_team_id?
+- effective_from
+- effective_to?
+- active
+- created_by_user_id
+- created_at
+- version.
+
+Rules:
+- exactly one principal field according to type;
+- USER must have current active identity + organization membership to be effective;
+- TEAM must belong to the organization and be active;
+- no job-title or membership-label inference;
+- multiple current Project admins are allowed;
+- grants/revokes are source-truth guarded and projected with the existing fail-closed authorization outbox.
+
+OpenFGA organization model adds:
+- `project_admin: [user, team#member]`
+- `can_manage_projects: project_admin or admin`
+
+The legacy generic `admin` relation remains model-compatible, but Slice 01 does not invent a source for it.
+
+This amendment preserves the previously frozen business intent — explicit authorized Project administration — while making its production source authoritative and testable.
+
+`CONTROLLED_AMENDMENT_01 = PASS`
+
+`PROJECT_ADMIN_AUTHORITY_SOURCE = PROJECT_AUTHORITY_BINDING`
+
+
+---
+
+# Controlled Amendment 02 — explicit HILTECH tenancy for Site / ProjectSite
+
+Date: 2026-09-20  
+Status: **ACCEPTED BEFORE SITE PRODUCTION CODE**
+
+Implementation inspection found a security/data-integrity gap in the pre-code V0004 Site scaffold:
+
+- Site has `client_organization_id`, but no owning HILTECH `organization_id`;
+- `client_organization_id` answers whose physical/client Site it is, not which HILTECH tenant owns the internal record;
+- an unattached reusable Site therefore cannot be safely scoped to one HILTECH organization;
+- ProjectSite's two independent foreign keys do not by themselves prove that Project and Site belong to the same HILTECH tenant.
+
+Slice 01 refines the physical contract:
+
+`site` adds:
+- `organization_id uuid NOT NULL -> organization`;
+- uniqueness becomes `(organization_id, client_organization_id, site_code)`;
+- `UNIQUE (id, organization_id)` supports composite integrity.
+
+`project_site` adds:
+- `organization_id uuid NOT NULL`;
+- composite FK `(project_id, organization_id) -> project(id, organization_id)`;
+- composite FK `(site_id, organization_id) -> site(id, organization_id)`.
+
+The existing `project_id` / `site_id` identities and unique `(project_id, site_id)` relation remain.
+
+This does not make Site equal Project. Site stays durable/reusable. It adds the missing internal tenant boundary required for safe Site creation, reuse and authorization.
+
+`CONTROLLED_AMENDMENT_02 = PASS`
+
+`SITE_TENANCY = EXPLICIT_HILTECH_ORGANIZATION`
+
+`PROJECT_SITE_CROSS_TENANT_LINK = DB_REJECTED`

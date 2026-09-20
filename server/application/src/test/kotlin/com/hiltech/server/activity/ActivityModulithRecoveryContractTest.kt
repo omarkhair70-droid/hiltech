@@ -371,7 +371,7 @@ class ActivityModulithRecoveryContractTest {
                 project_code, name,
                 client_organization_id,
                 lifecycle_state,
-                project_manager_id,
+                source_type,
                 created_at, created_by,
                 updated_at, version
             )
@@ -379,7 +379,7 @@ class ActivityModulithRecoveryContractTest {
                 ?, ?, ?,
                 'Recovery Project',
                 ?, 'ACTIVE',
-                NULL,
+                'INTERNAL',
                 ?, ?, ?, 1
             )
             """.trimIndent(),
@@ -398,6 +398,7 @@ class ActivityModulithRecoveryContractTest {
             """
             INSERT INTO site (
                 id,
+                organization_id,
                 client_organization_id,
                 site_code, name,
                 status,
@@ -405,13 +406,14 @@ class ActivityModulithRecoveryContractTest {
                 updated_at, version
             )
             VALUES (
-                ?, ?, ?,
+                ?, ?, ?, ?,
                 'Recovery Site',
                 'ACTIVE',
                 ?, ?, ?, 1
             )
             """.trimIndent(),
             siteId,
+            organizationId,
             organizationId,
             "RS-" +
                 UUID.randomUUID()

@@ -291,6 +291,7 @@ jobs:
           HILTECH_HR_DOCUMENTS_CONTRACT_TEST: "1"
           HILTECH_ONBOARDING_CONTRACT_TEST: "1"
           HILTECH_OFFBOARDING_CONTRACT_TEST: "1"
+          HILTECH_PROJECTS_CONTRACT_TEST: "1"
           HILTECH_ACTIVITY_CURSOR_SIGNING_KEY: "activity-contract-signing-key-20260919-strong"
           HILTECH_INBOX_CURSOR_SIGNING_KEY: "inbox-contract-signing-key-20260919-strong"
           HILTECH_FGA_ENABLED: "true"
@@ -320,6 +321,7 @@ jobs:
             --tests com.hiltech.server.people.HrDocumentsPostgresEvidenceContractTest \
             --tests com.hiltech.server.people.OnboardingPostgresContractTest \
             --tests com.hiltech.server.people.OffboardingPostgresContractTest \
+            --tests com.hiltech.server.projects.ProjectsPostgresOpenFgaContractTest \
             --rerun-tasks
 
           if PGPASSWORD=hiltech-keycloak-local \
