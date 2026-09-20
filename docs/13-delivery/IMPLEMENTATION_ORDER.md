@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 VERIFIED / COMPLETE / PHASE 3 ACTIVE — SLICE 01 MERGED / SLICE 02 CONTRACT CLOSED**
+Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 VERIFIED / COMPLETE / PHASE 3 ACTIVE — SLICE 01 MERGED / SLICE 02 VERIFIED / READY TO MERGE**
 
 ## Core Rule
 
@@ -415,7 +415,7 @@ The Project/Work/Warehouse/Field structural contracts and representative reality
 
 The rendered design proof and formal First-Slice Freeze Review now PASS.
 
-Repository Bootstrap, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are complete. Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 — Employee / Employment Core — merged at `0183a273f1a01d3b9d0277df2ac2e8bbe2f98390`; post-merge Bootstrap `35478418690` PASS. Slice 02 — Workforce Assignment / Reporting Structure — has a frozen reality/implementation contract that reuses the existing Team/security foundation rather than duplicating it.
+Repository Bootstrap, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are complete. Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is merged/post-merge verified. Slice 02 — Workforce Assignment / Reporting Structure — is exact-head VERIFIED / READY TO MERGE at `b838e92f1126ebf1081c81568d5abb90d0c17edd`; Bootstrap `35479675064`, Phase 2 runtime `35479675067`, and Phase 1 OIDC `35479675062` attempt 2 PASS.
 
 ---
 
@@ -453,9 +453,9 @@ Closed:
 Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
 
 Immediate next execution:
-**PHASE 3 / SLICE 02 — Workforce Assignment implementation only after the Slice 02 docs-closure merge.**
+**PHASE 3 / SLICE 02 — closure, merge, and post-merge verification.**
 
-Phase 0 engineering foundation, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are verified and complete. Phase 3 Slice 01 is merged/post-merge verified. Slice 02 reality and contract are closed; implementation follows only after this docs closure lands on `main`.
+Phase 0 engineering foundation, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are verified and complete. Phase 3 Slice 01 is merged/post-merge verified. Slice 02 is implementation-complete and exact-head verified; Slice 03 remains closed until Slice 02 merge/post-merge verification.
 
 
 ---

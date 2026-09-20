@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 3 ACTIVE — SLICE 01 VERIFIED / MERGED — SLICE 02 WORKFORCE ASSIGNMENT CONTRACT CLOSED**
+**PHASE 3 ACTIVE — SLICE 01 MERGED — SLICE 02 WORKFORCE ASSIGNMENT VERIFIED / READY TO MERGE**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -52,7 +52,7 @@ Final full regression evidence on that code head:
 
 Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Final Phase 2 closure PR #37 merged at `624bd6c50f8d17535316ae450a8a780bc756a108` with post-merge Bootstrap `35474921624` PASS.
 
-Phase 3 — People / Internal Workforce Core — is ACTIVE. **Slice 01 — Employee / Employment Core is VERIFIED / MERGED** through PR #40 at `0183a273f1a01d3b9d0277df2ac2e8bbe2f98390`; post-merge Bootstrap `35478418690` and OpenFGA `35478418692` PASS. Slice 02 — Workforce Assignment / Reporting Structure — has completed reality/contract closure. It establishes one effective-dated WorkforceAssignment business source while reusing existing Phase 1 Team/team_membership/OpenFGA foundations; implementation has not started on this docs-only closure branch.
+Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED / MERGED. **Slice 02 — Workforce Assignment / Reporting Structure is VERIFIED / READY TO MERGE** on canonical tested code head `b838e92f1126ebf1081c81568d5abb90d0c17edd`. Bootstrap `35479675064`, Phase 2 runtime `35479675067`, and Phase 1 Native OIDC `35479675062` attempt 2 are PASS. Slice 02 implements effective-dated workforce structure, safe reporting hierarchy, Team reuse, People-owned Team membership with Identity-link backfill, and aggregate shared Team authority so manual + People membership sources cannot stale-revoke one another.
 
 ---
 
@@ -83,8 +83,8 @@ Phase 3 — People / Internal Workforce Core — is ACTIVE. **Slice 01 — Emplo
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 3 ACTIVE | Slice 01 merged/post-merge verified; Slice 02 Workforce Assignment reality/contract closed |
-| Production code | PHASE 3 SLICE 01 MERGED | Slice 02 has no production code yet; contract closure only |
+| Implementation order | PHASE 3 ACTIVE | Slice 01 merged; Slice 02 verified/ready to merge; Slice 03 remains closed |
+| Production code | PHASE 3 SLICE 02 VERIFIED / READY TO MERGE | PostgreSQL/OpenFGA/shared client/Android/Windows/inherited regressions PASS |
 
 ---
 
@@ -239,7 +239,7 @@ Immediate continuation:
 1. Phase 0, Phase 1 and Phase 2 are VERIFIED / COMPLETE; do not reopen them without a genuine cross-cutting contradiction.
 2. Phase 3 scope/slice plan is frozen in `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md`.
 3. Phase 3 / Slice 01 — Employee / Employment Core is **VERIFIED / MERGED** at `0183a273f1a01d3b9d0277df2ac2e8bbe2f98390`; post-merge Bootstrap `35478418690` PASS.
-4. Slice 02 Workforce Assignment reality/contract closure is frozen. Before implementation, preserve the Team/security ownership boundaries and do not reinterpret role labels as permissions.
+4. Slice 02 Workforce Assignment is **VERIFIED / READY TO MERGE** on `b838e92f1126ebf1081c81568d5abb90d0c17edd`; after closure checks merge it, then require post-merge Bootstrap PASS before Slice 03 contract/implementation work.
 5. Continue consuming Reality Evidence/Facts by phase; current employee-master/import/legal HR unknowns are scoped out rather than guessed.
 6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 

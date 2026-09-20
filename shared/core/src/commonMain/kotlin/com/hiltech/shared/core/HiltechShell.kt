@@ -24,6 +24,8 @@ import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.IdentitySecuritySnapshot
 import com.hiltech.shared.core.people.EmployeeDetailDto
 import com.hiltech.shared.core.people.EmployeeDirectoryDto
+import com.hiltech.shared.core.people.WorkforceAssignmentDto
+import com.hiltech.shared.core.people.WorkforceStructureDto
 
 sealed interface HiltechShellState {
     data object SignedOut : HiltechShellState
@@ -49,7 +51,9 @@ sealed interface HiltechShellState {
 data class HiltechPeopleState(
     val loading: Boolean = false,
     val ownProfile: EmployeeDetailDto? = null,
+    val ownWorkforceAssignment: WorkforceAssignmentDto? = null,
     val directory: EmployeeDirectoryDto? = null,
+    val workforceStructure: WorkforceStructureDto? = null,
     val selectedEmployee: EmployeeDetailDto? = null,
     val errorMessage: String? = null,
 )
@@ -334,6 +338,62 @@ private fun PeopleSection(
         )
         own.employmentTypeCode?.let {
             Text("Employment: $it")
+        }
+    }
+
+    state.ownWorkforceAssignment?.let { assignment ->
+        Text(
+            "My workforce context",
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Text(
+            assignment.roleLabel
+                ?: assignment.roleCode,
+        )
+        assignment.teamName?.let {
+            Text("Team: $it")
+        }
+        assignment.reportsToDisplayName
+            ?.let {
+                Text("Reports to: $it")
+            }
+        Text(
+            "Effective from: " +
+                assignment.effectiveFrom,
+        )
+    }
+
+    state.workforceStructure?.let { structure ->
+        Text(
+            "Organization structure",
+            style = MaterialTheme.typography.titleSmall,
+        )
+        structure.items.forEach { assignment ->
+            Text(
+                buildString {
+                    append(
+                        assignment.employeeCode,
+                    )
+                    append(" · ")
+                    append(
+                        assignment.employeeDisplayName,
+                    )
+                    append(" · ")
+                    append(
+                        assignment.roleLabel
+                            ?: assignment.roleCode,
+                    )
+                    assignment.teamName?.let {
+                        append(" · ")
+                        append(it)
+                    }
+                    assignment.reportsToDisplayName
+                        ?.let {
+                            append(" · reports to ")
+                            append(it)
+                        }
+                },
+            )
         }
     }
 

@@ -10,6 +10,7 @@ import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
 import com.hiltech.shared.core.people.PeopleApiClient
+import com.hiltech.shared.core.people.WorkforceAssignmentApiClient
 import java.util.UUID
 
 class HiltechApplication : Application() {
@@ -54,6 +55,13 @@ class HiltechApplication : Application() {
 
     val peopleApi: PeopleApiClient by lazy {
         PeopleApiClient(productApi)
+    }
+
+    val workforceAssignmentApi:
+        WorkforceAssignmentApiClient by lazy {
+        WorkforceAssignmentApiClient(
+            productApi,
+        )
     }
 
     val syncRuntime: AndroidSyncRuntime by lazy {

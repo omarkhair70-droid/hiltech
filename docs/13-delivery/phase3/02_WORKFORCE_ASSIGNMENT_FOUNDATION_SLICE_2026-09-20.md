@@ -1,7 +1,7 @@
 # Phase 3 / Slice 02 — Workforce Assignment / Reporting Structure
 
 Date: 2026-09-20  
-Status: **CONTRACT FROZEN / IMPLEMENTATION NOT YET STARTED**
+Status: **VERIFIED / READY TO MERGE**
 
 ## Reality basis
 
@@ -58,6 +58,8 @@ Rules:
 - effective_to >= effective_from;
 - ACTIVE requires effective_to NULL;
 - one ACTIVE assignment per Employee in the current baseline;
+- Slice 02 creates only already-effective/current assignments: `effective_from` must not be in the future at command time;
+- future-dated scheduling/change activation belongs to Slice 05;
 - history remains in ended rows.
 
 ## Existing Team membership integration
@@ -85,6 +87,24 @@ Use:
 - valid_from/valid_until track the People security projection lifetime.
 
 Then call the already verified Phase 1 Team membership authorization projection bridge.
+
+### Change-control clarification — shared tuple aggregation
+
+Implementation review exposed one cross-source edge case: a manual/non-People TeamMembership and a People-owned TeamMembership may legitimately represent the same current `(team,user)` relation. Both map to the same OpenFGA `team#member` tuple.
+
+Projecting each row independently with its row-local version can produce a stale revoke when one source ends while the other remains current.
+
+Therefore Slice 02 extends the Phase 1 bridge with a monotonic **TeamMembershipAuthority aggregate** keyed by `(team_id,user_identity_id)`:
+
+- every TeamMembership mutation/sync increments the aggregate generation under transaction/lock;
+- desired PRESENT means at least one current valid TeamMembership source exists for that pair;
+- desired ABSENT means no current valid source remains;
+- the OpenFGA tuple remains the existing `team.member` tuple;
+- manual/non-People rows are never rewritten or adopted by People;
+- People-owned rows remain identifiable through `source_workforce_assignment_id`;
+- source-version ordering for the shared tuple comes from the aggregate generation, not an individual membership row.
+
+This is a minimal Phase 1 projection hardening required by the first legitimate multi-source Team-membership consumer. It does not change Team semantics or the OpenFGA model.
 
 ## Reporting manager vs Team manager
 
@@ -231,17 +251,18 @@ Do not implement:
 9. role code is configurable and grants no authority itself.
 10. existing Team table is reused; no duplicate Team model exists.
 11. linked Employee + Team creates exactly one People-owned Team membership.
-12. unlinked Employee assignment creates no fake Team membership.
-13. later `EmployeeIdentityLinked` backfills exactly one membership.
-14. People-owned membership is projected through existing Phase 1 OpenFGA pipeline.
-15. stale/revoked organization membership fails closed.
-16. manual/non-People Team membership is not overwritten by People.
-17. own assignment resolves only through linked identity/current organization membership.
-18. cross-organization reads/writes fail closed.
-19. commands are idempotent/version-safe.
-20. safe reads leak no private People fields.
-21. inherited Slice 01 + Phase 0–2 regressions PASS.
-22. Android/Windows shared client contracts compile if assignment DTOs are added.
+12. manual and People-owned memberships for the same `(team,user)` aggregate safely to one OpenFGA tuple without stale revoke; manual rows are not rewritten.
+13. unlinked Employee assignment creates no fake Team membership.
+14. later `EmployeeIdentityLinked` backfills exactly one membership.
+15. People-owned membership is projected through the existing Phase 1 OpenFGA pipeline.
+16. stale/revoked organization membership fails closed.
+17. manual/non-People Team membership is not overwritten by People.
+18. own assignment resolves only through linked identity/current organization membership.
+19. cross-organization reads/writes fail closed.
+20. commands are idempotent/version-safe.
+21. safe reads leak no private People fields.
+22. inherited Slice 01 + Phase 0–2 regressions PASS.
+23. Android/Windows shared client contracts compile if assignment DTOs are added.
 
 ## Closure rule
 
@@ -254,8 +275,46 @@ Require:
 - inherited People Slice 01 regression;
 - exact-head CI.
 
+## Verification closure
+
+Canonical tested code head:
+
+`b838e92f1126ebf1081c81568d5abb90d0c17edd`
+
+Exact-head verification:
+
+- Bootstrap Phase 0 `35479675064` — **PASS**
+  - V0016 migration + jOOQ generation — PASS
+  - WorkforceAssignment PostgreSQL/OpenFGA contract — PASS
+  - TeamMembershipAuthority aggregate/manual+People shared tuple convergence — PASS
+  - inherited Slice 01/Phase 0–2 local-platform regressions — PASS
+- Phase 2 Shared Command Runtime `35479675067` — **PASS**
+- Phase 1 Native OIDC Production Smoke `35479675062`, attempt 2 — **PASS**
+  - Android production shell render — PASS
+  - Windows/Desktop production shell render — PASS
+  - provider/browser smoke — PASS
+
+Verified implementation includes:
+
+- effective-dated WorkforceAssignment persistence and safe reads;
+- one-current-assignment baseline with historical rows representable;
+- same-organization Employee/Team/reporting-manager invariants;
+- self-reference and reporting-cycle rejection;
+- future activation deliberately deferred to Slice 05;
+- People-authorized idempotent assignment creation;
+- explicit role metadata with no permission inference;
+- People-owned Team membership linked to source WorkforceAssignment;
+- EmployeeIdentityLinked backfill for previously unlinked Employees;
+- aggregate `(team,user)` authority generation preventing stale OpenFGA revoke across manual + People membership sources;
+- manual Team membership preservation;
+- shared KMP WorkforceAssignment client contracts;
+- Android own Team/role/manager proof surface;
+- Windows own assignment + organization-structure proof surface.
+
+No assignment-change workflow, Project/Site/Work assignment, attendance, payroll, Team redesign or role-derived permission scope was introduced.
+
 ## Contract conclusion
 
-**CONTRACT FROZEN.**
+**VERIFIED / READY TO MERGE.**
 
-This document authorizes implementation only after Slice 01 merge/post-merge closure is durably recorded in canonical status.
+Merge only the verified closure head after docs-only closure checks. After merge, require post-merge `main` Bootstrap PASS before opening Slice 03 implementation.
