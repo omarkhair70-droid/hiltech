@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 VERIFIED / COMPLETE / PHASE 3 ACTIVE — SLICE 01/02/03/04/05 MERGED / SLICE 06 IMPLEMENTATION AUTHORIZED**
+Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 VERIFIED / COMPLETE / PHASE 3 ACTIVE — SLICE 01/02/03/04/05 MERGED / SLICE 06 VERIFIED / READY TO MERGE**
 
 ## Core Rule
 
@@ -415,7 +415,7 @@ The Project/Work/Warehouse/Field structural contracts and representative reality
 
 The rendered design proof and formal First-Slice Freeze Review now PASS.
 
-Repository Bootstrap, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are complete. Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01, Slice 02 and Slice 03 are merged/post-merge verified. Slice 03 merge commit is `d5d0cb256e68cf7b30978434aa6ba241c7500df1`; post-merge Bootstrap `35485263189` PASS. Slice 04 — Onboarding + Basic Self-Service — is VERIFIED / MERGED at `f7d7460718f43e634a180734623dabe5260b0224`; post-merge Bootstrap `35489327649` PASS. Slice 05 — Workforce Assignment Change Workflow — is VERIFIED / MERGED through PR #49 at `51648418a69df285334f76f5b1b4cfca9ec3cc43`; post-merge Bootstrap `35492558129` PASS. Slice 06 — Offboarding Skeleton — has PASS reality closure and a frozen implementation contract.
+Repository Bootstrap, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are complete. Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01, Slice 02 and Slice 03 are merged/post-merge verified. Slice 03 merge commit is `d5d0cb256e68cf7b30978434aa6ba241c7500df1`; post-merge Bootstrap `35485263189` PASS. Slice 04 — Onboarding + Basic Self-Service — is VERIFIED / MERGED at `f7d7460718f43e634a180734623dabe5260b0224`; post-merge Bootstrap `35489327649` PASS. Slice 05 — Workforce Assignment Change Workflow — is VERIFIED / MERGED through PR #49 at `51648418a69df285334f76f5b1b4cfca9ec3cc43`; post-merge Bootstrap `35492558129` PASS. Slice 06 — Offboarding Skeleton — is VERIFIED / READY TO MERGE at canonical tested code head `d88f5234bc100c5541c7d27608435e59c5fd986f`; Bootstrap `35494892676` attempt 2, Phase 2 runtime `35494892627`, Phase 1 OIDC `35494892665`, Onboarding Human Proof `35494892659`, Assignment Change Human Proof `35494892649`, and Offboarding Human Proof `35494892672` PASS.
 
 ---
 
@@ -453,9 +453,9 @@ Closed:
 Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
 
 Immediate next execution:
-**PHASE 3 / SLICE 06 — Offboarding Skeleton implementation.**
+**PHASE 3 / SLICE 06 — PR #51 merge closure, then Phase 3 final gap review.**
 
-Phase 0 engineering foundation, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are verified and complete. Phase 3 Slice 01/02/03/04/05 are merged/post-merge verified. Slice 06 reality/contract closure is complete. Implement only the frozen offboarding skeleton: People coordination + real HILTECH access/session revocation + typed external clearance slots. Do not pull Project/Asset/Finance/Payroll business truth or Phase 4 behavior backward.
+Phase 0 engineering foundation, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are verified and complete. Phase 3 Slice 01/02/03/04/05 are merged/post-merge verified. Slice 06 is exact-head VERIFIED and ready for merge closure. After post-merge Bootstrap, perform the Phase 3 final gap review against every frozen Phase 3 gate. Do not start Phase 4 production code before that review is closed and the owner has reviewed the Phase 4 entry plan.
 
 
 ---
