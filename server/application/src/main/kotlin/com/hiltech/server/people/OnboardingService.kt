@@ -180,9 +180,11 @@ class OnboardingService(
                         configRevisionRefsJson =
                             buildJsonArray {
                                 add(
-                                    policy
-                                        .configRevisionId
-                                        .toString(),
+                                    JsonPrimitive(
+                                        policy
+                                            .configRevisionId
+                                            .toString(),
+                                    ),
                                 )
                             }.toString(),
                     ),
@@ -674,9 +676,11 @@ class OnboardingService(
                         configRevisionRefsJson =
                             buildJsonArray {
                                 add(
-                                    currentCase
-                                        .policyConfigRevisionId
-                                        .toString(),
+                                    JsonPrimitive(
+                                        currentCase
+                                            .policyConfigRevisionId
+                                            .toString(),
+                                    ),
                                 )
                             }.toString(),
                     ),
