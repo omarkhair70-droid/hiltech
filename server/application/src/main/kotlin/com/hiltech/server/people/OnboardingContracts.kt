@@ -248,3 +248,16 @@ interface OnboardingSelfServicePolicyPort {
         at: Instant,
     ): Boolean
 }
+
+
+data class EmployeeIdentityProvisioned(
+    val eventId: UUID = UUID.randomUUID(),
+    val invitationId: UUID,
+    val organizationId: UUID,
+    val employeeId: UUID,
+    val userIdentityId: UUID,
+    val sourceVersion: Long,
+    val actorUserId: UUID,
+    val occurredAt: Instant,
+    val correlationId: String,
+)
