@@ -436,6 +436,477 @@ class WorkforceAssignmentService(
         )
     }
 
+    fun change(
+        command:
+            ChangeWorkforceAssignmentCommand,
+    ): WorkforceAssignmentCommandResult {
+        requirePositiveVersion(
+            command.baseAssignmentVersion,
+        )
+
+        val initialEmployee =
+            persistence.employee(
+                command.employeeId,
+            )
+                ?: throw assignmentError(
+                    code =
+                        "EMPLOYEE_NOT_FOUND",
+                    message =
+                        "The employee does not exist.",
+                    status =
+                        HttpStatus.NOT_FOUND,
+                )
+
+        requireManage(
+            actorUserId =
+                command.actorUserId,
+            organizationId =
+                initialEmployee.organizationId,
+        )
+
+        val normalizedRoleCode =
+            normalizeRoleCode(
+                command.roleCode,
+            )
+        val normalizedRoleLabel =
+            optionalText(
+                command.roleLabel,
+                160,
+            )
+        val newAssignmentId =
+            deterministicAssignmentId(
+                command.operationId,
+            )
+        val fingerprint =
+            IdempotencyKeyContract.fingerprint(
+                listOf(
+                    command.employeeId,
+                    command.currentAssignmentId,
+                    command.baseAssignmentVersion,
+                    command.teamId,
+                    normalizedRoleCode,
+                    normalizedRoleLabel,
+                    command.reportsToEmployeeId,
+                ).joinToString("|"),
+            )
+
+        val execution =
+            idempotency.execute(
+                IdempotentCommandSpec(
+                    operationId =
+                        command.operationId,
+                    actorUserId =
+                        command.actorUserId,
+                    commandType =
+                        "PEOPLE_CHANGE_WORKFORCE_ASSIGNMENT",
+                    targetType =
+                        "WORKFORCE_ASSIGNMENT",
+                    targetId =
+                        newAssignmentId,
+                    requestFingerprint =
+                        fingerprint,
+                    correlationId =
+                        command.correlationId,
+                ),
+            ) {
+                val now = clock.instant()
+                val employee =
+                    persistence.lockEmployee(
+                        command.employeeId,
+                    )
+                        ?: throw assignmentError(
+                            code =
+                                "EMPLOYEE_NOT_FOUND",
+                            message =
+                                "The employee does not exist.",
+                            status =
+                                HttpStatus.NOT_FOUND,
+                        )
+
+                requireManage(
+                    actorUserId =
+                        command.actorUserId,
+                    organizationId =
+                        employee.organizationId,
+                )
+
+                if (
+                    employee.employeeState ==
+                    EmployeeState.FORMER
+                ) {
+                    throw assignmentError(
+                        code =
+                            "EMPLOYEE_NOT_ASSIGNABLE",
+                        message =
+                            "A former employee cannot receive a workforce assignment change.",
+                        status =
+                            HttpStatus.CONFLICT,
+                    )
+                }
+
+                if (
+                    !persistence.lockOrganization(
+                        employee.organizationId,
+                    )
+                ) {
+                    throw assignmentError(
+                        code =
+                            "ORGANIZATION_NOT_ACTIVE",
+                        message =
+                            "The employee organization is not active.",
+                        status =
+                            HttpStatus.CONFLICT,
+                    )
+                }
+
+                val current =
+                    persistence.lockActiveAssignment(
+                        assignmentId =
+                            command.currentAssignmentId,
+                        employeeId =
+                            employee.employeeId,
+                    )
+                        ?: throw assignmentError(
+                            code =
+                                "WORKFORCE_ASSIGNMENT_CURRENT_MISMATCH",
+                            message =
+                                "The requested assignment is no longer the employee's current assignment.",
+                            status =
+                                HttpStatus.CONFLICT,
+                        )
+
+                if (
+                    current.version !=
+                    command.baseAssignmentVersion
+                ) {
+                    throw assignmentError(
+                        code =
+                            "WORKFORCE_ASSIGNMENT_VERSION_CONFLICT",
+                        message =
+                            "The workforce assignment has changed. Refresh before retrying.",
+                        status =
+                            HttpStatus.CONFLICT,
+                        currentVersion =
+                            current.version,
+                    )
+                }
+
+                command.teamId?.let {
+                    teamId ->
+                    val team =
+                        persistence.team(teamId)
+                            ?: throw assignmentError(
+                                code =
+                                    "TEAM_NOT_FOUND",
+                                message =
+                                    "The team does not exist.",
+                                status =
+                                    HttpStatus.NOT_FOUND,
+                            )
+
+                    if (
+                        team.organizationId !=
+                        employee.organizationId
+                    ) {
+                        throw assignmentError(
+                            code =
+                                "TEAM_ORGANIZATION_MISMATCH",
+                            message =
+                                "The team does not belong to the employee organization.",
+                            status =
+                                HttpStatus.CONFLICT,
+                        )
+                    }
+
+                    if (!team.active) {
+                        throw assignmentError(
+                            code =
+                                "TEAM_NOT_ACTIVE",
+                            message =
+                                "The team is not active.",
+                            status =
+                                HttpStatus.CONFLICT,
+                        )
+                    }
+                }
+
+                command.reportsToEmployeeId
+                    ?.let {
+                        managerId ->
+                        if (
+                            managerId ==
+                            employee.employeeId
+                        ) {
+                            throw assignmentError(
+                                code =
+                                    "REPORTING_SELF_REFERENCE",
+                                message =
+                                    "An employee cannot report to themselves.",
+                                status =
+                                    HttpStatus.CONFLICT,
+                            )
+                        }
+
+                        val manager =
+                            persistence.employee(
+                                managerId,
+                            )
+                                ?: throw assignmentError(
+                                    code =
+                                        "REPORTING_MANAGER_NOT_FOUND",
+                                    message =
+                                        "The reporting manager does not exist.",
+                                    status =
+                                        HttpStatus.NOT_FOUND,
+                                )
+
+                        if (
+                            manager.organizationId !=
+                            employee.organizationId
+                        ) {
+                            throw assignmentError(
+                                code =
+                                    "REPORTING_MANAGER_ORGANIZATION_MISMATCH",
+                                message =
+                                    "The reporting manager does not belong to the employee organization.",
+                                status =
+                                    HttpStatus.CONFLICT,
+                            )
+                        }
+
+                        if (
+                            manager.employeeState !in
+                            setOf(
+                                EmployeeState.PREBOARDING,
+                                EmployeeState.ACTIVE,
+                            )
+                        ) {
+                            throw assignmentError(
+                                code =
+                                    "REPORTING_MANAGER_NOT_CURRENT",
+                                message =
+                                    "The reporting manager is not current.",
+                                status =
+                                    HttpStatus.CONFLICT,
+                            )
+                        }
+
+                        if (
+                            persistence.wouldCreateReportingCycle(
+                                employeeId =
+                                    employee.employeeId,
+                                reportsToEmployeeId =
+                                    managerId,
+                            )
+                        ) {
+                            throw assignmentError(
+                                code =
+                                    "REPORTING_CYCLE",
+                                message =
+                                    "The reporting relationship would create a cycle.",
+                                status =
+                                    HttpStatus.CONFLICT,
+                            )
+                        }
+                    }
+
+                if (
+                    current.teamId ==
+                        command.teamId &&
+                    current.roleCode ==
+                        normalizedRoleCode &&
+                    current.roleLabel ==
+                        normalizedRoleLabel &&
+                    current.reportsToEmployeeId ==
+                        command.reportsToEmployeeId
+                ) {
+                    throw assignmentError(
+                        code =
+                            "WORKFORCE_ASSIGNMENT_NO_CHANGE",
+                        message =
+                            "The proposed workforce assignment is identical to the current assignment.",
+                        status =
+                            HttpStatus.CONFLICT,
+                    )
+                }
+
+                if (
+                    !persistence.endAssignment(
+                        assignmentId =
+                            current.assignmentId,
+                        expectedVersion =
+                            command.baseAssignmentVersion,
+                        effectiveTo = now,
+                    )
+                ) {
+                    throw assignmentError(
+                        code =
+                            "WORKFORCE_ASSIGNMENT_VERSION_CONFLICT",
+                        message =
+                            "The workforce assignment changed while applying the update.",
+                        status =
+                            HttpStatus.CONFLICT,
+                    )
+                }
+
+                try {
+                    persistence.insertAssignment(
+                        assignmentId =
+                            newAssignmentId,
+                        organizationId =
+                            employee.organizationId,
+                        employeeId =
+                            employee.employeeId,
+                        teamId =
+                            command.teamId,
+                        roleCode =
+                            normalizedRoleCode,
+                        roleLabel =
+                            normalizedRoleLabel,
+                        reportsToEmployeeId =
+                            command.reportsToEmployeeId,
+                        effectiveFrom = now,
+                        createdAt = now,
+                        supersedesAssignmentId =
+                            current.assignmentId,
+                    )
+                } catch (
+                    failure:
+                        DataIntegrityViolationException,
+                ) {
+                    throw assignmentError(
+                        code =
+                            "WORKFORCE_ASSIGNMENT_CONFLICT",
+                        message =
+                            "The workforce assignment change conflicts with current People state.",
+                        status =
+                            HttpStatus.CONFLICT,
+                    )
+                }
+
+                security.replaceAssignment(
+                    previousAssignmentId =
+                        current.assignmentId,
+                    newAssignmentId =
+                        newAssignmentId,
+                    occurredAt = now,
+                    correlationId =
+                        command.correlationId,
+                )
+
+                audit.append(
+                    AuditEventRecord(
+                        actorUserId =
+                            command.actorUserId,
+                        action =
+                            "WORKFORCE_ASSIGNMENT_CHANGED",
+                        targetType =
+                            "WORKFORCE_ASSIGNMENT",
+                        targetId =
+                            newAssignmentId,
+                        previousStateRef =
+                            current.assignmentId
+                                .toString(),
+                        newStateRef =
+                            newAssignmentId
+                                .toString(),
+                        safeDiffJson =
+                            """{"fields":["team","role","reportsTo","assignmentRevision"]}""",
+                        occurredAt = now,
+                        correlationId =
+                            command.correlationId,
+                    ),
+                )
+
+                events.publishEvent(
+                    WorkforceAssignmentChanged(
+                        previousAssignmentId =
+                            current.assignmentId,
+                        newAssignmentId =
+                            newAssignmentId,
+                        organizationId =
+                            employee.organizationId,
+                        employeeId =
+                            employee.employeeId,
+                        previousTeamId =
+                            current.teamId,
+                        newTeamId =
+                            command.teamId,
+                        previousRoleCode =
+                            current.roleCode,
+                        newRoleCode =
+                            normalizedRoleCode,
+                        previousReportsToEmployeeId =
+                            current.reportsToEmployeeId,
+                        newReportsToEmployeeId =
+                            command.reportsToEmployeeId,
+                        sourceVersion = 1,
+                        actorUserId =
+                            command.actorUserId,
+                        occurredAt = now,
+                        correlationId =
+                            command.correlationId,
+                    ),
+                )
+
+                IdempotentCommandOutcome(
+                    resultCode =
+                        "WORKFORCE_ASSIGNMENT_CHANGED",
+                    resultPayloadJson =
+                        buildJsonObject {
+                            put(
+                                "assignmentId",
+                                newAssignmentId
+                                    .toString(),
+                            )
+                        }.toString(),
+                )
+            }
+
+        return WorkforceAssignmentCommandResult(
+            assignment =
+                requireNotNull(
+                    persistence.loadAssignment(
+                        newAssignmentId,
+                    ),
+                ),
+            replayed =
+                execution.replayed,
+        )
+    }
+
+    fun historyForEmployee(
+        actorUserId: UUID,
+        employeeId: UUID,
+        limit: Int = 100,
+    ): List<WorkforceAssignmentSnapshot> {
+        val employee =
+            persistence.employee(
+                employeeId,
+            )
+                ?: throw assignmentError(
+                    code =
+                        "EMPLOYEE_NOT_FOUND",
+                    message =
+                        "The employee does not exist.",
+                    status =
+                        HttpStatus.NOT_FOUND,
+                )
+
+        requireManage(
+            actorUserId =
+                actorUserId,
+            organizationId =
+                employee.organizationId,
+        )
+
+        return persistence.historyForEmployee(
+            employeeId =
+                employeeId,
+            limit = limit,
+        )
+    }
+
     fun currentForEmployee(
         actorUserId: UUID,
         employeeId: UUID,
