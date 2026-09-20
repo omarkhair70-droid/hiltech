@@ -3,7 +3,7 @@
 Updated: 2026-09-20
 
 ## Overall Stage
-**PHASE 3 ACTIVE — SLICE 01/02/03 MERGED — SLICE 04 ONBOARDING + BASIC SELF-SERVICE VERIFIED / READY TO MERGE**
+**PHASE 3 ACTIVE — SLICE 01/02/03/04 MERGED — SLICE 05 WORKFORCE ASSIGNMENT CHANGE IMPLEMENTATION AUTHORIZED**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -52,7 +52,7 @@ Final full regression evidence on that code head:
 
 Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Final Phase 2 closure PR #37 merged at `624bd6c50f8d17535316ae450a8a780bc756a108` with post-merge Bootstrap `35474921624` PASS.
 
-Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED / MERGED. Slice 02 — Workforce Assignment / Reporting Structure — is VERIFIED / MERGED through PR #42 at `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` PASS. Slice 03 — HR Documents / Certifications — is VERIFIED / MERGED through PR #44 at `d5d0cb256e68cf7b30978434aa6ba241c7500df1`; post-merge Bootstrap `35485263189` PASS. Slice 04 — Onboarding + Basic Self-Service — is VERIFIED / READY TO MERGE at canonical tested code head `d511f1e262e954a2646bd040692d5a6f0e74371e`. Exact-head verification: Bootstrap `35488578970`, Phase 2 runtime `35488578980`, Phase 1 OIDC `35488578992`, Onboarding Human Proof `35488579082` — PASS.
+Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED / MERGED. Slice 02 — Workforce Assignment / Reporting Structure — is VERIFIED / MERGED through PR #42 at `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` PASS. Slice 03 — HR Documents / Certifications — is VERIFIED / MERGED through PR #44 at `d5d0cb256e68cf7b30978434aa6ba241c7500df1`; post-merge Bootstrap `35485263189` PASS. Slice 04 — Onboarding + Basic Self-Service — is VERIFIED / MERGED through PR #47 at `f7d7460718f43e634a180734623dabe5260b0224`; post-merge Bootstrap `35489327649` PASS. Slice 05 — Workforce Assignment Change Workflow — has PASS reality closure and a frozen implementation contract; implementation is AUTHORIZED.
 
 ---
 
@@ -83,8 +83,8 @@ Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 3 ACTIVE | Slice 01/02/03 merged; Slice 04 verified / ready to merge |
-| Production code | PHASE 3 SLICE 04 VERIFIED | Onboarding + own-record self-service exact-head green, including rendered Android/Windows human proof |
+| Implementation order | PHASE 3 ACTIVE | Slice 01/02/03/04 merged; Slice 05 implementation authorized |
+| Production code | PHASE 3 SLICE 05 AUTHORIZED | Effective-history WorkforceAssignment change over the existing Slice 02 model only |
 
 ---
 
@@ -241,7 +241,8 @@ Immediate continuation:
 3. Phase 3 / Slice 01 — Employee / Employment Core is **VERIFIED / MERGED** at `0183a273f1a01d3b9d0277df2ac2e8bbe2f98390`; post-merge Bootstrap `35478418690` PASS.
 4. Slice 02 is **VERIFIED / MERGED** at `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` PASS.
 5. Slice 03 HR Documents / Certifications is **VERIFIED / MERGED** at `d5d0cb256e68cf7b30978434aa6ba241c7500df1`; post-merge Bootstrap `35485263189` PASS.
-6. Slice 04 Onboarding + Basic Self-Service is **VERIFIED / READY TO MERGE** at `d511f1e262e954a2646bd040692d5a6f0e74371e`; exact-head Bootstrap `35488578970`, Phase 2 `35488578980`, Phase 1 OIDC `35488578992`, and Human Proof `35488579082` PASS. Keep actual HILTECH checklist values configurable; reuse Person/Employee, WorkforceAssignment, EmployeeDocument/Certification/Evidence and Phase 1 Identity rather than duplicating truth.
+6. Slice 04 Onboarding + Basic Self-Service is **VERIFIED / MERGED** at `f7d7460718f43e634a180734623dabe5260b0224`; post-merge Bootstrap `35489327649` PASS.
+7. Slice 05 Workforce Assignment Change Workflow reality closure is PASS and implementation is **AUTHORIZED**. Replace the existing current WorkforceAssignment with a new revision; preserve history and Team/OpenFGA projection truth; do not mutate Project/Payroll or open Slice 06.
 7. Continue consuming Reality Evidence/Facts by phase; current employee-master/import/legal HR unknowns are scoped out rather than guessed.
 6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 

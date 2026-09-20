@@ -1,7 +1,7 @@
 # Phase 3 / Slice 04 — Onboarding + Basic Self-Service
 
 Date: 2026-09-20  
-Status: **VERIFIED / READY TO MERGE**
+Status: **VERIFIED / MERGED**
 
 ## Reality basis
 
@@ -743,14 +743,30 @@ Verified implementation includes:
 
 No Slice 05 assignment-change, Slice 06 offboarding, ATS, Payroll, Assets/PPE, Project/Site assignment, SMTP/SMS provider, alternate file storage or guessed legal checklist was introduced.
 
+# Merge closure
+
+PR #47 merged at:
+
+`f7d7460718f43e634a180734623dabe5260b0224`
+
+Post-merge Bootstrap:
+
+- `35489327649` — **PASS**
+  - foundation — PASS;
+  - V0018/PostgreSQL + jOOQ/server compile — PASS;
+  - local platform/OpenFGA — PASS;
+  - Evidence storage — PASS;
+  - Terraform/supply-chain — PASS.
+  - dependency review is intentionally skipped on the main push path; exact-head PR dependency review already PASSed in `35489000630`.
+
 # Contract conclusion
 
-**VERIFIED / READY TO MERGE.**
+**VERIFIED / MERGED.**
 
-PR #47 may move from Draft to Ready only while the verified implementation remains unchanged or after any later head is re-verified.
+Slice 04 is closed.
 
-After merge, require post-merge Bootstrap before Slice 04 is called **MERGED / CLOSED**.
+Phase 3 proceeds to Slice 05 — Workforce Assignment Change Workflow.
 
 Unknown real HILTECH checklist values remain configuration/activation data and are not a blocker.
 
-Do not pull Slice 05 assignment-change or Slice 06 offboarding behavior backward into this slice.
+Do not reopen Slice 04 unless later evidence exposes a genuine contract contradiction.
