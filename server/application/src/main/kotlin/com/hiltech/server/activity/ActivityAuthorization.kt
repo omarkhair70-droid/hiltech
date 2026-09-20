@@ -77,6 +77,18 @@ object ActivityAuthorizationRelations {
             objectType = "project",
             objectId = projectId.toString(),
         )
+
+    fun projectManagerTeam(
+        teamId: UUID,
+        projectId: UUID,
+    ): OpenFgaTuple =
+        OpenFgaTuple(
+            subjectType = "team",
+            subjectId = "$teamId#member",
+            relation = "project_manager",
+            objectType = "project",
+            objectId = projectId.toString(),
+        )
 }
 
 @Component
@@ -125,7 +137,7 @@ class JdbcWorkOrderActivityAuthorization(
         var supportedCurrentSource = false
 
         if (
-            context.projectManagerId ==
+            context.projectManagerIdentityId ==
             identityId
         ) {
             supportedCurrentSource = true
@@ -137,6 +149,35 @@ class JdbcWorkOrderActivityAuthorization(
                             context.projectId,
                     )
         }
+
+        context.projectManagerTeamId
+            ?.let { teamId ->
+                if (
+                    sourceAuthority
+                        .isTeamMemberCurrent(
+                            identityId =
+                                identityId,
+                            teamId = teamId,
+                            at = at,
+                        )
+                ) {
+                    supportedCurrentSource = true
+                    guards +=
+                        ActivityAuthorizationRelations
+                            .projectManagerTeam(
+                                teamId = teamId,
+                                projectId =
+                                    context.projectId,
+                            )
+                    guards +=
+                        RoleTeamAuthorizationRelations
+                            .teamMember(
+                                identityId =
+                                    identityId,
+                                teamId = teamId,
+                            )
+                }
+            }
 
         if (context.assignedUserCurrent) {
             supportedCurrentSource = true
@@ -211,12 +252,54 @@ class JdbcWorkOrderActivityAuthorization(
                 SELECT
                     wo.project_id,
                     p.organization_id,
-                    p.project_manager_id
+                    CASE
+                        WHEN pr.principal_type = 'EMPLOYEE'
+                        THEN manager_identity.id
+                        ELSE NULL
+                    END AS project_manager_identity_id,
+                    CASE
+                        WHEN pr.principal_type = 'TEAM'
+                        THEN pr.principal_team_id
+                        ELSE NULL
+                    END AS project_manager_team_id
                 FROM work_order wo
                 JOIN project p
                   ON p.id = wo.project_id
                 JOIN organization o
                   ON o.id = p.organization_id
+                LEFT JOIN project_responsibility pr
+                  ON pr.project_id = p.id
+                 AND pr.responsibility_key = 'PROJECT_MANAGER'
+                 AND pr.state = 'ACTIVE'
+                LEFT JOIN employee manager_employee
+                  ON manager_employee.id =
+                        pr.principal_employee_id
+                 AND manager_employee.organization_id =
+                        p.organization_id
+                 AND manager_employee.state IN (
+                        'PREBOARDING',
+                        'ACTIVE'
+                 )
+                LEFT JOIN LATERAL (
+                    SELECT ui.id
+                    FROM user_identity ui
+                    JOIN organization_membership om
+                      ON om.user_identity_id = ui.id
+                    WHERE ui.person_id =
+                            manager_employee.person_id
+                      AND ui.status = 'ACTIVE'
+                      AND om.organization_id =
+                            p.organization_id
+                      AND om.state = 'ACTIVE'
+                      AND om.valid_from <= ?
+                      AND (
+                          om.valid_until IS NULL
+                          OR om.valid_until >= ?
+                      )
+                    ORDER BY ui.id
+                    LIMIT 1
+                ) manager_identity
+                  ON true
                 WHERE wo.id = ?
                   AND o.status = 'ACTIVE'
                   AND p.lifecycle_state <> 'CLOSED'
@@ -233,13 +316,20 @@ class JdbcWorkOrderActivityAuthorization(
                                 "organization_id",
                                 UUID::class.java,
                             ),
-                        projectManagerId =
+                        projectManagerIdentityId =
                             rs.getObject(
-                                "project_manager_id",
+                                "project_manager_identity_id",
+                                UUID::class.java,
+                            ),
+                        projectManagerTeamId =
+                            rs.getObject(
+                                "project_manager_team_id",
                                 UUID::class.java,
                             ),
                     )
                 },
+                at.atOffset(ZoneOffset.UTC),
+                at.atOffset(ZoneOffset.UTC),
                 workOrderId,
             ).singleOrNull()
                 ?: return null
@@ -299,8 +389,10 @@ class JdbcWorkOrderActivityAuthorization(
             organizationId =
                 base.organizationId,
             projectId = base.projectId,
-            projectManagerId =
-                base.projectManagerId,
+            projectManagerIdentityId =
+                base.projectManagerIdentityId,
+            projectManagerTeamId =
+                base.projectManagerTeamId,
             assignedUserCurrent =
                 assignedUserCurrent,
             assignedTeamIds =
@@ -311,13 +403,15 @@ class JdbcWorkOrderActivityAuthorization(
     private data class BaseContext(
         val projectId: UUID,
         val organizationId: UUID,
-        val projectManagerId: UUID?,
+        val projectManagerIdentityId: UUID?,
+        val projectManagerTeamId: UUID?,
     )
 
     private data class WorkOrderAuthorityContext(
         val organizationId: UUID,
         val projectId: UUID,
-        val projectManagerId: UUID?,
+        val projectManagerIdentityId: UUID?,
+        val projectManagerTeamId: UUID?,
         val assignedUserCurrent: Boolean,
         val assignedTeamIds: List<UUID>,
     )
