@@ -158,6 +158,165 @@ class WorkforceAssignmentSecuritySynchronizer(
         )
     }
 
+    @Transactional
+    fun replaceAssignment(
+        previousAssignmentId: UUID,
+        newAssignmentId: UUID,
+        occurredAt: Instant,
+        correlationId: String?,
+    ) {
+        val previousMembership =
+            existingMembership(
+                previousAssignmentId,
+            )
+
+        val newContext =
+            loadContext(
+                assignmentId =
+                    newAssignmentId,
+                occurredAt =
+                    occurredAt,
+            )
+
+        var newMembershipId: UUID? = null
+        var newIdentityId: UUID? = null
+
+        if (newContext != null) {
+            val identityIds =
+                currentIdentityIds(
+                    personId =
+                        newContext.personId,
+                    organizationId =
+                        newContext.organizationId,
+                    at = occurredAt,
+                )
+
+            if (identityIds.isNotEmpty()) {
+                check(identityIds.size == 1) {
+                    "Employee Person ${newContext.personId} has multiple current HILTECH identities in organization ${newContext.organizationId}."
+                }
+
+                newIdentityId =
+                    identityIds.single()
+                newMembershipId =
+                    deterministicMembershipId(
+                        newAssignmentId,
+                    )
+
+                jdbc.update(
+                    """
+                    INSERT INTO team_membership (
+                        id,
+                        team_id,
+                        user_identity_id,
+                        role_in_team,
+                        valid_from,
+                        valid_until,
+                        version,
+                        source_workforce_assignment_id
+                    )
+                    VALUES (
+                        ?, ?, ?,
+                        ?, ?, NULL,
+                        1, ?
+                    )
+                    ON CONFLICT (
+                        source_workforce_assignment_id
+                    )
+                    WHERE
+                        source_workforce_assignment_id
+                            IS NOT NULL
+                    DO NOTHING
+                    """.trimIndent(),
+                    newMembershipId,
+                    newContext.teamId,
+                    newIdentityId,
+                    newContext.roleCode,
+                    newContext.effectiveFrom
+                        .atOffset(
+                            ZoneOffset.UTC,
+                        ),
+                    newAssignmentId,
+                )
+            }
+        }
+
+        previousMembership?.let {
+            membership ->
+            jdbc.update(
+                """
+                UPDATE team_membership
+                SET valid_until = ?,
+                    version = version + 1
+                WHERE id = ?
+                  AND (
+                      valid_until IS NULL
+                      OR valid_until > ?
+                  )
+                """.trimIndent(),
+                occurredAt.atOffset(
+                    ZoneOffset.UTC,
+                ),
+                membership.membershipId,
+                occurredAt.atOffset(
+                    ZoneOffset.UTC,
+                ),
+            )
+        }
+
+        // Team membership validity uses an inclusive valid_until boundary.
+        // Evaluate the aggregate just after the revision boundary so the
+        // old source is expired and the new source is current.
+        val projectionAt =
+            occurredAt.plusMillis(1)
+
+        previousMembership?.let {
+            roleTeamProjection.syncTeamMembership(
+                teamMembershipId =
+                    it.membershipId,
+                occurredAt =
+                    projectionAt,
+            )
+        }
+
+        newMembershipId?.let {
+            membershipId ->
+            roleTeamProjection.syncTeamMembership(
+                teamMembershipId =
+                    membershipId,
+                occurredAt =
+                    projectionAt,
+            )
+
+            val context =
+                requireNotNull(newContext)
+            events.publishEvent(
+                WorkforceAssignmentSecuritySynchronized(
+                    assignmentId =
+                        newAssignmentId,
+                    organizationId =
+                        context.organizationId,
+                    employeeId =
+                        context.employeeId,
+                    teamId =
+                        context.teamId,
+                    userIdentityId =
+                        requireNotNull(
+                            newIdentityId,
+                        ),
+                    teamMembershipId =
+                        membershipId,
+                    sourceVersion =
+                        context.version,
+                    occurredAt =
+                        occurredAt,
+                    correlationId =
+                        correlationId,
+                ),
+            )
+        }
+    }
+
     private fun loadContext(
         assignmentId: UUID,
         occurredAt: Instant,
