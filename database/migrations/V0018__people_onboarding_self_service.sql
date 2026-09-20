@@ -66,6 +66,7 @@ CREATE TABLE onboarding_policy_requirement (
     waiver_allowed boolean NOT NULL DEFAULT false,
     self_service_visible boolean NOT NULL DEFAULT true,
     employee_may_submit boolean NOT NULL DEFAULT false,
+    evidence_required boolean NOT NULL DEFAULT false,
     profile_field_code varchar(32) NULL,
     document_type_code varchar(80) NULL
         CHECK (
@@ -97,6 +98,7 @@ CREATE TABLE onboarding_policy_requirement (
             AND document_type_code IS NULL
             AND certification_type_code IS NULL
             AND manual_confirmation_code IS NULL
+            AND evidence_required = false
         )
         OR
         (
@@ -105,6 +107,7 @@ CREATE TABLE onboarding_policy_requirement (
             AND document_type_code IS NULL
             AND certification_type_code IS NULL
             AND manual_confirmation_code IS NULL
+            AND evidence_required = false
         )
         OR
         (
@@ -113,6 +116,7 @@ CREATE TABLE onboarding_policy_requirement (
             AND document_type_code IS NULL
             AND certification_type_code IS NULL
             AND manual_confirmation_code IS NULL
+            AND evidence_required = false
         )
         OR
         (
@@ -129,6 +133,7 @@ CREATE TABLE onboarding_policy_requirement (
             AND document_type_code IS NULL
             AND certification_type_code IS NOT NULL
             AND manual_confirmation_code IS NULL
+            AND evidence_required = false
         )
         OR
         (
@@ -137,6 +142,7 @@ CREATE TABLE onboarding_policy_requirement (
             AND document_type_code IS NULL
             AND certification_type_code IS NULL
             AND manual_confirmation_code IS NOT NULL
+            AND evidence_required = false
         )
     )
 );

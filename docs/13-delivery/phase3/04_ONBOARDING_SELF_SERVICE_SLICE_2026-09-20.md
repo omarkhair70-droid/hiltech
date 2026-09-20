@@ -56,6 +56,7 @@ Minimum fields:
 - waiver_allowed;
 - self_service_visible;
 - employee_may_submit;
+- evidence_required;
 - profile_field_code nullable;
 - document_type_code nullable;
 - certification_type_code nullable;
@@ -78,6 +79,22 @@ Initial `responsibility` values:
 - `SHARED`.
 
 Type-specific constraints must prevent irrelevant target columns from being populated.
+
+### Implementation clarification — EmployeeDocument Evidence requirement
+
+Implementation review exposed one ambiguity in the frozen text: an onboarding `EMPLOYEE_DOCUMENT` requirement may legitimately be satisfied by verified metadata without binary Evidence, but the original field list did not carry that policy choice explicitly.
+
+Add `evidence_required boolean` to the typed requirement row.
+
+Rules:
+- meaningful only for `EMPLOYEE_DOCUMENT`;
+- defaults false at the generic schema level;
+- real HILTECH policy explicitly decides whether binary Evidence is required for each document requirement;
+- when true, only VERIFIED + READY Evidence satisfies the requirement;
+- when false, VERIFIED document metadata may satisfy without Evidence;
+- this is policy, not client authority, and does not change Slice 03 Evidence security.
+
+This is a narrow contract clarification, not a scope expansion.
 
 Examples:
 - `EMPLOYEE_DOCUMENT` requires document_type_code;
@@ -224,11 +241,10 @@ For configured document_type_code:
 
 - no current document -> NEEDS_EMPLOYEE when employee_may_submit, otherwise WAITING_HILTECH;
 - document REJECTED -> NEEDS_EMPLOYEE when resubmission is permitted;
-- document exists but required Evidence is not READY -> NEEDS_EMPLOYEE;
+- when `evidence_required=true`, document exists but Evidence is not READY -> NEEDS_EMPLOYEE;
 - Evidence READY but business verification is UNVERIFIED -> WAITING_HILTECH;
-- VERIFIED document with required READY Evidence -> SATISFIED.
-
-If a configured document type does not require binary Evidence, verification may satisfy it without Evidence according to the policy/Document contract.
+- when `evidence_required=true`, VERIFIED + READY Evidence -> SATISFIED;
+- when `evidence_required=false`, VERIFIED document metadata may satisfy without Evidence.
 
 ## CERTIFICATION
 
