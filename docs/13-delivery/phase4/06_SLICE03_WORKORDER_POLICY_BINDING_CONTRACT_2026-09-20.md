@@ -185,7 +185,38 @@ Each instance records:
 
 Slice 03 does not evaluate Phase-4 readiness yet.
 
-## 10. Work dependencies
+## 10. Optional Work Task
+
+Task remains an optional finer-grained unit under WorkOrder. It is not mandatory bureaucracy and it does not replace checklist items.
+
+Create `work_task` only for a WorkOrder that needs independently named/planned sub-work.
+
+Fields:
+- id;
+- organizationId;
+- workOrderId;
+- taskCode?;
+- title;
+- description?;
+- sortOrder;
+- mandatory;
+- estimatedDurationMinutes?;
+- evidenceRequirementKey?;
+- state: PLANNED / CANCELLED;
+- createdAt/by;
+- updatedAt;
+- version.
+
+Slice 03 behavior:
+- CreateWorkTask / UpdateWorkTask while WorkOrder is DRAFT/PLANNED;
+- Task inherits WorkOrder Project/Site/authorization context;
+- no independent Task assignment authority in Phase 4;
+- no Task completion command in Slice 03;
+- checklist item and Task are not interchangeable: checklist items prove procedural requirements, Task is named sub-work.
+
+Phase 6 may extend Task execution state only if the field contract actually needs it.
+
+## 11. Work dependencies
 
 Create normalized `work_order_dependency`.
 
@@ -207,7 +238,7 @@ Rules:
 - predecessor/successor cannot be CANCELLED at edge creation;
 - only typed FINISH_TO_START has Phase-4 semantics.
 
-## 11. WorkType / config reality
+## 12. WorkType / config reality
 
 The existing V0003 tables remain canonical.
 
@@ -222,7 +253,7 @@ Synthetic/representative seed config is allowed only when:
 - no source code branches on the seed name/code;
 - organization-specific config may later supersede it normally.
 
-## 12. Project activation
+## 13. Project activation
 
 Slice 03 enables:
 `READY -> ACTIVE`.
@@ -245,13 +276,15 @@ On success:
 
 Activation does not mean every WorkOrder is READY/ASSIGNED.
 
-## 13. Commands/routes
+## 14. Commands/routes
 
 Commands:
 - CreateWorkOrder
 - UpdateWorkOrderDetails
 - PlanWork
 - ReviseWorkInstruction
+- CreateWorkTask
+- UpdateWorkTask
 - AddWorkDependency
 - RemoveWorkDependency
 - ActivateProject
@@ -263,11 +296,13 @@ Routes:
 - PUT `/v1/work-orders/{workOrderId}/details`
 - POST `/v1/work-orders/{workOrderId}/plan`
 - POST `/v1/work-orders/{workOrderId}/instruction-revisions`
+- POST `/v1/work-orders/{workOrderId}/tasks`
+- PUT `/v1/work-tasks/{taskId}`
 - POST `/v1/work-orders/{workOrderId}/dependencies`
 - DELETE `/v1/work-orders/{workOrderId}/dependencies/{dependencyId}`
 - POST `/v1/projects/{projectId}/activate`
 
-## 14. Authorization
+## 15. Authorization
 
 Create/plan work requires:
 - OpenFGA Project `can_create_work`;
@@ -279,7 +314,7 @@ WorkOrder creation projects:
 
 No assignment relation yet.
 
-## 15. Windows
+## 16. Windows
 
 Planning Tree gains WorkOrder nodes/editor:
 - WorkType selector;
@@ -294,13 +329,13 @@ Planning Tree gains WorkOrder nodes/editor:
 
 Do not show fake assignee/material availability.
 
-## 16. Migration
+## 17. Migration
 
 `V0023__work_order_policy_binding__slice03.sql`.
 
 Must be safe over V0022 and existing V0005 scaffold.
 
-## 17. Tests
+## 18. Tests
 
 - same-tenant context enforced.
 - WorkPackage FK/context enforced.
@@ -310,6 +345,8 @@ Must be safe over V0022 and existing V0005 scaffold.
 - one current WorkPolicyBinding.
 - instruction revision append-only.
 - checklist materialized exactly once under idempotent replay.
+- optional WorkTask same-WorkOrder/tenant context enforced.
+- Task remains planning-only and cannot create independent assignment authority.
 - requirements materialized from bound revision.
 - work dependency cycle rejected.
 - stale WorkOrder update/plan rejected.
@@ -318,7 +355,7 @@ Must be safe over V0022 and existing V0005 scaffold.
 - ActivateProject READY -> ACTIVE success.
 - Windows render shows bound revision and no fake readiness.
 
-## 18. Exit
+## 19. Exit
 
 A Project baseline can contain explainable PLANNED WorkOrders whose exact WorkType/policies/instructions/checklists remain reconstructable after future config changes.
 
