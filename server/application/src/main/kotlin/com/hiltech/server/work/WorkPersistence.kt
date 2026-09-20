@@ -263,11 +263,15 @@ class JdbcWorkPersistence(private val jdbc: JdbcTemplate) : WorkPersistencePort 
     override fun activateProject(projectId: UUID, version: Long, at: Instant): Boolean = jdbc.update("""UPDATE project SET lifecycle_state='ACTIVE',start_date_actual=COALESCE(start_date_actual,?),updated_at=?,version=version+1 WHERE id=? AND version=? AND lifecycle_state='READY'""", at.atOffset(ZoneOffset.UTC), at.atOffset(ZoneOffset.UTC), projectId, version) == 1
 
     private fun loadOrders(where: String, args: Array<out Any>): List<WorkOrderSnapshot> = jdbc.query(
-        """SELECT wo.*, wpb.id binding_id, wpb.binding_revision, wt.code wt_code,wt.name wt_name,wpb.work_type_revision,
-                  ap.code ap_code,ap.name ap_name,wpb.assignment_policy_revision,rp.code rp_code,rp.name rp_name,wpb.readiness_policy_revision,
-                  ep.code ep_code,ep.name ep_name,wpb.evidence_policy_revision,vp.code vp_code,vp.name vp_name,wpb.review_policy_revision,
-                  tp.code tp_code,tp.name tp_name,wpb.tracking_policy_revision,ct.code ct_code,ct.name ct_name,wpb.checklist_template_revision,
-                  it.code it_code,it.name it_name,wpb.instruction_template_revision,wpb.binding_created_at,
+        """SELECT wo.*, wpb.id binding_id, wpb.binding_revision,
+                  wpb.work_type_definition_id, wt.code wt_code,wt.name wt_name,wpb.work_type_revision,
+                  wpb.assignment_policy_id, ap.code ap_code,ap.name ap_name,wpb.assignment_policy_revision,
+                  wpb.readiness_policy_id, rp.code rp_code,rp.name rp_name,wpb.readiness_policy_revision,
+                  wpb.evidence_policy_id, ep.code ep_code,ep.name ep_name,wpb.evidence_policy_revision,
+                  wpb.review_policy_id, vp.code vp_code,vp.name vp_name,wpb.review_policy_revision,
+                  wpb.tracking_policy_id, tp.code tp_code,tp.name tp_name,wpb.tracking_policy_revision,
+                  wpb.checklist_template_id, ct.code ct_code,ct.name ct_name,wpb.checklist_template_revision,
+                  wpb.instruction_template_id, it.code it_code,it.name it_name,wpb.instruction_template_revision,wpb.binding_created_at,
                   wir.id instruction_id,wir.instruction_revision,wir.payload_schema_version,wir.structured_payload_json::text instruction_json,
                   wir.summary_text,wir.change_reason,wir.created_at instruction_created_at,wir.correlation_id
            FROM work_order wo LEFT JOIN work_policy_binding wpb ON wpb.id=wo.current_policy_binding_id

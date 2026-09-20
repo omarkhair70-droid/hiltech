@@ -160,7 +160,7 @@ class WorkApiClientTest {
             )
         assertEquals("ACTIVE", active.lifecycleState)
 
-        assertEquals(
+        val expected: List<Triple<HttpMethod, String, String?>> =
             listOf(
                 Triple(
                     HttpMethod.Post,
@@ -177,8 +177,7 @@ class WorkApiClientTest {
                     "/v1/projects/$projectId/activate",
                     activateOperation,
                 ),
-            ),
-            seen,
-        )
+            )
+        assertEquals(expected, seen)
     }
 }
