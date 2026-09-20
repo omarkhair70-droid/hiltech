@@ -11,7 +11,7 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
 - Phase 2 — Shared Product Infrastructure: **VERIFIED / COMPLETE**
-- Current execution phase: **Phase 4 — Projects / Sites / Work Core — SCOPE + SLICE PLAN FROZEN; Slice 01 reality/contract closure next (NO SLICE 01 PRODUCTION CODE YET)**
+- Current execution phase: **Phase 4 — Projects / Sites / Work Core — Slice 01 Project + Site / ProjectSite contract FROZEN; Slice 01 production implementation next**
 - Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
 - Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
 - Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
@@ -76,7 +76,9 @@ Any coding agent, Codex session, new chat, automation, or human contributor must
 - Phase 3 final gap review: `docs/13-delivery/phase3/07_PHASE3_FINAL_GAP_REVIEW_2026-09-20.md` — **PASS / NO ADDITIONAL PHASE 3 SLICE REQUIRED**
 - Phase 4 owner entry reconstruction: `docs/13-delivery/phase4/00_PHASE4_OWNER_ENTRY_REALITY_RECONSTRUCTION_2026-09-20.md` — **PASS / OWNER ACCEPTED**
 - Phase 4 scope/slice closure: `docs/13-delivery/phase4/01_PHASE4_SCOPE_AND_SLICE_PLAN_2026-09-20.md` — **PASS / SCOPE FROZEN / 6 SLICES**
-- Current rule: preserve the original phase boundaries and configuration-first flexibility. Next close Slice 01 — Project + Site / ProjectSite Core — reality + implementation contract. Do not start Slice 01 production code before that closure is frozen.
+- Approval cursor stability prerequisite: PR #54 merged at `b9eee0ee5af61ffb960b3b4baa142b2896a9ac59`; exact-head Approval Stability `35511034523`, Bootstrap `35511034711`, Native OIDC `35511034539`, and post-merge Bootstrap `35511320336` — **PASS**
+- Phase 4 Slice 01 reality + implementation contract: `docs/13-delivery/phase4/02_PROJECT_SITE_CORE_REALITY_AND_IMPLEMENTATION_CONTRACT_2026-09-20.md` — **PASS / FROZEN / PRODUCTION CODE AUTHORIZED FOR SLICE 01 ONLY**
+- Current rule: implement only the frozen Slice 01 Project + Site / ProjectSite vertical. Preserve the DRAFT -> KICKOFF -> PLANNING lifecycle boundary and do not pull WorkOrder, Warehouse, READY/ACTIVE or Field/Offline work forward.
 - First production slice contracts: **FROZEN / PASS**
 - Figma: **OPTIONAL**, not an implementation blocker
 - First-slice rendered design proof: **PASS**
