@@ -131,7 +131,7 @@ class WorkService(
             }
             work.materializeRequirements(current.workOrderId,requirements,now)
             if(!work.markPlanned(current.workOrderId,current.version,bindingId,instructionId,definition,now))version()
-            val updated=order(current.workOrderId); val event=changed(updated,"planned",command.actorUserId,now,command.correlationId); record("WORK_ORDER_PLANNED",updated,current.lifecycleState.name,updated.lifecycleState.name,command.actorUserId,now,command.correlationId,event,listOf(definition.ref,definition.assignment.ref,definition.readiness.ref,definition.evidence.ref,definition.review.ref)); outcome(updated.projectId,updated.workOrderId)
+            val updated=order(current.workOrderId); val event=changed(updated,"planned",command.actorUserId,now,command.correlationId); record("WORK_ORDER_PLANNED",updated,current.lifecycleState.name,updated.lifecycleState.name,command.actorUserId,now,command.correlationId,event,listOfNotNull(definition.ref,definition.assignment.ref,definition.readiness.ref,definition.evidence.ref,definition.review.ref,definition.tracking?.ref,definition.assetTemplate?.ref,definition.materialTemplate?.ref,definition.documentTemplate?.ref,definition.checklistTemplate?.ref,definition.instructionTemplate?.ref)); outcome(updated.projectId,updated.workOrderId)
         }
         return WorkOrderMutationResult(get(command.actorUserId,command.workOrderId),replayed)
     }
