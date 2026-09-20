@@ -195,6 +195,8 @@ tasks.register("verifyJooqGeneration") {
             "Milestone.kt",
             "WorkPackage.kt",
             "ProjectPlanDependency.kt",
+            "WorkTask.kt",
+            "WorkOrderDependency.kt",
         ).forEach { expected ->
             check(expected in generatedFileNames) {
                 "Generated jOOQ schema is missing required first-slice table source: $expected"
