@@ -870,6 +870,57 @@ class PeoplePostgresOpenFgaContractTest {
                     "01111111111",
                 ),
             )
+
+            jdbc.update(
+                """
+                UPDATE people_authority_binding
+                SET active = false,
+                    effective_to = ?,
+                    version = version + 1
+                WHERE id = ?
+                """.trimIndent(),
+                clock.instant()
+                    .atOffset(
+                        ZoneOffset.UTC,
+                    ),
+                adminOneBinding,
+            )
+
+            assertFalse(
+                peopleAuthorization
+                    .canManagePeople(
+                        ids.adminOne,
+                        ids.organizationOne,
+                    ),
+                "Revoked PostgreSQL People authority must deny immediately even before OpenFGA tuple cleanup.",
+            )
+
+            transaction
+                .executeWithoutResult {
+                    peopleProjectionBridge
+                        .syncBinding(
+                            bindingId =
+                                adminOneBinding,
+                            occurredAt =
+                                clock.instant(),
+                        )
+                }
+
+            projectionProcessor
+                .processOne(
+                    clock.instant(),
+                )
+
+            assertFalse(
+                gateway.isAllowed(
+                    PeopleAuthorizationRelations
+                        .canManagePeople(
+                            ids.adminOne,
+                            ids.organizationOne,
+                        ),
+                ),
+                "Revoked People authority must converge to an absent OpenFGA permission.",
+            )
         } finally {
             telemetry.close()
         }
