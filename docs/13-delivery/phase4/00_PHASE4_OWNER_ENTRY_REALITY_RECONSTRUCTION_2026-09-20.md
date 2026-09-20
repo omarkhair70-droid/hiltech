@@ -1,7 +1,7 @@
 # Phase 4 — Projects / Sites / Work Core — Owner-Facing Reality Reconstruction
 
 Date: 2026-09-20  
-Status: **DRAFT / OWNER REVIEW REQUIRED / NO PHASE 4 PRODUCTION CODE AUTHORIZED**
+Status: **OWNER REVIEWED / ACCEPTED / ENTRY REALITY CLOSED**
 
 ## Purpose
 
@@ -624,74 +624,93 @@ Change only through explicit contradiction/change-control evidence.
 
 ---
 
-# 15. Genuine remaining owner/reality decisions
+# 15. Owner decisions recorded
 
-These are the meaningful remaining questions.
+The owner review did **not** identify a structural contradiction.
 
-They are narrower than the old pre-freeze “tell us how the whole company works” list.
+The main clarification is governance:
+
+HILTECH is flexible, so business choices that are legitimately flexible must remain policy/configuration rather than being frozen as one permanent company behavior.
+
+This is not indecision. It is the intended product architecture.
 
 ## A. Project creation before Phase 10
 
-Phase 10 eventually owns the full Opportunity/Tender/Award source.
+Phase 4 may support an authorized Project creation path now.
 
-Phase 4 still needs a usable entry path now.
+It is not a throwaway hack.
 
-Candidate:
-- authorized internal Project creation with optional source references;
-- later CreateProjectFromAward becomes the normal path.
+The Project keeps typed optional source references so that Phase 10 can later make `CreateProjectFromAward` the preferred commercial path without replacing Project identity or history.
 
-Owner decision required only on whether this temporary/manual-authorized path is acceptable for the Phase 4 product.
+Creation authority remains policy-controlled.
 
-## B. PM assignment mode
+## B. Project responsibility / PM requirement
 
-Mechanism is known.
+The repository rule remains:
 
-Still not proven:
-- must every ACTIVE project have one current PM?
-- may a project temporarily operate under Team/owner authority with PM unassigned?
+ACTIVE normally requires a responsible PM/Project authority, unless active policy explicitly allows a temporary unassigned/team/owner-managed state.
 
-Do not hard-code Mohamed.
+Do not hard-code Mohamed or any current employee.
+
+The important invariant is that every required Project decision/action has an authoritative current owner/authority, not that one named field must always contain the same kind of person.
 
 ## C. Assignment mode
 
-Mechanism is known.
+Confirmed as configuration.
 
-Still not proven whether HILTECH wants for the initial WorkTypes:
+`AssignmentPolicy` / WorkType configuration may permit:
 - automatic assignment;
-- suggested assignment + confirmation;
-- manual eligible-target choice.
+- suggestion + authorized confirmation;
+- manual choice from eligible targets;
+- Team/Crew/Subcontractor assignment where allowed.
 
-This should become WorkType/AssignmentPolicy configuration rather than one company-wide code law.
+Eligibility and authorization remain system truth.
+
+The current operating mode can change without schema redesign.
 
 ## D. Initial WorkType seed
 
-Schema/config mechanism is already closed.
+Representative/synthetic seed values are allowed for implementation and validation.
 
-Need only representative seed configuration for early real use.
+They must be clearly marked as seed/configuration, not claimed as the final HILTECH WorkType catalog.
 
-Examples can be synthetic until real HILTECH values are approved.
+Real company WorkTypes can be added/configured later without redesigning the domain.
 
-No schema redesign should depend on knowing every future WorkType.
+## E. Phase boundaries remain intentional
 
-## E. Phase 4 vs Phase 6 field boundary
+Do not compress phases merely to make the product appear usable sooner.
 
-Recommended boundary:
+Phase 4 remains Project / Site / Work Core.
 
-Phase 4:
-- Project/Site/Work planning;
-- WorkAssignment;
-- server-authoritative readiness;
-- Project/PM/owner surfaces;
-- basic assigned-work mobile read.
+Phase 5 remains Assets / Warehouse / Materials / Tools truth.
 
-Phase 6:
-- full offline execution/evidence/sync/tracking.
+Phase 6 remains the planned Field / Offline / Evidence / Sync execution phase.
 
-Owner review should confirm that this staged rollout matches how early product testing should feel.
+Phase 4 may expose the safe assigned-work read/context needed to prove the Project/Work vertical, but it must not absorb the Phase 6 offline execution engine merely for speed.
+
+If later implementation proves a genuine overlap or contradiction, use explicit change control. Do not pre-emptively collapse the phase plan.
+
+## F. Definition of Green
+
+A phase is not Green because screens exist or CI happened to pass.
+
+Green means:
+- reality/research reviewed;
+- contract frozen;
+- authoritative data ownership correct;
+- security/authorization/audit/idempotency preserved;
+- cross-phase boundaries honest;
+- relevant Windows/Android human flow rendered;
+- regression suites green;
+- exact-head CI green;
+- unknown/deferred items explicit;
+- repository status/handoff updated.
+
+A later change in configurable company policy does not invalidate a correctly closed phase.
 
 ---
 
-# 16. Candidate Phase 4 vertical slice plan — NOT FROZEN
+# 16. Phase 4 vertical slice plan — OWNER ACCEPTED / FREEZE CANDIDATE
 
 ## Slice 01 — Project + Site / ProjectSite Core
 
@@ -759,7 +778,7 @@ Visible result:
 - explicit “execution/evidence offline engine comes in Phase 6” boundary;
 - no fake offline capture.
 
-Whether this is a distinct slice or part of Slice 04/05 is an implementation-planning decision after owner review.
+Keep this as a distinct final Phase 4 slice unless implementation evidence shows that merging it preserves the same proof quality without pulling Phase 6 forward.
 
 ---
 
@@ -805,15 +824,18 @@ The owner should review only the narrow policy/rollout decisions in Section 15.
 
 ---
 
-# Draft conclusion
+# Owner review conclusion
 
-`PHASE_4_REALITY_RECONSTRUCTION = COMPLETE_DRAFT`
+`PHASE_4_REALITY_RECONSTRUCTION = PASS`
 
-`PHASE_4_PRODUCTION_CODE_AUTHORIZED = NO`
+`OWNER_REVIEW = ACCEPTED`
 
-`NEXT = OWNER_REVIEW_OF_RECONSTRUCTED_FLOW_AND_NARROW_OPEN_DECISIONS`
+`STRUCTURAL_CONTRADICTION_FOUND = NO`
 
-After owner agreement:
-1. record any controlled amendments;
-2. freeze the Phase 4 scope/slice plan;
-3. authorize Slice 01 implementation.
+`PHASE_BOUNDARIES = PRESERVE_ORIGINAL_PLAN`
+
+`FLEXIBLE_BUSINESS_CHOICES = CONFIGURATION_POLICY`
+
+`NEXT = FREEZE_PHASE_4_SCOPE_AND_SLICE_PLAN`
+
+Production code remains gated until the Phase 4 scope/slice closure is frozen in the repository.
