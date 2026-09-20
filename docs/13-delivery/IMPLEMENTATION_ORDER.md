@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 VERIFIED / COMPLETE / PHASE 3 ACTIVE — SLICE 01/02 MERGED / SLICE 03 VERIFIED / READY TO MERGE**
+Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 VERIFIED / COMPLETE / PHASE 3 ACTIVE — SLICE 01/02/03 MERGED / SLICE 04 IMPLEMENTATION AUTHORIZED**
 
 ## Core Rule
 
@@ -415,7 +415,7 @@ The Project/Work/Warehouse/Field structural contracts and representative reality
 
 The rendered design proof and formal First-Slice Freeze Review now PASS.
 
-Repository Bootstrap, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are complete. Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 and Slice 02 are merged/post-merge verified. Slice 03 — HR Documents / Certifications — is VERIFIED / READY TO MERGE at canonical tested code head `9fa0b95de549bd92cc7d3a554cd7cdcf941ef35f`; Bootstrap `35482995671`, Phase 2 runtime `35482995728`, and Phase 1 OIDC `35482995573` PASS.
+Repository Bootstrap, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are complete. Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01, Slice 02 and Slice 03 are merged/post-merge verified. Slice 03 merge commit is `d5d0cb256e68cf7b30978434aa6ba241c7500df1`; post-merge Bootstrap `35485263189` PASS. Slice 04 — Onboarding + Basic Self-Service — has PASS reality closure and a frozen implementation contract.
 
 ---
 
@@ -453,9 +453,9 @@ Closed:
 Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
 
 Immediate next execution:
-**PHASE 3 / SLICE 03 — PR #44 merge closure.**
+**PHASE 3 / SLICE 04 — Onboarding + Basic Self-Service implementation.**
 
-Phase 0 engineering foundation, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are verified and complete. Phase 3 Slice 01 and Slice 02 are merged/post-merge verified. Slice 03 HR Documents / Certifications is exact-head verified and ready for merge closure; after post-merge verification, proceed to Slice 04 — Onboarding + Basic Self-Service reality/contract closure.
+Phase 0 engineering foundation, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are verified and complete. Phase 3 Slice 01/02/03 are merged/post-merge verified. Slice 04 reality/contract closure is complete. Implement the frozen Slice 04 vertical only; actual HILTECH checklist values remain configurable activation data.
 
 
 ---

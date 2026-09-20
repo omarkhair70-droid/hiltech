@@ -3,7 +3,7 @@
 Updated: 2026-09-19
 
 ## Overall Stage
-**PHASE 3 ACTIVE — SLICE 01/02 MERGED — SLICE 03 HR DOCUMENTS / CERTIFICATIONS VERIFIED / READY TO MERGE**
+**PHASE 3 ACTIVE — SLICE 01/02/03 MERGED — SLICE 04 ONBOARDING + BASIC SELF-SERVICE IMPLEMENTATION AUTHORIZED**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -52,7 +52,7 @@ Final full regression evidence on that code head:
 
 Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Final Phase 2 closure PR #37 merged at `624bd6c50f8d17535316ae450a8a780bc756a108` with post-merge Bootstrap `35474921624` PASS.
 
-Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED / MERGED. Slice 02 — Workforce Assignment / Reporting Structure — is VERIFIED / MERGED through PR #42 at `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` PASS. Slice 03 — HR Documents / Certifications — has completed reality/contract closure and is IMPLEMENTATION AUTHORIZED. It will add private EmployeeDocument metadata, Certification facts/eligibility, and one EMPLOYEE_DOCUMENT Evidence target adapter over the existing private Evidence lifecycle.
+Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED / MERGED. Slice 02 — Workforce Assignment / Reporting Structure — is VERIFIED / MERGED through PR #42 at `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` PASS. Slice 03 — HR Documents / Certifications — is VERIFIED / MERGED through PR #44 at `d5d0cb256e68cf7b30978434aa6ba241c7500df1`; post-merge Bootstrap `35485263189` PASS. Slice 04 — Onboarding + Basic Self-Service — has PASS reality closure and a frozen implementation contract; implementation is AUTHORIZED.
 
 ---
 
@@ -83,8 +83,8 @@ Phase 3 — People / Internal Workforce Core — is ACTIVE. Slice 01 is VERIFIED
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 3 ACTIVE | Slice 01/02 merged; Slice 03 implementation authorized |
-| Production code | PHASE 3 SLICE 03 AUTHORIZED | EmployeeDocument/Certification + EMPLOYEE_DOCUMENT Evidence target only |
+| Implementation order | PHASE 3 ACTIVE | Slice 01/02/03 merged; Slice 04 implementation authorized |
+| Production code | PHASE 3 SLICE 04 AUTHORIZED | Onboarding case + configured blockers + identity provisioning boundary + own-record self-service only |
 
 ---
 
@@ -240,8 +240,9 @@ Immediate continuation:
 2. Phase 3 scope/slice plan is frozen in `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md`.
 3. Phase 3 / Slice 01 — Employee / Employment Core is **VERIFIED / MERGED** at `0183a273f1a01d3b9d0277df2ac2e8bbe2f98390`; post-merge Bootstrap `35478418690` PASS.
 4. Slice 02 is **VERIFIED / MERGED** at `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` PASS.
-5. Slice 03 HR Documents / Certifications is **VERIFIED / READY TO MERGE**. Canonical tested code head `9fa0b95de549bd92cc7d3a554cd7cdcf941ef35f`; Bootstrap `35482995671`, Phase 2 runtime `35482995728`, Phase 1 OIDC `35482995573` PASS. Keep catalogs configurable and reuse the existing Evidence/object-storage lifecycle through EMPLOYEE_DOCUMENT target dispatch.
-5. Continue consuming Reality Evidence/Facts by phase; current employee-master/import/legal HR unknowns are scoped out rather than guessed.
+5. Slice 03 HR Documents / Certifications is **VERIFIED / MERGED** at `d5d0cb256e68cf7b30978434aa6ba241c7500df1`; post-merge Bootstrap `35485263189` PASS.
+6. Slice 04 Onboarding + Basic Self-Service reality closure is PASS and implementation is **AUTHORIZED**. Keep actual HILTECH checklist values configurable; reuse Person/Employee, WorkforceAssignment, EmployeeDocument/Certification/Evidence and Phase 1 Identity rather than duplicating truth.
+7. Continue consuming Reality Evidence/Facts by phase; current employee-master/import/legal HR unknowns are scoped out rather than guessed.
 6. Treat OCI tenancy/quota/cutover and Windows signing activation as production-activation gates, not reasons to reopen frozen architecture.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.

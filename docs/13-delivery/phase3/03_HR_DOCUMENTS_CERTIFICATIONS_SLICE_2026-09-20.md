@@ -1,7 +1,7 @@
 # Phase 3 / Slice 03 — HR Documents / Certifications
 
 Date: 2026-09-20  
-Status: **VERIFIED / READY TO MERGE**
+Status: **VERIFIED / MERGED**
 
 ## Reality basis
 
@@ -323,12 +323,29 @@ Verified implementation includes:
 
 No onboarding/self-service policy, required-document catalog, legal retention schedule, Project/Work eligibility engine, generic document management or separate certification binary subsystem was introduced.
 
+## Merge closure
+
+PR #44 merged at:
+
+`d5d0cb256e68cf7b30978434aa6ba241c7500df1`
+
+Post-merge Bootstrap:
+
+- `35485263189` — **PASS**
+  - foundation — PASS;
+  - database migration/jOOQ/server compile — PASS;
+  - local platform/OpenFGA contract — PASS;
+  - Evidence storage contract — PASS;
+  - Terraform and supply-chain gates — PASS.
+
+A later documentation-only governance merge (#45) added the canonical product-ownership principles without changing Slice 03 runtime behavior.
+
 ## Contract conclusion
 
-**VERIFIED / READY TO MERGE.**
+**VERIFIED / MERGED.**
 
-PR #44 may move from Draft to Ready only while the verified implementation remains unchanged or after any later head is re-verified.
+Slice 03 is closed.
 
-After merge, require post-merge Bootstrap before Slice 03 is called **MERGED / CLOSED**.
+Phase 3 proceeds to Slice 04 — Onboarding + Basic Self-Service.
 
-Do not pull Slice 04 onboarding/self-service policy into this slice.
+Do not reopen Slice 03 unless later evidence exposes a genuine contract contradiction.
