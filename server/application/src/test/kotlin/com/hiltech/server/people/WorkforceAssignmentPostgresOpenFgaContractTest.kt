@@ -817,6 +817,70 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
                 noChange.code,
             )
 
+            val sameTeamChangeOperation =
+                UUID.randomUUID()
+            val sameTeamChanged =
+                service.change(
+                    ChangeWorkforceAssignmentCommand(
+                        operationId =
+                            sameTeamChangeOperation,
+                        employeeId =
+                            ids.workerEmployee,
+                        currentAssignmentId =
+                            created.assignment
+                                .assignmentId,
+                        baseAssignmentVersion =
+                            created.assignment
+                                .version,
+                        teamId =
+                            ids.fieldTeam,
+                        roleCode =
+                            "SENIOR_TECHNICIAN",
+                        roleLabel =
+                            "Senior Technician",
+                        reportsToEmployeeId =
+                            ids.managerEmployee,
+                        actorUserId =
+                            ids.adminIdentity,
+                        correlationId =
+                            "corr-workforce-same-team-change",
+                    ),
+                )
+
+            assertEquals(
+                created.assignment
+                    .assignmentId,
+                sameTeamChanged.assignment
+                    .supersedesAssignmentId,
+            )
+            assertEquals(
+                ids.fieldTeam,
+                sameTeamChanged.assignment
+                    .teamId,
+            )
+
+            drain(
+                projectionProcessor,
+                now.plusSeconds(6),
+            )
+            assertTrue(
+                RoleTeamAuthorizationService(
+                    authorization =
+                        authorization,
+                    sourceAuthority =
+                        sourceAuthority,
+                    clock =
+                        Clock.fixed(
+                            now.plusSeconds(7),
+                            ZoneOffset.UTC,
+                        ),
+                ).canViewTeam(
+                    ids.workerIdentity,
+                    ids.fieldTeam,
+                ),
+                "Same-Team role change must keep Team authority present while the People-owned source revision is replaced.",
+            )
+
             val changeOperation =
                 UUID.randomUUID()
             val changed =
@@ -827,10 +891,10 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
                         employeeId =
                             ids.workerEmployee,
                         currentAssignmentId =
-                            created.assignment
+                            sameTeamChanged.assignment
                                 .assignmentId,
                         baseAssignmentVersion =
-                            created.assignment
+                            sameTeamChanged.assignment
                                 .version,
                         teamId =
                             ids.supportTeam,
@@ -849,7 +913,7 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
 
             assertFalse(changed.replayed)
             assertEquals(
-                created.assignment
+                sameTeamChanged.assignment
                     .assignmentId,
                 changed.assignment
                     .supersedesAssignmentId,
@@ -875,10 +939,10 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
                         employeeId =
                             ids.workerEmployee,
                         currentAssignmentId =
-                            created.assignment
+                            sameTeamChanged.assignment
                                 .assignmentId,
                         baseAssignmentVersion =
-                            created.assignment
+                            sameTeamChanged.assignment
                                 .version,
                         teamId =
                             ids.supportTeam,
@@ -948,12 +1012,17 @@ class WorkforceAssignmentPostgresOpenFgaContractTest {
                     employeeId =
                         ids.workerEmployee,
                 )
-            assertEquals(2, history.size)
+            assertEquals(3, history.size)
             assertEquals(
                 changed.assignment
                     .assignmentId,
                 history.first()
                     .assignmentId,
+            )
+            assertEquals(
+                sameTeamChanged.assignment
+                    .assignmentId,
+                history[1].assignmentId,
             )
             assertEquals(
                 created.assignment
