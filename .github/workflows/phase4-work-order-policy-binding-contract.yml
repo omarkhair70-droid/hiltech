@@ -162,6 +162,11 @@ jobs:
           test -s build/reports/phase4-work/desktop-work-bound-revisions.png
           test -s build/reports/phase4-work/desktop-work-draft-gate.png
           test -s build/reports/phase4-work/desktop-project-activation-ready.png
+          test -s build/reports/phase4-work/desktop-work-editor-contract.png
+          grep -q "work_type_selector=PASS" /tmp/hiltech-phase4-work.log
+          grep -q "schedule_editor=PASS" /tmp/hiltech-phase4-work.log
+          grep -q "dependency_editor=PASS" /tmp/hiltech-phase4-work.log
+          grep -q "task_update_control=PASS" /tmp/hiltech-phase4-work.log
 
       - name: Upload WorkOrder planning evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
