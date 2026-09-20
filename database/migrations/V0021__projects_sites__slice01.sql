@@ -46,6 +46,42 @@ ALTER TABLE project
 ALTER TABLE project
     DROP COLUMN project_manager_id;
 
+-- Site needs an explicit owning HILTECH organization in addition to the
+-- client organization whose physical location it describes.
+ALTER TABLE site
+    DROP CONSTRAINT IF EXISTS site_client_organization_id_site_code_key,
+    ADD COLUMN organization_id uuid NOT NULL
+        REFERENCES organization(id) ON DELETE RESTRICT,
+    ADD CONSTRAINT uq_site_id_organization
+        UNIQUE (id, organization_id),
+    ADD CONSTRAINT uq_site_org_client_code
+        UNIQUE (
+            organization_id,
+            client_organization_id,
+            site_code
+        );
+
+ALTER TABLE project_site
+    ADD COLUMN organization_id uuid NOT NULL
+        REFERENCES organization(id) ON DELETE RESTRICT,
+    ADD CONSTRAINT fk_project_site_project_org
+        FOREIGN KEY (project_id, organization_id)
+        REFERENCES project(id, organization_id)
+        ON DELETE RESTRICT,
+    ADD CONSTRAINT fk_project_site_site_org
+        FOREIGN KEY (site_id, organization_id)
+        REFERENCES site(id, organization_id)
+        ON DELETE RESTRICT;
+
+CREATE INDEX idx_site_org_client_status
+    ON site (
+        organization_id,
+        client_organization_id,
+        status,
+        site_code,
+        id
+    );
+
 CREATE TABLE project_authority_binding (
     id uuid PRIMARY KEY,
     organization_id uuid NOT NULL
