@@ -156,18 +156,39 @@ fun ProjectControlSection(
                         },
                     ) {
                         Text(
-                            project.projectCode +
-                                " · " +
-                                project.name +
-                                " · " +
-                                project.lifecycleState +
-                                " · " +
-                                (
+                            buildString {
+                                append(project.projectCode)
+                                append(" · ")
+                                append(project.name)
+                                append(" · ")
+                                append(project.clientDisplayName)
+                                append(" · ")
+                                append(project.lifecycleState)
+                                append(" · ")
+                                append(
                                     project
                                         .currentResponsibility
                                         .principalLabel
-                                        ?: "بدون مسؤول"
-                                ),
+                                        ?: "بدون مسؤول",
+                                )
+                                if (
+                                    project.startDatePlanned !=
+                                    null ||
+                                    project.endDatePlanned !=
+                                    null
+                                ) {
+                                    append(" · ")
+                                    append(
+                                        project.startDatePlanned
+                                            ?: "؟",
+                                    )
+                                    append(" → ")
+                                    append(
+                                        project.endDatePlanned
+                                            ?: "؟",
+                                    )
+                                }
+                            },
                         )
                     }
                 }
@@ -223,6 +244,18 @@ fun ProjectControlSection(
                         project
                             .currentResponsibility
                             .resolutionState,
+                )
+                Text(
+                    "الفترة المخططة: " +
+                        (
+                            project.startDatePlanned
+                                ?: "غير محددة"
+                        ) +
+                        " → " +
+                        (
+                            project.endDatePlanned
+                                ?: "غير محددة"
+                        ),
                 )
                 Text(
                     "المواقع المرتبطة: " +

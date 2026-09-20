@@ -86,10 +86,20 @@ data class UpdateSiteRequest(
     val clientOccurredAt: String,
 )
 
+data class CreateProjectSiteSiteRequest(
+    val siteCode: String,
+    val name: String,
+    val addressText: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val timezone: String? = null,
+)
+
 data class AttachProjectSiteRequest(
     val operationId: String,
     val baseProjectVersion: Long,
-    val siteId: String,
+    val siteId: String? = null,
+    val createSite: CreateProjectSiteSiteRequest? = null,
     val projectSiteCode: String? = null,
     val accessInstructions: String? = null,
     val projectSpecificNotes: String? = null,
@@ -469,20 +479,102 @@ class ProjectsController(
             operationId,
         )
 
+        val projectUuid =
+            projectId.toUuid(
+                "INVALID_PROJECT_ID",
+            )
+        val actorUserId =
+            context.requireIdentityId()
+        val existingSiteId =
+            request.siteId
+                ?.takeIf {
+                    it.isNotBlank()
+                }
+        val createSite =
+            request.createSite
+
+        if (
+            (existingSiteId == null) ==
+            (createSite == null)
+        ) {
+            throw ProductApiException(
+                code = "REJECTED_VALIDATION",
+                message =
+                    "Exactly one Site mode is required: existing siteId or createSite.",
+                status =
+                    HttpStatus.BAD_REQUEST,
+            )
+        }
+
+        val resolvedSiteId =
+            if (existingSiteId != null) {
+                existingSiteId.toUuid(
+                    "INVALID_SITE_ID",
+                )
+            } else {
+                val project =
+                    service.projectDetail(
+                        actorUserId =
+                            actorUserId,
+                        projectId =
+                            projectUuid,
+                    )
+                val requested =
+                    requireNotNull(
+                        createSite,
+                    )
+                val childOperationId =
+                    UUID.nameUUIDFromBytes(
+                        (
+                            "project-site:create-site:" +
+                                operationId
+                        ).toByteArray(
+                            Charsets.UTF_8,
+                        ),
+                    )
+                service.createSite(
+                    CreateSiteCommand(
+                        operationId =
+                            childOperationId,
+                        organizationId =
+                            project.organizationId,
+                        clientOrganizationId =
+                            project.clientOrganizationId,
+                        siteCode =
+                            requested.siteCode,
+                        name =
+                            requested.name,
+                        addressText =
+                            requested.addressText,
+                        latitude =
+                            requested.latitude,
+                        longitude =
+                            requested.longitude,
+                        timezone =
+                            requested.timezone,
+                        clientOccurredAt =
+                            request.clientOccurredAt
+                                .toInstant(
+                                    "REJECTED_VALIDATION",
+                                ),
+                        actorUserId =
+                            actorUserId,
+                        correlationId =
+                            context.correlationId,
+                    ),
+                ).site.siteId
+            }
+
         val result =
             service.attachSite(
                 AttachProjectSiteCommand(
                     operationId = operationId,
                     projectId =
-                        projectId.toUuid(
-                            "INVALID_PROJECT_ID",
-                        ),
+                        projectUuid,
                     baseProjectVersion =
                         request.baseProjectVersion,
                     siteId =
-                        request.siteId.toUuid(
-                            "INVALID_SITE_ID",
-                        ),
+                        resolvedSiteId,
                     projectSiteCode =
                         request.projectSiteCode,
                     accessInstructions =
@@ -495,7 +587,7 @@ class ProjectsController(
                                 "REJECTED_VALIDATION",
                             ),
                     actorUserId =
-                        context.requireIdentityId(),
+                        actorUserId,
                     correlationId =
                         context.correlationId,
                 ),

@@ -172,8 +172,21 @@ class ProjectsApiClient(
         installationId: String,
     ): ProjectSiteCommandResponseDto {
         requireId(projectId)
-        requireId(request.siteId)
         requireId(request.operationId)
+        val hasExisting =
+            !request.siteId.isNullOrBlank()
+        val hasCreate =
+            request.createSite != null
+        require(
+            hasExisting.xor(hasCreate),
+        ) {
+            "Exactly one Site mode is required."
+        }
+        request.siteId?.let(::requireId)
+        request.createSite?.let {
+            require(it.siteCode.isNotBlank())
+            require(it.name.isNotBlank())
+        }
         return api.request(
             method = HttpMethod.Post,
             path =
