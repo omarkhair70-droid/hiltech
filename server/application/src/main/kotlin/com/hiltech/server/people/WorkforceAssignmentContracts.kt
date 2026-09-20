@@ -26,6 +26,7 @@ data class WorkforceAssignmentSnapshot(
     val effectiveFrom: Instant,
     val effectiveTo: Instant?,
     val version: Long,
+    val supersedesAssignmentId: UUID? = null,
 )
 
 data class CreateWorkforceAssignmentCommand(
@@ -37,6 +38,19 @@ data class CreateWorkforceAssignmentCommand(
     val roleLabel: String?,
     val reportsToEmployeeId: UUID?,
     val effectiveFrom: Instant,
+    val actorUserId: UUID,
+    val correlationId: String,
+)
+
+data class ChangeWorkforceAssignmentCommand(
+    val operationId: UUID,
+    val employeeId: UUID,
+    val currentAssignmentId: UUID,
+    val baseAssignmentVersion: Long,
+    val teamId: UUID?,
+    val roleCode: String,
+    val roleLabel: String?,
+    val reportsToEmployeeId: UUID?,
     val actorUserId: UUID,
     val correlationId: String,
 )
@@ -55,6 +69,24 @@ data class WorkforceAssignmentCreated(
     val teamId: UUID?,
     val roleCode: String,
     val reportsToEmployeeId: UUID?,
+    val sourceVersion: Long,
+    val actorUserId: UUID,
+    val occurredAt: Instant,
+    val correlationId: String,
+)
+
+data class WorkforceAssignmentChanged(
+    val eventId: UUID = UUID.randomUUID(),
+    val previousAssignmentId: UUID,
+    val newAssignmentId: UUID,
+    val organizationId: UUID,
+    val employeeId: UUID,
+    val previousTeamId: UUID?,
+    val newTeamId: UUID?,
+    val previousRoleCode: String,
+    val newRoleCode: String,
+    val previousReportsToEmployeeId: UUID?,
+    val newReportsToEmployeeId: UUID?,
     val sourceVersion: Long,
     val actorUserId: UUID,
     val occurredAt: Instant,
