@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 VERIFIED / COMPLETE / PHASE 3 ACTIVE — SLICE 01 IMPLEMENTATION AUTHORIZED**
+Status: **FROZEN v1.0 / PHASE 0 VERIFIED / PHASE 1 VERIFIED / PHASE 2 VERIFIED / COMPLETE / PHASE 3 ACTIVE — SLICE 01 VERIFIED / READY TO MERGE**
 
 ## Core Rule
 
@@ -415,7 +415,7 @@ The Project/Work/Warehouse/Field structural contracts and representative reality
 
 The rendered design proof and formal First-Slice Freeze Review now PASS.
 
-Repository Bootstrap, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are complete. Final Phase 2 closure merged at `624bd6c50f8d17535316ae450a8a780bc756a108` with post-merge Bootstrap `35474921624` PASS. Phase 3 — People / Internal Workforce Core — is ACTIVE. Its scope/slice plan is frozen in `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md`. The immediate build target is **Slice 01 — Employee / Employment Core**, authorized by `docs/13-delivery/phase3/01_EMPLOYEE_EMPLOYMENT_CORE_SLICE_2026-09-20.md`.
+Repository Bootstrap, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are complete. Phase 3 — People / Internal Workforce Core — is ACTIVE. **Slice 01 — Employee / Employment Core is VERIFIED / READY TO MERGE** on tested code head `59c5cb9fb4d859260ba48a9f8edd5ecce5a97e96`; OpenFGA `35477856791`, Bootstrap `35477856788`, Phase 1 OIDC `35477856782`, and Phase 2 runtime `35477856796` PASS. The next action is Slice 01 closure/merge/post-merge verification, not Slice 02 implementation.
 
 ---
 
@@ -453,9 +453,9 @@ Closed:
 Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
 
 Immediate next execution:
-**PHASE 3 / SLICE 01 — Employee / Employment Core implementation**.
+**PHASE 3 / SLICE 01 — closure, merge, and post-merge verification**.
 
-Phase 0 engineering foundation, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are verified and complete. Final Phase 2 closure post-merge Bootstrap `35474921624` PASS. Phase 3 scope is frozen into six vertical slices. The immediate execution target is **Slice 01 — Employee / Employment Core**. Later Phase 3 slices remain closed until Slice 01 is verified/merged.
+Phase 0 engineering foundation, Phase 1 Identity / Organization / Permissions, and Phase 2 Shared Product Infrastructure are verified and complete. Phase 3 scope is frozen into six vertical slices. Slice 01 is exact-head verified and ready to merge. Later Phase 3 slices remain closed until Slice 01 merge/post-merge verification and the next slice contract gate.
 
 
 ---
