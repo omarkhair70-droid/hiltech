@@ -102,6 +102,12 @@ class PlanningService(
         val areaCode = code(command.code, 64)
         val name = required(command.name, 160)
         requireSequence(command.sequence)
+        val sourceProject = requireProject(command.projectId)
+        requireManage(command.actorUserId, sourceProject)
+        requireAreaInProject(
+            sourceProject,
+            requireArea(command.areaId),
+        )
 
         val replayed = execute(
             operationId = command.operationId,
