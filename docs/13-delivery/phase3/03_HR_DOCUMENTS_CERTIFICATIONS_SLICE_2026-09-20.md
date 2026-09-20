@@ -1,7 +1,7 @@
 # Phase 3 / Slice 03 — HR Documents / Certifications
 
 Date: 2026-09-20  
-Status: **IMPLEMENTATION AUTHORIZED / CONTRACT FROZEN**
+Status: **VERIFIED / READY TO MERGE**
 
 ## Reality basis
 
@@ -289,8 +289,46 @@ Do not implement:
 21. Spring Modulith boundaries PASS.
 22. exact-head CI PASS.
 
+## Verification closure
+
+Canonical tested code head:
+
+`9fa0b95de549bd92cc7d3a554cd7cdcf941ef35f`
+
+Exact-head verification:
+
+- Bootstrap Phase 0 `35482995671` — **PASS**
+  - V0017 migration and database contract — PASS
+  - jOOQ generation and server compile — PASS
+  - HR Documents / Certifications PostgreSQL + Evidence lifecycle contract — PASS
+  - canonical OpenFGA model/local platform regression — PASS
+  - inherited Evidence S3-compatible storage contract — PASS
+  - shared tests, Android debug build, Desktop compile and server tests — PASS
+  - dependency/supply-chain/Terraform gates — PASS
+- Phase 2 Shared Command Runtime `35482995728` — **PASS**
+- Phase 1 Native OIDC Production Smoke `35482995573` — **PASS**
+
+Verified implementation includes:
+
+- `employee_document` + `certification` schema and constraints;
+- configurable document/certification type codes;
+- issue/expiry/verification facts and exact-version verification;
+- safe certification eligibility read without private HR/Evidence leakage;
+- `EMPLOYEE_DOCUMENT` dispatch through the existing private Evidence/object-storage lifecycle;
+- target-specific People authorization for Evidence reserve/finalize/read paths;
+- inherited checksum/size/private-delivery behavior without a second binary-storage subsystem;
+- PDF signature validation in the HR document evidence path;
+- shared KMP HR document/certification contracts and client coverage;
+- inherited WorkOrder Evidence behavior preserved.
+
+No onboarding/self-service policy, required-document catalog, legal retention schedule, Project/Work eligibility engine, generic document management or separate certification binary subsystem was introduced.
+
 ## Contract conclusion
 
-**IMPLEMENTATION AUTHORIZED.**
+**VERIFIED / READY TO MERGE.**
 
-Implement only EmployeeDocument/Certification + the `EMPLOYEE_DOCUMENT` Evidence target adapter described above. Do not pull Slice 04 onboarding/self-service policy into this slice.
+PR #44 may move from Draft to Ready only while the verified implementation remains unchanged or after any later head is re-verified.
+
+After merge, require post-merge Bootstrap before Slice 03 is called **MERGED / CLOSED**.
+
+Do not pull Slice 04 onboarding/self-service policy into this slice.

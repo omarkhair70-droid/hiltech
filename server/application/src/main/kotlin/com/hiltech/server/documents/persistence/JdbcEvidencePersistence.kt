@@ -4,6 +4,7 @@ import com.hiltech.server.documents.EvidenceFinalizeRecord
 import com.hiltech.server.documents.EvidencePersistencePort
 import com.hiltech.server.documents.EvidenceReservationInsert
 import com.hiltech.server.documents.EvidenceReservationRecord
+import com.hiltech.server.documents.EmployeeDocumentEvidenceReservationInsert
 import com.hiltech.server.documents.WorkOrderEvidencePolicySnapshot
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -183,6 +184,7 @@ class JdbcEvidencePersistence(
                 finalized_at,
                 classification_code,
                 client_visibility_mode,
+                security_scan_class,
                 supersedes_evidence_id,
                 created_at,
                 version
@@ -199,7 +201,7 @@ class JdbcEvidencePersistence(
                 'RESERVED',
                 ?,
                 NULL,
-                ?, ?,
+                ?, ?, ?,
                 ?,
                 ?,
                 1
@@ -228,12 +230,122 @@ class JdbcEvidencePersistence(
             value.objectKey,
             value.policy.classificationCode,
             value.policy.clientVisibilityMode,
+            value.policy.securityScanClass,
             value.supersedesEvidenceId,
             value.createdAt.atOffset(
                 ZoneOffset.UTC,
             ),
         )
 
+        insertUploadSession(
+            evidenceId = value.evidenceId,
+            uploadSessionId = value.uploadSessionId,
+            operationId = value.operationId,
+            sha256 = value.sha256,
+            sizeBytes = value.sizeBytes,
+            uploadExpiresAt = value.uploadExpiresAt,
+            createdAt = value.createdAt,
+        )
+    }
+
+    override fun insertEmployeeDocumentReservation(
+        value: EmployeeDocumentEvidenceReservationInsert,
+    ) {
+        jdbc.update(
+            """
+            INSERT INTO evidence (
+                id,
+                organization_id,
+                target_type,
+                target_id,
+                work_order_id,
+                evidence_requirement_key,
+                evidence_policy_id,
+                evidence_policy_revision,
+                evidence_type_code,
+                content_type,
+                original_file_name,
+                size_bytes,
+                sha256,
+                captured_at,
+                client_occurred_at,
+                captured_by_user_id,
+                source_device_id,
+                instruction_revision,
+                work_order_version_at_capture,
+                storage_state,
+                object_key_ref,
+                finalized_at,
+                classification_code,
+                client_visibility_mode,
+                security_scan_class,
+                supersedes_evidence_id,
+                created_at,
+                version
+            )
+            VALUES (
+                ?, ?,
+                'EMPLOYEE_DOCUMENT',
+                ?, NULL,
+                'EMPLOYEE_DOCUMENT_BINARY',
+                NULL, NULL,
+                ?,
+                ?, ?, ?, ?,
+                ?, ?, ?,
+                NULL,
+                NULL, NULL,
+                'RESERVED',
+                ?,
+                NULL,
+                'HIGHLY_RESTRICTED',
+                'INTERNAL_ONLY',
+                ?,
+                NULL,
+                ?,
+                1
+            )
+            """.trimIndent(),
+            value.evidenceId,
+            value.organizationId,
+            value.employeeDocumentId,
+            value.evidenceTypeCode,
+            value.contentType,
+            value.originalFileName,
+            value.sizeBytes,
+            value.sha256,
+            value.capturedAt.atOffset(
+                ZoneOffset.UTC,
+            ),
+            value.clientOccurredAt
+                ?.atOffset(ZoneOffset.UTC),
+            value.capturedByUserId,
+            value.objectKey,
+            value.securityScanClass,
+            value.createdAt.atOffset(
+                ZoneOffset.UTC,
+            ),
+        )
+
+        insertUploadSession(
+            evidenceId = value.evidenceId,
+            uploadSessionId = value.uploadSessionId,
+            operationId = value.operationId,
+            sha256 = value.sha256,
+            sizeBytes = value.sizeBytes,
+            uploadExpiresAt = value.uploadExpiresAt,
+            createdAt = value.createdAt,
+        )
+    }
+
+    private fun insertUploadSession(
+        evidenceId: UUID,
+        uploadSessionId: UUID,
+        operationId: UUID,
+        sha256: String,
+        sizeBytes: Long,
+        uploadExpiresAt: Instant,
+        createdAt: Instant,
+    ) {
         jdbc.update(
             """
             INSERT INTO evidence_upload_session (
@@ -257,17 +369,17 @@ class JdbcEvidencePersistence(
                 1
             )
             """.trimIndent(),
-            value.uploadSessionId,
-            value.evidenceId,
-            value.sha256,
-            value.sizeBytes,
-            value.uploadExpiresAt.atOffset(
+            uploadSessionId,
+            evidenceId,
+            sha256,
+            sizeBytes,
+            uploadExpiresAt.atOffset(
                 ZoneOffset.UTC,
             ),
-            value.createdAt.atOffset(
+            createdAt.atOffset(
                 ZoneOffset.UTC,
             ),
-            value.operationId,
+            operationId,
         )
     }
 
@@ -286,47 +398,10 @@ class JdbcEvidencePersistence(
         evidenceId: UUID,
     ): EvidenceFinalizeRecord? =
         jdbc.query(
-            """
-            SELECT
-                e.id AS evidence_id,
-                us.id AS upload_session_id,
-                e.organization_id,
-                e.work_order_id,
-                wo.lifecycle_state
-                    AS work_order_lifecycle_state,
-                e.captured_by_user_id,
-                e.evidence_requirement_key,
-                e.evidence_policy_id,
-                e.evidence_policy_revision,
-                e.evidence_type_code,
-                e.content_type,
-                us.expected_size_bytes,
-                us.expected_sha256,
-                e.storage_state,
-                us.state AS upload_state,
-                e.object_key_ref,
-                us.expires_at,
-                e.classification_code,
-                e.client_visibility_mode,
-                epr.security_scan_class,
-                e.version AS evidence_version,
-                us.version AS upload_session_version
-            FROM evidence e
-            JOIN evidence_upload_session us
-              ON us.evidence_id = e.id
-            JOIN work_order wo
-              ON wo.id = e.work_order_id
-            JOIN evidence_policy_requirement epr
-              ON epr.config_revision_id =
-                 e.evidence_policy_id
-             AND epr.requirement_key =
-                 e.evidence_requirement_key
-            WHERE e.id = ?
-              AND e.target_type = 'WORK_ORDER'
-              AND e.target_id = e.work_order_id
-            ORDER BY us.created_at DESC, us.id DESC
-            LIMIT 1
-            """.trimIndent(),
+            finalizeSelect(
+                predicate = "e.id = ?",
+                includeLimit = true,
+            ),
             finalizeRecordMapper,
             evidenceId,
         ).singleOrNull()
@@ -336,50 +411,63 @@ class JdbcEvidencePersistence(
         uploadSessionId: UUID,
     ): EvidenceFinalizeRecord? =
         jdbc.query(
-            """
-            SELECT
-                e.id AS evidence_id,
-                us.id AS upload_session_id,
-                e.organization_id,
-                e.work_order_id,
-                wo.lifecycle_state
-                    AS work_order_lifecycle_state,
-                e.captured_by_user_id,
-                e.evidence_requirement_key,
-                e.evidence_policy_id,
-                e.evidence_policy_revision,
-                e.evidence_type_code,
-                e.content_type,
-                us.expected_size_bytes,
-                us.expected_sha256,
-                e.storage_state,
-                us.state AS upload_state,
-                e.object_key_ref,
-                us.expires_at,
-                e.classification_code,
-                e.client_visibility_mode,
-                epr.security_scan_class,
-                e.version AS evidence_version,
-                us.version AS upload_session_version
-            FROM evidence e
-            JOIN evidence_upload_session us
-              ON us.evidence_id = e.id
-            JOIN work_order wo
-              ON wo.id = e.work_order_id
-            JOIN evidence_policy_requirement epr
-              ON epr.config_revision_id =
-                 e.evidence_policy_id
-             AND epr.requirement_key =
-                 e.evidence_requirement_key
-            WHERE e.id = ?
-              AND us.id = ?
-              AND e.target_type = 'WORK_ORDER'
-              AND e.target_id = e.work_order_id
-            """.trimIndent(),
+            finalizeSelect(
+                predicate =
+                    "e.id = ? AND us.id = ?",
+                includeLimit = false,
+            ),
             finalizeRecordMapper,
             evidenceId,
             uploadSessionId,
         ).singleOrNull()
+
+    private fun finalizeSelect(
+        predicate: String,
+        includeLimit: Boolean,
+    ): String =
+        """
+        SELECT
+            e.id AS evidence_id,
+            us.id AS upload_session_id,
+            e.organization_id,
+            e.target_type,
+            e.target_id,
+            e.work_order_id,
+            wo.lifecycle_state
+                AS work_order_lifecycle_state,
+            e.captured_by_user_id,
+            e.evidence_requirement_key,
+            e.evidence_policy_id,
+            e.evidence_policy_revision,
+            e.evidence_type_code,
+            e.content_type,
+            us.expected_size_bytes,
+            us.expected_sha256,
+            e.storage_state,
+            us.state AS upload_state,
+            e.object_key_ref,
+            us.expires_at,
+            e.classification_code,
+            e.client_visibility_mode,
+            COALESCE(
+                e.security_scan_class,
+                epr.security_scan_class
+            ) AS security_scan_class,
+            e.version AS evidence_version,
+            us.version AS upload_session_version
+        FROM evidence e
+        JOIN evidence_upload_session us
+          ON us.evidence_id = e.id
+        LEFT JOIN work_order wo
+          ON wo.id = e.work_order_id
+        LEFT JOIN evidence_policy_requirement epr
+          ON epr.config_revision_id =
+             e.evidence_policy_id
+         AND epr.requirement_key =
+             e.evidence_requirement_key
+        WHERE $predicate
+        ${if (includeLimit) "ORDER BY us.created_at DESC, us.id DESC LIMIT 1" else ""}
+        """.trimIndent()
 
     override fun markFinalized(
         evidenceId: UUID,
@@ -484,12 +572,19 @@ class JdbcEvidencePersistence(
                         "organization_id",
                         UUID::class.java,
                     ),
+                targetType =
+                    rs.getString(
+                        "target_type",
+                    ),
+                targetId =
+                    rs.getObject(
+                        "target_id",
+                        UUID::class.java,
+                    ),
                 workOrderId =
-                    requireNotNull(
-                        rs.getObject(
-                            "work_order_id",
-                            UUID::class.java,
-                        ),
+                    rs.getObject(
+                        "work_order_id",
+                        UUID::class.java,
                     ),
                 workOrderLifecycleState =
                     rs.getString(
@@ -501,22 +596,19 @@ class JdbcEvidencePersistence(
                         UUID::class.java,
                     ),
                 evidenceRequirementKey =
-                    requireNotNull(
-                        rs.getString(
-                            "evidence_requirement_key",
-                        ),
+                    rs.getString(
+                        "evidence_requirement_key",
                     ),
                 evidencePolicyId =
-                    requireNotNull(
-                        rs.getObject(
-                            "evidence_policy_id",
-                            UUID::class.java,
-                        ),
+                    rs.getObject(
+                        "evidence_policy_id",
+                        UUID::class.java,
                     ),
                 evidencePolicyRevision =
-                    rs.getInt(
+                    (rs.getObject(
                         "evidence_policy_revision",
-                    ),
+                    ) as? Number)
+                        ?.toInt(),
                 evidenceTypeCode =
                     rs.getString(
                         "evidence_type_code",
@@ -561,8 +653,10 @@ class JdbcEvidencePersistence(
                         "client_visibility_mode",
                     ),
                 securityScanClass =
-                    rs.getString(
-                        "security_scan_class",
+                    requireNotNull(
+                        rs.getString(
+                            "security_scan_class",
+                        ),
                     ),
                 evidenceVersion =
                     rs.getLong(
@@ -598,30 +692,34 @@ class JdbcEvidencePersistence(
                         "organization_id",
                         UUID::class.java,
                     ),
+                targetType =
+                    rs.getString(
+                        "target_type",
+                    ),
+                targetId =
+                    rs.getObject(
+                        "target_id",
+                        UUID::class.java,
+                    ),
                 workOrderId =
-                    requireNotNull(
-                        rs.getObject(
-                            "work_order_id",
-                            UUID::class.java,
-                        ),
+                    rs.getObject(
+                        "work_order_id",
+                        UUID::class.java,
                     ),
                 evidenceRequirementKey =
-                    requireNotNull(
-                        rs.getString(
-                            "evidence_requirement_key",
-                        ),
+                    rs.getString(
+                        "evidence_requirement_key",
                     ),
                 evidencePolicyId =
-                    requireNotNull(
-                        rs.getObject(
-                            "evidence_policy_id",
-                            UUID::class.java,
-                        ),
+                    rs.getObject(
+                        "evidence_policy_id",
+                        UUID::class.java,
                     ),
                 evidencePolicyRevision =
-                    rs.getInt(
+                    (rs.getObject(
                         "evidence_policy_revision",
-                    ),
+                    ) as? Number)
+                        ?.toInt(),
                 evidenceTypeCode =
                     rs.getString(
                         "evidence_type_code",
@@ -659,6 +757,10 @@ class JdbcEvidencePersistence(
                     rs.getString(
                         "client_visibility_mode",
                     ),
+                securityScanClass =
+                    rs.getString(
+                        "security_scan_class",
+                    ),
                 uploadState =
                     rs.getString(
                         "upload_state",
@@ -688,6 +790,8 @@ class JdbcEvidencePersistence(
             us.id AS upload_session_id,
             us.operation_id,
             e.organization_id,
+            e.target_type,
+            e.target_id,
             e.work_order_id,
             e.evidence_requirement_key,
             e.evidence_policy_id,
@@ -701,6 +805,7 @@ class JdbcEvidencePersistence(
             e.object_key_ref,
             e.classification_code,
             e.client_visibility_mode,
+            e.security_scan_class,
             us.state AS upload_state,
             us.expires_at,
             e.version AS evidence_version,
