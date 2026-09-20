@@ -773,26 +773,31 @@ class EvidenceLifecycleService(
         }
 
         if (
-            record.workOrderLifecycleState in TERMINAL_WORK_STATES
+            record.targetType == "WORK_ORDER" &&
+            record.workOrderLifecycleState in
+                TERMINAL_WORK_STATES
         ) {
             throw ProductApiException(
                 code = "WORK_ORDER_TERMINAL",
-                message = "Evidence cannot be finalized for a terminal WorkOrder.",
+                message =
+                    "Evidence cannot be finalized for a terminal WorkOrder.",
                 status = HttpStatus.CONFLICT,
             )
         }
 
         if (
-            !targetAuthorization.canFinalizeEvidence(
-                identityId = actorIdentityId,
-                evidenceId = record.evidenceId,
-                workOrderId = record.workOrderId,
-                creatorIdentityId = record.capturedByUserId,
+            !canAccessTarget(
+                actorIdentityId =
+                    actorIdentityId,
+                record = record,
+                operation =
+                    EvidenceTargetOperation.FINALIZE,
             )
         ) {
             throw ProductApiException(
                 code = "OBJECT_NOT_VISIBLE",
-                message = "The requested Evidence is not available.",
+                message =
+                    "The requested Evidence is not available.",
                 status = HttpStatus.NOT_FOUND,
             )
         }
@@ -894,27 +899,42 @@ class EvidenceLifecycleService(
                     )
                 }
 
-                events.publishEvent(
-                    EvidenceTerminalStateChanged(
-                        eventId = UUID.randomUUID(),
-                        evidenceId = record.evidenceId,
-                        workOrderId = record.workOrderId,
-                        sourceVersion =
-                            record.evidenceVersion + 1,
-                        storageState = targetState,
-                        evidenceTypeCode =
-                            record.evidenceTypeCode,
-                        evidenceRequirementKey =
-                            record.evidenceRequirementKey,
-                        classificationCode =
-                            record.classificationCode,
-                        actorIdentityId =
-                            actorIdentityId,
-                        occurredAt = now,
-                        correlationId =
-                            correlationId,
-                    ),
-                )
+                if (
+                    record.targetType ==
+                    "WORK_ORDER"
+                ) {
+                    events.publishEvent(
+                        EvidenceTerminalStateChanged(
+                            eventId =
+                                UUID.randomUUID(),
+                            evidenceId =
+                                record.evidenceId,
+                            workOrderId =
+                                requireNotNull(
+                                    record.workOrderId,
+                                ),
+                            sourceVersion =
+                                record.evidenceVersion +
+                                    1,
+                            storageState =
+                                targetState,
+                            evidenceTypeCode =
+                                record.evidenceTypeCode,
+                            evidenceRequirementKey =
+                                requireNotNull(
+                                    record
+                                        .evidenceRequirementKey,
+                                ),
+                            classificationCode =
+                                record.classificationCode,
+                            actorIdentityId =
+                                actorIdentityId,
+                            occurredAt = now,
+                            correlationId =
+                                correlationId,
+                        ),
+                    )
+                }
 
                 audit.append(
                     AuditEventRecord(
@@ -931,7 +951,7 @@ class EvidenceLifecycleService(
                         reason =
                             "BINARY_VERIFICATION_" + targetState,
                         configRevisionRefsJson =
-                            """{"evidencePolicyId":"${record.evidencePolicyId}","revision":${record.evidencePolicyRevision}}""",
+                            record.auditContextJson(),
                     ),
                 )
 
@@ -1088,31 +1108,17 @@ class EvidenceLifecycleService(
             )
 
         val allowed =
-            if (download) {
-                targetAuthorization
-                    .canDownloadEvidence(
-                        identityId =
-                            actorIdentityId,
-                        evidenceId =
-                            record.evidenceId,
-                        workOrderId =
-                            record.workOrderId,
-                        creatorIdentityId =
-                            record.capturedByUserId,
-                    )
-            } else {
-                targetAuthorization
-                    .canViewEvidence(
-                        identityId =
-                            actorIdentityId,
-                        evidenceId =
-                            record.evidenceId,
-                        workOrderId =
-                            record.workOrderId,
-                        creatorIdentityId =
-                            record.capturedByUserId,
-                    )
-            }
+            canAccessTarget(
+                actorIdentityId =
+                    actorIdentityId,
+                record = record,
+                operation =
+                    if (download) {
+                        EvidenceTargetOperation.DOWNLOAD
+                    } else {
+                        EvidenceTargetOperation.VIEW
+                    },
+            )
 
         if (!allowed) {
             throw ProductApiException(
@@ -1124,6 +1130,103 @@ class EvidenceLifecycleService(
         }
 
         return record
+    }
+
+    private fun canAccessTarget(
+        actorIdentityId: UUID,
+        record: EvidenceFinalizeRecord,
+        operation: EvidenceTargetOperation,
+    ): Boolean =
+        when (record.targetType) {
+            "WORK_ORDER" -> {
+                val workOrderId =
+                    record.workOrderId
+                        ?: return false
+
+                when (operation) {
+                    EvidenceTargetOperation.FINALIZE ->
+                        targetAuthorization
+                            .canFinalizeEvidence(
+                                identityId =
+                                    actorIdentityId,
+                                evidenceId =
+                                    record.evidenceId,
+                                workOrderId =
+                                    workOrderId,
+                                creatorIdentityId =
+                                    record.capturedByUserId,
+                            )
+
+                    EvidenceTargetOperation.VIEW ->
+                        targetAuthorization
+                            .canViewEvidence(
+                                identityId =
+                                    actorIdentityId,
+                                evidenceId =
+                                    record.evidenceId,
+                                workOrderId =
+                                    workOrderId,
+                                creatorIdentityId =
+                                    record.capturedByUserId,
+                            )
+
+                    EvidenceTargetOperation.DOWNLOAD ->
+                        targetAuthorization
+                            .canDownloadEvidence(
+                                identityId =
+                                    actorIdentityId,
+                                evidenceId =
+                                    record.evidenceId,
+                                workOrderId =
+                                    workOrderId,
+                                creatorIdentityId =
+                                    record.capturedByUserId,
+                            )
+                }
+            }
+
+            "EMPLOYEE_DOCUMENT" -> {
+                val target =
+                    employeeDocumentTarget
+                        .loadTarget(
+                            record.targetId,
+                        )
+                        ?: return false
+
+                target.organizationId ==
+                    record.organizationId &&
+                    target.evidenceId ==
+                    record.evidenceId &&
+                    target.verificationState !=
+                    "REJECTED" &&
+                    employeeDocumentTarget
+                        .canManage(
+                            identityId =
+                                actorIdentityId,
+                            organizationId =
+                                target.organizationId,
+                        )
+            }
+
+            else -> false
+        }
+
+    private fun EvidenceFinalizeRecord
+        .auditContextJson(): String =
+        if (
+            targetType == "WORK_ORDER" &&
+            evidencePolicyId != null &&
+            evidencePolicyRevision != null
+        ) {
+            """{"evidencePolicyId":"$evidencePolicyId","revision":$evidencePolicyRevision}"""
+        } else {
+            """{"targetType":"$targetType"}"""
+        }
+
+    private enum class EvidenceTargetOperation {
+        FINALIZE,
+        VIEW,
+        DOWNLOAD,
     }
 
     private fun validateReserveAgainstPolicy(
