@@ -1,6 +1,12 @@
 -- Phase 4 / Slice 03 — revision-bound WorkOrder planning.
 -- Forward-only hardening of the V0003 configuration and V0005 work scaffolds.
 
+-- Slice 03 closes the frozen DOCUMENT requirement-family gap without rewriting V0003:
+-- WorkType may bind an optional revisioned document-requirement template just like asset/material templates.
+ALTER TABLE work_type_definition
+    ADD COLUMN document_requirement_template_id uuid NULL
+        REFERENCES config_revision(id) ON DELETE RESTRICT;
+
 ALTER TABLE work_order
     ADD COLUMN organization_id uuid NULL,
     ADD COLUMN baseline_version integer NULL;
