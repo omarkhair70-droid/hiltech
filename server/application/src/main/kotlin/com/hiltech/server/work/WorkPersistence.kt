@@ -19,7 +19,7 @@ data class BoundConfig(val ref: ConfigRef, val templateType: String? = null, val
 data class WorkTypeDefinitionSnapshot(
     val ref: ConfigRef, val description: String?, val assignment: BoundConfig, val readiness: BoundConfig,
     val evidence: BoundConfig, val review: BoundConfig, val tracking: BoundConfig?,
-    val assetTemplate: BoundConfig?, val materialTemplate: BoundConfig?, val checklistTemplate: BoundConfig?,
+    val assetTemplate: BoundConfig?, val materialTemplate: BoundConfig?, val documentTemplate: BoundConfig?, val checklistTemplate: BoundConfig?,
     val instructionTemplate: BoundConfig?, val defaultPriorityCode: String?,
     val defaultProgressWeight: BigDecimal, val countsTowardProgress: Boolean,
 )
@@ -86,7 +86,11 @@ class JdbcWorkPersistence(private val jdbc: JdbcTemplate) : WorkPersistencePort 
                    vp.id vp_id, vp.code vp_code, vp.name vp_name, vp.revision_number vp_revision,
                    tp.id tp_id, tp.code tp_code, tp.name tp_name, tp.revision_number tp_revision,
                    asset.id asset_id, asset.code asset_code, asset.name asset_name, asset.revision_number asset_revision,
+                   atd.template_type asset_type, atd.schema_version asset_schema, atd.structured_definition::text asset_json,
                    material.id material_id, material.code material_code, material.name material_name, material.revision_number material_revision,
+                   mtd.template_type material_type, mtd.schema_version material_schema, mtd.structured_definition::text material_json,
+                   document.id document_id, document.code document_code, document.name document_name, document.revision_number document_revision,
+                   dtd.template_type document_type, dtd.schema_version document_schema, dtd.structured_definition::text document_json,
                    checklist.id checklist_id, checklist.code checklist_code, checklist.name checklist_name, checklist.revision_number checklist_revision,
                    ctd.template_type checklist_type, ctd.schema_version checklist_schema, ctd.structured_definition::text checklist_json,
                    instruction.id instruction_id, instruction.code instruction_code, instruction.name instruction_name, instruction.revision_number instruction_revision,
@@ -99,7 +103,11 @@ class JdbcWorkPersistence(private val jdbc: JdbcTemplate) : WorkPersistencePort 
             JOIN config_revision vp ON vp.id = wtd.review_policy_id
             LEFT JOIN config_revision tp ON tp.id = wtd.tracking_policy_id
             LEFT JOIN config_revision asset ON asset.id = wtd.asset_requirement_template_id
+            LEFT JOIN template_definition atd ON atd.config_revision_id = asset.id
             LEFT JOIN config_revision material ON material.id = wtd.material_requirement_template_id
+            LEFT JOIN template_definition mtd ON mtd.config_revision_id = material.id
+            LEFT JOIN config_revision document ON document.id = wtd.document_requirement_template_id
+            LEFT JOIN template_definition dtd ON dtd.config_revision_id = document.id
             LEFT JOIN config_revision checklist ON checklist.id = wtd.checklist_template_id
             LEFT JOIN template_definition ctd ON ctd.config_revision_id = checklist.id
             LEFT JOIN config_revision instruction ON instruction.id = wtd.instruction_template_id
@@ -111,6 +119,7 @@ class JdbcWorkPersistence(private val jdbc: JdbcTemplate) : WorkPersistencePort 
               AND (tp.id IS NULL OR tp.lifecycle_state = 'ACTIVE')
               AND (asset.id IS NULL OR asset.lifecycle_state = 'ACTIVE')
               AND (material.id IS NULL OR material.lifecycle_state = 'ACTIVE')
+              AND (document.id IS NULL OR document.lifecycle_state = 'ACTIVE')
               AND (checklist.id IS NULL OR checklist.lifecycle_state = 'ACTIVE')
               AND (instruction.id IS NULL OR instruction.lifecycle_state = 'ACTIVE')
               $extra
@@ -122,7 +131,7 @@ class JdbcWorkPersistence(private val jdbc: JdbcTemplate) : WorkPersistencePort 
                 fun template(prefix: String): BoundConfig? = rs.getObject("${prefix}_id", UUID::class.java)?.let { BoundConfig(ref(prefix), rs.getString("${prefix}_type"), rs.getObject("${prefix}_schema", Int::class.javaObjectType), rs.getString("${prefix}_json")) }
                 WorkTypeDefinitionSnapshot(
                     ref("wt"), rs.getString("wt_description"), BoundConfig(ref("ap")), BoundConfig(ref("rp")), BoundConfig(ref("ep")), BoundConfig(ref("vp")), optional("tp"),
-                    optional("asset"), optional("material"), template("checklist"), template("instruction"), rs.getString("default_priority_code"),
+                    template("asset"), template("material"), template("document"), template("checklist"), template("instruction"), rs.getString("default_priority_code"),
                     rs.getBigDecimal("default_progress_weight"), rs.getBoolean("counts_toward_project_progress"),
                 )
             }, timestamp, timestamp, organizationId, *extraArgs,
