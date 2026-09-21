@@ -66,6 +66,10 @@ import com.hiltech.shared.core.work.CreateWorkOrderRequestDto
 import com.hiltech.shared.core.work.CreateWorkTaskRequestDto
 import com.hiltech.shared.core.work.PlanWorkRequestDto
 import com.hiltech.shared.core.work.ReadinessAssignmentApiClient
+import com.hiltech.shared.core.work.ReviewProgressHealthApiClient
+import com.hiltech.shared.core.work.ReviewDecisionRequestDto
+import com.hiltech.shared.core.work.ProjectHoldRequestDto
+import com.hiltech.shared.core.work.ProjectResumeRequestDto
 import com.hiltech.shared.core.work.EvaluateReadinessRequestDto
 import com.hiltech.shared.core.work.AssignWorkRequestDto
 import com.hiltech.shared.core.work.ReassignWorkRequestDto
@@ -171,6 +175,9 @@ class DesktopIdentityRuntime(
 
     private val readinessAssignmentApi =
         ReadinessAssignmentApiClient(productApi)
+
+    private val reviewProgressHealthApi =
+        ReviewProgressHealthApiClient(productApi)
 
     suspend fun signIn(
         forceReauthentication: Boolean = false,
@@ -1112,6 +1119,93 @@ class DesktopIdentityRuntime(
 
     suspend fun workOrders(projectId: String) = workApi.list(projectId, installationId)
     suspend fun workTypes(projectId: String) = workApi.workTypes(projectId, installationId)
+
+    suspend fun reviewWorkItems() =
+        reviewProgressHealthApi.reviewWorkItems(
+            installationId,
+        )
+
+    suspend fun projectCommandCenter(
+        projectId: String,
+    ) = reviewProgressHealthApi.commandCenter(
+        projectId,
+        installationId,
+    )
+
+    suspend fun projectProgress(
+        projectId: String,
+    ) = reviewProgressHealthApi.progress(
+        projectId,
+        installationId,
+    )
+
+    suspend fun projectHealth(
+        projectId: String,
+    ) = reviewProgressHealthApi.health(
+        projectId,
+        installationId,
+    )
+
+    suspend fun acceptWork(
+        workOrderId: String,
+        baseVersion: Long,
+        reason: String?,
+    ) = reviewProgressHealthApi.accept(
+        workOrderId,
+        ReviewDecisionRequestDto(
+            operationId = operationId(),
+            baseVersion = baseVersion,
+            reason = reason,
+            clientOccurredAt = occurredAt(),
+        ),
+        installationId,
+    )
+
+    suspend fun requestWorkRework(
+        workOrderId: String,
+        baseVersion: Long,
+        reason: String?,
+    ) = reviewProgressHealthApi.requestRework(
+        workOrderId,
+        ReviewDecisionRequestDto(
+            operationId = operationId(),
+            baseVersion = baseVersion,
+            reason = reason,
+            clientOccurredAt = occurredAt(),
+        ),
+        installationId,
+    )
+
+    suspend fun putProjectOnHold(
+        projectId: String,
+        baseVersion: Long,
+        reason: String,
+    ) = reviewProgressHealthApi.putOnHold(
+        projectId,
+        ProjectHoldRequestDto(
+            operationId = operationId(),
+            baseVersion = baseVersion,
+            reason = reason,
+            clientOccurredAt = occurredAt(),
+        ),
+        installationId,
+    )
+
+    suspend fun resumeProject(
+        projectId: String,
+        baseVersion: Long,
+        resolution: String,
+    ) = reviewProgressHealthApi.resume(
+        projectId,
+        ProjectResumeRequestDto(
+            operationId = operationId(),
+            baseVersion = baseVersion,
+            resolution = resolution,
+            clientOccurredAt = occurredAt(),
+        ),
+        installationId,
+    )
+
 
     suspend fun workReadiness(workOrderId: String) =
         readinessAssignmentApi.readiness(
