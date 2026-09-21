@@ -309,6 +309,7 @@ interface WarehouseAuthorizationPort {
     fun canViewWarehouse(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canManageWarehouse(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canManageInventoryOrganization(actorUserId: UUID, organizationId: UUID): Boolean
+    fun canManageImport(actorUserId: UUID, organizationId: UUID): Boolean
     fun canManageMaster(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canViewValue(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canViewStorage(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean
@@ -366,6 +367,36 @@ class SpringWarehouseAuthorization(
                 principalMatches(actorUserId, binding, at) &&
                 persistence.warehouse(binding.warehouseId)
                     ?.let { canManageWarehouse(actorUserId, it) } == true
+        }
+    }
+
+    override fun canManageImport(
+        actorUserId: UUID,
+        organizationId: UUID,
+    ): Boolean {
+        val at = clock.instant()
+        if (
+            !sourceAuthority.isOrganizationMemberCurrent(
+                actorUserId,
+                organizationId,
+                at,
+            )
+        ) {
+            return false
+        }
+
+        return persistence.currentOrganizationWarehouseBindings(
+            organizationId,
+            at,
+        ).any { binding ->
+            binding.authorityKey in
+                setOf(
+                    WarehouseAuthorityKey.WAREHOUSE_MANAGER,
+                    WarehouseAuthorityKey.ASSET_MASTER_MANAGER,
+                ) &&
+                principalMatches(actorUserId, binding, at) &&
+                persistence.warehouse(binding.warehouseId)
+                    ?.let { canManageMaster(actorUserId, it) } == true
         }
     }
 
