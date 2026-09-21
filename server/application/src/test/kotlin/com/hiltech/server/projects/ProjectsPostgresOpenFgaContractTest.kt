@@ -3620,7 +3620,7 @@ class ProjectsPostgresOpenFgaContractTest {
                 )
                 """.trimIndent(),
                 healthPolicyId,
-                """{"REWORK_BACKLOG":{"severity":"CRITICAL"},"READINESS_FAILURE":{"severity":"ATTENTION"}}""",
+                """{"REWORK_BACKLOG":{"severity":"ATTENTION"},"CLIENT_ACTION_REQUIRED":{"severity":"CRITICAL"}}""",
             )
 
             val health =
@@ -3629,8 +3629,9 @@ class ProjectsPostgresOpenFgaContractTest {
                     readyProject.projectId,
                 )
             assertEquals(
-                ProjectHealthState.CRITICAL,
+                ProjectHealthState.ATTENTION,
                 health.state,
+                "Health policy severity must be resolved from the matching typed rule only.",
             )
             assertTrue(
                 health.signals.any {
@@ -3756,7 +3757,7 @@ class ProjectsPostgresOpenFgaContractTest {
                 resumed.lifecycleState,
             )
             assertEquals(
-                ProjectHealthState.CRITICAL,
+                ProjectHealthState.ATTENTION,
                 resumed.health.state,
             )
 
