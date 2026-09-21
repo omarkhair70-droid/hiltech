@@ -29,6 +29,12 @@ data class AssignmentPolicyExecutionSnapshot(
     val reassignmentRequiresReason: Boolean,
 )
 
+data class ReadinessPolicyExecutionSnapshot(
+    val configId: UUID,
+    val revision: Int,
+    val allRequiredMustBeSatisfied: Boolean,
+)
+
 data class EligibilityCheck(
     val code: String,
     val satisfied: Boolean,
