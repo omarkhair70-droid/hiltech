@@ -1,6 +1,6 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.2 / PHASE 0–4 VERIFIED / COMPLETE / PHASE 5 REALITY + CONTRACT CLOSURE NEXT**
+Status: **FROZEN v1.3 / PHASE 0–4 VERIFIED / COMPLETE / PHASE 5 PLAN FROZEN / SLICE 01 NEXT**
 
 ## Core Rule
 
@@ -149,7 +149,7 @@ This creates the operational spine.
 
 # PHASE 5 — Assets / Warehouse
 
-Status: **NEXT — REALITY / CONTRACT / SLICE-PLAN CLOSURE REQUIRED BEFORE PRODUCTION CODE**
+Status: **PLAN FROZEN — 9 SLICES — SLICE 01 PRODUCTION NEXT AFTER PLANNING MERGE**
 
 Build:
 - Asset Passport.
@@ -457,33 +457,28 @@ Closed:
 Pilot seed values and production activation steps occur after contract Freeze unless they expose a contradiction.
 
 Immediate next execution:
-**PHASE 5 — Assets / Warehouse — REALITY + CONTRACT CLOSURE BEFORE PRODUCTION IMPLEMENTATION.**
+**PHASE 5 / SLICE 01 — Warehouse / Storage / Authority / Import Staging.**
 
 Phase 0–4 are verified and complete.
 
-Phase 4 Slice 01–06 are VERIFIED / MERGED. Slice 06 merged through PR #64 at `43873e90b85de153697cb08139b4042cbfffd599`; post-merge Bootstrap `35559230083` PASS. Final Phase 4 review is `docs/13-delivery/phase4/11_PHASE4_FINAL_GAP_REVIEW_2026-09-21.md` — PASS / no additional Phase 4 slice required.
+Phase 5 planning is frozen under `docs/13-delivery/phase5/00` through `14`:
+- owner-entry reality reconstruction;
+- representative HILTECH UTP/FIBER/ACTIVE data validation;
+- exact decision register;
+- authorization matrix;
+- nine-slice master implementation map;
+- Slice 01–09 contracts;
+- completion gates / coding handoff.
 
-Before Phase 5 coding:
-- reconstruct current repository + warehouse/asset reality;
-- validate actual physical process, inventory and device/tagging assumptions;
-- close the remaining exact persistence/transition decisions in the Asset/Warehouse contract pack;
-- freeze the full Phase-5 slice plan;
-- then implement Phase 5 one exact tested vertical slice/PR at a time.
+Execution order:
 
-Phase 5 owns authoritative:
-- Asset identity/passport and tags;
-- Warehouse / StorageLocation;
-- StockItem and physical quantity truth;
-- reservations;
-- custody/movement;
-- checkout/return/transfer;
-- issue/consumption;
-- receiving;
-- damage/loss;
-- calibration/maintenance availability;
-- stocktake/adjustment.
+`Slice 01 -> 02 -> 03 -> 04 -> 05 -> 06 -> 07 -> 08 -> 09 -> Phase 5 Final Gap Review`
 
-Do not pull forward Phase 6 technician execution/offline command sync/Evidence capture, or later commercial/finance truth.
+Slice 01 target is V0026 and owns Warehouse/StorageLocation hardening, current-source Warehouse authority, OpenFGA expansion and safe Inventory Import Staging. It does **not** create authoritative Stock opening balance or Asset checkout.
+
+Production execution begins only after the Phase-5 planning PR merges and its post-merge Bootstrap is green.
+
+Do not pull forward Phase 6 technician execution/offline command sync/Evidence capture, Finance valuation ledger, Procurement PO lifecycle, or Security hardware integration.
 
 ---
 
