@@ -30,6 +30,8 @@ import com.hiltech.server.work.AssignWorkCommand
 import com.hiltech.server.work.AssignmentTargetType
 import com.hiltech.server.work.EvaluateReadinessCommand
 import com.hiltech.server.work.JdbcReadinessAssignmentPersistence
+import com.hiltech.server.work.JdbcFieldAssignedWorkPersistence
+import com.hiltech.server.work.FieldAssignedWorkService
 import com.hiltech.server.work.JdbcReviewProgressHealthPersistence
 import com.hiltech.server.work.ReviewEligibilityResolver
 import com.hiltech.server.work.ReviewProgressHealthService
@@ -2865,6 +2867,303 @@ class ProjectsPostgresOpenFgaContractTest {
                 "Projected current USER assignment must authorize the assigned user.",
             )
 
+            // Slice 06 reads the same authoritative assignment truth.
+            // No field execution command or local sync state is introduced.
+            val fieldSource =
+                JdbcWorkAssignmentSourceAuthority(
+                    jdbc,
+                )
+            val fieldService =
+                FieldAssignedWorkService(
+                    work =
+                        JdbcWorkPersistence(jdbc),
+                    readiness =
+                        JdbcReadinessAssignmentPersistence(
+                            jdbc,
+                        ),
+                    persistence =
+                        JdbcFieldAssignedWorkPersistence(
+                            jdbc,
+                        ),
+                    source = fieldSource,
+                    authorization =
+                        assignedAuthorization,
+                    clock = clock,
+                )
+
+            val userToday =
+                fieldService.today(
+                    ids.oldPm,
+                )
+            assertTrue(
+                userToday.any {
+                    it.workOrderId ==
+                        firstSlice04Order.workOrderId &&
+                        it.assignment.targetType ==
+                            AssignmentTargetType.USER &&
+                        it.assignment.targetId ==
+                            ids.oldPm &&
+                        it.currentlyActionable
+                },
+                "Current USER assignment must appear in Today after authorization projection.",
+            )
+            val userBundle =
+                fieldService.jobBundle(
+                    ids.oldPm,
+                    firstSlice04Order.workOrderId,
+                )
+            assertEquals(
+                assigned.readiness.workOrderVersion,
+                userBundle.workOrderVersion,
+            )
+            assertEquals(
+                requireNotNull(
+                    firstSlice04Order.binding,
+                ).bindingRevision,
+                requireNotNull(
+                    userBundle.binding,
+                ).bindingRevision,
+            )
+            assertEquals(
+                firstSlice04Order.instruction
+                    ?.revision,
+                userBundle.instruction
+                    ?.revision,
+            )
+            assertTrue(
+                userBundle.safeDocumentRefs
+                    .isEmpty(),
+                "Slice 06 must not invent a current document revision source.",
+            )
+            assertTrue(
+                userBundle.resourceRequirements
+                    .none {
+                        it.integrationState in
+                            setOf(
+                                "AVAILABLE",
+                                "RESERVED",
+                                "ISSUED",
+                                "CHECKED_OUT",
+                            )
+                    },
+                "Phase-5 resource truth must not be fabricated in the mobile bundle.",
+            )
+            assertFalse(
+                userBundle.executionCapabilities
+                    .startOffline,
+            )
+            assertFalse(
+                userBundle.executionCapabilities
+                    .blockOffline,
+            )
+            assertFalse(
+                userBundle.executionCapabilities
+                    .resumeOffline,
+            )
+            assertFalse(
+                userBundle.executionCapabilities
+                    .evidenceCaptureOffline,
+            )
+            assertFalse(
+                userBundle.executionCapabilities
+                    .submitOffline,
+            )
+            assertFalse(
+                userBundle.executionCapabilities
+                    .authoritativeOfflineQueue,
+            )
+
+            val teamFieldAssignment =
+                UUID.randomUUID()
+            jdbc.update(
+                """
+                INSERT INTO work_assignment (
+                    id,
+                    work_order_id,
+                    organization_id,
+                    project_id,
+                    target_type,
+                    target_id,
+                    lead,
+                    assigned_at,
+                    assigned_by,
+                    valid_from,
+                    valid_until,
+                    state,
+                    source_operation_id,
+                    version
+                )
+                VALUES (
+                    ?, ?, ?, ?,
+                    'TEAM', ?,
+                    true,
+                    ?, ?,
+                    ?, NULL,
+                    'ACTIVE',
+                    ?,
+                    1
+                )
+                """.trimIndent(),
+                teamFieldAssignment,
+                linked.workOrder.workOrderId,
+                ids.organization,
+                readyProject.projectId,
+                ids.team,
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                ids.teamUser,
+                clock.instant()
+                    .minusSeconds(60)
+                    .atOffset(ZoneOffset.UTC),
+                UUID.randomUUID(),
+            )
+            assertTrue(
+                fieldSource.isCurrentAssignedUser(
+                    ids.teamUser,
+                    linked.workOrder.workOrderId,
+                    clock.instant(),
+                ),
+                "Current Team membership must resolve a TEAM field assignment.",
+            )
+            jdbc.update(
+                """
+                UPDATE work_assignment
+                SET state = 'REPLACED',
+                    valid_until = ?,
+                    version = version + 1
+                WHERE id = ?
+                """.trimIndent(),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                teamFieldAssignment,
+            )
+
+            val slice06CrewMember =
+                UUID.randomUUID()
+            jdbc.update(
+                """
+                INSERT INTO work_crew_member (
+                    id,
+                    organization_id,
+                    crew_id,
+                    employee_id,
+                    effective_from,
+                    effective_to,
+                    created_at,
+                    created_by,
+                    version
+                )
+                VALUES (
+                    ?, ?, ?, ?,
+                    ?, NULL,
+                    ?, ?,
+                    1
+                )
+                """.trimIndent(),
+                slice06CrewMember,
+                ids.organization,
+                crewId,
+                ids.employee,
+                clock.instant()
+                    .minusSeconds(60)
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .minusSeconds(60)
+                    .atOffset(ZoneOffset.UTC),
+                ids.admin,
+            )
+            val crewFieldAssignment =
+                UUID.randomUUID()
+            jdbc.update(
+                """
+                INSERT INTO work_assignment (
+                    id,
+                    work_order_id,
+                    organization_id,
+                    project_id,
+                    target_type,
+                    target_id,
+                    lead,
+                    assigned_at,
+                    assigned_by,
+                    valid_from,
+                    valid_until,
+                    state,
+                    source_operation_id,
+                    version
+                )
+                VALUES (
+                    ?, ?, ?, ?,
+                    'CREW', ?,
+                    true,
+                    ?, ?,
+                    ?, NULL,
+                    'ACTIVE',
+                    ?,
+                    1
+                )
+                """.trimIndent(),
+                crewFieldAssignment,
+                linked.workOrder.workOrderId,
+                ids.organization,
+                readyProject.projectId,
+                crewId,
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                ids.teamUser,
+                clock.instant()
+                    .minusSeconds(60)
+                    .atOffset(ZoneOffset.UTC),
+                UUID.randomUUID(),
+            )
+            assertTrue(
+                fieldSource.isCurrentAssignedUser(
+                    ids.oldPm,
+                    linked.workOrder.workOrderId,
+                    clock.instant(),
+                ),
+                "Current Crew membership must resolve Employee to the current identity.",
+            )
+            assertFalse(
+                fieldSource.isCurrentAssignedUser(
+                    ids.ordinaryMember,
+                    linked.workOrder.workOrderId,
+                    clock.instant(),
+                ),
+                "Crew membership must not invent access for another identity.",
+            )
+            jdbc.update(
+                """
+                UPDATE work_crew_member
+                SET effective_to = ?,
+                    version = version + 1
+                WHERE id = ?
+                """.trimIndent(),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                slice06CrewMember,
+            )
+            assertFalse(
+                fieldSource.isCurrentAssignedUser(
+                    ids.oldPm,
+                    linked.workOrder.workOrderId,
+                    clock.instant(),
+                ),
+                "Ended Crew membership must remove field resolution immediately.",
+            )
+            jdbc.update(
+                """
+                UPDATE work_assignment
+                SET state = 'REPLACED',
+                    valid_until = ?,
+                    version = version + 1
+                WHERE id = ?
+                """.trimIndent(),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                crewFieldAssignment,
+            )
+
             jdbc.update(
                 """
                 UPDATE workforce_assignment
@@ -2990,6 +3289,26 @@ class ProjectsPostgresOpenFgaContractTest {
                     "can_start",
                 ),
                 "Replaced assignment must deny immediately even while its old FGA tuple is stale.",
+            )
+            assertTrue(
+                fieldService.today(
+                    ids.oldPm,
+                ).none {
+                    it.workOrderId ==
+                        firstSlice04Order.workOrderId
+                },
+                "Replaced WorkAssignment must disappear from Today immediately even before stale projection cleanup.",
+            )
+            val revokedBundle =
+                assertThrows<ProductApiException> {
+                    fieldService.jobBundle(
+                        ids.oldPm,
+                        firstSlice04Order.workOrderId,
+                    )
+                }
+            assertEquals(
+                "OBJECT_NOT_VISIBLE",
+                revokedBundle.code,
             )
 
             val afterReassign =
