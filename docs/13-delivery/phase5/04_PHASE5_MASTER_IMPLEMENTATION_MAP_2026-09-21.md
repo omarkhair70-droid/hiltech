@@ -151,7 +151,7 @@ Invariants:
 
 No reservation/issue yet.
 
-Completion proof uses real UTP/FIBER/ACTIVE representative rows.
+Completion proof uses real UTP/FIBER/ACTIVE/Accessories representative rows.
 
 ---
 
@@ -523,7 +523,8 @@ Required timing:
 
 ## Before Slice 02 cutover/import activation
 
-- approve UOM mapping for representative UTP/FIBER/ACTIVE rows;
+- approve UOM mapping for representative UTP/FIBER/ACTIVE/Accessories rows;
+- confirm ambiguous legacy source-column semantics are reviewed rather than inferred;
 - approve initial StorageLocation;
 - approve import review of ambiguous rows.
 
@@ -566,7 +567,40 @@ Phase 5 is complete only when:
 
 ---
 
-# 10. Freeze result
+# 10. Slice-count adequacy review
+
+The frozen count of nine Slices is deliberate domain separation, not scope inflation.
+
+Boundary rationale:
+
+1. **Slice 01** establishes trusted location/authority/import staging before any physical truth can mutate.
+2. **Slice 02** establishes Stock master, UOM, opening quantity and the stock ledger as one atomic quantity-truth boundary.
+3. **Slice 03** establishes persistent Asset identity/tag/custody before routine operational checkout exists.
+4. **Slice 04** isolates safety/availability blockers — incident, calibration, maintenance and inspection — so they are proven before reservation/checkout can depend on them.
+5. **Slice 05** owns reservation collision plus Phase-4 Work readiness integration without yet changing physical custody.
+6. **Slice 06** owns the highest-risk physical handoff/conservation transactions: checkout, issue, return, transfer and consumption.
+7. **Slice 07** owns inbound receiving/discrepancy because its source-of-truth and Procurement/Finance boundary differ from opening stock and normal movement.
+8. **Slice 08** owns stocktake/adjustment because count variance and separation-of-duty approval are a distinct control boundary from routine warehouse movement.
+9. **Slice 09** is intentionally migration-free by default and composes proven primitives into the daily Windows/Android Warehouse product; it does not introduce another source of truth.
+
+Potential merges were reviewed and rejected for the frozen plan:
+
+- **03 + 04** would mix identity/custody concurrency with safety/service availability rules and make Asset foundation proof too broad.
+- **02 + 07** would mix one-time opening/cutover truth with recurring receiving and Procurement/Finance discrepancy boundaries.
+- **06 + 08** would mix routine fulfillment with privileged inventory correction/approval controls.
+- folding **09** into earlier Slices would force product-composition/UI closure into transactional migrations and make end-to-end gaps harder to detect.
+
+Therefore the current plan is small enough to keep one dominant invariant family per production PR while large enough to avoid artificial micro-slices.
+
+`PHASE5_NINE_SLICES_REVIEW = JUSTIFIED`
+
+`PHASE5_SLICE_COUNT_EXPANSION_REQUIRED = NO`
+
+`PHASE5_SLICE_MERGE_REQUIRED = NO`
+
+---
+
+# 11. Freeze result
 
 `PHASE5_SLICE_COUNT = 9`
 
