@@ -723,8 +723,20 @@ class ReadinessAssignmentService(
                         "The requirement is already waived.",
                     )
                 }
+                val suppliedReason =
+                    optionalReason(command.reason)
+                if (
+                    requirement.waiverReasonRequired &&
+                    suppliedReason == null
+                ) {
+                    validation(
+                        "READINESS_WAIVER_REASON_REQUIRED",
+                        "The bound ReadinessPolicy requires an explicit waiver reason.",
+                    )
+                }
                 val reason =
-                    requiredReason(command.reason)
+                    suppliedReason
+                        ?: "Policy-approved waiver; reason not required"
 
                 persistence.insertWaiver(
                     waiverId = waiverId,
