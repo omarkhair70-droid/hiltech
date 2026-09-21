@@ -126,6 +126,11 @@ class JdbcActivityProjection(
                 }
             }.toString()
 
+        requireEvidenceSourceExists(
+            evidenceId = evidenceId,
+            workOrderId = workOrderId,
+        )
+
         val activityId =
             UUID.nameUUIDFromBytes(
                 (
@@ -305,6 +310,76 @@ class JdbcActivityProjection(
                 }.toString(),
         )
 
+    private fun requireEvidenceSourceExists(
+        evidenceId: UUID,
+        workOrderId: UUID,
+    ) {
+        val exists =
+            jdbc.queryForObject(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM evidence e
+                    JOIN work_order wo
+                      ON wo.id = e.work_order_id
+                    WHERE e.id = ?
+                      AND e.work_order_id = ?
+                )
+                """.trimIndent(),
+                Boolean::class.java,
+                evidenceId,
+                workOrderId,
+            ) ?: false
+        check(exists) {
+            "Evidence Activity source/context is unavailable."
+        }
+    }
+
+    private fun requireDomainSourceExists(
+        sourceType: String,
+        sourceId: UUID,
+        contextType: String,
+        contextId: UUID,
+    ) {
+        val exists =
+            when {
+                sourceType == "WORK_ORDER" &&
+                    contextType == "WORK_ORDER" &&
+                    sourceId == contextId ->
+                    jdbc.queryForObject(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM work_order
+                            WHERE id = ?
+                        )
+                        """.trimIndent(),
+                        Boolean::class.java,
+                        sourceId,
+                    ) ?: false
+
+                sourceType == "PROJECT" &&
+                    contextType == "PROJECT" &&
+                    sourceId == contextId ->
+                    jdbc.queryForObject(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM project
+                            WHERE id = ?
+                        )
+                        """.trimIndent(),
+                        Boolean::class.java,
+                        sourceId,
+                    ) ?: false
+
+                else -> false
+            }
+        check(exists) {
+            "Activity source/context is unavailable or inconsistent."
+        }
+    }
+
     private fun appendDomainActivity(
         sourceEventId: UUID,
         activityType: String,
@@ -319,6 +394,12 @@ class JdbcActivityProjection(
         safeSummary: String,
     ): Boolean {
         require(sourceVersion >= 1)
+        requireDomainSourceExists(
+            sourceType = sourceType,
+            sourceId = sourceId,
+            contextType = contextType,
+            contextId = contextId,
+        )
         val activityId =
             UUID.nameUUIDFromBytes(
                 (
