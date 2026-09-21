@@ -3164,6 +3164,185 @@ class ProjectsPostgresOpenFgaContractTest {
                 crewFieldAssignment,
             )
 
+            val noLoginPerson =
+                UUID.randomUUID()
+            val noLoginEmployee =
+                UUID.randomUUID()
+            jdbc.update(
+                """
+                INSERT INTO person (
+                    id,
+                    display_name,
+                    created_at,
+                    updated_at,
+                    version
+                )
+                VALUES (?, 'No login technician', ?, ?, 1)
+                """.trimIndent(),
+                noLoginPerson,
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+            )
+            jdbc.update(
+                """
+                INSERT INTO employee (
+                    id,
+                    organization_id,
+                    person_id,
+                    employee_code,
+                    state,
+                    hire_date,
+                    end_date,
+                    created_at,
+                    updated_at,
+                    version
+                )
+                VALUES (
+                    ?, ?, ?,
+                    'EMP-NO-LOGIN-SLICE06',
+                    'ACTIVE',
+                    CURRENT_DATE,
+                    NULL,
+                    ?, ?,
+                    1
+                )
+                """.trimIndent(),
+                noLoginEmployee,
+                ids.organization,
+                noLoginPerson,
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+            )
+            val noLoginCrewMember =
+                UUID.randomUUID()
+            jdbc.update(
+                """
+                INSERT INTO work_crew_member (
+                    id,
+                    organization_id,
+                    crew_id,
+                    employee_id,
+                    effective_from,
+                    effective_to,
+                    created_at,
+                    created_by,
+                    version
+                )
+                VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 1)
+                """.trimIndent(),
+                noLoginCrewMember,
+                ids.organization,
+                crewId,
+                noLoginEmployee,
+                clock.instant()
+                    .minusSeconds(60)
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .minusSeconds(60)
+                    .atOffset(ZoneOffset.UTC),
+                ids.admin,
+            )
+            assertEquals(
+                0,
+                jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM user_identity
+                    WHERE person_id = ?
+                    """.trimIndent(),
+                    Int::class.java,
+                    noLoginPerson,
+                ),
+                "The fixture employee intentionally has no interactive identity.",
+            )
+            val noLoginCrewAssignment =
+                UUID.randomUUID()
+            jdbc.update(
+                """
+                INSERT INTO work_assignment (
+                    id,
+                    work_order_id,
+                    organization_id,
+                    project_id,
+                    target_type,
+                    target_id,
+                    lead,
+                    assigned_at,
+                    assigned_by,
+                    valid_from,
+                    valid_until,
+                    state,
+                    source_operation_id,
+                    version
+                )
+                VALUES (
+                    ?, ?, ?, ?,
+                    'CREW', ?,
+                    true,
+                    ?, ?,
+                    ?, NULL,
+                    'ACTIVE',
+                    ?,
+                    1
+                )
+                """.trimIndent(),
+                noLoginCrewAssignment,
+                linked.workOrder.workOrderId,
+                ids.organization,
+                readyProject.projectId,
+                crewId,
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                ids.teamUser,
+                clock.instant()
+                    .minusSeconds(60)
+                    .atOffset(ZoneOffset.UTC),
+                UUID.randomUUID(),
+            )
+            assertFalse(
+                fieldSource.isCurrentAssignedUser(
+                    ids.oldPm,
+                    linked.workOrder.workOrderId,
+                    clock.instant(),
+                ),
+                "A Crew containing only an Employee without UserIdentity must not invent mobile access.",
+            )
+            assertFalse(
+                fieldSource.isCurrentAssignedUser(
+                    ids.teamUser,
+                    linked.workOrder.workOrderId,
+                    clock.instant(),
+                ),
+                "No-login Employee membership must not resolve to an unrelated current user.",
+            )
+            jdbc.update(
+                """
+                UPDATE work_assignment
+                SET state = 'REPLACED',
+                    valid_until = ?,
+                    version = version + 1
+                WHERE id = ?
+                """.trimIndent(),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                noLoginCrewAssignment,
+            )
+            jdbc.update(
+                """
+                UPDATE work_crew_member
+                SET effective_to = ?,
+                    version = version + 1
+                WHERE id = ?
+                """.trimIndent(),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                noLoginCrewMember,
+            )
+
             jdbc.update(
                 """
                 UPDATE workforce_assignment
@@ -3298,6 +3477,22 @@ class ProjectsPostgresOpenFgaContractTest {
                         firstSlice04Order.workOrderId
                 },
                 "Replaced WorkAssignment must disappear from Today immediately even before stale projection cleanup.",
+            )
+            assertFalse(
+                fieldSource.isCurrentAssignedUser(
+                    ids.teamUser,
+                    firstSlice04Order.workOrderId,
+                    clock.instant(),
+                ),
+                "Subcontractor assignment without an interactive organization membership must fail closed.",
+            )
+            assertFalse(
+                fieldSource.isCurrentAssignedUser(
+                    ids.ordinaryMember,
+                    firstSlice04Order.workOrderId,
+                    clock.instant(),
+                ),
+                "Subcontractor business assignment must not fabricate mobile identity access.",
             )
             val revokedBundle =
                 assertThrows<ProductApiException> {
