@@ -20,7 +20,20 @@ import com.hiltech.server.security.OpenFgaMutationResult
 import com.hiltech.server.security.OpenFgaTuple
 import com.hiltech.server.security.RoleTeamAuthorizationRelations
 import com.hiltech.server.telemetry.HiltechTelemetryRuntime
+import com.hiltech.server.people.JdbcHrDocumentsPersistence
+import com.hiltech.server.people.JdbcPeoplePersistence
+import com.hiltech.server.people.JdbcWorkforceAssignmentPersistence
 import com.hiltech.server.work.ActivateProjectCommand
+import com.hiltech.server.work.AssignWorkCommand
+import com.hiltech.server.work.AssignmentTargetType
+import com.hiltech.server.work.EvaluateReadinessCommand
+import com.hiltech.server.work.JdbcReadinessAssignmentPersistence
+import com.hiltech.server.work.JdbcWorkAssignmentSourceAuthority
+import com.hiltech.server.work.ReadinessAssignmentService
+import com.hiltech.server.work.ReassignWorkCommand
+import com.hiltech.server.work.SpringWorkAssignmentAuthorization
+import com.hiltech.server.work.WorkAssignmentAuthorizationProjectionBridge
+import com.hiltech.server.work.WorkEligibilityResolver
 import com.hiltech.server.work.AddWorkDependencyCommand
 import com.hiltech.server.work.CreateWorkOrderCommand
 import com.hiltech.server.work.CreateWorkTaskCommand
@@ -2065,6 +2078,555 @@ class ProjectsPostgresOpenFgaContractTest {
                 ) >= 1,
             )
 
+            // Slice 04 extends the exact Slice 03 WorkOrder/history fixture.
+            // First prove Phase-5 resource/document sources remain honestly
+            // blocked. Then isolate the ASSIGNEE readiness source to prove
+            // pre-assignment eligibility, AUTO exactly-one assignment,
+            // fail-closed projection and reassignment history.
+            jdbc.update(
+                """
+                INSERT INTO workforce_assignment (
+                    id,
+                    organization_id,
+                    employee_id,
+                    team_id,
+                    role_code,
+                    role_label,
+                    reports_to_employee_id,
+                    state,
+                    effective_from,
+                    effective_to,
+                    created_at,
+                    updated_at,
+                    version
+                )
+                VALUES (
+                    ?, ?, ?, NULL,
+                    'TECHNICIAN',
+                    'Technician',
+                    NULL,
+                    'ACTIVE',
+                    ?, NULL,
+                    ?, ?,
+                    1
+                )
+                """.trimIndent(),
+                UUID.randomUUID(),
+                ids.organization,
+                ids.employee,
+                clock.instant()
+                    .minusSeconds(300)
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .minusSeconds(300)
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .minusSeconds(300)
+                    .atOffset(ZoneOffset.UTC),
+            )
+
+            val readinessPersistence =
+                JdbcReadinessAssignmentPersistence(
+                    jdbc,
+                )
+            val readinessService =
+                ReadinessAssignmentService(
+                    projects =
+                        JdbcProjectsPersistence(jdbc),
+                    work =
+                        JdbcWorkPersistence(jdbc),
+                    persistence =
+                        readinessPersistence,
+                    eligibility =
+                        WorkEligibilityResolver(
+                            people =
+                                JdbcPeoplePersistence(
+                                    jdbc,
+                                ),
+                            workforce =
+                                JdbcWorkforceAssignmentPersistence(
+                                    jdbc,
+                                ),
+                            hr =
+                                JdbcHrDocumentsPersistence(
+                                    jdbc,
+                                ),
+                            sourceAuthority =
+                                sourceAuthority,
+                            jdbc = jdbc,
+                        ),
+                    authorization =
+                        projectAuthorization,
+                    projection =
+                        WorkAssignmentAuthorizationProjectionBridge(
+                            writer,
+                            jdbc,
+                        ),
+                    idempotency =
+                        JdbcIdempotentCommandExecutor(
+                            jdbc = jdbc,
+                            transactionManager =
+                                txManager,
+                            clock = clock,
+                            telemetry = telemetry,
+                        ),
+                    audit =
+                        JdbcAuditEventWriter(jdbc),
+                    events =
+                        ApplicationEventPublisher { event ->
+                            published += event
+                        },
+                    clock = clock,
+                )
+
+            val firstSlice04Order =
+                workService.get(
+                    ids.teamUser,
+                    firstPlanned.workOrder.workOrderId,
+                )
+            val blockedReadiness =
+                readinessService.evaluate(
+                    EvaluateReadinessCommand(
+                        operationId =
+                            UUID.randomUUID(),
+                        workOrderId =
+                            firstSlice04Order.workOrderId,
+                        baseVersion =
+                            firstSlice04Order.version,
+                        clientOccurredAt =
+                            clock.instant(),
+                        actorUserId =
+                            ids.teamUser,
+                        correlationId =
+                            "corr-slice04-readiness-blocked",
+                    ),
+                )
+            assertEquals(
+                WorkReadiness.BLOCKED,
+                blockedReadiness.readiness.readinessState,
+            )
+            assertTrue(
+                blockedReadiness.readiness.requirements
+                    .any {
+                        it.required &&
+                            it.typeCode == "MATERIAL" &&
+                            it.satisfactionState ==
+                                "BLOCKED" &&
+                            it.evaluationReasonCode ==
+                                "PHASE5_RESOURCE_SOURCE_UNAVAILABLE"
+                    },
+                "Material truth must remain blocked until Phase 5.",
+            )
+            assertTrue(
+                blockedReadiness.readiness.requirements
+                    .any {
+                        it.required &&
+                            it.typeCode ==
+                                "ASSET_TOOL" &&
+                            it.satisfactionState ==
+                                "BLOCKED" &&
+                            it.evaluationReasonCode ==
+                                "PHASE5_RESOURCE_SOURCE_UNAVAILABLE"
+                    },
+                "Asset/tool truth must remain blocked until Phase 5.",
+            )
+            assertTrue(
+                blockedReadiness.readiness.requirements
+                    .any {
+                        it.required &&
+                            it.typeCode ==
+                                "DRAWING_REVISION" &&
+                            it.satisfactionState ==
+                                "BLOCKED"
+                    },
+                "Document readiness must not be fabricated.",
+            )
+
+            val readinessPolicyId =
+                requireNotNull(
+                    blockedReadiness.readiness
+                        .requirements
+                        .firstOrNull {
+                            it.family ==
+                                "READINESS"
+                        },
+                ).let {
+                    requireNotNull(
+                        jdbc.queryForObject(
+                            """
+                            SELECT source_config_id
+                            FROM work_requirement_instance
+                            WHERE id = ?
+                            """.trimIndent(),
+                            UUID::class.java,
+                            it.requirementId,
+                        ),
+                    )
+                }
+
+            jdbc.update(
+                """
+                UPDATE readiness_policy_requirement
+                SET requirement_type_code = 'ASSIGNEE'
+                WHERE config_revision_id = ?
+                  AND requirement_key = 'SITE-ACCESS'
+                """.trimIndent(),
+                readinessPolicyId,
+            )
+            jdbc.update(
+                """
+                UPDATE work_requirement_instance
+                SET requirement_type_code =
+                        CASE
+                            WHEN requirement_family = 'READINESS'
+                                THEN 'ASSIGNEE'
+                            ELSE requirement_type_code
+                        END,
+                    required =
+                        CASE
+                            WHEN requirement_family IN (
+                                'ASSET',
+                                'MATERIAL',
+                                'DOCUMENT'
+                            )
+                                THEN false
+                            ELSE required
+                        END,
+                    satisfaction_state = 'PENDING',
+                    evaluation_reason_code = NULL,
+                    source_as_of = NULL,
+                    evaluated_at = NULL,
+                    updated_at = ?,
+                    version = version + 1
+                WHERE work_order_id = ?
+                  AND requirement_family IN (
+                      'READINESS',
+                      'ASSET',
+                      'MATERIAL',
+                      'DOCUMENT'
+                  )
+                """.trimIndent(),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                firstSlice04Order.workOrderId,
+            )
+
+            val afterBlocked =
+                workService.get(
+                    ids.teamUser,
+                    firstSlice04Order.workOrderId,
+                )
+            val readyForAssignment =
+                readinessService.evaluate(
+                    EvaluateReadinessCommand(
+                        operationId =
+                            UUID.randomUUID(),
+                        workOrderId =
+                            afterBlocked.workOrderId,
+                        baseVersion =
+                            afterBlocked.version,
+                        clientOccurredAt =
+                            clock.instant(),
+                        actorUserId =
+                            ids.teamUser,
+                        correlationId =
+                            "corr-slice04-readiness-ready",
+                    ),
+                )
+            assertEquals(
+                WorkReadiness.READY,
+                readyForAssignment.readiness.readinessState,
+            )
+            assertEquals(
+                1,
+                readyForAssignment.readiness
+                    .eligibleTargets
+                    .count { it.eligible },
+                "AUTO fixture must have exactly one eligible target before assignment.",
+            )
+            assertEquals(
+                ids.oldPm,
+                readyForAssignment.readiness
+                    .eligibleTargets
+                    .single { it.eligible }
+                    .targetId,
+            )
+
+            val deniedAssign =
+                assertThrows<ProductApiException> {
+                    readinessService.assign(
+                        AssignWorkCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            workOrderId =
+                                firstSlice04Order.workOrderId,
+                            targetType = null,
+                            targetId = null,
+                            baseVersion =
+                                readyForAssignment.readiness
+                                    .workOrderVersion,
+                            clientOccurredAt =
+                                clock.instant(),
+                            actorUserId =
+                                ids.ordinaryMember,
+                            correlationId =
+                                "corr-slice04-assign-denied",
+                        ),
+                    )
+                }
+            assertEquals(
+                "OBJECT_NOT_VISIBLE",
+                deniedAssign.code,
+            )
+
+            val assignOperation =
+                UUID.randomUUID()
+            val assignCommand =
+                AssignWorkCommand(
+                    operationId =
+                        assignOperation,
+                    workOrderId =
+                        firstSlice04Order.workOrderId,
+                    targetType = null,
+                    targetId = null,
+                    baseVersion =
+                        readyForAssignment.readiness
+                            .workOrderVersion,
+                    clientOccurredAt =
+                        clock.instant(),
+                    actorUserId =
+                        ids.teamUser,
+                    correlationId =
+                        "corr-slice04-assign",
+                )
+            val assigned =
+                readinessService.assign(
+                    assignCommand,
+                )
+            assertEquals(
+                WorkOrderLifecycle.ASSIGNED,
+                assigned.readiness.lifecycleState,
+            )
+            assertEquals(
+                ids.oldPm,
+                assigned.readiness
+                    .currentAssignment
+                    ?.targetId,
+            )
+            val assignReplay =
+                readinessService.assign(
+                    assignCommand,
+                )
+            assertTrue(assignReplay.replayed)
+            assertEquals(
+                assigned.assignmentId,
+                assignReplay.assignmentId,
+            )
+
+            val assignedAuthorization =
+                SpringWorkAssignmentAuthorization(
+                    authorizationProvider =
+                        provider,
+                    source =
+                        JdbcWorkAssignmentSourceAuthority(
+                            jdbc,
+                        ),
+                    clock = clock,
+                )
+            assertFalse(
+                assignedAuthorization.canUseAssignedWork(
+                    ids.oldPm,
+                    firstSlice04Order.workOrderId,
+                    "can_start",
+                ),
+                "Pending assignment grant must fail closed until projection is APPLIED.",
+            )
+            drain(
+                processor,
+                clock.instant(),
+            )
+            assertTrue(
+                assignedAuthorization.canUseAssignedWork(
+                    ids.oldPm,
+                    firstSlice04Order.workOrderId,
+                    "can_start",
+                ),
+                "Projected current USER assignment must authorize the assigned user.",
+            )
+
+            jdbc.update(
+                """
+                UPDATE workforce_assignment
+                SET state = 'ENDED',
+                    effective_to = ?,
+                    updated_at = ?,
+                    version = version + 1
+                WHERE employee_id = ?
+                  AND state = 'ACTIVE'
+                """.trimIndent(),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                ids.employee,
+            )
+            val assignedCurrent =
+                workService.get(
+                    ids.teamUser,
+                    firstSlice04Order.workOrderId,
+                )
+            val lostEligibility =
+                readinessService.evaluate(
+                    EvaluateReadinessCommand(
+                        operationId =
+                            UUID.randomUUID(),
+                        workOrderId =
+                            assignedCurrent.workOrderId,
+                        baseVersion =
+                            assignedCurrent.version,
+                        clientOccurredAt =
+                            clock.instant(),
+                        actorUserId =
+                            ids.teamUser,
+                        correlationId =
+                            "corr-slice04-assignee-lost",
+                    ),
+                )
+            assertEquals(
+                WorkReadiness.BLOCKED,
+                lostEligibility.readiness.readinessState,
+            )
+            assertTrue(
+                lostEligibility.readiness.requirements
+                    .any {
+                        it.typeCode == "ASSIGNEE" &&
+                            it.satisfactionState ==
+                                "BLOCKED"
+                    },
+            )
+
+            val subcontractor =
+                UUID.randomUUID()
+            insertOrganization(
+                jdbc,
+                subcontractor,
+                "SUBCONTRACTOR-A",
+                "Subcontractor A",
+                "SUBCONTRACTOR",
+                clock.instant(),
+            )
+            val currentAssignment =
+                requireNotNull(
+                    lostEligibility.readiness
+                        .currentAssignment,
+                )
+            val reassigned =
+                readinessService.reassign(
+                    ReassignWorkCommand(
+                        operationId =
+                            UUID.randomUUID(),
+                        workOrderId =
+                            firstSlice04Order.workOrderId,
+                        targetType =
+                            AssignmentTargetType
+                                .SUBCONTRACTOR_ORGANIZATION,
+                        targetId = subcontractor,
+                        baseVersion =
+                            lostEligibility.readiness
+                                .workOrderVersion,
+                        currentAssignmentId =
+                            currentAssignment.assignmentId,
+                        baseAssignmentVersion =
+                            currentAssignment.version,
+                        reason =
+                            "Current USER target lost eligibility",
+                        clientOccurredAt =
+                            clock.instant(),
+                        actorUserId =
+                            ids.teamUser,
+                        correlationId =
+                            "corr-slice04-reassign",
+                    ),
+                )
+            assertEquals(
+                subcontractor,
+                reassigned.readiness
+                    .currentAssignment
+                    ?.targetId,
+            )
+            assertEquals(
+                2,
+                reassigned.readiness
+                    .assignmentHistory.size,
+            )
+            assertTrue(
+                reassigned.readiness
+                    .assignmentHistory
+                    .any {
+                        it.assignmentId ==
+                            currentAssignment.assignmentId &&
+                            it.state ==
+                                "REPLACED"
+                    },
+            )
+            assertFalse(
+                assignedAuthorization.canUseAssignedWork(
+                    ids.oldPm,
+                    firstSlice04Order.workOrderId,
+                    "can_start",
+                ),
+                "Replaced assignment must deny immediately even while its old FGA tuple is stale.",
+            )
+
+            val afterReassign =
+                workService.get(
+                    ids.teamUser,
+                    firstSlice04Order.workOrderId,
+                )
+            val reassignedReady =
+                readinessService.evaluate(
+                    EvaluateReadinessCommand(
+                        operationId =
+                            UUID.randomUUID(),
+                        workOrderId =
+                            afterReassign.workOrderId,
+                        baseVersion =
+                            afterReassign.version,
+                        clientOccurredAt =
+                            clock.instant(),
+                        actorUserId =
+                            ids.teamUser,
+                        correlationId =
+                            "corr-slice04-reassign-ready",
+                    ),
+                )
+            assertEquals(
+                WorkReadiness.READY,
+                reassignedReady.readiness.readinessState,
+                "A current eligible replacement target must satisfy ASSIGNEE readiness.",
+            )
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "WORK_READINESS_EVALUATED",
+                    firstSlice04Order.workOrderId,
+                ) >= 3,
+            )
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "WORK_ASSIGNED",
+                    firstSlice04Order.workOrderId,
+                ) >= 1,
+            )
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "WORK_REASSIGNED",
+                    firstSlice04Order.workOrderId,
+                ) >= 1,
+            )
+
             jdbc.update(
                 """
                 UPDATE config_revision
@@ -2626,11 +3188,15 @@ class ProjectsPostgresOpenFgaContractTest {
             """
             INSERT INTO assignment_policy (
                 config_revision_id,
-                allowed_target_types
+                allowed_target_types,
+                execution_mode,
+                allow_external_subcontractor
             )
             VALUES (
                 ?,
-                ARRAY['USER','TEAM']::varchar[]
+                ARRAY['USER','TEAM','SUBCONTRACTOR_ORGANIZATION']::varchar[],
+                'AUTO',
+                true
             )
             """.trimIndent(),
             assignment,
