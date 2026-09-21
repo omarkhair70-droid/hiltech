@@ -65,6 +65,11 @@ import com.hiltech.shared.core.work.AddWorkDependencyRequestDto
 import com.hiltech.shared.core.work.CreateWorkOrderRequestDto
 import com.hiltech.shared.core.work.CreateWorkTaskRequestDto
 import com.hiltech.shared.core.work.PlanWorkRequestDto
+import com.hiltech.shared.core.work.ReadinessAssignmentApiClient
+import com.hiltech.shared.core.work.EvaluateReadinessRequestDto
+import com.hiltech.shared.core.work.AssignWorkRequestDto
+import com.hiltech.shared.core.work.ReassignWorkRequestDto
+import com.hiltech.shared.core.work.WaiveReadinessRequirementRequestDto
 import com.hiltech.shared.core.work.RemoveWorkDependencyRequestDto
 import com.hiltech.shared.core.work.ReviseInstructionRequestDto
 import com.hiltech.shared.core.work.UpdateWorkOrderRequestDto
@@ -163,6 +168,9 @@ class DesktopIdentityRuntime(
 
     private val workApi =
         WorkApiClient(productApi)
+
+    private val readinessAssignmentApi =
+        ReadinessAssignmentApiClient(productApi)
 
     suspend fun signIn(
         forceReauthentication: Boolean = false,
@@ -1104,6 +1112,96 @@ class DesktopIdentityRuntime(
 
     suspend fun workOrders(projectId: String) = workApi.list(projectId, installationId)
     suspend fun workTypes(projectId: String) = workApi.workTypes(projectId, installationId)
+
+    suspend fun workReadiness(workOrderId: String) =
+        readinessAssignmentApi.readiness(
+            workOrderId,
+            installationId,
+        )
+
+    suspend fun eligibleWorkTargets(workOrderId: String) =
+        readinessAssignmentApi.eligibleTargets(
+            workOrderId,
+            installationId,
+        )
+
+    suspend fun workQueueContext(projectId: String) =
+        readinessAssignmentApi.workQueueContext(
+            projectId,
+            installationId,
+        )
+
+    suspend fun evaluateWorkReadiness(
+        workOrderId: String,
+        baseVersion: Long,
+    ) = readinessAssignmentApi.evaluate(
+        workOrderId,
+        EvaluateReadinessRequestDto(
+            operationId = operationId(),
+            baseVersion = baseVersion,
+            clientOccurredAt = occurredAt(),
+        ),
+        installationId,
+    )
+
+    suspend fun assignWork(
+        workOrderId: String,
+        targetType: String?,
+        targetId: String?,
+        baseVersion: Long,
+    ) = readinessAssignmentApi.assign(
+        workOrderId,
+        AssignWorkRequestDto(
+            operationId = operationId(),
+            targetType = targetType,
+            targetId = targetId,
+            baseVersion = baseVersion,
+            clientOccurredAt = occurredAt(),
+        ),
+        installationId,
+    )
+
+    suspend fun reassignWork(
+        workOrderId: String,
+        targetType: String,
+        targetId: String,
+        baseVersion: Long,
+        currentAssignmentId: String,
+        baseAssignmentVersion: Long,
+        reason: String?,
+    ) = readinessAssignmentApi.reassign(
+        workOrderId,
+        ReassignWorkRequestDto(
+            operationId = operationId(),
+            targetType = targetType,
+            targetId = targetId,
+            baseVersion = baseVersion,
+            currentAssignmentId = currentAssignmentId,
+            baseAssignmentVersion = baseAssignmentVersion,
+            reason = reason,
+            clientOccurredAt = occurredAt(),
+        ),
+        installationId,
+    )
+
+    suspend fun waiveWorkReadiness(
+        workOrderId: String,
+        requirementId: String,
+        baseWorkOrderVersion: Long,
+        baseRequirementVersion: Long,
+        reason: String,
+    ) = readinessAssignmentApi.waive(
+        workOrderId,
+        requirementId,
+        WaiveReadinessRequirementRequestDto(
+            operationId = operationId(),
+            baseWorkOrderVersion = baseWorkOrderVersion,
+            baseRequirementVersion = baseRequirementVersion,
+            reason = reason,
+            clientOccurredAt = occurredAt(),
+        ),
+        installationId,
+    )
 
     suspend fun createWorkOrder(
         projectId:String,siteId:String,projectSiteId:String,areaId:String?,workPackageId:String?,
