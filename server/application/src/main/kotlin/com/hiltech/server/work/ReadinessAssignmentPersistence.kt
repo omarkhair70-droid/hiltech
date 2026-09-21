@@ -203,8 +203,23 @@ class JdbcReadinessAssignmentPersistence(
               ON rpr.config_revision_id = ?
              AND rpr.requirement_key = wri.requirement_key
             WHERE wri.work_order_id = ?
-              AND wri.requirement_family = 'READINESS'
-            ORDER BY COALESCE(rpr.sort_order, 0), wri.requirement_key, wri.id
+              AND wri.requirement_family IN (
+                  'READINESS',
+                  'ASSET',
+                  'MATERIAL',
+                  'DOCUMENT'
+              )
+            ORDER BY
+                CASE wri.requirement_family
+                    WHEN 'READINESS' THEN 0
+                    WHEN 'DOCUMENT' THEN 1
+                    WHEN 'MATERIAL' THEN 2
+                    WHEN 'ASSET' THEN 3
+                    ELSE 4
+                END,
+                COALESCE(rpr.sort_order, 0),
+                wri.requirement_key,
+                wri.id
             """.trimIndent(),
             { rs, _ -> rs.readinessRequirement() },
             readinessPolicyId,
