@@ -29,6 +29,10 @@ type team
     define can_view: member or manager
     define can_manage_membership: manager
 
+type crew
+  relations
+    define member: [user]
+
 type project
   relations
     define organization: [organization]
@@ -66,14 +70,16 @@ type work_order
     define site: [site]
     define assigned_user: [user]
     define assigned_team: [team#member]
+    define assigned_crew: [crew#member]
+    define assigned_subcontractor: [organization#member]
     define reviewer: [user, team#member]
     define explicit_viewer: [user, team#member]
 
-    define can_view: assigned_user or assigned_team or reviewer or explicit_viewer or can_view from project
-    define can_start: assigned_user or assigned_team
-    define can_block: assigned_user or assigned_team
-    define can_resume: assigned_user or assigned_team
-    define can_submit_completion: assigned_user or assigned_team
+    define can_view: assigned_user or assigned_team or assigned_crew or assigned_subcontractor or reviewer or explicit_viewer or can_view from project
+    define can_start: assigned_user or assigned_team or assigned_crew or assigned_subcontractor
+    define can_block: assigned_user or assigned_team or assigned_crew or assigned_subcontractor
+    define can_resume: assigned_user or assigned_team or assigned_crew or assigned_subcontractor
+    define can_submit_completion: assigned_user or assigned_team or assigned_crew or assigned_subcontractor
     define can_review: reviewer or can_review_work from project
     define can_request_rework: can_review
     define can_cancel: can_cancel_work from project
