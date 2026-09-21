@@ -45,7 +45,7 @@ data class WaiveReadinessRequirementRequest(
     val operationId: String,
     val baseWorkOrderVersion: Long,
     val baseRequirementVersion: Long,
-    val reason: String,
+    val reason: String? = null,
     val clientOccurredAt: String,
 )
 
@@ -288,7 +288,7 @@ class ReadinessAssignmentController(
         }
 
     @PostMapping(
-        "/{id}/readiness-requirements/{requirementId}/waive",
+        "/{id}/readiness/{requirementId}/waive",
     )
     fun waive(
         request: HttpServletRequest,
