@@ -154,7 +154,7 @@ private fun todayItem(
             if (actionable) {
                 null
             } else {
-                "في انتظار مصدر مواد موثوق من Phase 5",
+                "في انتظار مصدر مواد موثوق من Phase 5"
             },
         instructionRevision = 2,
         workOrderVersion = 8,
