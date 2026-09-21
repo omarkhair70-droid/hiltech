@@ -58,7 +58,7 @@ wait_for_text "التنفيذ يبدأ في Phase 6" 10
 render_mode "detail" "SOURCE_PENDING_PHASE5" "android-job-bundle-blocked.png"
 wait_for_text "التقاط/رفع Evidence من الموبايل مش متاح في Slice 06" 10
 wait_for_text "Authoritative queue: false" 10
-wait_for_text "مفيش Started/Completed/Waiting to sync state محلي هنا" 10
+wait_for_text "القراءة والسياق متاحين دلوقتي" 10
 
 render_mode "revoked" "مفيش WorkOrder حالي متعيّن ليك" "android-assignment-revoked.png"
 
