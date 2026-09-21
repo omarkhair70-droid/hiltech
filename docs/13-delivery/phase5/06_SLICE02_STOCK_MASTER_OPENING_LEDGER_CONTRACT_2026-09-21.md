@@ -117,13 +117,15 @@ Inventory:
 
 ## Representative proof
 
-Use reviewed UTP/FIBER/ACTIVE rows.
+Use reviewed UTP/FIBER/ACTIVE/Accessories rows.
 
 Must demonstrate:
 
 - cable UOM ambiguity cannot pass silently;
 - placeholder/duplicate Part Number does not become hard identity;
-- ACTIVE description conflict remains visible during import review.
+- ACTIVE description conflict remains visible during import review;
+- Accessories rows with implicit `بالعود` / `باللفه` unit semantics cannot bypass UOM review;
+- a legacy field labelled `الرقم التسلسلي` containing catalog/origin markers cannot auto-classify a row as serialized Stock or Asset.
 
 ## Tests
 
@@ -136,7 +138,8 @@ Must demonstrate:
 - wrong-org location denied;
 - direct balance edit impossible;
 - rebuild balance from movements equals projection;
-- import provenance retained.
+- import provenance retained;
+- legacy source-column semantic ambiguity remains blocked until explicitly reviewed.
 
 ## Out of scope
 
