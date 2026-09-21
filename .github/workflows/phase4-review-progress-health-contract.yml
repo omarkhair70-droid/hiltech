@@ -9,6 +9,7 @@ on:
       - "server/application/src/main/kotlin/com/hiltech/server/work/ReviewProgressHealth**"
       - "server/application/src/main/kotlin/com/hiltech/server/work/ReviewEligibilityResolver.kt"
       - "server/application/src/main/kotlin/com/hiltech/server/projects/ProjectsAuthorization.kt"
+      - "server/application/src/main/kotlin/com/hiltech/server/activity/ActivityPersistence.kt"
       - "server/application/src/test/kotlin/com/hiltech/server/projects/ProjectsPostgresOpenFgaContractTest.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/work/ReviewProgressHealth**"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/work/ReviewProgressHealthApiClientTest.kt"
@@ -16,6 +17,7 @@ on:
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/ProjectControlSection.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/HiltechShell.kt"
       - "apps/desktopApp/**"
+      - "docs/13-delivery/phase4/08A_SLICE05_FINAL_GAP_REVIEW_2026-09-21.md"
       - ".github/workflows/phase4-review-progress-health-contract.yml"
   workflow_dispatch:
 
