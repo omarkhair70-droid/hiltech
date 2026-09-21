@@ -13,6 +13,7 @@ on:
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/HiltechShell.kt"
       - "apps/androidApp/**"
       - "scripts/ci/phase4_android_assigned_work_smoke.sh"
+      - "docs/13-delivery/phase4/09A_SLICE06_FINAL_GAP_REVIEW_2026-09-21.md"
       - ".github/workflows/phase4-assigned-work-mobile-handoff.yml"
   workflow_dispatch:
 
