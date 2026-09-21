@@ -10,6 +10,7 @@ import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
 import com.hiltech.shared.core.WorkPlanningUiAction
+import com.hiltech.shared.core.WorkReadinessUiAction
 import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
@@ -1082,6 +1083,25 @@ fun main() {
                         runtime.workTypes(it)
                     }
                 }
+            val workReadinessResult =
+                workOrdersResult
+                    ?.getOrNull()
+                    ?.let { orders ->
+                        runCatching {
+                            orders.associate { order ->
+                                order.workOrderId to
+                                    runtime.workReadiness(
+                                        order.workOrderId,
+                                    )
+                            }
+                        }
+                    }
+            val workQueueResult =
+                selectedId?.let {
+                    runCatching {
+                        runtime.workQueueContext(it)
+                    }
+                }
 
             val current =
                 shellState.value as?
@@ -1098,6 +1118,10 @@ fun main() {
                     ?: workOrdersResult
                         ?.exceptionOrNull()
                     ?: workTypesResult
+                        ?.exceptionOrNull()
+                    ?: workReadinessResult
+                        ?.exceptionOrNull()
+                    ?: workQueueResult
                         ?.exceptionOrNull()
 
             setState(
@@ -1135,6 +1159,18 @@ fun main() {
                                     ?.getOrNull()
                                     ?: current.projects
                                         ?.workTypes
+                                    ?: emptyList(),
+                            workReadinessByOrder =
+                                workReadinessResult
+                                    ?.getOrNull()
+                                    ?: current.projects
+                                        ?.workReadinessByOrder
+                                    ?: emptyMap(),
+                            workQueueContext =
+                                workQueueResult
+                                    ?.getOrNull()
+                                    ?: current.projects
+                                        ?.workQueueContext
                                     ?: emptyList(),
                             lastCreatedSite =
                                 current.projects
@@ -1203,6 +1239,25 @@ fun main() {
                         projectId,
                     )
                 }
+            val selectedWorkReadinessResult =
+                workOrdersResult
+                    .getOrNull()
+                    ?.let { orders ->
+                        runCatching {
+                            orders.associate { order ->
+                                order.workOrderId to
+                                    runtime.workReadiness(
+                                        order.workOrderId,
+                                    )
+                            }
+                        }
+                    }
+            val selectedWorkQueueResult =
+                runCatching {
+                    runtime.workQueueContext(
+                        projectId,
+                    )
+                }
             val current =
                 shellState.value as?
                     HiltechShellState.SignedIn
@@ -1213,6 +1268,10 @@ fun main() {
                     ?: planResult.exceptionOrNull()
                     ?: workOrdersResult.exceptionOrNull()
                     ?: workTypesResult.exceptionOrNull()
+                    ?: selectedWorkReadinessResult
+                        ?.exceptionOrNull()
+                    ?: selectedWorkQueueResult
+                        .exceptionOrNull()
 
             setState(
                 current.copy(
@@ -1236,6 +1295,14 @@ fun main() {
                                         ?: emptyList(),
                                 workTypes =
                                     workTypesResult
+                                        .getOrNull()
+                                        ?: emptyList(),
+                                workReadinessByOrder =
+                                    selectedWorkReadinessResult
+                                        ?.getOrNull()
+                                        ?: emptyMap(),
+                                workQueueContext =
+                                    selectedWorkQueueResult
                                         .getOrNull()
                                         ?: emptyList(),
                                 errorCode =
@@ -2014,6 +2081,96 @@ fun main() {
         }
     }
 
+    fun runWorkReadinessAction(
+        action: WorkReadinessUiAction,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+        val projectId =
+            signed.projects
+                ?.selectedProject
+                ?.projectId
+                ?: return
+
+        setState(
+            signed.copy(
+                projects =
+                    (signed.projects
+                        ?: HiltechProjectsState())
+                        .copy(
+                            loading = true,
+                            errorCode = null,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+
+        scope.launch {
+            runCatching {
+                when (action) {
+                    is WorkReadinessUiAction.Evaluate ->
+                        runtime.evaluateWorkReadiness(
+                            action.workOrderId,
+                            action.baseVersion,
+                        )
+
+                    is WorkReadinessUiAction.Assign ->
+                        runtime.assignWork(
+                            action.workOrderId,
+                            action.targetType,
+                            action.targetId,
+                            action.baseVersion,
+                        )
+
+                    is WorkReadinessUiAction.Reassign ->
+                        runtime.reassignWork(
+                            action.workOrderId,
+                            action.targetType,
+                            action.targetId,
+                            action.baseVersion,
+                            action.currentAssignmentId,
+                            action.baseAssignmentVersion,
+                            action.reason,
+                        )
+
+                    is WorkReadinessUiAction.Waive ->
+                        runtime.waiveWorkReadiness(
+                            action.workOrderId,
+                            action.requirementId,
+                            action.baseWorkOrderVersion,
+                            action.baseRequirementVersion,
+                            action.reason,
+                        )
+                }
+            }.onSuccess {
+                selectProject(projectId)
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                        ?: return@onFailure
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects
+                                ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    errorCode =
+                                        (failure as?
+                                            HiltechApiException)
+                                            ?.code,
+                                    errorMessage =
+                                        failure.message,
+                                ),
+                    ),
+                )
+            }
+        }
+    }
+
     fun signIn(
         forceReauthentication: Boolean = false,
     ) {
@@ -2178,6 +2335,8 @@ fun main() {
                     ::runPlanningAction,
                 onWorkPlanningAction =
                     ::runWorkPlanningAction,
+                onWorkReadinessAction =
+                    ::runWorkReadinessAction,
             )
         }
     }

@@ -710,6 +710,7 @@ class ActivityProjectionPostgresOpenFgaContractTest {
             """
             INSERT INTO work_assignment (
                 id, work_order_id,
+                organization_id, project_id,
                 target_type, target_id,
                 lead,
                 assigned_at,
@@ -722,6 +723,7 @@ class ActivityProjectionPostgresOpenFgaContractTest {
             )
             VALUES (
                 ?, ?,
+                ?, ?,
                 'USER', ?,
                 true,
                 ?, ?,
@@ -732,6 +734,8 @@ class ActivityProjectionPostgresOpenFgaContractTest {
             """.trimIndent(),
             assignmentId,
             workOrderId,
+            organizationId,
+            projectId,
             actorId,
             at,
             actorId,

@@ -32,17 +32,17 @@ class DatabaseMigrationContractTest {
     private val migrationPath = System.getenv("HILTECH_MIGRATIONS_PATH") ?: "database/migrations"
 
     @Test
-    fun emptyPostgresMigratesThroughPriorSliceThenV0023AndRejectsInvalidStates() {
+    fun emptyPostgresMigratesThroughPriorSliceThenV0024AndRejectsInvalidStates() {
         assumeTrue(enabled)
 
         val priorSliceResult = Flyway.configure()
             .dataSource(url, user, password)
             .locations("filesystem:$migrationPath")
-            .target("22")
+            .target("23")
             .load()
             .migrate()
 
-        assertEquals(22, priorSliceResult.migrationsExecuted)
+        assertEquals(23, priorSliceResult.migrationsExecuted)
 
         val result = Flyway.configure()
             .dataSource(url, user, password)
@@ -86,12 +86,15 @@ class DatabaseMigrationContractTest {
                         'work_package',
                         'project_plan_dependency',
                         'work_task',
-                        'work_order_dependency'
+                        'work_order_dependency',
+                        'work_readiness_waiver',
+                        'work_crew',
+                        'work_crew_member'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(46, tables.getInt(1))
+                assertEquals(49, tables.getInt(1))
             }
 
             val orgId = UUID.randomUUID()

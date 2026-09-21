@@ -49,6 +49,12 @@ tuples:
   - user: organization:hiltech
     relation: organization
     object: team:crew-a
+  - user: user:tech2
+    relation: member
+    object: crew:field-alpha
+  - user: user:sub-tech
+    relation: member
+    object: organization:sub-a
 
   - user: organization:hiltech
     relation: organization
@@ -85,6 +91,20 @@ tuples:
   - user: user:supervisor1
     relation: reviewer
     object: work_order:w1
+
+  - user: project:p1
+    relation: project
+    object: work_order:w-crew
+  - user: crew:field-alpha#member
+    relation: assigned_crew
+    object: work_order:w-crew
+
+  - user: project:p1
+    relation: project
+    object: work_order:w-sub
+  - user: organization:sub-a#member
+    relation: assigned_subcontractor
+    object: work_order:w-sub
 
   - user: organization:hiltech
     relation: organization
@@ -207,6 +227,28 @@ tests:
           can_resume: true
           can_submit_completion: true
           can_review: false
+
+  - name: crew member executes crew-assigned work
+    check:
+      - user: user:tech2
+        object: work_order:w-crew
+        assertions:
+          can_view: true
+          can_start: true
+          can_block: true
+          can_resume: true
+          can_submit_completion: true
+
+  - name: subcontractor organization member executes assigned work
+    check:
+      - user: user:sub-tech
+        object: work_order:w-sub
+        assertions:
+          can_view: true
+          can_start: true
+          can_block: true
+          can_resume: true
+          can_submit_completion: true
 
   - name: supervisor can review work
     check:

@@ -213,6 +213,7 @@ fun HiltechShell(
         },
     onPlanningAction: (PlanningUiAction) -> Unit = {},
     onWorkPlanningAction: (WorkPlanningUiAction) -> Unit = {},
+    onWorkReadinessAction: (WorkReadinessUiAction) -> Unit = {},
 ) {
     MaterialTheme {
         Column(
@@ -435,6 +436,8 @@ fun HiltechShell(
                                 onPlanningAction,
                             onWorkPlanningAction =
                                 onWorkPlanningAction,
+                            onWorkReadinessAction =
+                                onWorkReadinessAction,
                         )
                     }
 
