@@ -91,13 +91,27 @@ type warehouse
     define operator: [user, team#member]
     define manager: [user, team#member]
     define viewer: [user, team#member]
+    define asset_master_manager: [user, team#member]
+    define adjustment_approver: [user, team#member]
+    define value_viewer: [user, team#member]
 
-    define can_view_inventory: operator or manager or viewer
+    define can_view_inventory: operator or manager or viewer or asset_master_manager or adjustment_approver or value_viewer
+    define can_view_value: value_viewer
+    define can_manage_master: manager or asset_master_manager
     define can_receive: operator or manager
+    define can_reserve: operator or manager
     define can_checkout: operator or manager
+    define can_checkout_asset: operator or manager
+    define can_issue_stock: operator or manager
     define can_return: operator or manager
+    define can_accept_return: operator or manager
     define can_transfer: operator or manager
+    define can_inspect_return: operator or manager or asset_master_manager
     define can_count: operator or manager
+    define can_request_adjustment: operator or manager
+    define can_approve_adjustment: adjustment_approver
+    define can_manage_asset_service: manager or asset_master_manager
+    define can_request_retirement: manager or asset_master_manager
     define can_manage: manager
 
 type storage_location
@@ -113,6 +127,7 @@ type storage_location
     define can_move_in: responsible or operator or can_receive from warehouse
     define can_move_out: responsible or operator or can_checkout from warehouse
     define can_count: responsible or operator or can_count from warehouse
+    define can_manage: can_manage from warehouse
 
 type asset
   relations
