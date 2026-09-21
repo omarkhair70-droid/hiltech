@@ -1,9 +1,9 @@
 # HILTECH Program Status
 
-Updated: 2026-09-20
+Updated: 2026-09-21
 
 ## Overall Stage
-**PHASE 4 ACTIVE — SLICE 01 VERIFIED / MERGED — SLICE 02–06 IMPLEMENTATION PLANNING FROZEN — PRODUCTION EXECUTION NEXT**
+**PHASE 4 VERIFIED / COMPLETE — PHASE 5 ASSETS / WAREHOUSE REALITY + CONTRACT CLOSURE NEXT**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -54,7 +54,7 @@ Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Final 
 
 Phase 3 — People / Internal Workforce Core — is **VERIFIED / COMPLETE**. Slice 01–05 are VERIFIED / MERGED. Slice 06 — Offboarding Skeleton — merged through PR #51 at `bc6b61cca744c17814e58d5e212812339cd96409`; final closure head `4d941970563b84245061d5ab80101550243b6000` passed Bootstrap `35495373713` attempt 2, Phase 2 runtime `35495373785`, Phase 1 OIDC `35495373737`, Onboarding Human Proof `35495373800`, Assignment Change Human Proof `35495373780`, and Offboarding Human Proof `35495373723`. Post-merge Bootstrap `35495676983` PASS. Final Phase 3 gap review: `docs/13-delivery/phase3/07_PHASE3_FINAL_GAP_REVIEW_2026-09-20.md` — PASS / no additional Phase 3 slice required.
 
-Phase 4 — Projects / Sites / Work Core — has an accepted owner-entry reconstruction and a frozen six-slice plan. Slice 01 — Project + Site / ProjectSite Core — is **VERIFIED / MERGED**. The remaining Phase 4 implementation is now pre-planned and frozen before further production coding: master map `04_PHASE4_MASTER_IMPLEMENTATION_MAP_2026-09-20.md`, Slice 02–06 contracts `05` through `09`, and execution/completion handoff `10_PHASE4_COMPLETION_GATES_AND_CODEX_HANDOFF_2026-09-20.md`. Its frozen contract is `docs/13-delivery/phase4/02_PROJECT_SITE_CORE_REALITY_AND_IMPLEMENTATION_CONTRACT_2026-09-20.md`; final gap review is `docs/13-delivery/phase4/03_PROJECT_SITE_CORE_FINAL_GAP_REVIEW_2026-09-20.md` — PASS / no additional Slice 01 work required. Final tested head `89c19605405dad912457dc22286751c2eb379752` passed Phase 4 Project Site Core `35515218944`, Bootstrap `35515218905`, Native OIDC `35515218910`, Onboarding `35515218926`, Assignment Change `35515218940`, and Offboarding `35515218945`. Final merge commit `e6b87dd4a6a4f66e72190a5d1d3c632b414f359e`; post-merge Bootstrap `35515882737` PASS. Phase 4 planning for Slice 02–06 is now frozen. Production execution resumes at Slice 02 — Project Planning Structure — from the frozen contract set; Phase 5/6 boundaries remain unchanged.
+Phase 4 — Projects / Sites / Work Core — is **VERIFIED / COMPLETE**. All six frozen Slices are VERIFIED / MERGED: Project + Site / ProjectSite Core; Project Planning Structure; WorkOrder + WorkType / Policy Binding; Readiness + WorkAssignment; Review / Rework / Accepted Progress / Project Health; and Assigned Work Mobile Handoff. Slice 06 merged through PR #64 at `43873e90b85de153697cb08139b4042cbfffd599`; post-merge Bootstrap run `35559230083` PASS. Final Phase 4 gap review: `docs/13-delivery/phase4/11_PHASE4_FINAL_GAP_REVIEW_2026-09-21.md` — PASS / no additional Phase 4 slice required. Phase 5 remains the authoritative Assets / Warehouse / Stock / Custody phase, and Phase 6 remains technician field execution / offline sync / Evidence capture. Next program work is Phase 5 reality + exact contract closure before Phase-5 production coding.
 
 ---
 
@@ -85,8 +85,8 @@ Phase 4 — Projects / Sites / Work Core — has an accepted owner-entry reconst
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 4 SLICE 01 VERIFIED / SLICE 02–06 PLANNING FROZEN | Execute Slice 02 -> 03 -> 04 -> 05 -> 06 from frozen contracts; later boundaries preserved |
-| Production code | PHASE 4 SLICE 01 VERIFIED / MERGED; SLICE 02 NEXT | Slice 02 production implementation is authorized from its frozen contract; subsequent Slices execute only after prior Slice closure |
+| Implementation order | PHASE 0–4 VERIFIED / COMPLETE | Phase 5 Assets / Warehouse reality + contract closure next; later boundaries preserved |
+| Production code | PHASE 4 VERIFIED / COMPLETE | Phase 5 production code is not authorized until its reality/contract/slice-plan closure is frozen |
 
 ---
 
@@ -238,12 +238,12 @@ Final stack/version review:
 - production GitHub Actions immutable SHA baseline selected.
 
 Immediate continuation:
-1. Phase 0–3 are VERIFIED / COMPLETE.
-2. Phase 4 Slice 01 is VERIFIED / MERGED; final code merge `e6b87dd4a6a4f66e72190a5d1d3c632b414f359e`; post-merge Bootstrap `35515882737` PASS.
-3. Phase 4 planning for Slice 02–06 is now FROZEN in `docs/13-delivery/phase4/04` through `10`.
-4. Next production execution is **Phase 4 / Slice 02 — Project Planning Structure**, using the frozen Slice 02 contract without reopening product design.
-5. Then execute Slice 03 -> 04 -> 05 -> 06 sequentially, one exact tested head/PR at a time.
-6. Phase 5 remains authoritative Warehouse/Assets/Materials/Tools truth. Phase 6 remains technician offline execution/sync/evidence workflow truth.
+1. Phase 0–4 are VERIFIED / COMPLETE.
+2. Phase 4 Slice 01–06 are VERIFIED / MERGED; final Slice-06 code merge `43873e90b85de153697cb08139b4042cbfffd599`; post-merge Bootstrap `35559230083` PASS.
+3. Phase 4 final gap review is PASS with no additional Phase 4 slice required.
+4. Next program step is **Phase 5 — Assets / Warehouse** reality reconstruction and exact contract closure.
+5. Before Phase-5 production coding, freeze the Phase-5 slice plan as a whole, including authoritative Asset / Storage / Stock / Reservation / Custody / Movement boundaries.
+6. Phase 6 remains technician field execution / offline sync / Evidence capture and must not be pulled into Phase 5.
 7. A coding agent stops only for a genuine repository contradiction that changes business semantics; normal implementation difficulty is not a planning reset.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
