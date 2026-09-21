@@ -1922,6 +1922,7 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
             """
             INSERT INTO work_assignment (
                 id, work_order_id,
+                organization_id, project_id,
                 target_type, target_id,
                 lead, assigned_at,
                 assigned_by,
@@ -1931,6 +1932,7 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                 version
             )
             VALUES (
+                ?, ?,
                 ?, ?,
                 'USER', ?,
                 true, ?,
@@ -1942,6 +1944,8 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
             """.trimIndent(),
             assignmentId,
             workOrderId,
+            organizationId,
+            projectId,
             actorId,
             at.atOffset(
                 ZoneOffset.UTC,
