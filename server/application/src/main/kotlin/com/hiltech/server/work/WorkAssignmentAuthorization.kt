@@ -327,13 +327,37 @@ class JdbcWorkAssignmentSourceAuthority(
               AND wa.valid_from <= ?
               AND (wa.valid_until IS NULL OR wa.valid_until > ?)
               AND (
-                  (wa.target_type = 'USER' AND wa.target_id = ?)
+                  (
+                      wa.target_type = 'USER'
+                      AND wa.target_id = ?
+                      AND EXISTS (
+                          SELECT 1
+                          FROM user_identity ui_guard
+                          JOIN organization_membership om_guard
+                            ON om_guard.user_identity_id = ui_guard.id
+                           AND om_guard.organization_id = wa.organization_id
+                           AND om_guard.state = 'ACTIVE'
+                           AND om_guard.valid_from <= ?
+                           AND (om_guard.valid_until IS NULL OR om_guard.valid_until > ?)
+                          WHERE ui_guard.id = wa.target_id
+                            AND ui_guard.status = 'ACTIVE'
+                      )
+                  )
                   OR
                   (
                       wa.target_type = 'TEAM'
                       AND EXISTS (
                           SELECT 1
                           FROM team_membership tm
+                          JOIN user_identity ui_guard
+                            ON ui_guard.id = tm.user_identity_id
+                           AND ui_guard.status = 'ACTIVE'
+                          JOIN organization_membership om_guard
+                            ON om_guard.user_identity_id = tm.user_identity_id
+                           AND om_guard.organization_id = wa.organization_id
+                           AND om_guard.state = 'ACTIVE'
+                           AND om_guard.valid_from <= ?
+                           AND (om_guard.valid_until IS NULL OR om_guard.valid_until > ?)
                           WHERE tm.team_id = wa.target_id
                             AND tm.user_identity_id = ?
                             AND tm.valid_from <= ?
@@ -352,6 +376,12 @@ class JdbcWorkAssignmentSourceAuthority(
                           JOIN user_identity ui
                             ON ui.person_id = e.person_id
                            AND ui.status = 'ACTIVE'
+                          JOIN organization_membership om_guard
+                            ON om_guard.user_identity_id = ui.id
+                           AND om_guard.organization_id = wa.organization_id
+                           AND om_guard.state = 'ACTIVE'
+                           AND om_guard.valid_from <= ?
+                           AND (om_guard.valid_until IS NULL OR om_guard.valid_until > ?)
                           WHERE wcm.crew_id = wa.target_id
                             AND ui.id = ?
                             AND wcm.effective_from <= ?
@@ -364,6 +394,9 @@ class JdbcWorkAssignmentSourceAuthority(
                       AND EXISTS (
                           SELECT 1
                           FROM organization_membership om
+                          JOIN user_identity ui_guard
+                            ON ui_guard.id = om.user_identity_id
+                           AND ui_guard.status = 'ACTIVE'
                           WHERE om.organization_id = wa.target_id
                             AND om.user_identity_id = ?
                             AND om.state = 'ACTIVE'
@@ -434,7 +467,13 @@ class JdbcWorkAssignmentSourceAuthority(
             timestamp,
             timestamp,
             actorUserId,
+            timestamp,
+            timestamp,
+            timestamp,
+            timestamp,
             actorUserId,
+            timestamp,
+            timestamp,
             timestamp,
             timestamp,
             actorUserId,
