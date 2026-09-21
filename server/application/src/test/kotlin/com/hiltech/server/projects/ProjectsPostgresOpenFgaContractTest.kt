@@ -3309,6 +3309,57 @@ class ProjectsPostgresOpenFgaContractTest {
                 ids.teamUser,
             )
 
+            jdbc.update(
+                """
+                UPDATE organization_membership
+                SET valid_until = ?,
+                    version = version + 1
+                WHERE organization_id = ?
+                  AND user_identity_id = ?
+                  AND valid_until IS NULL
+                """.trimIndent(),
+                clock.instant()
+                    .minusSeconds(1)
+                    .atOffset(ZoneOffset.UTC),
+                ids.organization,
+                ids.teamUser,
+            )
+            val offboardedReviewer =
+                assertThrows<ProductApiException> {
+                    slice05Service.accept(
+                        AcceptWorkCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            workOrderId =
+                                submittedFirst.workOrderId,
+                            baseVersion =
+                                submittedFirst.version,
+                            reason = null,
+                            clientOccurredAt =
+                                clock.instant(),
+                            actorUserId =
+                                ids.teamUser,
+                            correlationId =
+                                "corr-slice05-offboarded-reviewer",
+                        ),
+                    )
+                }
+            assertEquals(
+                "OBJECT_NOT_VISIBLE",
+                offboardedReviewer.code,
+            )
+            jdbc.update(
+                """
+                UPDATE organization_membership
+                SET valid_until = NULL,
+                    version = version + 1
+                WHERE organization_id = ?
+                  AND user_identity_id = ?
+                """.trimIndent(),
+                ids.organization,
+                ids.teamUser,
+            )
+
             val reviewEvidenceId =
                 UUID.randomUUID()
             jdbc.update(
