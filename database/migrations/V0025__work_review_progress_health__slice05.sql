@@ -252,3 +252,52 @@ CREATE INDEX idx_work_review_evidence_ready
         storage_state
     )
     WHERE storage_state = 'READY';
+
+
+-- Slice 05 broadens the previously Evidence-only Activity projection into
+-- a typed polymorphic Project/Work projection. Source/domain tables remain
+-- authoritative; Activity remains rebuildable/read-only.
+ALTER TABLE activity_event
+    DROP CONSTRAINT IF EXISTS activity_event_activity_type_check,
+    DROP CONSTRAINT IF EXISTS activity_event_context_type_check,
+    DROP CONSTRAINT IF EXISTS activity_event_source_type_check,
+    DROP CONSTRAINT IF EXISTS activity_event_context_id_fkey,
+    DROP CONSTRAINT IF EXISTS activity_event_source_id_fkey;
+
+ALTER TABLE activity_event
+    ADD CONSTRAINT ck_activity_event_slice05_type
+        CHECK (
+            activity_type IN (
+                'EVIDENCE_READY',
+                'EVIDENCE_QUARANTINED',
+                'EVIDENCE_REJECTED',
+                'WORK_ACCEPTED',
+                'WORK_REWORK_REQUESTED',
+                'PROJECT_HEALTH_CHANGED',
+                'PROJECT_PUT_ON_HOLD',
+                'PROJECT_RESUMED'
+            )
+        ),
+    ADD CONSTRAINT ck_activity_event_slice05_context
+        CHECK (
+            context_type IN (
+                'WORK_ORDER',
+                'PROJECT'
+            )
+        ),
+    ADD CONSTRAINT ck_activity_event_slice05_source
+        CHECK (
+            source_type IN (
+                'EVIDENCE',
+                'WORK_ORDER',
+                'PROJECT'
+            )
+        );
+
+CREATE INDEX idx_activity_project_time
+    ON activity_event (
+        context_id,
+        occurred_at DESC,
+        id DESC
+    )
+    WHERE context_type = 'PROJECT';
