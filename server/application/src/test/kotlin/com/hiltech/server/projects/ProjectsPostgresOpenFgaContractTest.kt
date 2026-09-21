@@ -2392,6 +2392,235 @@ class ProjectsPostgresOpenFgaContractTest {
                     ).binding,
                 ).assignmentPolicy.id
 
+            val ambiguousSubcontractor =
+                UUID.randomUUID()
+            insertOrganization(
+                jdbc,
+                ambiguousSubcontractor,
+                "SUBCONTRACTOR-AMBIGUOUS",
+                "Subcontractor Ambiguous",
+                "SUBCONTRACTOR",
+                clock.instant(),
+            )
+            jdbc.update(
+                """
+                INSERT INTO certification (
+                    id,
+                    organization_id,
+                    employee_id,
+                    certification_type_code,
+                    certification_label,
+                    issuer,
+                    issued_at,
+                    valid_until,
+                    verification_state,
+                    verified_at,
+                    verified_by_user_id,
+                    employee_document_id,
+                    created_at,
+                    updated_at,
+                    version
+                )
+                VALUES (
+                    ?, ?, ?,
+                    'FIBER_CERT',
+                    'Fiber certification',
+                    'Contract fixture',
+                    ?, ?,
+                    'VERIFIED',
+                    ?, ?,
+                    NULL,
+                    ?, ?,
+                    1
+                )
+                """.trimIndent(),
+                UUID.randomUUID(),
+                ids.organization,
+                ids.employee,
+                clock.instant()
+                    .minusSeconds(7200)
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .minusSeconds(3600)
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                ids.admin,
+                clock.instant()
+                    .minusSeconds(7200)
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+            )
+            jdbc.update(
+                """
+                UPDATE assignment_policy
+                SET required_skill_or_certification_codes =
+                    ARRAY['FIBER_CERT']::varchar[]
+                WHERE config_revision_id = ?
+                """.trimIndent(),
+                assignmentPolicyId,
+            )
+            val capabilityConstrainedTargets =
+                readinessService.eligibleTargets(
+                    ids.teamUser,
+                    firstSlice04Order.workOrderId,
+                )
+            assertTrue(
+                capabilityConstrainedTargets
+                    .any {
+                        it.targetType ==
+                            AssignmentTargetType.USER &&
+                            it.targetId == ids.oldPm &&
+                            "CERTIFICATION_EXPIRED" in
+                                it.reasonCodes
+                    },
+                "Expired certification must deny the USER target.",
+            )
+            assertTrue(
+                capabilityConstrainedTargets
+                    .any {
+                        it.targetType ==
+                            AssignmentTargetType
+                                .SUBCONTRACTOR_ORGANIZATION &&
+                            it.targetId ==
+                                ambiguousSubcontractor &&
+                            "CAPABILITY_SOURCE_UNAVAILABLE" in
+                                it.reasonCodes &&
+                            it.sourceFreshness ==
+                                "UNAVAILABLE"
+                    },
+                "External capability truth must stay unavailable when no authoritative source exists.",
+            )
+            jdbc.update(
+                """
+                UPDATE assignment_policy
+                SET required_skill_or_certification_codes =
+                        ARRAY[]::varchar[],
+                    allowed_target_types =
+                        ARRAY[
+                            'USER',
+                            'TEAM',
+                            'CREW',
+                            'SUBCONTRACTOR_ORGANIZATION'
+                        ]::varchar[]
+                WHERE config_revision_id = ?
+                """.trimIndent(),
+                assignmentPolicyId,
+            )
+
+            val crewId = UUID.randomUUID()
+            val crewMemberId =
+                UUID.randomUUID()
+            jdbc.update(
+                """
+                INSERT INTO work_crew (
+                    id,
+                    organization_id,
+                    project_id,
+                    crew_code,
+                    name,
+                    state,
+                    effective_from,
+                    effective_to,
+                    created_at,
+                    created_by,
+                    updated_at,
+                    version
+                )
+                VALUES (
+                    ?, ?, ?,
+                    'CREW-SLICE04',
+                    'Slice 04 Crew',
+                    'ACTIVE',
+                    ?, NULL,
+                    ?, ?, ?,
+                    1
+                )
+                """.trimIndent(),
+                crewId,
+                ids.organization,
+                readyProject.projectId,
+                clock.instant()
+                    .minusSeconds(300)
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .minusSeconds(300)
+                    .atOffset(ZoneOffset.UTC),
+                ids.admin,
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+            )
+            jdbc.update(
+                """
+                INSERT INTO work_crew_member (
+                    id,
+                    organization_id,
+                    crew_id,
+                    employee_id,
+                    effective_from,
+                    effective_to,
+                    created_at,
+                    created_by,
+                    version
+                )
+                VALUES (
+                    ?, ?, ?, ?,
+                    ?, NULL,
+                    ?, ?,
+                    1
+                )
+                """.trimIndent(),
+                crewMemberId,
+                ids.organization,
+                crewId,
+                ids.employee,
+                clock.instant()
+                    .minusSeconds(300)
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .minusSeconds(300)
+                    .atOffset(ZoneOffset.UTC),
+                ids.admin,
+            )
+            assertTrue(
+                readinessService.eligibleTargets(
+                    ids.teamUser,
+                    firstSlice04Order.workOrderId,
+                ).any {
+                    it.targetType ==
+                        AssignmentTargetType.CREW &&
+                        it.targetId == crewId &&
+                        it.eligible
+                },
+                "Current Crew membership must produce an eligible Crew target.",
+            )
+            jdbc.update(
+                """
+                UPDATE work_crew_member
+                SET effective_to = ?,
+                    version = version + 1
+                WHERE id = ?
+                """.trimIndent(),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                crewMemberId,
+            )
+            assertTrue(
+                readinessService.eligibleTargets(
+                    ids.teamUser,
+                    firstSlice04Order.workOrderId,
+                ).any {
+                    it.targetType ==
+                        AssignmentTargetType.CREW &&
+                        it.targetId == crewId &&
+                        !it.eligible &&
+                        "CREW_HAS_NO_ELIGIBLE_MEMBER" in
+                            it.reasonCodes
+                },
+                "Ended Crew membership must remain history while current eligibility is denied.",
+            )
+
             jdbc.update(
                 """
                 UPDATE assignment_policy
@@ -2474,16 +2703,6 @@ class ProjectsPostgresOpenFgaContractTest {
                 WHERE config_revision_id = ?
                 """.trimIndent(),
                 assignmentPolicyId,
-            )
-            val ambiguousSubcontractor =
-                UUID.randomUUID()
-            insertOrganization(
-                jdbc,
-                ambiguousSubcontractor,
-                "SUBCONTRACTOR-AMBIGUOUS",
-                "Subcontractor Ambiguous",
-                "SUBCONTRACTOR",
-                clock.instant(),
             )
             val ambiguousAuto =
                 assertThrows<ProductApiException> {
