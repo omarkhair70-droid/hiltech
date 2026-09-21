@@ -2241,6 +2241,17 @@ class ProjectsPostgresOpenFgaContractTest {
                     },
                 "Document readiness must not be fabricated.",
             )
+            assertEquals(
+                "READINESS_BLOCKER_REQUIRES_AUTHORITY",
+                readinessService.workQueueContext(
+                    ids.teamUser,
+                    readyProject.projectId,
+                ).single {
+                    it.workOrderId ==
+                        firstSlice04Order.workOrderId
+                }.actionCode,
+                "Blocked WorkQueue context must expose a typed authority action, not a second WorkOrder state.",
+            )
 
             val readinessPolicyId =
                 requireNotNull(
@@ -2350,6 +2361,173 @@ class ProjectsPostgresOpenFgaContractTest {
                     .eligibleTargets
                     .single { it.eligible }
                     .targetId,
+            )
+            assertTrue(
+                readyForAssignment.readiness
+                    .eligibleTargets
+                    .any {
+                        it.targetType ==
+                            AssignmentTargetType.TEAM &&
+                            "TEAM_HAS_NO_ELIGIBLE_MEMBER" in
+                                it.reasonCodes
+                    },
+                "TEAM target must require a current eligible member.",
+            )
+            assertTrue(
+                readinessService.workQueueContext(
+                    ids.teamUser,
+                    readyProject.projectId,
+                ).none {
+                    it.workOrderId ==
+                        firstSlice04Order.workOrderId
+                },
+                "AUTO exactly-one has no human confirmation item.",
+            )
+
+            val assignmentPolicyId =
+                requireNotNull(
+                    workService.get(
+                        ids.teamUser,
+                        firstSlice04Order.workOrderId,
+                    ).binding,
+                ).assignmentPolicy.id
+
+            jdbc.update(
+                """
+                UPDATE assignment_policy
+                SET execution_mode =
+                    'MANUAL_ELIGIBLE'
+                WHERE config_revision_id = ?
+                """.trimIndent(),
+                assignmentPolicyId,
+            )
+            assertEquals(
+                "ASSIGNMENT_CONFIRMATION_REQUIRED",
+                readinessService.workQueueContext(
+                    ids.teamUser,
+                    readyProject.projectId,
+                ).single {
+                    it.workOrderId ==
+                        firstSlice04Order.workOrderId
+                }.actionCode,
+                "MANUAL_ELIGIBLE must route explicit confirmation.",
+            )
+            val manualMissingTarget =
+                assertThrows<ProductApiException> {
+                    readinessService.assign(
+                        AssignWorkCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            workOrderId =
+                                firstSlice04Order.workOrderId,
+                            targetType = null,
+                            targetId = null,
+                            baseVersion =
+                                readyForAssignment.readiness
+                                    .workOrderVersion,
+                            clientOccurredAt =
+                                clock.instant(),
+                            actorUserId =
+                                ids.teamUser,
+                            correlationId =
+                                "corr-slice04-manual-target-required",
+                        ),
+                    )
+                }
+            assertEquals(
+                "ASSIGNMENT_TARGET_REQUIRED",
+                manualMissingTarget.code,
+            )
+            val manualIneligibleTarget =
+                assertThrows<ProductApiException> {
+                    readinessService.assign(
+                        AssignWorkCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            workOrderId =
+                                firstSlice04Order.workOrderId,
+                            targetType =
+                                AssignmentTargetType.USER,
+                            targetId =
+                                ids.teamUser,
+                            baseVersion =
+                                readyForAssignment.readiness
+                                    .workOrderVersion,
+                            clientOccurredAt =
+                                clock.instant(),
+                            actorUserId =
+                                ids.teamUser,
+                            correlationId =
+                                "corr-slice04-manual-ineligible",
+                        ),
+                    )
+                }
+            assertEquals(
+                "ASSIGNMENT_TARGET_INELIGIBLE",
+                manualIneligibleTarget.code,
+            )
+
+            jdbc.update(
+                """
+                UPDATE assignment_policy
+                SET execution_mode = 'AUTO'
+                WHERE config_revision_id = ?
+                """.trimIndent(),
+                assignmentPolicyId,
+            )
+            val ambiguousSubcontractor =
+                UUID.randomUUID()
+            insertOrganization(
+                jdbc,
+                ambiguousSubcontractor,
+                "SUBCONTRACTOR-AMBIGUOUS",
+                "Subcontractor Ambiguous",
+                "SUBCONTRACTOR",
+                clock.instant(),
+            )
+            val ambiguousAuto =
+                assertThrows<ProductApiException> {
+                    readinessService.assign(
+                        AssignWorkCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            workOrderId =
+                                firstSlice04Order.workOrderId,
+                            targetType = null,
+                            targetId = null,
+                            baseVersion =
+                                readyForAssignment.readiness
+                                    .workOrderVersion,
+                            clientOccurredAt =
+                                clock.instant(),
+                            actorUserId =
+                                ids.teamUser,
+                            correlationId =
+                                "corr-slice04-auto-ambiguous",
+                        ),
+                    )
+                }
+            assertEquals(
+                "ASSIGNMENT_CONFIRMATION_REQUIRED",
+                ambiguousAuto.code,
+            )
+            assertEquals(
+                "ASSIGNMENT_CONFIRMATION_REQUIRED",
+                readinessService.workQueueContext(
+                    ids.teamUser,
+                    readyProject.projectId,
+                ).single {
+                    it.workOrderId ==
+                        firstSlice04Order.workOrderId
+                }.actionCode,
+            )
+            jdbc.update(
+                """
+                UPDATE organization
+                SET status = 'INACTIVE'
+                WHERE id = ?
+                """.trimIndent(),
+                ambiguousSubcontractor,
             )
 
             val deniedAssign =
@@ -2501,8 +2679,11 @@ class ProjectsPostgresOpenFgaContractTest {
                     .any {
                         it.typeCode == "ASSIGNEE" &&
                             it.satisfactionState ==
-                                "BLOCKED"
+                                "BLOCKED" &&
+                            it.evaluationReasonCode ==
+                                "WORKFORCE_ASSIGNMENT_NOT_CURRENT"
                     },
+                "Stale WorkforceAssignment must be explained by its current-source reason.",
             )
 
             val subcontractor =
