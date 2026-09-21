@@ -166,7 +166,7 @@ BEGIN
         WHERE sl.id = NEW.parent_storage_location_id
           AND sl.organization_id = NEW.organization_id
 
-        UNION ALL
+        UNION
 
         SELECT
             parent.id,
