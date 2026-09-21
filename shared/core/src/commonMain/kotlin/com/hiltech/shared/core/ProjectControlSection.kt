@@ -24,6 +24,8 @@ import com.hiltech.shared.core.projects.ProjectSiteListDto
 import com.hiltech.shared.core.projects.ProjectSummaryDto
 import com.hiltech.shared.core.projects.SiteDto
 import com.hiltech.shared.core.work.WorkOrderDto
+import com.hiltech.shared.core.work.WorkReadinessDto
+import com.hiltech.shared.core.work.WorkQueueContextDto
 import com.hiltech.shared.core.work.WorkTypeChoiceDto
 
 data class HiltechProjectsState(
@@ -34,6 +36,8 @@ data class HiltechProjectsState(
     val plan: ProjectPlanDto? = null,
     val workOrders: List<WorkOrderDto> = emptyList(),
     val workTypes: List<WorkTypeChoiceDto> = emptyList(),
+    val workReadinessByOrder: Map<String, WorkReadinessDto> = emptyMap(),
+    val workQueueContext: List<WorkQueueContextDto> = emptyList(),
     val lastCreatedSite: SiteDto? = null,
     val errorCode: String? = null,
     val errorMessage: String? = null,
@@ -101,6 +105,7 @@ fun ProjectControlSection(
         },
     onPlanningAction: (PlanningUiAction) -> Unit = {},
     onWorkPlanningAction: (WorkPlanningUiAction) -> Unit = {},
+    onWorkReadinessAction: (WorkReadinessUiAction) -> Unit = {},
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -385,6 +390,15 @@ fun ProjectControlSection(
                         workTypes = state.workTypes,
                         orders = state.workOrders,
                         onAction = onWorkPlanningAction,
+                    )
+                    WorkReadinessSection(
+                        orders = state.workOrders,
+                        readinessByWorkOrder =
+                            state.workReadinessByOrder,
+                        workQueueContext =
+                            state.workQueueContext,
+                        onAction =
+                            onWorkReadinessAction,
                     )
                 }
             }
