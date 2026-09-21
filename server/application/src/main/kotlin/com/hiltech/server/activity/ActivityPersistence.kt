@@ -1,6 +1,10 @@
 package com.hiltech.server.activity
 
 import com.hiltech.server.documents.EvidenceTerminalStateChanged
+import com.hiltech.server.work.ProjectHealthChanged
+import com.hiltech.server.work.ProjectHoldChanged
+import com.hiltech.server.work.WorkAccepted
+import com.hiltech.server.work.WorkReworkRequested
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -35,6 +39,22 @@ data class ActivityRecord(
 interface ActivityProjectionPort {
     fun appendEvidenceTerminal(
         event: EvidenceTerminalStateChanged,
+    ): Boolean
+
+    fun appendWorkAccepted(
+        event: WorkAccepted,
+    ): Boolean
+
+    fun appendWorkReworkRequested(
+        event: WorkReworkRequested,
+    ): Boolean
+
+    fun appendProjectHealthChanged(
+        event: ProjectHealthChanged,
+    ): Boolean
+
+    fun appendProjectHoldChanged(
+        event: ProjectHoldChanged,
     ): Boolean
 
     fun findWorkOrderActivity(
@@ -164,6 +184,198 @@ class JdbcActivityProjection(
                 .takeIf { it.isNotBlank() }
                 ?.take(128),
             event.classificationCode,
+        ) == 1
+    }
+
+    override fun appendWorkAccepted(
+        event: WorkAccepted,
+    ): Boolean =
+        appendDomainActivity(
+            sourceEventId = event.eventId,
+            activityType = "WORK_ACCEPTED",
+            contextType = "WORK_ORDER",
+            contextId = event.workOrderId,
+            sourceType = "WORK_ORDER",
+            sourceId = event.workOrderId,
+            sourceVersion = event.sourceVersion,
+            actorUserId = event.actorUserId,
+            occurredAt = event.occurredAt,
+            correlationId = event.correlationId,
+            safeSummary =
+                buildJsonObject {
+                    put(
+                        "projectId",
+                        event.projectId.toString(),
+                    )
+                    put(
+                        "decisionId",
+                        event.decisionId.toString(),
+                    )
+                }.toString(),
+        )
+
+    override fun appendWorkReworkRequested(
+        event: WorkReworkRequested,
+    ): Boolean =
+        appendDomainActivity(
+            sourceEventId = event.eventId,
+            activityType =
+                "WORK_REWORK_REQUESTED",
+            contextType = "WORK_ORDER",
+            contextId = event.workOrderId,
+            sourceType = "WORK_ORDER",
+            sourceId = event.workOrderId,
+            sourceVersion = event.sourceVersion,
+            actorUserId = event.actorUserId,
+            occurredAt = event.occurredAt,
+            correlationId = event.correlationId,
+            safeSummary =
+                buildJsonObject {
+                    put(
+                        "projectId",
+                        event.projectId.toString(),
+                    )
+                    put(
+                        "decisionId",
+                        event.decisionId.toString(),
+                    )
+                }.toString(),
+        )
+
+    override fun appendProjectHealthChanged(
+        event: ProjectHealthChanged,
+    ): Boolean =
+        appendDomainActivity(
+            sourceEventId = event.eventId,
+            activityType =
+                "PROJECT_HEALTH_CHANGED",
+            contextType = "PROJECT",
+            contextId = event.projectId,
+            sourceType = "PROJECT",
+            sourceId = event.projectId,
+            sourceVersion = event.sourceVersion,
+            actorUserId = event.actorUserId,
+            occurredAt = event.occurredAt,
+            correlationId = event.correlationId,
+            safeSummary =
+                buildJsonObject {
+                    put(
+                        "previousState",
+                        event.previousState.name,
+                    )
+                    put(
+                        "newState",
+                        event.newState.name,
+                    )
+                }.toString(),
+        )
+
+    override fun appendProjectHoldChanged(
+        event: ProjectHoldChanged,
+    ): Boolean =
+        appendDomainActivity(
+            sourceEventId = event.eventId,
+            activityType =
+                if (
+                    event.toState.name ==
+                    "ON_HOLD"
+                ) {
+                    "PROJECT_PUT_ON_HOLD"
+                } else {
+                    "PROJECT_RESUMED"
+                },
+            contextType = "PROJECT",
+            contextId = event.projectId,
+            sourceType = "PROJECT",
+            sourceId = event.projectId,
+            sourceVersion = event.sourceVersion,
+            actorUserId = event.actorUserId,
+            occurredAt = event.occurredAt,
+            correlationId = event.correlationId,
+            safeSummary =
+                buildJsonObject {
+                    put(
+                        "fromState",
+                        event.fromState.name,
+                    )
+                    put(
+                        "toState",
+                        event.toState.name,
+                    )
+                }.toString(),
+        )
+
+    private fun appendDomainActivity(
+        sourceEventId: UUID,
+        activityType: String,
+        contextType: String,
+        contextId: UUID,
+        sourceType: String,
+        sourceId: UUID,
+        sourceVersion: Long,
+        actorUserId: UUID?,
+        occurredAt: Instant,
+        correlationId: String?,
+        safeSummary: String,
+    ): Boolean {
+        require(sourceVersion >= 1)
+        val activityId =
+            UUID.nameUUIDFromBytes(
+                (
+                    "activity:" +
+                        sourceEventId
+                ).toByteArray(
+                    StandardCharsets.UTF_8,
+                ),
+            )
+        return jdbc.update(
+            """
+            INSERT INTO activity_event (
+                id,
+                source_event_id,
+                activity_type,
+                context_type,
+                context_id,
+                source_type,
+                source_id,
+                source_version,
+                actor_user_id,
+                occurred_at,
+                recorded_at,
+                safe_summary,
+                correlation_id,
+                classification_code,
+                schema_version
+            )
+            VALUES (
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                CAST(? AS jsonb),
+                ?, 'INTERNAL', 1
+            )
+            ON CONFLICT (source_event_id)
+            DO NOTHING
+            """.trimIndent(),
+            activityId,
+            sourceEventId,
+            activityType,
+            contextType,
+            contextId,
+            sourceType,
+            sourceId,
+            sourceVersion,
+            actorUserId,
+            occurredAt.atOffset(
+                ZoneOffset.UTC,
+            ),
+            clock.instant()
+                .atOffset(ZoneOffset.UTC),
+            safeSummary,
+            correlationId
+                ?.takeIf {
+                    it.isNotBlank()
+                }
+                ?.take(128),
         ) == 1
     }
 
@@ -346,6 +558,42 @@ class ActivityProjectionListener(
         event: EvidenceTerminalStateChanged,
     ) {
         projection.appendEvidenceTerminal(
+            event,
+        )
+    }
+
+    @ApplicationModuleListener
+    fun onWorkAccepted(
+        event: WorkAccepted,
+    ) {
+        projection.appendWorkAccepted(
+            event,
+        )
+    }
+
+    @ApplicationModuleListener
+    fun onWorkReworkRequested(
+        event: WorkReworkRequested,
+    ) {
+        projection.appendWorkReworkRequested(
+            event,
+        )
+    }
+
+    @ApplicationModuleListener
+    fun onProjectHealthChanged(
+        event: ProjectHealthChanged,
+    ) {
+        projection.appendProjectHealthChanged(
+            event,
+        )
+    }
+
+    @ApplicationModuleListener
+    fun onProjectHoldChanged(
+        event: ProjectHoldChanged,
+    ) {
+        projection.appendProjectHoldChanged(
             event,
         )
     }
