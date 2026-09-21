@@ -1,6 +1,9 @@
 package com.hiltech.server.work
 
 import com.hiltech.server.projects.ProjectSnapshot
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
@@ -1606,41 +1609,49 @@ class JdbcReviewProgressHealthPersistence(
 }
 
 private object HealthSignalRules {
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+        }
+
     fun parse(
-        json: String?,
+        raw: String?,
     ): Map<ProjectHealthSignalCode, ProjectHealthSeverity> {
-        if (json.isNullOrBlank()) {
+        if (raw.isNullOrBlank()) {
             return emptyMap()
         }
+        val root =
+            runCatching {
+                json.parseToJsonElement(raw)
+                    .jsonObject
+            }.getOrElse {
+                return emptyMap()
+            }
+
         return ProjectHealthSignalCode.entries
             .mapNotNull { code ->
-                val marker =
-                    "\"" + code.name + "\""
-                val index =
-                    json.indexOf(marker)
-                if (index < 0) {
-                    null
-                } else {
-                    val tail =
-                        json.substring(index)
-                    val severity =
-                        when {
-                            tail.indexOf(
-                                "\"CRITICAL\"",
-                            ) in 0..160 ->
-                                ProjectHealthSeverity.CRITICAL
-
-                            tail.indexOf(
-                                "\"ATTENTION\"",
-                            ) in 0..160 ->
-                                ProjectHealthSeverity.ATTENTION
-
-                            else -> null
-                        }
-                    severity?.let {
-                        code to it
-                    }
-                }
+                val rule =
+                    root[code.name]
+                        ?: return@mapNotNull null
+                val severityRaw =
+                    runCatching {
+                        rule.jsonObject["severity"]
+                            ?.jsonPrimitive
+                            ?.content
+                    }.getOrNull()
+                        ?: runCatching {
+                            rule.jsonPrimitive.content
+                        }.getOrNull()
+                        ?: return@mapNotNull null
+                val severity =
+                    runCatching {
+                        ProjectHealthSeverity.valueOf(
+                            severityRaw.uppercase(),
+                        )
+                    }.getOrNull()
+                        ?: return@mapNotNull null
+                code to severity
             }.toMap()
     }
 }
+
