@@ -3,5 +3,8 @@
         <activity
             android:name=".OnboardingEvidenceActivity"
             android:exported="true" />
+        <activity
+            android:name=".AssignedWorkEvidenceActivity"
+            android:exported="true" />
     </application>
 </manifest>

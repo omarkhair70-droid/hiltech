@@ -13,6 +13,7 @@ import com.hiltech.shared.core.people.HrDocumentsApiClient
 import com.hiltech.shared.core.people.OnboardingApiClient
 import com.hiltech.shared.core.people.PeopleApiClient
 import com.hiltech.shared.core.people.WorkforceAssignmentApiClient
+import com.hiltech.shared.core.work.FieldAssignedWorkApiClient
 import java.util.UUID
 
 class HiltechApplication : Application() {
@@ -73,6 +74,13 @@ class HiltechApplication : Application() {
     val hrDocumentsApi:
         HrDocumentsApiClient by lazy {
         HrDocumentsApiClient(productApi)
+    }
+
+    val fieldAssignedWorkApi:
+        FieldAssignedWorkApiClient by lazy {
+        FieldAssignedWorkApiClient(
+            productApi,
+        )
     }
 
     val syncRuntime: AndroidSyncRuntime by lazy {

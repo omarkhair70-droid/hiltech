@@ -35,6 +35,7 @@ import java.awt.Window as AwtWindow
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.imageio.ImageIO
+import kotlin.system.exitProcess
 
 fun main() = application {
     val outputDirectory = Path.of(
@@ -72,7 +73,9 @@ fun main() = application {
                         "ready_gate=PASS stale_conflict=PASS no_phase5_truth=PASS no_phase6_execution=PASS",
                 )
             } finally {
+                System.out.flush()
                 exitApplication()
+                exitProcess(0)
             }
         }
     }
