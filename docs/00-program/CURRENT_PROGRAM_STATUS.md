@@ -3,7 +3,7 @@
 Updated: 2026-09-21
 
 ## Overall Stage
-**PHASE 4 VERIFIED / COMPLETE — PHASE 5 ASSETS / WAREHOUSE REALITY + CONTRACT CLOSURE NEXT**
+**PHASE 4 VERIFIED / COMPLETE — PHASE 5 PLAN FROZEN — SLICE 01 PRODUCTION NEXT AFTER PLANNING MERGE**
 
 Freeze status: **PASS — FIRST PRODUCTION SLICE FROZEN**
 
@@ -54,7 +54,9 @@ Phase 2 — Shared Product Infrastructure — is **VERIFIED / COMPLETE**. Final 
 
 Phase 3 — People / Internal Workforce Core — is **VERIFIED / COMPLETE**. Slice 01–05 are VERIFIED / MERGED. Slice 06 — Offboarding Skeleton — merged through PR #51 at `bc6b61cca744c17814e58d5e212812339cd96409`; final closure head `4d941970563b84245061d5ab80101550243b6000` passed Bootstrap `35495373713` attempt 2, Phase 2 runtime `35495373785`, Phase 1 OIDC `35495373737`, Onboarding Human Proof `35495373800`, Assignment Change Human Proof `35495373780`, and Offboarding Human Proof `35495373723`. Post-merge Bootstrap `35495676983` PASS. Final Phase 3 gap review: `docs/13-delivery/phase3/07_PHASE3_FINAL_GAP_REVIEW_2026-09-20.md` — PASS / no additional Phase 3 slice required.
 
-Phase 4 — Projects / Sites / Work Core — is **VERIFIED / COMPLETE**. All six frozen Slices are VERIFIED / MERGED: Project + Site / ProjectSite Core; Project Planning Structure; WorkOrder + WorkType / Policy Binding; Readiness + WorkAssignment; Review / Rework / Accepted Progress / Project Health; and Assigned Work Mobile Handoff. Slice 06 merged through PR #64 at `43873e90b85de153697cb08139b4042cbfffd599`; post-merge Bootstrap run `35559230083` PASS. Final Phase 4 gap review: `docs/13-delivery/phase4/11_PHASE4_FINAL_GAP_REVIEW_2026-09-21.md` — PASS / no additional Phase 4 slice required. Phase 5 remains the authoritative Assets / Warehouse / Stock / Custody phase, and Phase 6 remains technician field execution / offline sync / Evidence capture. Next program work is Phase 5 reality + exact contract closure before Phase-5 production coding.
+Phase 4 — Projects / Sites / Work Core — is **VERIFIED / COMPLETE**. All six frozen Slices are VERIFIED / MERGED. Final Phase 4 gap review: `docs/13-delivery/phase4/11_PHASE4_FINAL_GAP_REVIEW_2026-09-21.md` — PASS / no additional Phase 4 slice required.
+
+Phase 5 — Assets / Warehouse — planning closure is now **FROZEN** on the Phase-5 planning branch. Reality reconstruction, representative HILTECH UTP/FIBER/ACTIVE data validation, exact decision register, authorization matrix, nine-slice master map, Slice 01–09 contracts and completion gates are recorded under `docs/13-delivery/phase5/00` through `14`. The first production slice after planning merge is **Slice 01 — Warehouse / Storage / Authority / Import Staging**. Phase 6 remains technician field execution / offline sync / Evidence capture.
 
 ---
 
@@ -85,8 +87,8 @@ Phase 4 — Projects / Sites / Work Core — is **VERIFIED / COMPLETE**. All six
 | Module ownership | v0.1 | High-level ownership defined |
 | Monorepo structure | BOOTSTRAPPED / VERIFIED | Gradle multi-project, shared/client/server/database/infrastructure roots are implemented and CI-green |
 | Technical spikes | CLOSED — 01/02/03/04/05/06/07/08/09/10/11/12/13/14/15 PASSED | Full end-to-end architectural vertical and Ktor/shared networking accepted |
-| Implementation order | PHASE 0–4 VERIFIED / COMPLETE | Phase 5 Assets / Warehouse reality + contract closure next; later boundaries preserved |
-| Production code | PHASE 4 VERIFIED / COMPLETE | Phase 5 production code is not authorized until its reality/contract/slice-plan closure is frozen |
+| Implementation order | PHASE 0–4 VERIFIED / COMPLETE; PHASE 5 PLAN FROZEN | Execute Phase 5 Slice 01→09 sequentially after planning PR merge |
+| Production code | PHASE 5 SLICE 01 NEXT | Production authorization begins after Phase-5 planning PR merge; V0026 is the first planned migration |
 
 ---
 
@@ -239,12 +241,13 @@ Final stack/version review:
 
 Immediate continuation:
 1. Phase 0–4 are VERIFIED / COMPLETE.
-2. Phase 4 Slice 01–06 are VERIFIED / MERGED; final Slice-06 code merge `43873e90b85de153697cb08139b4042cbfffd599`; post-merge Bootstrap `35559230083` PASS.
-3. Phase 4 final gap review is PASS with no additional Phase 4 slice required.
-4. Next program step is **Phase 5 — Assets / Warehouse** reality reconstruction and exact contract closure.
-5. Before Phase-5 production coding, freeze the Phase-5 slice plan as a whole, including authoritative Asset / Storage / Stock / Reservation / Custody / Movement boundaries.
-6. Phase 6 remains technician field execution / offline sync / Evidence capture and must not be pulled into Phase 5.
-7. A coding agent stops only for a genuine repository contradiction that changes business semantics; normal implementation difficulty is not a planning reset.
+2. Phase 5 reality reconstruction and representative HILTECH data validation are complete for planning.
+3. Phase 5 exact decision register and authorization matrix are frozen.
+4. Phase 5 is frozen as **9 sequential Slices** in `docs/13-delivery/phase5/04_PHASE5_MASTER_IMPLEMENTATION_MAP_2026-09-21.md`.
+5. Slice contracts `05` through `13` plus completion gates `14` are frozen.
+6. After the Phase-5 planning PR merges and post-merge Bootstrap passes, begin **Phase 5 / Slice 01 — Warehouse / Storage / Authority / Import Staging** from current `main`.
+7. Do not pull forward Phase 6 technician execution/offline command sync/Evidence capture, or Finance/Procurement ownership.
+8. A coding agent stops only for a genuine semantic contradiction; normal implementation difficulty is not a planning reset.
 
 OCI tenancy/quota/latency, DigiCert issuance, signed-MSI staging, PITR/DR rehearsal and detailed observability settings remain production activation/cutover work unless they expose a contract contradiction.
 
