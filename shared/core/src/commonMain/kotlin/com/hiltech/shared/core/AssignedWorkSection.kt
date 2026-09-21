@@ -502,29 +502,13 @@ private fun JobBundleDetail(
         }
 
         Text(
-            "قدرات التنفيذ على الجهاز",
+            "التنفيذ من الموبايل",
             style =
                 MaterialTheme.typography
                     .titleMedium,
         )
         Text(
-            "Start offline: " +
-                bundle.executionCapabilities.startOffline +
-                " · Block offline: " +
-                bundle.executionCapabilities.blockOffline +
-                " · Resume offline: " +
-                bundle.executionCapabilities.resumeOffline,
-        )
-        Text(
-            "Evidence offline: " +
-                bundle.executionCapabilities.evidenceCaptureOffline +
-                " · Submit offline: " +
-                bundle.executionCapabilities.submitOffline +
-                " · Authoritative queue: " +
-                bundle.executionCapabilities.authoritativeOfflineQueue,
-        )
-        Text(
-            "التنفيذ وOffline Sync لسه Phase 6 — مفيش Started/Completed/Waiting to sync state محلي هنا.",
+            "القراءة والسياق متاحين دلوقتي. أوامر التنفيذ، Evidence capture، وOffline Sync هتتفعّل في Phase 6.",
         )
     }
 }
