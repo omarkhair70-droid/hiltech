@@ -118,3 +118,14 @@ tasks.register<JavaExec>("renderPhase4PlanningEvidence") {
         "com.hiltech.desktop.evidence.Phase4PlanningRenderEvidenceKt",
     )
 }
+
+
+tasks.register<JavaExec>("renderPhase4WorkEvidence") {
+    group = "verification"
+    description = "Renders Phase 4 Slice 03 WorkOrder policy-binding human proof."
+    dependsOn(tasks.named("testClasses"))
+    classpath = testRuntimeClasspath
+    mainClass.set(
+        "com.hiltech.desktop.evidence.Phase4WorkPlanningRenderEvidenceKt",
+    )
+}

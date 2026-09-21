@@ -20,6 +20,22 @@ import com.hiltech.server.security.OpenFgaMutationResult
 import com.hiltech.server.security.OpenFgaTuple
 import com.hiltech.server.security.RoleTeamAuthorizationRelations
 import com.hiltech.server.telemetry.HiltechTelemetryRuntime
+import com.hiltech.server.work.ActivateProjectCommand
+import com.hiltech.server.work.AddWorkDependencyCommand
+import com.hiltech.server.work.CreateWorkOrderCommand
+import com.hiltech.server.work.CreateWorkTaskCommand
+import com.hiltech.server.work.JdbcWorkPersistence
+import com.hiltech.server.work.PlanWorkCommand
+import com.hiltech.server.work.RemoveWorkDependencyCommand
+import com.hiltech.server.work.ReviseWorkInstructionCommand
+import com.hiltech.server.work.UpdateWorkOrderDetailsCommand
+import com.hiltech.server.work.UpdateWorkTaskCommand
+import com.hiltech.server.work.WorkAuthorizationProjectionBridge
+import com.hiltech.server.work.WorkDependencyType
+import com.hiltech.server.work.WorkOrderLifecycle
+import com.hiltech.server.work.WorkReadiness
+import com.hiltech.server.work.WorkService
+import com.hiltech.server.work.WorkTaskState
 import io.opentelemetry.api.OpenTelemetry
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -1313,6 +1329,767 @@ class ProjectsPostgresOpenFgaContractTest {
                 stale.code,
             )
 
+            seedWorkConfiguration(
+                jdbc = jdbc,
+                organizationId = ids.organization,
+                actorUserId = ids.admin,
+                at = clock.instant(),
+            )
+            val workService =
+                WorkService(
+                    projects = JdbcProjectsPersistence(jdbc),
+                    work = JdbcWorkPersistence(jdbc),
+                    authorization = projectAuthorization,
+                    projection =
+                        WorkAuthorizationProjectionBridge(
+                            writer,
+                        ),
+                    idempotency =
+                        JdbcIdempotentCommandExecutor(
+                            jdbc = jdbc,
+                            transactionManager = txManager,
+                            clock = clock,
+                            telemetry = telemetry,
+                        ),
+                    audit = JdbcAuditEventWriter(jdbc),
+                    events =
+                        ApplicationEventPublisher { event ->
+                            published += event
+                        },
+                    clock = clock,
+                )
+
+            val readyProject =
+                requireNotNull(
+                    JdbcProjectsPersistence(jdbc)
+                        .project(
+                            ready.plan.project.projectId,
+                            clock.instant(),
+                        ),
+                )
+            assertTrue(
+                projectAuthorization.canCreateWork(
+                    ids.teamUser,
+                    readyProject,
+                ),
+                "Current Project manager Team membership must grant can_create_work.",
+            )
+            assertFalse(
+                projectAuthorization.canCreateWork(
+                    ids.ordinaryMember,
+                    readyProject,
+                ),
+                "Plain organization membership must not grant can_create_work.",
+            )
+
+            val deniedWork =
+                assertThrows<ProductApiException> {
+                    workService.create(
+                        CreateWorkOrderCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = readyProject.projectId,
+                            siteId = site.site.siteId,
+                            projectSiteId =
+                                attached.projectSite.projectSiteId,
+                            areaId = area.targetId,
+                            workPackageId = workPackage.targetId,
+                            explicitCode = null,
+                            workTypeCode = "INSTALL",
+                            workTypeRevision = 1,
+                            title = "Denied work",
+                            description = null,
+                            plannedStart = null,
+                            plannedEnd = null,
+                            priorityCode = null,
+                            baseProjectVersion = readyProject.version,
+                            expectedBaselineVersion =
+                                readyProject.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.ordinaryMember,
+                            correlationId = "corr-work-denied",
+                        ),
+                    )
+                }
+            assertEquals("OBJECT_NOT_VISIBLE", deniedWork.code)
+
+            val manualCodeDenied =
+                assertThrows<ProductApiException> {
+                    workService.create(
+                        CreateWorkOrderCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = readyProject.projectId,
+                            siteId = site.site.siteId,
+                            projectSiteId =
+                                attached.projectSite.projectSiteId,
+                            areaId = area.targetId,
+                            workPackageId = workPackage.targetId,
+                            explicitCode = "MANUAL-001",
+                            workTypeCode = "INSTALL",
+                            workTypeRevision = 1,
+                            title = "Manual code denied",
+                            description = null,
+                            plannedStart = null,
+                            plannedEnd = null,
+                            priorityCode = null,
+                            baseProjectVersion = readyProject.version,
+                            expectedBaselineVersion =
+                                readyProject.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.teamUser,
+                            correlationId = "corr-work-manual-code",
+                        ),
+                    )
+                }
+            assertEquals(
+                "MANUAL_CODE_NOT_ALLOWED",
+                manualCodeDenied.code,
+            )
+
+            val invalidWorkContext =
+                assertThrows<ProductApiException> {
+                    workService.create(
+                        CreateWorkOrderCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId = readyProject.projectId,
+                            siteId = otherClientSite.site.siteId,
+                            projectSiteId =
+                                attached.projectSite.projectSiteId,
+                            areaId = area.targetId,
+                            workPackageId = workPackage.targetId,
+                            explicitCode = null,
+                            workTypeCode = "INSTALL",
+                            workTypeRevision = 1,
+                            title = "Invalid WorkOrder context",
+                            description = null,
+                            plannedStart = null,
+                            plannedEnd = null,
+                            priorityCode = null,
+                            baseProjectVersion = readyProject.version,
+                            expectedBaselineVersion =
+                                readyProject.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.teamUser,
+                            correlationId =
+                                "corr-work-context-invalid",
+                        ),
+                    )
+                }
+            assertEquals(
+                "WORK_CONTEXT_INVALID",
+                invalidWorkContext.code,
+            )
+
+            val firstCreateOperation = UUID.randomUUID()
+            val firstCreateCommand =
+                CreateWorkOrderCommand(
+                    operationId = firstCreateOperation,
+                    projectId = readyProject.projectId,
+                    siteId = site.site.siteId,
+                    projectSiteId =
+                        attached.projectSite.projectSiteId,
+                    areaId = area.targetId,
+                    workPackageId = workPackage.targetId,
+                    explicitCode = null,
+                    workTypeCode = "INSTALL",
+                    workTypeRevision = 1,
+                    title = "Install backbone rack",
+                    description =
+                        "Authoritative Slice 03 planning fixture",
+                    plannedStart = clock.instant(),
+                    plannedEnd =
+                        clock.instant().plusSeconds(7200),
+                    priorityCode = null,
+                    baseProjectVersion = readyProject.version,
+                    expectedBaselineVersion =
+                        readyProject.baselineVersion,
+                    clientOccurredAt = clock.instant(),
+                    actorUserId = ids.teamUser,
+                    correlationId = "corr-work-create-1",
+                )
+            val firstCreated =
+                workService.create(firstCreateCommand)
+            assertEquals(
+                WorkOrderLifecycle.DRAFT,
+                firstCreated.workOrder.lifecycleState,
+            )
+            assertEquals(
+                WorkReadiness.NOT_EVALUATED,
+                firstCreated.workOrder.readinessState,
+            )
+            assertEquals(
+                "WO-2026-001",
+                firstCreated.workOrder.workOrderCode,
+            )
+            val firstReplay =
+                workService.create(firstCreateCommand)
+            assertTrue(firstReplay.replayed)
+            assertEquals(
+                firstCreated.workOrder.workOrderId,
+                firstReplay.workOrder.workOrderId,
+            )
+
+            val firstUpdated =
+                workService.update(
+                    UpdateWorkOrderDetailsCommand(
+                        operationId = UUID.randomUUID(),
+                        workOrderId =
+                            firstCreated.workOrder.workOrderId,
+                        areaId = area.targetId,
+                        workPackageId = workPackage.targetId,
+                        title = "Install backbone rack — planned",
+                        description =
+                            "Authoritative Slice 03 planning fixture updated",
+                        plannedStart = firstCreated.workOrder.plannedStart,
+                        plannedEnd = firstCreated.workOrder.plannedEnd,
+                        priorityCode = firstCreated.workOrder.priorityCode,
+                        baseVersion = firstCreated.workOrder.version,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.teamUser,
+                        correlationId = "corr-work-update-1",
+                    ),
+                )
+            assertEquals(
+                "Install backbone rack — planned",
+                firstUpdated.workOrder.title,
+            )
+            val staleUpdate =
+                assertThrows<ProductApiException> {
+                    workService.update(
+                        UpdateWorkOrderDetailsCommand(
+                            operationId = UUID.randomUUID(),
+                            workOrderId =
+                                firstUpdated.workOrder.workOrderId,
+                            areaId = area.targetId,
+                            workPackageId = workPackage.targetId,
+                            title = "Stale update",
+                            description = null,
+                            plannedStart =
+                                firstUpdated.workOrder.plannedStart,
+                            plannedEnd =
+                                firstUpdated.workOrder.plannedEnd,
+                            priorityCode =
+                                firstUpdated.workOrder.priorityCode,
+                            baseVersion =
+                                firstCreated.workOrder.version,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.teamUser,
+                            correlationId =
+                                "corr-work-update-stale",
+                        ),
+                    )
+                }
+            assertEquals("VERSION_CONFLICT", staleUpdate.code)
+
+            val unauthorizedPlan =
+                assertThrows<ProductApiException> {
+                    workService.plan(
+                        PlanWorkCommand(
+                            operationId = UUID.randomUUID(),
+                            workOrderId =
+                                firstUpdated.workOrder.workOrderId,
+                            workTypeCode = "INSTALL",
+                            workTypeRevision = 1,
+                            payloadSchemaVersion = 1,
+                            structuredInstructionJson = null,
+                            instructionSummary = null,
+                            baseVersion =
+                                firstUpdated.workOrder.version,
+                            expectedBaselineVersion =
+                                readyProject.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.ordinaryMember,
+                            correlationId =
+                                "corr-work-plan-denied",
+                        ),
+                    )
+                }
+            assertEquals(
+                "OBJECT_NOT_VISIBLE",
+                unauthorizedPlan.code,
+            )
+
+            val stalePlan =
+                assertThrows<ProductApiException> {
+                    workService.plan(
+                        PlanWorkCommand(
+                            operationId = UUID.randomUUID(),
+                            workOrderId =
+                                firstUpdated.workOrder.workOrderId,
+                            workTypeCode = "INSTALL",
+                            workTypeRevision = 1,
+                            payloadSchemaVersion = 1,
+                            structuredInstructionJson = null,
+                            instructionSummary = null,
+                            baseVersion =
+                                firstUpdated.workOrder.version + 1,
+                            expectedBaselineVersion =
+                                readyProject.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.teamUser,
+                            correlationId =
+                                "corr-work-plan-stale",
+                        ),
+                    )
+                }
+            assertEquals("VERSION_CONFLICT", stalePlan.code)
+
+            val firstPlanOperation = UUID.randomUUID()
+            val firstPlanCommand =
+                PlanWorkCommand(
+                    operationId = firstPlanOperation,
+                    workOrderId =
+                        firstUpdated.workOrder.workOrderId,
+                    workTypeCode = "INSTALL",
+                    workTypeRevision = 1,
+                    payloadSchemaVersion = 1,
+                    structuredInstructionJson = null,
+                    instructionSummary =
+                        "Use the bound installation instruction",
+                    baseVersion =
+                        firstUpdated.workOrder.version,
+                    expectedBaselineVersion =
+                        readyProject.baselineVersion,
+                    clientOccurredAt = clock.instant(),
+                    actorUserId = ids.teamUser,
+                    correlationId = "corr-work-plan-1",
+                )
+            val firstPlanned =
+                workService.plan(firstPlanCommand)
+            assertEquals(
+                WorkOrderLifecycle.PLANNED,
+                firstPlanned.workOrder.lifecycleState,
+            )
+            assertEquals(
+                WorkReadiness.NOT_EVALUATED,
+                firstPlanned.workOrder.readinessState,
+            )
+            assertEquals(
+                1,
+                firstPlanned.workOrder.binding?.workType?.revision,
+            )
+            assertEquals(
+                1,
+                firstPlanned.workOrder.instruction?.revision,
+            )
+            assertEquals(
+                setOf(
+                    "READINESS",
+                    "EVIDENCE",
+                    "ASSET",
+                    "MATERIAL",
+                    "DOCUMENT",
+                ),
+                firstPlanned.workOrder.requirements
+                    .map { it.family }
+                    .toSet(),
+            )
+            assertTrue(
+                firstPlanned.workOrder.requirements
+                    .all {
+                        it.satisfactionState == "PENDING"
+                    },
+            )
+            assertEquals(
+                1,
+                firstPlanned.workOrder.checklist.size,
+            )
+            val firstPlanReplay =
+                workService.plan(firstPlanCommand)
+            assertTrue(firstPlanReplay.replayed)
+            assertEquals(
+                1,
+                firstPlanReplay.workOrder.checklist.size,
+            )
+            assertEquals(
+                5,
+                firstPlanReplay.workOrder.requirements.size,
+            )
+
+            val revised =
+                workService.revise(
+                    ReviseWorkInstructionCommand(
+                        operationId = UUID.randomUUID(),
+                        workOrderId =
+                            firstPlanned.workOrder.workOrderId,
+                        payloadSchemaVersion = 1,
+                        structuredInstructionJson =
+                            """{"steps":["verify","install","label"]}""",
+                        summary = "Revision two",
+                        changeReason = "Site sequencing clarified",
+                        baseVersion =
+                            firstPlanned.workOrder.version,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.teamUser,
+                        correlationId =
+                            "corr-work-instruction-r2",
+                    ),
+                )
+            assertEquals(
+                2,
+                revised.workOrder.instruction?.revision,
+            )
+            assertEquals(
+                2,
+                jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM work_instruction_revision
+                    WHERE work_order_id = ?
+                    """.trimIndent(),
+                    Int::class.java,
+                    revised.workOrder.workOrderId,
+                ),
+            )
+
+            val withTask =
+                workService.createTask(
+                    CreateWorkTaskCommand(
+                        operationId = UUID.randomUUID(),
+                        workOrderId =
+                            revised.workOrder.workOrderId,
+                        taskCode = "T-01",
+                        title = "Verify rack position",
+                        description = null,
+                        sortOrder = 10,
+                        mandatory = true,
+                        estimatedDurationMinutes = 20,
+                        evidenceRequirementKey = "PHOTO-FINAL",
+                        baseVersion = revised.workOrder.version,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.teamUser,
+                        correlationId = "corr-work-task",
+                    ),
+                )
+            assertEquals(
+                1,
+                withTask.workOrder.tasks.size,
+            )
+            assertEquals(
+                "PLANNED",
+                withTask.workOrder.tasks.single().state.name,
+            )
+
+            val taskBeforeUpdate = withTask.workOrder.tasks.single()
+            val taskUpdateOperation = UUID.randomUUID()
+            val taskUpdateCommand =
+                UpdateWorkTaskCommand(
+                    operationId = taskUpdateOperation,
+                    taskId = withTask.taskId,
+                    taskCode = "T-01",
+                    title = "Verify and label rack position",
+                    description = "Planning-only task update",
+                    sortOrder = 20,
+                    mandatory = true,
+                    estimatedDurationMinutes = 25,
+                    evidenceRequirementKey = "PHOTO-FINAL",
+                    state = WorkTaskState.PLANNED,
+                    baseTaskVersion = taskBeforeUpdate.version,
+                    baseWorkOrderVersion = withTask.workOrder.version,
+                    clientOccurredAt = clock.instant(),
+                    actorUserId = ids.teamUser,
+                    correlationId = "corr-work-task-update",
+                )
+            val withUpdatedTask =
+                workService.updateTask(taskUpdateCommand)
+            assertEquals(
+                "Verify and label rack position",
+                withUpdatedTask.workOrder.tasks.single().title,
+            )
+            assertEquals(
+                taskBeforeUpdate.version + 1,
+                withUpdatedTask.workOrder.tasks.single().version,
+            )
+            val taskUpdateReplay =
+                workService.updateTask(taskUpdateCommand)
+            assertTrue(taskUpdateReplay.replayed)
+            assertEquals(
+                withUpdatedTask.workOrder.version,
+                taskUpdateReplay.workOrder.version,
+            )
+
+            val projectForSecond =
+                requireNotNull(
+                    JdbcProjectsPersistence(jdbc)
+                        .project(
+                            readyProject.projectId,
+                            clock.instant(),
+                        ),
+                )
+            val secondCreated =
+                workService.create(
+                    CreateWorkOrderCommand(
+                        operationId = UUID.randomUUID(),
+                        projectId = projectForSecond.projectId,
+                        siteId = site.site.siteId,
+                        projectSiteId =
+                            attached.projectSite.projectSiteId,
+                        areaId = area.targetId,
+                        workPackageId = workPackage.targetId,
+                        explicitCode = null,
+                        workTypeCode = "INSTALL",
+                        workTypeRevision = 1,
+                        title = "Terminate backbone",
+                        description = null,
+                        plannedStart = null,
+                        plannedEnd = null,
+                        priorityCode = "NORMAL",
+                        baseProjectVersion =
+                            projectForSecond.version,
+                        expectedBaselineVersion =
+                            projectForSecond.baselineVersion,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.teamUser,
+                        correlationId = "corr-work-create-2",
+                    ),
+                )
+            assertEquals(
+                "WO-2026-002",
+                secondCreated.workOrder.workOrderCode,
+            )
+
+            val blockedProject =
+                requireNotNull(
+                    JdbcProjectsPersistence(jdbc)
+                        .project(
+                            readyProject.projectId,
+                            clock.instant(),
+                        ),
+                )
+            val blockedActivation =
+                assertThrows<ProductApiException> {
+                    workService.activate(
+                        ActivateProjectCommand(
+                            operationId = UUID.randomUUID(),
+                            projectId =
+                                blockedProject.projectId,
+                            baseVersion =
+                                blockedProject.version,
+                            expectedBaselineVersion =
+                                blockedProject.baselineVersion,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.teamUser,
+                            correlationId =
+                                "corr-project-activate-blocked",
+                        ),
+                    )
+                }
+            assertEquals(
+                "PROJECT_ACTIVATION_BLOCKED",
+                blockedActivation.code,
+            )
+
+            val secondPlanned =
+                workService.plan(
+                    PlanWorkCommand(
+                        operationId = UUID.randomUUID(),
+                        workOrderId =
+                            secondCreated.workOrder.workOrderId,
+                        workTypeCode = "INSTALL",
+                        workTypeRevision = 1,
+                        payloadSchemaVersion = 1,
+                        structuredInstructionJson = null,
+                        instructionSummary = "Second order",
+                        baseVersion =
+                            secondCreated.workOrder.version,
+                        expectedBaselineVersion =
+                            blockedProject.baselineVersion,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.teamUser,
+                        correlationId = "corr-work-plan-2",
+                    ),
+                )
+
+            val linked =
+                workService.addDependency(
+                    AddWorkDependencyCommand(
+                        operationId = UUID.randomUUID(),
+                        workOrderId =
+                            secondPlanned.workOrder.workOrderId,
+                        predecessorWorkOrderId =
+                            withTask.workOrder.workOrderId,
+                        type =
+                            WorkDependencyType.FINISH_TO_START,
+                        lagMinutes = 30,
+                        baseVersion =
+                            secondPlanned.workOrder.version,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.teamUser,
+                        correlationId =
+                            "corr-work-dependency",
+                    ),
+                )
+            assertEquals(
+                1,
+                linked.workOrder.dependencies
+                    .count {
+                        it.successorWorkOrderId ==
+                            linked.workOrder.workOrderId
+                    },
+            )
+
+            val latestFirst =
+                workService.get(
+                    ids.teamUser,
+                    withTask.workOrder.workOrderId,
+                )
+            val cycleRejected =
+                assertThrows<ProductApiException> {
+                    workService.addDependency(
+                        AddWorkDependencyCommand(
+                            operationId = UUID.randomUUID(),
+                            workOrderId =
+                                latestFirst.workOrderId,
+                            predecessorWorkOrderId =
+                                linked.workOrder.workOrderId,
+                            type =
+                                WorkDependencyType.FINISH_TO_START,
+                            lagMinutes = 0,
+                            baseVersion = latestFirst.version,
+                            clientOccurredAt = clock.instant(),
+                            actorUserId = ids.teamUser,
+                            correlationId =
+                                "corr-work-cycle",
+                        ),
+                    )
+                }
+            assertEquals(
+                "WORK_DEPENDENCY_CYCLE",
+                cycleRejected.code,
+            )
+
+            val linkedDependency =
+                linked.workOrder.dependencies.single {
+                    it.dependencyId == linked.dependencyId
+                }
+            val removeDependencyOperation = UUID.randomUUID()
+            val removeDependencyCommand =
+                RemoveWorkDependencyCommand(
+                    operationId = removeDependencyOperation,
+                    workOrderId = linked.workOrder.workOrderId,
+                    dependencyId = linked.dependencyId,
+                    baseVersion = linked.workOrder.version,
+                    baseDependencyVersion = linkedDependency.version,
+                    clientOccurredAt = clock.instant(),
+                    actorUserId = ids.teamUser,
+                    correlationId = "corr-work-dependency-remove",
+                )
+            val unlinked =
+                workService.removeDependency(removeDependencyCommand)
+            assertEquals(
+                0,
+                unlinked.workOrder.dependencies.count {
+                    it.successorWorkOrderId ==
+                        unlinked.workOrder.workOrderId
+                },
+            )
+            val removeDependencyReplay =
+                workService.removeDependency(removeDependencyCommand)
+            assertTrue(removeDependencyReplay.replayed)
+            assertEquals(
+                unlinked.workOrder.version,
+                removeDependencyReplay.workOrder.version,
+            )
+
+            drain(
+                processor,
+                clock.instant(),
+            )
+
+            val projectForActivation =
+                requireNotNull(
+                    JdbcProjectsPersistence(jdbc)
+                        .project(
+                            readyProject.projectId,
+                            clock.instant(),
+                        ),
+                )
+            val activated =
+                workService.activate(
+                    ActivateProjectCommand(
+                        operationId = UUID.randomUUID(),
+                        projectId =
+                            projectForActivation.projectId,
+                        baseVersion =
+                            projectForActivation.version,
+                        expectedBaselineVersion =
+                            projectForActivation.baselineVersion,
+                        clientOccurredAt = clock.instant(),
+                        actorUserId = ids.teamUser,
+                        correlationId =
+                            "corr-project-activate",
+                    ),
+                )
+            assertEquals(
+                ProjectLifecycleState.ACTIVE.name,
+                activated.lifecycleState,
+            )
+            assertEquals(
+                1,
+                jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM work_policy_binding
+                    WHERE work_order_id = ?
+                      AND superseded_at IS NULL
+                    """.trimIndent(),
+                    Int::class.java,
+                    firstPlanned.workOrder.workOrderId,
+                ),
+            )
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "WORK_ORDER_PLANNED",
+                    firstPlanned.workOrder.workOrderId,
+                ) >= 1,
+            )
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "PROJECT_ACTIVATED",
+                    readyProject.projectId,
+                ) >= 1,
+            )
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "WORK_TASK_UPDATED",
+                    withTask.workOrder.workOrderId,
+                ) >= 1,
+            )
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "WORK_DEPENDENCY_REMOVED",
+                    linked.workOrder.workOrderId,
+                ) >= 1,
+            )
+
+            jdbc.update(
+                """
+                UPDATE config_revision
+                SET lifecycle_state = 'SUPERSEDED',
+                    effective_to = ?
+                WHERE family = 'work-types'
+                  AND code = 'INSTALL'
+                  AND scope_organization_id = ?
+                """.trimIndent(),
+                clock.instant()
+                    .plusSeconds(60)
+                    .atOffset(ZoneOffset.UTC),
+                ids.organization,
+            )
+            val historical =
+                workService.get(
+                    ids.teamUser,
+                    firstPlanned.workOrder.workOrderId,
+                )
+            assertEquals(
+                1,
+                historical.binding?.workType?.revision,
+                "Superseding active configuration must not rewrite historical WorkPolicyBinding.",
+            )
+
             assertTrue(
                 published.any {
                     it is ProjectCreated
@@ -1714,6 +2491,325 @@ class ProjectsPostgresOpenFgaContractTest {
             team = team,
             projectAdminBinding =
                 adminBinding,
+        )
+    }
+
+    private fun seedWorkConfiguration(
+        jdbc: JdbcTemplate,
+        organizationId: UUID,
+        actorUserId: UUID,
+        at: Instant,
+    ) {
+        fun revision(
+            family: String,
+            code: String,
+            name: String,
+        ): UUID {
+            val id = UUID.randomUUID()
+            val timestamp = at.atOffset(ZoneOffset.UTC)
+            jdbc.update(
+                """
+                INSERT INTO config_revision (
+                    id,
+                    scope_type,
+                    scope_organization_id,
+                    family,
+                    code,
+                    name,
+                    lifecycle_state,
+                    revision_number,
+                    effective_from,
+                    created_at,
+                    created_by,
+                    activated_at,
+                    activated_by,
+                    version
+                )
+                VALUES (
+                    ?,
+                    'ORGANIZATION',
+                    ?,
+                    ?, ?, ?,
+                    'ACTIVE',
+                    1,
+                    ?,
+                    ?, ?,
+                    ?, ?,
+                    1
+                )
+                """.trimIndent(),
+                id,
+                organizationId,
+                family,
+                code,
+                name,
+                timestamp,
+                timestamp,
+                actorUserId,
+                timestamp,
+                actorUserId,
+            )
+            return id
+        }
+
+        fun template(
+            code: String,
+            type: String,
+            json: String,
+        ): UUID {
+            val id =
+                revision(
+                    "templates",
+                    code,
+                    "$code template",
+                )
+            jdbc.update(
+                """
+                INSERT INTO template_definition (
+                    config_revision_id,
+                    template_type,
+                    schema_version,
+                    structured_definition
+                )
+                VALUES (?, ?, 1, ?::jsonb)
+                """.trimIndent(),
+                id,
+                type,
+                json,
+            )
+            return id
+        }
+
+        val codePolicy =
+            revision(
+                "code-policies",
+                "WORK_ORDER",
+                "Work order codes",
+            )
+        jdbc.update(
+            """
+            INSERT INTO code_policy (
+                config_revision_id,
+                target_object_type,
+                prefix,
+                include_year,
+                separator,
+                sequence_scope,
+                sequence_padding,
+                manual_override_allowed,
+                uniqueness_scope,
+                reset_rule
+            )
+            VALUES (
+                ?,
+                'WORK_ORDER',
+                'WO',
+                true,
+                '-',
+                'PROJECT',
+                3,
+                false,
+                'PROJECT',
+                'YEARLY'
+            )
+            """.trimIndent(),
+            codePolicy,
+        )
+
+        val assignment =
+            revision(
+                "assignment-policies",
+                "INSTALL-ASSIGN",
+                "Install assignment",
+            )
+        jdbc.update(
+            """
+            INSERT INTO assignment_policy (
+                config_revision_id,
+                allowed_target_types
+            )
+            VALUES (
+                ?,
+                ARRAY['USER','TEAM']::varchar[]
+            )
+            """.trimIndent(),
+            assignment,
+        )
+
+        val readiness =
+            revision(
+                "readiness-policies",
+                "INSTALL-READY",
+                "Install readiness",
+            )
+        jdbc.update(
+            """
+            INSERT INTO readiness_policy (
+                config_revision_id
+            )
+            VALUES (?)
+            """.trimIndent(),
+            readiness,
+        )
+        jdbc.update(
+            """
+            INSERT INTO readiness_policy_requirement (
+                id,
+                config_revision_id,
+                requirement_key,
+                requirement_type_code,
+                label,
+                required,
+                sort_order
+            )
+            VALUES (
+                ?, ?,
+                'SITE-ACCESS',
+                'SITE_ACCESS',
+                'Site access confirmed',
+                true,
+                10
+            )
+            """.trimIndent(),
+            UUID.randomUUID(),
+            readiness,
+        )
+
+        val evidence =
+            revision(
+                "evidence-policies",
+                "INSTALL-EVIDENCE",
+                "Install evidence",
+            )
+        jdbc.update(
+            """
+            INSERT INTO evidence_policy (
+                config_revision_id
+            )
+            VALUES (?)
+            """.trimIndent(),
+            evidence,
+        )
+        jdbc.update(
+            """
+            INSERT INTO evidence_policy_requirement (
+                id,
+                config_revision_id,
+                requirement_key,
+                evidence_type_code,
+                stage,
+                min_count,
+                classification_code,
+                client_visibility_mode,
+                security_scan_class
+            )
+            VALUES (
+                ?, ?,
+                'PHOTO-FINAL',
+                'PHOTO',
+                'BEFORE_SUBMIT',
+                1,
+                'INTERNAL',
+                'INTERNAL_ONLY',
+                'NATIVE_MEDIA'
+            )
+            """.trimIndent(),
+            UUID.randomUUID(),
+            evidence,
+        )
+
+        val review =
+            revision(
+                "review-policies",
+                "INSTALL-REVIEW",
+                "Install review",
+            )
+        jdbc.update(
+            """
+            INSERT INTO review_policy (
+                config_revision_id
+            )
+            VALUES (?)
+            """.trimIndent(),
+            review,
+        )
+
+        val asset =
+            template(
+                "INSTALL-ASSET",
+                "ASSET_REQUIREMENTS",
+                """{"requirements":[{"key":"CALIBRATED-METER","type":"ASSET_TOOL","label":"Calibrated meter","required":true,"sortOrder":10}]}""",
+            )
+        val material =
+            template(
+                "INSTALL-MATERIAL",
+                "MATERIAL_REQUIREMENTS",
+                """{"requirements":[{"key":"PATCH-CORD","type":"MATERIAL","label":"Patch cord","required":true,"sortOrder":10}]}""",
+            )
+        val document =
+            template(
+                "INSTALL-DOCUMENT",
+                "DOCUMENT_REQUIREMENTS",
+                """{"requirements":[{"key":"APPROVED-DRAWING","type":"DRAWING_REVISION","label":"Approved drawing","required":true,"sortOrder":10}]}""",
+            )
+        val checklist =
+            template(
+                "INSTALL-CHECKLIST",
+                "CHECKLIST",
+                """{"items":[{"key":"LABEL","label":"Label rack and ports","required":true,"sortOrder":10,"evidenceRequirementKey":"PHOTO-FINAL"}]}""",
+            )
+        val instruction =
+            template(
+                "INSTALL-INSTRUCTION",
+                "WORK_INSTRUCTION",
+                """{"steps":["verify","install"]}""",
+            )
+
+        val workType =
+            revision(
+                "work-types",
+                "INSTALL",
+                "Installation",
+            )
+        jdbc.update(
+            """
+            INSERT INTO work_type_definition (
+                config_revision_id,
+                assignment_policy_id,
+                readiness_policy_id,
+                evidence_policy_id,
+                review_policy_id,
+                tracking_policy_id,
+                asset_requirement_template_id,
+                material_requirement_template_id,
+                document_requirement_template_id,
+                checklist_template_id,
+                instruction_template_id,
+                completion_policy_id,
+                default_priority_code,
+                default_progress_weight,
+                counts_toward_project_progress
+            )
+            VALUES (
+                ?, ?, ?, ?, ?,
+                NULL,
+                ?, ?, ?, ?, ?,
+                NULL,
+                'NORMAL',
+                2.0,
+                true
+            )
+            """.trimIndent(),
+            workType,
+            assignment,
+            readiness,
+            evidence,
+            review,
+            asset,
+            material,
+            document,
+            checklist,
+            instruction,
         )
     }
 
