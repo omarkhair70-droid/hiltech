@@ -1,7 +1,7 @@
 # Phase 5 — Exact Decision Register
 
 Date: 2026-09-21  
-Status: **DECISION REGISTER v0.1 / CONTRACT CLOSURE IN PROGRESS**
+Status: **DECISION REGISTER v0.2 / FROZEN / EVIDENCE RECONCILED**
 
 This register converts the old Asset/Warehouse “open items” into explicit frozen or reality-blocked decisions.
 
@@ -697,7 +697,35 @@ Do not implement technician field consumption workflow in Phase 5.
 
 ---
 
-# Remaining reality gates before final phase freeze
+# P5-D28 — Legacy spreadsheet column semantics
+
+Status: **FROZEN**
+
+Decision:
+
+Legacy spreadsheet column names are source evidence, not production-domain semantics.
+
+Import staging must:
+
+- preserve raw source field names and values;
+- map fields through a known template or explicit human review;
+- refuse to infer Asset/Stock classification from a column label alone;
+- refuse to infer serialization merely because a legacy field is labelled `serial` / `الرقم التسلسلي`;
+- raise `LEGACY_COLUMN_SEMANTICS_AMBIGUOUS` when the source label and observed values do not establish one safe production meaning.
+
+The reviewed Accessories workbook proves this is required: its `الرقم التسلسلي` column contains catalog/model/origin-style values such as `LOCAL`, `2M`, `مصري` and parenthesized product codes rather than trustworthy per-unit serial identities.
+
+Ownership:
+
+- Slice 01 owns preservation, staging and ambiguity review;
+- Slice 02 owns approved Stock master/UOM/classification consequences;
+- Slice 03 owns Asset serial/tag truth only after explicit Asset review.
+
+This refines P5-D08, P5-D09 and P5-D20 without changing the nine-Slice plan.
+
+---
+
+# Remaining seed/process reality gates after plan freeze
 
 These do not reopen the domain model.
 
@@ -745,8 +773,12 @@ Additional discovered decisions:
 
 `PHASE5_REPRESENTATIVE_ASSET_SEED_VALIDATION_PENDING = YES`
 
-`PHASE5_AUTHORIZATION_MATRIX_PENDING = YES`
+`PHASE5_AUTHORIZATION_MATRIX_PENDING = NO`
 
-`PHASE5_SLICE_PLAN_FROZEN = NO`
+`PHASE5_AUTHORIZATION_MATRIX_FROZEN = YES`
 
-`PHASE5_PRODUCTION_CODE_AUTHORIZED = NO`
+`PHASE5_SLICE_PLAN_FROZEN = YES`
+
+`PHASE5_EVIDENCE_RECONCILIATION_REOPENS_SLICE_PLAN = NO`
+
+`PHASE5_PRODUCTION_CODE_AUTHORIZED = PER_FROZEN_SLICE_HANDOFF_ONLY`

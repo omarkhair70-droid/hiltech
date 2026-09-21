@@ -86,7 +86,8 @@ Must remain true:
 - legacy row trace;
 - ambiguity cannot silently become production truth;
 - opening balance/custody explicit;
-- no fake historical movements.
+- no fake historical movements;
+- no source-column label is silently promoted into Asset/Stock semantics.
 
 ### Authorization
 
@@ -109,10 +110,11 @@ Must remain true:
 
 Before Stock cutover:
 
-- UTP/FIBER/ACTIVE import rows reviewed;
+- UTP/FIBER/ACTIVE/Accessories import rows reviewed;
 - UOM mapping approved;
 - initial StorageLocation approved;
-- ambiguous rows remain blocked.
+- ambiguous rows remain blocked;
+- legacy column labels with ambiguous semantics remain blocked until explicit mapping/review.
 
 Before Asset production seed:
 

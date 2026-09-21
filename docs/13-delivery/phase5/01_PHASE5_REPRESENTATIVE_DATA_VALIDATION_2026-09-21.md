@@ -1,7 +1,7 @@
 # Phase 5 — Representative Data Validation
 
 Date: 2026-09-21  
-Status: **REPRESENTATIVE DATA REVIEW v0.1**
+Status: **REPRESENTATIVE DATA REVIEW v0.2 / POST-FREEZE EVIDENCE RECONCILED**
 
 ## 1. Purpose
 
@@ -12,7 +12,9 @@ Reviewed Library sources:
 - `UTP 01-04-2026(3).xlsx`;
 - `FIBER 01-04-2026(3).xlsx`;
 - `ACTIVE 01-04-2026 -(3).xlsx`;
-- `تقرير_مبيعات_ومشتريات_مخصص.xlsx`.
+- `.xlsx(3)` — primary sheet `أكسسوارات`, treated here as the legacy Accessories workbook;
+- `تقرير_مبيعات_ومشتريات_مخصص.xlsx`;
+- `Petrokima-1(1) CLAIM01(3).xlsx` — Project/Work evidence only, not an inventory master.
 
 A payroll workbook named `2025(3).xlsx` was also inspected and is not a Phase-5 inventory source.
 
@@ -194,6 +196,87 @@ Classification should be explicit:
 
 ---
 
+# 4A. Accessories workbook
+
+Reviewed Library file:
+
+`.xlsx(3)`
+
+Primary sheet:
+
+`أكسسوارات`
+
+Observed fields:
+
+- رقم;
+- اسم الصنف;
+- العدد;
+- الرقم التسلسلي;
+- سعر القطعه;
+- السعر الإجمالي;
+- ملاحظات.
+
+Representative review:
+
+- 27 item rows before the total row;
+- sheet total approximately EGP 49,259.5;
+- quantity is present but there is no explicit UOM column;
+- unit/pack semantics appear inside descriptions such as `بالعود` and `باللفه`;
+- zero-quantity rows exist and must remain reviewable rather than being silently dropped;
+- notes include mixed/local-source context.
+
+## Critical legacy-column semantics finding
+
+The column labelled `الرقم التسلسلي` is **not reliable evidence of per-unit serialization**.
+
+Representative values include:
+
+- `(4525/2)`;
+- `(4525/6)`;
+- `LOCAL`;
+- `2M`;
+- `مصري`.
+
+These values behave like catalog/model/origin/pack descriptors in multiple rows, not unique Asset serial numbers.
+
+Therefore:
+
+- a legacy column label must never by itself select a production domain field;
+- `الرقم التسلسلي` must not automatically imply `STOCK_SERIALIZED` or `COMPANY_ASSET`;
+- import staging must preserve raw source columns and require explicit semantic mapping/review;
+- ambiguous source-field meaning must block approval with a typed issue such as `LEGACY_COLUMN_SEMANTICS_AMBIGUOUS`;
+- implicit unit words inside description require UOM review rather than parser guessing.
+
+This strengthens the existing staging/UOM/classification decisions; it does not change the Phase-5 domain boundary or require another Slice.
+
+---
+
+# 4B. Petrokima Project/Work evidence
+
+Reviewed:
+
+`Petrokima-1(1) CLAIM01(3).xlsx`
+
+The workbook is Project/claim/work evidence, not warehouse master data.
+
+It includes the work description:
+
+`Fiber splicing point labeling with Fluke Or OTDR test.`
+
+This supports the operational reality that Fluke/OTDR-class equipment is relevant to HILTECH project execution.
+
+It does **not** prove:
+
+- HILTECH ownership of a specific tool;
+- Asset count;
+- serial/tag convention;
+- current custodian/location;
+- calibration certificate or interval.
+
+Therefore it may guide representative Asset examples but must not be converted into Asset seed truth.
+
+---
+
 # 5. Legacy stock-date / movement finding
 
 Across UTP/FIBER/ACTIVE, columns include inbound/outbound and date-like fields.
@@ -286,6 +369,7 @@ Validation issue examples:
 - SERIAL_REQUIRED_BUT_MISSING;
 - QUANTITY_AMBIGUOUS;
 - LEGACY_DATE_SEMANTICS_AMBIGUOUS;
+- LEGACY_COLUMN_SEMANTICS_AMBIGUOUS;
 - ITEM_CLASSIFICATION_REQUIRED;
 - OPENING_LOCATION_REQUIRED.
 
@@ -353,7 +437,8 @@ Representative validation must include:
 - discrete connectors/modules;
 - packaged/carton items;
 - ready-made cable assemblies;
-- active devices.
+- active devices;
+- Accessories rows where UOM is implicit in Arabic description rather than a dedicated field.
 
 ---
 
@@ -443,3 +528,9 @@ It does block pretending that Asset custody/calibration/receiving process detail
 `UOM_POLICY_REQUIRES_FREEZE = YES`
 
 `ASSET_REALITY_VALIDATION_STILL_REQUIRED = YES`
+
+`ACCESSORIES_EVIDENCE_RECONCILED = YES`
+
+`LEGACY_COLUMN_LABELS_ARE_DOMAIN_TRUTH = NO`
+
+`PHASE5_SLICE_PLAN_REOPEN_REQUIRED = NO`
