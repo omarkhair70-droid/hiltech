@@ -3913,10 +3913,10 @@ class ProjectsPostgresOpenFgaContractTest {
                     """.trimIndent(),
                     Int::class.java,
                     rework.workOrder.workOrderId,
-                ) >= 1,
+                ) ?: 0) >= 1,
             )
             assertTrue(
-                jdbc.queryForObject(
+                (jdbc.queryForObject(
                     """
                     SELECT count(*)
                     FROM activity_event
@@ -3928,10 +3928,10 @@ class ProjectsPostgresOpenFgaContractTest {
                     """.trimIndent(),
                     Int::class.java,
                     readyProject.projectId,
-                ) >= 1,
+                ) ?: 0) >= 1,
             )
             assertTrue(
-                jdbc.queryForObject(
+                (jdbc.queryForObject(
                     """
                     SELECT count(*)
                     FROM activity_event
@@ -3945,7 +3945,7 @@ class ProjectsPostgresOpenFgaContractTest {
                     """.trimIndent(),
                     Int::class.java,
                     readyProject.projectId,
-                ) >= 2,
+                ) ?: 0) >= 2,
             )
 
             assertTrue(
