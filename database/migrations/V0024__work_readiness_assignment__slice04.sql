@@ -26,6 +26,29 @@ WHERE wri.requirement_family = 'READINESS'
   AND wri.source_config_id = rpr.config_revision_id
   AND wri.requirement_key = rpr.requirement_key;
 
+-- Template-backed requirements keep their exact typed source semantics.
+-- V0023 intentionally stored only family/key/source revision, so V0024
+-- reconstructs the frozen template item type forward-only from that exact
+-- bound template revision rather than guessing from the family.
+UPDATE work_requirement_instance wri
+SET requirement_type_code =
+    COALESCE(
+        template_item.item ->> 'type',
+        wri.requirement_family
+    )
+FROM template_definition td
+CROSS JOIN LATERAL jsonb_array_elements(
+    COALESCE(
+        td.structured_definition -> 'requirements',
+        td.structured_definition -> 'items',
+        '[]'::jsonb
+    )
+) AS template_item(item)
+WHERE wri.requirement_type_code IS NULL
+  AND wri.requirement_family IN ('ASSET','MATERIAL','DOCUMENT')
+  AND wri.source_config_id = td.config_revision_id
+  AND template_item.item ->> 'key' = wri.requirement_key;
+
 UPDATE work_requirement_instance
 SET requirement_type_code = requirement_family
 WHERE requirement_type_code IS NULL;
