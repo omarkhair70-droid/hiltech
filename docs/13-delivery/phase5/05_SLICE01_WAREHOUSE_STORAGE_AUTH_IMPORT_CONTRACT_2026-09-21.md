@@ -95,10 +95,13 @@ Required issue codes include:
 - SERIAL_REQUIRED_BUT_MISSING;
 - QUANTITY_AMBIGUOUS;
 - LEGACY_DATE_SEMANTICS_AMBIGUOUS;
+- LEGACY_COLUMN_SEMANTICS_AMBIGUOUS;
 - ITEM_CLASSIFICATION_REQUIRED;
 - OPENING_LOCATION_REQUIRED.
 
 No reviewed row creates Stock/Asset truth in Slice 01.
+
+Legacy field names are not trusted as domain semantics. A source column labelled `serial` / `الرقم التسلسلي` does not imply serialized Stock or Asset identity unless its values and explicit review establish that mapping. Raw source labels/values remain preserved.
 
 ## API
 
@@ -142,7 +145,7 @@ Must prove:
 - stale TEAM membership denied;
 - unrelated org denied;
 - import source hash/idempotency;
-- ambiguous UOM/part/description stays blocked;
+- ambiguous UOM/part/description/source-column semantics stay blocked;
 - no import row mutates stock/asset tables;
 - value redaction.
 
