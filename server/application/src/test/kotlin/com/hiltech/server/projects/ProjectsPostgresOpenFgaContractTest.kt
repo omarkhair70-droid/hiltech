@@ -3901,7 +3901,7 @@ class ProjectsPostgresOpenFgaContractTest {
                 "Activity projection must be idempotent by source event.",
             )
             assertTrue(
-                jdbc.queryForObject(
+                (jdbc.queryForObject(
                     """
                     SELECT count(*)
                     FROM activity_event
