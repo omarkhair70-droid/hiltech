@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hiltech.android.identity.AndroidIdentityRuntime
+import com.hiltech.shared.core.HiltechFieldState
 import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechShell
@@ -64,6 +65,10 @@ class MainActivity : ComponentActivity() {
                 onRefreshPeople = ::refreshPeople,
                 onRefreshOnboarding =
                     ::refreshOnboarding,
+                onRefreshFieldWork =
+                    ::refreshFieldWork,
+                onSelectFieldWork =
+                    ::selectFieldWork,
             )
         }
 
@@ -181,10 +186,226 @@ class MainActivity : ComponentActivity() {
                     HiltechOnboardingState(
                         loading = true,
                     ),
+                field =
+                    HiltechFieldState(
+                        loading = true,
+                    ),
             )
         refreshSecurity()
         refreshPeople()
         refreshOnboarding()
+        refreshFieldWork()
+    }
+
+    private fun refreshFieldWork() {
+        val signed =
+            shellState as?
+                HiltechShellState.SignedIn
+                ?: return
+        val previous =
+            signed.field
+                ?: HiltechFieldState()
+
+        shellState =
+            signed.copy(
+                field =
+                    previous.copy(
+                        loading = true,
+                        errorMessage = null,
+                    ),
+            )
+
+        scope.launch {
+            val todayResult =
+                runCatching {
+                    hiltechApplication
+                        .fieldAssignedWorkApi
+                        .today(
+                            hiltechApplication
+                                .installationId,
+                        )
+                }
+
+            val current =
+                shellState as?
+                    HiltechShellState.SignedIn
+                        ?: return@launch
+            if (
+                current.identity.identityId !=
+                signed.identity.identityId
+            ) {
+                return@launch
+            }
+
+            todayResult.onSuccess { today ->
+                val selectedId =
+                    current.field
+                        ?.selectedWorkOrderId
+                        ?.takeIf { id ->
+                            today.any {
+                                it.workOrderId ==
+                                    id
+                            }
+                        }
+                val bundleResult =
+                    selectedId?.let { id ->
+                        runCatching {
+                            hiltechApplication
+                                .fieldAssignedWorkApi
+                                .jobBundle(
+                                    workOrderId = id,
+                                    installationId =
+                                        hiltechApplication
+                                            .installationId,
+                                )
+                        }
+                    }
+
+                shellState =
+                    current.copy(
+                        field =
+                            HiltechFieldState(
+                                loading = false,
+                                today = today,
+                                selectedWorkOrderId =
+                                    selectedId,
+                                selectedBundle =
+                                    bundleResult
+                                        ?.getOrNull(),
+                                errorMessage =
+                                    bundleResult
+                                        ?.exceptionOrNull()
+                                        ?.let {
+                                            failure ->
+                                            if (
+                                                failure is
+                                                HiltechApiException &&
+                                                failure.code ==
+                                                "OBJECT_NOT_VISIBLE"
+                                            ) {
+                                                null
+                                            } else {
+                                                failure.message
+                                            }
+                                        },
+                            ),
+                    )
+            }.onFailure { failure ->
+                shellState =
+                    current.copy(
+                        field =
+                            (current.field
+                                ?: previous)
+                                .copy(
+                                    loading = false,
+                                    errorMessage =
+                                        failure.message
+                                            ?: "Assigned Work could not be loaded.",
+                                ),
+                    )
+            }
+        }
+    }
+
+    private fun selectFieldWork(
+        workOrderId: String,
+    ) {
+        val signed =
+            shellState as?
+                HiltechShellState.SignedIn
+                ?: return
+        val field =
+            signed.field
+                ?: HiltechFieldState()
+
+        shellState =
+            signed.copy(
+                field =
+                    field.copy(
+                        loading = true,
+                        selectedWorkOrderId =
+                            workOrderId,
+                        selectedBundle = null,
+                        errorMessage = null,
+                    ),
+            )
+
+        scope.launch {
+            runCatching {
+                hiltechApplication
+                    .fieldAssignedWorkApi
+                    .jobBundle(
+                        workOrderId =
+                            workOrderId,
+                        installationId =
+                            hiltechApplication
+                                .installationId,
+                    )
+            }.onSuccess { bundle ->
+                val current =
+                    shellState as?
+                        HiltechShellState.SignedIn
+                            ?: return@onSuccess
+                shellState =
+                    current.copy(
+                        field =
+                            (current.field
+                                ?: HiltechFieldState())
+                                .copy(
+                                    loading = false,
+                                    selectedWorkOrderId =
+                                        workOrderId,
+                                    selectedBundle =
+                                        bundle,
+                                    errorMessage = null,
+                                ),
+                    )
+            }.onFailure { failure ->
+                if (
+                    failure is HiltechApiException &&
+                    failure.code ==
+                        "OBJECT_NOT_VISIBLE"
+                ) {
+                    val current =
+                        shellState as?
+                            HiltechShellState.SignedIn
+                                ?: return@onFailure
+                    shellState =
+                        current.copy(
+                            field =
+                                (current.field
+                                    ?: HiltechFieldState())
+                                    .copy(
+                                        loading = false,
+                                        selectedWorkOrderId =
+                                            null,
+                                        selectedBundle =
+                                            null,
+                                        errorMessage =
+                                            "التكليف لم يعد متاحًا لك.",
+                                    ),
+                        )
+                    refreshFieldWork()
+                } else {
+                    val current =
+                        shellState as?
+                            HiltechShellState.SignedIn
+                                ?: return@onFailure
+                    shellState =
+                        current.copy(
+                            field =
+                                (current.field
+                                    ?: HiltechFieldState())
+                                    .copy(
+                                        loading = false,
+                                        errorMessage =
+                                            failure.message
+                                                ?: "Job bundle could not be loaded.",
+                                    ),
+                        )
+                }
+            }
+        }
     }
 
     private fun refreshSecurity() {
