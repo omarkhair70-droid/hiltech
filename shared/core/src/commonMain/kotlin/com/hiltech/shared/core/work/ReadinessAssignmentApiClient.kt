@@ -112,7 +112,7 @@ class ReadinessAssignmentApiClient(
     ): WorkReadinessMutationResponseDto =
         command(
             HttpMethod.Post,
-            "/v1/work-orders/${id(workOrderId)}/readiness-requirements/${id(requirementId)}/waive",
+            "/v1/work-orders/${id(workOrderId)}/readiness/${id(requirementId)}/waive",
             request.operationId,
             request,
             WaiveReadinessRequirementRequestDto.serializer(),
