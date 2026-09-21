@@ -3,9 +3,11 @@ package com.hiltech.android
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
-import com.hiltech.shared.core.AssignedWorkSection
+import com.hiltech.shared.core.HiltechShell
+import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.HiltechFieldState
+import com.hiltech.shared.core.identity.IdentityBootstrapDto
+import com.hiltech.shared.core.identity.IdentityOrganizationDto
 import com.hiltech.shared.core.work.FieldAssignmentDto
 import com.hiltech.shared.core.work.FieldBlockerDto
 import com.hiltech.shared.core.work.FieldConfigRefDto
@@ -31,17 +33,50 @@ class AssignedWorkEvidenceActivity :
                 ?: "today"
 
         setContent {
-            MaterialTheme {
-                AssignedWorkSection(
-                    state =
-                        fixtureState(mode),
-                    onRefresh = {},
-                    onSelectWork = {},
-                )
-            }
+            HiltechShell(
+                state =
+                    HiltechShellState.SignedIn(
+                        identity =
+                            fixtureIdentity(),
+                        field =
+                            fixtureState(mode),
+                    ),
+            )
         }
     }
 }
+
+private fun fixtureIdentity() =
+    IdentityBootstrapDto(
+        identityId =
+            "99999999-9999-4999-8999-999999999999",
+        identityStatus = "ACTIVE",
+        identityVersion = 1,
+        primaryOrganizationId =
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        organizations =
+            listOf(
+                IdentityOrganizationDto(
+                    membershipId =
+                        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                    organizationId =
+                        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    organizationCode =
+                        "HILTECH",
+                    displayName =
+                        "HILTECH",
+                    organizationType =
+                        "HILTECH",
+                    membershipType =
+                        "EMPLOYEE",
+                    roleLabel =
+                        "Field technician",
+                    primary = true,
+                    membershipVersion = 1,
+                ),
+            ),
+        teams = emptyList(),
+    )
 
 private fun fixtureState(
     mode: String,
@@ -119,7 +154,7 @@ private fun todayItem(
             if (actionable) {
                 null
             } else {
-                "المادة المطلوبة لسه بدون مصدر مخزون موثوق",
+                "في انتظار مصدر مواد موثوق من Phase 5",
             },
         instructionRevision = 2,
         workOrderVersion = 8,
@@ -269,7 +304,7 @@ private fun jobBundle() =
                     explanationCode =
                         "PHASE5_RESOURCE_SOURCE_UNAVAILABLE",
                     description =
-                        "المادة المطلوبة لسه بدون مصدر مخزون موثوق",
+                        "في انتظار مصدر مواد موثوق من Phase 5",
                     state = "OPEN",
                     version = 1,
                 ),
