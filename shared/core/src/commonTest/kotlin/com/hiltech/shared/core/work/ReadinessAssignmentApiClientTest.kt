@@ -57,6 +57,23 @@ class ReadinessAssignmentApiClientTest {
               "evaluatedAt":"2026-09-21T00:00:00Z"
             }
             """.trimIndent()
+        val eligibleTargetsResponse =
+            """
+            [
+              {
+                "targetType":"USER",
+                "targetId":"$targetId",
+                "displayLabel":"Field technician",
+                "eligible":true,
+                "reasonCodes":[],
+                "sourceAsOf":"2026-09-21T00:00:00Z",
+                "sourceFreshness":"CURRENT",
+                "requiredRoleChecks":[],
+                "requiredCertificationChecks":[],
+                "currentAssignmentConflict":null
+              }
+            ]
+            """.trimIndent()
         val readinessMutation =
             """
             {
@@ -111,10 +128,7 @@ class ReadinessAssignmentApiClientTest {
                                 request.url.encodedPath.endsWith("/work-queue-context") ->
                                     queue
                                 request.url.encodedPath.endsWith("/eligible-targets") ->
-                                    readiness
-                                        .substringAfter(""eligibleTargets":")
-                                        .substringBefore(",
-  "currentAssignment"")
+                                    eligibleTargetsResponse
                                 request.url.encodedPath.endsWith("/assign") ->
                                     assignmentMutation
                                 request.url.encodedPath.endsWith("/evaluate-readiness") ||
