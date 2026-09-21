@@ -503,6 +503,11 @@ interface ProjectAuthorizationPort {
         project: ProjectSnapshot,
     ): Boolean
 
+    fun canReviewWork(
+        actorUserId: UUID,
+        project: ProjectSnapshot,
+    ): Boolean
+
     fun canManageSite(
         actorUserId: UUID,
         site: SiteSnapshot,
@@ -601,6 +606,16 @@ class SpringProjectAuthorization(
             actorUserId,
             project,
             "can_assign_work",
+        )
+
+    override fun canReviewWork(
+        actorUserId: UUID,
+        project: ProjectSnapshot,
+    ): Boolean =
+        checkProjectAction(
+            actorUserId,
+            project,
+            "can_review_work",
         )
 
     override fun canManageSite(

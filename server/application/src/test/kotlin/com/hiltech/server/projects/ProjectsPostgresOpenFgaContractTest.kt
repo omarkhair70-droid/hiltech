@@ -1,6 +1,8 @@
 package com.hiltech.server.projects
 
 import com.hiltech.server.audit.JdbcAuditEventWriter
+import com.hiltech.server.activity.ActivityProjectionListener
+import com.hiltech.server.activity.JdbcActivityProjection
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
 import com.hiltech.server.security.AuthorizationCheckPort
@@ -28,6 +30,14 @@ import com.hiltech.server.work.AssignWorkCommand
 import com.hiltech.server.work.AssignmentTargetType
 import com.hiltech.server.work.EvaluateReadinessCommand
 import com.hiltech.server.work.JdbcReadinessAssignmentPersistence
+import com.hiltech.server.work.JdbcReviewProgressHealthPersistence
+import com.hiltech.server.work.ReviewEligibilityResolver
+import com.hiltech.server.work.ReviewProgressHealthService
+import com.hiltech.server.work.AcceptWorkCommand
+import com.hiltech.server.work.RequestReworkCommand
+import com.hiltech.server.work.PutProjectOnHoldCommand
+import com.hiltech.server.work.ResumeProjectCommand
+import com.hiltech.server.work.ProjectHealthState
 import com.hiltech.server.work.JdbcWorkAssignmentSourceAuthority
 import com.hiltech.server.work.ReadinessAssignmentService
 import com.hiltech.server.work.ReassignWorkCommand
@@ -49,6 +59,10 @@ import com.hiltech.server.work.WorkOrderLifecycle
 import com.hiltech.server.work.WorkReadiness
 import com.hiltech.server.work.WorkService
 import com.hiltech.server.work.WorkTaskState
+import com.hiltech.server.work.WorkAccepted
+import com.hiltech.server.work.WorkReworkRequested
+import com.hiltech.server.work.ProjectHealthChanged
+import com.hiltech.server.work.ProjectHoldChanged
 import io.opentelemetry.api.OpenTelemetry
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -3024,6 +3038,942 @@ class ProjectsPostgresOpenFgaContractTest {
                     jdbc,
                     "WORK_REASSIGNED",
                     firstSlice04Order.workOrderId,
+                ) >= 1,
+            )
+
+            // Slice 05 starts from the real Slice 01-04 history.
+            // Submission itself remains a future production boundary, so
+            // this contract seeds authoritative SUBMITTED_FOR_REVIEW rows.
+            val slice05Persistence =
+                JdbcReviewProgressHealthPersistence(
+                    jdbc,
+                )
+            val slice05Service =
+                ReviewProgressHealthService(
+                    projects =
+                        JdbcProjectsPersistence(jdbc),
+                    work =
+                        JdbcWorkPersistence(jdbc),
+                    persistence =
+                        slice05Persistence,
+                    reviewerEligibility =
+                        ReviewEligibilityResolver(
+                            authorization =
+                                projectAuthorization,
+                            sourceAuthority =
+                                sourceAuthority,
+                            jdbc = jdbc,
+                        ),
+                    authorization =
+                        projectAuthorization,
+                    readiness =
+                        readinessService,
+                    idempotency =
+                        JdbcIdempotentCommandExecutor(
+                            jdbc = jdbc,
+                            transactionManager =
+                                txManager,
+                            clock = clock,
+                            telemetry = telemetry,
+                        ),
+                    audit =
+                        JdbcAuditEventWriter(jdbc),
+                    events =
+                        ApplicationEventPublisher { event ->
+                            published += event
+                        },
+                    clock = clock,
+                )
+
+            val firstBeforeReview =
+                workService.get(
+                    ids.teamUser,
+                    firstSlice04Order.workOrderId,
+                )
+            val reviewBinding =
+                requireNotNull(
+                    firstBeforeReview.binding,
+                )
+            jdbc.update(
+                """
+                INSERT INTO review_policy_step (
+                    id,
+                    config_revision_id,
+                    step_key,
+                    reviewer_relationship_code,
+                    sort_order,
+                    sequence,
+                    selector_type,
+                    selector_value,
+                    quorum_count,
+                    reauth_required,
+                    reason_required_on_rework,
+                    reason_required_on_reject,
+                    evidence_visibility_mode
+                )
+                VALUES (
+                    ?, ?,
+                    'technical-review',
+                    NULL,
+                    10,
+                    10,
+                    'RELATIONSHIP',
+                    'CAN_REVIEW_WORK',
+                    NULL,
+                    false,
+                    true,
+                    true,
+                    'POLICY'
+                )
+                """.trimIndent(),
+                UUID.randomUUID(),
+                reviewBinding.reviewPolicy.id,
+            )
+            jdbc.update(
+                """
+                INSERT INTO evidence_policy_requirement (
+                    id,
+                    config_revision_id,
+                    requirement_key,
+                    evidence_type_code,
+                    stage,
+                    min_count,
+                    max_count,
+                    offline_capture_allowed,
+                    allowed_content_types,
+                    classification_code,
+                    retention_policy_code,
+                    client_visibility_mode,
+                    reviewer_relationship_code,
+                    security_scan_class
+                )
+                VALUES (
+                    ?, ?,
+                    'REVIEW-PHOTO',
+                    'PHOTO',
+                    'BEFORE_ACCEPT',
+                    1,
+                    NULL,
+                    true,
+                    ARRAY['image/jpeg']::varchar[],
+                    'INTERNAL',
+                    NULL,
+                    'INTERNAL_ONLY',
+                    NULL,
+                    'NATIVE_MEDIA'
+                )
+                """.trimIndent(),
+                UUID.randomUUID(),
+                reviewBinding.evidencePolicy.id,
+            )
+
+            jdbc.update(
+                """
+                UPDATE work_order
+                SET lifecycle_state =
+                        'SUBMITTED_FOR_REVIEW',
+                    submitted_at = ?,
+                    submitted_review_version =
+                        version + 1,
+                    updated_at = ?,
+                    version = version + 1
+                WHERE id = ?
+                """.trimIndent(),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                firstBeforeReview.workOrderId,
+            )
+            val submittedFirst =
+                workService.get(
+                    ids.teamUser,
+                    firstBeforeReview.workOrderId,
+                )
+
+            val staleAccept =
+                assertThrows<ProductApiException> {
+                    slice05Service.accept(
+                        AcceptWorkCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            workOrderId =
+                                submittedFirst.workOrderId,
+                            baseVersion =
+                                submittedFirst.version - 1,
+                            reason = null,
+                            clientOccurredAt =
+                                clock.instant(),
+                            actorUserId =
+                                ids.teamUser,
+                            correlationId =
+                                "corr-slice05-stale-accept",
+                        ),
+                    )
+                }
+            assertEquals(
+                "VERSION_CONFLICT",
+                staleAccept.code,
+            )
+
+            val reviewQueueBeforeEvidence =
+                slice05Service.reviewWorkItems(
+                    ids.teamUser,
+                )
+            assertTrue(
+                reviewQueueBeforeEvidence.any {
+                    it.workOrderId ==
+                        submittedFirst.workOrderId &&
+                        it.reviewer.eligible &&
+                        !it.beforeAcceptEvidenceSatisfied &&
+                        it.evidenceReasonCodes.any { reason ->
+                            reason.startsWith(
+                                "BEFORE_ACCEPT_EVIDENCE_MISSING:",
+                            )
+                        }
+                },
+            )
+            val evidenceBlocked =
+                assertThrows<ProductApiException> {
+                    slice05Service.accept(
+                        AcceptWorkCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            workOrderId =
+                                submittedFirst.workOrderId,
+                            baseVersion =
+                                submittedFirst.version,
+                            reason = null,
+                            clientOccurredAt =
+                                clock.instant(),
+                            actorUserId =
+                                ids.teamUser,
+                            correlationId =
+                                "corr-slice05-evidence-blocked",
+                        ),
+                    )
+                }
+            assertEquals(
+                "BEFORE_ACCEPT_EVIDENCE_BLOCKED",
+                evidenceBlocked.code,
+            )
+
+            jdbc.update(
+                """
+                UPDATE team_membership
+                SET valid_until = ?,
+                    version = version + 1
+                WHERE team_id = ?
+                  AND user_identity_id = ?
+                  AND valid_until IS NULL
+                """.trimIndent(),
+                clock.instant()
+                    .minusSeconds(1)
+                    .atOffset(ZoneOffset.UTC),
+                ids.team,
+                ids.teamUser,
+            )
+            val staleReviewer =
+                assertThrows<ProductApiException> {
+                    slice05Service.accept(
+                        AcceptWorkCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            workOrderId =
+                                submittedFirst.workOrderId,
+                            baseVersion =
+                                submittedFirst.version,
+                            reason = null,
+                            clientOccurredAt =
+                                clock.instant(),
+                            actorUserId =
+                                ids.teamUser,
+                            correlationId =
+                                "corr-slice05-stale-reviewer",
+                        ),
+                    )
+                }
+            assertEquals(
+                "OBJECT_NOT_VISIBLE",
+                staleReviewer.code,
+            )
+            jdbc.update(
+                """
+                UPDATE team_membership
+                SET valid_until = NULL,
+                    version = version + 1
+                WHERE team_id = ?
+                  AND user_identity_id = ?
+                """.trimIndent(),
+                ids.team,
+                ids.teamUser,
+            )
+
+            jdbc.update(
+                """
+                UPDATE organization_membership
+                SET valid_until = ?,
+                    version = version + 1
+                WHERE organization_id = ?
+                  AND user_identity_id = ?
+                  AND valid_until IS NULL
+                """.trimIndent(),
+                clock.instant()
+                    .minusSeconds(1)
+                    .atOffset(ZoneOffset.UTC),
+                ids.organization,
+                ids.teamUser,
+            )
+            val offboardedReviewer =
+                assertThrows<ProductApiException> {
+                    slice05Service.accept(
+                        AcceptWorkCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            workOrderId =
+                                submittedFirst.workOrderId,
+                            baseVersion =
+                                submittedFirst.version,
+                            reason = null,
+                            clientOccurredAt =
+                                clock.instant(),
+                            actorUserId =
+                                ids.teamUser,
+                            correlationId =
+                                "corr-slice05-offboarded-reviewer",
+                        ),
+                    )
+                }
+            assertEquals(
+                "OBJECT_NOT_VISIBLE",
+                offboardedReviewer.code,
+            )
+            jdbc.update(
+                """
+                UPDATE organization_membership
+                SET valid_until = NULL,
+                    version = version + 1
+                WHERE organization_id = ?
+                  AND user_identity_id = ?
+                """.trimIndent(),
+                ids.organization,
+                ids.teamUser,
+            )
+
+            val reviewEvidenceId =
+                UUID.randomUUID()
+            jdbc.update(
+                """
+                INSERT INTO evidence (
+                    id,
+                    organization_id,
+                    target_type,
+                    target_id,
+                    work_order_id,
+                    evidence_requirement_key,
+                    evidence_policy_id,
+                    evidence_policy_revision,
+                    evidence_type_code,
+                    content_type,
+                    original_file_name,
+                    size_bytes,
+                    sha256,
+                    captured_at,
+                    client_occurred_at,
+                    captured_by_user_id,
+                    source_device_id,
+                    instruction_revision,
+                    work_order_version_at_capture,
+                    storage_state,
+                    object_key_ref,
+                    finalized_at,
+                    classification_code,
+                    client_visibility_mode,
+                    supersedes_evidence_id,
+                    created_at,
+                    version
+                )
+                VALUES (
+                    ?, ?,
+                    'WORK_ORDER',
+                    ?, ?,
+                    'REVIEW-PHOTO',
+                    ?, ?,
+                    'PHOTO',
+                    'image/jpeg',
+                    'review.jpg',
+                    128,
+                    ?,
+                    ?, ?,
+                    ?,
+                    NULL,
+                    NULL,
+                    ?,
+                    'READY',
+                    'contracts/review.jpg',
+                    ?,
+                    'INTERNAL',
+                    'INTERNAL_ONLY',
+                    NULL,
+                    ?,
+                    1
+                )
+                """.trimIndent(),
+                reviewEvidenceId,
+                ids.organization,
+                submittedFirst.workOrderId,
+                submittedFirst.workOrderId,
+                reviewBinding.evidencePolicy.id,
+                reviewBinding.evidencePolicy.revision,
+                "a".repeat(64),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                ids.teamUser,
+                submittedFirst.version,
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+            )
+
+            val unauthorizedAccept =
+                assertThrows<ProductApiException> {
+                    slice05Service.accept(
+                        AcceptWorkCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            workOrderId =
+                                submittedFirst.workOrderId,
+                            baseVersion =
+                                submittedFirst.version,
+                            reason = null,
+                            clientOccurredAt =
+                                clock.instant(),
+                            actorUserId =
+                                ids.ordinaryMember,
+                            correlationId =
+                                "corr-slice05-unauthorized",
+                        ),
+                    )
+                }
+            assertEquals(
+                "OBJECT_NOT_VISIBLE",
+                unauthorizedAccept.code,
+            )
+
+            val acceptOperation =
+                UUID.randomUUID()
+            val acceptCommand =
+                AcceptWorkCommand(
+                    operationId =
+                        acceptOperation,
+                    workOrderId =
+                        submittedFirst.workOrderId,
+                    baseVersion =
+                        submittedFirst.version,
+                    reason =
+                        "Technical review passed",
+                    clientOccurredAt =
+                        clock.instant(),
+                    actorUserId =
+                        ids.teamUser,
+                    correlationId =
+                        "corr-slice05-accept",
+                )
+            val accepted =
+                slice05Service.accept(
+                    acceptCommand,
+                )
+            assertEquals(
+                WorkOrderLifecycle.ACCEPTED,
+                accepted.workOrder.lifecycleState,
+            )
+            val acceptedReplay =
+                slice05Service.accept(
+                    acceptCommand,
+                )
+            assertTrue(acceptedReplay.replayed)
+            assertEquals(
+                accepted.decision.decisionId,
+                acceptedReplay.decision.decisionId,
+            )
+            assertEquals(
+                1,
+                jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM work_review_decision
+                    WHERE work_order_id = ?
+                      AND submitted_work_version = ?
+                      AND decision = 'ACCEPT'
+                    """.trimIndent(),
+                    Int::class.java,
+                    accepted.workOrder.workOrderId,
+                    submittedFirst.version,
+                ),
+            )
+
+            val progress50 =
+                slice05Service.progress(
+                    ids.teamUser,
+                    readyProject.projectId,
+                )
+            assertEquals(
+                "2.000000",
+                progress50.acceptedWeight
+                    .setScale(6)
+                    .toPlainString(),
+            )
+            assertEquals(
+                "4.000000",
+                progress50.totalWeight
+                    .setScale(6)
+                    .toPlainString(),
+            )
+            assertEquals(
+                "50.0000",
+                progress50.progressPercent
+                    ?.setScale(4)
+                    ?.toPlainString(),
+            )
+
+            val secondBeforeReview =
+                workService.get(
+                    ids.teamUser,
+                    linked.workOrder.workOrderId,
+                )
+            jdbc.update(
+                """
+                UPDATE work_order
+                SET lifecycle_state =
+                        'SUBMITTED_FOR_REVIEW',
+                    submitted_at = ?,
+                    submitted_review_version =
+                        version + 1,
+                    updated_at = ?,
+                    version = version + 1
+                WHERE id = ?
+                """.trimIndent(),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                secondBeforeReview.workOrderId,
+            )
+            val submittedSecond =
+                workService.get(
+                    ids.teamUser,
+                    secondBeforeReview.workOrderId,
+                )
+            val rework =
+                slice05Service.requestRework(
+                    RequestReworkCommand(
+                        operationId =
+                            UUID.randomUUID(),
+                        workOrderId =
+                            submittedSecond.workOrderId,
+                        baseVersion =
+                            submittedSecond.version,
+                        reason =
+                            "Termination evidence requires correction",
+                        clientOccurredAt =
+                            clock.instant(),
+                        actorUserId =
+                            ids.teamUser,
+                        correlationId =
+                            "corr-slice05-rework",
+                    ),
+                )
+            assertEquals(
+                WorkOrderLifecycle.REWORK_REQUIRED,
+                rework.workOrder.lifecycleState,
+            )
+            assertEquals(
+                "Termination evidence requires correction",
+                rework.decision.reason,
+            )
+
+            val healthPolicyId =
+                UUID.randomUUID()
+            jdbc.update(
+                """
+                INSERT INTO config_revision (
+                    id,
+                    scope_type,
+                    scope_organization_id,
+                    family,
+                    code,
+                    name,
+                    description,
+                    lifecycle_state,
+                    revision_number,
+                    effective_from,
+                    effective_to,
+                    supersedes_id,
+                    change_reason,
+                    created_at,
+                    created_by,
+                    activated_at,
+                    activated_by,
+                    version
+                )
+                VALUES (
+                    ?,
+                    'ORGANIZATION',
+                    ?,
+                    'project-health-policies',
+                    'SLICE05-HEALTH',
+                    'Slice 05 Health',
+                    NULL,
+                    'ACTIVE',
+                    1,
+                    ?,
+                    NULL,
+                    NULL,
+                    NULL,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    1
+                )
+                """.trimIndent(),
+                healthPolicyId,
+                ids.organization,
+                clock.instant()
+                    .minusSeconds(60)
+                    .atOffset(ZoneOffset.UTC),
+                clock.instant()
+                    .minusSeconds(60)
+                    .atOffset(ZoneOffset.UTC),
+                ids.admin,
+                clock.instant()
+                    .minusSeconds(60)
+                    .atOffset(ZoneOffset.UTC),
+                ids.admin,
+            )
+            jdbc.update(
+                """
+                INSERT INTO project_health_policy (
+                    config_revision_id,
+                    aggregation_precedence,
+                    signal_rules
+                )
+                VALUES (
+                    ?,
+                    ARRAY[
+                        'CRITICAL',
+                        'ATTENTION'
+                    ]::varchar[],
+                    ?::jsonb
+                )
+                """.trimIndent(),
+                healthPolicyId,
+                """{"REWORK_BACKLOG":{"severity":"ATTENTION"},"CLIENT_ACTION_REQUIRED":{"severity":"CRITICAL"}}""",
+            )
+
+            val health =
+                slice05Service.health(
+                    ids.teamUser,
+                    readyProject.projectId,
+                )
+            assertEquals(
+                ProjectHealthState.ATTENTION,
+                health.state,
+                "Health policy severity must be resolved from the matching typed rule only.",
+            )
+            assertTrue(
+                health.signals.any {
+                    it.signalCode.name ==
+                        "REWORK_BACKLOG" &&
+                        it.sourceType ==
+                            "WORK_ORDER" &&
+                        it.sourceId ==
+                            rework.workOrder.workOrderId
+                },
+            )
+
+            val commandCenter =
+                slice05Service.commandCenter(
+                    ids.teamUser,
+                    readyProject.projectId,
+                )
+            assertEquals(
+                progress50.projectId,
+                commandCenter.projectId,
+            )
+            assertTrue(
+                commandCenter.reworkItems.any {
+                    it.workOrderId ==
+                        rework.workOrder.workOrderId
+                },
+            )
+            assertTrue(
+                commandCenter.projectSiteIds
+                    .contains(
+                        attached.projectSite.projectSiteId,
+                    ),
+            )
+            assertTrue(
+                commandCenter.workPackageIds
+                    .contains(
+                        workPackage.targetId,
+                    ),
+            )
+
+            val activeProjectForHold =
+                requireNotNull(
+                    JdbcProjectsPersistence(jdbc)
+                        .project(
+                            readyProject.projectId,
+                            clock.instant(),
+                        ),
+                )
+            val hold =
+                slice05Service.putOnHold(
+                    PutProjectOnHoldCommand(
+                        operationId =
+                            UUID.randomUUID(),
+                        projectId =
+                            activeProjectForHold.projectId,
+                        baseVersion =
+                            activeProjectForHold.version,
+                        reason =
+                            "Client site access suspended",
+                        clientOccurredAt =
+                            clock.instant(),
+                        actorUserId =
+                            ids.teamUser,
+                        correlationId =
+                            "corr-slice05-hold",
+                    ),
+                )
+            assertEquals(
+                ProjectLifecycleState.ON_HOLD,
+                hold.lifecycleState,
+            )
+            assertEquals(
+                ProjectHealthState.ON_HOLD,
+                hold.health.state,
+            )
+
+            val deniedResume =
+                assertThrows<ProductApiException> {
+                    slice05Service.resume(
+                        ResumeProjectCommand(
+                            operationId =
+                                UUID.randomUUID(),
+                            projectId =
+                                hold.projectId,
+                            baseVersion =
+                                hold.projectVersion,
+                            resolution =
+                                "Attempted by ordinary member",
+                            clientOccurredAt =
+                                clock.instant(),
+                            actorUserId =
+                                ids.ordinaryMember,
+                            correlationId =
+                                "corr-slice05-resume-denied",
+                        ),
+                    )
+                }
+            assertEquals(
+                "OBJECT_NOT_VISIBLE",
+                deniedResume.code,
+            )
+            val resumed =
+                slice05Service.resume(
+                    ResumeProjectCommand(
+                        operationId =
+                            UUID.randomUUID(),
+                        projectId =
+                            hold.projectId,
+                        baseVersion =
+                            hold.projectVersion,
+                        resolution =
+                            "Client restored site access",
+                        clientOccurredAt =
+                            clock.instant(),
+                        actorUserId =
+                            ids.teamUser,
+                        correlationId =
+                            "corr-slice05-resume",
+                    ),
+                )
+            assertEquals(
+                ProjectLifecycleState.ACTIVE,
+                resumed.lifecycleState,
+            )
+            assertEquals(
+                ProjectHealthState.ATTENTION,
+                resumed.health.state,
+            )
+
+            jdbc.update(
+                """
+                UPDATE work_order
+                SET counts_toward_project_progress = false,
+                    version = version + 1
+                WHERE id = ?
+                """.trimIndent(),
+                accepted.workOrder.workOrderId,
+            )
+            jdbc.update(
+                """
+                UPDATE work_order
+                SET lifecycle_state = 'CANCELLED',
+                    updated_at = ?,
+                    version = version + 1
+                WHERE id = ?
+                """.trimIndent(),
+                clock.instant()
+                    .atOffset(ZoneOffset.UTC),
+                rework.workOrder.workOrderId,
+            )
+            val zeroProgress =
+                slice05Service.progress(
+                    ids.teamUser,
+                    readyProject.projectId,
+                )
+            assertEquals(
+                null,
+                zeroProgress.progressPercent,
+                "A zero accepted-progress denominator must be null, not fake zero.",
+            )
+
+            val slice05ActivityListener =
+                ActivityProjectionListener(
+                    JdbcActivityProjection(
+                        jdbc,
+                        clock,
+                    ),
+                )
+            published
+                .filterIsInstance<WorkAccepted>()
+                .forEach {
+                    slice05ActivityListener
+                        .onWorkAccepted(it)
+                }
+            published
+                .filterIsInstance<WorkReworkRequested>()
+                .forEach {
+                    slice05ActivityListener
+                        .onWorkReworkRequested(it)
+                }
+            published
+                .filterIsInstance<ProjectHealthChanged>()
+                .forEach {
+                    slice05ActivityListener
+                        .onProjectHealthChanged(it)
+                }
+            published
+                .filterIsInstance<ProjectHoldChanged>()
+                .forEach {
+                    slice05ActivityListener
+                        .onProjectHoldChanged(it)
+                }
+
+            val acceptedEvent =
+                published
+                    .filterIsInstance<WorkAccepted>()
+                    .single {
+                        it.workOrderId ==
+                            accepted.workOrder.workOrderId
+                    }
+            slice05ActivityListener
+                .onWorkAccepted(
+                    acceptedEvent,
+                )
+            assertEquals(
+                1,
+                jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM activity_event
+                    WHERE source_event_id = ?
+                    """.trimIndent(),
+                    Int::class.java,
+                    acceptedEvent.eventId,
+                ),
+                "Activity projection must be idempotent by source event.",
+            )
+            assertTrue(
+                (jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM activity_event
+                    WHERE activity_type =
+                        'WORK_REWORK_REQUESTED'
+                      AND context_type =
+                        'WORK_ORDER'
+                      AND context_id = ?
+                    """.trimIndent(),
+                    Int::class.java,
+                    rework.workOrder.workOrderId,
+                ) ?: 0) >= 1,
+            )
+            assertTrue(
+                (jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM activity_event
+                    WHERE activity_type =
+                        'PROJECT_HEALTH_CHANGED'
+                      AND context_type =
+                        'PROJECT'
+                      AND context_id = ?
+                    """.trimIndent(),
+                    Int::class.java,
+                    readyProject.projectId,
+                ) ?: 0) >= 1,
+            )
+            assertTrue(
+                (jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM activity_event
+                    WHERE activity_type IN (
+                        'PROJECT_PUT_ON_HOLD',
+                        'PROJECT_RESUMED'
+                    )
+                      AND context_type =
+                        'PROJECT'
+                      AND context_id = ?
+                    """.trimIndent(),
+                    Int::class.java,
+                    readyProject.projectId,
+                ) ?: 0) >= 2,
+            )
+
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "WORK_ACCEPTED",
+                    accepted.workOrder.workOrderId,
+                ) >= 1,
+            )
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "WORK_REWORK_REQUESTED",
+                    rework.workOrder.workOrderId,
+                ) >= 1,
+            )
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "PROJECT_PUT_ON_HOLD",
+                    readyProject.projectId,
+                ) >= 1,
+            )
+            assertTrue(
+                auditCount(
+                    jdbc,
+                    "PROJECT_RESUMED",
+                    readyProject.projectId,
                 ) >= 1,
             )
 

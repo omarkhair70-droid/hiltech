@@ -9,6 +9,7 @@ import com.hiltech.shared.core.HiltechProjectsState
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
+import com.hiltech.shared.core.ProjectCommandCenterUiAction
 import com.hiltech.shared.core.WorkPlanningUiAction
 import com.hiltech.shared.core.WorkReadinessUiAction
 import com.hiltech.shared.core.identity.IdentityApiException
@@ -1102,6 +1103,12 @@ fun main() {
                         runtime.workQueueContext(it)
                     }
                 }
+            val commandCenterResult =
+                selectedId?.let {
+                    runCatching {
+                        runtime.projectCommandCenter(it)
+                    }
+                }
 
             val current =
                 shellState.value as?
@@ -1172,6 +1179,11 @@ fun main() {
                                     ?: current.projects
                                         ?.workQueueContext
                                     ?: emptyList(),
+                            commandCenter =
+                                commandCenterResult
+                                    ?.getOrNull()
+                                    ?: current.projects
+                                        ?.commandCenter,
                             lastCreatedSite =
                                 current.projects
                                     ?.lastCreatedSite,
@@ -1258,6 +1270,12 @@ fun main() {
                         projectId,
                     )
                 }
+            val selectedCommandCenterResult =
+                runCatching {
+                    runtime.projectCommandCenter(
+                        projectId,
+                    )
+                }
             val current =
                 shellState.value as?
                     HiltechShellState.SignedIn
@@ -1305,6 +1323,9 @@ fun main() {
                                     selectedWorkQueueResult
                                         .getOrNull()
                                         ?: emptyList(),
+                                commandCenter =
+                                    selectedCommandCenterResult
+                                        .getOrNull(),
                                 errorCode =
                                     (failure as?
                                         HiltechApiException)
@@ -2171,6 +2192,90 @@ fun main() {
         }
     }
 
+    fun runProjectCommandCenterAction(
+        action: ProjectCommandCenterUiAction,
+    ) {
+        val signed =
+            shellState.value as?
+                HiltechShellState.SignedIn
+                ?: return
+        val projectId =
+            signed.projects
+                ?.selectedProject
+                ?.projectId
+                ?: return
+
+        setState(
+            signed.copy(
+                projects =
+                    (signed.projects
+                        ?: HiltechProjectsState())
+                        .copy(
+                            loading = true,
+                            errorCode = null,
+                            errorMessage = null,
+                        ),
+            ),
+        )
+
+        scope.launch {
+            runCatching {
+                when (action) {
+                    is ProjectCommandCenterUiAction.Accept ->
+                        runtime.acceptWork(
+                            action.workOrderId,
+                            action.baseVersion,
+                            action.reason,
+                        )
+
+                    is ProjectCommandCenterUiAction.RequestRework ->
+                        runtime.requestWorkRework(
+                            action.workOrderId,
+                            action.baseVersion,
+                            action.reason,
+                        )
+
+                    is ProjectCommandCenterUiAction.PutOnHold ->
+                        runtime.putProjectOnHold(
+                            action.projectId,
+                            action.baseVersion,
+                            action.reason,
+                        )
+
+                    is ProjectCommandCenterUiAction.Resume ->
+                        runtime.resumeProject(
+                            action.projectId,
+                            action.baseVersion,
+                            action.resolution,
+                        )
+                }
+            }.onSuccess {
+                selectProject(projectId)
+            }.onFailure { failure ->
+                val current =
+                    shellState.value as?
+                        HiltechShellState.SignedIn
+                        ?: return@onFailure
+                setState(
+                    current.copy(
+                        projects =
+                            (current.projects
+                                ?: HiltechProjectsState())
+                                .copy(
+                                    loading = false,
+                                    errorCode =
+                                        (failure as?
+                                            HiltechApiException)
+                                            ?.code,
+                                    errorMessage =
+                                        failure.message,
+                                ),
+                    ),
+                )
+            }
+        }
+    }
+
     fun signIn(
         forceReauthentication: Boolean = false,
     ) {
@@ -2337,6 +2442,8 @@ fun main() {
                     ::runWorkPlanningAction,
                 onWorkReadinessAction =
                     ::runWorkReadinessAction,
+                onProjectCommandCenterAction =
+                    ::runProjectCommandCenterAction,
             )
         }
     }
