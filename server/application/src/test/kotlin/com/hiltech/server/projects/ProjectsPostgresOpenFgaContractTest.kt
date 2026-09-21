@@ -1,6 +1,8 @@
 package com.hiltech.server.projects
 
 import com.hiltech.server.audit.JdbcAuditEventWriter
+import com.hiltech.server.activity.ActivityProjectionListener
+import com.hiltech.server.activity.JdbcActivityProjection
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
 import com.hiltech.server.security.AuthorizationCheckPort
@@ -57,6 +59,10 @@ import com.hiltech.server.work.WorkOrderLifecycle
 import com.hiltech.server.work.WorkReadiness
 import com.hiltech.server.work.WorkService
 import com.hiltech.server.work.WorkTaskState
+import com.hiltech.server.work.WorkAccepted
+import com.hiltech.server.work.WorkReworkRequested
+import com.hiltech.server.work.ProjectHealthChanged
+import com.hiltech.server.work.ProjectHoldChanged
 import io.opentelemetry.api.OpenTelemetry
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -3784,6 +3790,110 @@ class ProjectsPostgresOpenFgaContractTest {
                 null,
                 zeroProgress.progressPercent,
                 "A zero accepted-progress denominator must be null, not fake zero.",
+            )
+
+            val slice05ActivityListener =
+                ActivityProjectionListener(
+                    JdbcActivityProjection(
+                        jdbc,
+                        clock,
+                    ),
+                )
+            published
+                .filterIsInstance<WorkAccepted>()
+                .forEach {
+                    slice05ActivityListener
+                        .onWorkAccepted(it)
+                }
+            published
+                .filterIsInstance<WorkReworkRequested>()
+                .forEach {
+                    slice05ActivityListener
+                        .onWorkReworkRequested(it)
+                }
+            published
+                .filterIsInstance<ProjectHealthChanged>()
+                .forEach {
+                    slice05ActivityListener
+                        .onProjectHealthChanged(it)
+                }
+            published
+                .filterIsInstance<ProjectHoldChanged>()
+                .forEach {
+                    slice05ActivityListener
+                        .onProjectHoldChanged(it)
+                }
+
+            val acceptedEvent =
+                published
+                    .filterIsInstance<WorkAccepted>()
+                    .single {
+                        it.workOrderId ==
+                            accepted.workOrder.workOrderId
+                    }
+            slice05ActivityListener
+                .onWorkAccepted(
+                    acceptedEvent,
+                )
+            assertEquals(
+                1,
+                jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM activity_event
+                    WHERE source_event_id = ?
+                    """.trimIndent(),
+                    Int::class.java,
+                    acceptedEvent.eventId,
+                ),
+                "Activity projection must be idempotent by source event.",
+            )
+            assertTrue(
+                jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM activity_event
+                    WHERE activity_type =
+                        'WORK_REWORK_REQUESTED'
+                      AND context_type =
+                        'WORK_ORDER'
+                      AND context_id = ?
+                    """.trimIndent(),
+                    Int::class.java,
+                    rework.workOrder.workOrderId,
+                ) >= 1,
+            )
+            assertTrue(
+                jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM activity_event
+                    WHERE activity_type =
+                        'PROJECT_HEALTH_CHANGED'
+                      AND context_type =
+                        'PROJECT'
+                      AND context_id = ?
+                    """.trimIndent(),
+                    Int::class.java,
+                    readyProject.projectId,
+                ) >= 1,
+            )
+            assertTrue(
+                jdbc.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM activity_event
+                    WHERE activity_type IN (
+                        'PROJECT_PUT_ON_HOLD',
+                        'PROJECT_RESUMED'
+                    )
+                      AND context_type =
+                        'PROJECT'
+                      AND context_id = ?
+                    """.trimIndent(),
+                    Int::class.java,
+                    readyProject.projectId,
+                ) >= 2,
             )
 
             assertTrue(
