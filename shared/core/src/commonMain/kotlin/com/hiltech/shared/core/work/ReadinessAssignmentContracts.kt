@@ -35,7 +35,7 @@ data class WaiveReadinessRequirementRequestDto(
     val operationId: String,
     val baseWorkOrderVersion: Long,
     val baseRequirementVersion: Long,
-    val reason: String,
+    val reason: String? = null,
     val clientOccurredAt: String,
 )
 
