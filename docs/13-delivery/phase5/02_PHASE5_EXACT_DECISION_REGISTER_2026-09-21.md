@@ -725,7 +725,7 @@ This refines P5-D08, P5-D09 and P5-D20 without changing the nine-Slice plan.
 
 ---
 
-# Remaining reality gates before final phase freeze
+# Remaining seed/process reality gates after plan freeze
 
 These do not reopen the domain model.
 
@@ -773,7 +773,9 @@ Additional discovered decisions:
 
 `PHASE5_REPRESENTATIVE_ASSET_SEED_VALIDATION_PENDING = YES`
 
-`PHASE5_AUTHORIZATION_MATRIX_PENDING = YES`
+`PHASE5_AUTHORIZATION_MATRIX_PENDING = NO`
+
+`PHASE5_AUTHORIZATION_MATRIX_FROZEN = YES`
 
 `PHASE5_SLICE_PLAN_FROZEN = YES`
 
