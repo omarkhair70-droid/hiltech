@@ -69,33 +69,39 @@ class ReadinessAssignmentService(
             project.responsibility?.linkedUserIdentityId
         return work.workOrders(projectId)
             .mapNotNull { order ->
-                when {
+                if (
                     order.lifecycleState !in
-                        setOf(
-                            WorkOrderLifecycle.PLANNED,
-                            WorkOrderLifecycle.ASSIGNED,
-                        ) -> null
-
+                    setOf(
+                        WorkOrderLifecycle.PLANNED,
+                        WorkOrderLifecycle.ASSIGNED,
+                    ) ||
                     order.readinessState ==
-                        WorkReadiness.NOT_EVALUATED ->
-                        WorkQueueContextItem(
-                            workOrderId = order.workOrderId,
-                            workOrderCode = order.workOrderCode,
-                            title = order.title,
-                            actionCode = "EVALUATE_READINESS",
-                            reasonCodes =
-                                listOf("READINESS_NOT_EVALUATED"),
-                            ownerUserId = owner,
-                        )
+                        WorkReadiness.NOT_EVALUATED
+                ) {
+                    return@mapNotNull null
+                }
 
+                val state = snapshot(order)
+                when {
                     order.readinessState ==
                         WorkReadiness.BLOCKED -> {
-                        val state = snapshot(order)
+                        val waiverReview =
+                            state.requirements.any {
+                                it.required &&
+                                    it.satisfactionState ==
+                                        "BLOCKED" &&
+                                    it.waiverAllowed
+                            }
                         WorkQueueContextItem(
                             workOrderId = order.workOrderId,
                             workOrderCode = order.workOrderCode,
                             title = order.title,
-                            actionCode = "RESOLVE_READINESS",
+                            actionCode =
+                                if (waiverReview) {
+                                    "READINESS_WAIVER_REVIEW_REQUIRED"
+                                } else {
+                                    "READINESS_BLOCKER_REQUIRES_AUTHORITY"
+                                },
                             reasonCodes =
                                 state.waitingOnReasonCodes,
                             ownerUserId = owner,
@@ -104,18 +110,48 @@ class ReadinessAssignmentService(
 
                     order.lifecycleState ==
                         WorkOrderLifecycle.PLANNED &&
-                        persistence.activeAssignment(
-                            order.workOrderId,
-                        ) == null ->
-                        WorkQueueContextItem(
-                            workOrderId = order.workOrderId,
-                            workOrderCode = order.workOrderCode,
-                            title = order.title,
-                            actionCode = "ASSIGN_WORK",
-                            reasonCodes =
-                                listOf("READY_UNASSIGNED"),
-                            ownerUserId = owner,
-                        )
+                        state.currentAssignment == null -> {
+                        val eligibleCount =
+                            state.eligibleTargets
+                                .count { it.eligible }
+                        when {
+                            eligibleCount == 0 ->
+                                WorkQueueContextItem(
+                                    workOrderId =
+                                        order.workOrderId,
+                                    workOrderCode =
+                                        order.workOrderCode,
+                                    title = order.title,
+                                    actionCode =
+                                        "NO_ELIGIBLE_TARGET",
+                                    reasonCodes =
+                                        listOf(
+                                            "NO_ELIGIBLE_TARGET",
+                                        ),
+                                    ownerUserId = owner,
+                                )
+
+                            state.assignmentMode !=
+                                AssignmentMode.AUTO ||
+                                eligibleCount != 1 ->
+                                WorkQueueContextItem(
+                                    workOrderId =
+                                        order.workOrderId,
+                                    workOrderCode =
+                                        order.workOrderCode,
+                                    title = order.title,
+                                    actionCode =
+                                        "ASSIGNMENT_CONFIRMATION_REQUIRED",
+                                    reasonCodes =
+                                        listOf(
+                                            "ASSIGNMENT_CONFIRMATION_REQUIRED",
+                                        ),
+                                    ownerUserId = owner,
+                                )
+
+                            else -> null
+                        }
+                    }
 
                     else -> null
                 }
