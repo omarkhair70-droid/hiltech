@@ -46,6 +46,8 @@ sealed interface HiltechShellState {
             HiltechOnboardingState? = null,
         val projects:
             HiltechProjectsState? = null,
+        val field:
+            HiltechFieldState? = null,
     ) : HiltechShellState
     data class AccessDenied(
         val code: String,
@@ -215,6 +217,8 @@ fun HiltechShell(
     onWorkPlanningAction: (WorkPlanningUiAction) -> Unit = {},
     onWorkReadinessAction: (WorkReadinessUiAction) -> Unit = {},
     onProjectCommandCenterAction: (ProjectCommandCenterUiAction) -> Unit = {},
+    onRefreshFieldWork: () -> Unit = {},
+    onSelectFieldWork: (String) -> Unit = {},
 ) {
     MaterialTheme {
         Column(
@@ -411,6 +415,16 @@ fun HiltechShell(
                                 onCompleteOffboarding,
                             onCreateEmployee =
                                 onCreateEmployee,
+                        )
+                    }
+
+                    state.field?.let {
+                        AssignedWorkSection(
+                            state = it,
+                            onRefresh =
+                                onRefreshFieldWork,
+                            onSelectWork =
+                                onSelectFieldWork,
                         )
                     }
 
