@@ -2676,9 +2676,9 @@ class ProjectsPostgresOpenFgaContractTest {
                             workOrderId =
                                 firstSlice04Order.workOrderId,
                             targetType =
-                                AssignmentTargetType.USER,
+                                AssignmentTargetType.TEAM,
                             targetId =
-                                ids.teamUser,
+                                ids.team,
                             baseVersion =
                                 readyForAssignment.readiness
                                     .workOrderVersion,
