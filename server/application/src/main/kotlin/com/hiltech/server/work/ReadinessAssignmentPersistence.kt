@@ -36,6 +36,12 @@ interface ReadinessAssignmentPersistencePort {
         at: Instant,
     )
 
+    fun resolveReadinessBlocker(
+        workOrderId: UUID,
+        requirementId: UUID,
+        at: Instant,
+    )
+
     fun insertReadinessBlocker(
         blockerId: UUID,
         workOrderId: UUID,
@@ -329,6 +335,28 @@ class JdbcReadinessAssignmentPersistence(
             """.trimIndent(),
             at.atOffset(ZoneOffset.UTC),
             workOrderId,
+        )
+    }
+
+    override fun resolveReadinessBlocker(
+        workOrderId: UUID,
+        requirementId: UUID,
+        at: Instant,
+    ) {
+        jdbc.update(
+            """
+            UPDATE work_blocker
+            SET state = 'RESOLVED',
+                resolved_at = ?,
+                resolution = 'READINESS_REQUIREMENT_RESOLVED',
+                version = version + 1
+            WHERE work_order_id = ?
+              AND source_requirement_id = ?
+              AND state = 'OPEN'
+            """.trimIndent(),
+            at.atOffset(ZoneOffset.UTC),
+            workOrderId,
+            requirementId,
         )
     }
 
