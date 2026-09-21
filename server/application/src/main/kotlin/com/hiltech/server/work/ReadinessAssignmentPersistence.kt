@@ -16,6 +16,7 @@ interface ReadinessAssignmentPersistencePort {
     ): List<ReadinessRequirementExecutionSnapshot>
 
     fun blockers(workOrderId: UUID): List<WorkReadinessBlockerSnapshot>
+    fun dependenciesSatisfied(workOrderId: UUID): Boolean
     fun assignments(workOrderId: UUID): List<WorkAssignmentRecord>
     fun activeAssignment(workOrderId: UUID): WorkAssignmentRecord?
     fun assignment(assignmentId: UUID): WorkAssignmentRecord?
@@ -203,6 +204,22 @@ class JdbcReadinessAssignmentPersistence(
             readinessPolicyId,
             workOrderId,
         )
+
+    override fun dependenciesSatisfied(workOrderId: UUID): Boolean =
+        jdbc.queryForObject(
+            """
+            SELECT NOT EXISTS (
+                SELECT 1
+                FROM work_order_dependency d
+                JOIN work_order predecessor
+                  ON predecessor.id = d.predecessor_work_order_id
+                WHERE d.successor_work_order_id = ?
+                  AND predecessor.lifecycle_state NOT IN ('ACCEPTED','CLOSED')
+            )
+            """.trimIndent(),
+            Boolean::class.java,
+            workOrderId,
+        ) == true
 
     override fun blockers(workOrderId: UUID): List<WorkReadinessBlockerSnapshot> =
         jdbc.query(
