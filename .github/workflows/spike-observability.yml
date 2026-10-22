@@ -1,0 +1,36 @@
+name: Spike — Observability
+
+on:
+  push:
+    branches:
+      - "spike/observability-20260918"
+    paths:
+      - "spikes/observability/**"
+      - ".github/workflows/spike-observability.yml"
+  pull_request:
+    paths:
+      - "spikes/observability/**"
+      - ".github/workflows/spike-observability.yml"
+  workflow_dispatch:
+
+jobs:
+  observability:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: spikes/observability
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: End-to-end trace and telemetry hygiene tests
+        run: gradle test --stacktrace
