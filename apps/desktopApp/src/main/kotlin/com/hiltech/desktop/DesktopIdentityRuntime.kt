@@ -86,6 +86,8 @@ import com.hiltech.shared.core.warehouse.WarehouseCreateRequestDto
 import com.hiltech.shared.core.warehouse.StorageLocationCreateRequestDto
 import com.hiltech.shared.core.warehouse.StorageLocationListDto
 import com.hiltech.shared.core.warehouse.InventoryImportBatchDto
+import com.hiltech.shared.core.warehouse.InventoryImportRowReviewRequestDto
+import com.hiltech.shared.core.WarehouseImportReviewDraft
 import com.hiltech.shared.core.warehouse.AuthorityEndRequestDto
 import com.hiltech.shared.core.work.WorkApiClient
 import com.sun.net.httpserver.HttpExchange
@@ -709,6 +711,29 @@ class DesktopIdentityRuntime(
         ensureConfigured()
         return warehouseApi.importBatch(batchId, installationId)
     }
+
+    suspend fun reviewWarehouseImportRow(draft: WarehouseImportReviewDraft) =
+        warehouseApi.reviewImportRow(
+            draft.batchId,
+            draft.rowId,
+            InventoryImportRowReviewRequestDto(
+                operationId = operationId(),
+                baseVersion = draft.baseVersion,
+                candidateClass = draft.candidateClass,
+                normalizedBrand = draft.normalizedBrand,
+                normalizedPartNumber = draft.normalizedPartNumber,
+                normalizedDescription = draft.normalizedDescription,
+                candidateUom = draft.candidateUom,
+                candidateQuantity = draft.candidateQuantity,
+                candidateValue = null,
+                candidateCurrencyCode = null,
+                issueCodes = draft.issueCodes,
+                reviewState = draft.reviewState,
+                reviewNotes = draft.reviewNotes,
+                clientOccurredAt = occurredAt(),
+            ),
+            installationId,
+        )
 
     suspend fun grantWarehouseAuthority(
         warehouseId: String,
