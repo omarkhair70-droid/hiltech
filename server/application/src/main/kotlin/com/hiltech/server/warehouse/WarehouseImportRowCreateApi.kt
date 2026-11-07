@@ -47,7 +47,6 @@ class WarehouseImportRowCreateService(
         val initialBatch = persistence.importBatch(command.batchId)
             ?: throw missingBatch()
         requireImportAuthority(command.actorUserId, initialBatch.organizationId)
-        requireOpenBatch(initialBatch)
 
         val normalized = normalize(command)
         val rowId = UUID.nameUUIDFromBytes(
