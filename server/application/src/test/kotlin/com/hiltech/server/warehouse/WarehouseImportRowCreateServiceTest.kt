@@ -40,7 +40,7 @@ class WarehouseImportRowCreateServiceTest {
         val error = assertThrows<ProductApiException> {
             service.addRow(command())
         }
-        assertEquals("INVENTORY_IMPORT_FORBIDDEN", error.code)
+        assertEquals("INVENTORY_IMPORT_NOT_FOUND", error.code)
         assertEquals(0, executor.calls)
         assertEquals(0, Mockito.mockingDetails(audit).invocations.size)
     }
