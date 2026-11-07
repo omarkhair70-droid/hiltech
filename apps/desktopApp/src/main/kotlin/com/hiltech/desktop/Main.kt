@@ -2496,7 +2496,9 @@ fun main() {
                 refreshPeople()
                 refreshOnboarding()
                 refreshProjects()
-                refreshWarehouses()
+                // setState posts the signed-in state to Swing EDT. Queue the
+                // Warehouse refresh after that state update, not before it.
+                SwingUtilities.invokeLater { refreshWarehouses() }
             }.onFailure(::showFailure)
         }
     }
