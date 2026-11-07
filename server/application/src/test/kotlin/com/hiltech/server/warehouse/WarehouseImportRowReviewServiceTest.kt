@@ -125,9 +125,8 @@ class WarehouseImportRowReviewServiceTest {
         assertEquals(InventoryImportReviewState.APPROVED, outcome.row.reviewState)
         assertEquals(2L, outcome.row.version)
         assertEquals(1, executor.calls)
-        assertEquals(
-            1, Mockito.mockingDetails(persistence).invocations
-                .count { it.method.name == "updateImportRowReview" } - 1,
+        Mockito.verify(persistence).updateImportRowReview(
+            request, emptyList(), clock.instant(),
         )
         assertEquals(1, Mockito.mockingDetails(audit).invocations.size)
     }
