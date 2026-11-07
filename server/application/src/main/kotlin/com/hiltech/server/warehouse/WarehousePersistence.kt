@@ -87,6 +87,8 @@ interface WarehousePersistencePort {
     ): Boolean
 
     fun importBatch(batchId: UUID): InventoryImportBatchSnapshot?
+    /** For command transactions: serialize row staging against cancel/review transitions. */
+    fun lockImportBatch(batchId: UUID): InventoryImportBatchSnapshot?
     fun importBatchByHash(
         organizationId: UUID,
         sourceSha256: String,
@@ -563,6 +565,21 @@ class JdbcWarehousePersistence(
                 version
             FROM inventory_import_batch
             WHERE id = ?
+            """.trimIndent(),
+            { rs, _ -> rs.toImportBatch() },
+            batchId,
+        ).singleOrNull()
+
+    override fun lockImportBatch(batchId: UUID): InventoryImportBatchSnapshot? =
+        jdbc.query(
+            """
+            SELECT
+                id, organization_id, source_file_name, source_sha256,
+                source_type, cutover_date, state, created_by_user_id,
+                created_at, updated_at, version
+            FROM inventory_import_batch
+            WHERE id = ?
+            FOR UPDATE
             """.trimIndent(),
             { rs, _ -> rs.toImportBatch() },
             batchId,
