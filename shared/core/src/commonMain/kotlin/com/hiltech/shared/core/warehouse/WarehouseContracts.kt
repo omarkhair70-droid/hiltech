@@ -102,6 +102,24 @@ data class StorageLocationCreateResponseDto(
 )
 
 @Serializable
+data class InventoryImportBatchSummaryDto(
+    val batchId: String,
+    val organizationId: String,
+    val sourceFileName: String,
+    val sourceSha256: String,
+    val sourceType: String,
+    val cutoverDate: String? = null,
+    val state: String,
+    val version: Long,
+)
+
+@Serializable
+data class InventoryImportBatchDirectoryDto(
+    val items: List<InventoryImportBatchSummaryDto>,
+    val correlationId: String,
+)
+
+@Serializable
 data class InventoryImportBatchDto(
     val batchId: String,
     val organizationId: String,
