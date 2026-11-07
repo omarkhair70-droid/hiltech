@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
@@ -25,6 +26,15 @@ class WarehouseImportReadService(
     private val persistence: WarehousePersistencePort,
     private val authorization: WarehouseAuthorizationPort,
 ) {
+    fun batchDirectory(actorUserId: UUID, organizationId: UUID): List<InventoryImportBatchSnapshot> {
+        if (!authorization.canManageImport(actorUserId, organizationId)) {
+            throw importNotFound()
+        }
+        return persistence.importBatches(organizationId)
+            .filter { it.organizationId == organizationId }
+            .take(100)
+    }
+
     fun batchDetail(actorUserId: UUID, batchId: UUID): InventoryImportBatchDetail {
         val batch = persistence.importBatch(batchId) ?: throw importNotFound()
         if (!authorization.canManageImport(actorUserId, batch.organizationId)) {
@@ -42,6 +52,22 @@ class WarehouseImportReadService(
         status = HttpStatus.NOT_FOUND,
     )
 }
+
+data class InventoryImportBatchSummaryResponse(
+    val batchId: String,
+    val organizationId: String,
+    val sourceFileName: String,
+    val sourceSha256: String,
+    val sourceType: String,
+    val cutoverDate: String?,
+    val state: String,
+    val version: Long,
+)
+
+data class InventoryImportBatchDirectoryResponse(
+    val items: List<InventoryImportBatchSummaryResponse>,
+    val correlationId: String,
+)
 
 data class InventoryImportBatchReadResponse(
     val batchId: String,
@@ -77,6 +103,38 @@ data class InventoryImportRowReadResponse(
 class WarehouseImportReadController(
     private val service: WarehouseImportReadService,
 ) {
+    @GetMapping
+    fun list(
+        servletRequest: HttpServletRequest,
+        @RequestParam organizationId: String,
+    ): InventoryImportBatchDirectoryResponse {
+        val context = HiltechRequestContext.current(servletRequest)
+        val organizationIdValue = runCatching { UUID.fromString(organizationId) }
+            .getOrElse {
+                throw ProductApiException(
+                    code = "INVALID_ORGANIZATION_ID",
+                    message = "The organization identifier is invalid.",
+                    status = HttpStatus.BAD_REQUEST,
+                )
+            }
+        return InventoryImportBatchDirectoryResponse(
+            items = service.batchDirectory(context.requireImportIdentity(), organizationIdValue)
+                .map {
+                    InventoryImportBatchSummaryResponse(
+                        batchId = it.batchId.toString(),
+                        organizationId = it.organizationId.toString(),
+                        sourceFileName = it.sourceFileName,
+                        sourceSha256 = it.sourceSha256,
+                        sourceType = it.sourceType.name,
+                        cutoverDate = it.cutoverDate?.toString(),
+                        state = it.state.name,
+                        version = it.version,
+                    )
+                },
+            correlationId = context.correlationId,
+        )
+    }
+
     @GetMapping("/{batchId}")
     fun detail(
         servletRequest: HttpServletRequest,
