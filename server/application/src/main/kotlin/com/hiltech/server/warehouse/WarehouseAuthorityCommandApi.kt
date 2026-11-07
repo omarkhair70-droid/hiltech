@@ -44,6 +44,15 @@ class WarehouseAuthorityCommandService(
     private val audit: AuditEventWriter,
     private val clock: Clock,
 ) {
+    fun currentBindings(actorUserId: UUID, warehouseId: UUID): List<WarehouseAuthorityBindingSnapshot> {
+        val warehouse = requireManagedWarehouse(actorUserId, warehouseId)
+        return persistence.currentWarehouseAuthorityBindings(warehouse.warehouseId, clock.instant())
+            .filter {
+                it.current && it.organizationId == warehouse.organizationId &&
+                    it.warehouseId == warehouse.warehouseId
+            }
+    }
+
     fun grant(command: GrantWarehouseAuthorityCommand): WarehouseBindingCommandResult {
         val warehouse = requireManagedWarehouse(command.actorUserId, command.warehouseId)
         requireDelegableKey(command.authorityKey)
@@ -240,6 +249,18 @@ data class WarehouseAuthorityEndRequest(
     val baseVersion: Long,
     val clientOccurredAt: String,
 )
+data class WarehouseAuthorityCurrentResponse(
+    val bindingId: String,
+    val warehouseId: String,
+    val authorityKey: String,
+    val principalType: String,
+    val principalId: String,
+    val version: Long,
+)
+data class WarehouseAuthorityCurrentListResponse(
+    val items: List<WarehouseAuthorityCurrentResponse>,
+    val correlationId: String,
+)
 data class WarehouseAuthorityCommandResponse(
     val bindingId: String,
     val warehouseId: String,
@@ -254,6 +275,29 @@ data class WarehouseAuthorityCommandResponse(
 
 @RestController
 class WarehouseAuthorityCommandController(private val service: WarehouseAuthorityCommandService) {
+    @org.springframework.web.bind.annotation.GetMapping("/v1/warehouses/{warehouseId}/authority")
+    fun listCurrent(
+        servletRequest: HttpServletRequest,
+        @PathVariable warehouseId: String,
+    ): WarehouseAuthorityCurrentListResponse {
+        val context = HiltechRequestContext.current(servletRequest)
+        val actor = context.requireWarehouseAuthIdentity()
+        val id = warehouseId.asWarehouseAuthUuid("INVALID_WAREHOUSE_ID")
+        return WarehouseAuthorityCurrentListResponse(
+            items = service.currentBindings(actor, id).map {
+                WarehouseAuthorityCurrentResponse(
+                    bindingId = it.bindingId.toString(),
+                    warehouseId = it.warehouseId.toString(),
+                    authorityKey = it.authorityKey.name,
+                    principalType = it.principalType.name,
+                    principalId = it.principalId.toString(),
+                    version = it.version,
+                )
+            },
+            correlationId = context.correlationId,
+        )
+    }
+
     @PostMapping("/v1/warehouses/{warehouseId}/authority")
     fun grant(
         servletRequest: HttpServletRequest,
