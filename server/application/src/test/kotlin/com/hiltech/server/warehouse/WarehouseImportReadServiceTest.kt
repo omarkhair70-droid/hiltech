@@ -59,6 +59,29 @@ class WarehouseImportReadServiceTest {
         Mockito.verify(persistence, Mockito.never()).importRows(batchId)
     }
 
+    @Test
+    fun importDirectoryIsUnavailableForNonReviewerWithoutListingAnything() {
+        val error = assertThrows<ProductApiException> {
+            service.batchDirectory(actor, organization)
+        }
+        assertEquals("INVENTORY_IMPORT_NOT_FOUND", error.code)
+        Mockito.verify(persistence, Mockito.never()).importBatches(organization)
+    }
+
+    @Test
+    fun importDirectoryIncludesOnlyRequestedOrganization() {
+        Mockito.`when`(authorization.canManageImport(actor, organization))
+            .thenReturn(true)
+        val allowed = batch()
+        val foreign = batch().copy(
+            batchId = UUID.randomUUID(),
+            organizationId = UUID.randomUUID(),
+        )
+        Mockito.`when`(persistence.importBatches(organization))
+            .thenReturn(listOf(allowed, foreign))
+        assertEquals(listOf(allowed), service.batchDirectory(actor, organization))
+    }
+
     private fun batch() = InventoryImportBatchSnapshot(
         batchId = batchId,
         organizationId = organization,
