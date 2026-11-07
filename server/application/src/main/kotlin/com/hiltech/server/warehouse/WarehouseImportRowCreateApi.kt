@@ -155,8 +155,11 @@ class WarehouseImportRowCreateService(
         if (sheet.isEmpty() || sheet.length > 160 || command.sourceRowNumber <= 0) {
             throw invalid("INVALID_SOURCE_ROW", "Source sheet/row is invalid.")
         }
+        if (command.sourceIssueCodes.size > 64) {
+            throw invalid("TOO_MANY_SOURCE_ISSUES", "The source issue list is too large.")
+        }
         val raw = command.rawPayloadJson
-        if (raw.length > 131_072 ||
+        if (raw.length > 131_072 || raw.toByteArray(StandardCharsets.UTF_8).size > 131_072 ||
             runCatching { Json.parseToJsonElement(raw) is JsonObject }.getOrNull() != true
         ) {
             throw invalid(
@@ -257,11 +260,8 @@ class WarehouseImportRowCreateService(
 
     private fun requireImportAuthority(actor: UUID, organization: UUID) {
         if (!authorization.canManageImport(actor, organization)) {
-            throw ProductApiException(
-                code = "INVENTORY_IMPORT_FORBIDDEN",
-                message = "Current inventory import authority is required.",
-                status = HttpStatus.FORBIDDEN,
-            )
+            // A guessed batch ID must not reveal whether that batch exists.
+            throw missingBatch()
         }
     }
 
@@ -388,6 +388,13 @@ private fun String.asRowUuid(code: String): UUID =
 
 private fun String?.asRowDecimal(code: String): BigDecimal? =
     this?.let {
+        if (it.length > 80) {
+            throw ProductApiException(
+                code = code,
+                message = "An import decimal exceeds the safe length.",
+                status = HttpStatus.BAD_REQUEST,
+            )
+        }
         runCatching { BigDecimal(it) }.getOrElse {
             throw ProductApiException(
                 code = code,
