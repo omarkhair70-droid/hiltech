@@ -105,6 +105,24 @@ class WarehouseImportRowReviewService(
                 )
             }
 
+            // The ordinary import-review UI deliberately hides restricted
+            // value/currency columns. A nullable HTTP request must not erase
+            // hidden financial evidence or silently change its meaning.
+            if ((normalized.candidateValue != null &&
+                    normalized.candidateValue.compareTo(previous.candidateValue ?: BigDecimal.ZERO) != 0) ||
+                (normalized.candidateCurrencyCode != null &&
+                    normalized.candidateCurrencyCode != previous.candidateCurrencyCode)
+            ) {
+                throw ProductApiException(
+                    code = "INVENTORY_VALUE_REVIEW_REQUIRES_SEPARATE_AUTHORITY",
+                    message = "Restricted source values require a separately authorized review workflow.",
+                    status = HttpStatus.FORBIDDEN,
+                )
+            }
+            val safeReview = normalized.copy(
+                candidateValue = previous.candidateValue,
+                candidateCurrencyCode = previous.candidateCurrencyCode,
+            )
             val removedIssues = previous.issueCodes.toSet() - normalized.issueCodes.toSet()
             if (removedIssues.isNotEmpty() && normalized.reviewNotes.isNullOrBlank()) {
                 throw invalid(
@@ -133,7 +151,7 @@ class WarehouseImportRowReviewService(
                     )
                 }
             }
-            if (!persistence.updateImportRowReview(normalized, issues, clock.instant())) {
+            if (!persistence.updateImportRowReview(safeReview, issues, clock.instant())) {
                 throw ProductApiException(
                     code = "INVENTORY_IMPORT_ROW_VERSION_CONFLICT",
                     message = "The row was changed concurrently.",
