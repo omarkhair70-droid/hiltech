@@ -53,16 +53,14 @@ class WarehouseImportRowReviewService(
             throw invalid("INVALID_ROW_VERSION", "A positive import row version is required.")
         }
         val normalized = normalize(command)
-        val fingerprint = IdempotencyKeyContract.fingerprint(
-            listOf(
-                normalized.batchId, normalized.rowId, normalized.baseVersion,
-                normalized.candidateClass, normalized.normalizedBrand,
-                normalized.normalizedPartNumber, normalized.normalizedDescription,
-                normalized.candidateUom, normalized.candidateQuantity,
-                normalized.candidateValue, normalized.candidateCurrencyCode,
-                normalized.issueCodes.sortedBy { it.name }, normalized.reviewState,
-                normalized.reviewNotes, normalized.clientOccurredAt,
-            ).joinToString("|"),
+        val fingerprint = warehouseCommandFingerprint(
+            normalized.batchId, normalized.rowId, normalized.baseVersion,
+            normalized.candidateClass, normalized.normalizedBrand,
+            normalized.normalizedPartNumber, normalized.normalizedDescription,
+            normalized.candidateUom, normalized.candidateQuantity,
+            normalized.candidateValue, normalized.candidateCurrencyCode,
+            normalized.issueCodes.sortedBy { it.name }, normalized.reviewState,
+            normalized.reviewNotes, normalized.clientOccurredAt,
         )
         val execution = idempotency.execute(
             IdempotentCommandSpec(
@@ -112,7 +110,13 @@ class WarehouseImportRowReviewService(
                 candidateValue = previous.candidateValue,
                 candidateCurrencyCode = previous.candidateCurrencyCode,
             )
-            val removedIssues = previous.issueCodes.toSet() - normalized.issueCodes.toSet()
+            val requestedClears = previous.issueCodes.toSet() - normalized.issueCodes.toSet()
+            val issues = deriveMandatoryIssues(locked.sourceType, previous, normalized)
+                .plus(normalized.issueCodes)
+                .plus(requestedClears.filterNot { it in candidateReviewIssues })
+                .distinct()
+                .sortedBy { it.name }
+            val removedIssues = previous.issueCodes.toSet() - issues.toSet()
             if (removedIssues.isNotEmpty() && normalized.reviewNotes.isNullOrBlank()) {
                 throw invalid(
                     "IMPORT_ISSUE_RESOLUTION_REASON_REQUIRED",
@@ -127,10 +131,6 @@ class WarehouseImportRowReviewService(
                     "Rejected import rows require an explanation.",
                 )
             }
-            val issues = deriveMandatoryIssues(locked.sourceType, previous, normalized)
-                .plus(normalized.issueCodes)
-                .distinct()
-                .sortedBy { it.name }
             if (normalized.reviewState == InventoryImportReviewState.APPROVED) {
                 throw ProductApiException(
                     code = "INVENTORY_IMPORT_ROW_REVIEW_BLOCKED",
@@ -189,6 +189,11 @@ class WarehouseImportRowReviewService(
         if (command.candidateUom == null) {
             issues += InventoryImportIssueCode.UNKNOWN_UOM
         }
+        if (command.normalizedBrand == null &&
+            InventoryImportIssueCode.BRAND_NORMALIZATION_REQUIRED in previous.issueCodes
+        ) {
+            issues += InventoryImportIssueCode.BRAND_NORMALIZATION_REQUIRED
+        }
         val part = command.normalizedPartNumber
         if (part == null) {
             issues += InventoryImportIssueCode.PART_NUMBER_MISSING
@@ -228,9 +233,13 @@ class WarehouseImportRowReviewService(
         }
         fun decimal(value: BigDecimal?, code: String): BigDecimal? {
             if (value == null) return null
-            val exact = value.stripTrailingZeros()
+            val exact = try {
+                value.stripTrailingZeros()
+            } catch (failure: ArithmeticException) {
+                throw invalid(code, "Candidate number is outside numeric(20,6) limits.")
+            }
             if (exact < BigDecimal.ZERO || exact.scale() > 6 ||
-                exact.precision() - exact.scale() > 14
+                exact.precision().toLong() - exact.scale() > 14
             ) {
                 throw invalid(code, "Candidate number is outside numeric(20,6) limits.")
             }
@@ -263,6 +272,16 @@ class WarehouseImportRowReviewService(
     private fun invalid(code: String, message: String) =
         ProductApiException(code = code, message = message, status = HttpStatus.BAD_REQUEST)
 }
+
+private val candidateReviewIssues = setOf(
+    InventoryImportIssueCode.ITEM_CLASSIFICATION_REQUIRED,
+    InventoryImportIssueCode.UNKNOWN_UOM,
+    InventoryImportIssueCode.BRAND_NORMALIZATION_REQUIRED,
+    InventoryImportIssueCode.PART_NUMBER_MISSING,
+    InventoryImportIssueCode.PART_NUMBER_PLACEHOLDER,
+    InventoryImportIssueCode.DUPLICATE_PART_NUMBER,
+    InventoryImportIssueCode.QUANTITY_AMBIGUOUS,
+)
 
 data class ReviewInventoryImportRowRequest(
     val operationId: String,

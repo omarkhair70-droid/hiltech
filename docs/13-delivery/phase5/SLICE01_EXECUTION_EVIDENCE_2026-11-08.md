@@ -29,6 +29,7 @@ To stage the checked range in an approved environment, add `--api-url <https-bas
 - Handoff head `96e6aebf23f6b4fc5cf37858610f160bca5c89f4` had a cancelled native OIDC run. Logs for its cancelled Android job were unavailable. The same regression passed at `fc8e72101fb2f3d82c771ae5af7c9e5df769d5e8`. [Native OIDC run 42421237449](https://github.com/omarkhair70-droid/hiltech/actions/runs/42421237449)
 - Bootstrap at `fc8e72101fb2f3d82c771ae5af7c9e5df769d5e8` passed real PostgreSQL migration and JDBC staging/review and OpenFGA stale USER/TEAM authorization. This evidence predates the operator provisioning command. [Bootstrap run 42421237571](https://github.com/omarkhair70-droid/hiltech/actions/runs/42421237571)
 - The import preview uses a source-layout column allowlist. Ordinary review accepts candidate edits and rejection with a reason. Approval requires verified source and mapping evidence. A declared SHA-256 and deduplication check do not verify the workbook bytes.
+- Candidate issue clearance requires an explanation and server-side validation of the revised fields. Source mapping, category, serial and opening-location issues remain until the relevant evidence exists. Updated receipt fingerprints distinguish field boundaries in Warehouse and import commands. Receipts from the earlier draft format may return a conflict after upgrade. Inspect existing staged state before retrying.
 
 ## Remaining closure gates
 
@@ -36,3 +37,14 @@ To stage the checked range in an approved environment, add `--api-url <https-bas
 - Verify the authorized intake against the real UTP, FIBER, ACTIVE and Accessories inputs with a HILTECH operator. The server currently records the submitted digest and rows. An independently verified source and field-mapping path is still required before approval can be enabled. Keep raw workbooks in the approved private evidence location.
 - Capture operator acceptance for Warehouse Setup and import review, then complete the Slice 01 gap review.
 - Obtain human review and merge approval, then verify post-merge Bootstrap on `main`. Slice 02 begins after those gates close.
+
+## Private workbook handoff
+
+The original workbooks are currently unavailable. When the files become available, share a restricted link to the HILTECH-approved private evidence location with the authorized operator. Keep original workbook bytes out of the repository, PR attachments and public artifact links.
+
+| Private original | Primary sheet |
+| --- | --- |
+| `UTP 01-04-2026(3).xlsx` | `Main` |
+| `FIBER 01-04-2026(3).xlsx` | `FIBER` |
+| `ACTIVE 01-04-2026 -(3).xlsx` | `SAMPLE` |
+| Legacy Accessories workbook recorded as `.xlsx(3)` | `أكسسوارات` |

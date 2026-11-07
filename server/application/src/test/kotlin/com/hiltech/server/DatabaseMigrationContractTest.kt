@@ -687,7 +687,7 @@ class DatabaseMigrationContractTest {
             sourceRowNumber = 2,
             rawPayloadJson = """{"الرقم التسلسلي":"LOCAL","العدد":0,"سعر القطعه":123.45}""",
             candidateClass = InventoryCandidateClass.STOCK_QUANTITY,
-            normalizedBrand = null,
+            normalizedBrand = "TEST|BRAND",
             normalizedPartNumber = "TEST-PART",
             normalizedDescription = "Synthetic accessory",
             candidateUom = null,
@@ -709,6 +709,9 @@ class DatabaseMigrationContractTest {
         assertEquals("IDEMPOTENCY_KEY_REUSED", assertThrows<ProductApiException> {
             stage.addRow(stageCommand.copy(sourceRowNumber = 3))
         }.code)
+        assertEquals("IDEMPOTENCY_KEY_REUSED", assertThrows<ProductApiException> {
+            stage.addRow(stageCommand.copy(normalizedBrand = "TEST", normalizedPartNumber = "BRAND|TEST-PART"))
+        }.code)
 
         val reviewCommand = ReviewInventoryImportRowCommand(
             operationId = UUID.randomUUID(),
@@ -719,13 +722,13 @@ class DatabaseMigrationContractTest {
             normalizedBrand = row.normalizedBrand,
             normalizedPartNumber = row.normalizedPartNumber,
             normalizedDescription = row.normalizedDescription,
-            candidateUom = row.candidateUom,
+            candidateUom = "TEST-UOM",
             candidateQuantity = row.candidateQuantity,
             candidateValue = null,
             candidateCurrencyCode = null,
-            issueCodes = row.issueCodes,
+            issueCodes = emptyList(),
             reviewState = InventoryImportReviewState.NEEDS_REVIEW,
-            reviewNotes = "Awaiting source mapping.",
+            reviewNotes = "Synthetic candidate unit supplied. The legacy label remains unresolved.",
             actorUserId = actorId,
             clientOccurredAt = at,
             correlationId = batchCommand.correlationId,
@@ -735,7 +738,7 @@ class DatabaseMigrationContractTest {
         assertEquals(row.rawPayloadJson, reviewed.rawPayloadJson)
         assertEquals(row.candidateValue, reviewed.candidateValue)
         assertEquals(row.candidateCurrencyCode, reviewed.candidateCurrencyCode)
-        assertEquals(expectedIssues, reviewed.issueCodes.toSet())
+        assertEquals(listOf(InventoryImportIssueCode.LEGACY_COLUMN_SEMANTICS_AMBIGUOUS), reviewed.issueCodes)
         assertTrue(review.review(reviewCommand).replayed)
         assertEquals("INVENTORY_IMPORT_ROW_VERSION_CONFLICT", assertThrows<ProductApiException> {
             review.review(reviewCommand.copy(operationId = UUID.randomUUID()))

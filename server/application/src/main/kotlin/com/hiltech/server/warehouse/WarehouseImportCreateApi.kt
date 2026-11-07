@@ -54,15 +54,13 @@ class WarehouseImportCreateService(
         val batchId = UUID.nameUUIDFromBytes(
             ("hiltech:inventory-import:" + command.operationId).toByteArray(StandardCharsets.UTF_8),
         )
-        val fingerprint = IdempotencyKeyContract.fingerprint(
-            listOf(
-                command.organizationId,
-                sha256,
-                fileName,
-                command.sourceType.name,
-                command.cutoverDate,
-                command.clientOccurredAt,
-            ).joinToString("|"),
+        val fingerprint = warehouseCommandFingerprint(
+            command.organizationId,
+            sha256,
+            fileName,
+            command.sourceType.name,
+            command.cutoverDate,
+            command.clientOccurredAt,
         )
 
         val execution = idempotency.execute(

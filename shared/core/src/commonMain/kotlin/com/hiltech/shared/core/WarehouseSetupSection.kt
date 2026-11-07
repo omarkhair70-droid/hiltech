@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -254,6 +255,9 @@ fun WarehouseSetupSection(
                 var notes by remember(selectedRow.rowId, selectedRow.version) {
                     mutableStateOf("")
                 }
+                var requestedClears by remember(selectedRow.rowId, selectedRow.version) {
+                    mutableStateOf(emptySet<String>())
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text(
                         "Review source row " + selectedRow.sourceRowNumber +
@@ -268,6 +272,21 @@ fun WarehouseSetupSection(
                     Text("Approval requires verified source and mapping evidence.")
                     Text("Recorded source issues: " +
                         selectedRow.issueCodes.joinToString().ifBlank { "None recorded" })
+                    val candidateIssues = selectedRow.issueCodes.filter { it in candidateReviewIssues }
+                    if (candidateIssues.isNotEmpty()) {
+                        Text("Request issue clearance after correcting the candidate.")
+                        candidateIssues.forEach { issue ->
+                            Row {
+                                Checkbox(
+                                    checked = issue in requestedClears,
+                                    onCheckedChange = { checked ->
+                                        requestedClears = if (checked) requestedClears + issue else requestedClears - issue
+                                    },
+                                )
+                                Text(issue)
+                            }
+                        }
+                    }
                     Text("Normalized candidate", style = MaterialTheme.typography.titleSmall)
                     OutlinedTextField(
                         value = candidateClass, onValueChange = { candidateClass = it },
@@ -310,13 +329,14 @@ fun WarehouseSetupSection(
                         normalizedDescription = description.trim().ifEmpty { null },
                         candidateUom = unit.trim().ifEmpty { null },
                         candidateQuantity = quantity.trim().ifEmpty { null },
-                        issueCodes = selectedRow.issueCodes,
+                        issueCodes = selectedRow.issueCodes.filterNot { it in requestedClears },
                         reviewState = state,
                         reviewNotes = notes.trim().ifEmpty { null },
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
-                            enabled = !state.loading && candidateValid,
+                            enabled = !state.loading && candidateValid &&
+                                (requestedClears.isEmpty() || notes.isNotBlank()),
                             onClick = { onReviewImportRow(draft("NEEDS_REVIEW")) },
                         ) { Text("Save review / needs clarification") }
                         OutlinedButton(
@@ -329,6 +349,11 @@ fun WarehouseSetupSection(
         }
     }
 }
+
+private val candidateReviewIssues = setOf(
+    "ITEM_CLASSIFICATION_REQUIRED", "UNKNOWN_UOM", "BRAND_NORMALIZATION_REQUIRED",
+    "PART_NUMBER_MISSING", "PART_NUMBER_PLACEHOLDER", "DUPLICATE_PART_NUMBER", "QUANTITY_AMBIGUOUS",
+)
 
 private fun storageTree(locations: List<StorageLocationDto>): List<Pair<StorageLocationDto, Int>> {
     val visibleIds = locations.mapTo(mutableSetOf()) { it.storageLocationId }

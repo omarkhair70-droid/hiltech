@@ -32,7 +32,7 @@ fun main() = runBlocking {
     Files.createDirectories(directory)
     val scroll = ScrollState(0)
     val state = syntheticWarehouse()
-    val scene = ImageComposeScene(width = 940, height = 840, coroutineContext = coroutineContext) {
+    val scene = ImageComposeScene(width = 940, height = 940, coroutineContext = coroutineContext) {
         Column(
             Modifier.fillMaxSize().background(Color.White).verticalScroll(scroll).padding(24.dp),
         ) {

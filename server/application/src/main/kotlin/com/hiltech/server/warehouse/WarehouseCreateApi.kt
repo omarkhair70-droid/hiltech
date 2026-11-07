@@ -64,14 +64,12 @@ class WarehouseCreateService(
         val warehouseId = UUID.nameUUIDFromBytes(
             ("hiltech:warehouse:" + command.operationId).toByteArray(StandardCharsets.UTF_8),
         )
-        val fingerprint = IdempotencyKeyContract.fingerprint(
-            listOf(
-                command.organizationId,
-                normalizedCode,
-                normalizedName,
-                normalizedFacility,
-                command.clientOccurredAt,
-            ).joinToString("|"),
+        val fingerprint = warehouseCommandFingerprint(
+            command.organizationId,
+            normalizedCode,
+            normalizedName,
+            normalizedFacility,
+            command.clientOccurredAt,
         )
 
         val execution = idempotency.execute(

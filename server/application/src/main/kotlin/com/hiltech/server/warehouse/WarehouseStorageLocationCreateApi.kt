@@ -67,15 +67,13 @@ class WarehouseStorageLocationCreateService(
             ("hiltech:storage-location:" + normalized.operationId)
                 .toByteArray(StandardCharsets.UTF_8),
         )
-        val fingerprint = IdempotencyKeyContract.fingerprint(
-            listOf(
-                normalized.organizationId, normalized.warehouseId,
-                normalized.code, normalized.name, normalized.kind,
-                normalized.parentStorageLocationId, normalized.projectId,
-                normalized.siteId, normalized.temporary, normalized.activeFrom,
-                normalized.restrictedAccess, normalized.addressOrLocationRef,
-                normalized.notes, normalized.clientOccurredAt,
-            ).joinToString("|"),
+        val fingerprint = warehouseCommandFingerprint(
+            normalized.organizationId, normalized.warehouseId,
+            normalized.code, normalized.name, normalized.kind,
+            normalized.parentStorageLocationId, normalized.projectId,
+            normalized.siteId, normalized.temporary, normalized.activeFrom,
+            normalized.restrictedAccess, normalized.addressOrLocationRef,
+            normalized.notes, normalized.clientOccurredAt,
         )
 
         val execution = idempotency.execute(

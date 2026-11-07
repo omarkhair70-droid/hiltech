@@ -53,23 +53,21 @@ class WarehouseImportRowCreateService(
             ("hiltech:inventory-import-row:" + command.operationId)
                 .toByteArray(StandardCharsets.UTF_8),
         )
-        val fingerprint = IdempotencyKeyContract.fingerprint(
-            listOf(
-                normalized.batchId,
-                normalized.sourceSheet,
-                normalized.sourceRowNumber,
-                normalized.rawPayloadJson,
-                normalized.candidateClass,
-                normalized.normalizedBrand,
-                normalized.normalizedPartNumber,
-                normalized.normalizedDescription,
-                normalized.candidateUom,
-                normalized.candidateQuantity,
-                normalized.candidateValue,
-                normalized.candidateCurrencyCode,
-                normalized.sourceIssueCodes.sortedBy { it.name },
-                normalized.clientOccurredAt,
-            ).joinToString("|"),
+        val fingerprint = warehouseCommandFingerprint(
+            normalized.batchId,
+            normalized.sourceSheet,
+            normalized.sourceRowNumber,
+            normalized.rawPayloadJson,
+            normalized.candidateClass,
+            normalized.normalizedBrand,
+            normalized.normalizedPartNumber,
+            normalized.normalizedDescription,
+            normalized.candidateUom,
+            normalized.candidateQuantity,
+            normalized.candidateValue,
+            normalized.candidateCurrencyCode,
+            normalized.sourceIssueCodes.sortedBy { it.name },
+            normalized.clientOccurredAt,
         )
 
         val execution = idempotency.execute(
@@ -187,9 +185,13 @@ class WarehouseImportRowCreateService(
         }
         fun decimal(value: BigDecimal?, code: String): BigDecimal? {
             if (value == null) return null
-            val exact = value.stripTrailingZeros()
+            val exact = try {
+                value.stripTrailingZeros()
+            } catch (failure: ArithmeticException) {
+                throw invalid(code, "Candidate decimal is outside numeric(20,6) limits.")
+            }
             if (exact < BigDecimal.ZERO || exact.scale() > 6 ||
-                (exact.precision() - exact.scale()) > 14
+                (exact.precision().toLong() - exact.scale()) > 14
             ) {
                 throw invalid(code, "Candidate decimal is outside numeric(20,6) limits.")
             }
