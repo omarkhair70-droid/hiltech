@@ -702,6 +702,9 @@ class DesktopIdentityRuntime(
         warehouseId = warehouseId,
     )
 
+    suspend fun warehouseImportBatches(organizationId: String) =
+        warehouseApi.importBatches(organizationId, installationId)
+
     suspend fun warehouseImportBatch(batchId: String): InventoryImportBatchDto {
         ensureConfigured()
         return warehouseApi.importBatch(batchId, installationId)
