@@ -163,6 +163,7 @@ fun HiltechShell(
     onCreateWarehouse: (String, String) -> Unit = { _, _ -> },
     onCreateWarehouseLocation: (String, String) -> Unit = { _, _ -> },
     onOpenImportBatch: (String) -> Unit = {},
+    onReviewImportRow: (WarehouseImportReviewDraft) -> Unit = {},
     onGrantWarehouseAuthority: (String, String) -> Unit = { _, _ -> },
     onEndWarehouseAuthority: (String, Long) -> Unit = { _, _ -> },
     onRefreshProjects: () -> Unit = {},
@@ -445,6 +446,7 @@ fun HiltechShell(
                             onCreateWarehouse = onCreateWarehouse,
                             onCreateWarehouseLocation = onCreateWarehouseLocation,
                             onOpenImportBatch = onOpenImportBatch,
+                            onReviewImportRow = onReviewImportRow,
                             onGrantWarehouseAuthority = onGrantWarehouseAuthority,
                             onEndWarehouseAuthority = onEndWarehouseAuthority,
                         )
