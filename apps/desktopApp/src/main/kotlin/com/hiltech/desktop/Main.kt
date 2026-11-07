@@ -7,6 +7,7 @@ import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechProjectsState
 import com.hiltech.shared.core.HiltechWarehouseState
+import com.hiltech.shared.core.WarehouseImportReviewDraft
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
@@ -1176,6 +1177,43 @@ fun main() {
                         warehouse = (current.warehouse ?: HiltechWarehouseState()).copy(
                             loading = false,
                             selectedImport = result.getOrNull(),
+                            errorCode = (result.exceptionOrNull() as? HiltechApiException)?.code,
+                            errorMessage = result.exceptionOrNull()?.message,
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun reviewWarehouseImportRow(draft: WarehouseImportReviewDraft) {
+        val signed = shellState.value as? HiltechShellState.SignedIn ?: return
+        if (signed.warehouse?.selectedImport?.batchId != draft.batchId) return
+        setState(
+            signed.copy(
+                warehouse = (signed.warehouse ?: HiltechWarehouseState()).copy(
+                    loading = true,
+                    errorCode = null,
+                    errorMessage = null,
+                ),
+            ),
+        )
+        scope.launch {
+            val result = runCatching {
+                runtime.reviewWarehouseImportRow(draft)
+                runtime.warehouseImportBatch(draft.batchId)
+            }
+            val current = shellState.value as? HiltechShellState.SignedIn
+            if (current != null &&
+                current.identity.identityId == signed.identity.identityId &&
+                current.warehouse?.selectedImport?.batchId == draft.batchId
+            ) {
+                setState(
+                    current.copy(
+                        warehouse = (current.warehouse ?: HiltechWarehouseState()).copy(
+                            loading = false,
+                            selectedImport = result.getOrNull()
+                                ?: current.warehouse?.selectedImport,
                             errorCode = (result.exceptionOrNull() as? HiltechApiException)?.code,
                             errorMessage = result.exceptionOrNull()?.message,
                         ),
@@ -2606,6 +2644,8 @@ fun main() {
                     ::createWarehouseLocation,
                 onOpenImportBatch =
                     ::openWarehouseImport,
+                onReviewImportRow =
+                    ::reviewWarehouseImportRow,
                 onGrantWarehouseAuthority =
                     ::grantWarehouseAuthority,
                 onEndWarehouseAuthority =
