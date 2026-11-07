@@ -22,6 +22,25 @@ import com.hiltech.shared.core.warehouse.StorageLocationListDto
 import com.hiltech.shared.core.warehouse.WarehouseAuthorityListDto
 import com.hiltech.shared.core.warehouse.WarehouseListDto
 
+/** 
+ * Safe reviewer edit intent. Never carries source raw JSON or monetary values.
+ * The UI does not expose APPROVED until source comparison is independently verified.
+ */
+data class WarehouseImportReviewDraft(
+    val batchId: String,
+    val rowId: String,
+    val baseVersion: Long,
+    val candidateClass: String,
+    val normalizedBrand: String?,
+    val normalizedPartNumber: String?,
+    val normalizedDescription: String?,
+    val candidateUom: String?,
+    val candidateQuantity: String?,
+    val issueCodes: List<String>,
+    val reviewState: String,
+    val reviewNotes: String?,
+)
+
 /**
  * First human Warehouse Setup surface in the canonical signed-in shell.
  * Data, permissions and import decisions always come from authoritative API.
@@ -46,6 +65,7 @@ fun WarehouseSetupSection(
     onCreateWarehouse: (String, String) -> Unit = { _, _ -> },
     onCreateWarehouseLocation: (String, String) -> Unit = { _, _ -> },
     onOpenImportBatch: (String) -> Unit = {},
+    onReviewImportRow: (WarehouseImportReviewDraft) -> Unit = {},
     onGrantWarehouseAuthority: (String, String) -> Unit = { _, _ -> },
     onEndWarehouseAuthority: (String, Long) -> Unit = { _, _ -> },
 ) {
@@ -54,6 +74,7 @@ fun WarehouseSetupSection(
     var storageCode by remember { mutableStateOf("") }
     var storageName by remember { mutableStateOf("") }
     var importBatchId by remember { mutableStateOf("") }
+    var selectedImportRowId by remember { mutableStateOf<String?>(null) }
     var principalId by remember { mutableStateOf("") }
     var authorityKey by remember { mutableStateOf("WAREHOUSE_VIEWER") }
 
@@ -198,6 +219,101 @@ fun WarehouseSetupSection(
                     Text(row.normalizedDescription ?: "Description pending review")
                     if (row.issueCodes.isNotEmpty()) {
                         Text("Needs review: " + row.issueCodes.joinToString())
+                    }
+                    OutlinedButton(
+                        onClick = { selectedImportRowId = row.rowId },
+                    ) { Text("Review row") }
+                }
+            }
+            val selectedRow = batch.rows.firstOrNull { it.rowId == selectedImportRowId }
+            if (selectedRow != null) {
+                var candidateClass by remember(selectedRow.rowId, selectedRow.version) {
+                    mutableStateOf(selectedRow.candidateClass)
+                }
+                var brand by remember(selectedRow.rowId, selectedRow.version) {
+                    mutableStateOf(selectedRow.normalizedBrand.orEmpty())
+                }
+                var partNumber by remember(selectedRow.rowId, selectedRow.version) {
+                    mutableStateOf(selectedRow.normalizedPartNumber.orEmpty())
+                }
+                var description by remember(selectedRow.rowId, selectedRow.version) {
+                    mutableStateOf(selectedRow.normalizedDescription.orEmpty())
+                }
+                var unit by remember(selectedRow.rowId, selectedRow.version) {
+                    mutableStateOf(selectedRow.candidateUom.orEmpty())
+                }
+                var quantity by remember(selectedRow.rowId, selectedRow.version) {
+                    mutableStateOf(selectedRow.candidateQuantity.orEmpty())
+                }
+                var notes by remember(selectedRow.rowId, selectedRow.version) {
+                    mutableStateOf("")
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(
+                        "Review source row " + selectedRow.sourceRowNumber +
+                            " · version " + selectedRow.version,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        "Safe candidate fields only. The original workbook is not exposed here; " +
+                            "approval is intentionally unavailable until a verified source comparison exists.",
+                    )
+                    Text("Recorded source issues: " +
+                        selectedRow.issueCodes.joinToString().ifBlank { "None recorded" })
+                    OutlinedTextField(
+                        value = candidateClass, onValueChange = { candidateClass = it },
+                        label = { Text("Candidate class") }, singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = brand, onValueChange = { brand = it },
+                        label = { Text("Brand") }, singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = partNumber, onValueChange = { partNumber = it },
+                        label = { Text("Part number") }, singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = description, onValueChange = { description = it },
+                        label = { Text("Description") },
+                    )
+                    OutlinedTextField(
+                        value = unit, onValueChange = { unit = it },
+                        label = { Text("Candidate UOM") }, singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = quantity, onValueChange = { quantity = it },
+                        label = { Text("Candidate quantity") }, singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = notes, onValueChange = { notes = it },
+                        label = { Text("Reviewer explanation") },
+                    )
+                    val candidateValid = candidateClass in setOf(
+                        "UNCLASSIFIED", "STOCK_QUANTITY", "STOCK_SERIALIZED", "COMPANY_ASSET",
+                    )
+                    fun draft(state: String) = WarehouseImportReviewDraft(
+                        batchId = batch.batchId,
+                        rowId = selectedRow.rowId,
+                        baseVersion = selectedRow.version,
+                        candidateClass = candidateClass,
+                        normalizedBrand = brand.trim().ifEmpty { null },
+                        normalizedPartNumber = partNumber.trim().ifEmpty { null },
+                        normalizedDescription = description.trim().ifEmpty { null },
+                        candidateUom = unit.trim().ifEmpty { null },
+                        candidateQuantity = quantity.trim().ifEmpty { null },
+                        issueCodes = selectedRow.issueCodes,
+                        reviewState = state,
+                        reviewNotes = notes.trim().ifEmpty { null },
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            enabled = !state.loading && candidateValid,
+                            onClick = { onReviewImportRow(draft("NEEDS_REVIEW")) },
+                        ) { Text("Save review / needs clarification") }
+                        OutlinedButton(
+                            enabled = !state.loading && candidateValid && notes.isNotBlank(),
+                            onClick = { onReviewImportRow(draft("REJECTED")) },
+                        ) { Text("Reject with reason") }
                     }
                 }
             }
