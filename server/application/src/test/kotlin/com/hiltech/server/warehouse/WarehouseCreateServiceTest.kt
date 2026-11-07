@@ -43,7 +43,7 @@ class WarehouseCreateServiceTest {
         Mockito.`when`(authorization.canManageInventoryOrganization(actor, organization))
             .thenReturn(true)
         val error = assertThrows<ProductApiException> {
-            service.create(command(code = "BAD CODE WITH SPACES"))
+            service.create(command(code = "   "))
         }
         assertEquals("INVALID_WAREHOUSE_CODE", error.code)
         Mockito.verifyNoInteractions(persistence, idempotency, projection, audit)
