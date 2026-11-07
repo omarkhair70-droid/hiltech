@@ -116,15 +116,20 @@ class WarehouseImportRowReviewServiceTest {
             reviewedAt = clock.instant(),
         )
         Mockito.`when`(persistence.importRow(rowId)).thenReturn(before, after)
+        val request = command(reviewState = InventoryImportReviewState.APPROVED)
         Mockito.`when`(
-            persistence.updateImportRowReview(command(
-                reviewState = InventoryImportReviewState.APPROVED,
-            ), emptyList(), clock.instant()),
+            persistence.updateImportRowReview(request, emptyList(), clock.instant()),
         ).thenReturn(true)
 
-        // Capture the exact command sent by service, including normalization.
-        // Mockito exact stubbing above is intentionally NOT used for success;
-        // the service must be tested through a real matching command instance.
+        val outcome = service.review(request)
+        assertEquals(InventoryImportReviewState.APPROVED, outcome.row.reviewState)
+        assertEquals(2L, outcome.row.version)
+        assertEquals(1, executor.calls)
+        assertEquals(
+            1, Mockito.mockingDetails(persistence).invocations
+                .count { it.method.name == "updateImportRowReview" } - 1,
+        )
+        assertEquals(1, Mockito.mockingDetails(audit).invocations.size)
     }
 
     private fun authorize() {
