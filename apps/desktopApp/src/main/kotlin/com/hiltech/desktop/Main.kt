@@ -1034,6 +1034,7 @@ fun main() {
         )
         scope.launch {
             val directory = runCatching { runtime.warehouses(organizationId) }
+            val imports = runCatching { runtime.warehouseImportBatches(organizationId) }
             val actualSelected = directory.getOrNull()?.items?.let { items ->
                 selectedId?.takeIf { id -> items.any { it.warehouseId == id } }
                     ?: items.firstOrNull()?.warehouseId
@@ -1055,6 +1056,7 @@ fun main() {
                             selectedWarehouseId = actualSelected,
                             locations = locations?.getOrNull(),
                             currentAuthority = authority?.getOrNull(),
+                            importDirectory = imports.getOrNull(),
                             selectedImport = current.warehouse?.selectedImport,
                             errorCode = (directory.exceptionOrNull() as? HiltechApiException)?.code,
                             errorMessage = directory.exceptionOrNull()?.message,
