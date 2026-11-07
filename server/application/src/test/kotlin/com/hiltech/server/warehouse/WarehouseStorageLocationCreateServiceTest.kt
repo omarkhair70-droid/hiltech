@@ -55,9 +55,7 @@ class WarehouseStorageLocationCreateServiceTest {
             service.create(command(warehouseId = warehouse.warehouseId))
         }
         assertEquals("WAREHOUSE_CONTEXT_UNAVAILABLE", failure.code)
-        Mockito.verify(persistence, Mockito.never()).insertStorageLocation(
-            Mockito.any(UUID::class.java), Mockito.any(CreateStorageLocationCommand::class.java),
-        )
+        Mockito.verifyNoInteractions(projection, audit)
     }
 
     @Test
@@ -110,9 +108,7 @@ class WarehouseStorageLocationCreateServiceTest {
             )
         }
         assertEquals("STORAGE_PARENT_UNAVAILABLE", failure.code)
-        Mockito.verify(persistence, Mockito.never()).insertStorageLocation(
-            Mockito.any(UUID::class.java), Mockito.any(CreateStorageLocationCommand::class.java),
-        )
+        Mockito.verifyNoInteractions(projection, audit)
     }
 
     @Test
@@ -161,7 +157,11 @@ class WarehouseStorageLocationCreateServiceTest {
             locationId, request.copy(code = "LOC-001"),
         )
         Mockito.verify(projection).storageCreated(saved, saved.version)
-        Mockito.verify(audit).append(Mockito.any())
+        val recorded = Mockito.mockingDetails(audit).invocations.toList()
+        assertEquals(1, recorded.size)
+        val auditEvent = recorded.single().arguments[0] as com.hiltech.server.audit.AuditEventRecord
+        assertEquals("STORAGE_LOCATION_CREATED", auditEvent.action)
+        assertEquals(locationId, auditEvent.targetId)
     }
 
     private fun authorizeOrganizationManager() {
