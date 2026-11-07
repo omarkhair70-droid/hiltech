@@ -51,10 +51,7 @@ class WarehouseCreateService(
         val normalizedName = command.name.trim()
         val normalizedFacility = command.facilityRef?.trim()?.takeIf { it.isNotEmpty() }
 
-        if (
-            normalizedCode.isEmpty() || normalizedCode.length > 64 ||
-            !Regex("^[A-Z0-9][A-Z0-9._-]*$").matches(normalizedCode)
-        ) {
+        if (normalizedCode.isEmpty() || normalizedCode.length > 64) {
             throw invalid("INVALID_WAREHOUSE_CODE", "Warehouse code is invalid.")
         }
         if (normalizedName.isEmpty() || normalizedName.length > 160) {
