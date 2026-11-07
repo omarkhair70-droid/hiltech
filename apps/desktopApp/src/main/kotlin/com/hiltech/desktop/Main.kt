@@ -6,6 +6,7 @@ import androidx.compose.ui.window.application
 import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechProjectsState
+import com.hiltech.shared.core.HiltechWarehouseState
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
@@ -155,6 +156,10 @@ fun main() {
                     ),
                 projects =
                     HiltechProjectsState(
+                        loading = true,
+                    ),
+                warehouse =
+                    HiltechWarehouseState(
                         loading = true,
                     ),
             ),
@@ -1010,6 +1015,187 @@ fun main() {
                     )
                 }
             }
+        }
+    }
+
+    fun refreshWarehouses() {
+        val signed = shellState.value as? HiltechShellState.SignedIn ?: return
+        val organizationId = signed.identity.organizations
+            .firstOrNull { it.primary }?.organizationId
+            ?: signed.identity.organizations.firstOrNull()?.organizationId
+            ?: return
+        val selectedId = signed.warehouse?.selectedWarehouseId
+        setState(
+            signed.copy(
+                warehouse = (signed.warehouse ?: HiltechWarehouseState()).copy(
+                    loading = true, errorCode = null, errorMessage = null,
+                ),
+            ),
+        )
+        scope.launch {
+            val directory = runCatching { runtime.warehouses(organizationId) }
+            val actualSelected = directory.getOrNull()?.items?.let { items ->
+                selectedId?.takeIf { id -> items.any { it.warehouseId == id } }
+                    ?: items.firstOrNull()?.warehouseId
+            }
+            val locations = actualSelected?.let {
+                runCatching { runtime.warehouseLocations(it) }
+            }
+            val authority = actualSelected?.let {
+                runCatching { runtime.currentWarehouseAuthority(it) }
+            }
+            val current = shellState.value as? HiltechShellState.SignedIn
+            if (current != null &&
+                current.identity.identityId == signed.identity.identityId
+            ) {
+                setState(
+                    current.copy(
+                        warehouse = HiltechWarehouseState(
+                            directory = directory.getOrNull(),
+                            selectedWarehouseId = actualSelected,
+                            locations = locations?.getOrNull(),
+                            currentAuthority = authority?.getOrNull(),
+                            selectedImport = current.warehouse?.selectedImport,
+                            errorCode = (directory.exceptionOrNull() as? HiltechApiException)?.code,
+                            errorMessage = directory.exceptionOrNull()?.message,
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun selectWarehouse(warehouseId: String) {
+        val signed = shellState.value as? HiltechShellState.SignedIn ?: return
+        setState(
+            signed.copy(
+                warehouse = (signed.warehouse ?: HiltechWarehouseState()).copy(
+                    selectedWarehouseId = warehouseId,
+                    loading = true,
+                    locations = null,
+                    currentAuthority = null,
+                    errorCode = null,
+                    errorMessage = null,
+                ),
+            ),
+        )
+        scope.launch {
+            val locations = runCatching { runtime.warehouseLocations(warehouseId) }
+            val authority = runCatching { runtime.currentWarehouseAuthority(warehouseId) }
+            val current = shellState.value as? HiltechShellState.SignedIn
+            if (current != null &&
+                current.identity.identityId == signed.identity.identityId &&
+                current.warehouse?.selectedWarehouseId == warehouseId
+            ) {
+                setState(
+                    current.copy(
+                        warehouse = (current.warehouse ?: HiltechWarehouseState()).copy(
+                            loading = false,
+                            locations = locations.getOrNull(),
+                            currentAuthority = authority.getOrNull(),
+                            errorCode = (locations.exceptionOrNull() as? HiltechApiException)?.code,
+                            errorMessage = locations.exceptionOrNull()?.message,
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun mutateWarehouse(action: suspend () -> Unit) {
+        val signed = shellState.value as? HiltechShellState.SignedIn ?: return
+        setState(
+            signed.copy(
+                warehouse = (signed.warehouse ?: HiltechWarehouseState()).copy(
+                    loading = true, errorCode = null, errorMessage = null,
+                ),
+            ),
+        )
+        scope.launch {
+            runCatching { action() }.onSuccess {
+                refreshWarehouses()
+            }.onFailure { failure ->
+                val current = shellState.value as? HiltechShellState.SignedIn
+                if (current != null &&
+                    current.identity.identityId == signed.identity.identityId
+                ) {
+                    setState(
+                        current.copy(
+                            warehouse = (current.warehouse ?: HiltechWarehouseState()).copy(
+                                loading = false,
+                                errorCode = (failure as? HiltechApiException)?.code,
+                                errorMessage = failure.message ?: "Warehouse command failed.",
+                            ),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun createWarehouse(code: String, name: String) {
+        val signed = shellState.value as? HiltechShellState.SignedIn ?: return
+        val organizationId = signed.identity.organizations
+            .firstOrNull { it.primary }?.organizationId
+            ?: signed.identity.organizations.firstOrNull()?.organizationId
+            ?: return
+        mutateWarehouse { runtime.createWarehouse(organizationId, code, name) }
+    }
+
+    fun createWarehouseLocation(code: String, name: String) {
+        val signed = shellState.value as? HiltechShellState.SignedIn ?: return
+        val organizationId = signed.identity.organizations
+            .firstOrNull { it.primary }?.organizationId
+            ?: signed.identity.organizations.firstOrNull()?.organizationId
+            ?: return
+        val warehouseId = signed.warehouse?.selectedWarehouseId ?: return
+        mutateWarehouse {
+            runtime.createWarehouseLocation(organizationId, warehouseId, code, name)
+        }
+    }
+
+    fun openWarehouseImport(batchId: String) {
+        val signed = shellState.value as? HiltechShellState.SignedIn ?: return
+        setState(
+            signed.copy(
+                warehouse = (signed.warehouse ?: HiltechWarehouseState()).copy(
+                    loading = true, errorCode = null, errorMessage = null,
+                ),
+            ),
+        )
+        scope.launch {
+            val result = runCatching { runtime.warehouseImportBatch(batchId) }
+            val current = shellState.value as? HiltechShellState.SignedIn
+            if (current != null &&
+                current.identity.identityId == signed.identity.identityId
+            ) {
+                setState(
+                    current.copy(
+                        warehouse = (current.warehouse ?: HiltechWarehouseState()).copy(
+                            loading = false,
+                            selectedImport = result.getOrNull(),
+                            errorCode = (result.exceptionOrNull() as? HiltechApiException)?.code,
+                            errorMessage = result.exceptionOrNull()?.message,
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun grantWarehouseAuthority(key: String, principalId: String) {
+        val signed = shellState.value as? HiltechShellState.SignedIn ?: return
+        val warehouseId = signed.warehouse?.selectedWarehouseId ?: return
+        mutateWarehouse {
+            runtime.grantWarehouseAuthority(warehouseId, key, principalId)
+        }
+    }
+
+    fun endWarehouseAuthority(bindingId: String, baseVersion: Long) {
+        val signed = shellState.value as? HiltechShellState.SignedIn ?: return
+        val warehouseId = signed.warehouse?.selectedWarehouseId ?: return
+        mutateWarehouse {
+            runtime.endWarehouseAuthority(warehouseId, bindingId, baseVersion)
         }
     }
 
@@ -2308,6 +2494,7 @@ fun main() {
                 refreshPeople()
                 refreshOnboarding()
                 refreshProjects()
+                refreshWarehouses()
             }.onFailure(::showFailure)
         }
     }
@@ -2405,6 +2592,20 @@ fun main() {
                 onCompleteOffboarding =
                     ::completeOffboarding,
                 onCreateEmployee = ::createEmployee,
+                onRefreshWarehouse =
+                    ::refreshWarehouses,
+                onSelectWarehouse =
+                    ::selectWarehouse,
+                onCreateWarehouse =
+                    ::createWarehouse,
+                onCreateWarehouseLocation =
+                    ::createWarehouseLocation,
+                onOpenImportBatch =
+                    ::openWarehouseImport,
+                onGrantWarehouseAuthority =
+                    ::grantWarehouseAuthority,
+                onEndWarehouseAuthority =
+                    ::endWarehouseAuthority,
                 onRefreshProjects =
                     ::refreshProjects,
                 onSelectProject =
