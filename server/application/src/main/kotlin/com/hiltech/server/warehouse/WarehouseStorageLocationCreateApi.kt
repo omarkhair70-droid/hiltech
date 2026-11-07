@@ -202,7 +202,7 @@ class WarehouseStorageLocationCreateService(
             val parent = persistence.storageLocation(parentId)
             if (parent == null || parent.organizationId != command.organizationId ||
                 parent.lifecycleState != StorageLocationLifecycle.ACTIVE ||
-                (parent.warehouseId != null && command.warehouseId != null &&
+                (parent.warehouseId != null &&
                     parent.warehouseId != command.warehouseId) ||
                 (parent.projectId != null && command.projectId != null &&
                     parent.projectId != command.projectId) ||
@@ -214,6 +214,22 @@ class WarehouseStorageLocationCreateService(
                     message = "The StorageLocation parent is unavailable in this context.",
                     status = HttpStatus.CONFLICT,
                 )
+            }
+            // Parent-specific warehouse authority is required, even if this
+            // location is created through the standalone Project/Site route.
+            parent.warehouseId?.let { parentWarehouseId ->
+                val parentWarehouse = persistence.warehouse(parentWarehouseId)
+                if (parentWarehouse == null ||
+                    !parentWarehouse.active ||
+                    parentWarehouse.organizationId != command.organizationId ||
+                    !authorization.canManageWarehouse(command.actorUserId, parentWarehouse)
+                ) {
+                    throw ProductApiException(
+                        code = "STORAGE_PARENT_UNAVAILABLE",
+                        message = "The StorageLocation parent is unavailable in this context.",
+                        status = HttpStatus.CONFLICT,
+                    )
+                }
             }
             // A newly generated StorageLocation cannot be an existing parent.
             // V0026 protects all subsequent hierarchy edits against cycles.
@@ -235,23 +251,6 @@ class WarehouseStorageLocationCreateService(
 }
 
 data class CreateStorageLocationRequest(
-    val operationId: String,
-    val organizationId: String,
-    val code: String,
-    val name: String,
-    val kind: String,
-    val parentStorageLocationId: String? = null,
-    val projectId: String? = null,
-    val siteId: String? = null,
-    val temporary: Boolean = false,
-    val activeFrom: String? = null,
-    val restrictedAccess: Boolean = false,
-    val addressOrLocationRef: String? = null,
-    val notes: String? = null,
-    val clientOccurredAt: String,
-)
-
-data class CreateStorageLocationWithoutWarehouseRequest(
     val operationId: String,
     val organizationId: String,
     val code: String,
