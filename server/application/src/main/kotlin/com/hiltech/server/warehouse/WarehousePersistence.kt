@@ -758,7 +758,7 @@ class JdbcWarehousePersistence(
             VALUES (
                 ?, ?, ?, ?, ?, CAST(? AS jsonb), ?,
                 ?, ?, ?, ?, ?, ?, ?,
-                ?, 'PENDING', NULL, NULL, NULL, NULL, NULL,
+                CAST(? AS varchar(64)[]), 'PENDING', NULL, NULL, NULL, NULL, NULL,
                 ?, ?, 1
             )
             """.trimIndent(),
@@ -776,7 +776,7 @@ class JdbcWarehousePersistence(
             command.candidateQuantity,
             command.candidateValue,
             command.candidateCurrencyCode,
-            issueCodes.map { it.name }.toTypedArray(),
+            issueCodes.toPgIssueCodeArray(),
             at.atOffset(ZoneOffset.UTC),
             at.atOffset(ZoneOffset.UTC),
         )
@@ -798,7 +798,7 @@ class JdbcWarehousePersistence(
                 candidate_quantity = ?,
                 candidate_value = ?,
                 candidate_currency_code = ?,
-                issue_codes = ?,
+                issue_codes = CAST(? AS varchar(64)[]),
                 review_state = ?,
                 review_notes = ?,
                 reviewed_by_user_id = ?,
@@ -817,7 +817,7 @@ class JdbcWarehousePersistence(
             command.candidateQuantity,
             command.candidateValue,
             command.candidateCurrencyCode,
-            issueCodes.map { it.name }.toTypedArray(),
+            issueCodes.toPgIssueCodeArray(),
             command.reviewState.name,
             command.reviewNotes,
             command.actorUserId,
@@ -899,6 +899,14 @@ class JdbcWarehousePersistence(
         WHERE $predicate
         """.trimIndent()
 }
+
+/**
+ * Encode only the closed InventoryImportIssueCode enum into a PostgreSQL
+ * varchar[] text literal. Do not apply this helper to arbitrary source text.
+ * CAST avoids driver-specific setObject(String[]) interpretation.
+ */
+private fun List<InventoryImportIssueCode>.toPgIssueCodeArray(): String =
+    joinToString(prefix = "{", postfix = "}", separator = ",") { it.name }
 
 private fun java.sql.ResultSet.toStorageLocation() =
     StorageLocationSnapshot(
