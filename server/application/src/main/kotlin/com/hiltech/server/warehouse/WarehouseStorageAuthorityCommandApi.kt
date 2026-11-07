@@ -41,6 +41,15 @@ class WarehouseStorageAuthorityCommandService(
     private val audit: AuditEventWriter,
     private val clock: Clock,
 ) {
+    fun currentBindings(actorUserId: UUID, storageLocationId: UUID): List<StorageAuthorityBindingSnapshot> {
+        val location = requireManagedStorage(actorUserId, storageLocationId)
+        return persistence.currentStorageAuthorityBindings(location.storageLocationId, clock.instant())
+            .filter {
+                it.current && it.organizationId == location.organizationId &&
+                    it.storageLocationId == location.storageLocationId
+            }
+    }
+
     fun grant(command: GrantStorageAuthorityCommand): StorageBindingCommandResult {
         val storage = requireManagedStorage(command.actorUserId, command.storageLocationId)
         if (command.effectiveFrom > clock.instant()) {
@@ -240,6 +249,18 @@ data class StorageAuthorityEndRequest(
     val baseVersion: Long,
     val clientOccurredAt: String,
 )
+data class StorageAuthorityCurrentResponse(
+    val bindingId: String,
+    val storageLocationId: String,
+    val authorityKey: String,
+    val principalType: String,
+    val principalId: String,
+    val version: Long,
+)
+data class StorageAuthorityCurrentListResponse(
+    val items: List<StorageAuthorityCurrentResponse>,
+    val correlationId: String,
+)
 data class StorageAuthorityCommandResponse(
     val bindingId: String,
     val storageLocationId: String,
@@ -254,6 +275,29 @@ data class StorageAuthorityCommandResponse(
 
 @RestController
 class WarehouseStorageAuthorityController(private val service: WarehouseStorageAuthorityCommandService) {
+    @org.springframework.web.bind.annotation.GetMapping("/v1/storage-locations/{storageLocationId}/authority")
+    fun listCurrent(
+        servletRequest: HttpServletRequest,
+        @PathVariable storageLocationId: String,
+    ): StorageAuthorityCurrentListResponse {
+        val context = HiltechRequestContext.current(servletRequest)
+        val actor = context.requireStorageAuthIdentity()
+        val id = storageLocationId.asStorageAuthUuid("INVALID_STORAGE_LOCATION_ID")
+        return StorageAuthorityCurrentListResponse(
+            items = service.currentBindings(actor, id).map {
+                StorageAuthorityCurrentResponse(
+                    bindingId = it.bindingId.toString(),
+                    storageLocationId = it.storageLocationId.toString(),
+                    authorityKey = it.authorityKey.name,
+                    principalType = it.principalType.name,
+                    principalId = it.principalId.toString(),
+                    version = it.version,
+                )
+            },
+            correlationId = context.correlationId,
+        )
+    }
+
     @PostMapping("/v1/storage-locations/{storageLocationId}/authority")
     fun grant(
         servletRequest: HttpServletRequest,
