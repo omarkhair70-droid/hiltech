@@ -36,6 +36,34 @@ class WarehouseAuthorityCommandServiceTest {
     private val principalId = UUID.randomUUID()
 
     @Test
+    fun currentDirectoryFiltersWrongOrganizationWarehouseAndEndedAuthority() {
+        authorizeManager()
+        val visible = snapshot(UUID.randomUUID(), WarehouseAuthorityKey.WAREHOUSE_VIEWER)
+        val otherOrg = visible.copy(bindingId = UUID.randomUUID(), organizationId = UUID.randomUUID())
+        val otherWarehouse = visible.copy(bindingId = UUID.randomUUID(), warehouseId = UUID.randomUUID())
+        val ended = visible.copy(bindingId = UUID.randomUUID(), current = false)
+        Mockito.`when`(
+            persistence.currentWarehouseAuthorityBindings(warehouseId, clock.instant()),
+        ).thenReturn(listOf(visible, otherOrg, otherWarehouse, ended))
+        assertEquals(listOf(visible), service.currentBindings(actor, warehouseId))
+    }
+
+    @Test
+    fun unauthorizedManagerCannotReadAuthorityDirectory() {
+        val w = warehouse()
+        Mockito.`when`(persistence.warehouse(warehouseId)).thenReturn(w)
+        val error = assertThrows<ProductApiException> {
+            service.currentBindings(actor, warehouseId)
+        }
+        assertEquals("WAREHOUSE_AUTHORITY_UNAVAILABLE", error.code)
+        assertTrue(
+            Mockito.mockingDetails(persistence).invocations.none {
+                it.method.name == "currentWarehouseAuthorityBindings"
+            },
+        )
+    }
+
+    @Test
     fun deniesSensitiveCapabilitiesEvenForCurrentWarehouseManager() {
         authorizeManager()
         val error = assertThrows<ProductApiException> {
