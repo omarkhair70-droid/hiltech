@@ -112,6 +112,32 @@ class WarehouseApiClientTest {
     }
 
     @Test
+    fun importDirectoryIsBrowsableWithoutRawRows() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/inventory-imports", request.url.encodedPath)
+            assertEquals("organizationId=$org", request.url.encodedQuery)
+            respond(
+                content = """
+                    {
+                      "items":[{
+                        "batchId":"$batchId","organizationId":"$org",
+                        "sourceFileName":"stock.xlsx","sourceSha256":"${"a".repeat(64)}",
+                        "sourceType":"LEGACY_EXCEL","cutoverDate":null,
+                        "state":"IN_REVIEW","version":2
+                      }],
+                      "correlationId":"corr-import-directory"
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val items = client(http).importBatches(org, installation).items
+        assertEquals(1, items.size)
+        assertEquals("stock.xlsx", items.single().sourceFileName)
+    }
+
+    @Test
     fun invalidIdentifiersCannotBecomeRequests() = runBlocking {
         var called = false
         val http = HttpClient(MockEngine {
