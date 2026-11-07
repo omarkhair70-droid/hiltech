@@ -100,6 +100,16 @@ class WarehouseApiClient(
         )
     }
 
+    suspend fun importBatches(
+        organizationId: String,
+        installationId: String,
+    ): InventoryImportBatchDirectoryDto =
+        get(
+            "/v1/inventory-imports?organizationId=" + uuid(organizationId),
+            installationId,
+            InventoryImportBatchDirectoryDto.serializer(),
+        )
+
     suspend fun importBatch(
         batchId: String,
         installationId: String,
