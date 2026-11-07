@@ -10,8 +10,6 @@ import com.hiltech.server.platform.IdempotentCommandOutcome
 import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
 import jakarta.servlet.http.HttpServletRequest
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.springframework.http.HttpStatus
@@ -30,10 +28,8 @@ import java.util.UUID
 /**
  * Manual review of a staged, immutable raw spreadsheet row.
  *
- * APPROVED only means "candidate row reviewed for future master-data
- * preparation"; it never imports stock, establishes opening truth or registers
- * Assets in Slice 01. Ambiguous original columns remain blocking until an
- * explicit field-mapping resolution contract is added.
+ * Approval requires verified source and mapping evidence. Slice 01 currently
+ * records candidate edits and rejection without granting approval.
  */
 @Component
 class WarehouseImportRowReviewService(
@@ -46,6 +42,13 @@ class WarehouseImportRowReviewService(
     fun review(command: ReviewInventoryImportRowCommand): ImportRowCommandResult {
         val batch = persistence.importBatch(command.batchId) ?: throw unavailable()
         requireImportAccess(command.actorUserId, batch.organizationId)
+        if (command.candidateValue != null || command.candidateCurrencyCode != null) {
+            throw ProductApiException(
+                code = "INVENTORY_VALUE_REVIEW_REQUIRES_SEPARATE_AUTHORITY",
+                message = "Restricted source values require a separately authorized review workflow.",
+                status = HttpStatus.FORBIDDEN,
+            )
+        }
         if (command.baseVersion <= 0) {
             throw invalid("INVALID_ROW_VERSION", "A positive import row version is required.")
         }
@@ -105,20 +108,6 @@ class WarehouseImportRowReviewService(
                 )
             }
 
-            // The ordinary import-review UI deliberately hides restricted
-            // value/currency columns. A nullable HTTP request must not erase
-            // hidden financial evidence or silently change its meaning.
-            if ((normalized.candidateValue != null &&
-                    normalized.candidateValue.compareTo(previous.candidateValue ?: BigDecimal.ZERO) != 0) ||
-                (normalized.candidateCurrencyCode != null &&
-                    normalized.candidateCurrencyCode != previous.candidateCurrencyCode)
-            ) {
-                throw ProductApiException(
-                    code = "INVENTORY_VALUE_REVIEW_REQUIRES_SEPARATE_AUTHORITY",
-                    message = "Restricted source values require a separately authorized review workflow.",
-                    status = HttpStatus.FORBIDDEN,
-                )
-            }
             val safeReview = normalized.copy(
                 candidateValue = previous.candidateValue,
                 candidateCurrencyCode = previous.candidateCurrencyCode,
@@ -138,18 +127,16 @@ class WarehouseImportRowReviewService(
                     "Rejected import rows require an explanation.",
                 )
             }
-            val issues = deriveMandatoryIssues(previous, normalized)
+            val issues = deriveMandatoryIssues(locked.sourceType, previous, normalized)
                 .plus(normalized.issueCodes)
                 .distinct()
                 .sortedBy { it.name }
             if (normalized.reviewState == InventoryImportReviewState.APPROVED) {
-                if (issues.isNotEmpty() || normalized.normalizedDescription.isNullOrBlank()) {
-                    throw ProductApiException(
-                        code = "INVENTORY_IMPORT_ROW_REVIEW_BLOCKED",
-                        message = "Resolve all issues and provide a description before approval.",
-                        status = HttpStatus.CONFLICT,
-                    )
-                }
+                throw ProductApiException(
+                    code = "INVENTORY_IMPORT_ROW_REVIEW_BLOCKED",
+                    message = "Approval requires verified source and mapping evidence.",
+                    status = HttpStatus.CONFLICT,
+                )
             }
             if (!persistence.updateImportRowReview(safeReview, issues, clock.instant())) {
                 throw ProductApiException(
@@ -190,10 +177,12 @@ class WarehouseImportRowReviewService(
     }
 
     private fun deriveMandatoryIssues(
+        sourceType: InventoryImportSourceType,
         previous: InventoryImportRowSnapshot,
         command: ReviewInventoryImportRowCommand,
     ): List<InventoryImportIssueCode> {
-        val issues = mutableSetOf<InventoryImportIssueCode>()
+        val issues = LegacyInventorySource.issues(sourceType, previous.sourceSheet, previous.rawPayloadJson)
+            .toMutableSet()
         if (command.candidateClass == InventoryCandidateClass.UNCLASSIFIED) {
             issues += InventoryImportIssueCode.ITEM_CLASSIFICATION_REQUIRED
         }
@@ -213,16 +202,6 @@ class WarehouseImportRowReviewService(
         }
         if (command.candidateQuantity == null) {
             issues += InventoryImportIssueCode.QUANTITY_AMBIGUOUS
-        }
-        // The raw source is immutable. A legacy serial-labelled column is NOT
-        // trustworthy serialized identity, even if the reviewer changes class.
-        val raw = Json.parseToJsonElement(previous.rawPayloadJson) as JsonObject
-        if (raw.keys.any { sourceKey ->
-                sourceKey.trim().lowercase(Locale.ROOT).replace(" ", "").replace("_", "") in
-                    setOf("serial", "serialnumber", "الرقمالتسلسلي")
-            }
-        ) {
-            issues += InventoryImportIssueCode.LEGACY_COLUMN_SEMANTICS_AMBIGUOUS
         }
         return issues.toList()
     }

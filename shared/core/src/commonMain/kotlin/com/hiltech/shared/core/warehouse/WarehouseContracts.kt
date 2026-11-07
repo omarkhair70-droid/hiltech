@@ -148,6 +148,7 @@ data class InventoryImportRowDto(
     val issueCodes: List<String>,
     val reviewState: String,
     val version: Long,
+    val sourcePreview: Map<String, String> = emptyMap(),
 )
 
 @Serializable

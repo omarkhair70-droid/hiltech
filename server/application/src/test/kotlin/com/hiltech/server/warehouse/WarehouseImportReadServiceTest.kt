@@ -82,6 +82,50 @@ class WarehouseImportReadServiceTest {
         assertEquals(listOf(allowed), service.batchDirectory(actor, organization))
     }
 
+    @Test
+    fun sourcePreviewKeepsKnownLegacyColumnsAndOmitsValuesAndUnknownFields() {
+        val row = row(organization, batchId).copy(
+            sourceSheet = "أكسسوارات",
+            rawPayloadJson = """{
+                "اسم الصنف":"Example",
+                "العدد":0,
+                "الرقم التسلسلي":"LOCAL",
+                "سعر القطعه":1000,
+                "السعر الإجمالي":1000,
+                "ملاحظات":"private",
+                "PART NUMBER":"unexpected on this layout",
+                "supplierCost":1000
+            }""",
+        )
+
+        assertEquals(
+            mapOf("اسم الصنف" to "Example", "العدد" to "0", "الرقم التسلسلي" to "LOCAL"),
+            LegacyInventorySource.preview(InventoryImportSourceType.LEGACY_EXCEL, row),
+        )
+        assertEquals(emptyMap<String, String>(), LegacyInventorySource.preview(InventoryImportSourceType.CSV, row))
+    }
+
+    @Test
+    fun representativeLegacyLayoutsSurfaceDifferentSourceAmbiguities() {
+        val excel = InventoryImportSourceType.LEGACY_EXCEL
+        assertEquals(
+            setOf(InventoryImportIssueCode.LEGACY_DATE_SEMANTICS_AMBIGUOUS),
+            LegacyInventorySource.issues(excel, "Main", """{"UOM":"PC","تاريخ الخروج":"2026-01-01"}"""),
+        )
+        assertEquals(
+            setOf(InventoryImportIssueCode.UNKNOWN_UOM),
+            LegacyInventorySource.issues(excel, "FIBER", """{"DESC":"Fiber cable","UOM":"PC"}"""),
+        )
+        assertEquals(
+            setOf(InventoryImportIssueCode.DESCRIPTION_CONFLICT),
+            LegacyInventorySource.issues(excel, "SAMPLE", """{"DESCRPTION":"Patch cord","DESC":"Switch"}"""),
+        )
+        assertEquals(
+            setOf(InventoryImportIssueCode.LEGACY_COLUMN_SEMANTICS_AMBIGUOUS),
+            LegacyInventorySource.issues(excel, "أكسسوارات", """{"الرقم التسلسلي":"LOCAL"}"""),
+        )
+    }
+
     private fun batch() = InventoryImportBatchSnapshot(
         batchId = batchId,
         organizationId = organization,

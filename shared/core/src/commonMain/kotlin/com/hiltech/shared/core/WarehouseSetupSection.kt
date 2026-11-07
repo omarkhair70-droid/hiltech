@@ -254,12 +254,15 @@ fun WarehouseSetupSection(
                             " · version " + selectedRow.version,
                         style = MaterialTheme.typography.titleMedium,
                     )
-                    Text(
-                        "Safe candidate fields only. The original workbook is not exposed here; " +
-                            "approval is intentionally unavailable until a verified source comparison exists.",
-                    )
+                    Text("Source cells", style = MaterialTheme.typography.titleSmall)
+                    if (selectedRow.sourcePreview.isEmpty()) {
+                        Text("No preview is available for this source layout.")
+                    }
+                    selectedRow.sourcePreview.forEach { (label, value) -> Text("$label · $value") }
+                    Text("Approval requires verified source and mapping evidence.")
                     Text("Recorded source issues: " +
                         selectedRow.issueCodes.joinToString().ifBlank { "None recorded" })
+                    Text("Normalized candidate", style = MaterialTheme.typography.titleSmall)
                     OutlinedTextField(
                         value = candidateClass, onValueChange = { candidateClass = it },
                         label = { Text("Candidate class") }, singleLine = true,

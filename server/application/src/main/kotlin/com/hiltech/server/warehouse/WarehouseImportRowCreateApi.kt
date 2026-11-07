@@ -90,7 +90,7 @@ class WarehouseImportRowCreateService(
             requireImportAuthority(normalized.actorUserId, batch.organizationId)
             requireOpenBatch(batch)
 
-            val issues = deriveIssues(normalized)
+            val issues = deriveIssues(batch.sourceType, normalized)
             try {
                 persistence.insertImportRow(
                     rowId = rowId,
@@ -210,9 +210,11 @@ class WarehouseImportRowCreateService(
     }
 
     private fun deriveIssues(
+        sourceType: InventoryImportSourceType,
         command: AddInventoryImportRowCommand,
     ): List<InventoryImportIssueCode> {
-        val issues = command.sourceIssueCodes.toMutableSet()
+        val issues = LegacyInventorySource.issues(sourceType, command.sourceSheet, command.rawPayloadJson)
+            .plus(command.sourceIssueCodes).toMutableSet()
         if (command.candidateClass == InventoryCandidateClass.UNCLASSIFIED) {
             issues += InventoryImportIssueCode.ITEM_CLASSIFICATION_REQUIRED
         }
@@ -232,16 +234,6 @@ class WarehouseImportRowCreateService(
         }
         if (command.candidateQuantity == null) {
             issues += InventoryImportIssueCode.QUANTITY_AMBIGUOUS
-        }
-        // Source field names cannot establish Asset serial identity.
-        val raw = Json.parseToJsonElement(command.rawPayloadJson) as JsonObject
-        if (raw.keys.any { sourceKey ->
-                val normalizedKey = sourceKey.trim().lowercase(Locale.ROOT)
-                    .replace(" ", "").replace("_", "")
-                normalizedKey in setOf("serial", "serialnumber", "الرقمالتسلسلي")
-            }
-        ) {
-            issues += InventoryImportIssueCode.LEGACY_COLUMN_SEMANTICS_AMBIGUOUS
         }
         return issues.sortedBy { it.name }
     }

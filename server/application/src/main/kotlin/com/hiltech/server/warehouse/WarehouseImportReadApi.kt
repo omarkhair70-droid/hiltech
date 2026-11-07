@@ -18,8 +18,8 @@ import java.util.UUID
  *
  * Raw spreadsheets may embed arbitrary financial and personal data in columns
  * with misleading names. Do not publish raw JSON or candidate monetary values
- * through this endpoint. A separately reviewed, value-authorized preview
- * contract must precede any raw/value display in the Windows workspace.
+ * through this endpoint. The source preview selects known inventory columns
+ * from the representative sheet layouts.
  */
 @Component
 class WarehouseImportReadService(
@@ -96,6 +96,7 @@ data class InventoryImportRowReadResponse(
     val issueCodes: List<String>,
     val reviewState: String,
     val version: Long,
+    val sourcePreview: Map<String, String>,
 )
 
 @RestController
@@ -174,6 +175,7 @@ class WarehouseImportReadController(
                     issueCodes = row.issueCodes.map { it.name },
                     reviewState = row.reviewState.name,
                     version = row.version,
+                    sourcePreview = LegacyInventorySource.preview(detail.batch.sourceType, row),
                 )
             },
             correlationId = context.correlationId,

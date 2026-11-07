@@ -104,31 +104,45 @@ class WarehouseImportRowReviewServiceTest {
     }
 
     @Test
-    fun cleanCandidateCanBeReviewedWithoutCreatingStockOrAsset() {
+    fun cleanCandidateCanBeSavedForReviewWithoutCreatingStockOrAsset() {
         authorize()
         Mockito.`when`(persistence.importBatch(batchId)).thenReturn(batch())
         Mockito.`when`(persistence.lockImportBatch(batchId)).thenReturn(batch())
         val before = row(raw = """{"ITEM#":"1"}""")
         val after = before.copy(
             version = 2,
-            reviewState = InventoryImportReviewState.APPROVED,
+            reviewState = InventoryImportReviewState.NEEDS_REVIEW,
             reviewedByUserId = actor,
             reviewedAt = clock.instant(),
         )
         Mockito.`when`(persistence.importRow(rowId)).thenReturn(before, after)
-        val request = command(reviewState = InventoryImportReviewState.APPROVED)
+        val request = command(reviewState = InventoryImportReviewState.NEEDS_REVIEW)
         Mockito.`when`(
             persistence.updateImportRowReview(request, emptyList(), clock.instant()),
         ).thenReturn(true)
 
         val outcome = service.review(request)
-        assertEquals(InventoryImportReviewState.APPROVED, outcome.row.reviewState)
+        assertEquals(InventoryImportReviewState.NEEDS_REVIEW, outcome.row.reviewState)
         assertEquals(2L, outcome.row.version)
         assertEquals(1, executor.calls)
         Mockito.verify(persistence).updateImportRowReview(
             request, emptyList(), clock.instant(),
         )
         assertEquals(1, Mockito.mockingDetails(audit).invocations.size)
+    }
+
+    @Test
+    fun cleanCandidateCannotBeApprovedWithoutVerifiedSourceEvidence() {
+        authorize()
+        Mockito.`when`(persistence.importBatch(batchId)).thenReturn(batch())
+        Mockito.`when`(persistence.lockImportBatch(batchId)).thenReturn(batch())
+        Mockito.`when`(persistence.importRow(rowId)).thenReturn(row(raw = """{"ITEM#":"1"}"""))
+
+        val failure = assertThrows<ProductApiException> {
+            service.review(command(reviewState = InventoryImportReviewState.APPROVED))
+        }
+        assertEquals("INVENTORY_IMPORT_ROW_REVIEW_BLOCKED", failure.code)
+        Mockito.verifyNoInteractions(audit)
     }
 
     @Test
@@ -162,16 +176,23 @@ class WarehouseImportRowReviewServiceTest {
     }
 
     @Test
-    fun ordinaryReviewCannotRewriteRestrictedSourceCost() {
+    fun ordinaryReviewCannotGuessRestrictedSourceCostOrCurrency() {
         authorize()
         Mockito.`when`(persistence.importBatch(batchId)).thenReturn(batch())
         Mockito.`when`(persistence.lockImportBatch(batchId)).thenReturn(batch())
         Mockito.`when`(persistence.importRow(rowId)).thenReturn(
             row().copy(candidateValue = BigDecimal("240.25"), candidateCurrencyCode = "EGP"),
         )
-        val request = command().copy(candidateValue = BigDecimal("9999.99"))
-        val failure = assertThrows<ProductApiException> { service.review(request) }
-        assertEquals("INVENTORY_VALUE_REVIEW_REQUIRES_SEPARATE_AUTHORITY", failure.code)
+        val requests = listOf(
+            command().copy(candidateValue = BigDecimal("9999.99")),
+            command().copy(candidateValue = BigDecimal("240.25")),
+            command().copy(candidateCurrencyCode = "EGP"),
+        )
+        requests.forEach { request ->
+            val failure = assertThrows<ProductApiException> { service.review(request) }
+            assertEquals("INVENTORY_VALUE_REVIEW_REQUIRES_SEPARATE_AUTHORITY", failure.code)
+        }
+        assertEquals(0, executor.calls)
         assertTrue(
             Mockito.mockingDetails(persistence).invocations.none {
                 it.method.name == "updateImportRowReview"
