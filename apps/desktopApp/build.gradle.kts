@@ -151,3 +151,11 @@ tasks.register<JavaExec>("renderPhase4Slice05Evidence") {
         "com.hiltech.desktop.evidence.Phase4Slice05RenderEvidenceKt",
     )
 }
+
+tasks.register<JavaExec>("renderPhase5WarehouseEvidence") {
+    group = "verification"
+    description = "Captures synthetic Warehouse Setup and import-review renders."
+    dependsOn(tasks.named("testClasses"))
+    classpath = testRuntimeClasspath
+    mainClass.set("com.hiltech.desktop.evidence.Phase5WarehouseRenderEvidenceKt")
+}

@@ -1,16 +1,19 @@
 package com.hiltech.server.security
 
+import com.hiltech.server.audit.JdbcAuditEventWriter
 import com.hiltech.server.warehouse.InventoryPrincipalType
 import com.hiltech.server.warehouse.JdbcWarehousePersistence
 import com.hiltech.server.warehouse.SpringWarehouseAuthorization
 import com.hiltech.server.warehouse.WarehouseAuthorityKey
 import com.hiltech.server.warehouse.WarehouseAuthorizationProjectionBridge
 import com.hiltech.server.warehouse.WarehouseAuthorizationRelations
+import com.hiltech.server.warehouse.WarehouseManagerProvisioner
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.support.StaticListableBeanFactory
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
@@ -19,6 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 class RoleTeamAuthorizationPostgresOpenFgaContractTest {
@@ -450,7 +454,7 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
             gateway,
             properties,
         )
-        val now = Instant.now()
+        val now = Instant.now().truncatedTo(ChronoUnit.MICROS)
         val clock = Clock.fixed(now, ZoneOffset.UTC)
         val source = JdbcRoleTeamSourceAuthority(jdbc)
         val persistence = JdbcWarehousePersistence(jdbc)
@@ -462,7 +466,6 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
         val teamId = UUID.randomUUID()
         val teamMembershipId = UUID.randomUUID()
         val warehouseId = UUID.randomUUID()
-        val userBindingId = UUID.randomUUID()
         val teamBindingId = UUID.randomUUID()
         seedOrganizationAndIdentities(jdbc, org, listOf(userManager, teamManager), now.minusSeconds(60))
         transaction.executeWithoutResult {
@@ -483,17 +486,24 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
                 teamMembershipId, teamId, teamManager, now.minusSeconds(60).atOffset(ZoneOffset.UTC),
             )
             roleTeamBridge.syncTeamMembership(teamMembershipId, now)
-            persistence.insertWarehouse(warehouseId, org, "WAREHOUSE-TEST", "Synthetic warehouse", null)
-            warehouseBridge.warehouseCreated(requireNotNull(persistence.warehouse(warehouseId)), UUID.randomUUID())
-            persistence.insertWarehouseAuthorityBinding(
-                userBindingId, org, warehouseId, WarehouseAuthorityKey.WAREHOUSE_MANAGER,
-                InventoryPrincipalType.USER, userManager, now.minusSeconds(60), userManager, now,
-            )
+        }
+        val provisioner = WarehouseManagerProvisioner(
+            jdbc, transaction, persistence, source, warehouseBridge, JdbcAuditEventWriter(jdbc), clock,
+        )
+        assertThrows<IllegalArgumentException> {
+            provisioner.provision(org, warehouseId, userManager, UUID.randomUUID(), "WAREHOUSE-TEST", "Synthetic warehouse")
+        }
+        val userBindingId = provisioner.provision(
+            org, warehouseId, userManager, userManager, "WAREHOUSE-TEST", "Synthetic warehouse",
+        )
+        assertTrue(userBindingId == provisioner.provision(
+            org, warehouseId, userManager, userManager, "WAREHOUSE-TEST", "Synthetic warehouse",
+        ))
+        transaction.executeWithoutResult {
             persistence.insertWarehouseAuthorityBinding(
                 teamBindingId, org, warehouseId, WarehouseAuthorityKey.WAREHOUSE_MANAGER,
                 InventoryPrincipalType.TEAM, teamId, now.minusSeconds(60), userManager, now,
             )
-            warehouseBridge.warehouseAuthority(userBindingId)
             warehouseBridge.warehouseAuthority(teamBindingId)
         }
 
@@ -505,7 +515,7 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
         assertFalse(authorization.canViewValue(userManager, warehouse))
 
         // Deliberately leave the last projected grants in place to exercise the source guards.
-        assertTrue(persistence.endWarehouseAuthorityBinding(userBindingId, warehouseId, 1, now.minusSeconds(1)))
+        assertTrue(persistence.endWarehouseAuthorityBinding(userBindingId, warehouseId, 1, now))
         jdbc.update(
             "UPDATE team_membership SET valid_until = ?, version = version + 1 WHERE id = ?",
             now.minusSeconds(1).atOffset(ZoneOffset.UTC), teamMembershipId,
@@ -514,6 +524,10 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
             assertTrue(gateway.isAllowed(WarehouseAuthorizationRelations.warehouseAction(actor, warehouseId, "can_manage")))
             assertFalse(authorization.canManageWarehouse(actor, warehouse))
             assertFalse(authorization.canManageImport(actor, org))
+        }
+        assertTrue(persistence.endWarehouseAuthorityBinding(teamBindingId, warehouseId, 1, now))
+        assertThrows<IllegalArgumentException> {
+            provisioner.provision(org, warehouseId, userManager, userManager, "WAREHOUSE-TEST", "Synthetic warehouse")
         }
     }
 

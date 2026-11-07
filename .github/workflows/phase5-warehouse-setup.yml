@@ -1,0 +1,55 @@
+name: Phase 5 — Warehouse Setup
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "database/migrations/V0026__warehouse_storage_authority_import__slice01.sql"
+      - "server/application/src/main/kotlin/com/hiltech/server/warehouse/**"
+      - "server/application/src/test/kotlin/com/hiltech/server/warehouse/**"
+      - "shared/core/src/**/warehouse/**"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehouseSetupSection.kt"
+      - "apps/desktopApp/**"
+      - "scripts/*stage_legacy_inventory.py"
+      - ".github/workflows/phase5-warehouse-setup.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  warehouse-contract-and-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+      - name: Verify Warehouse services and the shared client
+        run: |
+          ./gradlew :server:application:test --tests 'com.hiltech.server.warehouse.*' :shared:core:desktopTest
+          python3 -B -m unittest discover -s scripts -p test_stage_legacy_inventory.py
+      - name: Capture Warehouse Setup and import review with synthetic rows
+        env:
+          HILTECH_PHASE5_WAREHOUSE_EVIDENCE_DIR: ${{ github.workspace }}/build/reports/phase5-warehouse
+        run: |
+          set -euo pipefail
+          ./gradlew :apps:desktopApp:renderPhase5WarehouseEvidence
+          test -s build/reports/phase5-warehouse/warehouse-setup.png
+          test -s build/reports/phase5-warehouse/import-review.png
+      - name: Upload synthetic render evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hiltech-phase5-warehouse-synthetic-render
+          path: build/reports/phase5-warehouse/*.png
+          if-no-files-found: error
+          retention-days: 30

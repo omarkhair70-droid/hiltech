@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.Mockito
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
 import org.springframework.jdbc.datasource.DriverManagerDataSource
@@ -594,6 +595,59 @@ class DatabaseMigrationContractTest {
         val dataSource = DriverManagerDataSource(url, user, password)
         val jdbc = JdbcTemplate(dataSource)
         val persistence = JdbcWarehousePersistence(jdbc)
+        val warehouseId = UUID.randomUUID()
+        persistence.insertWarehouse(warehouseId, organizationId, "TEST-WAREHOUSE", "Synthetic warehouse", null)
+        assertThrows<DataIntegrityViolationException> {
+            persistence.insertWarehouse(UUID.randomUUID(), organizationId, "TEST-WAREHOUSE", "Duplicate", null)
+        }
+        val parent = UUID.randomUUID()
+        val child = UUID.randomUUID()
+        val insertLocation = """
+            INSERT INTO storage_location (id, organization_id, warehouse_id, code, name, kind, parent_storage_location_id)
+            VALUES (?, ?, ?, ?, ?, 'WAREHOUSE', ?::uuid)
+        """.trimIndent()
+        jdbc.update(insertLocation, parent, organizationId, warehouseId, "PARENT", "Synthetic parent", null)
+        jdbc.update(insertLocation, child, organizationId, warehouseId, "CHILD", "Synthetic child", parent)
+        assertThrows<DataIntegrityViolationException> {
+            jdbc.update("UPDATE storage_location SET parent_storage_location_id = ? WHERE id = ?", child, parent)
+        }
+        val projectId = UUID.randomUUID()
+        val siteId = UUID.randomUUID()
+        val timestamp = at.atOffset(ZoneOffset.UTC)
+        jdbc.update(
+            """
+            INSERT INTO project (id, organization_id, client_organization_id, project_code, name,
+                lifecycle_state, created_at, created_by, updated_at, source_type)
+            VALUES (?, ?, ?, 'TEST-STORAGE', 'Synthetic project', 'DRAFT', ?, ?, ?, 'INTERNAL')
+            """.trimIndent(),
+            projectId, organizationId, organizationId, timestamp, actorId, timestamp,
+        )
+        jdbc.update(
+            """
+            INSERT INTO site (id, organization_id, client_organization_id, site_code, name, status,
+                created_at, created_by, updated_at)
+            VALUES (?, ?, ?, 'TEST-STORAGE', 'Synthetic site', 'ACTIVE', ?, ?, ?)
+            """.trimIndent(),
+            siteId, organizationId, organizationId, timestamp, actorId, timestamp,
+        )
+        val siteStorageId = UUID.randomUUID()
+        val insertSiteStorage = """
+            INSERT INTO storage_location (id, organization_id, code, name, kind, project_id, site_id, temporary)
+            VALUES (?, ?, 'SITE-TEMP', 'Synthetic site storage', 'SITE_STORAGE', ?, ?, true)
+        """.trimIndent()
+        assertThrows<DataIntegrityViolationException> {
+            jdbc.update(insertSiteStorage, siteStorageId, organizationId, projectId, siteId)
+        }
+        jdbc.update(
+            """
+            INSERT INTO project_site (id, organization_id, project_id, site_id, lifecycle_state)
+            VALUES (?, ?, ?, ?, 'ACTIVE')
+            """.trimIndent(),
+            UUID.randomUUID(), organizationId, projectId, siteId,
+        )
+        jdbc.update(insertSiteStorage, siteStorageId, organizationId, projectId, siteId)
+        assertEquals(siteId, requireNotNull(persistence.storageLocation(siteStorageId)).siteId)
+
         val clock = Clock.fixed(at, ZoneOffset.UTC)
         val audit = JdbcAuditEventWriter(jdbc)
         val authority = Mockito.mock(WarehouseAuthorizationPort::class.java)

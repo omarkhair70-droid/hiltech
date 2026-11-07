@@ -3,6 +3,7 @@ package com.hiltech.shared.core
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.warehouse.InventoryImportBatchDirectoryDto
 import com.hiltech.shared.core.warehouse.InventoryImportBatchDto
+import com.hiltech.shared.core.warehouse.StorageLocationDto
 import com.hiltech.shared.core.warehouse.StorageLocationListDto
 import com.hiltech.shared.core.warehouse.WarehouseAuthorityListDto
 import com.hiltech.shared.core.warehouse.WarehouseListDto
@@ -74,7 +76,6 @@ fun WarehouseSetupSection(
     var storageCode by remember { mutableStateOf("") }
     var storageName by remember { mutableStateOf("") }
     var importBatchId by remember { mutableStateOf("") }
-    var selectedImportRowId by remember { mutableStateOf<String?>(null) }
     var principalId by remember { mutableStateOf("") }
     var authorityKey by remember { mutableStateOf("WAREHOUSE_VIEWER") }
 
@@ -132,11 +133,13 @@ fun WarehouseSetupSection(
 
         state.selectedWarehouseId?.let {
             Text("Storage Locations", style = MaterialTheme.typography.titleMedium)
-            state.locations?.items.orEmpty().forEach { location ->
-                Text(
-                    "· " + location.code + " — " + location.name +
-                        " · " + location.kind + " · " + location.lifecycleState,
-                )
+            for ((location, depth) in storageTree(state.locations?.items.orEmpty())) {
+                Column(Modifier.padding(start = (depth.coerceAtMost(8) * 16).dp)) {
+                    Text(location.code + " · " + location.name + " · " + location.lifecycleState)
+                    Text(location.kind + if (location.temporary) " · Temporary" else "")
+                    location.projectId?.let { Text("Project $it") }
+                    location.siteId?.let { Text("Site $it") }
+                }
             }
             Text("Add a location inside the selected Warehouse")
             OutlinedTextField(
@@ -212,6 +215,9 @@ fun WarehouseSetupSection(
             onClick = { onOpenImportBatch(importBatchId.trim()) },
         ) { Text("Open import batch") }
         state.selectedImport?.let { batch ->
+            var selectedImportRowId by remember(batch.batchId) {
+                mutableStateOf(batch.rows.firstOrNull()?.rowId)
+            }
             Text(batch.sourceFileName + " · " + batch.state + " · " + batch.rows.size + " rows")
             batch.rows.forEach { row ->
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -319,6 +325,21 @@ fun WarehouseSetupSection(
                         ) { Text("Reject with reason") }
                     }
                 }
+            }
+        }
+    }
+}
+
+private fun storageTree(locations: List<StorageLocationDto>): List<Pair<StorageLocationDto, Int>> {
+    val visibleIds = locations.mapTo(mutableSetOf()) { it.storageLocationId }
+    val children = locations.groupBy { it.parentStorageLocationId?.takeIf(visibleIds::contains) }
+    val pending = ArrayDeque(children[null].orEmpty().map { it to 0 })
+    return buildList {
+        while (pending.isNotEmpty()) {
+            val (location, depth) = pending.removeFirst()
+            add(location to depth)
+            children[location.storageLocationId].orEmpty().asReversed().forEach {
+                pending.addFirst(it to depth + 1)
             }
         }
     }
