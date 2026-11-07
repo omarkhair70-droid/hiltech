@@ -37,6 +37,33 @@ class WarehouseStorageAuthorityCommandServiceTest {
     private val principalId = UUID.randomUUID()
 
     @Test
+    fun currentDirectoryOnlyShowsSameStorageAndOrganization() {
+        authorizeStorage()
+        val visible = binding(UUID.randomUUID())
+        val wrongOrg = visible.copy(bindingId = UUID.randomUUID(), organizationId = UUID.randomUUID())
+        val wrongStorage = visible.copy(bindingId = UUID.randomUUID(), storageLocationId = UUID.randomUUID())
+        val expired = visible.copy(bindingId = UUID.randomUUID(), current = false)
+        Mockito.`when`(
+            persistence.currentStorageAuthorityBindings(storageId, clock.instant()),
+        ).thenReturn(listOf(visible, wrongOrg, wrongStorage, expired))
+        assertEquals(listOf(visible), service.currentBindings(actor, storageId))
+    }
+
+    @Test
+    fun unauthorizedActorCannotEnumerateStorageBindings() {
+        Mockito.`when`(persistence.storageLocation(storageId)).thenReturn(storage(null))
+        val error = assertThrows<ProductApiException> {
+            service.currentBindings(actor, storageId)
+        }
+        assertEquals("STORAGE_AUTHORITY_UNAVAILABLE", error.code)
+        assertTrue(
+            Mockito.mockingDetails(persistence).invocations.none {
+                it.method.name == "currentStorageAuthorityBindings"
+            },
+        )
+    }
+
+    @Test
     fun differentWarehouseManagerCannotGrantLocationAuthority() {
         val location = storage(warehouseId)
         val warehouse = warehouse()
