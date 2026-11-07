@@ -46,6 +46,8 @@ sealed interface HiltechShellState {
             HiltechOnboardingState? = null,
         val projects:
             HiltechProjectsState? = null,
+        val warehouse:
+            HiltechWarehouseState? = null,
         val field:
             HiltechFieldState? = null,
     ) : HiltechShellState
@@ -156,6 +158,13 @@ fun HiltechShell(
             startDate: String,
             employmentTypeCode: String?,
         ) -> Unit = { _, _, _, _ -> },
+    onRefreshWarehouse: () -> Unit = {},
+    onSelectWarehouse: (String) -> Unit = {},
+    onCreateWarehouse: (String, String) -> Unit = { _, _ -> },
+    onCreateWarehouseLocation: (String, String) -> Unit = { _, _ -> },
+    onOpenImportBatch: (String) -> Unit = {},
+    onGrantWarehouseAuthority: (String, String) -> Unit = { _, _ -> },
+    onEndWarehouseAuthority: (String, Long) -> Unit = { _, _ -> },
     onRefreshProjects: () -> Unit = {},
     onSelectProject: (String) -> Unit = {},
     onCreateProject:
@@ -425,6 +434,19 @@ fun HiltechShell(
                                 onRefreshFieldWork,
                             onSelectWork =
                                 onSelectFieldWork,
+                        )
+                    }
+
+                    state.warehouse?.let { warehouse ->
+                        WarehouseSetupSection(
+                            state = warehouse,
+                            onRefresh = onRefreshWarehouse,
+                            onSelectWarehouse = onSelectWarehouse,
+                            onCreateWarehouse = onCreateWarehouse,
+                            onCreateWarehouseLocation = onCreateWarehouseLocation,
+                            onOpenImportBatch = onOpenImportBatch,
+                            onGrantWarehouseAuthority = onGrantWarehouseAuthority,
+                            onEndWarehouseAuthority = onEndWarehouseAuthority,
                         )
                     }
 
