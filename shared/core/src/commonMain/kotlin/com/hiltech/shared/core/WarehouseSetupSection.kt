@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.warehouse.InventoryImportBatchDirectoryDto
 import com.hiltech.shared.core.warehouse.InventoryImportBatchDto
 import com.hiltech.shared.core.warehouse.StorageLocationListDto
 import com.hiltech.shared.core.warehouse.WarehouseAuthorityListDto
@@ -31,6 +32,7 @@ data class HiltechWarehouseState(
     val selectedWarehouseId: String? = null,
     val locations: StorageLocationListDto? = null,
     val currentAuthority: WarehouseAuthorityListDto? = null,
+    val importDirectory: InventoryImportBatchDirectoryDto? = null,
     val selectedImport: InventoryImportBatchDto? = null,
     val errorCode: String? = null,
     val errorMessage: String? = null,
@@ -171,6 +173,13 @@ fun WarehouseSetupSection(
 
         Text("Legacy Import Review", style = MaterialTheme.typography.titleMedium)
         Text("Rows are evidence only; approval here never changes Stock or Asset balances.")
+        state.importDirectory?.items.orEmpty().forEach { batch ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { onOpenImportBatch(batch.batchId) }) {
+                    Text(batch.sourceFileName + " · " + batch.state)
+                }
+            }
+        }
         OutlinedTextField(
             value = importBatchId,
             onValueChange = { importBatchId = it },
@@ -180,7 +189,7 @@ fun WarehouseSetupSection(
         Button(
             enabled = !state.loading && importBatchId.isNotBlank(),
             onClick = { onOpenImportBatch(importBatchId.trim()) },
-        ) { Text("Open reviewed import") }
+        ) { Text("Open import batch") }
         state.selectedImport?.let { batch ->
             Text(batch.sourceFileName + " · " + batch.state + " · " + batch.rows.size + " rows")
             batch.rows.forEach { row ->
