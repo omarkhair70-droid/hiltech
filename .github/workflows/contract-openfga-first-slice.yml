@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Test OpenFGA model
-        uses: openfga/action-openfga-test@e89aa8259796cd5ee5c1b1ae7d72c401029cb947 # v0.1.2
+        uses: openfga/action-openfga-test@4c0f4d245aa1375be20f0db8d242d84354c7bf10 # v0.2.0
         with:
           test_path: docs/13-delivery/first-slice-contract-pack/openfga/first-slice-model.fga.yaml
           fga_cli_version: v0.7.20
