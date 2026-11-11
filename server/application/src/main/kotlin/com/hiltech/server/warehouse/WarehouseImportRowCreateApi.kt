@@ -274,7 +274,7 @@ data class AddInventoryImportRowRequest(
     val sourceSheet: String,
     val sourceRowNumber: Int,
     val rawPayloadJson: String,
-    val candidateClass: String = "UNCLASSIFIED",
+    val candidateClass: String? = null,
     val normalizedBrand: String? = null,
     val normalizedPartNumber: String? = null,
     val normalizedDescription: String? = null,
@@ -282,7 +282,7 @@ data class AddInventoryImportRowRequest(
     val candidateQuantity: String? = null,
     val candidateValue: String? = null,
     val candidateCurrencyCode: String? = null,
-    val sourceIssueCodes: List<String> = emptyList(),
+    val sourceIssueCodes: List<String>? = null,
     val clientOccurredAt: String,
 )
 
@@ -311,7 +311,8 @@ class WarehouseImportRowCreateController(
         val operationId = request.operationId.asRowUuid("INVALID_OPERATION_ID")
         IdempotencyKeyContract.requireMatches(idempotencyKey, operationId)
         val candidateClass = runCatching {
-            enumValueOf<InventoryCandidateClass>(request.candidateClass)
+            request.candidateClass?.let { enumValueOf<InventoryCandidateClass>(it) }
+                ?: InventoryCandidateClass.UNCLASSIFIED
         }.getOrElse {
             throw ProductApiException(
                 code = "INVALID_IMPORT_CANDIDATE_CLASS",
@@ -319,7 +320,7 @@ class WarehouseImportRowCreateController(
                 status = HttpStatus.BAD_REQUEST,
             )
         }
-        val sourceIssues = request.sourceIssueCodes.map { issue ->
+        val sourceIssues = request.sourceIssueCodes.orEmpty().map { issue ->
             runCatching { enumValueOf<InventoryImportIssueCode>(issue) }.getOrElse {
                 throw ProductApiException(
                     code = "INVALID_IMPORT_ISSUE_CODE",

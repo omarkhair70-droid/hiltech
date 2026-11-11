@@ -294,7 +294,7 @@ data class ReviewInventoryImportRowRequest(
     val candidateQuantity: String? = null,
     val candidateValue: String? = null,
     val candidateCurrencyCode: String? = null,
-    val issueCodes: List<String> = emptyList(),
+    val issueCodes: List<String>? = null,
     val reviewState: String,
     val reviewNotes: String? = null,
     val clientOccurredAt: String,
@@ -335,7 +335,7 @@ class WarehouseImportRowReviewController(
         }.getOrElse {
             throw invalidRequest("INVALID_REVIEW_STATE", "Review state is invalid.")
         }
-        val issueCodes = request.issueCodes.map { issue ->
+        val issueCodes = request.issueCodes.orEmpty().map { issue ->
             runCatching { enumValueOf<InventoryImportIssueCode>(issue) }.getOrElse {
                 throw invalidRequest("INVALID_ISSUE_CODE", "Review issue code is invalid.")
             }

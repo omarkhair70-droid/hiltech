@@ -24,8 +24,19 @@ python scripts/stage_legacy_inventory.py <workbook.xlsx> --sheet <sheet> --heade
 
 To stage the checked range in an approved environment, add `--api-url <https-base-url>`, `--organization-id <uuid>`, `--device-id <registered-installation-uuid>`, `--operation-id <new-uuid>` and `--occurred-at <original-iso-8601-timestamp>`. Enter the authorized access token at the prompt. For a retry, reuse the same workbook, sheet, range, organization, actor, operation ID and timestamp. The script hashes and parses the same immutable bytes, submits physical row numbers, and leaves candidates unclassified. Formula and error cells are preserved as source evidence. Inspect the batch ID in Warehouse Setup.
 
+### Compare the staged batch with the private workbook
+
+Use the original sheet and row range. Copy the batch ID from Warehouse Setup. When the source custodian has recorded a SHA-256, supply it as `--expected-sha256` in the initial intake and in the comparison. A mismatch stops the command before authentication or network access.
+
+```text
+python scripts/stage_legacy_inventory.py <workbook.xlsx> --sheet <sheet> --header-row <n> --last-row <n> --api-url <https-base-url> --organization-id <uuid> --device-id <registered-installation-uuid> --compare-batch <uuid> --expected-sha256 <custodian-digest>
+```
+
+Comparison reads the authorized batch and checks its recorded digest, selected sheet's exact physical row numbers, and the redacted values returned by the API. The report gives counts and physical row numbers. Formula, restricted, and unmapped cells still require inspection in the original workbook by the authorized operator. Record the source custodian, digest, sheet and range, batch ID, unresolved mappings, and operator decision in the private acceptance record.
+
 ## Evidence
 
+- Baseline `870bba0c1e8d79ee8199a11771f2f35bba9e5887` passed all 30 GitHub checks, including provisioning, V0026, synthetic Desktop render, and the Android native OIDC regression. [Bootstrap](https://github.com/omarkhair70-droid/hiltech/actions/runs/42422666802) · [Warehouse Setup](https://github.com/omarkhair70-droid/hiltech/actions/runs/42422666864) · [Native OIDC](https://github.com/omarkhair70-droid/hiltech/actions/runs/42422666773)
 - Handoff head `96e6aebf23f6b4fc5cf37858610f160bca5c89f4` had a cancelled native OIDC run. Logs for its cancelled Android job were unavailable. The same regression passed at `fc8e72101fb2f3d82c771ae5af7c9e5df769d5e8`. [Native OIDC run 42421237449](https://github.com/omarkhair70-droid/hiltech/actions/runs/42421237449)
 - Bootstrap at `fc8e72101fb2f3d82c771ae5af7c9e5df769d5e8` passed real PostgreSQL migration and JDBC staging/review and OpenFGA stale USER/TEAM authorization. This evidence predates the operator provisioning command. [Bootstrap run 42421237571](https://github.com/omarkhair70-droid/hiltech/actions/runs/42421237571)
 - The import preview uses a source-layout column allowlist. Ordinary review accepts candidate edits and rejection with a reason. Approval requires verified source and mapping evidence. A declared SHA-256 and deduplication check do not verify the workbook bytes.

@@ -26,7 +26,8 @@ internal object LegacyInventorySource {
         return payload.entries.mapNotNull { (label, cell) ->
             if (label.trim().uppercase(Locale.ROOT) !in columns) return@mapNotNull null
             val value = (cell as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
-            label to value.take(512)
+            val preview = value.take(512)
+            label to if (preview.lastOrNull()?.isHighSurrogate() == true) preview.dropLast(1) else preview
         }.toMap()
     }
 

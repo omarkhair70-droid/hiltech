@@ -1,6 +1,8 @@
 package com.hiltech.server.security
 
 import com.hiltech.server.audit.JdbcAuditEventWriter
+import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
+import com.hiltech.server.telemetry.HiltechTelemetryRuntime
 import com.hiltech.server.warehouse.InventoryPrincipalType
 import com.hiltech.server.warehouse.JdbcWarehousePersistence
 import com.hiltech.server.warehouse.SpringWarehouseAuthorization
@@ -8,6 +10,8 @@ import com.hiltech.server.warehouse.WarehouseAuthorityKey
 import com.hiltech.server.warehouse.WarehouseAuthorizationProjectionBridge
 import com.hiltech.server.warehouse.WarehouseAuthorizationRelations
 import com.hiltech.server.warehouse.WarehouseManagerProvisioner
+import com.hiltech.server.warehouse.WarehouseImportOperatorScenario
+import io.opentelemetry.api.OpenTelemetry
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -513,6 +517,12 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
         assertTrue(authorization.canManageWarehouse(userManager, warehouse))
         assertTrue(authorization.canManageWarehouse(teamManager, warehouse))
         assertFalse(authorization.canViewValue(userManager, warehouse))
+        val operator = WarehouseImportOperatorScenario(
+            persistence, authorization,
+            JdbcIdempotentCommandExecutor(jdbc, manager, clock, HiltechTelemetryRuntime(OpenTelemetry.noop()) {}),
+            JdbcAuditEventWriter(jdbc), clock,
+        )
+        val importBatchId = operator.stageAndReview(org, userManager)
 
         // Deliberately leave the last projected grants in place to exercise the source guards.
         assertTrue(persistence.endWarehouseAuthorityBinding(userBindingId, warehouseId, 1, now))
@@ -524,6 +534,7 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
             assertTrue(gateway.isAllowed(WarehouseAuthorizationRelations.warehouseAction(actor, warehouseId, "can_manage")))
             assertFalse(authorization.canManageWarehouse(actor, warehouse))
             assertFalse(authorization.canManageImport(actor, org))
+            operator.assertHidden(importBatchId, actor)
         }
         assertTrue(persistence.endWarehouseAuthorityBinding(teamBindingId, warehouseId, 1, now))
         assertThrows<IllegalArgumentException> {

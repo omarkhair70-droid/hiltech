@@ -1,4 +1,4 @@
-"""Stage selected XLSX rows through the Warehouse API with an explicit source range."""
+"""Stage or compare selected XLSX rows through the Warehouse API."""
 
 import argparse
 import getpass
@@ -123,24 +123,61 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def post(base_url, path, token, device_id, payload):
+def request_json(base_url, path, token, device_id, payload=None):
+    headers = {
+        "Authorization": "Bearer " + token,
+        "X-Device-Installation-Id": device_id,
+        "X-Correlation-Id": str(uuid.uuid4()),
+    }
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+        headers["Idempotency-Key"] = payload["operationId"]
     request = urllib.request.Request(
         base_url + path,
-        method="POST",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + token,
-            "X-Device-Installation-Id": device_id,
-            "X-Correlation-Id": str(uuid.uuid4()),
-            "Idempotency-Key": payload["operationId"],
-        },
+        data=None if payload is None else json.dumps(payload).encode("utf-8"),
+        headers=headers,
     )
     try:
         with urllib.request.build_opener(NoRedirect).open(request, timeout=30) as response:
             return json.load(response)
     except urllib.error.HTTPError as exc:
-        raise ValueError(f"The API returned HTTP {exc.code} for operation {payload['operationId']}.") from None
+        reference = f"operation {payload['operationId']}" if payload is not None else path
+        raise ValueError(f"The API returned HTTP {exc.code} for {reference}.") from None
+
+
+def compare_batch(batch, batch_id, organization_id, digest, sheet, rows):
+    if (batch["batchId"] != str(batch_id) or batch["organizationId"] != str(organization_id)
+            or batch["sourceType"] != "LEGACY_EXCEL" or batch["sourceSha256"] != digest):
+        raise ValueError("Batch identity, organization, source type or SHA-256 does not match.")
+
+    staged = {}
+    for row in batch["rows"]:
+        if row["sourceSheet"] != sheet.strip():
+            continue
+        number = row["sourceRowNumber"]
+        if row["batchId"] != str(batch_id) or number in staged:
+            raise ValueError(f"Unexpected or duplicate staged source row {number}.")
+        staged[number] = row["sourcePreview"]
+    local_numbers = {number for number, _ in rows}
+    missing = sorted(local_numbers - staged.keys())
+    extra = sorted(staged.keys() - local_numbers)
+    if missing or extra:
+        raise ValueError(f"Row numbers differ. Missing {missing[:10]}. Unexpected {extra[:10]}.")
+
+    compared = 0
+    for number, payload in rows:
+        source = json.loads(payload)
+        for label, preview in staged[number].items():
+            value = source.get(label)
+            if not isinstance(value, str) or preview != preview_text(value):
+                raise ValueError(f"A visible source cell differs at row {number}.")
+            compared += 1
+    return compared
+
+
+def preview_text(value):
+    # Match the server's 512 UTF-16 code unit limit without splitting a character.
+    return value.encode("utf-16-le")[:1024].decode("utf-16-le", errors="ignore")
 
 
 def main():
@@ -150,6 +187,8 @@ def main():
     parser.add_argument("--header-row", required=True, type=int)
     parser.add_argument("--last-row", required=True, type=int)
     parser.add_argument("--api-url", help="HTTPS HILTECH base URL. Omit for a local intake check.")
+    parser.add_argument("--expected-sha256", help="Workbook digest recorded by the source custodian.")
+    parser.add_argument("--compare-batch", type=uuid.UUID, help="Read and compare an existing batch.")
     parser.add_argument("--organization-id", type=uuid.UUID)
     parser.add_argument("--device-id", type=uuid.UUID)
     parser.add_argument("--operation-id", type=uuid.UUID)
@@ -159,12 +198,16 @@ def main():
         parser.error("Select a range of 1 to 10,000 data rows after the header.")
     if args.workbook.suffix.lower() != ".xlsx":
         parser.error("Only XLSX workbooks are accepted.")
+    if args.compare_batch and (not args.api_url or args.operation_id or args.occurred_at):
+        parser.error("Batch comparison requires --api-url and does not take staging operation parameters.")
     try:
         with args.workbook.open("rb") as stream:
             source = stream.read(MAX_SOURCE + 1)
         if len(source) > MAX_SOURCE:
             raise ValueError("The workbook exceeds the intake size limit.")
         digest = hashlib.sha256(source).hexdigest()
+        if args.expected_sha256 is not None and args.expected_sha256.lower() != digest:
+            raise ValueError("Workbook SHA-256 does not match the expected digest.")
         rows = read_rows(source, args.sheet, args.header_row, args.last_row)
         if not rows:
             raise ValueError("No data rows in the selected source range.")
@@ -174,10 +217,13 @@ def main():
         url = urllib.parse.urlsplit(args.api_url)
         if url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment:
             raise ValueError("Provide an HTTPS base URL without user information, query or fragment.")
-        if not all((args.organization_id, args.device_id, args.operation_id, args.occurred_at)):
-            raise ValueError("Staging requires the organization, device, operation ID and original timestamp.")
-        if datetime.fromisoformat(args.occurred_at.replace("Z", "+00:00")).utcoffset() is None:
-            raise ValueError("The timestamp must include an offset.")
+        if not args.organization_id or not args.device_id:
+            raise ValueError("API access requires the organization and registered device IDs.")
+        if args.compare_batch is None:
+            if not args.operation_id or not args.occurred_at:
+                raise ValueError("Staging requires an operation ID and original timestamp.")
+            if datetime.fromisoformat(args.occurred_at.replace("Z", "+00:00")).utcoffset() is None:
+                raise ValueError("The timestamp must include an offset.")
         if not sys.stdin.isatty():
             raise ValueError("Send mode requires an interactive terminal for the access token.")
         token = getpass.getpass("Current authorized HILTECH access token: ")
@@ -185,7 +231,12 @@ def main():
             raise ValueError("An access token is required.")
         base_url = args.api_url.rstrip("/")
         device_id = str(args.device_id)
-        batch = post(base_url, "/v1/inventory-imports", token, device_id, {
+        if args.compare_batch is not None:
+            batch = request_json(base_url, f"/v1/inventory-imports/{args.compare_batch}", token, device_id)
+            compared = compare_batch(batch, args.compare_batch, args.organization_id, digest, args.sheet, rows)
+            print(f"Matched batch digest and {len(rows)} physical rows. Compared {compared} visible source cells.")
+            return
+        batch = request_json(base_url, "/v1/inventory-imports", token, device_id, {
             "operationId": str(args.operation_id),
             "organizationId": str(args.organization_id),
             "sourceFileName": args.workbook.name,
@@ -197,7 +248,7 @@ def main():
         print(f"Batch {batch_id}.", flush=True)
         for number, payload in rows:
             operation_id = uuid.uuid5(args.operation_id, f"{args.sheet}:{number}")
-            post(base_url, f"/v1/inventory-imports/{batch_id}/rows", token, device_id, {
+            request_json(base_url, f"/v1/inventory-imports/{batch_id}/rows", token, device_id, {
                 "operationId": str(operation_id),
                 "sourceSheet": args.sheet,
                 "sourceRowNumber": number,

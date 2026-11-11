@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -197,7 +198,6 @@ fun WarehouseSetupSection(
         }
 
         Text("Legacy Import Review", style = MaterialTheme.typography.titleMedium)
-        Text("Rows are evidence only; approval here never changes Stock or Asset balances.")
         state.importDirectory?.items.orEmpty().forEach { batch ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { onOpenImportBatch(batch.batchId) }) {
@@ -220,6 +220,12 @@ fun WarehouseSetupSection(
                 mutableStateOf(batch.rows.firstOrNull()?.rowId)
             }
             Text(batch.sourceFileName + " · " + batch.state + " · " + batch.rows.size + " rows")
+            SelectionContainer {
+                Column {
+                    Text("Batch " + batch.batchId)
+                    Text("Source SHA-256 " + batch.sourceSha256)
+                }
+            }
             batch.rows.forEach { row ->
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(row.sourceSheet + " · row " + row.sourceRowNumber + " · " + row.reviewState)

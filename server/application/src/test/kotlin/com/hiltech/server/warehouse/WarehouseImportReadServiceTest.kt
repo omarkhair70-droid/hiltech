@@ -106,6 +106,19 @@ class WarehouseImportReadServiceTest {
     }
 
     @Test
+    fun sourcePreviewKeepsCompleteUnicodeCharactersAtTheLengthLimit() {
+        val prefix = "x".repeat(511)
+        val row = row(organization, batchId).copy(
+            sourceSheet = "Main",
+            rawPayloadJson = """{"DESC":"${prefix}📦"}""",
+        )
+        assertEquals(
+            mapOf("DESC" to prefix),
+            LegacyInventorySource.preview(InventoryImportSourceType.LEGACY_EXCEL, row),
+        )
+    }
+
+    @Test
     fun representativeLegacyLayoutsSurfaceDifferentSourceAmbiguities() {
         val excel = InventoryImportSourceType.LEGACY_EXCEL
         assertEquals(
