@@ -78,6 +78,17 @@ import com.hiltech.shared.core.work.RemoveWorkDependencyRequestDto
 import com.hiltech.shared.core.work.ReviseInstructionRequestDto
 import com.hiltech.shared.core.work.UpdateWorkOrderRequestDto
 import com.hiltech.shared.core.work.UpdateWorkTaskRequestDto
+import com.hiltech.shared.core.warehouse.WarehouseApiClient
+import com.hiltech.shared.core.warehouse.WarehouseListDto
+import com.hiltech.shared.core.warehouse.WarehouseAuthorityListDto
+import com.hiltech.shared.core.warehouse.WarehouseAuthorityGrantRequestDto
+import com.hiltech.shared.core.warehouse.WarehouseCreateRequestDto
+import com.hiltech.shared.core.warehouse.StorageLocationCreateRequestDto
+import com.hiltech.shared.core.warehouse.StorageLocationListDto
+import com.hiltech.shared.core.warehouse.InventoryImportBatchDto
+import com.hiltech.shared.core.warehouse.InventoryImportRowReviewRequestDto
+import com.hiltech.shared.core.WarehouseImportReviewDraft
+import com.hiltech.shared.core.warehouse.AuthorityEndRequestDto
 import com.hiltech.shared.core.work.WorkApiClient
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
@@ -166,6 +177,9 @@ class DesktopIdentityRuntime(
 
     private val projectsApi =
         ProjectsApiClient(productApi)
+
+    private val warehouseApi =
+        WarehouseApiClient(productApi)
 
     private val planningApi =
         PlanningApiClient(productApi)
@@ -640,6 +654,118 @@ class DesktopIdentityRuntime(
                 installationId,
         ).offboarding
     }
+
+    suspend fun warehouses(organizationId: String): WarehouseListDto {
+        ensureConfigured()
+        return warehouseApi.warehouses(organizationId, installationId)
+    }
+
+    suspend fun warehouseLocations(warehouseId: String): StorageLocationListDto {
+        ensureConfigured()
+        return warehouseApi.warehouseStorageLocations(warehouseId, installationId)
+    }
+
+    suspend fun currentWarehouseAuthority(warehouseId: String): WarehouseAuthorityListDto {
+        ensureConfigured()
+        return warehouseApi.currentWarehouseAuthority(warehouseId, installationId)
+    }
+
+    suspend fun createWarehouse(
+        organizationId: String,
+        code: String,
+        name: String,
+    ) = warehouseApi.createWarehouse(
+        WarehouseCreateRequestDto(
+            operationId = operationId(),
+            organizationId = organizationId,
+            code = code,
+            name = name,
+            clientOccurredAt = occurredAt(),
+        ),
+        installationId,
+    )
+
+    suspend fun createWarehouseLocation(
+        organizationId: String,
+        warehouseId: String,
+        code: String,
+        name: String,
+    ) = warehouseApi.createStorageLocation(
+        StorageLocationCreateRequestDto(
+            operationId = operationId(),
+            organizationId = organizationId,
+            code = code,
+            name = name,
+            kind = "WAREHOUSE",
+            temporary = false,
+            clientOccurredAt = occurredAt(),
+        ),
+        installationId,
+        warehouseId = warehouseId,
+    )
+
+    suspend fun warehouseImportBatches(organizationId: String) =
+        warehouseApi.importBatches(organizationId, installationId)
+
+    suspend fun warehouseImportBatch(batchId: String): InventoryImportBatchDto {
+        ensureConfigured()
+        return warehouseApi.importBatch(batchId, installationId)
+    }
+
+    suspend fun reviewWarehouseImportRow(draft: WarehouseImportReviewDraft) =
+        warehouseApi.reviewImportRow(
+            draft.batchId,
+            draft.rowId,
+            InventoryImportRowReviewRequestDto(
+                operationId = operationId(),
+                baseVersion = draft.baseVersion,
+                candidateClass = draft.candidateClass,
+                normalizedBrand = draft.normalizedBrand,
+                normalizedPartNumber = draft.normalizedPartNumber,
+                normalizedDescription = draft.normalizedDescription,
+                candidateUom = draft.candidateUom,
+                candidateQuantity = draft.candidateQuantity,
+                candidateValue = null,
+                candidateCurrencyCode = null,
+                issueCodes = draft.issueCodes,
+                reviewState = draft.reviewState,
+                reviewNotes = draft.reviewNotes,
+                clientOccurredAt = occurredAt(),
+            ),
+            installationId,
+        )
+
+    suspend fun grantWarehouseAuthority(
+        warehouseId: String,
+        authorityKey: String,
+        principalUserId: String,
+    ) = warehouseApi.grantWarehouseAuthority(
+        warehouseId,
+        WarehouseAuthorityGrantRequestDto(
+            operationId = operationId(),
+            authorityKey = authorityKey,
+            principalType = "USER",
+            principalId = principalUserId,
+            effectiveFrom = occurredAt(),
+            clientOccurredAt = occurredAt(),
+        ),
+        installationId,
+    )
+
+    suspend fun endWarehouseAuthority(
+        warehouseId: String,
+        bindingId: String,
+        baseVersion: Long,
+    ) = warehouseApi.endWarehouseAuthority(
+        warehouseId,
+        bindingId,
+        AuthorityEndRequestDto(
+            operationId = operationId(),
+            baseVersion = baseVersion,
+            clientOccurredAt = occurredAt(),
+        ),
+        installationId,
+    )
 
     suspend fun projects(
         organizationId: String,

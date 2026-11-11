@@ -1,5 +1,8 @@
 package com.hiltech.server
 
+import com.hiltech.server.audit.JdbcAuditEventWriter
+import com.hiltech.server.platform.ProductApiException
+import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
 import com.hiltech.server.security.AuthorizationDesiredState
 import com.hiltech.server.security.AuthorizationProjectionIntent
 import com.hiltech.server.security.AuthorizationProjectionRetryPolicy
@@ -9,19 +12,39 @@ import com.hiltech.server.security.JdbcAuthorizationProjectionIntentWriter
 import com.hiltech.server.security.JdbcAuthorizationProjectionStore
 import com.hiltech.server.security.OpenFgaTuple
 import com.hiltech.server.security.ProjectionGuardDecision
+import com.hiltech.server.telemetry.HiltechTelemetryRuntime
+import com.hiltech.server.warehouse.AddInventoryImportRowCommand
+import com.hiltech.server.warehouse.CreateInventoryImportBatchCommand
+import com.hiltech.server.warehouse.InventoryCandidateClass
+import com.hiltech.server.warehouse.InventoryImportIssueCode
+import com.hiltech.server.warehouse.InventoryImportReviewState
+import com.hiltech.server.warehouse.InventoryImportSourceType
+import com.hiltech.server.warehouse.JdbcWarehousePersistence
+import com.hiltech.server.warehouse.ReviewInventoryImportRowCommand
+import com.hiltech.server.warehouse.WarehouseAuthorizationPort
+import com.hiltech.server.warehouse.WarehouseImportCreateService
+import com.hiltech.server.warehouse.WarehouseImportRowCreateService
+import com.hiltech.server.warehouse.WarehouseImportRowReviewService
+import io.opentelemetry.api.OpenTelemetry
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.mockito.Mockito
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
 import org.springframework.jdbc.datasource.DriverManagerDataSource
 import org.springframework.transaction.support.TransactionTemplate
+import java.math.BigDecimal
 import java.sql.DriverManager
 import java.sql.SQLException
+import java.time.Clock
 import java.time.Instant
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 class DatabaseMigrationContractTest {
@@ -32,17 +55,17 @@ class DatabaseMigrationContractTest {
     private val migrationPath = System.getenv("HILTECH_MIGRATIONS_PATH") ?: "database/migrations"
 
     @Test
-    fun emptyPostgresMigratesThroughPriorSliceThenV0025AndRejectsInvalidStates() {
+    fun emptyPostgresMigratesThroughPriorSliceThenV0026AndRejectsInvalidStates() {
         assumeTrue(enabled)
 
         val priorSliceResult = Flyway.configure()
             .dataSource(url, user, password)
             .locations("filesystem:$migrationPath")
-            .target("24")
+            .target("25")
             .load()
             .migrate()
 
-        assertEquals(24, priorSliceResult.migrationsExecuted)
+        assertEquals(25, priorSliceResult.migrationsExecuted)
 
         val result = Flyway.configure()
             .dataSource(url, user, password)
@@ -131,6 +154,8 @@ class DatabaseMigrationContractTest {
                 ps.setObject(4, now)
                 ps.executeUpdate()
             }
+
+            verifyWarehouseStaging(orgId, userId, now.toInstant())
 
             assertConstraintRejects(connection) {
                 prepareStatement(
@@ -564,6 +589,164 @@ class DatabaseMigrationContractTest {
             tuple.relationKey,
         )
         assertEquals(2, completedOutbox)
+    }
+
+    private fun verifyWarehouseStaging(organizationId: UUID, actorId: UUID, at: Instant) {
+        val dataSource = DriverManagerDataSource(url, user, password)
+        val jdbc = JdbcTemplate(dataSource)
+        val persistence = JdbcWarehousePersistence(jdbc)
+        val warehouseId = UUID.randomUUID()
+        persistence.insertWarehouse(warehouseId, organizationId, "TEST-WAREHOUSE", "Synthetic warehouse", null)
+        assertThrows<DataIntegrityViolationException> {
+            persistence.insertWarehouse(UUID.randomUUID(), organizationId, "TEST-WAREHOUSE", "Duplicate", null)
+        }
+        val parent = UUID.randomUUID()
+        val child = UUID.randomUUID()
+        val insertLocation = """
+            INSERT INTO storage_location (id, organization_id, warehouse_id, code, name, kind, parent_storage_location_id)
+            VALUES (?, ?, ?, ?, ?, 'WAREHOUSE', ?::uuid)
+        """.trimIndent()
+        jdbc.update(insertLocation, parent, organizationId, warehouseId, "PARENT", "Synthetic parent", null)
+        jdbc.update(insertLocation, child, organizationId, warehouseId, "CHILD", "Synthetic child", parent)
+        assertThrows<DataIntegrityViolationException> {
+            jdbc.update("UPDATE storage_location SET parent_storage_location_id = ? WHERE id = ?", child, parent)
+        }
+        val projectId = UUID.randomUUID()
+        val siteId = UUID.randomUUID()
+        val timestamp = at.atOffset(ZoneOffset.UTC)
+        jdbc.update(
+            """
+            INSERT INTO project (id, organization_id, client_organization_id, project_code, name,
+                lifecycle_state, created_at, created_by, updated_at, source_type)
+            VALUES (?, ?, ?, 'TEST-STORAGE', 'Synthetic project', 'DRAFT', ?, ?, ?, 'INTERNAL')
+            """.trimIndent(),
+            projectId, organizationId, organizationId, timestamp, actorId, timestamp,
+        )
+        jdbc.update(
+            """
+            INSERT INTO site (id, organization_id, client_organization_id, site_code, name, status,
+                created_at, created_by, updated_at)
+            VALUES (?, ?, ?, 'TEST-STORAGE', 'Synthetic site', 'ACTIVE', ?, ?, ?)
+            """.trimIndent(),
+            siteId, organizationId, organizationId, timestamp, actorId, timestamp,
+        )
+        val siteStorageId = UUID.randomUUID()
+        val insertSiteStorage = """
+            INSERT INTO storage_location (id, organization_id, code, name, kind, project_id, site_id, temporary)
+            VALUES (?, ?, 'SITE-TEMP', 'Synthetic site storage', 'SITE_STORAGE', ?, ?, true)
+        """.trimIndent()
+        assertThrows<DataIntegrityViolationException> {
+            jdbc.update(insertSiteStorage, siteStorageId, organizationId, projectId, siteId)
+        }
+        jdbc.update(
+            """
+            INSERT INTO project_site (id, organization_id, project_id, site_id, lifecycle_state)
+            VALUES (?, ?, ?, ?, 'ACTIVE')
+            """.trimIndent(),
+            UUID.randomUUID(), organizationId, projectId, siteId,
+        )
+        jdbc.update(insertSiteStorage, siteStorageId, organizationId, projectId, siteId)
+        assertEquals(siteId, requireNotNull(persistence.storageLocation(siteStorageId)).siteId)
+
+        val clock = Clock.fixed(at, ZoneOffset.UTC)
+        val audit = JdbcAuditEventWriter(jdbc)
+        val authority = Mockito.mock(WarehouseAuthorizationPort::class.java)
+        Mockito.`when`(authority.canManageImport(actorId, organizationId)).thenReturn(true)
+        val executor = JdbcIdempotentCommandExecutor(
+            jdbc,
+            DataSourceTransactionManager(dataSource),
+            clock,
+            HiltechTelemetryRuntime(openTelemetry = OpenTelemetry.noop(), closeAction = {}),
+        )
+        val create = WarehouseImportCreateService(persistence, authority, executor, audit, clock)
+        val stage = WarehouseImportRowCreateService(persistence, authority, executor, audit, clock)
+        val review = WarehouseImportRowReviewService(persistence, authority, executor, audit, clock)
+        val batchCommand = CreateInventoryImportBatchCommand(
+            operationId = UUID.randomUUID(),
+            organizationId = organizationId,
+            sourceFileName = "synthetic-accessories.xlsx",
+            sourceSha256 = "d".repeat(64),
+            sourceType = InventoryImportSourceType.LEGACY_EXCEL,
+            cutoverDate = null,
+            actorUserId = actorId,
+            clientOccurredAt = at,
+            correlationId = "warehouse-migration-contract",
+        )
+        val batch = create.create(batchCommand).batch
+        assertEquals(batch.batchId, create.create(batchCommand).also { assertTrue(it.replayed) }.batch.batchId)
+        assertEquals("INVENTORY_IMPORT_DUPLICATE_SOURCE", assertThrows<ProductApiException> {
+            create.create(batchCommand.copy(operationId = UUID.randomUUID()))
+        }.code)
+
+        val inventoryTables = listOf("stock_item", "stock_balance", "stock_movement", "asset", "asset_movement")
+        val inventoryBefore = inventoryTables.map { jdbc.queryForObject("SELECT count(*) FROM $it", Long::class.java) }
+        val stageCommand = AddInventoryImportRowCommand(
+            operationId = UUID.randomUUID(),
+            batchId = batch.batchId,
+            sourceSheet = "أكسسوارات",
+            sourceRowNumber = 2,
+            rawPayloadJson = """{"الرقم التسلسلي":"LOCAL","العدد":0,"سعر القطعه":123.45}""",
+            candidateClass = InventoryCandidateClass.STOCK_QUANTITY,
+            normalizedBrand = "TEST|BRAND",
+            normalizedPartNumber = "TEST-PART",
+            normalizedDescription = "Synthetic accessory",
+            candidateUom = null,
+            candidateQuantity = BigDecimal.ZERO,
+            candidateValue = BigDecimal("123.45"),
+            candidateCurrencyCode = "EGP",
+            sourceIssueCodes = emptyList(),
+            actorUserId = actorId,
+            clientOccurredAt = at,
+            correlationId = batchCommand.correlationId,
+        )
+        val row = stage.addRow(stageCommand).row
+        val expectedIssues = setOf(
+            InventoryImportIssueCode.LEGACY_COLUMN_SEMANTICS_AMBIGUOUS,
+            InventoryImportIssueCode.UNKNOWN_UOM,
+        )
+        assertEquals(expectedIssues, row.issueCodes.toSet())
+        assertTrue(stage.addRow(stageCommand).replayed)
+        assertEquals("IDEMPOTENCY_KEY_REUSED", assertThrows<ProductApiException> {
+            stage.addRow(stageCommand.copy(sourceRowNumber = 3))
+        }.code)
+        assertEquals("IDEMPOTENCY_KEY_REUSED", assertThrows<ProductApiException> {
+            stage.addRow(stageCommand.copy(normalizedBrand = "TEST", normalizedPartNumber = "BRAND|TEST-PART"))
+        }.code)
+
+        val reviewCommand = ReviewInventoryImportRowCommand(
+            operationId = UUID.randomUUID(),
+            batchId = batch.batchId,
+            rowId = row.rowId,
+            baseVersion = row.version,
+            candidateClass = row.candidateClass,
+            normalizedBrand = row.normalizedBrand,
+            normalizedPartNumber = row.normalizedPartNumber,
+            normalizedDescription = row.normalizedDescription,
+            candidateUom = "TEST-UOM",
+            candidateQuantity = row.candidateQuantity,
+            candidateValue = null,
+            candidateCurrencyCode = null,
+            issueCodes = emptyList(),
+            reviewState = InventoryImportReviewState.NEEDS_REVIEW,
+            reviewNotes = "Synthetic candidate unit supplied. The legacy label remains unresolved.",
+            actorUserId = actorId,
+            clientOccurredAt = at,
+            correlationId = batchCommand.correlationId,
+        )
+        val reviewed = review.review(reviewCommand).row
+        assertEquals(row.version + 1, reviewed.version)
+        assertEquals(row.rawPayloadJson, reviewed.rawPayloadJson)
+        assertEquals(row.candidateValue, reviewed.candidateValue)
+        assertEquals(row.candidateCurrencyCode, reviewed.candidateCurrencyCode)
+        assertEquals(listOf(InventoryImportIssueCode.LEGACY_COLUMN_SEMANTICS_AMBIGUOUS), reviewed.issueCodes)
+        assertTrue(review.review(reviewCommand).replayed)
+        assertEquals("INVENTORY_IMPORT_ROW_VERSION_CONFLICT", assertThrows<ProductApiException> {
+            review.review(reviewCommand.copy(operationId = UUID.randomUUID()))
+        }.code)
+        assertEquals(
+            inventoryBefore,
+            inventoryTables.map { jdbc.queryForObject("SELECT count(*) FROM $it", Long::class.java) },
+        )
     }
 
     private fun assertConstraintRejects(

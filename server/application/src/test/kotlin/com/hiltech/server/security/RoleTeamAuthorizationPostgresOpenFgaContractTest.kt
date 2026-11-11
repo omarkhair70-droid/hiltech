@@ -1,10 +1,24 @@
 package com.hiltech.server.security
 
+import com.hiltech.server.audit.JdbcAuditEventWriter
+import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
+import com.hiltech.server.telemetry.HiltechTelemetryRuntime
+import com.hiltech.server.warehouse.InventoryPrincipalType
+import com.hiltech.server.warehouse.JdbcWarehousePersistence
+import com.hiltech.server.warehouse.SpringWarehouseAuthorization
+import com.hiltech.server.warehouse.WarehouseAuthorityKey
+import com.hiltech.server.warehouse.WarehouseAuthorizationProjectionBridge
+import com.hiltech.server.warehouse.WarehouseAuthorizationRelations
+import com.hiltech.server.warehouse.WarehouseManagerProvisioner
+import com.hiltech.server.warehouse.WarehouseImportOperatorScenario
+import io.opentelemetry.api.OpenTelemetry
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.springframework.beans.factory.support.StaticListableBeanFactory
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
 import org.springframework.jdbc.datasource.DriverManagerDataSource
@@ -12,6 +26,7 @@ import org.springframework.transaction.support.TransactionTemplate
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 class RoleTeamAuthorizationPostgresOpenFgaContractTest {
@@ -411,6 +426,120 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
             replacementManagerId = replacementManagerIdentityId,
             at = now.plusSeconds(90),
         )
+    }
+
+    @Test
+    fun warehouseManagementDeniesStaleUserBindingAndStaleTeamMembership() {
+        assumeTrue(enabled)
+        Flyway.configure()
+            .dataSource(url, user, password)
+            .locations("filesystem:$migrationPath")
+            .load()
+            .migrate()
+
+        val dataSource = DriverManagerDataSource(url, user, password)
+        val jdbc = JdbcTemplate(dataSource)
+        val manager = DataSourceTransactionManager(dataSource)
+        val transaction = TransactionTemplate(manager)
+        val properties = HiltechOpenFgaProperties(
+            enabled = true,
+            apiUrl = fgaApiUrl,
+            storeId = fgaStoreId,
+            authorizationModelId = fgaModelId,
+        ).also { it.validateEnabledConfiguration() }
+        val gateway = OpenFgaGateway(properties, JdkOpenFgaHttpTransport(properties))
+        val checks = FailClosedAuthorizationAdapter(JdbcAuthorizationProjectionGuard(jdbc), gateway)
+        val provider = StaticListableBeanFactory(mapOf("authorization" to checks))
+            .getBeanProvider(AuthorizationCheckPort::class.java)
+        val writer = JdbcAuthorizationProjectionIntentWriter(jdbc, properties)
+        val roleTeamBridge = JdbcRoleTeamAuthorizationProjectionBridge(jdbc, writer)
+        val processor = AuthorizationProjectionProcessor(
+            JdbcAuthorizationProjectionStore(jdbc, manager, properties, AuthorizationProjectionRetryPolicy()),
+            gateway,
+            properties,
+        )
+        val now = Instant.now().truncatedTo(ChronoUnit.MICROS)
+        val clock = Clock.fixed(now, ZoneOffset.UTC)
+        val source = JdbcRoleTeamSourceAuthority(jdbc)
+        val persistence = JdbcWarehousePersistence(jdbc)
+        val warehouseBridge = WarehouseAuthorizationProjectionBridge(persistence, writer, clock)
+        val authorization = SpringWarehouseAuthorization(provider, source, persistence, clock)
+        val org = UUID.randomUUID()
+        val userManager = UUID.randomUUID()
+        val teamManager = UUID.randomUUID()
+        val teamId = UUID.randomUUID()
+        val teamMembershipId = UUID.randomUUID()
+        val warehouseId = UUID.randomUUID()
+        val teamBindingId = UUID.randomUUID()
+        seedOrganizationAndIdentities(jdbc, org, listOf(userManager, teamManager), now.minusSeconds(60))
+        transaction.executeWithoutResult {
+            listOf(userManager, teamManager).forEach { actor ->
+                val membershipId = UUID.randomUUID()
+                insertOrganizationMembership(jdbc, membershipId, org, actor, now.minusSeconds(60))
+                roleTeamBridge.syncOrganizationMembership(membershipId, now)
+            }
+            jdbc.update(
+                "INSERT INTO team (id, organization_id, code, name) VALUES (?, ?, ?, ?)",
+                teamId, org, "WAREHOUSE-TEST", "Synthetic warehouse team",
+            )
+            jdbc.update(
+                """
+                INSERT INTO team_membership (id, team_id, user_identity_id, role_in_team, valid_from)
+                VALUES (?, ?, ?, 'MEMBER', ?)
+                """.trimIndent(),
+                teamMembershipId, teamId, teamManager, now.minusSeconds(60).atOffset(ZoneOffset.UTC),
+            )
+            roleTeamBridge.syncTeamMembership(teamMembershipId, now)
+        }
+        val provisioner = WarehouseManagerProvisioner(
+            jdbc, transaction, persistence, source, warehouseBridge, JdbcAuditEventWriter(jdbc), clock,
+        )
+        assertThrows<IllegalArgumentException> {
+            provisioner.provision(org, warehouseId, userManager, UUID.randomUUID(), "WAREHOUSE-TEST", "Synthetic warehouse")
+        }
+        val userBindingId = provisioner.provision(
+            org, warehouseId, userManager, userManager, "WAREHOUSE-TEST", "Synthetic warehouse",
+        )
+        assertTrue(userBindingId == provisioner.provision(
+            org, warehouseId, userManager, userManager, "WAREHOUSE-TEST", "Synthetic warehouse",
+        ))
+        transaction.executeWithoutResult {
+            persistence.insertWarehouseAuthorityBinding(
+                teamBindingId, org, warehouseId, WarehouseAuthorityKey.WAREHOUSE_MANAGER,
+                InventoryPrincipalType.TEAM, teamId, now.minusSeconds(60), userManager, now,
+            )
+            warehouseBridge.warehouseAuthority(teamBindingId)
+        }
+
+        val warehouse = requireNotNull(persistence.warehouse(warehouseId))
+        assertFalse(authorization.canManageWarehouse(userManager, warehouse))
+        drain(processor, now.plusSeconds(1))
+        assertTrue(authorization.canManageWarehouse(userManager, warehouse))
+        assertTrue(authorization.canManageWarehouse(teamManager, warehouse))
+        assertFalse(authorization.canViewValue(userManager, warehouse))
+        val operator = WarehouseImportOperatorScenario(
+            persistence, authorization,
+            JdbcIdempotentCommandExecutor(jdbc, manager, clock, HiltechTelemetryRuntime(OpenTelemetry.noop()) {}),
+            JdbcAuditEventWriter(jdbc), clock,
+        )
+        val importBatchId = operator.stageAndReview(org, userManager)
+
+        // Deliberately leave the last projected grants in place to exercise the source guards.
+        assertTrue(persistence.endWarehouseAuthorityBinding(userBindingId, warehouseId, 1, now))
+        jdbc.update(
+            "UPDATE team_membership SET valid_until = ?, version = version + 1 WHERE id = ?",
+            now.minusSeconds(1).atOffset(ZoneOffset.UTC), teamMembershipId,
+        )
+        for (actor in listOf(userManager, teamManager)) {
+            assertTrue(gateway.isAllowed(WarehouseAuthorizationRelations.warehouseAction(actor, warehouseId, "can_manage")))
+            assertFalse(authorization.canManageWarehouse(actor, warehouse))
+            assertFalse(authorization.canManageImport(actor, org))
+            operator.assertHidden(importBatchId, actor)
+        }
+        assertTrue(persistence.endWarehouseAuthorityBinding(teamBindingId, warehouseId, 1, now))
+        assertThrows<IllegalArgumentException> {
+            provisioner.provision(org, warehouseId, userManager, userManager, "WAREHOUSE-TEST", "Synthetic warehouse")
+        }
     }
 
     private fun proveStaleManagerGrantCannotReplay(
