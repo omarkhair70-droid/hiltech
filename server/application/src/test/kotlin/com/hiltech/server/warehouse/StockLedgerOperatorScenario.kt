@@ -2,6 +2,10 @@ package com.hiltech.server.warehouse
 
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.ProductApiException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -9,7 +13,6 @@ import org.junit.jupiter.api.assertThrows
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import java.math.BigDecimal
@@ -122,13 +125,17 @@ internal class StockLedgerOperatorScenario(
             jdbc.update("DELETE FROM stock_movement WHERE operation_id = ?", transfer.operationId)
         }
         val session = UUID.randomUUID()
-        MockMvcBuilders.standaloneSetup(StockLedgerController(service)).build()
+        val response = MockMvcBuilders.standaloneSetup(StockLedgerController(service)).build()
             .perform(get("/v1/stock-items/${item.id}/balances").with {
                 HiltechRequestContext.bindAuthenticatedIdentity(it, actor, session)
                 it
             })
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$[?(@.locationCode == 'SYNTH-SOURCE')].onHandQuantity").value(listOf("1.123454")))
+            .andReturn().response.contentAsString
+        val wireBalance = Json.parseToJsonElement(response).jsonArray.map { it.jsonObject }
+            .single { it.getValue("locationCode").jsonPrimitive.content == "SYNTH-SOURCE" }
+        assertEquals("1.123454", wireBalance.getValue("onHandQuantity").jsonPrimitive.content)
+        assertTrue(wireBalance.getValue("onHandQuantity").jsonPrimitive.isString)
         return item.id
     }
 

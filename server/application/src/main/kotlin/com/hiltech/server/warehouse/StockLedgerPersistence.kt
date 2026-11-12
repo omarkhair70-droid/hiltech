@@ -143,7 +143,8 @@ class StockLedgerPersistence(private val jdbc: JdbcTemplate) {
     internal fun append(
         item: StockItemView, operationId: UUID, actor: UUID, type: StockMovementType, quantity: BigDecimal,
         from: UUID?, to: UUID, sourceRow: UUID?, occurredAt: Instant, now: Instant, correlationId: String,
-    ) {
+    ): UUID {
+        val movementId = UUID.randomUUID()
         jdbc.update(
             """
             INSERT INTO stock_movement (id, stock_item_id, organization_id, operation_id, quantity, unit_code,
@@ -151,9 +152,10 @@ class StockLedgerPersistence(private val jdbc: JdbcTemplate) {
                 occurred_at, recorded_at, recorded_by, correlation_id, reason_code)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
-            UUID.randomUUID(), item.id, item.organizationId, operationId, quantity, item.baseUnitCode, type.name,
+            movementId, item.id, item.organizationId, operationId, quantity, item.baseUnitCode, type.name,
             from, to, sourceRow, occurredAt.utc(), now.utc(), actor, correlationId, type.name,
         )
+        return movementId
     }
 
     private fun ResultSet.stockItem() = StockItemView(

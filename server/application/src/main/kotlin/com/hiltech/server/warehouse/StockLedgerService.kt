@@ -7,6 +7,7 @@ import com.hiltech.server.platform.IdempotentCommandOutcome
 import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.security.RoleTeamSourceAuthorityPort
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -19,6 +20,10 @@ import java.util.UUID
 data class StockCommandContext(val operationId: UUID, val actor: UUID, val correlationId: String)
 data class StockCatalogView(val units: List<StockUnitView>, val categories: List<StockCategoryView>)
 data class StockMovementReceipt(val movement: StockMovementView, val replayed: Boolean)
+data class StockMovementPosted(
+    val movementId: UUID, val stockItemId: UUID, val organizationId: UUID,
+    val type: StockMovementType, val actorUserId: UUID, val correlationId: String, val occurredAt: Instant,
+)
 
 @Service
 class StockLedgerService(
@@ -29,6 +34,7 @@ class StockLedgerService(
     private val commands: IdempotentCommandExecutor,
     private val audit: AuditEventWriter,
     private val clock: Clock,
+    private val events: ApplicationEventPublisher,
 ) {
     fun catalog(actor: UUID, org: UUID): StockCatalogView {
         requireCatalogAccess(actor, org)
@@ -139,8 +145,8 @@ class StockLedgerService(
             if (current != proof || cutover != proof.cutoverAt || cutover > clock.instant()) {
                 throw stockConflict("STOCK_CUTOVER_NOT_READY", "Opening requires matching verified evidence and an effective cutover time.")
             }
-            ledger.append(locked, context.operationId, context.actor, StockMovementType.INITIALIZE_OPENING, quantity,
-                null, request.storageLocationId, request.sourceImportRowId, cutover, clock.instant(), context.correlationId)
+            appendMovement(locked, context, StockMovementType.INITIALIZE_OPENING, quantity,
+                null, request.storageLocationId, request.sourceImportRowId, cutover)
         }
         return StockMovementReceipt(requireNotNull(ledger.movement(context.operationId)), replayed)
     }
@@ -156,8 +162,7 @@ class StockLedgerService(
             val locked = lockedItem(id, request.baseVersion, request.unitCode, quantity)
             locations.forEach { transferLocation(context.actor, locked.organizationId, it) }
             val now = clock.instant()
-            ledger.append(locked, context.operationId, context.actor, StockMovementType.TRANSFER, quantity,
-                locations[0], locations[1], null, now, now, context.correlationId)
+            appendMovement(locked, context, StockMovementType.TRANSFER, quantity, locations[0], locations[1], null, now)
         }
         return StockMovementReceipt(requireNotNull(ledger.movement(context.operationId)), replayed)
     }
@@ -220,6 +225,16 @@ class StockLedgerService(
             throw stockInvalid("Serialized Stock requires a whole quantity.")
         }
         return item
+    }
+
+    private fun appendMovement(
+        item: StockItemView, context: StockCommandContext, type: StockMovementType, quantity: BigDecimal,
+        from: UUID?, to: UUID, sourceRow: UUID?, occurredAt: Instant,
+    ) {
+        val movementId = ledger.append(item, context.operationId, context.actor, type, quantity,
+            from, to, sourceRow, occurredAt, clock.instant(), context.correlationId)
+        events.publishEvent(StockMovementPosted(movementId, item.id, item.organizationId,
+            type, context.actor, context.correlationId, occurredAt))
     }
 
     private fun execute(
