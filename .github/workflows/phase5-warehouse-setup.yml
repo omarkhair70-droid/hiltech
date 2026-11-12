@@ -78,8 +78,9 @@ jobs:
         run: ./gradlew :apps:androidApp:assembleDebug
       - name: Free runner disk before emulator
         run: |
-          ./gradlew --stop
-          rm -rf "$HOME/.gradle/caches" "$HOME/.gradle/wrapper/dists"
+          ./gradlew --stop || true
+          rm -rf "$HOME/.gradle/caches" "$HOME/.gradle/wrapper/dists" || true
+          df -h /
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

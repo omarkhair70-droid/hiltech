@@ -16,6 +16,7 @@ import org.junit.jupiter.api.assertThrows
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import java.time.Clock
@@ -147,7 +148,7 @@ internal class AssetPassportOperatorScenario(
         val response = mvc.perform(get("/v1/assets/by-tag/$code").with {
             HiltechRequestContext.bindAuthenticatedIdentity(it, custodian, session)
             it
-        }).andExpect(status().isOk()).andReturn().response.contentAsString
+        }).andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store")).andReturn().response.contentAsString
         val json = Json.parseToJsonElement(response).jsonObject
         assertEquals(expected, json.getValue("assetCode").jsonPrimitive.content)
         assertEquals("SYNTH-EMPLOYEE", json.getValue("employeeCode").jsonPrimitive.content)

@@ -29,7 +29,7 @@ wait_for_text() {
 }
 
 submit_tag() {
-  local position
+  local position x y
   position="$(wait_for_text 'Scan or enter opaque tag code' | python3 -c '
 import re
 import sys
@@ -50,7 +50,7 @@ current="$(wait_for_text 'SYNTH-PASSPORT')"
 [[ "$current" == *'SYNTH-ASSET-BIN'* && "$current" != *'Replace primary tag'* && "$current" != *'Acquisition'* ]]
 adb exec-out screencap -p > "$report_dir/android-current-asset.png"
 submit_tag synthetic-retired-tag
-unavailable="$(wait_for_text 'Asset tag unavailable.' )"
+unavailable="$(wait_for_text 'Asset tag unavailable.')"
 [[ "$unavailable" != *'SYNTH-PASSPORT'* ]]
 adb exec-out screencap -p > "$report_dir/android-tag-unavailable.png"
 echo 'HILTECH_PHASE5_ASSET_ANDROID_PASS synthetic=true scanner_enter=PASS passport=PASS unavailable=PASS previous_result_cleared=PASS'

@@ -234,7 +234,9 @@ class AssetPassportPersistence(private val jdbc: JdbcTemplate) {
     private fun Instant.utc() = atOffset(ZoneOffset.UTC)
 
     private val assetSelect = """
-        SELECT a.*, r.name AS type_name, EXISTS (SELECT 1 FROM asset other
+        SELECT a.id, a.organization_id, a.warehouse_id, a.asset_code, a.display_name, a.manufacturer, a.model,
+            a.serial_number, a.asset_type_definition_id, a.asset_type_revision, a.condition_state, a.lifecycle_state,
+            a.source_import_row_id, a.version, r.name AS type_name, EXISTS (SELECT 1 FROM asset other
             WHERE other.organization_id = a.organization_id AND other.id <> a.id
               AND lower(btrim(other.serial_number)) = lower(btrim(a.serial_number))) AS duplicate_serial
         FROM asset a JOIN config_revision r ON r.id = a.asset_type_definition_id

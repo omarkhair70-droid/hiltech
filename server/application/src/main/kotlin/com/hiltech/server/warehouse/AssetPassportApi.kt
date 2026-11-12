@@ -4,7 +4,9 @@ import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.IdempotencyKeyContract
 import com.hiltech.server.platform.ProductApiException
 import jakarta.servlet.http.HttpServletRequest
+import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -53,7 +55,8 @@ class AssetPassportController(private val service: AssetPassportService) {
     fun passport(request: HttpServletRequest, @PathVariable id: UUID) = service.passport(request.assetActor(), id)
 
     @GetMapping("/v1/assets/by-tag/{opaqueCode}")
-    fun lookup(request: HttpServletRequest, @PathVariable opaqueCode: String) = service.lookup(request.assetActor(), opaqueCode)
+    fun lookup(request: HttpServletRequest, @PathVariable opaqueCode: String): ResponseEntity<AssetTagLookupView> =
+        ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.lookup(request.assetActor(), opaqueCode))
 
     @PostMapping("/v1/assets/{id}/tags")
     fun issue(request: HttpServletRequest, @PathVariable id: UUID, @RequestBody body: IssueAssetTagRequest) =
