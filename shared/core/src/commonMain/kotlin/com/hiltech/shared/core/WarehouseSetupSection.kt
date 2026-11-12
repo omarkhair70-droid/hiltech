@@ -60,6 +60,7 @@ data class HiltechWarehouseState(
     val errorCode: String? = null,
     val errorMessage: String? = null,
     val stock: StockInventoryState? = null,
+    val assets: AssetInventoryState? = null,
 )
 
 @Composable
@@ -74,6 +75,7 @@ fun WarehouseSetupSection(
     onGrantWarehouseAuthority: (String, String) -> Unit = { _, _ -> },
     onEndWarehouseAuthority: (String, Long) -> Unit = { _, _ -> },
     onStockAction: (StockAction) -> Unit = {},
+    onAssetAction: (AssetAction) -> Unit = {},
 ) {
     var warehouseCode by remember { mutableStateOf("") }
     var warehouseName by remember { mutableStateOf("") }
@@ -199,6 +201,7 @@ fun WarehouseSetupSection(
             }
         }
 
+        state.assets?.let { AssetPassportSection(it, state.selectedWarehouseId, onAssetAction) }
         state.stock?.let { StockInventorySection(it, state.selectedWarehouseId, onStockAction) }
         Text("Legacy Import Review", style = MaterialTheme.typography.titleMedium)
         state.importDirectory?.items.orEmpty().forEach { batch ->
@@ -291,6 +294,12 @@ fun WarehouseSetupSection(
                                 approvedItemCode.trim(), approvedItemName.trim()))
                         }, enabled = !state.loading && !state.stock.loading &&
                             approvedItemCode.isNotBlank() && approvedItemName.isNotBlank()) { Text("Approve verified Stock item") }
+                    }
+                    if (state.assets != null && selectedRow.reviewState == "NEEDS_REVIEW" &&
+                        selectedRow.candidateClass == "COMPANY_ASSET"
+                    ) {
+                        ApproveAssetImportForm(batch.batchId, selectedRow.rowId, selectedRow.version,
+                            state.loading || state.assets.loading, onAssetAction)
                     }
                     Text("Recorded source issues: " +
                         selectedRow.issueCodes.joinToString().ifBlank { "None recorded" })

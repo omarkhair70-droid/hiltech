@@ -2,6 +2,13 @@ package com.hiltech.desktop
 
 import com.hiltech.shared.core.StockAction
 import com.hiltech.shared.core.StockInventoryState
+import com.hiltech.shared.core.AssetAction
+import com.hiltech.shared.core.AssetInventoryState
+import com.hiltech.shared.core.warehouse.ApproveAssetImportDto
+import com.hiltech.shared.core.warehouse.AssetRegistrationDto
+import com.hiltech.shared.core.warehouse.AssetTagCommandDto
+import com.hiltech.shared.core.warehouse.CorrectAssetCustodyDto
+import com.hiltech.shared.core.warehouse.OpenAssetCustodyDto
 import com.hiltech.shared.core.warehouse.ApproveStockItemDto
 import com.hiltech.shared.core.warehouse.CreateStockItemDto
 import com.hiltech.shared.core.warehouse.InitializeStockOpeningDto
@@ -666,6 +673,51 @@ class DesktopIdentityRuntime(
     suspend fun warehouses(organizationId: String): WarehouseListDto {
         ensureConfigured()
         return warehouseApi.warehouses(organizationId, installationId)
+    }
+
+    suspend fun applyAssetAction(
+        organizationId: String, warehouseId: String, state: AssetInventoryState, action: AssetAction, operationId: String,
+    ): AssetInventoryState {
+        ensureConfigured()
+        val selectedId = when (action) {
+            is AssetAction.Search -> state.selected?.identity?.id.takeIf { state.search == action.query }
+            is AssetAction.Select -> return loadAssetPassport(state, action.id)
+            is AssetAction.More -> {
+                val page = warehouseApi.assets(warehouseId, state.search, action.afterCode, installationId)
+                return state.copy(items = (state.items + page).distinctBy { it.id },
+                    nextAfterCode = page.lastOrNull()?.assetCode?.takeIf { page.size == 100 })
+            }
+            is AssetAction.Register -> warehouseApi.registerAsset(AssetRegistrationDto(
+                operationId, warehouseId, action.type, action.code, action.name, action.manufacturer,
+                action.model, action.serial, action.ownership, action.condition, action.initialLocation,
+            ), installationId).identity.id
+            is AssetAction.Tag -> {
+                warehouseApi.tagAsset(action.id, AssetTagCommandDto(operationId, action.version, action.type, action.previous), installationId)
+                action.id
+            }
+            is AssetAction.Opening -> warehouseApi.openAssetCustody(action.id, OpenAssetCustodyDto(
+                operationId, action.version, action.condition, action.location, action.employee, action.work, action.cutover,
+            ), installationId).identity.id
+            is AssetAction.Correct -> warehouseApi.correctAssetCustody(action.id, CorrectAssetCustodyDto(
+                operationId, action.version, action.condition, action.sourceMovement, action.reason, action.location, action.employee, action.work,
+            ), installationId).identity.id
+            is AssetAction.Approve -> warehouseApi.approveAssetImport(action.batchId, action.rowId, ApproveAssetImportDto(
+                operationId, action.version, action.code, action.name, action.ownership, action.condition,
+            ), installationId).identity.takeIf { it.warehouseId == warehouseId }?.id
+        }
+        val search = (action as? AssetAction.Search)?.query ?: state.search
+        val page = warehouseApi.assets(warehouseId, search, null, installationId)
+        val refreshed = state.copy(catalog = warehouseApi.assetCatalog(warehouseId, installationId), search = search,
+            items = page, nextAfterCode = page.lastOrNull()?.assetCode?.takeIf { page.size == 100 },
+            locations = warehouseApi.storageLocations(organizationId, installationId).items,
+            selected = null, movements = emptyList())
+        return if (selectedId == null) refreshed else loadAssetPassport(refreshed, selectedId)
+    }
+
+    private suspend fun loadAssetPassport(state: AssetInventoryState, id: String): AssetInventoryState {
+        val passport = warehouseApi.assetPassport(id, installationId)
+        val movements = warehouseApi.assetMovements(id, installationId)
+        return state.copy(selected = passport, movements = movements)
     }
 
     suspend fun applyStockAction(

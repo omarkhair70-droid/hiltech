@@ -1,5 +1,7 @@
 package com.hiltech.desktop
 
+import com.hiltech.shared.core.AssetAction
+import com.hiltech.shared.core.AssetInventoryState
 import com.hiltech.shared.core.StockAction
 import com.hiltech.shared.core.StockInventoryState
 
@@ -1063,6 +1065,8 @@ fun main() {
                             importDirectory = imports.getOrNull(),
                             selectedImport = current.warehouse?.selectedImport,
                             stock = current.warehouse?.stock ?: StockInventoryState(),
+                            assets = current.warehouse?.takeIf { it.selectedWarehouseId == actualSelected }?.assets
+                                ?: AssetInventoryState(),
                             errorCode = (directory.exceptionOrNull() as? HiltechApiException)?.code,
                             errorMessage = directory.exceptionOrNull()?.message,
                         ),
@@ -1078,6 +1082,7 @@ fun main() {
             signed.copy(
                 warehouse = (signed.warehouse ?: HiltechWarehouseState()).copy(
                     selectedWarehouseId = warehouseId,
+                    assets = AssetInventoryState(),
                     loading = true,
                     locations = null,
                     currentAuthority = null,
@@ -1106,6 +1111,53 @@ fun main() {
                     ),
                 )
             }
+        }
+    }
+
+    data class PendingAssetCommand(val actor: String, val warehouse: String, val action: AssetAction.Command, val operationId: String)
+    var pendingAssetCommand: PendingAssetCommand? = null
+    var assetRequestSequence = 0
+
+    fun applyAssetAction(action: AssetAction) {
+        val signed = shellState.value as? HiltechShellState.SignedIn ?: return
+        val setup = signed.warehouse ?: return
+        val facility = setup.selectedWarehouseId ?: return
+        val assets = setup.assets ?: return
+        if (assets.loading) return
+        val organization = signed.identity.organizations.firstOrNull { it.primary }
+            ?: signed.identity.organizations.firstOrNull() ?: return
+        val actor = signed.identity.identityId
+        val command = (action as? AssetAction.Command)?.let {
+            pendingAssetCommand?.takeIf { prior -> prior.actor == actor && prior.warehouse == facility && prior.action == it }
+                ?: PendingAssetCommand(actor, facility, it, java.util.UUID.randomUUID().toString())
+        }
+        if (command != null) pendingAssetCommand = command
+        val request = ++assetRequestSequence
+        setState(signed.copy(warehouse = setup.copy(assets = assets.copy(loading = true, message = null))))
+        scope.launch {
+            val result = runCatching {
+                val refreshed = runtime.applyAssetAction(organization.organizationId, facility, assets, action, command?.operationId.orEmpty())
+                val batch = (action as? AssetAction.Approve)?.let { runtime.warehouseImportBatch(it.batchId) }
+                refreshed to batch
+            }
+            val current = shellState.value as? HiltechShellState.SignedIn ?: return@launch
+            val currentSetup = current.warehouse ?: return@launch
+            if (current.identity.identityId != actor || currentSetup.selectedWarehouseId != facility ||
+                request != assetRequestSequence || currentSetup.assets?.loading != true) return@launch
+            val updated = result.fold(
+                onSuccess = { (refreshed, batch) ->
+                    if (command != null && pendingAssetCommand == command) pendingAssetCommand = null
+                    val selectedBatch = batch?.takeIf { it.batchId == currentSetup.selectedImport?.batchId }
+                    currentSetup.copy(selectedImport = selectedBatch ?: currentSetup.selectedImport,
+                        assets = refreshed.copy(loading = false, message = if (command == null) null else "Asset command recorded."))
+                },
+                onFailure = {
+                    val message = (it as? HiltechApiException)?.message ?: "Asset request failed. Try again."
+                    val fallback = if ((it as? HiltechApiException)?.code == "ASSET_UNAVAILABLE") AssetInventoryState() else assets
+                    currentSetup.copy(assets = fallback.copy(loading = false, message = message))
+                },
+            )
+            setState(current.copy(warehouse = updated))
         }
     }
 
@@ -2686,6 +2738,7 @@ fun main() {
                 onRefreshWarehouse =
                     ::refreshWarehouses,
                 onStockAction = ::applyStockAction,
+                onAssetAction = ::applyAssetAction,
                 onSelectWarehouse =
                     ::selectWarehouse,
                 onCreateWarehouse =
