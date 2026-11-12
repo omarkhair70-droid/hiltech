@@ -313,6 +313,7 @@ interface WarehouseAuthorizationPort {
     fun canManageMaster(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canViewValue(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canViewStorage(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean
+    fun canTransferStock(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean
 }
 
 @Component
@@ -322,6 +323,34 @@ class SpringWarehouseAuthorization(
     private val persistence: WarehousePersistencePort,
     private val clock: Clock,
 ) : WarehouseAuthorizationPort {
+    override fun canTransferStock(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean {
+        val authorization = authorizationProvider.ifAvailable ?: return false
+        val at = clock.instant()
+        if (!sourceAuthority.isOrganizationMemberCurrent(actorUserId, storage.organizationId, at)) return false
+        val direct = persistence.currentStorageAuthorityBindings(storage.storageLocationId, at).filter {
+            it.authorityKey != StorageLocationAuthorityKey.LOCATION_VIEWER && principalMatches(actorUserId, it, at)
+        }
+        for (binding in direct) {
+            val guards = buildList {
+                add(RoleTeamAuthorizationRelations.organizationMember(actorUserId, storage.organizationId))
+                add(WarehouseAuthorizationRelations.storageAuthority(binding))
+                if (binding.principalType == InventoryPrincipalType.TEAM) {
+                    add(RoleTeamAuthorizationRelations.teamMember(actorUserId, binding.principalId))
+                }
+            }
+            if (listOf("can_move_in", "can_move_out").all { relation ->
+                authorization.isAllowed(AuthorizationCheckRequest(
+                    WarehouseAuthorizationRelations.storageAction(actorUserId, storage.storageLocationId, relation),
+                    guards,
+                ))
+            }) return true
+        }
+        val warehouse = storage.warehouseId?.let(persistence::warehouse) ?: return false
+        return warehouse.organizationId == storage.organizationId &&
+            checkWarehouseAction(actorUserId, warehouse, "can_transfer",
+                setOf(WarehouseAuthorityKey.WAREHOUSE_MANAGER, WarehouseAuthorityKey.WAREHOUSE_OPERATOR))
+    }
+
     override fun canViewWarehouse(
         actorUserId: UUID,
         warehouse: WarehouseSnapshot,

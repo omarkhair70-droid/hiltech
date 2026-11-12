@@ -1,5 +1,13 @@
 package com.hiltech.desktop
 
+import com.hiltech.shared.core.StockAction
+import com.hiltech.shared.core.StockInventoryState
+import com.hiltech.shared.core.warehouse.ApproveStockItemDto
+import com.hiltech.shared.core.warehouse.CreateStockItemDto
+import com.hiltech.shared.core.warehouse.InitializeStockOpeningDto
+import com.hiltech.shared.core.warehouse.RegisterStockUnitDto
+import com.hiltech.shared.core.warehouse.TransferStockDto
+
 import com.hiltech.shared.core.identity.DeviceRegistrationDto
 import com.hiltech.shared.core.identity.IdentityApiClient
 import com.hiltech.shared.core.identity.IdentityApiException
@@ -659,6 +667,58 @@ class DesktopIdentityRuntime(
         ensureConfigured()
         return warehouseApi.warehouses(organizationId, installationId)
     }
+
+    suspend fun applyStockAction(
+        organizationId: String, warehouseId: String?, state: StockInventoryState, action: StockAction, operationId: String,
+    ): StockInventoryState {
+        ensureConfigured()
+        val selectedId = when (action) {
+            StockAction.Refresh -> state.selected?.id
+            is StockAction.More -> {
+                val page = warehouseApi.stockItems(organizationId, installationId, action.afterCode)
+                return state.copy(items = (state.items + page).distinctBy { it.id },
+                    nextAfterCode = page.lastOrNull()?.itemCode?.takeIf { page.size == 100 })
+            }
+            is StockAction.Select -> return loadStockDetail(state, action.id)
+            is StockAction.RegisterUnit -> {
+                warehouseApi.registerStockUnit(RegisterStockUnitDto(operationId, requireNotNull(warehouseId), action.code, action.name),
+                    installationId)
+                state.selected?.id
+            }
+            is StockAction.Create -> warehouseApi.createStockItem(CreateStockItemDto(
+                operationId, requireNotNull(warehouseId), action.code, action.name, action.description, action.brand,
+                action.partNumber, action.categoryId, action.unit, action.classification, action.lotTracked,
+            ), installationId).id
+            is StockAction.Approve -> warehouseApi.approveStockItem(action.batchId, action.rowId,
+                ApproveStockItemDto(operationId, action.version, action.code, action.name), installationId).id
+            is StockAction.Opening -> {
+                val item = action.item
+                warehouseApi.initializeStockOpening(item.id, InitializeStockOpeningDto(
+                    operationId, item.version, requireNotNull(item.sourceImportRowId), action.location,
+                    action.quantity, item.baseUnitCode, action.cutoverAt,
+                ), installationId)
+                return loadStockDetail(state, item.id)
+            }
+            is StockAction.Transfer -> {
+                val item = action.item
+                warehouseApi.transferStock(item.id, TransferStockDto(
+                    operationId, item.version, action.from, action.to, action.quantity, item.baseUnitCode,
+                ), installationId)
+                return loadStockDetail(state, item.id)
+            }
+        }
+        val page = warehouseApi.stockItems(organizationId, installationId)
+        val refreshed = state.copy(catalog = warehouseApi.stockCatalog(organizationId, installationId), items = page,
+            nextAfterCode = page.lastOrNull()?.itemCode?.takeIf { page.size == 100 },
+            locations = warehouseApi.storageLocations(organizationId, installationId).items)
+        return if (selectedId == null) refreshed else loadStockDetail(refreshed, selectedId)
+    }
+
+    private suspend fun loadStockDetail(state: StockInventoryState, id: String): StockInventoryState = state.copy(
+        selected = warehouseApi.stockItem(id, installationId),
+        balances = warehouseApi.stockBalances(id, installationId),
+        movements = warehouseApi.stockMovements(id, installationId),
+    )
 
     suspend fun warehouseLocations(warehouseId: String): StorageLocationListDto {
         ensureConfigured()
