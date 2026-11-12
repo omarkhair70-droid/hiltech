@@ -1,5 +1,8 @@
 package com.hiltech.desktop
 
+import com.hiltech.shared.core.StockAction
+import com.hiltech.shared.core.StockInventoryState
+
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -1059,6 +1062,7 @@ fun main() {
                             currentAuthority = authority?.getOrNull(),
                             importDirectory = imports.getOrNull(),
                             selectedImport = current.warehouse?.selectedImport,
+                            stock = current.warehouse?.stock ?: StockInventoryState(),
                             errorCode = (directory.exceptionOrNull() as? HiltechApiException)?.code,
                             errorMessage = directory.exceptionOrNull()?.message,
                         ),
@@ -1102,6 +1106,51 @@ fun main() {
                     ),
                 )
             }
+        }
+    }
+
+    data class PendingStockCommand(
+        val actor: String, val warehouseId: String?, val action: StockAction, val operationId: String,
+    )
+    var pendingStockCommand: PendingStockCommand? = null
+
+    fun applyStockAction(action: StockAction) {
+        val signed = shellState.value as? HiltechShellState.SignedIn ?: return
+        val setup = signed.warehouse ?: return
+        val stock = setup.stock ?: return
+        if (stock.loading) return
+        val organization = signed.identity.organizations.firstOrNull { it.primary }
+            ?: signed.identity.organizations.firstOrNull() ?: return
+        val actor = signed.identity.identityId
+        val isMutation = action !is StockAction.Refresh && action !is StockAction.Select && action !is StockAction.More
+        val operation = pendingStockCommand?.takeIf {
+            it.actor == actor && it.action == action && it.warehouseId == setup.selectedWarehouseId
+        } ?: PendingStockCommand(actor, setup.selectedWarehouseId, action, java.util.UUID.randomUUID().toString())
+        if (isMutation) pendingStockCommand = operation
+        setState(signed.copy(warehouse = setup.copy(stock = stock.copy(loading = true, message = null))))
+        scope.launch {
+            val result = runCatching {
+                val refreshed = runtime.applyStockAction(
+                    organization.organizationId, setup.selectedWarehouseId, stock, action, operation.operationId,
+                )
+                val batch = (action as? StockAction.Approve)?.let { runtime.warehouseImportBatch(it.batchId) }
+                refreshed to batch
+            }
+            val current = shellState.value as? HiltechShellState.SignedIn ?: return@launch
+            val currentSetup = current.warehouse ?: return@launch
+            if (current.identity.identityId != actor) return@launch
+            val updated = result.fold(
+                onSuccess = { (refreshed, batch) ->
+                    if (pendingStockCommand == operation) pendingStockCommand = null
+                    val selectedBatch = batch?.takeIf { it.batchId == currentSetup.selectedImport?.batchId }
+                    currentSetup.copy(selectedImport = selectedBatch ?: currentSetup.selectedImport,
+                        stock = refreshed.copy(loading = false, message = if (isMutation) "Stock command recorded" else null))
+                },
+                onFailure = { failure ->
+                    currentSetup.copy(stock = stock.copy(loading = false, message = failure.message ?: "Stock request failed."))
+                },
+            )
+            setState(current.copy(warehouse = updated))
         }
     }
 
@@ -2636,6 +2685,7 @@ fun main() {
                 onCreateEmployee = ::createEmployee,
                 onRefreshWarehouse =
                     ::refreshWarehouses,
+                onStockAction = ::applyStockAction,
                 onSelectWarehouse =
                     ::selectWarehouse,
                 onCreateWarehouse =

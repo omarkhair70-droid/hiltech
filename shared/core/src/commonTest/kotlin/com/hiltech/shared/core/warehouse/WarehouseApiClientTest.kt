@@ -7,6 +7,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -22,6 +23,29 @@ class WarehouseApiClientTest {
     private val batchId = "33333333-3333-3333-3333-333333333333"
     private val operation = "44444444-4444-4444-4444-444444444444"
     private val installation = "55555555-5555-5555-5555-555555555555"
+
+    @Test
+    fun stockTransferUsesTheAuthenticatedRouteAndPreservesExactDecimalText() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/stock-items/$batchId/transfer", request.url.encodedPath)
+            assertEquals("POST", request.method.value)
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            assertEquals(operation, request.headers["Idempotency-Key"])
+            val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            val sent = Json.decodeFromString<TransferStockDto>(body)
+            assertEquals("99999999999999.123456", sent.quantity)
+            assertEquals("SYNTH-UOM", sent.unitCode)
+            respond(
+                """{"replayed":true,"movement":{"id":"synthetic-move","operationId":"$operation","type":"TRANSFER","quantity":"99999999999999.123456","unitCode":"SYNTH-UOM","occurredAt":"2026-11-12T08:00:00Z","recordedBy":"synthetic-actor"}}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val receipt = client(http).transferStock(batchId, TransferStockDto(
+            operation, 1, org, warehouseId, "99999999999999.123456", "SYNTH-UOM",
+        ), installation)
+        assertEquals("99999999999999.123456", receipt.movement.quantity)
+        assertTrue(receipt.replayed)
+    }
 
     @Test
     fun warehouseDirectoryAndCreateUseExistingAuthenticatedTransport() = runBlocking {

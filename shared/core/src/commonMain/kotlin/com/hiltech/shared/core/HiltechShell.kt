@@ -159,6 +159,7 @@ fun HiltechShell(
             employmentTypeCode: String?,
         ) -> Unit = { _, _, _, _ -> },
     onRefreshWarehouse: () -> Unit = {},
+    onStockAction: (StockAction) -> Unit = {},
     onSelectWarehouse: (String) -> Unit = {},
     onCreateWarehouse: (String, String) -> Unit = { _, _ -> },
     onCreateWarehouseLocation: (String, String) -> Unit = { _, _ -> },
@@ -442,6 +443,7 @@ fun HiltechShell(
                         WarehouseSetupSection(
                             state = warehouse,
                             onRefresh = onRefreshWarehouse,
+                            onStockAction = onStockAction,
                             onSelectWarehouse = onSelectWarehouse,
                             onCreateWarehouse = onCreateWarehouse,
                             onCreateWarehouseLocation = onCreateWarehouseLocation,

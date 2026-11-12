@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "database/migrations/V0026__warehouse_storage_authority_import__slice01.sql"
+      - "database/migrations/V0027__stock_master_opening_ledger__slice02.sql"
       - "server/application/src/main/kotlin/com/hiltech/server/warehouse/**"
       - "server/application/src/test/kotlin/com/hiltech/server/warehouse/**"
       - "shared/core/src/**/warehouse/**"
@@ -46,6 +47,7 @@ jobs:
           ./gradlew :apps:desktopApp:renderPhase5WarehouseEvidence
           test -s build/reports/phase5-warehouse/warehouse-setup.png
           test -s build/reports/phase5-warehouse/import-review.png
+          test -s build/reports/phase5-warehouse/stock-inventory.png
       - name: Upload synthetic render evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

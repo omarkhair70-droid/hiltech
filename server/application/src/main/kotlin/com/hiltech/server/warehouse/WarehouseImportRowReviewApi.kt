@@ -99,6 +99,13 @@ class WarehouseImportRowReviewService(
                     currentVersion = previous.version,
                 )
             }
+            if (previous.reviewState == InventoryImportReviewState.APPROVED) {
+                throw ProductApiException(
+                    code = "INVENTORY_IMPORT_ROW_ALREADY_APPROVED",
+                    message = "The approved import row is immutable.",
+                    status = HttpStatus.CONFLICT,
+                )
+            }
             if (normalized.reviewState == InventoryImportReviewState.PENDING) {
                 throw invalid(
                     "INVALID_IMPORT_REVIEW_STATE",

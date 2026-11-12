@@ -11,6 +11,10 @@ import com.hiltech.server.warehouse.WarehouseAuthorizationProjectionBridge
 import com.hiltech.server.warehouse.WarehouseAuthorizationRelations
 import com.hiltech.server.warehouse.WarehouseManagerProvisioner
 import com.hiltech.server.warehouse.WarehouseImportOperatorScenario
+import com.hiltech.server.warehouse.StockLedgerOperatorScenario
+import com.hiltech.server.warehouse.StockLedgerPersistence
+import com.hiltech.server.warehouse.StockLedgerService
+import com.hiltech.server.warehouse.StockMovementPosted
 import io.opentelemetry.api.OpenTelemetry
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -28,6 +32,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import java.util.concurrent.CopyOnWriteArrayList
 
 class RoleTeamAuthorizationPostgresOpenFgaContractTest {
     private val enabled =
@@ -523,6 +528,21 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
             JdbcAuditEventWriter(jdbc), clock,
         )
         val importBatchId = operator.stageAndReview(org, userManager)
+        val stockEvents = CopyOnWriteArrayList<StockMovementPosted>()
+        val stock = StockLedgerOperatorScenario(
+            jdbc,
+            StockLedgerService(StockLedgerPersistence(jdbc), persistence, authorization, source,
+                JdbcIdempotentCommandExecutor(jdbc, manager, clock, HiltechTelemetryRuntime(OpenTelemetry.noop()) {}),
+                JdbcAuditEventWriter(jdbc), clock, { event -> stockEvents.add(event as StockMovementPosted) }),
+            clock, org, warehouseId, userManager, teamManager,
+        )
+        val stockItemId = stock.exercise { locations ->
+            transaction.executeWithoutResult {
+                locations.forEach { id -> warehouseBridge.storageCreated(requireNotNull(persistence.storageLocation(id))) }
+            }
+            drain(processor, now.plusSeconds(1))
+        }
+        assertTrue(stockEvents.size == 3 && stockEvents.all { it.stockItemId == stockItemId })
 
         // Deliberately leave the last projected grants in place to exercise the source guards.
         assertTrue(persistence.endWarehouseAuthorityBinding(userBindingId, warehouseId, 1, now))
@@ -535,6 +555,7 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
             assertFalse(authorization.canManageWarehouse(actor, warehouse))
             assertFalse(authorization.canManageImport(actor, org))
             operator.assertHidden(importBatchId, actor)
+            stock.assertTransferDenied(stockItemId, actor)
         }
         assertTrue(persistence.endWarehouseAuthorityBinding(teamBindingId, warehouseId, 1, now))
         assertThrows<IllegalArgumentException> {

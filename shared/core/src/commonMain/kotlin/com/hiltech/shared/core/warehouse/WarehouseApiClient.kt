@@ -3,7 +3,9 @@ package com.hiltech.shared.core.warehouse
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
+import io.ktor.http.encodeURLQueryComponent
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 /**
@@ -19,6 +21,44 @@ class WarehouseApiClient(
         explicitNulls = false
     },
 ) {
+    suspend fun stockCatalog(organizationId: String, installationId: String): StockCatalogDto =
+        get("/v1/stock-catalog?organizationId=" + uuid(organizationId), installationId, StockCatalogDto.serializer())
+
+    suspend fun stockItems(organizationId: String, installationId: String, afterCode: String? = null): List<StockItemDto> =
+        get("/v1/stock-items?organizationId=" + uuid(organizationId) +
+            (afterCode?.let { "&afterCode=" + it.encodeURLQueryComponent() } ?: ""),
+            installationId, ListSerializer(StockItemDto.serializer()))
+
+    suspend fun stockItem(id: String, installationId: String): StockItemDto =
+        get("/v1/stock-items/" + uuid(id), installationId, StockItemDto.serializer())
+
+    suspend fun stockBalances(id: String, installationId: String): List<StockBalanceDto> =
+        get("/v1/stock-items/" + uuid(id) + "/balances", installationId, ListSerializer(StockBalanceDto.serializer()))
+
+    suspend fun stockMovements(id: String, installationId: String): List<StockMovementDto> =
+        get("/v1/stock-items/" + uuid(id) + "/movements", installationId, ListSerializer(StockMovementDto.serializer()))
+
+    suspend fun registerStockUnit(request: RegisterStockUnitDto, installationId: String): StockUnitDto =
+        post("/v1/stock-units", request.operationId, json.encodeToString(RegisterStockUnitDto.serializer(), request),
+            installationId, StockUnitDto.serializer())
+
+    suspend fun createStockItem(request: CreateStockItemDto, installationId: String): StockItemDto =
+        post("/v1/stock-items", request.operationId, json.encodeToString(CreateStockItemDto.serializer(), request),
+            installationId, StockItemDto.serializer())
+
+    suspend fun approveStockItem(batchId: String, rowId: String, request: ApproveStockItemDto, installationId: String): StockItemDto =
+        post("/v1/inventory-imports/" + uuid(batchId) + "/rows/" + uuid(rowId) + "/approve-stock-item",
+            request.operationId, json.encodeToString(ApproveStockItemDto.serializer(), request),
+            installationId, StockItemDto.serializer())
+
+    suspend fun initializeStockOpening(id: String, request: InitializeStockOpeningDto, installationId: String): StockMovementReceiptDto =
+        post("/v1/stock-items/" + uuid(id) + "/opening-balance", request.operationId,
+            json.encodeToString(InitializeStockOpeningDto.serializer(), request), installationId, StockMovementReceiptDto.serializer())
+
+    suspend fun transferStock(id: String, request: TransferStockDto, installationId: String): StockMovementReceiptDto =
+        post("/v1/stock-items/" + uuid(id) + "/transfer", request.operationId,
+            json.encodeToString(TransferStockDto.serializer(), request), installationId, StockMovementReceiptDto.serializer())
+
     suspend fun warehouses(
         organizationId: String,
         installationId: String,

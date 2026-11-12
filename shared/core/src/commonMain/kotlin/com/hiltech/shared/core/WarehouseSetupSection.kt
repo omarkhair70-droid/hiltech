@@ -59,6 +59,7 @@ data class HiltechWarehouseState(
     val selectedImport: InventoryImportBatchDto? = null,
     val errorCode: String? = null,
     val errorMessage: String? = null,
+    val stock: StockInventoryState? = null,
 )
 
 @Composable
@@ -72,6 +73,7 @@ fun WarehouseSetupSection(
     onReviewImportRow: (WarehouseImportReviewDraft) -> Unit = {},
     onGrantWarehouseAuthority: (String, String) -> Unit = { _, _ -> },
     onEndWarehouseAuthority: (String, Long) -> Unit = { _, _ -> },
+    onStockAction: (StockAction) -> Unit = {},
 ) {
     var warehouseCode by remember { mutableStateOf("") }
     var warehouseName by remember { mutableStateOf("") }
@@ -197,6 +199,7 @@ fun WarehouseSetupSection(
             }
         }
 
+        state.stock?.let { StockInventorySection(it, state.selectedWarehouseId, onStockAction) }
         Text("Legacy Import Review", style = MaterialTheme.typography.titleMedium)
         state.importDirectory?.items.orEmpty().forEach { batch ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -240,6 +243,8 @@ fun WarehouseSetupSection(
             }
             val selectedRow = batch.rows.firstOrNull { it.rowId == selectedImportRowId }
             if (selectedRow != null) {
+                var approvedItemCode by remember(selectedRow.rowId) { mutableStateOf("") }
+                var approvedItemName by remember(selectedRow.rowId) { mutableStateOf("") }
                 var candidateClass by remember(selectedRow.rowId, selectedRow.version) {
                     mutableStateOf(selectedRow.candidateClass)
                 }
@@ -276,6 +281,17 @@ fun WarehouseSetupSection(
                     }
                     selectedRow.sourcePreview.forEach { (label, value) -> Text("$label · $value") }
                     Text("Approval requires verified source and mapping evidence.")
+                    if (state.stock != null && selectedRow.reviewState == "NEEDS_REVIEW" &&
+                        selectedRow.candidateClass in setOf("STOCK_QUANTITY", "STOCK_SERIALIZED")
+                    ) {
+                        OutlinedTextField(approvedItemCode, { approvedItemCode = it }, label = { Text("New Stock item code") }, singleLine = true)
+                        OutlinedTextField(approvedItemName, { approvedItemName = it }, label = { Text("New Stock item name") }, singleLine = true)
+                        OutlinedButton(onClick = {
+                            onStockAction(StockAction.Approve(batch.batchId, selectedRow.rowId, selectedRow.version,
+                                approvedItemCode.trim(), approvedItemName.trim()))
+                        }, enabled = !state.loading && !state.stock.loading &&
+                            approvedItemCode.isNotBlank() && approvedItemName.isNotBlank()) { Text("Approve verified Stock item") }
+                    }
                     Text("Recorded source issues: " +
                         selectedRow.issueCodes.joinToString().ifBlank { "None recorded" })
                     val candidateIssues = selectedRow.issueCodes.filter { it in candidateReviewIssues }
