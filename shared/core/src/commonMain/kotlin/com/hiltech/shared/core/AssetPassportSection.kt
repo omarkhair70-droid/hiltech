@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -84,8 +85,9 @@ fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispa
             Text("Select a warehouse.")
             return@Column
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            assetField("Code, serial, manufacturer, model, type or tag", search) { search = it }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(search, { search = it }, modifier = Modifier.weight(1f),
+                label = { Text("Search assets") }, placeholder = { Text("Code, serial, manufacturer, model, type or tag") }, singleLine = true)
             OutlinedButton({ dispatch(AssetAction.Search(search.trim())) }, enabled = !state.loading) {
                 Text(if (state.loading) "Loading assets" else "Search assets")
             }
