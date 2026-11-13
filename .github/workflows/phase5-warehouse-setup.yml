@@ -8,6 +8,7 @@ on:
       - "database/migrations/V0027__stock_master_opening_ledger__slice02.sql"
       - "database/migrations/V0028__asset_passport_custody__slice03.sql"
       - "database/migrations/V0029__asset_availability_service__slice04.sql"
+      - "database/migrations/V0030__resource_reservations__slice05.sql"
       - "server/application/src/main/kotlin/com/hiltech/server/warehouse/**"
       - "server/application/src/test/kotlin/com/hiltech/server/warehouse/**"
       - "shared/core/src/**/warehouse/**"

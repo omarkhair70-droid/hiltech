@@ -488,6 +488,8 @@ interface ProjectAuthorizationPort {
         project: ProjectSnapshot,
     ): Boolean
 
+    fun canRequestResources(actorUserId: UUID, project: ProjectSnapshot): Boolean
+
     fun canManageProject(
         actorUserId: UUID,
         project: ProjectSnapshot,
@@ -577,6 +579,9 @@ class SpringProjectAuthorization(
             project,
             "can_view",
         )
+
+    override fun canRequestResources(actorUserId: UUID, project: ProjectSnapshot): Boolean =
+        checkProjectAction(actorUserId, project, "can_request_resource")
 
     override fun canManageProject(
         actorUserId: UUID,

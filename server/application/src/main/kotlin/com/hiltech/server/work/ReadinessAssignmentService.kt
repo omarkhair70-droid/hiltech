@@ -35,6 +35,7 @@ class ReadinessAssignmentService(
     private val audit: AuditEventWriter,
     private val events: ApplicationEventPublisher,
     private val clock: Clock,
+    private val resourceSource: WorkResourceSource = WorkResourceSource { _, _, _ -> null },
 ) {
     fun readiness(
         actorUserId: UUID,
@@ -184,6 +185,7 @@ class ReadinessAssignmentService(
                     ),
             ) {
                 val now = clock.instant()
+                if (!work.lockWorkOrder(command.workOrderId)) hidden()
                 val current = order(command.workOrderId)
                 val project = project(current.projectId)
                 requireAssign(command.actorUserId, project)
@@ -192,145 +194,7 @@ class ReadinessAssignmentService(
                 }
                 requireReadinessLifecycle(current)
 
-                val assignmentPolicy =
-                    assignmentPolicy(current)
-                val readinessPolicy =
-                    readinessPolicy(current)
-                val candidates =
-                    eligibility.eligibleTargets(
-                        current,
-                        assignmentPolicy,
-                        now,
-                    )
-                val activeAssignment =
-                    persistence.activeAssignment(
-                        current.workOrderId,
-                    )
-                val requirements =
-                    readinessRequirements(current)
-
-                persistence.resolveReadinessBlockers(
-                    current.workOrderId,
-                    now,
-                )
-
-                requirements
-                    .filterNot { it.waived }
-                    .forEach { requirement ->
-                        val evaluation =
-                            evaluateRequirement(
-                                requirement = requirement,
-                                order = current,
-                                candidates = candidates,
-                                activeAssignment =
-                                    activeAssignment,
-                            )
-                        if (
-                            !persistence
-                                .updateRequirementEvaluation(
-                                    requirementId =
-                                        requirement.requirementId,
-                                    expectedVersion =
-                                        requirement.version,
-                                    state = evaluation.state,
-                                    reasonCode =
-                                        evaluation.reasonCode,
-                                    sourceAsOf = now,
-                                    evaluatedAt = now,
-                                    satisfiedByRef =
-                                        evaluation.satisfiedByRef,
-                                )
-                        ) {
-                            version()
-                        }
-                    }
-
-                val evaluated =
-                    readinessRequirements(current)
-                evaluated
-                    .filter {
-                        it.required &&
-                            it.satisfactionState ==
-                            "BLOCKED"
-                    }
-                    .forEachIndexed { index, requirement ->
-                        persistence.insertReadinessBlocker(
-                            blockerId =
-                                deterministic(
-                                    "readiness-blocker",
-                                    command.operationId,
-                                    "$index:${requirement.requirementId}",
-                                ),
-                            workOrderId =
-                                current.workOrderId,
-                            requirementId =
-                                requirement.requirementId,
-                            reasonCode =
-                                requirement
-                                    .evaluationReasonCode
-                                    ?: "READINESS_REQUIREMENT_BLOCKED",
-                            actorUserId =
-                                command.actorUserId,
-                            at = now,
-                        )
-                    }
-
-                val nextState =
-                    readinessState(
-                        readinessPolicy,
-                        evaluated,
-                    )
-                if (
-                    !persistence.updateReadiness(
-                        current.workOrderId,
-                        current.version,
-                        nextState,
-                        now,
-                    )
-                ) {
-                    version()
-                }
-
-                val updated = order(current.workOrderId)
-                audit.append(
-                    AuditEventRecord(
-                        actorUserId =
-                            command.actorUserId,
-                        action = "WORK_READINESS_EVALUATED",
-                        targetType = "WORK_ORDER",
-                        targetId = current.workOrderId,
-                        previousStateRef =
-                            current.readinessState.name,
-                        newStateRef = nextState.name,
-                        safeDiffJson =
-                            """{"fields":["readinessState","requirements","blockers"]}""",
-                        occurredAt = now,
-                        correlationId =
-                            command.correlationId,
-                        configRevisionRefsJson =
-                            """["${requireNotNull(current.binding).readinessPolicy.id}","${current.binding.assignmentPolicy.id}"]""",
-                    ),
-                )
-                if (current.readinessState != nextState) {
-                    events.publishEvent(
-                        WorkReadinessChanged(
-                            workOrderId =
-                                updated.workOrderId,
-                            organizationId =
-                                updated.organizationId,
-                            projectId = updated.projectId,
-                            previousState =
-                                current.readinessState,
-                            newState = nextState,
-                            sourceVersion = updated.version,
-                            actorUserId =
-                                command.actorUserId,
-                            occurredAt = now,
-                            correlationId =
-                                command.correlationId,
-                        ),
-                    )
-                }
+                applyEvaluation(current, command.operationId, command.actorUserId, command.correlationId, now)
                 outcome(
                     current.projectId,
                     current.workOrderId,
@@ -342,6 +206,162 @@ class ReadinessAssignmentService(
                 snapshot(order(command.workOrderId)),
             replayed = replayed,
         )
+    }
+
+    @Transactional
+    fun resourceChanged(change: WorkResourceChanged) {
+        execute(change.id, change.actor, "WORK_RESOURCE_READINESS", change.workOrderId, change.correlationId,
+            listOf(change.workOrderId)) {
+            if (!work.lockWorkOrder(change.workOrderId)) hidden()
+            val current = order(change.workOrderId)
+            if (current.binding != null && current.lifecycleState in setOf(WorkOrderLifecycle.PLANNED, WorkOrderLifecycle.ASSIGNED)) {
+                applyEvaluation(current, change.id, change.actor, change.correlationId, clock.instant())
+            }
+            outcome(current.projectId, current.workOrderId)
+        }
+    }
+
+    private fun applyEvaluation(current: WorkOrderSnapshot, operationId: UUID, actor: UUID, correlation: String, now: Instant) {
+        val assignmentPolicy =
+            assignmentPolicy(current)
+        val readinessPolicy =
+            readinessPolicy(current)
+        val candidates =
+            eligibility.eligibleTargets(
+                current,
+                assignmentPolicy,
+                now,
+            )
+        val activeAssignment =
+            persistence.activeAssignment(
+                current.workOrderId,
+            )
+        val requirements =
+            readinessRequirements(current)
+
+        persistence.resolveReadinessBlockers(
+            current.workOrderId,
+            now,
+        )
+
+        requirements
+            .filterNot { it.waived }
+            .forEach { requirement ->
+                val evaluation =
+                    evaluateRequirement(
+                        requirement = requirement,
+                        order = current,
+                        candidates = candidates,
+                        activeAssignment =
+                            activeAssignment,
+                        at = now,
+                    )
+                if (
+                    !persistence
+                        .updateRequirementEvaluation(
+                            requirementId =
+                                requirement.requirementId,
+                            expectedVersion =
+                                requirement.version,
+                            state = evaluation.state,
+                            reasonCode =
+                                evaluation.reasonCode,
+                            sourceAsOf = evaluation.sourceAsOf ?: now,
+                            evaluatedAt = now,
+                            satisfiedByRef =
+                                evaluation.satisfiedByRef,
+                        )
+                ) {
+                    version()
+                }
+            }
+
+        val evaluated =
+            readinessRequirements(current)
+        evaluated
+            .filter {
+                it.required &&
+                    it.satisfactionState ==
+                    "BLOCKED"
+            }
+            .forEachIndexed { index, requirement ->
+                persistence.insertReadinessBlocker(
+                    blockerId =
+                        deterministic(
+                            "readiness-blocker",
+                            operationId,
+                            "$index:${requirement.requirementId}",
+                        ),
+                    workOrderId =
+                        current.workOrderId,
+                    requirementId =
+                        requirement.requirementId,
+                    reasonCode =
+                        requirement
+                            .evaluationReasonCode
+                            ?: "READINESS_REQUIREMENT_BLOCKED",
+                    actorUserId =
+                        actor,
+                    at = now,
+                )
+            }
+
+        val nextState =
+            readinessState(
+                readinessPolicy,
+                evaluated,
+            )
+        if (
+            !persistence.updateReadiness(
+                current.workOrderId,
+                current.version,
+                nextState,
+                now,
+            )
+        ) {
+            version()
+        }
+
+        val updated = order(current.workOrderId)
+        audit.append(
+            AuditEventRecord(
+                actorUserId =
+                    actor,
+                action = "WORK_READINESS_EVALUATED",
+                targetType = "WORK_ORDER",
+                targetId = current.workOrderId,
+                previousStateRef =
+                    current.readinessState.name,
+                newStateRef = nextState.name,
+                safeDiffJson =
+                    """{"fields":["readinessState","requirements","blockers"]}""",
+                occurredAt = now,
+                correlationId =
+                    correlation,
+                configRevisionRefsJson =
+                    """["${requireNotNull(current.binding).readinessPolicy.id}","${current.binding.assignmentPolicy.id}"]""",
+            ),
+        )
+        if (current.readinessState != nextState) {
+            events.publishEvent(
+                WorkReadinessChanged(
+                    workOrderId =
+                        updated.workOrderId,
+                    organizationId =
+                        updated.organizationId,
+                    projectId = updated.projectId,
+                    previousState =
+                        current.readinessState,
+                    newState = nextState,
+                    sourceVersion = updated.version,
+                    actorUserId =
+                        actor,
+                    occurredAt = now,
+                    correlationId =
+                        correlation,
+                ),
+            )
+        }
     }
 
     @Transactional
@@ -377,6 +397,7 @@ class ReadinessAssignmentService(
                     ),
             ) {
                 val now = clock.instant()
+                if (!work.lockWorkOrder(command.workOrderId)) hidden()
                 val current = order(command.workOrderId)
                 val project = project(current.projectId)
                 requireAssign(command.actorUserId, project)
@@ -530,6 +551,7 @@ class ReadinessAssignmentService(
                     ),
             ) {
                 val now = clock.instant()
+                if (!work.lockWorkOrder(command.workOrderId)) hidden()
                 val current = order(command.workOrderId)
                 val project = project(current.projectId)
                 requireAssign(command.actorUserId, project)
@@ -948,6 +970,7 @@ class ReadinessAssignmentService(
         order: WorkOrderSnapshot,
         candidates: List<EligibleTargetResult>,
         activeAssignment: WorkAssignmentRecord?,
+        at: Instant,
     ): RequirementEvaluation =
         when (
             requirement.typeCode
@@ -1031,11 +1054,12 @@ class ReadinessAssignmentService(
             "ASSET_TOOL",
             "TOOL",
             ->
-                RequirementEvaluation(
-                    state = "BLOCKED",
-                    reasonCode =
-                        "PHASE5_RESOURCE_SOURCE_UNAVAILABLE",
-                )
+                resourceSource.evaluate(order, requirement, at)?.let { fact ->
+                    RequirementEvaluation(
+                        if (fact.satisfied) "SATISFIED" else "BLOCKED", fact.reason,
+                        fact.sourceId?.let { "warehouse:$it:${fact.sourceVersion}" }, fact.asOf,
+                    )
+                } ?: RequirementEvaluation("BLOCKED", "PHASE5_RESOURCE_SOURCE_UNAVAILABLE")
 
             "SITE_ACCESS" ->
                 RequirementEvaluation(
@@ -1502,5 +1526,6 @@ class ReadinessAssignmentService(
         val state: String,
         val reasonCode: String?,
         val satisfiedByRef: String? = null,
+        val sourceAsOf: Instant? = null,
     )
 }

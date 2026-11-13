@@ -1,5 +1,15 @@
 package com.hiltech.server.projects
 
+import com.hiltech.server.warehouse.AssetPassportPersistence
+import com.hiltech.server.warehouse.AssetServicePersistence
+import com.hiltech.server.warehouse.JdbcWarehousePersistence
+import com.hiltech.server.warehouse.ReservationOperatorScenario
+import com.hiltech.server.warehouse.ReservationPersistence
+import com.hiltech.server.warehouse.SpringWarehouseAuthorization
+import com.hiltech.server.warehouse.StockLedgerPersistence
+import com.hiltech.server.warehouse.WarehouseAuthorizationProjectionBridge
+import com.hiltech.server.warehouse.WarehouseWorkResourceSource
+
 import com.hiltech.server.audit.JdbcAuditEventWriter
 import com.hiltech.server.activity.ActivityProjectionListener
 import com.hiltech.server.activity.JdbcActivityProjection
@@ -2268,6 +2278,24 @@ class ProjectsPostgresOpenFgaContractTest {
                 }.actionCode,
                 "Blocked WorkQueue context must expose a typed authority action, not a second WorkOrder state.",
             )
+
+            val reservationWarehouse = JdbcWarehousePersistence(jdbc)
+            val reservationSource = WarehouseWorkResourceSource(ReservationPersistence(jdbc), AssetServicePersistence(jdbc),
+                StockLedgerPersistence(jdbc), reservationWarehouse, AssetPassportPersistence(jdbc))
+            val reservationReadiness = ReadinessAssignmentService(
+                JdbcProjectsPersistence(jdbc), JdbcWorkPersistence(jdbc), readinessPersistence,
+                WorkEligibilityResolver(JdbcPeoplePersistence(jdbc), JdbcWorkforceAssignmentPersistence(jdbc),
+                    JdbcHrDocumentsPersistence(jdbc), sourceAuthority, jdbc),
+                projectAuthorization, WorkAssignmentAuthorizationProjectionBridge(writer, jdbc),
+                JdbcIdempotentCommandExecutor(jdbc, txManager, clock, telemetry), JdbcAuditEventWriter(jdbc),
+                ApplicationEventPublisher { event -> published += event }, clock, reservationSource,
+            )
+            ReservationOperatorScenario(jdbc, txManager, reservationWarehouse,
+                SpringWarehouseAuthorization(provider, sourceAuthority, reservationWarehouse, clock),
+                WarehouseAuthorizationProjectionBridge(reservationWarehouse, writer, clock),
+                JdbcProjectsPersistence(jdbc), projectAuthorization, JdbcWorkPersistence(jdbc), reservationReadiness,
+                clock, ids.teamUser, ids.admin, firstSlice04Order, secondPlanned.workOrder,
+            ).exercise { drain(processor, clock.instant().plusSeconds(5)) }
 
             val readinessPolicyId =
                 requireNotNull(

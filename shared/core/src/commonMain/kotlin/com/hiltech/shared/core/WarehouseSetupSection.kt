@@ -75,6 +75,7 @@ fun WarehouseSetupSection(
     onGrantWarehouseAuthority: (String, String) -> Unit = { _, _ -> },
     onEndWarehouseAuthority: (String, Long) -> Unit = { _, _ -> },
     onStockAction: (StockAction) -> Unit = {},
+    reservationPort: ReservationUiPort? = null,
     onAssetAction: (AssetAction) -> Unit = {},
 ) {
     var warehouseCode by remember { mutableStateOf("") }
@@ -203,6 +204,7 @@ fun WarehouseSetupSection(
 
         state.assets?.let { AssetPassportSection(it, state.selectedWarehouseId, onAssetAction) }
         state.stock?.let { StockInventorySection(it, state.selectedWarehouseId, onStockAction) }
+        if (reservationPort != null) state.selectedWarehouseId?.let { WarehouseReservations(it, reservationPort) }
         Text("Legacy Import Review", style = MaterialTheme.typography.titleMedium)
         state.importDirectory?.items.orEmpty().forEach { batch ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
