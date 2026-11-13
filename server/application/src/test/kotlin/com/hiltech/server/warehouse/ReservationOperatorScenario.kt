@@ -166,7 +166,8 @@ internal class ReservationOperatorScenario(
             storage_location_id, category_definition_id, verified_by, cutover_approver_id, evidence_ref, verified_at, cutover_at)
             VALUES (?, ?, 2, ?, ?, ?, ?, ?, 'synthetic-reservations', ?, ?)""", row, org, digest, location, category, pm, operator, at, at)
         jdbc.update("""INSERT INTO stock_item (id, organization_id, item_code, name, category_definition_id,
-            category_revision, unit_of_measure_code, source_import_row_id) VALUES (?, ?, 'SYNTH-RSV', 'Synthetic stock', ?, 1, 'SYNTH-RSV', ?)""",
+            category_revision, unit_of_measure_code, classification, source_import_row_id)
+            VALUES (?, ?, 'SYNTH-RSV', 'Synthetic stock', ?, 1, 'SYNTH-RSV', 'STOCK_QUANTITY', ?)""",
             item, org, category, row)
         assertEquals(1, stock.approveImport(row, item, operator, now, 2))
         stock.append(stock.item(item)!!, UUID.randomUUID(), operator, StockMovementType.INITIALIZE_OPENING, java.math.BigDecimal.TEN,

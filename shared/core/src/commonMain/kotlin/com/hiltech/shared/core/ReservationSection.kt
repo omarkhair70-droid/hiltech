@@ -42,22 +42,32 @@ fun ProjectResources(work: String, port: ReservationUiPort) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedButton({ task.launch { refresh() } }, enabled = !task.busy) { Text("Load resource requirements") }
         task.message?.let { Text(it) }
-        candidates?.let { data ->
+        candidates?.let { data -> ProjectResourceResults(data, reservations, task.busy) { demand, resource, amount, unit ->
+            task.launch {
+                port.request(data, demand, resource, amount, unit)
+                refresh()
+            }
+        } }
+    }
+}
+
+@Composable
+fun ProjectResourceResults(
+    data: WorkResourceCandidatesDto, reservations: List<ReservationDto>, busy: Boolean,
+    request: (WorkResourceDemandDto, String, String?, String?) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (data.requirements.isEmpty()) Text("No resource requirements")
             data.requirements.forEach { requirement ->
                 ResourceRequirement(requirement)
                 if (data.canRequest && requirement.demand.version == null) {
-                    ResourceRequestForm(requirement.demand, task.busy) { resource, amount, unit ->
-                        task.launch {
-                            port.request(data, requirement.demand, resource, amount, unit)
-                            refresh()
-                        }
+                    ResourceRequestForm(requirement.demand, busy) { resource, amount, unit ->
+                        request(requirement.demand, resource, amount, unit)
                     }
                 }
             }
             if (reservations.isNotEmpty()) Text("Warehouse reservations", style = MaterialTheme.typography.titleSmall)
             reservations.forEach { ReservationSummary(it) }
-        }
     }
 }
 
@@ -72,30 +82,44 @@ fun WarehouseReservations(warehouse: String, port: ReservationUiPort) {
         OutlinedButton({ task.launch { refresh() } }, enabled = !task.busy) { Text("Refresh reservation queue") }
         task.message?.let { Text(it) }
         val data = queue ?: return@Column
+        WarehouseReservationResults(data, selected, task.busy, { selected = it }, { work, requirement, candidate, expiry, amount ->
+            task.launch {
+                port.reserve(work.workOrderId, work.workVersion, requirement.demand, candidate, expiry, amount)
+                refresh()
+            }
+        }, { reservation, reason ->
+            task.launch {
+                port.release(reservation, reason)
+                refresh()
+            }
+        })
+    }
+}
+
+@Composable
+fun WarehouseReservationResults(
+    data: WarehouseReservationQueueDto, selected: String?, busy: Boolean, select: (String) -> Unit,
+    reserve: (com.hiltech.shared.core.warehouse.WarehouseWorkRequestDto, RequirementCandidatesDto, ResourceCandidateDto, String, String?) -> Unit,
+    release: (ReservationDto, String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (data.requests.isEmpty() && data.reservations.isEmpty()) Text("No resource requests or reservations")
-        assetPicker("Work request", selected, data.requests.map { it.workOrderId to "${it.code} · ${it.title}" }) { selected = it }
+        assetPicker("Work request", selected, data.requests.map { it.workOrderId to "${it.code} · ${it.title}" }, select = select)
         data.requests.firstOrNull { it.workOrderId == selected }?.let { work ->
             work.requirements.forEach { requirement ->
                 ResourceRequirement(requirement)
-                if (data.canReserve) ReserveResourceForm(requirement, task.busy) { candidate, expiry, amount ->
-                    task.launch {
-                        port.reserve(work.workOrderId, work.workVersion, requirement.demand, candidate, expiry, amount)
-                        refresh()
-                    }
+                if (data.canReserve) ReserveResourceForm(requirement, busy) { candidate, expiry, amount ->
+                    reserve(work, requirement, candidate, expiry, amount)
                 }
             }
         }
         data.reservations.forEach { reservation ->
             ReservationSummary(reservation)
             if (data.canReserve && reservation.state == "ACTIVE") {
-                var release by remember(reservation.id, reservation.version) { mutableStateOf("") }
-                assetField("Release reason", release) { release = it }
-                OutlinedButton({
-                    task.launch {
-                        port.release(reservation, release.trim())
-                        refresh()
-                    }
-                }, enabled = !task.busy && release.isNotBlank()) { Text("Release reservation") }
+                var reason by remember(reservation.id, reservation.version) { mutableStateOf("") }
+                assetField("Release reason", reason) { reason = it }
+                OutlinedButton({ release(reservation, reason.trim()) },
+                    enabled = !busy && reason.isNotBlank()) { Text("Release reservation") }
             }
         }
     }

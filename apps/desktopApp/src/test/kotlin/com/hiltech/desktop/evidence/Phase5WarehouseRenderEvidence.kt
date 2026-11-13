@@ -15,6 +15,15 @@ import com.hiltech.shared.core.AssetInventoryState
 import com.hiltech.shared.core.AssetLookupState
 import com.hiltech.shared.core.AssetPassportSection
 import com.hiltech.shared.core.AssetServiceQueue
+import com.hiltech.shared.core.ProjectResourceResults
+import com.hiltech.shared.core.WarehouseReservationResults
+import com.hiltech.shared.core.warehouse.RequirementCandidatesDto
+import com.hiltech.shared.core.warehouse.ReservationDto
+import com.hiltech.shared.core.warehouse.ResourceCandidateDto
+import com.hiltech.shared.core.warehouse.WarehouseReservationQueueDto
+import com.hiltech.shared.core.warehouse.WarehouseWorkRequestDto
+import com.hiltech.shared.core.warehouse.WorkResourceCandidatesDto
+import com.hiltech.shared.core.warehouse.WorkResourceDemandDto
 import com.hiltech.shared.core.AssetServiceDetail
 import com.hiltech.shared.core.warehouse.AssetAvailabilityDto
 import com.hiltech.shared.core.warehouse.AssetAvailabilityReasonDto
@@ -120,6 +129,27 @@ fun main() = runBlocking<Unit> {
         }
     }
     captureAndClose(availabilityScene, directory.resolve("asset-service-queue.png"))
+    val expiry = "2026-11-13T18:00:00Z"
+    val demand = WorkResourceDemandDto("synthetic-requirement", 3, "FIBER-TOOLS", "ASSET", "ASSET_TOOL",
+        assetTypeId = asset.typeId, quantity = "1", version = 1)
+    val candidate = ResourceCandidateDto("ASSET", asset.id, asset.assetCode, "synthetic-bin", 4, expiry, reasonCodes = listOf("ASSET_RESERVED"))
+    val requirement = RequirementCandidatesDto(demand, "ASSET_RESERVED", listOf(candidate))
+    val reservation = ReservationDto("ASSET", "synthetic-reservation", asset.id, "synthetic-work", demand.requirementId,
+        "synthetic-project", "synthetic-site", state = "ACTIVE", version = 1, expiresAt = expiry, requestedBy = "synthetic-operator")
+    val workScene = ImageComposeScene(width = 920, height = 720, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+            androidx.compose.material3.Text("Project resource requirements")
+            ProjectResourceResults(WorkResourceCandidatesDto("synthetic-work", 5, true, listOf(requirement)), listOf(reservation), false) {
+                _, _, _, _ -> Unit
+            }
+            androidx.compose.material3.HorizontalDivider()
+            androidx.compose.material3.Text("Warehouse reservation queue")
+            val request = WarehouseWorkRequestDto("synthetic-work", "SYNTH-WORK", "Synthetic installation", 5, listOf(requirement))
+            WarehouseReservationResults(WarehouseReservationQueueDto(true, listOf(request), listOf(reservation)), request.workOrderId,
+                false, {}, { _, _, _, _, _ -> Unit }, { _, _ -> Unit })
+        }
+    }
+    captureAndClose(workScene, directory.resolve("work-resource-reservations.png"))
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
