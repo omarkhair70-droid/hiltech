@@ -70,7 +70,7 @@ CREATE TABLE asset_calibration_record (
         OR (result = 'FAILED' AND valid_until IS NULL)
     )
 );
-CREATE INDEX idx_asset_calibration_history ON asset_calibration_record (asset_id, calibrated_at DESC);
+CREATE INDEX idx_asset_service_warehouse ON asset (warehouse_id, asset_code);
 
 CREATE TABLE asset_maintenance_record (
     id uuid PRIMARY KEY,
@@ -160,7 +160,7 @@ LANGUAGE sql STABLE AS $$
           AND service_type = 'MAINTENANCE' ORDER BY completed_at DESC, id DESC LIMIT 1
     ), return_movement AS (
         SELECT m.*, i.id AS inspection_id, i.condition_observed, i.version AS inspection_version,
-            i.damage_incident_id, i.accessory_results, i.accessory_template_id AS inspected_template
+            i.accessory_results, i.accessory_template_id AS inspected_template
         FROM asset_movement m LEFT JOIN asset_return_inspection i ON i.return_movement_id = m.id AND i.asset_id = m.asset_id
         WHERE m.asset_id = p_asset_id AND m.movement_type IN ('RETURN', 'RETURN_ASSET')
         ORDER BY m.ledger_version DESC NULLS LAST, m.recorded_at DESC, m.id DESC LIMIT 1

@@ -6,6 +6,7 @@ import com.hiltech.server.telemetry.HiltechTelemetryRuntime
 import com.hiltech.server.warehouse.InventoryPrincipalType
 import com.hiltech.server.warehouse.JdbcWarehousePersistence
 import com.hiltech.server.warehouse.SpringWarehouseAuthorization
+import com.hiltech.server.warehouse.StorageLocationAuthorityKey
 import com.hiltech.server.warehouse.WarehouseAuthorityKey
 import com.hiltech.server.warehouse.WarehouseAuthorizationProjectionBridge
 import com.hiltech.server.warehouse.WarehouseAuthorizationRelations
@@ -485,9 +486,11 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
         val warehouseId = UUID.randomUUID()
         val teamBindingId = UUID.randomUUID()
         val custodian = UUID.randomUUID()
-        seedOrganizationAndIdentities(jdbc, org, listOf(userManager, teamManager, custodian), now.minusSeconds(60))
+        val locationViewer = UUID.randomUUID()
+        val serviceOperator = UUID.randomUUID()
+        seedOrganizationAndIdentities(jdbc, org, listOf(userManager, teamManager, custodian, locationViewer, serviceOperator), now.minusSeconds(60))
         transaction.executeWithoutResult {
-            listOf(userManager, teamManager, custodian).forEach { actor ->
+            listOf(userManager, teamManager, custodian, locationViewer, serviceOperator).forEach { actor ->
                 val membershipId = UUID.randomUUID()
                 insertOrganizationMembership(jdbc, membershipId, org, actor, now.minusSeconds(60))
                 roleTeamBridge.syncOrganizationMembership(membershipId, now)
@@ -570,6 +573,26 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
         val availability = AssetServiceOperatorScenario(jdbc, passports, serviceRecords, service, clock, warehouseId, userManager, custodian)
         availability.exercise(passport) { drain(processor, now.plusSeconds(1)) }
         assertTrue(serviceEvents.size == 13 && serviceEvents.all { it.assetId == passport.identity.id })
+
+        val location = requireNotNull(passport.custody?.storageLocationId)
+        val viewerBinding = UUID.randomUUID()
+        val operatorBinding = UUID.randomUUID()
+        transaction.executeWithoutResult {
+            warehouseBridge.storageCreated(requireNotNull(persistence.storageLocation(location)))
+            persistence.insertStorageAuthorityBinding(viewerBinding, org, location, StorageLocationAuthorityKey.LOCATION_VIEWER,
+                InventoryPrincipalType.USER, locationViewer, now.minusSeconds(30), userManager, now)
+            warehouseBridge.storageAuthority(viewerBinding)
+            persistence.insertWarehouseAuthorityBinding(operatorBinding, org, warehouseId, WarehouseAuthorityKey.WAREHOUSE_OPERATOR,
+                InventoryPrincipalType.USER, serviceOperator, now.minusSeconds(30), userManager, now)
+            warehouseBridge.warehouseAuthority(operatorBinding)
+        }
+        drain(processor, now.plusSeconds(1))
+        availability.exerciseLimitedRoles(passport, locationViewer, serviceOperator)
+        assertTrue(persistence.endWarehouseAuthorityBinding(operatorBinding, warehouseId, 1, now))
+        assertTrue(persistence.endStorageAuthorityBinding(viewerBinding, location, 1, now))
+        assertTrue(gateway.isAllowed(WarehouseAuthorizationRelations.storageAction(locationViewer, location, "can_view")))
+        availability.assertLocationRevoked(passport, locationViewer)
+        availability.assertRevoked(passport.identity.id, serviceOperator)
 
         // Deliberately leave the last projected grants in place to exercise the source guards.
         assertTrue(persistence.endWarehouseAuthorityBinding(userBindingId, warehouseId, 1, now))

@@ -2,6 +2,10 @@ package com.hiltech.shared.core
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -12,8 +16,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.warehouse.AssetServiceDetailDto
+import com.hiltech.shared.core.warehouse.AssetServiceQueueEntryDto
 import com.hiltech.shared.core.warehouse.SafeAssetAvailabilityDto
 
 sealed interface AssetServiceCommand {
@@ -47,24 +53,39 @@ fun AssetServiceQueue(state: AssetInventoryState, dispatch: (AssetAction) -> Uni
         OutlinedButton({ dispatch(AssetAction.RefreshServiceQueue) }, enabled = !state.loading) { Text("Refresh service queue") }
         val entries = state.serviceQueue ?: return@Column
         if (entries.isEmpty()) Text("No blocked assets or service due")
-        entries.forEach { entry ->
-            val info = entry.availability
-            val detail = when {
-                info.state != "AVAILABLE" -> statusLabel(info.state)
-                info.calibrationStatus == "DUE" -> "Calibration due"
-                else -> "Maintenance " + statusLabel(info.maintenanceStatus).lowercase()
+        if (entries.isNotEmpty()) {
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 260.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(entries, key = { it.id }) { entry ->
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        AssetServiceQueueRow(entry, state.loading, dispatch)
+                    }
+                }
             }
-            OutlinedButton({ dispatch(AssetAction.Select(entry.id)) }, enabled = !state.loading) {
-                Text(listOfNotNull(entry.assetCode, entry.name, detail).joinToString(" · "))
-            }
-            if (info.calibrationStatus in setOf("DUE", "EXPIRED")) info.calibrationDueAt?.let { Text("Calibration due $it") }
-            if (info.maintenanceStatus == "DUE") info.maintenanceDueAt?.let { Text("Maintenance due $it") }
-            info.reasons.map { availabilityReasonLabel(it.code) }.distinct().forEach { Text(it) }
         }
         state.serviceQueueCursor?.let { cursor ->
             OutlinedButton({ dispatch(AssetAction.MoreServiceQueue(cursor)) }, enabled = !state.loading) { Text("More service records") }
         }
     }
+}
+
+@Composable
+private fun AssetServiceQueueRow(
+    entry: AssetServiceQueueEntryDto, loading: Boolean, dispatch: (AssetAction) -> Unit,
+) {
+    val info = entry.availability
+    val detail = when {
+        info.state != "AVAILABLE" -> statusLabel(info.state)
+        info.calibrationStatus == "DUE" -> "Calibration due"
+        else -> "Maintenance " + statusLabel(info.maintenanceStatus).lowercase()
+    }
+    OutlinedButton({ dispatch(AssetAction.Select(entry.id)) }, enabled = !loading) {
+        Text(listOfNotNull(entry.assetCode, entry.name, detail).joinToString(" · "))
+    }
+    if (info.calibrationStatus in setOf("DUE", "EXPIRED")) {
+        info.calibrationDueAt?.let { Text("Calibration valid until $it") }
+    }
+    if (info.maintenanceStatus == "DUE") info.maintenanceDueAt?.let { Text("Maintenance due $it") }
+    info.reasons.map { availabilityReasonLabel(it.code) }.distinct().forEach { Text(it) }
 }
 
 @Composable

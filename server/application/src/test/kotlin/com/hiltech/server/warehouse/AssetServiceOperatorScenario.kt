@@ -180,6 +180,35 @@ internal class AssetServiceOperatorScenario(
         exerciseDuePolicy(org, asset, passport.identity.typeId, current.id)
     }
 
+    fun exerciseLimitedRoles(passport: AssetPassportView, locationViewer: UUID, operator: UUID) {
+        val id = passport.identity.id
+        val tag = passport.tags.single { it.active }.code
+        val safe = requireNotNull(passports.lookup(locationViewer, tag).availability)
+        assertTrue("ACTIVE_INCIDENT" in safe.reasonCodes)
+        assertTrue(safe.incidentTypes.isEmpty())
+        denied("ASSET_UNAVAILABLE") { service.incidents(locationViewer, id) }
+        denied("ASSET_UNAVAILABLE") { service.availability(locationViewer, id) }
+
+        val before = service.history(operator, id)
+        assertTrue(before.capabilities.canReport)
+        assertTrue(before.capabilities.canSend)
+        assertFalse(before.capabilities.canManageService)
+        val request = SendAssetMaintenanceRequest(UUID.randomUUID(), before.availability.assetVersion,
+            AssetServiceType.MAINTENANCE, "Synthetic authorized operator service")
+        val started = service.send(context(request.operationId, operator), id, request)
+        val latestVersion = service.availability(operator, id).assetVersion
+        val complete = CompleteAssetMaintenanceRequest(UUID.randomUUID(), latestVersion, started.id, started.version,
+            "Synthetic operator completion should be denied")
+        denied("ASSET_UNAVAILABLE") { service.complete(context(complete.operationId, operator), id, complete) }
+        val calibrate = RecordAssetCalibrationRequest(UUID.randomUUID(), latestVersion, "SYNTH", CalibrationResult.FAILED, now.toString())
+        denied("ASSET_UNAVAILABLE") { service.calibrate(context(calibrate.operationId, operator), id, calibrate) }
+        service.complete(context(complete.operationId), id, complete.copy(notes = "Synthetic manager completed service"))
+    }
+
+    fun assertLocationRevoked(passport: AssetPassportView, actor: UUID) {
+        denied("ASSET_UNAVAILABLE") { passports.lookup(actor, passport.tags.single { it.active }.code) }
+    }
+
     fun assertRevoked(id: UUID, actor: UUID) {
         denied("ASSET_UNAVAILABLE") { service.availability(actor, id) }
         val request = SendAssetMaintenanceRequest(UUID.randomUUID(), 1, AssetServiceType.MAINTENANCE, "Synthetic revoked service request")
