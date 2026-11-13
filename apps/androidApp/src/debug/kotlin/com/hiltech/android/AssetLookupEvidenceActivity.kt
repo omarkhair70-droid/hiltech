@@ -13,6 +13,7 @@ import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.warehouse.AssetCondition
 import com.hiltech.shared.core.warehouse.AssetTagLookupDto
+import com.hiltech.shared.core.warehouse.SafeAssetAvailabilityDto
 
 class AssetLookupEvidenceActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,6 +37,9 @@ class AssetLookupEvidenceActivity : ComponentActivity() {
                         AssetLookupState(result = AssetTagLookupDto(
                             "SYNTH-PASSPORT", "Synthetic calibration instrument", "Synthetic Asset type",
                             serialNumber = "SYNTH-SERIAL", condition = AssetCondition.GOOD, locationCode = "SYNTH-ASSET-BIN",
+                            availability = SafeAssetAvailabilityDto("BLOCKED_CALIBRATION",
+                                listOf("CALIBRATION_EXPIRED", "MAINTENANCE_IN_PROGRESS"), "EXPIRED",
+                                "2026-11-12T12:00:00Z", certificateOnFile = true),
                         ))
                     } else AssetLookupState(message = "Asset tag unavailable.")
                 },

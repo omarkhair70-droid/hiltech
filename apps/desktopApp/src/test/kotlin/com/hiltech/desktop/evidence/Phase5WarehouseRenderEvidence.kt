@@ -14,6 +14,14 @@ import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.AssetInventoryState
 import com.hiltech.shared.core.AssetLookupState
 import com.hiltech.shared.core.AssetPassportSection
+import com.hiltech.shared.core.AssetServiceQueue
+import com.hiltech.shared.core.AssetServiceDetail
+import com.hiltech.shared.core.warehouse.AssetAvailabilityDto
+import com.hiltech.shared.core.warehouse.AssetAvailabilityReasonDto
+import com.hiltech.shared.core.warehouse.AssetMaintenanceDto
+import com.hiltech.shared.core.warehouse.AssetServiceCapabilitiesDto
+import com.hiltech.shared.core.warehouse.AssetServiceDetailDto
+import com.hiltech.shared.core.warehouse.AssetServiceQueueEntryDto
 import com.hiltech.shared.core.AssetTagLookupSection
 import com.hiltech.shared.core.HiltechWarehouseState
 import com.hiltech.shared.core.warehouse.AssetCatalogDto
@@ -96,6 +104,22 @@ fun main() = runBlocking<Unit> {
         }
     }
     captureAndClose(lookupScene, directory.resolve("asset-tag-lookup-compose.png"))
+    val asset = requireNotNull(assets.selected).identity
+    val evaluation = AssetAvailabilityDto("BLOCKED_CALIBRATION", asset.version, "2026-11-13T12:00:00Z",
+        listOf(
+            AssetAvailabilityReasonDto("BLOCKED_CALIBRATION", "CALIBRATION_EXPIRED", "ASSET_CALIBRATION", "synthetic-calibration", 1),
+            AssetAvailabilityReasonDto("BLOCKED_MAINTENANCE", "MAINTENANCE_IN_PROGRESS", "ASSET_MAINTENANCE", "synthetic-service", 1),
+        ), "EXPIRED", "2026-11-12T12:00:00Z", true, "IN_PROGRESS")
+    val service = AssetServiceDetailDto(evaluation, emptyList(), emptyList(),
+        listOf(AssetMaintenanceDto("synthetic-service", "MAINTENANCE", "IN_PROGRESS", "Synthetic bench inspection",
+            sentAt = "2026-11-13T08:00:00Z", version = 1)), AssetServiceCapabilitiesDto(true, true, true))
+    val availabilityScene = ImageComposeScene(width = 980, height = 910, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            AssetServiceQueue(assets.copy(serviceQueue = listOf(AssetServiceQueueEntryDto(asset.id, asset.assetCode, asset.name, evaluation)))) {}
+            AssetServiceDetail(asset.id, service, false) {}
+        }
+    }
+    captureAndClose(availabilityScene, directory.resolve("asset-service-queue.png"))
 }
 
 @OptIn(ExperimentalComposeUiApi::class)

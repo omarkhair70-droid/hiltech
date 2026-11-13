@@ -312,6 +312,8 @@ interface WarehouseAuthorizationPort {
     fun canManageImport(actorUserId: UUID, organizationId: UUID): Boolean
     fun canManageMaster(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canTagAsset(actorUserId: UUID, warehouse: WarehouseSnapshot, allowOperator: Boolean): Boolean
+    fun canOperateAssetService(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
+    fun canManageAssetService(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canViewValue(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canViewStorage(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean
     fun canTransferStock(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean
@@ -449,6 +451,15 @@ class SpringWarehouseAuthorization(
         canManageMaster(actorUserId, warehouse) || (allowOperator && checkWarehouseAction(
             actorUserId, warehouse, "can_transfer", setOf(WarehouseAuthorityKey.WAREHOUSE_OPERATOR),
         ))
+
+    override fun canOperateAssetService(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean =
+        canManageAssetService(actorUserId, warehouse) || checkWarehouseAction(
+            actorUserId, warehouse, "can_transfer", setOf(WarehouseAuthorityKey.WAREHOUSE_OPERATOR),
+        )
+
+    override fun canManageAssetService(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean =
+        checkWarehouseAction(actorUserId, warehouse, "can_manage_asset_service",
+            setOf(WarehouseAuthorityKey.WAREHOUSE_MANAGER, WarehouseAuthorityKey.ASSET_MASTER_MANAGER))
 
     override fun canViewValue(
         actorUserId: UUID,
