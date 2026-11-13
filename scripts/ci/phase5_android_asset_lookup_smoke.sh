@@ -29,7 +29,7 @@ wait_for_text() {
 }
 
 submit_tag() {
-  local position x y
+  local position x y entered
   position="$(wait_for_text 'Scan or enter opaque tag code' | python3 -c '
 import re
 import sys
@@ -41,16 +41,27 @@ print((x1+x2)//2, (y1+y2)//2)
 ')"
   read -r x y <<< "$position"
   adb shell input tap "$x" "$y"
-  adb shell input text "$1"
-  adb shell input keyevent KEYCODE_ENTER
+  for ((attempt=0; attempt<3; attempt++)); do
+    adb shell input keycombination KEYCODE_CTRL_LEFT KEYCODE_A
+    adb shell input text "$1"
+    entered="$(dump_ui || true)"
+    if [[ "$entered" == *"text=\"$1\""* ]]; then
+      adb shell input keyevent KEYCODE_ENTER
+      return
+    fi
+  done
+  printf 'Asset tag field did not contain the complete synthetic code.\n%s\n' "$entered" >&2
+  return 1
 }
 
 submit_tag synthetic-current-tag
 current="$(wait_for_text 'SYNTH-PASSPORT')"
-[[ "$current" == *'SYNTH-ASSET-BIN'* && "$current" != *'Replace primary tag'* && "$current" != *'Acquisition'* ]]
+[[ "$current" == *'SYNTH-ASSET-BIN'* && "$current" == *'Required calibration has expired'* &&
+  "$current" == *'Maintenance in progress'* && "$current" == *'Calibration certificate on file'* &&
+  "$current" != *'Replace primary tag'* && "$current" != *'Acquisition'* ]]
 adb exec-out screencap -p > "$report_dir/android-current-asset.png"
 submit_tag synthetic-retired-tag
 unavailable="$(wait_for_text 'Asset tag unavailable.')"
 [[ "$unavailable" != *'SYNTH-PASSPORT'* ]]
 adb exec-out screencap -p > "$report_dir/android-tag-unavailable.png"
-echo 'HILTECH_PHASE5_ASSET_ANDROID_PASS synthetic=true scanner_enter=PASS passport=PASS unavailable=PASS previous_result_cleared=PASS'
+echo 'HILTECH_PHASE5_ASSET_ANDROID_PASS synthetic=true scanner_enter=PASS passport=PASS availability=PASS unavailable=PASS previous_result_cleared=PASS'

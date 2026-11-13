@@ -21,6 +21,41 @@ class WarehouseApiClient(
         explicitNulls = false
     },
 ) {
+    suspend fun assetServiceQueue(warehouse: String, afterCode: String?, installationId: String): List<AssetServiceQueueEntryDto> =
+        get("/v1/assets/service-queue?warehouseId=" + uuid(warehouse) +
+            (afterCode?.let { "&afterCode=" + it.encodeURLQueryComponent() } ?: ""),
+            installationId, ListSerializer(AssetServiceQueueEntryDto.serializer()))
+
+    suspend fun assetAvailability(id: String, installationId: String): AssetAvailabilityDto =
+        get("/v1/assets/" + uuid(id) + "/availability", installationId, AssetAvailabilityDto.serializer())
+
+    suspend fun assetServiceDetail(id: String, installationId: String): AssetServiceDetailDto =
+        get("/v1/assets/" + uuid(id) + "/service-history", installationId, AssetServiceDetailDto.serializer())
+
+    suspend fun assetIncidents(id: String, installationId: String): List<AssetIncidentDto> =
+        get("/v1/assets/" + uuid(id) + "/incidents", installationId, ListSerializer(AssetIncidentDto.serializer()))
+
+    suspend fun reportAssetIncident(id: String, request: ReportAssetIncidentDto, installationId: String): AssetIncidentDto =
+        post("/v1/assets/" + uuid(id) + "/incidents", request.operationId,
+            json.encodeToString(ReportAssetIncidentDto.serializer(), request), installationId, AssetIncidentDto.serializer())
+
+    suspend fun changeAssetIncident(
+        id: String, incidentId: String, request: ChangeAssetIncidentDto, installationId: String,
+    ): AssetIncidentDto = post("/v1/assets/" + uuid(id) + "/incidents/" + uuid(incidentId) + "/transition", request.operationId,
+        json.encodeToString(ChangeAssetIncidentDto.serializer(), request), installationId, AssetIncidentDto.serializer())
+
+    suspend fun recordAssetCalibration(id: String, request: RecordAssetCalibrationDto, installationId: String): AssetCalibrationDto =
+        post("/v1/assets/" + uuid(id) + "/calibrations", request.operationId,
+            json.encodeToString(RecordAssetCalibrationDto.serializer(), request), installationId, AssetCalibrationDto.serializer())
+
+    suspend fun sendAssetMaintenance(id: String, request: SendAssetMaintenanceDto, installationId: String): AssetMaintenanceDto =
+        post("/v1/assets/" + uuid(id) + "/maintenance/send", request.operationId,
+            json.encodeToString(SendAssetMaintenanceDto.serializer(), request), installationId, AssetMaintenanceDto.serializer())
+
+    suspend fun completeAssetMaintenance(id: String, request: CompleteAssetMaintenanceDto, installationId: String): AssetMaintenanceDto =
+        post("/v1/assets/" + uuid(id) + "/maintenance/complete", request.operationId,
+            json.encodeToString(CompleteAssetMaintenanceDto.serializer(), request), installationId, AssetMaintenanceDto.serializer())
+
     suspend fun assetCatalog(warehouseId: String, installationId: String): AssetCatalogDto =
         get("/v1/asset-types?warehouseId=" + uuid(warehouseId), installationId, AssetCatalogDto.serializer())
 

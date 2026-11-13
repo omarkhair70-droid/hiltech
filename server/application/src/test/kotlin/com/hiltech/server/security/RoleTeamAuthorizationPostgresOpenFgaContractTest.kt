@@ -6,6 +6,7 @@ import com.hiltech.server.telemetry.HiltechTelemetryRuntime
 import com.hiltech.server.warehouse.InventoryPrincipalType
 import com.hiltech.server.warehouse.JdbcWarehousePersistence
 import com.hiltech.server.warehouse.SpringWarehouseAuthorization
+import com.hiltech.server.warehouse.StorageLocationAuthorityKey
 import com.hiltech.server.warehouse.WarehouseAuthorityKey
 import com.hiltech.server.warehouse.WarehouseAuthorizationProjectionBridge
 import com.hiltech.server.warehouse.WarehouseAuthorizationRelations
@@ -16,6 +17,10 @@ import com.hiltech.server.warehouse.AssetCustodyMovementPosted
 import com.hiltech.server.warehouse.AssetPassportOperatorScenario
 import com.hiltech.server.warehouse.AssetPassportPersistence
 import com.hiltech.server.warehouse.AssetPassportService
+import com.hiltech.server.warehouse.AssetService
+import com.hiltech.server.warehouse.AssetServiceChanged
+import com.hiltech.server.warehouse.AssetServiceOperatorScenario
+import com.hiltech.server.warehouse.AssetServicePersistence
 import com.hiltech.server.warehouse.StockLedgerPersistence
 import com.hiltech.server.warehouse.StockLedgerService
 import com.hiltech.server.warehouse.StockMovementPosted
@@ -481,9 +486,11 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
         val warehouseId = UUID.randomUUID()
         val teamBindingId = UUID.randomUUID()
         val custodian = UUID.randomUUID()
-        seedOrganizationAndIdentities(jdbc, org, listOf(userManager, teamManager, custodian), now.minusSeconds(60))
+        val locationViewer = UUID.randomUUID()
+        val serviceOperator = UUID.randomUUID()
+        seedOrganizationAndIdentities(jdbc, org, listOf(userManager, teamManager, custodian, locationViewer, serviceOperator), now.minusSeconds(60))
         transaction.executeWithoutResult {
-            listOf(userManager, teamManager, custodian).forEach { actor ->
+            listOf(userManager, teamManager, custodian, locationViewer, serviceOperator).forEach { actor ->
                 val membershipId = UUID.randomUUID()
                 insertOrganizationMembership(jdbc, membershipId, org, actor, now.minusSeconds(60))
                 roleTeamBridge.syncOrganizationMembership(membershipId, now)
@@ -550,15 +557,42 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
         assertTrue(stockEvents.size == 3 && stockEvents.all { it.stockItemId == stockItemId })
 
         val assetEvents = CopyOnWriteArrayList<AssetCustodyMovementPosted>()
-        val assets = AssetPassportOperatorScenario(
-            jdbc,
-            AssetPassportService(AssetPassportPersistence(jdbc), persistence, authorization, source, provider, writer,
-                JdbcIdempotentCommandExecutor(jdbc, manager, clock, HiltechTelemetryRuntime(OpenTelemetry.noop()) {}),
-                JdbcAuditEventWriter(jdbc), clock, { event -> assetEvents.add(event as AssetCustodyMovementPosted) }),
-            clock, org, warehouseId, userManager, teamManager, custodian,
-        )
+        val passportRecords = AssetPassportPersistence(jdbc)
+        val serviceRecords = AssetServicePersistence(jdbc)
+        val assetCommands = JdbcIdempotentCommandExecutor(jdbc, manager, clock, HiltechTelemetryRuntime(OpenTelemetry.noop()) {})
+        val assetAudit = JdbcAuditEventWriter(jdbc)
+        val passports = AssetPassportService(passportRecords, persistence, authorization, source, provider, writer,
+            assetCommands, assetAudit, clock, { event -> assetEvents.add(event as AssetCustodyMovementPosted) }, serviceRecords)
+        val assets = AssetPassportOperatorScenario(jdbc, passports, clock, org, warehouseId, userManager, teamManager, custodian)
         val passport = assets.exercise { drain(processor, now.plusSeconds(1)) }
         assertTrue(assetEvents.size == 4 && assetEvents.count { it.assetId == passport.identity.id } == 2)
+
+        val serviceEvents = CopyOnWriteArrayList<AssetServiceChanged>()
+        val service = AssetService(passports, passportRecords, serviceRecords, authorization, assetCommands, assetAudit, clock,
+            { event -> serviceEvents.add(event as AssetServiceChanged) })
+        val availability = AssetServiceOperatorScenario(jdbc, passports, serviceRecords, service, clock, warehouseId, userManager, custodian)
+        availability.exercise(passport) { drain(processor, now.plusSeconds(1)) }
+        assertTrue(serviceEvents.size == 13 && serviceEvents.all { it.assetId == passport.identity.id })
+
+        val location = requireNotNull(passport.custody?.storageLocationId)
+        val viewerBinding = UUID.randomUUID()
+        val operatorBinding = UUID.randomUUID()
+        transaction.executeWithoutResult {
+            warehouseBridge.storageCreated(requireNotNull(persistence.storageLocation(location)))
+            persistence.insertStorageAuthorityBinding(viewerBinding, org, location, StorageLocationAuthorityKey.LOCATION_VIEWER,
+                InventoryPrincipalType.USER, locationViewer, now.minusSeconds(30), userManager, now)
+            warehouseBridge.storageAuthority(viewerBinding)
+            persistence.insertWarehouseAuthorityBinding(operatorBinding, org, warehouseId, WarehouseAuthorityKey.WAREHOUSE_OPERATOR,
+                InventoryPrincipalType.USER, serviceOperator, now.minusSeconds(30), userManager, now)
+            warehouseBridge.warehouseAuthority(operatorBinding)
+        }
+        drain(processor, now.plusSeconds(1))
+        availability.exerciseLimitedRoles(passport, locationViewer, serviceOperator)
+        assertTrue(persistence.endWarehouseAuthorityBinding(operatorBinding, warehouseId, 1, now))
+        assertTrue(persistence.endStorageAuthorityBinding(viewerBinding, location, 1, now))
+        assertTrue(gateway.isAllowed(WarehouseAuthorizationRelations.storageAction(locationViewer, location, "can_view")))
+        availability.assertLocationRevoked(passport, locationViewer)
+        availability.assertRevoked(passport.identity.id, serviceOperator)
 
         // Deliberately leave the last projected grants in place to exercise the source guards.
         assertTrue(persistence.endWarehouseAuthorityBinding(userBindingId, warehouseId, 1, now))
@@ -573,6 +607,7 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
             operator.assertHidden(importBatchId, actor)
             stock.assertTransferDenied(stockItemId, actor)
             assets.assertRevoked(passport, actor)
+            availability.assertRevoked(passport.identity.id, actor)
         }
         assertTrue(persistence.endWarehouseAuthorityBinding(teamBindingId, warehouseId, 1, now))
         assertThrows<IllegalArgumentException> {

@@ -3,6 +3,12 @@ package com.hiltech.desktop
 import com.hiltech.shared.core.StockAction
 import com.hiltech.shared.core.StockInventoryState
 import com.hiltech.shared.core.AssetAction
+import com.hiltech.shared.core.AssetServiceCommand
+import com.hiltech.shared.core.warehouse.ChangeAssetIncidentDto
+import com.hiltech.shared.core.warehouse.CompleteAssetMaintenanceDto
+import com.hiltech.shared.core.warehouse.RecordAssetCalibrationDto
+import com.hiltech.shared.core.warehouse.ReportAssetIncidentDto
+import com.hiltech.shared.core.warehouse.SendAssetMaintenanceDto
 import com.hiltech.shared.core.AssetInventoryState
 import com.hiltech.shared.core.warehouse.ApproveAssetImportDto
 import com.hiltech.shared.core.warehouse.AssetRegistrationDto
@@ -681,7 +687,19 @@ class DesktopIdentityRuntime(
         ensureConfigured()
         val selectedId = when (action) {
             is AssetAction.Search -> state.selected?.identity?.id.takeIf { state.search == action.query }
-            is AssetAction.Select -> return loadAssetPassport(state, action.id)
+            is AssetAction.Select -> {
+                val ready = if (state.catalog != null) state else state.copy(
+                    catalog = warehouseApi.assetCatalog(warehouseId, installationId),
+                    locations = warehouseApi.storageLocations(organizationId, installationId).items,
+                )
+                return loadAssetPassport(ready, action.id)
+            }
+            AssetAction.RefreshServiceQueue -> return refreshAssetServiceQueue(warehouseId, state, null)
+            is AssetAction.MoreServiceQueue -> return refreshAssetServiceQueue(warehouseId, state, action.afterCode)
+            is AssetAction.Service -> {
+                applyAssetServiceCommand(action.command, operationId)
+                return loadAssetPassport(refreshAssetServiceQueue(warehouseId, state, null), action.command.assetId)
+            }
             is AssetAction.More -> {
                 val page = warehouseApi.assets(warehouseId, state.search, action.afterCode, installationId)
                 return state.copy(items = (state.items + page).distinctBy { it.id },
@@ -710,14 +728,41 @@ class DesktopIdentityRuntime(
         val refreshed = state.copy(catalog = warehouseApi.assetCatalog(warehouseId, installationId), search = search,
             items = page, nextAfterCode = page.lastOrNull()?.assetCode?.takeIf { page.size == 100 },
             locations = warehouseApi.storageLocations(organizationId, installationId).items,
-            selected = null, movements = emptyList())
-        return if (selectedId == null) refreshed else loadAssetPassport(refreshed, selectedId)
+            selected = null, movements = emptyList(), serviceDetail = null)
+        val withQueue = refreshAssetServiceQueue(warehouseId, refreshed, null)
+        return if (selectedId == null) withQueue else loadAssetPassport(withQueue, selectedId)
+    }
+
+    private suspend fun refreshAssetServiceQueue(warehouse: String, state: AssetInventoryState, after: String?): AssetInventoryState {
+        val page = warehouseApi.assetServiceQueue(warehouse, after, installationId)
+        val previous = state.serviceQueue.orEmpty().takeIf { after != null }.orEmpty()
+        return state.copy(serviceQueue = (previous + page).distinctBy { it.id },
+            serviceQueueCursor = page.lastOrNull()?.assetCode?.takeIf { page.size == 100 })
+    }
+
+    private suspend fun applyAssetServiceCommand(command: AssetServiceCommand, operation: String) {
+        val id = command.assetId
+        val version = command.baseVersion
+        when (command) {
+            is AssetServiceCommand.Report -> warehouseApi.reportAssetIncident(id,
+                ReportAssetIncidentDto(operation, version, command.type, command.description, command.evidenceId), installationId)
+            is AssetServiceCommand.Transition -> warehouseApi.changeAssetIncident(id, command.incidentId,
+                ChangeAssetIncidentDto(operation, version, command.incidentVersion, command.state, command.resolution, command.ownerId), installationId)
+            is AssetServiceCommand.Calibrate -> warehouseApi.recordAssetCalibration(id, RecordAssetCalibrationDto(
+                operation, version, command.type, command.result, command.calibratedAt, command.validUntil,
+                command.provider, command.certificateId, command.notes,
+            ), installationId)
+            is AssetServiceCommand.Send -> warehouseApi.sendAssetMaintenance(id,
+                SendAssetMaintenanceDto(operation, version, command.type, command.description, command.provider), installationId)
+            is AssetServiceCommand.Complete -> warehouseApi.completeAssetMaintenance(id,
+                CompleteAssetMaintenanceDto(operation, version, command.serviceId, command.version, command.notes), installationId)
+        }
     }
 
     private suspend fun loadAssetPassport(state: AssetInventoryState, id: String): AssetInventoryState {
         val passport = warehouseApi.assetPassport(id, installationId)
         val movements = warehouseApi.assetMovements(id, installationId)
-        return state.copy(selected = passport, movements = movements)
+        return state.copy(selected = passport, movements = movements, serviceDetail = warehouseApi.assetServiceDetail(id, installationId))
     }
 
     suspend fun applyStockAction(

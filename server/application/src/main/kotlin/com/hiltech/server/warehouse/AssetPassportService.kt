@@ -34,7 +34,7 @@ data class AssetPassportView(
 data class AssetTagLookupView(
     val assetCode: String, val name: String?, val typeName: String, val manufacturer: String?, val model: String?,
     val serialNumber: String?, val condition: AssetCondition, val locationCode: String?, val employeeCode: String?,
-    val custodySince: String?,
+    val custodySince: String?, val availability: SafeAssetAvailabilityView? = null,
 )
 data class AssetCustodyMovementPosted(
     val movementId: UUID, val assetId: UUID, val organizationId: UUID,
@@ -53,6 +53,7 @@ class AssetPassportService(
     private val audit: AuditEventWriter,
     private val clock: Clock,
     private val events: ApplicationEventPublisher,
+    private val serviceRecords: AssetServicePersistence,
 ) {
     fun types(actor: UUID, facilityId: UUID): AssetCatalogView {
         val facility = viewableWarehouse(actor, facilityId)
@@ -77,19 +78,27 @@ class AssetPassportService(
     fun lookup(actor: UUID, input: String): AssetTagLookupView {
         val code = input.trim()
         if (!Regex("[A-Za-z0-9_-]{1,128}").matches(code)) throw unavailable()
-        val asset = assets.activeTagAsset(code)?.let { assets.asset(it) }?.takeIf { it.lifecycle == "ACTIVE" } ?: throw unavailable()
+        val asset = assets.activeTagAsset(code)?.let { assets.asset(it) }?: throw unavailable()
         val custody = assets.custody(asset.id)
         val facilityAccess = asset.warehouseId?.let(warehouse::warehouse)?.let { authorization.canViewWarehouse(actor, it) } == true
         val locationAccess = custody?.storageLocationId?.let(warehouse::storageLocation)
             ?.takeIf { it.organizationId == asset.organizationId && it.lifecycleState == StorageLocationLifecycle.ACTIVE &&
                 (it.activeFrom == null || it.activeFrom <= clock.instant()) && (it.activeUntil == null || it.activeUntil > clock.instant()) }
             ?.let { authorization.canViewStorage(actor, it) } == true
-        if (!facilityAccess && !locationAccess && !isCustodian(actor, asset, custody)) throw unavailable()
-        if (assets.activeTagAsset(code) != asset.id || assets.custody(asset.id)?.sourceMovementId != custody?.sourceMovementId) {
+        val custodianAccess = !facilityAccess && isCustodian(actor, asset, custody)
+        if (!facilityAccess && !locationAccess && !custodianAccess) throw unavailable()
+        val availability = serviceRecords.availability(asset.id, clock.instant()) ?: throw unavailable()
+        if (availability.assetVersion != asset.version || assets.activeTagAsset(code) != asset.id ||
+            assets.custody(asset.id)?.sourceMovementId != custody?.sourceMovementId) {
             throw unavailable()
         }
+        val reasons = availability.reasons.map { it.code }.distinct()
+        val safe = SafeAssetAvailabilityView(availability.state, reasons.filterNot { it.startsWith("INCIDENT_") } +
+            (if (reasons.any { it.startsWith("INCIDENT_") }) listOf("ACTIVE_INCIDENT") else emptyList()),
+            availability.calibrationStatus, availability.calibrationDueAt, availability.certificateOnFile,
+            reasons.filter { it.startsWith("INCIDENT_") && (facilityAccess || custodianAccess) }.map { it.removePrefix("INCIDENT_") })
         return AssetTagLookupView(asset.assetCode, asset.name, asset.typeName, asset.manufacturer, asset.model,
-            asset.serialNumber, asset.condition, custody?.locationCode, custody?.employeeCode, custody?.since)
+            asset.serialNumber, asset.condition, custody?.locationCode, custody?.employeeCode, custody?.since, safe)
     }
 
     fun register(context: AssetCommandContext, request: AssetRegistrationRequest): AssetPassportView {
@@ -216,10 +225,10 @@ class AssetPassportService(
             active && custody != null && authorization.canManageWarehouse(actor, facility))
     }
     private fun asset(id: UUID) = assets.asset(id) ?: throw unavailable()
-    private fun facility(asset: AssetIdentityView): WarehouseSnapshot = asset.warehouseId?.let(warehouse::warehouse)
+    internal fun facility(asset: AssetIdentityView): WarehouseSnapshot = asset.warehouseId?.let(warehouse::warehouse)
         ?.takeIf { it.organizationId == asset.organizationId } ?: throw unavailable()
 
-    private fun viewableWarehouse(actor: UUID, id: UUID): WarehouseSnapshot =
+    internal fun viewableWarehouse(actor: UUID, id: UUID): WarehouseSnapshot =
         warehouse.warehouse(id)?.takeIf { authorization.canViewWarehouse(actor, it) } ?: throw unavailable()
 
     private fun managedWarehouse(actor: UUID, id: UUID): WarehouseSnapshot =
@@ -235,14 +244,14 @@ class AssetPassportService(
         if (tagType !in type.allowedTagTypes) throw invalid("Select a tag type permitted by the Asset type.")
     }
 
-    private fun isCustodian(actor: UUID, asset: AssetIdentityView, custody: AssetCustodyView?): Boolean {
+    internal fun isCustodian(actor: UUID, asset: AssetIdentityView, custody: AssetCustodyView?, relation: String = "can_view"): Boolean {
         val employee = custody?.employeeId ?: return false
         val now = clock.instant()
         if (!sourceAuthority.isOrganizationMemberCurrent(actor, asset.organizationId, now) ||
             !assets.employeeActive(asset.organizationId, employee) ||
             actor !in assets.employeeIdentities(asset.organizationId, employee)) return false
         return fga.ifAvailable?.isAllowed(AuthorizationCheckRequest(
-            assetTuple("user", actor, "can_view", asset.id),
+            assetTuple("user", actor, relation, asset.id),
             listOf(assetTuple("user", actor, "current_custodian", asset.id),
                 RoleTeamAuthorizationRelations.organizationMember(actor, asset.organizationId)),
         )) == true

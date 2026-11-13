@@ -83,11 +83,11 @@ class AssetPassportController(private val service: AssetPassportService) {
     ) = service.approve(request.assetContext(body.operationId), batchId, rowId, body)
 }
 
-private fun HttpServletRequest.assetActor(): UUID =
+internal fun HttpServletRequest.assetActor(): UUID =
     HiltechRequestContext.current(this).identityId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
         ?: throw ProductApiException("UNAUTHENTICATED", "Authentication is required.", HttpStatus.UNAUTHORIZED)
 
-private fun HttpServletRequest.assetContext(operationId: UUID): AssetCommandContext {
+internal fun HttpServletRequest.assetContext(operationId: UUID): AssetCommandContext {
     val actor = assetActor()
     val context = HiltechRequestContext.current(this)
     IdempotencyKeyContract.requireMatches(context.idempotencyKey, operationId)

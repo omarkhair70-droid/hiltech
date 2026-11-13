@@ -35,6 +35,8 @@ import com.hiltech.shared.core.warehouse.AssetIdentityDto
 import com.hiltech.shared.core.warehouse.AssetMovementDto
 import com.hiltech.shared.core.warehouse.AssetPassportDto
 import com.hiltech.shared.core.warehouse.AssetTagLookupDto
+import com.hiltech.shared.core.warehouse.AssetServiceDetailDto
+import com.hiltech.shared.core.warehouse.AssetServiceQueueEntryDto
 import com.hiltech.shared.core.warehouse.StorageLocationDto
 
 data class AssetInventoryState(
@@ -47,6 +49,9 @@ data class AssetInventoryState(
     val locations: List<StorageLocationDto> = emptyList(),
     val loading: Boolean = false,
     val message: String? = null,
+    val serviceQueue: List<AssetServiceQueueEntryDto>? = null,
+    val serviceQueueCursor: String? = null,
+    val serviceDetail: AssetServiceDetailDto? = null,
 )
 
 data class AssetLookupState(val result: AssetTagLookupDto? = null, val loading: Boolean = false, val message: String? = null)
@@ -55,7 +60,10 @@ sealed interface AssetAction {
     data class Search(val query: String) : AssetAction
     data class More(val afterCode: String) : AssetAction
     data class Select(val id: String) : AssetAction
+    data object RefreshServiceQueue : AssetAction
+    data class MoreServiceQueue(val afterCode: String) : AssetAction
     sealed interface Command : AssetAction
+    data class Service(val command: AssetServiceCommand) : Command
     data class Register(
         val type: String, val code: String, val name: String, val manufacturer: String?, val model: String?,
         val serial: String?, val ownership: String, val condition: AssetCondition, val initialLocation: String?,
@@ -93,6 +101,7 @@ fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispa
             }
         }
         state.message?.let { Text(it) }
+        AssetServiceQueue(state, dispatch)
         val catalog = state.catalog ?: return@Column
         if (catalog.canRegister) {
             OutlinedButton({ showRegistration = !showRegistration }) {
@@ -168,6 +177,7 @@ private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventor
     }
     AssetTags(passport, state.loading, dispatch)
     if (passport.canInitialize || passport.canCorrect) AssetCustodyForm(passport, state, dispatch)
+    state.serviceDetail?.let { AssetServiceDetail(asset.id, it, state.loading, dispatch) }
     Text("Movement history", style = MaterialTheme.typography.titleSmall)
     val locationCodes = state.locations.associate { it.storageLocationId to it.code }
     if (state.movements.isEmpty()) Text("No movements recorded")
@@ -295,6 +305,7 @@ fun AssetTagLookupSection(state: AssetLookupState, lookup: (String) -> Unit) {
             Text("Condition · ${it.condition.name.lowercase().replaceFirstChar { letter -> letter.uppercase() }}")
             Text("Current custody · ${it.locationCode ?: it.employeeCode?.let { code -> "Employee $code" } ?: "Unrecorded"}")
             it.custodySince?.let { since -> Text("Since $since") }
+            it.availability?.let { availability -> SafeAssetAvailability(availability) }
         }
     }
 }
@@ -304,12 +315,12 @@ private fun conditionPicker(condition: AssetCondition, select: (AssetCondition) 
     assetPicker("Condition", condition.name, AssetCondition.entries.map { it.name to it.name.lowercase() }) { select(AssetCondition.valueOf(it)) }
 
 @Composable
-private fun assetField(label: String, value: String, change: (String) -> Unit) {
+internal fun assetField(label: String, value: String, change: (String) -> Unit) {
     OutlinedTextField(value, change, label = { Text(label) }, singleLine = true)
 }
 
 @Composable
-private fun assetPicker(label: String, selection: String?, choices: List<Pair<String, String>>, enabled: Boolean = true, select: (String) -> Unit) {
+internal fun assetPicker(label: String, selection: String?, choices: List<Pair<String, String>>, enabled: Boolean = true, select: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column {
         OutlinedButton({ expanded = true }, enabled = enabled && choices.isNotEmpty()) {
@@ -323,7 +334,7 @@ private fun assetPicker(label: String, selection: String?, choices: List<Pair<St
     }
 }
 
-private fun String.optional() = trim().ifEmpty { null }
+internal fun String.optional() = trim().ifEmpty { null }
 private fun AssetInventoryState.locationChoices() = locations.filter { it.lifecycleState == "ACTIVE" }
     .map { it.storageLocationId to "${it.code} · ${it.name}" }
 private val assetRecordId = Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")

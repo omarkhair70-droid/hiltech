@@ -33,7 +33,9 @@ class WarehouseApiClientTest {
             assertEquals(installation, request.headers["X-Device-Installation-Id"])
             respond(
                 """{"assetCode":"SYNTH-PASSPORT","typeName":"Synthetic test instrument","condition":"GOOD",
-                    "employeeCode":"SYNTH-CUSTODIAN","acquisitionCost":98765.43}""",
+                    "employeeCode":"SYNTH-CUSTODIAN","acquisitionCost":98765.43,
+                    "availability":{"state":"BLOCKED_CALIBRATION","reasonCodes":["CALIBRATION_EXPIRED","MAINTENANCE_IN_PROGRESS"],
+                    "calibrationStatus":"EXPIRED","certificateOnFile":true,"sourceId":"synthetic-private-ref"}}""",
                 HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"),
             )
         })
@@ -41,6 +43,9 @@ class WarehouseApiClientTest {
         val result = client.lookupAssetTag("  synthetic-opaque-tag  ", installation)
         assertEquals("SYNTH-PASSPORT", result.assetCode)
         assertEquals("SYNTH-CUSTODIAN", result.employeeCode)
+        assertEquals(listOf("CALIBRATION_EXPIRED", "MAINTENANCE_IN_PROGRESS"), result.availability?.reasonCodes)
+        assertTrue(result.availability?.certificateOnFile == true)
+        assertFalse(Json.encodeToString(AssetTagLookupDto.serializer(), result).contains("synthetic-private-ref"))
         assertFalse(Json.encodeToString(AssetTagLookupDto.serializer(), result).contains("98765.43"))
         assertFailsWith<IllegalArgumentException> { client.lookupAssetTag("https://example.invalid/tag", installation) }
         assertFailsWith<IllegalArgumentException> { client.lookupAssetTag("../asset", installation) }
