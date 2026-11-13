@@ -33,6 +33,8 @@ data class ProjectAuthorityBindingContext(
 )
 
 interface ProjectAuthoritySourcePort {
+    fun currentResourceRoles(projectId: UUID, actor: UUID, at: Instant): List<String>
+
     fun currentAdminBindings(
         organizationId: UUID,
         at: Instant,
@@ -48,6 +50,13 @@ interface ProjectAuthoritySourcePort {
 class JdbcProjectAuthoritySource(
     private val jdbc: JdbcTemplate,
 ) : ProjectAuthoritySourcePort {
+    override fun currentResourceRoles(projectId: UUID, actor: UUID, at: Instant): List<String> =
+        jdbc.query("""
+            SELECT DISTINCT role FROM project_resource_request_delegate
+            WHERE project_id = ? AND user_id = ? AND effective_from <= ?
+              AND (effective_until IS NULL OR effective_until > ?) ORDER BY role
+        """.trimIndent(), { rs, _ -> rs.getString("role") }, projectId, actor, at.atOffset(ZoneOffset.UTC), at.atOffset(ZoneOffset.UTC))
+
     override fun currentAdminBindings(
         organizationId: UUID,
         at: Instant,
@@ -580,8 +589,19 @@ class SpringProjectAuthorization(
             "can_view",
         )
 
-    override fun canRequestResources(actorUserId: UUID, project: ProjectSnapshot): Boolean =
-        checkProjectAction(actorUserId, project, "can_request_resource")
+    override fun canRequestResources(actorUserId: UUID, project: ProjectSnapshot): Boolean {
+        if (checkProjectAction(actorUserId, project, "can_request_resource")) return true
+        val at = clock.instant()
+        val authorization = authorizationProvider.ifAvailable ?: return false
+        if (!sourceAuthority.isOrganizationMemberCurrent(actorUserId, project.organizationId, at)) return false
+        return projectAuthoritySource.currentResourceRoles(project.projectId, actorUserId, at).any { role ->
+            authorization.isAllowed(AuthorizationCheckRequest(
+                ProjectAuthorizationRelations.projectAction(actorUserId, project.projectId, "can_request_resource"),
+                listOf(RoleTeamAuthorizationRelations.organizationMember(actorUserId, project.organizationId),
+                    ProjectAuthorizationRelations.projectAction(actorUserId, project.projectId, role)),
+            ))
+        }
+    }
 
     override fun canManageProject(
         actorUserId: UUID,

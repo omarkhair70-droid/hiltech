@@ -433,6 +433,13 @@ class ReadinessAssignmentService(
                     )
                 }
 
+                if (readinessRequirements(current).any { requirement ->
+                    requirement.required && !requirement.waived &&
+                        resourceSource.evaluate(current, requirement, now)?.satisfied == false
+                }) {
+                    conflict("WORK_RESOURCE_NOT_READY", "A required resource reservation is unavailable. Evaluate readiness again.")
+                }
+
                 val policy =
                     assignmentPolicy(current)
                 val candidates =

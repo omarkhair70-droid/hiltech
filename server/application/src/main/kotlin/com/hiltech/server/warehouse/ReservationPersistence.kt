@@ -51,12 +51,6 @@ class ReservationPersistence(private val jdbc: JdbcTemplate) {
         }, work,
     )
 
-    fun assetTypeExists(org: UUID, type: UUID): Boolean = jdbc.queryForObject(
-        """SELECT EXISTS (SELECT 1 FROM asset_type_definition t JOIN config_revision c ON c.id = t.config_revision_id
-            WHERE t.config_revision_id = ? AND (c.scope_type = 'SYSTEM' OR c.scope_organization_id = ?))""",
-        Boolean::class.java, type, org,
-    ) == true
-
     fun request(work: WorkOrderSnapshot, demand: UUID, request: RequestWorkResource, quantity: BigDecimal, actor: UUID, at: Instant) {
         jdbc.update("""
             INSERT INTO work_resource_request (requirement_id, work_order_id, organization_id, asset_type_id, stock_item_id,
@@ -121,10 +115,30 @@ class ReservationPersistence(private val jdbc: JdbcTemplate) {
         { rs, _ -> rs.uuid("work_order_id") to rs.uuid("requested_by") }, resource, at.utc(),
     )
 
+    fun stockUnitActive(org: UUID, code: String): Boolean = jdbc.queryForObject(
+        "SELECT EXISTS (SELECT 1 FROM stock_unit WHERE organization_id = ? AND code = ? AND active)",
+        Boolean::class.java, org, code,
+    ) == true
+
     fun openWork(org: UUID): List<UUID> = jdbc.query(
         """SELECT DISTINCT w.id FROM work_order w JOIN work_resource_request d ON d.work_order_id = w.id
             WHERE w.organization_id = ? AND w.lifecycle_state IN ('PLANNED','ASSIGNED','IN_PROGRESS','BLOCKED')
             ORDER BY w.id LIMIT 100""", { rs, _ -> rs.uuid("id") }, org,
+    )
+
+    fun readinessDrift(at: Instant): List<Triple<UUID, UUID, Long>> = jdbc.query(
+        """
+        SELECT DISTINCT w.id, r.requested_by, w.version FROM asset_reservation r
+        JOIN work_order w ON w.id = r.work_order_id
+        JOIN work_requirement_instance i ON i.id = r.work_requirement_instance_id
+        WHERE r.state = 'ACTIVE' AND r.end_at > ? AND w.lifecycle_state IN ('PLANNED','ASSIGNED')
+          AND i.satisfaction_state = 'SATISFIED' AND NOT i.waived
+          AND EXISTS (
+              SELECT 1 FROM asset_availability_reasons(r.asset_id, ?) reason
+              WHERE NOT (reason.code = 'ACTIVE_RESERVATION' AND reason.source_id = r.id)
+          )
+        ORDER BY w.id LIMIT 100
+        """.trimIndent(), { rs, _ -> Triple(rs.uuid("id"), rs.uuid("requested_by"), rs.getLong("version")) }, at.utc(), at.utc(),
     )
 
     fun expired(at: Instant): List<ReservationView> = ResourceKind.entries.flatMap {

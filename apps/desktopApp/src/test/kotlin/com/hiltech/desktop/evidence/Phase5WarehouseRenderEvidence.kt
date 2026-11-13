@@ -138,12 +138,9 @@ fun main() = runBlocking<Unit> {
         "synthetic-project", "synthetic-site", state = "ACTIVE", version = 1, expiresAt = expiry, requestedBy = "synthetic-operator")
     val workScene = ImageComposeScene(width = 920, height = 720, coroutineContext = coroutineContext) {
         Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
-            androidx.compose.material3.Text("Project resource requirements")
             ProjectResourceResults(WorkResourceCandidatesDto("synthetic-work", 5, true, listOf(requirement)), listOf(reservation), false) {
                 _, _, _, _ -> Unit
             }
-            androidx.compose.material3.HorizontalDivider()
-            androidx.compose.material3.Text("Warehouse reservation queue")
             val request = WarehouseWorkRequestDto("synthetic-work", "SYNTH-WORK", "Synthetic installation", 5, listOf(requirement))
             WarehouseReservationResults(WarehouseReservationQueueDto(true, listOf(request), listOf(reservation)), request.workOrderId,
                 false, {}, { _, _, _, _, _ -> Unit }, { _, _ -> Unit })

@@ -1,4 +1,17 @@
 -- Phase 5 Slice 05. Work owns the requirement. Warehouse owns the resource mapping and reservation.
+CREATE TABLE project_resource_request_delegate (
+    id uuid PRIMARY KEY,
+    organization_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    user_id uuid NOT NULL REFERENCES user_identity(id),
+    role varchar(16) NOT NULL CHECK (role IN ('engineer','supervisor')),
+    effective_from timestamptz NOT NULL,
+    effective_until timestamptz,
+    FOREIGN KEY (project_id, organization_id) REFERENCES project(id, organization_id),
+    CHECK (effective_until IS NULL OR effective_until > effective_from)
+);
+CREATE INDEX idx_project_resource_delegate ON project_resource_request_delegate (project_id, user_id);
+
 CREATE TABLE work_resource_request (
     requirement_id uuid PRIMARY KEY,
     work_order_id uuid NOT NULL,

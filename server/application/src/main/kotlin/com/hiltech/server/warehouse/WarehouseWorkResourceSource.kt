@@ -44,7 +44,8 @@ class WarehouseWorkResourceSource(
                 ResourceCandidate(ResourceKind.ASSET, id, code, location, health.assetVersion, at.toString(), null, null, reasons.distinct())
             }
         }
-        val item = demand.stockItemId?.let { stock.item(it) }?.takeIf { it.active } ?: return emptyList()
+        val item = demand.stockItemId?.let { stock.item(it) }
+            ?.takeIf { it.active && reservations.stockUnitActive(order.organizationId, it.baseUnitCode) } ?: return emptyList()
         return reservations.balances(item.id, at).map { balance ->
             val mine = owned.filter { it.storageLocationId == balance.location }.sumOf { it.quantity?.toBigDecimal() ?: BigDecimal.ZERO }
             val reason = when {
@@ -89,6 +90,11 @@ class WarehouseWorkResourceSource(
                 best?.sourceVersion ?: demand.version, at)
         }
         val required = requireNotNull(demand.quantity).toBigDecimal()
+        val item = requireNotNull(demand.stockItemId)
+        val master = stock.item(item)
+        if (master == null || !master.active || !reservations.stockUnitActive(order.organizationId, master.baseUnitCode)) {
+            return WorkResourceFact(false, "STOCK_INACTIVE", item, master?.version ?: demand.version, at)
+        }
         val eligible = held.filter { it.storageLocationId?.let { id -> eligible(order, id, at) } == true }
         val count = eligible.sumOf { requireNotNull(it.quantity).toBigDecimal() }
         if (count >= required) {

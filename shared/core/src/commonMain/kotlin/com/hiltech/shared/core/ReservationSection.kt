@@ -57,6 +57,7 @@ fun ProjectResourceResults(
     request: (WorkResourceDemandDto, String, String?, String?) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Project resource requirements", style = MaterialTheme.typography.titleSmall)
             if (data.requirements.isEmpty()) Text("No resource requirements")
             data.requirements.forEach { requirement ->
                 ResourceRequirement(requirement)
@@ -103,6 +104,7 @@ fun WarehouseReservationResults(
     release: (ReservationDto, String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Warehouse reservation queue", style = MaterialTheme.typography.titleSmall)
         if (data.requests.isEmpty() && data.reservations.isEmpty()) Text("No resource requests or reservations")
         assetPicker("Work request", selected, data.requests.map { it.workOrderId to "${it.code} · ${it.title}" }, select = select)
         data.requests.firstOrNull { it.workOrderId == selected }?.let { work ->

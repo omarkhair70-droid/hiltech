@@ -91,11 +91,12 @@ class ReservationService(
                 val item = request.stockItemId?.let { stock.item(it) }
                     ?.takeIf { it.active && it.organizationId == order.organizationId } ?: hidden()
                 if (request.assetTypeId != null || request.quantity == null || item.baseUnitCode != request.unitCode ||
+                    !records.stockUnitActive(item.organizationId, item.baseUnitCode) ||
                     (item.serialized && quantity.stripTrailingZeros().scale() > 0)) invalid("Enter a canonical Stock quantity and unit.")
             } else {
                 val type = request.assetTypeId ?: invalid("Select an Asset type.")
                 if (request.stockItemId != null || request.unitCode != null || quantity.compareTo(BigDecimal.ONE) != 0 ||
-                    !records.assetTypeExists(order.organizationId, type)) invalid("Select an Asset type for one Asset.")
+                    assets.types(order.organizationId, now).none { it.id == type }) invalid("Select an Asset type for one Asset.")
             }
             records.request(order, requirement, request, quantity, context.actor, now)
         }
@@ -177,6 +178,17 @@ class ReservationService(
         }
     }
 
+    fun reevaluateDrift() {
+        records.readinessDrift(clock.instant()).distinctBy { it.first }.forEach { (id, actor, version) ->
+            transaction.executeWithoutResult {
+                if (!work.lockWorkOrder(id)) return@executeWithoutResult
+                if (order(id).version != version) return@executeWithoutResult
+                val eventId = UUID.nameUUIDFromBytes("resource-readiness-drift:$id:$version".toByteArray())
+                events.publishEvent(WorkResourceChanged(eventId, id, actor, eventId.toString()))
+            }
+        }
+    }
+
     private fun requireReservationOperator(actor: UUID, reservation: ReservationView) {
         when (reservation.kind) {
             ResourceKind.ASSET -> requireAssetOperator(actor, reservation.resourceId, allowMoved = true)
@@ -205,7 +217,8 @@ class ReservationService(
     }
 
     private fun requireProjectView(actor: UUID, order: WorkOrderSnapshot) {
-        if (!projectAuth.canViewProject(actor, project(order))) hidden()
+        val project = project(order)
+        if (!projectAuth.canViewProject(actor, project) && !projectAuth.canRequestResources(actor, project)) hidden()
     }
 
     private fun canRequest(actor: UUID, order: WorkOrderSnapshot) = projectAuth.canRequestResources(actor, project(order))
@@ -257,7 +270,10 @@ data class WarehouseReservationQueue(val canReserve: Boolean, val requests: List
 @Component
 class ReservationExpiry(private val reservations: ReservationService) {
     @Scheduled(fixedDelayString = "\${hiltech.warehouse.reservation-expiry-ms:30000}")
-    fun expire() = reservations.expireDue()
+    fun expire() {
+        reservations.expireDue()
+        reservations.reevaluateDrift()
+    }
 }
 
 private fun reservationId(operation: UUID) = UUID.nameUUIDFromBytes("hiltech:reservation:$operation".toByteArray())

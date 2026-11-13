@@ -80,12 +80,21 @@ internal class ReservationOperatorScenario(
         val release = ReleaseReservationRequest(UUID.randomUUID(), held.version, "Synthetic scheduling change")
         assertEquals("RELEASED", svc.release(context(release.operationId), ResourceKind.ASSET, held.id, release).state)
         val replacement = assetRequest(second, secondAsset)
-        assertEquals("ACTIVE", svc.reserveAsset(context(replacement.operationId), asset, replacement).state)
+        val replacementHold = svc.reserveAsset(context(replacement.operationId), asset, replacement)
+        assertEquals("ACTIVE", replacementHold.state)
+        val assetEvent = events.last { it.workOrderId == second.workOrderId }
+        readiness.resourceChanged(assetEvent)
+        val afterAssetEvent = work.workOrder(second.workOrderId)!!.version
+        readiness.resourceChanged(assetEvent)
+        assertEquals(afterAssetEvent, work.workOrder(second.workOrderId)!!.version)
+        assertEquals("ASSET_RESERVED", readiness.readiness(pm, second.workOrderId).requirements
+            .single { it.requirementId == secondAsset.requirementId }.evaluationReasonCode)
 
         val version = records.balances(item, now, location).single().version
         fun stockRequest(order: WorkOrderSnapshot, demand: WorkResourceDemand, quantity: String) = ReserveStockRequest(
             UUID.randomUUID(), order.workOrderId, demand.requirementId, work.workOrder(order.workOrderId)!!.version,
-            demand.requirementVersion, version, location, quantity, "SYNTH-RSV", expires.toString())
+            records.demands(order.workOrderId).single { it.requirementId == demand.requirementId }.requirementVersion,
+            version, location, quantity, "SYNTH-RSV", expires.toString())
         val shortage = stockRequest(first, firstStock, "11")
         denied("STOCK_SHORTAGE") { svc.reserveStock(context(shortage.operationId), item, shortage) }
         val attempts = listOf(stockRequest(first, firstStock, "8"), stockRequest(second, secondStock, "8"))
@@ -114,7 +123,9 @@ internal class ReservationOperatorScenario(
         service(Clock.fixed(expires, ZoneOffset.UTC)).expireDue()
         assertEquals("EXPIRED", records.reservation(ResourceKind.STOCK, winner.id, expires)?.state)
         assertEquals(2L, records.reservation(ResourceKind.STOCK, winner.id, expires)?.version)
-        readiness.resourceChanged(events.last { it.workOrderId == winner.workOrderId })
+        assertEquals("EXPIRED", records.reservation(ResourceKind.ASSET, replacementHold.id, expires)?.state)
+        assertEquals(2L, records.reservation(ResourceKind.ASSET, replacementHold.id, expires)?.version)
+        events.takeLast(2).forEach(readiness::resourceChanged)
         assertEquals("STOCK_AVAILABLE", readiness.readiness(pm, winner.workOrderId).requirements
             .single { it.requirementId == winner.requirementId }.evaluationReasonCode)
         assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM stock_movement WHERE stock_item_id = ?", Int::class.java, item))
