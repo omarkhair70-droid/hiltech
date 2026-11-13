@@ -50,6 +50,7 @@ sealed interface HiltechShellState {
             HiltechWarehouseState? = null,
         val field:
             HiltechFieldState? = null,
+        val assetLookup: AssetLookupState? = null,
     ) : HiltechShellState
     data class AccessDenied(
         val code: String,
@@ -160,6 +161,8 @@ fun HiltechShell(
         ) -> Unit = { _, _, _, _ -> },
     onRefreshWarehouse: () -> Unit = {},
     onStockAction: (StockAction) -> Unit = {},
+    onAssetAction: (AssetAction) -> Unit = {},
+    onLookupAssetTag: (String) -> Unit = {},
     onSelectWarehouse: (String) -> Unit = {},
     onCreateWarehouse: (String, String) -> Unit = { _, _ -> },
     onCreateWarehouseLocation: (String, String) -> Unit = { _, _ -> },
@@ -429,6 +432,8 @@ fun HiltechShell(
                         )
                     }
 
+                    state.assetLookup?.let { AssetTagLookupSection(it, onLookupAssetTag) }
+
                     state.field?.let {
                         AssignedWorkSection(
                             state = it,
@@ -444,6 +449,7 @@ fun HiltechShell(
                             state = warehouse,
                             onRefresh = onRefreshWarehouse,
                             onStockAction = onStockAction,
+                            onAssetAction = onAssetAction,
                             onSelectWarehouse = onSelectWarehouse,
                             onCreateWarehouse = onCreateWarehouse,
                             onCreateWarehouseLocation = onCreateWarehouseLocation,

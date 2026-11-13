@@ -25,6 +25,46 @@ class WarehouseApiClientTest {
     private val installation = "55555555-5555-5555-5555-555555555555"
 
     @Test
+    fun assetLookupUsesOnlyTheOpaqueSegmentAndTheAuthenticatedReadTransport() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/assets/by-tag/synthetic-opaque-tag", request.url.encodedPath)
+            assertEquals("GET", request.method.value)
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            respond(
+                """{"assetCode":"SYNTH-PASSPORT","typeName":"Synthetic test instrument","condition":"GOOD",
+                    "employeeCode":"SYNTH-CUSTODIAN","acquisitionCost":98765.43}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val client = client(http)
+        val result = client.lookupAssetTag("  synthetic-opaque-tag  ", installation)
+        assertEquals("SYNTH-PASSPORT", result.assetCode)
+        assertEquals("SYNTH-CUSTODIAN", result.employeeCode)
+        assertFalse(Json.encodeToString(AssetTagLookupDto.serializer(), result).contains("98765.43"))
+        assertFailsWith<IllegalArgumentException> { client.lookupAssetTag("https://example.invalid/tag", installation) }
+        assertFailsWith<IllegalArgumentException> { client.lookupAssetTag("../asset", installation) }
+    }
+
+    @Test
+    fun tagReplacementUsesTheCurrentVersionAndAStableCommandKey() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/assets/$batchId/replace-tag", request.url.encodedPath)
+            assertEquals("POST", request.method.value)
+            assertEquals(operation, request.headers["Idempotency-Key"])
+            val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            assertEquals(AssetTagCommandDto(operation, 8, "QR", warehouseId), Json.decodeFromString<AssetTagCommandDto>(body))
+            respond(
+                """{"id":"replacement","code":"synthetic-new-tag","type":"QR","active":true,"primary":true,
+                    "replacesTagId":"$warehouseId","issuedAt":"2026-11-13T06:00:00Z"}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val result = client(http).tagAsset(batchId, AssetTagCommandDto(operation, 8, "QR", warehouseId), installation)
+        assertEquals(warehouseId, result.replacesTagId)
+    }
+
+    @Test
     fun stockTransferUsesTheAuthenticatedRouteAndPreservesExactDecimalText() = runBlocking {
         val http = HttpClient(MockEngine { request ->
             assertEquals("/v1/stock-items/$batchId/transfer", request.url.encodedPath)

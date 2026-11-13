@@ -21,6 +21,50 @@ class WarehouseApiClient(
         explicitNulls = false
     },
 ) {
+    suspend fun assetCatalog(warehouseId: String, installationId: String): AssetCatalogDto =
+        get("/v1/asset-types?warehouseId=" + uuid(warehouseId), installationId, AssetCatalogDto.serializer())
+
+    suspend fun assets(warehouseId: String, search: String, afterCode: String?, installationId: String): List<AssetIdentityDto> =
+        get("/v1/assets?warehouseId=" + uuid(warehouseId) + "&search=" + search.encodeURLQueryComponent() +
+            (afterCode?.let { "&afterCode=" + it.encodeURLQueryComponent() } ?: ""),
+            installationId, ListSerializer(AssetIdentityDto.serializer()))
+
+    suspend fun assetPassport(id: String, installationId: String): AssetPassportDto =
+        get("/v1/assets/" + uuid(id), installationId, AssetPassportDto.serializer())
+
+    suspend fun assetMovements(id: String, installationId: String): List<AssetMovementDto> =
+        get("/v1/assets/" + uuid(id) + "/movements", installationId, ListSerializer(AssetMovementDto.serializer()))
+
+    suspend fun lookupAssetTag(code: String, installationId: String): AssetTagLookupDto {
+        val opaqueCode = code.trim()
+        require(Regex("[A-Za-z0-9_-]{1,128}").matches(opaqueCode))
+        return get("/v1/assets/by-tag/" + opaqueCode, installationId, AssetTagLookupDto.serializer())
+    }
+
+    suspend fun registerAsset(request: AssetRegistrationDto, installationId: String): AssetPassportDto =
+        post("/v1/assets", request.operationId, json.encodeToString(AssetRegistrationDto.serializer(), request),
+            installationId, AssetPassportDto.serializer())
+
+    suspend fun tagAsset(id: String, request: AssetTagCommandDto, installationId: String): AssetTagDto {
+        val action = if (request.previousTagId == null) "/tags" else "/replace-tag"
+        return post("/v1/assets/" + uuid(id) + action, request.operationId,
+            json.encodeToString(AssetTagCommandDto.serializer(), request), installationId, AssetTagDto.serializer())
+    }
+
+    suspend fun openAssetCustody(id: String, request: OpenAssetCustodyDto, installationId: String): AssetPassportDto =
+        post("/v1/assets/" + uuid(id) + "/opening-custody", request.operationId,
+            json.encodeToString(OpenAssetCustodyDto.serializer(), request), installationId, AssetPassportDto.serializer())
+
+    suspend fun correctAssetCustody(id: String, request: CorrectAssetCustodyDto, installationId: String): AssetPassportDto =
+        post("/v1/assets/" + uuid(id) + "/correct-custody", request.operationId,
+            json.encodeToString(CorrectAssetCustodyDto.serializer(), request), installationId, AssetPassportDto.serializer())
+
+    suspend fun approveAssetImport(
+        batchId: String, rowId: String, request: ApproveAssetImportDto, installationId: String,
+    ): AssetPassportDto =
+        post("/v1/inventory-imports/" + uuid(batchId) + "/rows/" + uuid(rowId) + "/approve-asset",
+            request.operationId, json.encodeToString(ApproveAssetImportDto.serializer(), request), installationId, AssetPassportDto.serializer())
+
     suspend fun stockCatalog(organizationId: String, installationId: String): StockCatalogDto =
         get("/v1/stock-catalog?organizationId=" + uuid(organizationId), installationId, StockCatalogDto.serializer())
 

@@ -12,6 +12,10 @@ import com.hiltech.server.warehouse.WarehouseAuthorizationRelations
 import com.hiltech.server.warehouse.WarehouseManagerProvisioner
 import com.hiltech.server.warehouse.WarehouseImportOperatorScenario
 import com.hiltech.server.warehouse.StockLedgerOperatorScenario
+import com.hiltech.server.warehouse.AssetCustodyMovementPosted
+import com.hiltech.server.warehouse.AssetPassportOperatorScenario
+import com.hiltech.server.warehouse.AssetPassportPersistence
+import com.hiltech.server.warehouse.AssetPassportService
 import com.hiltech.server.warehouse.StockLedgerPersistence
 import com.hiltech.server.warehouse.StockLedgerService
 import com.hiltech.server.warehouse.StockMovementPosted
@@ -476,9 +480,10 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
         val teamMembershipId = UUID.randomUUID()
         val warehouseId = UUID.randomUUID()
         val teamBindingId = UUID.randomUUID()
-        seedOrganizationAndIdentities(jdbc, org, listOf(userManager, teamManager), now.minusSeconds(60))
+        val custodian = UUID.randomUUID()
+        seedOrganizationAndIdentities(jdbc, org, listOf(userManager, teamManager, custodian), now.minusSeconds(60))
         transaction.executeWithoutResult {
-            listOf(userManager, teamManager).forEach { actor ->
+            listOf(userManager, teamManager, custodian).forEach { actor ->
                 val membershipId = UUID.randomUUID()
                 insertOrganizationMembership(jdbc, membershipId, org, actor, now.minusSeconds(60))
                 roleTeamBridge.syncOrganizationMembership(membershipId, now)
@@ -544,6 +549,17 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
         }
         assertTrue(stockEvents.size == 3 && stockEvents.all { it.stockItemId == stockItemId })
 
+        val assetEvents = CopyOnWriteArrayList<AssetCustodyMovementPosted>()
+        val assets = AssetPassportOperatorScenario(
+            jdbc,
+            AssetPassportService(AssetPassportPersistence(jdbc), persistence, authorization, source, provider, writer,
+                JdbcIdempotentCommandExecutor(jdbc, manager, clock, HiltechTelemetryRuntime(OpenTelemetry.noop()) {}),
+                JdbcAuditEventWriter(jdbc), clock, { event -> assetEvents.add(event as AssetCustodyMovementPosted) }),
+            clock, org, warehouseId, userManager, teamManager, custodian,
+        )
+        val passport = assets.exercise { drain(processor, now.plusSeconds(1)) }
+        assertTrue(assetEvents.size == 4 && assetEvents.count { it.assetId == passport.identity.id } == 2)
+
         // Deliberately leave the last projected grants in place to exercise the source guards.
         assertTrue(persistence.endWarehouseAuthorityBinding(userBindingId, warehouseId, 1, now))
         jdbc.update(
@@ -556,6 +572,7 @@ class RoleTeamAuthorizationPostgresOpenFgaContractTest {
             assertFalse(authorization.canManageImport(actor, org))
             operator.assertHidden(importBatchId, actor)
             stock.assertTransferDenied(stockItemId, actor)
+            assets.assertRevoked(passport, actor)
         }
         assertTrue(persistence.endWarehouseAuthorityBinding(teamBindingId, warehouseId, 1, now))
         assertThrows<IllegalArgumentException> {

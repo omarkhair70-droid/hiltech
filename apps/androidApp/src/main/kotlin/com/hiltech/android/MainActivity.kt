@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hiltech.android.identity.AndroidIdentityRuntime
+import com.hiltech.shared.core.AssetLookupState
 import com.hiltech.shared.core.HiltechFieldState
 import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
@@ -40,6 +41,8 @@ class MainActivity : ComponentActivity() {
         get() =
             hiltechApplication.identityRuntime
 
+    private var assetLookupSequence = 0
+
     private var shellState:
         HiltechShellState by mutableStateOf(
             HiltechShellState.Working(
@@ -65,6 +68,7 @@ class MainActivity : ComponentActivity() {
                 onRefreshPeople = ::refreshPeople,
                 onRefreshOnboarding =
                     ::refreshOnboarding,
+                onLookupAssetTag = ::lookupAssetTag,
                 onRefreshFieldWork =
                     ::refreshFieldWork,
                 onSelectFieldWork =
@@ -175,9 +179,11 @@ class MainActivity : ComponentActivity() {
     private fun showSignedIn(
         identity: IdentityBootstrapDto,
     ) {
+        assetLookupSequence++
         shellState =
             HiltechShellState.SignedIn(
                 identity = identity,
+                assetLookup = AssetLookupState(),
                 people =
                     HiltechPeopleState(
                         loading = true,
@@ -195,6 +201,27 @@ class MainActivity : ComponentActivity() {
         refreshPeople()
         refreshOnboarding()
         refreshFieldWork()
+    }
+
+    private fun lookupAssetTag(code: String) {
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        val request = ++assetLookupSequence
+        shellState = signed.copy(assetLookup = AssetLookupState(loading = true))
+        scope.launch {
+            val response = runCatching {
+                hiltechApplication.warehouseApi.lookupAssetTag(code, hiltechApplication.installationId)
+            }
+            val current = shellState as? HiltechShellState.SignedIn ?: return@launch
+            if (request != assetLookupSequence || current.identity.identityId != signed.identity.identityId) return@launch
+            val lookup = response.fold(
+                onSuccess = { AssetLookupState(result = it) },
+                onFailure = {
+                    val unavailable = (it as? HiltechApiException)?.code == "ASSET_UNAVAILABLE"
+                    AssetLookupState(message = if (unavailable) "Asset tag unavailable." else "Lookup failed. Try again.")
+                },
+            )
+            shellState = current.copy(assetLookup = lookup)
+        }
     }
 
     private fun refreshFieldWork() {
