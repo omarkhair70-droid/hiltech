@@ -21,6 +21,40 @@ class WarehouseApiClient(
         explicitNulls = false
     },
 ) {
+    suspend fun workResourceCatalog(work: String, installationId: String): WorkResourceCatalogDto =
+        get("/v1/work-orders/" + uuid(work) + "/resource-catalog", installationId, WorkResourceCatalogDto.serializer())
+
+    suspend fun workResourceCandidates(work: String, installationId: String): WorkResourceCandidatesDto =
+        get("/v1/work-orders/" + uuid(work) + "/resource-candidates", installationId, WorkResourceCandidatesDto.serializer())
+
+    suspend fun workReservations(work: String, installationId: String): List<ReservationDto> =
+        get("/v1/work-orders/" + uuid(work) + "/resource-reservations", installationId, ListSerializer(ReservationDto.serializer()))
+
+    suspend fun reservationQueue(warehouse: String, installationId: String): WarehouseReservationQueueDto =
+        get("/v1/reservations?warehouseId=" + uuid(warehouse), installationId, WarehouseReservationQueueDto.serializer())
+
+    suspend fun requestResource(work: String, requirement: String, request: RequestWorkResourceDto, installationId: String): WorkResourceDemandDto =
+        post("/v1/work-orders/" + uuid(work) + "/resource-requirements/" + uuid(requirement) + "/request", request.operationId,
+            json.encodeToString(RequestWorkResourceDto.serializer(), request), installationId, WorkResourceDemandDto.serializer())
+
+    suspend fun reserveAsset(id: String, request: ReserveAssetDto, installationId: String): ReservationDto =
+        post("/v1/assets/" + uuid(id) + "/reserve", request.operationId,
+            json.encodeToString(ReserveAssetDto.serializer(), request), installationId, ReservationDto.serializer())
+
+    suspend fun reserveStock(id: String, request: ReserveStockDto, installationId: String): ReservationDto =
+        post("/v1/stock-items/" + uuid(id) + "/reserve", request.operationId,
+            json.encodeToString(ReserveStockDto.serializer(), request), installationId, ReservationDto.serializer())
+
+    suspend fun releaseReservation(kind: String, id: String, request: ReleaseReservationDto, installationId: String): ReservationDto {
+        val route = when (kind) {
+            "ASSET" -> "/v1/asset-reservations/"
+            "STOCK" -> "/v1/stock-reservations/"
+            else -> error("Unknown reservation kind")
+        }
+        return post(route + uuid(id) + "/release", request.operationId,
+            json.encodeToString(ReleaseReservationDto.serializer(), request), installationId, ReservationDto.serializer())
+    }
+
     suspend fun assetServiceQueue(warehouse: String, afterCode: String?, installationId: String): List<AssetServiceQueueEntryDto> =
         get("/v1/assets/service-queue?warehouseId=" + uuid(warehouse) +
             (afterCode?.let { "&afterCode=" + it.encodeURLQueryComponent() } ?: ""),

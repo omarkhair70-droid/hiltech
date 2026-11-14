@@ -34,6 +34,7 @@ interface WorkPersistencePort {
     fun codeExists(projectId: UUID, code: String): Boolean
     fun validContext(project: ProjectSnapshot, projectSiteId: UUID, siteId: UUID, areaId: UUID?, packageId: UUID?): Boolean
     fun insertWorkOrder(id: UUID, project: ProjectSnapshot, code: String, siteId: UUID, projectSiteId: UUID, areaId: UUID?, packageId: UUID?, title: String, description: String?, start: Instant?, end: Instant?, priority: String, actor: UUID, at: Instant)
+    fun lockWorkOrder(id: UUID): Boolean
     fun workOrder(id: UUID): WorkOrderSnapshot?
     fun workOrders(projectId: UUID): List<WorkOrderSnapshot>
     fun updateDetails(id: UUID, version: Long, areaId: UUID?, packageId: UUID?, title: String, description: String?, start: Instant?, end: Instant?, priority: String, at: Instant): Boolean
@@ -191,6 +192,9 @@ class JdbcWorkPersistence(private val jdbc: JdbcTemplate) : WorkPersistencePort 
             id, project.organizationId, code, project.projectId, siteId, projectSiteId, areaId, packageId, title, description, start?.atOffset(ZoneOffset.UTC), end?.atOffset(ZoneOffset.UTC), priority, project.baselineVersion, at.atOffset(ZoneOffset.UTC), actor, at.atOffset(ZoneOffset.UTC),
         )
     }
+
+    override fun lockWorkOrder(id: UUID): Boolean =
+        jdbc.query("SELECT id FROM work_order WHERE id = ? FOR NO KEY UPDATE", { rs, _ -> rs.getObject(1, UUID::class.java) }, id).isNotEmpty()
 
     override fun workOrder(id: UUID): WorkOrderSnapshot? = loadOrders("wo.id=?", arrayOf(id)).singleOrNull()
     override fun workOrders(projectId: UUID): List<WorkOrderSnapshot> = loadOrders("wo.project_id=?", arrayOf(projectId))

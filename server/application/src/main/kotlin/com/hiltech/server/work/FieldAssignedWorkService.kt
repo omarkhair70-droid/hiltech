@@ -374,6 +374,9 @@ class FieldAssignedWorkService(
                                 "NOT_APPLICABLE" ->
                                 "NOT_APPLICABLE"
 
+                            it.evaluationReasonCode != null &&
+                                it.evaluationReasonCode != "PHASE5_RESOURCE_SOURCE_UNAVAILABLE" -> "SOURCE_CURRENT"
+
                             else ->
                                 "SOURCE_PENDING_PHASE5"
                         },
