@@ -21,6 +21,9 @@ class WarehouseApiClient(
         explicitNulls = false
     },
 ) {
+    suspend fun workResourceCatalog(work: String, installationId: String): WorkResourceCatalogDto =
+        get("/v1/work-orders/" + uuid(work) + "/resource-catalog", installationId, WorkResourceCatalogDto.serializer())
+
     suspend fun workResourceCandidates(work: String, installationId: String): WorkResourceCandidatesDto =
         get("/v1/work-orders/" + uuid(work) + "/resource-candidates", installationId, WorkResourceCandidatesDto.serializer())
 

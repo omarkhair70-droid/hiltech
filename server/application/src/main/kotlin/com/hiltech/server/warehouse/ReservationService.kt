@@ -44,6 +44,13 @@ class ReservationService(
     transactionManager: PlatformTransactionManager,
 ) {
     private val transaction = TransactionTemplate(transactionManager)
+    fun catalog(actor: UUID, id: UUID): WorkResourceCatalog {
+        val order = order(id)
+        requireProjectView(actor, order)
+        return WorkResourceCatalog(assets.types(order.organizationId, clock.instant()).map { ResourceCatalogChoice(it.id, it.name, null) },
+            stock.items(order.organizationId, null).filter { it.active }.map { ResourceCatalogChoice(it.id, "${it.itemCode} · ${it.name}", it.baseUnitCode) })
+    }
+
     fun candidates(actor: UUID, id: UUID): WorkResourceCandidates {
         val order = order(id)
         requireProjectView(actor, order)
@@ -261,6 +268,9 @@ class ReservationService(
         }
     }
 }
+
+data class ResourceCatalogChoice(val id: UUID, val label: String, val unitCode: String?)
+data class WorkResourceCatalog(val assetTypes: List<ResourceCatalogChoice>, val stockItems: List<ResourceCatalogChoice>)
 
 data class WarehouseWorkRequest(
     val workOrderId: UUID, val code: String, val title: String, val workVersion: Long, val requirements: List<ResourceRequirementCandidates>,

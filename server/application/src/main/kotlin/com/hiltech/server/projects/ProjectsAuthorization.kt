@@ -594,12 +594,14 @@ class SpringProjectAuthorization(
         val at = clock.instant()
         val authorization = authorizationProvider.ifAvailable ?: return false
         if (!sourceAuthority.isOrganizationMemberCurrent(actorUserId, project.organizationId, at)) return false
+        val membership = RoleTeamAuthorizationRelations.organizationMember(actorUserId, project.organizationId)
         return projectAuthoritySource.currentResourceRoles(project.projectId, actorUserId, at).any { role ->
-            authorization.isAllowed(AuthorizationCheckRequest(
-                ProjectAuthorizationRelations.projectAction(actorUserId, project.projectId, "can_request_resource"),
-                listOf(RoleTeamAuthorizationRelations.organizationMember(actorUserId, project.organizationId),
-                    ProjectAuthorizationRelations.projectAction(actorUserId, project.projectId, role)),
-            ))
+            val relation = ProjectAuthorizationRelations.projectAction(actorUserId, project.projectId, role)
+            val guards = listOf(membership, relation)
+            authorization.isAllowed(AuthorizationCheckRequest(relation, guards)) &&
+                authorization.isAllowed(AuthorizationCheckRequest(
+                    ProjectAuthorizationRelations.projectAction(actorUserId, project.projectId, "can_request_resource"), guards,
+                ))
         }
     }
 

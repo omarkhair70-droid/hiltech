@@ -691,6 +691,7 @@ class DesktopIdentityRuntime(
     }
 
     val reservationPort: ReservationUiPort = object : ReservationUiPort {
+        override suspend fun catalog(work: String) = warehouseApi.workResourceCatalog(work, installationId)
         override suspend fun candidates(work: String) = warehouseApi.workResourceCandidates(work, installationId)
         override suspend fun reservations(work: String) = warehouseApi.workReservations(work, installationId)
         override suspend fun queue(warehouse: String) = warehouseApi.reservationQueue(warehouse, installationId)

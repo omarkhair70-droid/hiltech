@@ -8,6 +8,12 @@ data class WorkResourceDemandDto(val requirementId: String, val requirementVersi
     val unitCode: String? = null, val version: Long? = null)
 
 @Serializable
+data class ResourceCatalogChoiceDto(val id: String, val label: String, val unitCode: String? = null)
+
+@Serializable
+data class WorkResourceCatalogDto(val assetTypes: List<ResourceCatalogChoiceDto>, val stockItems: List<ResourceCatalogChoiceDto>)
+
+@Serializable
 data class ResourceCandidateDto(val kind: String, val id: String, val code: String, val locationId: String? = null,
     val sourceVersion: Long, val asOf: String, val availableQuantity: String? = null, val unitCode: String? = null,
     val reasonCodes: List<String>)

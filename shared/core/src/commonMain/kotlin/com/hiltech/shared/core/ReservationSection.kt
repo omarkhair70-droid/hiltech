@@ -17,11 +17,14 @@ import com.hiltech.shared.core.warehouse.ReservationDto
 import com.hiltech.shared.core.warehouse.ResourceCandidateDto
 import com.hiltech.shared.core.warehouse.WarehouseReservationQueueDto
 import com.hiltech.shared.core.warehouse.WorkResourceCandidatesDto
+import com.hiltech.shared.core.warehouse.WorkResourceCatalogDto
+import com.hiltech.shared.core.warehouse.WarehouseWorkRequestDto
 import com.hiltech.shared.core.warehouse.WorkResourceDemandDto
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 interface ReservationUiPort {
+    suspend fun catalog(work: String): WorkResourceCatalogDto
     suspend fun candidates(work: String): WorkResourceCandidatesDto
     suspend fun reservations(work: String): List<ReservationDto>
     suspend fun queue(warehouse: String): WarehouseReservationQueueDto
@@ -34,15 +37,18 @@ interface ReservationUiPort {
 fun ProjectResources(work: String, port: ReservationUiPort) {
     var candidates by remember(work, port) { mutableStateOf<WorkResourceCandidatesDto?>(null) }
     var reservations by remember(work, port) { mutableStateOf(emptyList<ReservationDto>()) }
+    var catalog by remember(work, port) { mutableStateOf<WorkResourceCatalogDto?>(null) }
     val task = rememberReservationTask(work)
     suspend fun refresh() {
-        candidates = port.candidates(work)
+        val current = port.candidates(work)
+        catalog = if (current.canRequest) port.catalog(work) else null
         reservations = port.reservations(work)
+        candidates = current
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedButton({ task.launch { refresh() } }, enabled = !task.busy) { Text("Load resource requirements") }
         task.message?.let { Text(it) }
-        candidates?.let { data -> ProjectResourceResults(data, reservations, task.busy) { demand, resource, amount, unit ->
+        candidates?.let { data -> ProjectResourceResults(data, reservations, task.busy, catalog) { demand, resource, amount, unit ->
             task.launch {
                 port.request(data, demand, resource, amount, unit)
                 refresh()
@@ -53,22 +59,22 @@ fun ProjectResources(work: String, port: ReservationUiPort) {
 
 @Composable
 fun ProjectResourceResults(
-    data: WorkResourceCandidatesDto, reservations: List<ReservationDto>, busy: Boolean,
+    data: WorkResourceCandidatesDto, reservations: List<ReservationDto>, busy: Boolean, catalog: WorkResourceCatalogDto? = null,
     request: (WorkResourceDemandDto, String, String?, String?) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Project resource requirements", style = MaterialTheme.typography.titleSmall)
-            if (data.requirements.isEmpty()) Text("No resource requirements")
-            data.requirements.forEach { requirement ->
-                ResourceRequirement(requirement)
-                if (data.canRequest && requirement.demand.version == null) {
-                    ResourceRequestForm(requirement.demand, busy) { resource, amount, unit ->
-                        request(requirement.demand, resource, amount, unit)
-                    }
+        if (data.requirements.isEmpty()) Text("No resource requirements")
+        data.requirements.forEach { requirement ->
+            ResourceRequirement(requirement)
+            if (data.canRequest && requirement.demand.version == null) {
+                ResourceRequestForm(requirement.demand, catalog, busy) { resource, amount, unit ->
+                    request(requirement.demand, resource, amount, unit)
                 }
             }
-            if (reservations.isNotEmpty()) Text("Warehouse reservations", style = MaterialTheme.typography.titleSmall)
-            reservations.forEach { ReservationSummary(it) }
+        }
+        if (reservations.isNotEmpty()) Text("Warehouse reservations", style = MaterialTheme.typography.titleSmall)
+        reservations.forEach { ReservationSummary(it) }
     }
 }
 
@@ -100,7 +106,7 @@ fun WarehouseReservations(warehouse: String, port: ReservationUiPort) {
 @Composable
 fun WarehouseReservationResults(
     data: WarehouseReservationQueueDto, selected: String?, busy: Boolean, select: (String) -> Unit,
-    reserve: (com.hiltech.shared.core.warehouse.WarehouseWorkRequestDto, RequirementCandidatesDto, ResourceCandidateDto, String, String?) -> Unit,
+    reserve: (WarehouseWorkRequestDto, RequirementCandidatesDto, ResourceCandidateDto, String, String?) -> Unit,
     release: (ReservationDto, String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -138,11 +144,20 @@ private fun ResourceRequirement(requirement: RequirementCandidatesDto) {
 }
 
 @Composable
-private fun ResourceRequestForm(demand: WorkResourceDemandDto, busy: Boolean, submit: (String, String?, String?) -> Unit) {
+private fun ResourceRequestForm(
+    demand: WorkResourceDemandDto, catalog: WorkResourceCatalogDto?, busy: Boolean, submit: (String, String?, String?) -> Unit,
+) {
     var id by remember(demand.requirementId) { mutableStateOf("") }
     var amount by remember(demand.requirementId) { mutableStateOf("") }
     var unit by remember(demand.requirementId) { mutableStateOf("") }
     val stock = demand.family == "MATERIAL" || demand.type == "MATERIAL"
+    val options = if (stock) catalog?.stockItems.orEmpty() else catalog?.assetTypes.orEmpty()
+    if (options.isNotEmpty()) {
+        assetPicker(if (stock) "Stock item" else "Asset type", id, options.map { it.id to it.label }) { selected ->
+            id = selected
+            unit = options.firstOrNull { it.id == selected }?.unitCode.orEmpty()
+        }
+    }
     assetField(if (stock) "Stock item ID" else "Asset type ID", id) { id = it }
     if (stock) {
         assetField("Required quantity", amount) { amount = it }

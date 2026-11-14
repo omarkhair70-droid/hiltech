@@ -2297,6 +2297,21 @@ class ProjectsPostgresOpenFgaContractTest {
                 clock, ids.teamUser, ids.admin, firstSlice04Order, secondPlanned.workOrder,
             ).exercise { drain(processor, clock.instant().plusSeconds(5)) }
 
+            val resourceDelegate = UUID.randomUUID()
+            val delegateAt = clock.instant().atOffset(ZoneOffset.UTC)
+            val delegateProject = requireNotNull(JdbcProjectsPersistence(jdbc).project(firstSlice04Order.projectId, clock.instant()))
+            val engineer = ProjectAuthorizationRelations.projectAction(ids.ordinaryMember, delegateProject.projectId, "engineer")
+            jdbc.update("""
+                INSERT INTO project_resource_request_delegate (id, organization_id, project_id, user_id, role, effective_from)
+                VALUES (?, ?, ?, ?, 'engineer', ?)
+            """.trimIndent(), resourceDelegate, ids.organization, delegateProject.projectId, ids.ordinaryMember, delegateAt.minusMinutes(1))
+            assertFalse(projectAuthorization.canRequestResources(ids.ordinaryMember, delegateProject))
+            applyTuple(gateway, engineer)
+            assertTrue(projectAuthorization.canRequestResources(ids.ordinaryMember, delegateProject))
+            jdbc.update("UPDATE project_resource_request_delegate SET effective_until = ? WHERE id = ?", delegateAt, resourceDelegate)
+            assertTrue(gateway.isAllowed(ProjectAuthorizationRelations.projectAction(ids.ordinaryMember, delegateProject.projectId, "can_request_resource")))
+            assertFalse(projectAuthorization.canRequestResources(ids.ordinaryMember, delegateProject))
+
             val readinessPolicyId =
                 requireNotNull(
                     blockedReadiness.readiness

@@ -26,6 +26,9 @@ data class ReleaseReservationRequest(val operationId: UUID, val baseVersion: Lon
 
 @RestController
 class ReservationController(private val service: ReservationService) {
+    @GetMapping("/v1/work-orders/{id}/resource-catalog")
+    fun catalog(request: HttpServletRequest, @PathVariable id: UUID) = service.catalog(request.assetActor(), id)
+
     @GetMapping("/v1/work-orders/{id}/resource-candidates")
     fun candidates(request: HttpServletRequest, @PathVariable id: UUID) = service.candidates(request.assetActor(), id)
 
