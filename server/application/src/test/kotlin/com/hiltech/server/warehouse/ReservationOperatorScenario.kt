@@ -250,6 +250,15 @@ internal class ReservationOperatorScenario(
         assertTrue(source.fact(order, demand, instant).satisfied)
         denied("STOCK_FULFILLMENT_UNAVAILABLE") { service.issued(pm, item, order.workOrderId) }
         assertEquals("8.000000", service.issued(operator, item, order.workOrderId).single().outstandingQuantity)
+        denied("STOCK_FULFILLMENT_UNAVAILABLE") { service.directory(pm, item, facility, "") }
+        val directory = service.directory(operator, item, facility, "Synthetic no-login")
+        assertFalse(directory.limited)
+        val visible = directory.items.single()
+        assertEquals(employee, visible.context.employeeId)
+        assertEquals(order.workOrderId, visible.context.workOrderId)
+        assertEquals(order.version, visible.workVersion)
+        assertEquals("SYNTH-RSV", visible.unitCode)
+        assertTrue(service.directory(operator, item, facility, "not-a-matching-employee").items.isEmpty())
         assertEquals("FULFILLED", records.reservation(ResourceKind.STOCK, hold, instant)?.state)
         assertEquals(0, BigDecimal("2").compareTo(balance("stock_balance", "on_hand_qty")))
         assertEquals(0, BigDecimal("8").compareTo(balance("stock_issued_balance", "outstanding_qty")))
@@ -269,6 +278,7 @@ internal class ReservationOperatorScenario(
         val returned = consume.copy(operationId = UUID.randomUUID(), quantity = "2", storageLocationId = location,
             issuedVersion = service.issued(operator, item, order.workOrderId).single().version)
         service.returnUnused(stockContext(returned.operationId), item, returned)
+        assertTrue(service.directory(operator, item, facility, "").items.isEmpty())
         assertFalse(source.fact(order, demand, instant).satisfied)
         assertEquals(0, BigDecimal("4").compareTo(balance("stock_balance", "on_hand_qty")))
         assertEquals(0, BigDecimal.ZERO.compareTo(balance("stock_issued_balance", "outstanding_qty")))

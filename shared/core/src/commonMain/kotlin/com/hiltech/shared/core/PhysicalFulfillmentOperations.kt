@@ -16,7 +16,7 @@ import com.hiltech.shared.core.warehouse.AssetPassportDto
 import com.hiltech.shared.core.warehouse.StockItemDto
 
 @Composable
-internal fun PhysicalAssetOperations(passport: AssetPassportDto, state: AssetInventoryState, dispatch: (AssetAction) -> Unit) {
+fun PhysicalAssetOperations(passport: AssetPassportDto, state: AssetInventoryState, dispatch: (AssetAction) -> Unit) {
     val asset = passport.identity
     val custody = passport.custody ?: return
     val currentMovement = state.movements.firstOrNull { it.id == custody.sourceMovementId }
@@ -89,7 +89,7 @@ internal fun PhysicalAssetOperations(passport: AssetPassportDto, state: AssetInv
 }
 
 @Composable
-internal fun IssuedStockOperations(item: StockItemDto, warehouse: String, state: StockInventoryState, dispatch: (StockAction) -> Unit) {
+fun IssuedStockOperations(item: StockItemDto, warehouse: String, state: StockInventoryState, dispatch: (StockAction) -> Unit) {
     var search by remember(item.id, warehouse) { mutableStateOf(state.issuedSearch) }
     var selected by remember(item.id, warehouse) { mutableStateOf<String?>(null) }
     val directory = state.issued.takeIf { state.issuedWarehouseId == warehouse }

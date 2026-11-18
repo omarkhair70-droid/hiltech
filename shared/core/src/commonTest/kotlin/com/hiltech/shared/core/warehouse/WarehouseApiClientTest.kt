@@ -44,6 +44,25 @@ class WarehouseApiClientTest {
     }
 
     @Test
+    fun issuedDirectoryIsScopedToWarehouseAndPreservesVersion() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/stock-items/$batchId/issued-directory", request.url.encodedPath)
+            assertEquals(warehouseId, request.url.parameters["warehouseId"])
+            assertEquals("Employee A", request.url.parameters["search"])
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            respond("""{"items":[{"context":{"stockItemId":"$batchId","employeeId":"$org","projectId":"$org",
+                "siteId":"$org","workOrderId":"$org","requirementId":"$batchId","outstandingQuantity":"2.123456","version":3},
+                "employeeCode":"SYNTH-EMP","employeeName":"Employee A","workCode":"WORK",
+                "workTitle":"Synthetic task","workVersion":9,"unitCode":"SYNTH-UOM"}],"limited":false}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).issuedStockDirectory(batchId, warehouseId, "Employee A", installation)
+        assertEquals("2.123456", result.items.single().context.outstandingQuantity)
+        assertEquals(9L, result.items.single().workVersion)
+        assertFalse(result.limited)
+    }
+
+    @Test
     fun physicalAssetInspectionBindsTheExactReturnAndCommandKey() = runBlocking {
         val command = InspectPhysicalReturnDto(operation, 7, AssetCondition.GOOD, "Synthetic condition check")
         val http = HttpClient(MockEngine { request ->
