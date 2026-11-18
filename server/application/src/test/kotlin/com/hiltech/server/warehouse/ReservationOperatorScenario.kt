@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.assertThrows
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.dao.DataIntegrityViolationException
+import java.math.BigDecimal
 import org.springframework.transaction.PlatformTransactionManager
 import java.time.Clock
 import java.time.Instant
@@ -132,10 +134,67 @@ internal class ReservationOperatorScenario(
         assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM asset_movement WHERE asset_id = ?", Int::class.java, asset))
         assertEquals("0.000000", jdbc.queryForObject(
             "SELECT reserved_qty FROM stock_balance WHERE stock_item_id = ?", java.math.BigDecimal::class.java, item)?.toPlainString())
+        exerciseStockFulfilment(winner, expires.plusSeconds(1))
         assertTrue(warehouse.endWarehouseAuthorityBinding(binding, facility, 1, now))
         val revoked = assetRequest(first, firstAsset)
         denied("RESOURCE_UNAVAILABLE") { svc.reserveAsset(context(revoked.operationId), asset, revoked) }
         assertFalse(svc.forWork(pm, winner.workOrderId).isEmpty())
+    }
+
+    // Persistence-only proof. Operator API authorization/idempotency are a later checkpoint.
+    private fun exerciseStockFulfilment(previous: ReservationView, instant: Instant) {
+        val org = first.organizationId
+        val timestamp = instant.atOffset(ZoneOffset.UTC)
+        val person = UUID.randomUUID()
+        val employee = UUID.randomUUID()
+        jdbc.update("INSERT INTO person (id, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            person, "Synthetic no-login custodian", timestamp, timestamp)
+        jdbc.update("""INSERT INTO employee (id, organization_id, person_id, employee_code, state, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?)""", employee, org, person, "SYNTH-$employee", timestamp, timestamp)
+        val order = requireNotNull(work.workOrder(previous.workOrderId))
+        val hold = UUID.randomUUID()
+        records.reserve(ResourceKind.STOCK, hold, item, order, previous.requirementId, operator,
+            instant, instant.plusSeconds(600), location, BigDecimal("8"), "SYNTH-RSV")
+        fun post(kind: String, qty: String, recipient: UUID = employee, reservation: UUID? = null) {
+            jdbc.update("""INSERT INTO stock_movement (id, stock_item_id, organization_id, quantity, unit_code,
+                movement_type, from_storage_location_id, to_storage_location_id, project_id, site_id, work_order_id,
+                recipient_target_type, recipient_target_id, work_requirement_instance_id, fulfilled_reservation_id,
+                operation_id, reason_code, occurred_at, recorded_at, recorded_by, correlation_id)
+                VALUES (?, ?, ?, ?, 'SYNTH-RSV', ?, ?, ?, ?, ?, ?, 'EMPLOYEE', ?, ?, ?, ?, ?, ?, ?, ?, 'synthetic-fulfilment')""",
+                UUID.randomUUID(), item, org, BigDecimal(qty), kind,
+                location.takeIf { kind == "ISSUE" }, location.takeIf { kind == "RETURN" },
+                order.projectId, order.siteId, order.workOrderId, recipient, previous.requirementId, reservation,
+                UUID.randomUUID(), kind, timestamp, timestamp, operator)
+        }
+        fun balance(table: String, column: String): BigDecimal = requireNotNull(jdbc.queryForObject(
+            "SELECT $column FROM $table WHERE stock_item_id = ?", BigDecimal::class.java, item))
+        assertThrows<DataIntegrityViolationException> { post("ISSUE", "7", reservation = hold) }
+        assertEquals("ACTIVE", records.reservation(ResourceKind.STOCK, hold, instant)?.state)
+        assertThrows<DataIntegrityViolationException> {
+            jdbc.update("""UPDATE stock_reservation SET state = 'FULFILLED', version = version + 1,
+                ended_at = ?, ended_by = ?, end_reason = 'No movement' WHERE id = ?""", timestamp, operator, hold)
+        }
+        post("ISSUE", "8", reservation = hold)
+        assertEquals("FULFILLED", records.reservation(ResourceKind.STOCK, hold, instant)?.state)
+        assertEquals(0, BigDecimal("2").compareTo(balance("stock_balance", "on_hand_qty")))
+        assertEquals(0, BigDecimal("8").compareTo(balance("stock_issued_balance", "outstanding_qty")))
+        assertThrows<DataIntegrityViolationException> { post("ISSUE", "8", reservation = hold) }
+        assertThrows<DataIntegrityViolationException> { post("CONSUME", "9") }
+        assertThrows<DataIntegrityViolationException> { post("RETURN", "1", UUID.randomUUID()) }
+        assertThrows<DataIntegrityViolationException> {
+            records.reserve(ResourceKind.STOCK, UUID.randomUUID(), item, order, previous.requirementId, operator,
+                instant, instant.plusSeconds(600), location, BigDecimal.ONE, "SYNTH-RSV")
+        }
+        post("CONSUME", "6")
+        assertEquals(0, BigDecimal("2").compareTo(balance("stock_balance", "on_hand_qty")))
+        post("RETURN", "2")
+        assertEquals(0, BigDecimal("4").compareTo(balance("stock_balance", "on_hand_qty")))
+        assertEquals(0, BigDecimal.ZERO.compareTo(balance("stock_issued_balance", "outstanding_qty")))
+        assertEquals(balance("stock_issued_balance", "outstanding_qty"), balance("stock_issued_ledger", "outstanding_qty"))
+        assertEquals(balance("stock_balance", "on_hand_qty"), balance("stock_ledger_on_hand", "on_hand_qty"))
+        assertThrows<DataIntegrityViolationException> {
+            jdbc.update("UPDATE stock_issued_balance SET outstanding_qty = 100 WHERE stock_item_id = ?", item)
+        }
     }
 
     private fun request(svc: ReservationService, order: WorkOrderSnapshot, family: String): WorkResourceDemand {
