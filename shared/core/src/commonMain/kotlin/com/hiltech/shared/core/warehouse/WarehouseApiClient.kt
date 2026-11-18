@@ -21,6 +21,38 @@ class WarehouseApiClient(
         explicitNulls = false
     },
 ) {
+    suspend fun issueReservedStock(id: String, request: IssueReservedStockDto, installationId: String): StockFulfillmentReceiptDto =
+        post("/v1/stock-items/" + uuid(id) + "/issue", request.operationId,
+            json.encodeToString(IssueReservedStockDto.serializer(), request), installationId, StockFulfillmentReceiptDto.serializer())
+
+    suspend fun returnUnusedStock(id: String, request: AdjustIssuedStockDto, installationId: String): StockFulfillmentReceiptDto =
+        post("/v1/stock-items/" + uuid(id) + "/return-unused", request.operationId,
+            json.encodeToString(AdjustIssuedStockDto.serializer(), request), installationId, StockFulfillmentReceiptDto.serializer())
+
+    suspend fun consumeIssuedStock(id: String, request: AdjustIssuedStockDto, installationId: String): StockFulfillmentReceiptDto =
+        post("/v1/stock-items/" + uuid(id) + "/consume", request.operationId,
+            json.encodeToString(AdjustIssuedStockDto.serializer(), request), installationId, StockFulfillmentReceiptDto.serializer())
+
+    suspend fun issuedStock(id: String, work: String, installationId: String): List<IssuedStockContextDto> =
+        get("/v1/stock-items/" + uuid(id) + "/issued-context?workOrderId=" + uuid(work), installationId,
+            ListSerializer(IssuedStockContextDto.serializer()))
+
+    suspend fun checkoutReservedAsset(id: String, request: CheckoutReservedAssetDto, installationId: String): PhysicalAssetReceiptDto =
+        post("/v1/assets/" + uuid(id) + "/checkout", request.operationId,
+            json.encodeToString(CheckoutReservedAssetDto.serializer(), request), installationId, PhysicalAssetReceiptDto.serializer())
+
+    suspend fun returnPhysicalAsset(id: String, request: ReturnPhysicalAssetDto, installationId: String): PhysicalAssetReceiptDto =
+        post("/v1/assets/" + uuid(id) + "/return", request.operationId,
+            json.encodeToString(ReturnPhysicalAssetDto.serializer(), request), installationId, PhysicalAssetReceiptDto.serializer())
+
+    suspend fun transferPhysicalAsset(id: String, request: TransferPhysicalAssetDto, installationId: String): PhysicalAssetReceiptDto =
+        post("/v1/assets/" + uuid(id) + "/transfer", request.operationId,
+            json.encodeToString(TransferPhysicalAssetDto.serializer(), request), installationId, PhysicalAssetReceiptDto.serializer())
+
+    suspend fun inspectPhysicalReturn(id: String, returned: String, request: InspectPhysicalReturnDto, installationId: String): PhysicalAssetReceiptDto =
+        post("/v1/assets/" + uuid(id) + "/returns/" + uuid(returned) + "/inspect", request.operationId,
+            json.encodeToString(InspectPhysicalReturnDto.serializer(), request), installationId, PhysicalAssetReceiptDto.serializer())
+
     suspend fun workResourceCatalog(work: String, installationId: String): WorkResourceCatalogDto =
         get("/v1/work-orders/" + uuid(work) + "/resource-catalog", installationId, WorkResourceCatalogDto.serializer())
 

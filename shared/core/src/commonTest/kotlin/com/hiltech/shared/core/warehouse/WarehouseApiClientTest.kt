@@ -25,6 +25,39 @@ class WarehouseApiClientTest {
     private val installation = "55555555-5555-5555-5555-555555555555"
 
     @Test
+    fun reservedStockIssuePreservesExactQuantityAndIdempotency() = runBlocking {
+        val command = IssueReservedStockDto(operation, org, batchId, warehouseId, org, warehouseId,
+            7, 8, 9, 10, "1.123456", "SYNTH-UOM")
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/stock-items/$batchId/issue", request.url.encodedPath)
+            assertEquals("POST", request.method.value)
+            assertEquals(operation, request.headers["Idempotency-Key"])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            assertEquals(command, Json.decodeFromString<IssueReservedStockDto>(body))
+            respond("""{"movementId":"synthetic-issue","operationId":"$operation","type":"ISSUE","itemId":"$batchId",
+                "employeeId":"$warehouseId","workOrderId":"$org","requirementId":"$batchId","quantity":"1.123456",
+                "unitCode":"SYNTH-UOM","replayed":false}""", HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        assertEquals("1.123456", client(http).issueReservedStock(batchId, command, installation).quantity)
+    }
+
+    @Test
+    fun physicalAssetInspectionBindsTheExactReturnAndCommandKey() = runBlocking {
+        val command = InspectPhysicalReturnDto(operation, 7, AssetCondition.GOOD, "Synthetic condition check")
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/assets/$batchId/returns/$warehouseId/inspect", request.url.encodedPath)
+            assertEquals(operation, request.headers["Idempotency-Key"])
+            val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            assertEquals(command, Json.decodeFromString<InspectPhysicalReturnDto>(body))
+            respond("""{"recordId":"synthetic-inspection","assetId":"$batchId","kind":"INSPECT","replayed":true}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        assertTrue(client(http).inspectPhysicalReturn(batchId, warehouseId, command, installation).replayed)
+    }
+
+    @Test
     fun assetLookupUsesOnlyTheOpaqueSegmentAndTheAuthenticatedReadTransport() = runBlocking {
         val http = HttpClient(MockEngine { request ->
             assertEquals("/v1/assets/by-tag/synthetic-opaque-tag", request.url.encodedPath)
