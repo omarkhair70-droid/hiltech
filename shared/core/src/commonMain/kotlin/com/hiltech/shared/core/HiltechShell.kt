@@ -161,6 +161,7 @@ fun HiltechShell(
         ) -> Unit = { _, _, _, _ -> },
     onRefreshWarehouse: () -> Unit = {},
     onStockAction: (StockAction) -> Unit = {},
+    reservationPort: ReservationUiPort? = null,
     onAssetAction: (AssetAction) -> Unit = {},
     onLookupAssetTag: (String) -> Unit = {},
     onSelectWarehouse: (String) -> Unit = {},
@@ -449,6 +450,7 @@ fun HiltechShell(
                             state = warehouse,
                             onRefresh = onRefreshWarehouse,
                             onStockAction = onStockAction,
+                            reservationPort = reservationPort,
                             onAssetAction = onAssetAction,
                             onSelectWarehouse = onSelectWarehouse,
                             onCreateWarehouse = onCreateWarehouse,
@@ -462,6 +464,7 @@ fun HiltechShell(
 
                     state.projects?.let {
                         ProjectControlSection(
+                            reservationPort = reservationPort,
                             state = it,
                             onRefresh =
                                 onRefreshProjects,

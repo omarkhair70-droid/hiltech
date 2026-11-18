@@ -108,6 +108,7 @@ fun ProjectControlSection(
     onPlanningAction: (PlanningUiAction) -> Unit = {},
     onWorkPlanningAction: (WorkPlanningUiAction) -> Unit = {},
     onWorkReadinessAction: (WorkReadinessUiAction) -> Unit = {},
+    reservationPort: ReservationUiPort? = null,
     onProjectCommandCenterAction: (ProjectCommandCenterUiAction) -> Unit = {},
 ) {
     CompositionLocalProvider(
@@ -402,6 +403,7 @@ fun ProjectControlSection(
                             state.workQueueContext,
                         onAction =
                             onWorkReadinessAction,
+                        reservationPort = reservationPort,
                     )
                     state.commandCenter?.let {
                         ProjectCommandCenterSection(

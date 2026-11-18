@@ -3,6 +3,15 @@ package com.hiltech.desktop
 import com.hiltech.shared.core.StockAction
 import com.hiltech.shared.core.StockInventoryState
 import com.hiltech.shared.core.AssetAction
+import com.hiltech.shared.core.ReservationUiPort
+import com.hiltech.shared.core.warehouse.WorkResourceCandidatesDto
+import com.hiltech.shared.core.warehouse.WorkResourceDemandDto
+import com.hiltech.shared.core.warehouse.ResourceCandidateDto
+import com.hiltech.shared.core.warehouse.ReservationDto
+import com.hiltech.shared.core.warehouse.RequestWorkResourceDto
+import com.hiltech.shared.core.warehouse.ReserveAssetDto
+import com.hiltech.shared.core.warehouse.ReserveStockDto
+import com.hiltech.shared.core.warehouse.ReleaseReservationDto
 import com.hiltech.shared.core.AssetServiceCommand
 import com.hiltech.shared.core.warehouse.ChangeAssetIncidentDto
 import com.hiltech.shared.core.warehouse.CompleteAssetMaintenanceDto
@@ -680,6 +689,46 @@ class DesktopIdentityRuntime(
         ensureConfigured()
         return warehouseApi.warehouses(organizationId, installationId)
     }
+
+    val reservationPort: ReservationUiPort = object : ReservationUiPort {
+        override suspend fun catalog(work: String) = warehouseApi.workResourceCatalog(work, installationId)
+        override suspend fun candidates(work: String) = warehouseApi.workResourceCandidates(work, installationId)
+        override suspend fun reservations(work: String) = warehouseApi.workReservations(work, installationId)
+        override suspend fun queue(warehouse: String) = warehouseApi.reservationQueue(warehouse, installationId)
+
+        override suspend fun request(work: WorkResourceCandidatesDto, demand: WorkResourceDemandDto, resource: String, quantity: String?, unit: String?) {
+            val stock = demand.family == "MATERIAL" || demand.type == "MATERIAL"
+            warehouseApi.requestResource(work.workOrderId, demand.requirementId, RequestWorkResourceDto(
+                reservationOperation("request", work.workOrderId, work.workVersion, demand.requirementId, demand.requirementVersion, resource, quantity, unit),
+                work.workVersion, demand.requirementVersion, resource.takeUnless { stock }, resource.takeIf { stock }, quantity, unit,
+            ), installationId)
+        }
+
+        override suspend fun reserve(
+            work: String, workVersion: Long, demand: WorkResourceDemandDto, candidate: ResourceCandidateDto, expiry: String, quantity: String?,
+        ) {
+            val operation = reservationOperation("reserve", work, workVersion, demand.requirementId, demand.requirementVersion,
+                candidate.kind, candidate.id, candidate.locationId, candidate.sourceVersion, expiry, quantity)
+            if (candidate.kind == "ASSET") {
+                warehouseApi.reserveAsset(candidate.id, ReserveAssetDto(operation, work, demand.requirementId,
+                    workVersion, demand.requirementVersion, candidate.sourceVersion, expiry), installationId)
+            } else {
+                warehouseApi.reserveStock(candidate.id, ReserveStockDto(operation, work, demand.requirementId, workVersion,
+                    demand.requirementVersion, candidate.sourceVersion, requireNotNull(candidate.locationId),
+                    requireNotNull(quantity), requireNotNull(candidate.unitCode), expiry), installationId)
+            }
+        }
+
+        override suspend fun release(reservation: ReservationDto, reason: String) {
+            warehouseApi.releaseReservation(reservation.kind, reservation.id, ReleaseReservationDto(
+                reservationOperation("release", reservation.id, reservation.version, reason), reservation.version, reason,
+            ), installationId)
+        }
+    }
+
+    private fun reservationOperation(vararg fields: Any?): String =
+        java.util.UUID.nameUUIDFromBytes((listOf("desktop-reservation", installationId) + fields)
+            .joinToString("") { value -> value.toString().let { "${it.length}:$it" } }.toByteArray(Charsets.UTF_8)).toString()
 
     suspend fun applyAssetAction(
         organizationId: String, warehouseId: String, state: AssetInventoryState, action: AssetAction, operationId: String,

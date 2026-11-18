@@ -33,105 +33,116 @@ import java.awt.Window as AwtWindow
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.imageio.ImageIO
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.system.exitProcess
 
-fun main() = application {
-    val outputDirectory =
-        Path.of(
-            System.getenv("HILTECH_PHASE4_WORK_EVIDENCE_DIR")
-                ?: "build/reports/phase4-work",
-        )
-    Files.createDirectories(outputDirectory)
+fun main() {
+    val completed = AtomicBoolean(false)
+    application(exitProcessOnExit = false) {
+        val outputDirectory =
+            Path.of(
+                System.getenv("HILTECH_PHASE4_WORK_EVIDENCE_DIR")
+                    ?: "build/reports/phase4-work",
+            )
+        Files.createDirectories(outputDirectory)
 
-    Window(
-        onCloseRequest = ::exitApplication,
-        title = "HILTECH Phase 4 Work Planning Evidence",
-        state = rememberWindowState(width = 1180.dp, height = 1080.dp),
-    ) {
-        var screen by remember { mutableStateOf(0) }
-        val frame = window
-        CompositionLocalProvider(
-            LocalLayoutDirection provides LayoutDirection.Rtl,
+        Window(
+            onCloseRequest = ::exitApplication,
+            title = "HILTECH Phase 4 Work Planning Evidence",
+            state = rememberWindowState(width = 1180.dp, height = 1080.dp),
         ) {
-            when (screen) {
-                0 ->
-                    WorkPlanningSection(
-                        plan = plan("PLANNING", 12),
-                        workTypes = listOf(workType(), surveyType()),
-                        orders = listOf(plannedOrder()),
-                        onAction = {},
-                    )
-                1 ->
-                    WorkPlanningSection(
-                        plan = plan("READY", 13),
-                        workTypes = listOf(workType(), surveyType()),
-                        orders = listOf(draftOrder()),
-                        onAction = {},
-                    )
-                2 ->
-                    WorkPlanningSection(
-                        plan = plan("READY", 14),
-                        workTypes = listOf(workType(), surveyType()),
-                        orders = listOf(plannedOrder()),
-                        onAction = {},
-                    )
-                else ->
-                    WorkPlanningSection(
-                        plan = plan("PLANNING", 15),
-                        workTypes = listOf(workType(), surveyType()),
-                        orders = emptyList(),
-                        onAction = {},
-                    )
+            var screen by remember { mutableStateOf(0) }
+            val frame = window
+            CompositionLocalProvider(
+                LocalLayoutDirection provides LayoutDirection.Rtl,
+            ) {
+                when (screen) {
+                    0 ->
+                        WorkPlanningSection(
+                            plan = plan("PLANNING", 12),
+                            workTypes = listOf(workType(), surveyType()),
+                            orders = listOf(plannedOrder()),
+                            onAction = {},
+                        )
+                    1 ->
+                        WorkPlanningSection(
+                            plan = plan("READY", 13),
+                            workTypes = listOf(workType(), surveyType()),
+                            orders = listOf(draftOrder()),
+                            onAction = {},
+                        )
+                    2 ->
+                        WorkPlanningSection(
+                            plan = plan("READY", 14),
+                            workTypes = listOf(workType(), surveyType()),
+                            orders = listOf(plannedOrder()),
+                            onAction = {},
+                        )
+                    else ->
+                        WorkPlanningSection(
+                            plan = plan("PLANNING", 15),
+                            workTypes = listOf(workType(), surveyType()),
+                            orders = emptyList(),
+                            onAction = {},
+                        )
+                }
             }
-        }
 
-        LaunchedEffect(Unit) {
-            try {
-                settle()
-                captureWindow(
-                    frame,
-                    outputDirectory.resolve(
-                        "desktop-work-bound-revisions.png",
-                    ),
-                )
-                screen = 1
-                settle()
-                captureWindow(
-                    frame,
-                    outputDirectory.resolve(
-                        "desktop-work-draft-gate.png",
-                    ),
-                )
-                screen = 2
-                settle()
-                captureWindow(
-                    frame,
-                    outputDirectory.resolve(
-                        "desktop-project-activation-ready.png",
-                    ),
-                )
-                screen = 3
-                settle()
-                captureWindow(
-                    frame,
-                    outputDirectory.resolve(
-                        "desktop-work-editor-contract.png",
-                    ),
-                )
-                println(
-                    "HILTECH_PHASE4_WORK_RENDER_PASS " +
-                        "bound_revisions=PASS checklist_definition=PASS " +
-                        "requirements_pending=PASS document_requirement=PASS " +
-                        "readiness_not_evaluated=PASS draft_gate=PASS " +
-                        "activation_ready=PASS work_type_selector=PASS " +
-                        "schedule_editor=PASS dependency_editor=PASS " +
-                        "task_update_control=PASS no_fake_assignment=PASS " +
-                        "no_fake_resource_availability=PASS",
-                )
-            } finally {
-                exitApplication()
+            LaunchedEffect(Unit) {
+                try {
+                    settle()
+                    captureWindow(
+                        frame,
+                        outputDirectory.resolve(
+                            "desktop-work-bound-revisions.png",
+                        ),
+                    )
+                    screen = 1
+                    settle()
+                    captureWindow(
+                        frame,
+                        outputDirectory.resolve(
+                            "desktop-work-draft-gate.png",
+                        ),
+                    )
+                    screen = 2
+                    settle()
+                    captureWindow(
+                        frame,
+                        outputDirectory.resolve(
+                            "desktop-project-activation-ready.png",
+                        ),
+                    )
+                    screen = 3
+                    settle()
+                    captureWindow(
+                        frame,
+                        outputDirectory.resolve(
+                            "desktop-work-editor-contract.png",
+                        ),
+                    )
+                    completed.set(true)
+                } finally {
+                    exitApplication()
+                }
             }
         }
     }
+    if (!completed.get()) {
+        System.err.println("Work planning evidence closed before all captures completed")
+        exitProcess(1)
+    }
+    println(
+        "HILTECH_PHASE4_WORK_RENDER_PASS " +
+            "bound_revisions=PASS checklist_definition=PASS " +
+            "requirements_pending=PASS document_requirement=PASS " +
+            "readiness_not_evaluated=PASS draft_gate=PASS " +
+            "activation_ready=PASS work_type_selector=PASS " +
+            "schedule_editor=PASS dependency_editor=PASS " +
+            "task_update_control=PASS no_fake_assignment=PASS " +
+            "no_fake_resource_availability=PASS",
+    )
+    exitProcess(0)
 }
 
 private suspend fun settle() {

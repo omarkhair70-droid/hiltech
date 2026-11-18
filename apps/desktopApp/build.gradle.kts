@@ -16,6 +16,16 @@ dependencies {
 
 val testRuntimeClasspath = sourceSets["test"].runtimeClasspath
 
+// Hosted Linux evidence jobs render real Compose windows without GPU access.
+// Keep this limited to evidence JavaExec tasks, never the production launcher.
+tasks.withType<JavaExec>().configureEach {
+    if (name.startsWith("renderPhase") && System.getenv("CI") == "true" &&
+        System.getProperty("os.name").startsWith("Linux", ignoreCase = true)
+    ) {
+        systemProperty("skiko.renderApi", "SOFTWARE")
+    }
+}
+
 tasks.register<JavaExec>("runOidcProviderSmoke") {
     group = "verification"
     description = "Runs the Phase 1 native OIDC provider smoke harness."

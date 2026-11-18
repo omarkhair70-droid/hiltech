@@ -2738,6 +2738,7 @@ fun main() {
                 onRefreshWarehouse =
                     ::refreshWarehouses,
                 onStockAction = ::applyStockAction,
+                reservationPort = runtime.reservationPort,
                 onAssetAction = ::applyAssetAction,
                 onSelectWarehouse =
                     ::selectWarehouse,

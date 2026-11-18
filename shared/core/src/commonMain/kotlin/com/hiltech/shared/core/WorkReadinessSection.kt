@@ -56,6 +56,7 @@ fun WorkReadinessSection(
     readinessByWorkOrder: Map<String, WorkReadinessDto>,
     workQueueContext: List<WorkQueueContextDto>,
     onAction: (WorkReadinessUiAction) -> Unit,
+    reservationPort: ReservationUiPort? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
@@ -91,6 +92,7 @@ fun WorkReadinessSection(
                         onAction = onAction,
                     )
                 }
+                if (reservationPort != null) ProjectResources(order.workOrderId, reservationPort)
             }
     }
 }

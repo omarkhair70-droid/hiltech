@@ -314,6 +314,7 @@ interface WarehouseAuthorizationPort {
     fun canTagAsset(actorUserId: UUID, warehouse: WarehouseSnapshot, allowOperator: Boolean): Boolean
     fun canOperateAssetService(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canManageAssetService(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
+    fun canReserveResources(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canViewValue(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canViewStorage(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean
     fun canTransferStock(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean
@@ -460,6 +461,10 @@ class SpringWarehouseAuthorization(
     override fun canManageAssetService(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean =
         checkWarehouseAction(actorUserId, warehouse, "can_manage_asset_service",
             setOf(WarehouseAuthorityKey.WAREHOUSE_MANAGER, WarehouseAuthorityKey.ASSET_MASTER_MANAGER))
+
+    override fun canReserveResources(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean =
+        checkWarehouseAction(actorUserId, warehouse, "can_reserve",
+            setOf(WarehouseAuthorityKey.WAREHOUSE_OPERATOR, WarehouseAuthorityKey.WAREHOUSE_MANAGER))
 
     override fun canViewValue(
         actorUserId: UUID,

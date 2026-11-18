@@ -205,6 +205,7 @@ jobs:
           gradle-version: "9.5.0"
 
       - name: Render production Desktop shell states
+        shell: bash
         env:
           HILTECH_SHELL_EVIDENCE_DIR: ${{ github.workspace }}/build/reports/phase1-native-oidc
         run: |
