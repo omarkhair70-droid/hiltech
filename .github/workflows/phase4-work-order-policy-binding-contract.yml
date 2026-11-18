@@ -153,6 +153,7 @@ jobs:
           gradle-version: "9.5.0"
 
       - name: Render WorkOrder planning flows
+        shell: bash
         env:
           HILTECH_PHASE4_WORK_EVIDENCE_DIR: ${{ github.workspace }}/build/reports/phase4-work
         run: |
