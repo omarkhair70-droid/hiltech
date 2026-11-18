@@ -315,7 +315,7 @@ class AssetPassportService(
         events.publishEvent(AssetCustodyMovementPosted(id, asset.id, asset.organizationId, type, context.actor, context.correlationId, occurred))
     }
 
-    private fun project(context: AssetCommandContext, asset: AssetIdentityView, target: AssetDestination?, at: Instant, prior: AssetCustodyView? = null) {
+    internal fun project(context: AssetCommandContext, asset: AssetIdentityView, target: AssetDestination?, at: Instant, prior: AssetCustodyView? = null) {
         fun relation(type: String, id: UUID, key: String, desired: AuthorizationDesiredState) {
             val tuple = assetTuple(type, id, key, asset.id)
             projection.write(AuthorizationProjectionIntent(

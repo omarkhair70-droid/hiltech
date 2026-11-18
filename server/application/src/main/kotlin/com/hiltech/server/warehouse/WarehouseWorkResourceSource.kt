@@ -67,6 +67,17 @@ class WarehouseWorkResourceSource(
         if (demand.version == null) return WorkResourceFact(false, "RESOURCE_REQUEST_REQUIRED", demand.requirementId, demand.requirementVersion, at)
         val held = reservations.demandReservations(demand.requirementId, at)
         if (demand.assetTypeId != null) {
+            val checkedOut = assets.fulfilledAsset(demand.requirementId, order.workOrderId, at)
+            if (checkedOut != null) {
+                val health = availability.availability(checkedOut, at)
+                if (health != null) {
+                    val blockers = health.reasons.filterNot { it.code == "ASSET_IN_EMPLOYEE_CUSTODY" && it.state == "CHECKED_OUT" }
+                    val custody = assets.custody(checkedOut)
+                    if (blockers.isEmpty() && custody != null) {
+                        return WorkResourceFact(true, "ASSET_FULFILLED", custody.sourceMovementId, health.assetVersion, at)
+                    }
+                }
+            }
             val reservation = held.firstOrNull()
             if (reservation != null) {
                 val health = availability.availability(reservation.resourceId, at)

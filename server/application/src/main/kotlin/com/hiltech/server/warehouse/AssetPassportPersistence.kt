@@ -25,6 +25,7 @@ data class AssetIdentityView(
 data class AssetCustodyView(
     val storageLocationId: UUID?, val locationCode: String?, val employeeId: UUID?, val employeeCode: String?,
     val projectId: UUID?, val siteId: UUID?, val workOrderId: UUID?, val sourceMovementId: UUID, val since: String?,
+    val expectedReturnAt: String? = null,
 )
 data class AssetTagView(
     val id: UUID, val code: String, val type: String, val active: Boolean, val primary: Boolean,
@@ -129,7 +130,7 @@ class AssetPassportPersistence(private val jdbc: JdbcTemplate) {
             AssetCustodyView(rs.optionalUuid("current_storage_location_id"), rs.getString("location_code"),
                 rs.optionalUuid("current_custodian_target_id").takeIf { rs.getString("current_custodian_target_type") == "EMPLOYEE" },
                 rs.getString("employee_code"), rs.optionalUuid("current_project_id"), rs.optionalUuid("current_site_id"),
-                rs.optionalUuid("current_work_order_id"), rs.uuid("source_movement_id"), rs.instant("custody_started_at")?.toString())
+                rs.optionalUuid("current_work_order_id"), rs.uuid("source_movement_id"), rs.instant("custody_started_at")?.toString(), rs.instant("expected_return_at")?.toString())
         }, assetId,
     ).singleOrNull()
 
@@ -145,6 +146,17 @@ class AssetPassportPersistence(private val jdbc: JdbcTemplate) {
                 rs.getString("condition_at_transfer"), requireNotNull(rs.instant("occurred_at")).toString(), rs.getString("notes"))
         }, assetId,
     )
+
+    fun fulfilledAsset(requirement: UUID, work: UUID, at: Instant): UUID? = jdbc.query("""
+        SELECT a.id FROM asset_reservation r JOIN asset a ON a.id = r.asset_id
+        JOIN asset_custody_projection c ON c.asset_id = a.id
+        JOIN asset_movement m ON m.id = c.source_movement_id AND m.fulfilled_reservation_id = r.id
+        JOIN employee e ON e.id = c.current_custodian_target_id AND e.organization_id = a.organization_id
+        WHERE r.work_requirement_instance_id = ? AND r.work_order_id = ? AND r.state = 'FULFILLED'
+          AND c.current_work_order_id = r.work_order_id AND c.current_custodian_target_type = 'EMPLOYEE'
+          AND e.state = 'ACTIVE' AND m.recorded_at <= ? AND m.movement_type = 'CHECKOUT'
+        ORDER BY m.ledger_version DESC LIMIT 1
+    """.trimIndent(), { rs, _ -> rs.uuid("id") }, requirement, work, at.utc()).singleOrNull()
 
     fun employeeActive(org: UUID, employeeId: UUID): Boolean = jdbc.queryForObject(
         "SELECT EXISTS (SELECT 1 FROM employee WHERE id = ? AND organization_id = ? AND state = 'ACTIVE')",

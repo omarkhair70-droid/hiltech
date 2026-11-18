@@ -135,7 +135,11 @@ BEGIN
             OR EXISTS (SELECT 1 FROM asset_reservation r WHERE r.asset_id = NEW.asset_id AND r.state = 'ACTIVE'
                 AND (r.start_at IS NULL OR r.start_at < NEW.end_at) AND (r.end_at IS NULL OR r.end_at > NEW.start_at))
             OR EXISTS (SELECT 1 FROM asset_reservation r WHERE r.work_requirement_instance_id = demand.requirement_id
-                AND r.state = 'ACTIVE' AND r.end_at > NEW.recorded_at) THEN
+                AND r.state = 'ACTIVE' AND r.end_at > NEW.recorded_at)
+            OR EXISTS (SELECT 1 FROM asset_reservation r JOIN asset_custody_projection c ON c.asset_id = r.asset_id
+                JOIN asset_movement m ON m.id = c.source_movement_id AND m.fulfilled_reservation_id = r.id
+                WHERE r.work_requirement_instance_id = demand.requirement_id AND r.state = 'FULFILLED'
+                  AND c.current_work_order_id = NEW.work_order_id AND c.current_custodian_target_type = 'EMPLOYEE') THEN
             RAISE EXCEPTION 'Asset is unavailable or demand is already reserved' USING ERRCODE = '23514';
         END IF;
         SELECT l.* INTO location FROM asset_custody_projection c JOIN storage_location l ON l.id = c.current_storage_location_id
