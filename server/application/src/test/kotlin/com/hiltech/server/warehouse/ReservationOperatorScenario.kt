@@ -141,7 +141,7 @@ internal class ReservationOperatorScenario(
         assertFalse(svc.forWork(pm, winner.workOrderId).isEmpty())
     }
 
-    // Persistence-only proof. Operator API authorization/idempotency are a later checkpoint.
+    // Exercise database invariants AND the authorized, idempotent service path.
     private fun exerciseStockFulfilment(previous: ReservationView, instant: Instant) {
         val org = first.organizationId
         val timestamp = instant.atOffset(ZoneOffset.UTC)
@@ -174,7 +174,28 @@ internal class ReservationOperatorScenario(
             jdbc.update("""UPDATE stock_reservation SET state = 'FULFILLED', version = version + 1,
                 ended_at = ?, ended_by = ?, end_reason = 'No movement' WHERE id = ?""", timestamp, operator, hold)
         }
-        post("ISSUE", "8", reservation = hold)
+        val fulfillment = StockFulfillmentPersistence(jdbc)
+        val commandClock = Clock.fixed(instant, ZoneOffset.UTC)
+        val service = StockFulfillmentService(fulfillment, stock, records, warehouse, authority, work,
+            JdbcIdempotentCommandExecutor(jdbc, manager, commandClock, HiltechTelemetryRuntime(OpenTelemetry.noop()) {}),
+            JdbcAuditEventWriter(jdbc), { events.add(it as WorkResourceChanged) }, commandClock)
+        val demand = records.demands(order.workOrderId).single { it.requirementId == previous.requirementId }
+        val issue = IssueReservedStockRequest(UUID.randomUUID(), order.workOrderId, previous.requirementId, employee,
+            hold, location, order.version, demand.requirementVersion, 1,
+            records.balances(item, instant, location).single().version, "8", "SYNTH-RSV")
+        fun stockContext(id: UUID, actor: UUID = operator) = StockCommandContext(id, actor, "synthetic-fulfillment")
+        denied("STOCK_FULFILLMENT_UNAVAILABLE") { service.issue(stockContext(issue.operationId, pm), item, issue) }
+        denied("STOCK_FULFILLMENT_VERSION_CONFLICT") {
+            val stale = issue.copy(operationId = UUID.randomUUID(), balanceVersion = issue.balanceVersion + 1)
+            service.issue(stockContext(stale.operationId), item, stale)
+        }
+        val receipt = service.issue(stockContext(issue.operationId), item, issue)
+        assertFalse(receipt.replayed)
+        assertEquals(receipt.copy(replayed = true), service.issue(stockContext(issue.operationId), item, issue))
+        assertEquals("STOCK_FULFILLED", source.fact(order, demand, instant).reason)
+        assertTrue(source.fact(order, demand, instant).satisfied)
+        denied("STOCK_FULFILLMENT_UNAVAILABLE") { service.issued(pm, item, order.workOrderId) }
+        assertEquals("8.000000", service.issued(operator, item, order.workOrderId).single().outstandingQuantity)
         assertEquals("FULFILLED", records.reservation(ResourceKind.STOCK, hold, instant)?.state)
         assertEquals(0, BigDecimal("2").compareTo(balance("stock_balance", "on_hand_qty")))
         assertEquals(0, BigDecimal("8").compareTo(balance("stock_issued_balance", "outstanding_qty")))
@@ -185,9 +206,16 @@ internal class ReservationOperatorScenario(
             records.reserve(ResourceKind.STOCK, UUID.randomUUID(), item, order, previous.requirementId, operator,
                 instant, instant.plusSeconds(600), location, BigDecimal.ONE, "SYNTH-RSV")
         }
-        post("CONSUME", "6")
+        val consume = AdjustIssuedStockRequest(UUID.randomUUID(), order.workOrderId, previous.requirementId,
+            employee, order.version, service.issued(operator, item, order.workOrderId).single().version, "6", "SYNTH-RSV")
+        denied("STOCK_FULFILLMENT_UNAVAILABLE") { service.consume(stockContext(consume.operationId, pm), item, consume) }
+        val consumed = service.consume(stockContext(consume.operationId), item, consume)
+        assertEquals(consumed.copy(replayed = true), service.consume(stockContext(consume.operationId), item, consume))
         assertEquals(0, BigDecimal("2").compareTo(balance("stock_balance", "on_hand_qty")))
-        post("RETURN", "2")
+        val returned = consume.copy(operationId = UUID.randomUUID(), quantity = "2", storageLocationId = location,
+            issuedVersion = service.issued(operator, item, order.workOrderId).single().version)
+        service.returnUnused(stockContext(returned.operationId), item, returned)
+        assertFalse(source.fact(order, demand, instant).satisfied)
         assertEquals(0, BigDecimal("4").compareTo(balance("stock_balance", "on_hand_qty")))
         assertEquals(0, BigDecimal.ZERO.compareTo(balance("stock_issued_balance", "outstanding_qty")))
         assertEquals(balance("stock_issued_balance", "outstanding_qty"), balance("stock_issued_ledger", "outstanding_qty"))
