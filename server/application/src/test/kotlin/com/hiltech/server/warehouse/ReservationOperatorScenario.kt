@@ -135,10 +135,64 @@ internal class ReservationOperatorScenario(
         assertEquals("0.000000", jdbc.queryForObject(
             "SELECT reserved_qty FROM stock_balance WHERE stock_item_id = ?", java.math.BigDecimal::class.java, item)?.toPlainString())
         exerciseStockFulfilment(winner, expires.plusSeconds(1))
+        exerciseAssetFulfilment(second, secondAsset, expires.plusSeconds(2))
         assertTrue(warehouse.endWarehouseAuthorityBinding(binding, facility, 1, now))
         val revoked = assetRequest(first, firstAsset)
         denied("RESOURCE_UNAVAILABLE") { svc.reserveAsset(context(revoked.operationId), asset, revoked) }
         assertFalse(svc.forWork(pm, winner.workOrderId).isEmpty())
+    }
+
+    private fun exerciseAssetFulfilment(order: WorkOrderSnapshot, demand: WorkResourceDemand, instant: Instant) {
+        val org = order.organizationId
+        val current = requireNotNull(work.workOrder(order.workOrderId))
+        val timestamp = instant.atOffset(ZoneOffset.UTC)
+        val person = UUID.randomUUID()
+        val employee = UUID.randomUUID()
+        jdbc.update("INSERT INTO person (id, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            person, "Synthetic physical asset custodian", timestamp, timestamp)
+        jdbc.update("""INSERT INTO employee (id, organization_id, person_id, employee_code, state, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?)""", employee, org, person, "SYNTH-ASSET-$employee", timestamp, timestamp)
+        jdbc.update("UPDATE asset_type_definition SET inspection_required_on_return = true WHERE config_revision_id = ?", type)
+        val hold = UUID.randomUUID()
+        records.reserve(ResourceKind.ASSET, hold, asset, current, demand.requirementId, operator,
+            instant, instant.plusSeconds(600))
+        val initial = requireNotNull(assets.custody(asset))
+        val checkout = UUID.randomUUID()
+        fun checkoutTo(recipient: UUID, id: UUID = checkout) {
+            jdbc.update("""INSERT INTO asset_movement (id, asset_id, organization_id, movement_type,
+                from_storage_location_id, to_custodian_target_type, to_custodian_target_id,
+                project_id, site_id, work_order_id, occurred_at, recorded_at, recorded_by, source_operation_id,
+                condition_at_transfer, expected_return_at, correlation_id, fulfilled_reservation_id, prior_custody_movement_id)
+                VALUES (?, ?, ?, 'CHECKOUT', ?, 'EMPLOYEE', ?, ?, ?, ?, ?, ?, ?, ?, 'GOOD', ?, 'synthetic-asset', ?, ?)""",
+                id, asset, org, location, recipient, order.projectId, order.siteId, order.workOrderId,
+                timestamp, timestamp, operator, UUID.randomUUID(), timestamp.plusHours(1), hold, initial.sourceMovementId)
+        }
+        assertThrows<DataIntegrityViolationException> { checkoutTo(UUID.randomUUID()) }
+        checkoutTo(employee)
+        assertEquals("FULFILLED", records.reservation(ResourceKind.ASSET, hold, instant)?.state)
+        assertEquals(employee, assets.custody(asset)?.employeeId)
+        assertEquals(timestamp.plusHours(1), jdbc.queryForObject(
+            "SELECT expected_return_at FROM asset_custody_projection WHERE asset_id = ?", java.time.OffsetDateTime::class.java, asset))
+        assertThrows<DataIntegrityViolationException> { checkoutTo(employee, UUID.randomUUID()) }
+        val returned = UUID.randomUUID()
+        jdbc.update("""INSERT INTO asset_movement (id, asset_id, organization_id, movement_type,
+            from_custodian_target_type, from_custodian_target_id, to_storage_location_id,
+            occurred_at, recorded_at, recorded_by, source_operation_id, condition_at_transfer, correlation_id,
+            prior_custody_movement_id)
+            VALUES (?, ?, ?, 'RETURN', 'EMPLOYEE', ?, ?, ?, ?, ?, ?, 'GOOD', 'synthetic-asset', ?)""",
+            returned, asset, org, employee, location, timestamp.plusSeconds(1), timestamp.plusSeconds(1),
+            operator, UUID.randomUUID(), checkout)
+        assertEquals(location, assets.custody(asset)?.storageLocationId)
+        assertEquals(null, assets.custody(asset)?.employeeId)
+        val serviceRecords = AssetServicePersistence(jdbc)
+        assertEquals("BLOCKED_INSPECTION", serviceRecords.availability(asset, instant.plusSeconds(1))?.state)
+        val inspection = UUID.randomUUID()
+        jdbc.update("""INSERT INTO asset_return_inspection (id, asset_id, return_movement_id, inspected_by, inspected_at, condition_observed)
+            VALUES (?, ?, ?, ?, ?, 'GOOD')""", inspection, asset, returned, operator, timestamp.plusSeconds(2))
+        assertEquals("AVAILABLE", serviceRecords.availability(asset, instant.plusSeconds(2))?.state)
+        assertThrows<DataIntegrityViolationException> {
+            jdbc.update("DELETE FROM asset_return_inspection WHERE id = ?", inspection)
+        }
     }
 
     // Exercise database invariants AND the authorized, idempotent service path.
