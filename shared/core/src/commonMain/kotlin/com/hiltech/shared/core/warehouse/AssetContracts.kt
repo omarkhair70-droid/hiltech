@@ -25,6 +25,7 @@ data class AssetCustodyDto(
     val storageLocationId: String? = null, val locationCode: String? = null,
     val employeeId: String? = null, val employeeCode: String? = null, val projectId: String? = null,
     val siteId: String? = null, val workOrderId: String? = null, val sourceMovementId: String, val since: String? = null,
+    val expectedReturnAt: String? = null,
 )
 
 @Serializable

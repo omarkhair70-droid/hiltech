@@ -6,8 +6,19 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
 
+data class FulfillmentEmployeeChoice(val id: UUID, val code: String, val name: String)
+
 @Repository
 class AssetFulfillmentPersistence(private val jdbc: JdbcTemplate) {
+    fun recipients(organization: UUID, search: String): List<FulfillmentEmployeeChoice> = jdbc.query("""
+        SELECT e.id, e.employee_code, p.display_name
+        FROM employee e JOIN person p ON p.id = e.person_id
+        WHERE e.organization_id = ? AND e.state = 'ACTIVE'
+          AND (strpos(lower(e.employee_code), lower(?)) > 0 OR strpos(lower(p.display_name), lower(?)) > 0)
+        ORDER BY e.employee_code, e.id LIMIT 100
+    """.trimIndent(), { rs, _ -> FulfillmentEmployeeChoice(rs.getObject("id", UUID::class.java),
+        rs.getString("employee_code"), rs.getString("display_name")) }, organization, search, search)
+
     fun id(operation: UUID): UUID = UUID.nameUUIDFromBytes("hiltech:asset-physical:$operation".toByteArray(Charsets.UTF_8))
 
     internal fun post(asset: AssetIdentityView, context: AssetCommandContext, prior: AssetCustodyView,

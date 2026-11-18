@@ -49,6 +49,14 @@ class AssetFulfillmentService(
     private val events: ApplicationEventPublisher,
     private val clock: Clock,
 ) {
+    fun recipients(actor: UUID, warehouseId: UUID, search: String): List<FulfillmentEmployeeChoice> {
+        val facility = warehouse.warehouse(warehouseId)?.takeIf { it.active && authorization.canReserveResources(actor, it) }
+            ?: physicalHidden()
+        val query = search.trim()
+        if (query.length > 160) invalidPhysical()
+        return physical.recipients(facility.organizationId, query)
+    }
+
     fun checkout(context: AssetCommandContext, id: UUID, request: CheckoutReservedAssetRequest): PhysicalAssetReceipt {
         requireOperator(context.actor, getAsset(id))
         val due = request.expectedReturnAt?.let { runCatching { Instant.parse(it) }.getOrElse { invalidPhysical() } }

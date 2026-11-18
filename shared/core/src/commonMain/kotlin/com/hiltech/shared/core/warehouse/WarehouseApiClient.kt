@@ -21,6 +21,10 @@ class WarehouseApiClient(
         explicitNulls = false
     },
 ) {
+    suspend fun fulfillmentRecipients(warehouse: String, search: String, installationId: String): List<FulfillmentEmployeeChoiceDto> =
+        get("/v1/warehouses/" + uuid(warehouse) + "/fulfillment-recipients?search=" + search.encodeURLQueryComponent(),
+            installationId, ListSerializer(FulfillmentEmployeeChoiceDto.serializer()))
+
     suspend fun issueReservedStock(id: String, request: IssueReservedStockDto, installationId: String): StockFulfillmentReceiptDto =
         post("/v1/stock-items/" + uuid(id) + "/issue", request.operationId,
             json.encodeToString(IssueReservedStockDto.serializer(), request), installationId, StockFulfillmentReceiptDto.serializer())

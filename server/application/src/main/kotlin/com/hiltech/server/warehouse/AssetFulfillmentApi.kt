@@ -1,6 +1,8 @@
 package com.hiltech.server.warehouse
 
 import jakarta.servlet.http.HttpServletRequest
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -9,6 +11,11 @@ import java.util.UUID
 
 @RestController
 class AssetFulfillmentController(private val service: AssetFulfillmentService) {
+    @GetMapping("/v1/warehouses/{id}/fulfillment-recipients")
+    fun recipients(request: HttpServletRequest, @PathVariable id: UUID,
+        @RequestParam(defaultValue = "") search: String) =
+        service.recipients(request.assetActor(), id, search)
+
     @PostMapping("/v1/assets/{id}/checkout")
     fun checkout(request: HttpServletRequest, @PathVariable id: UUID, @RequestBody body: CheckoutReservedAssetRequest) =
         service.checkout(request.assetContext(body.operationId), id, body)

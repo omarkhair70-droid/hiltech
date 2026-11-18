@@ -24,6 +24,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 interface ReservationUiPort {
+    val fulfillment: ReservedFulfillmentUiPort? get() = null
     suspend fun catalog(work: String): WorkResourceCatalogDto
     suspend fun candidates(work: String): WorkResourceCandidatesDto
     suspend fun reservations(work: String): List<ReservationDto>
@@ -100,6 +101,14 @@ fun WarehouseReservations(warehouse: String, port: ReservationUiPort) {
                 refresh()
             }
         })
+        if (data.canReserve) port.fulfillment?.let { fulfillment ->
+            ReservedFulfillmentSection(warehouse, data, fulfillment, task.busy, { action ->
+                task.launch {
+                    action()
+                    refresh()
+                }
+            })
+        }
     }
 }
 

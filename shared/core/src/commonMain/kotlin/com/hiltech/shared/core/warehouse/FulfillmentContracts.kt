@@ -52,3 +52,6 @@ data class InspectPhysicalReturnDto(
 )
 @Serializable
 data class PhysicalAssetReceiptDto(val recordId: String, val assetId: String, val kind: String, val replayed: Boolean)
+
+@Serializable
+data class FulfillmentEmployeeChoiceDto(val id: String, val code: String, val name: String)

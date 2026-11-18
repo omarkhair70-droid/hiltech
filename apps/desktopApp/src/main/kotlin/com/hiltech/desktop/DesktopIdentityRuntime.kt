@@ -4,6 +4,9 @@ import com.hiltech.shared.core.StockAction
 import com.hiltech.shared.core.StockInventoryState
 import com.hiltech.shared.core.AssetAction
 import com.hiltech.shared.core.ReservationUiPort
+import com.hiltech.shared.core.ReservedFulfillmentUiPort
+import com.hiltech.shared.core.warehouse.CheckoutReservedAssetDto
+import com.hiltech.shared.core.warehouse.IssueReservedStockDto
 import com.hiltech.shared.core.warehouse.WorkResourceCandidatesDto
 import com.hiltech.shared.core.warehouse.WorkResourceDemandDto
 import com.hiltech.shared.core.warehouse.ResourceCandidateDto
@@ -691,6 +694,36 @@ class DesktopIdentityRuntime(
     }
 
     val reservationPort: ReservationUiPort = object : ReservationUiPort {
+        override val fulfillment: ReservedFulfillmentUiPort = object : ReservedFulfillmentUiPort {
+            override suspend fun recipients(warehouse: String, search: String) =
+                warehouseApi.fulfillmentRecipients(warehouse, search, installationId)
+
+            override suspend fun fulfill(reservation: ReservationDto, work: com.hiltech.shared.core.warehouse.WarehouseWorkRequestDto,
+                requirement: com.hiltech.shared.core.warehouse.RequirementCandidatesDto, employee: String, expectedReturn: String?): String {
+                val operation = reservationOperation("physical-fulfill", reservation.id, reservation.version,
+                    work.workVersion, requirement.demand.requirementVersion, employee, expectedReturn)
+                if (reservation.kind == "ASSET") {
+                    val passport = warehouseApi.assetPassport(reservation.resourceId, installationId)
+                    val custody = requireNotNull(passport.custody) { "Asset custody is not established." }
+                    val receipt = warehouseApi.checkoutReservedAsset(reservation.resourceId,
+                        CheckoutReservedAssetDto(operation, passport.identity.version, custody.sourceMovementId,
+                            work.workOrderId, work.workVersion, reservation.id, reservation.version, employee, expectedReturn),
+                        installationId)
+                    return receipt.recordId
+                }
+                require(reservation.kind == "STOCK")
+                val location = requireNotNull(reservation.storageLocationId)
+                val balance = warehouseApi.stockBalances(reservation.resourceId, installationId)
+                    .singleOrNull { it.storageLocationId == location } ?: error("Stock capacity is unavailable.")
+                val receipt = warehouseApi.issueReservedStock(reservation.resourceId,
+                    IssueReservedStockDto(operation, work.workOrderId, reservation.requirementId, employee,
+                        reservation.id, location, work.workVersion, requirement.demand.requirementVersion,
+                        reservation.version, balance.version, requireNotNull(reservation.quantity), requireNotNull(reservation.unitCode)),
+                    installationId)
+                return receipt.movementId
+            }
+        }
+
         override suspend fun catalog(work: String) = warehouseApi.workResourceCatalog(work, installationId)
         override suspend fun candidates(work: String) = warehouseApi.workResourceCandidates(work, installationId)
         override suspend fun reservations(work: String) = warehouseApi.workReservations(work, installationId)
