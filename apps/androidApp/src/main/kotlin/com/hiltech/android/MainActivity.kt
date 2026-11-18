@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hiltech.android.identity.AndroidIdentityRuntime
@@ -14,6 +15,7 @@ import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
+import com.hiltech.shared.core.WarehousePhysicalOperatorSection
 import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
@@ -73,6 +75,26 @@ class MainActivity : ComponentActivity() {
                     ::refreshFieldWork,
                 onSelectFieldWork =
                     ::selectFieldWork,
+                warehouseOperator = {
+                    val signed = shellState as? HiltechShellState.SignedIn
+                    val identity = signed?.identity
+                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                        ?: identity?.organizations?.firstOrNull()
+                    if (identity != null && organization != null) {
+                        key(identity.identityId, organization.organizationId) {
+                            WarehousePhysicalOperatorSection(
+                                api = hiltechApplication.warehouseApi,
+                                organizationId = organization.organizationId,
+                                installationId = hiltechApplication.installationId,
+                                operationId = { fields ->
+                                    val payload = (listOf(identity.identityId, hiltechApplication.installationId) + fields)
+                                        .joinToString("") { value -> value?.toString()?.let { "${it.length}:$it" } ?: "-1:" }
+                                    java.util.UUID.nameUUIDFromBytes(payload.toByteArray(Charsets.UTF_8)).toString()
+                                },
+                            )
+                        }
+                    }
+                },
             )
         }
 

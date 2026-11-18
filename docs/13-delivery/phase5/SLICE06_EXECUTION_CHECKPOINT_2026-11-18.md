@@ -16,3 +16,7 @@ Implemented core V0031 reserved checkout, employee custody, due return, same-hom
 
 ## Checkpoint 04 — Desktop physical operations
 Adds outstanding issued-stock discovery scoped to the selected Warehouse and every contributing origin, by current employee code/name, including non-active Work for return. Returns explicit Work/issued versions and canonical unit. Desktop uses existing stable pending-command identity for consume/return and Asset return/storage transfer/inspection. Basic inspection remains blocked for accessory-controlled types; damage links use existing incident records. Exact-head CI pending. No Android mutation surfaces claimed.
+
+## Checkpoint 05 — Android online physical operator (WIP)
+
+Reuses shared Compose physical handoff, Asset return/storage transfer/basic inspection and issued Stock return/consumption controls inside the signed-in Android shell. Uses authorized warehouse discovery, current API context, explicit employee selection, online server receipts, and actor/installation/payload-scoped stable operation IDs. No technician offline execution, administrative setup, accessory-controlled release, or broadened custody policy. Previous d2ab1ce workflow runs all succeeded (13/13); Android operator build and interactive evidence are not yet verified for this new checkpoint. Dedicated Android mutation journey tests, access/session regression, scoped movement history and remaining frozen contract gates still required. Draft only.
