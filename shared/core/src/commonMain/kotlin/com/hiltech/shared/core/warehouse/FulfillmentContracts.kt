@@ -55,3 +55,11 @@ data class PhysicalAssetReceiptDto(val recordId: String, val assetId: String, va
 
 @Serializable
 data class FulfillmentEmployeeChoiceDto(val id: String, val code: String, val name: String)
+
+@Serializable
+data class IssuedStockDirectoryEntryDto(
+    val context: IssuedStockContextDto, val employeeCode: String, val employeeName: String,
+    val workCode: String, val workTitle: String, val workVersion: Long, val unitCode: String,
+)
+@Serializable
+data class IssuedStockDirectoryDto(val items: List<IssuedStockDirectoryEntryDto>, val limited: Boolean)

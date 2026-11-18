@@ -18,6 +18,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.warehouse.StockBalanceDto
+import com.hiltech.shared.core.warehouse.IssuedStockDirectoryDto
+import com.hiltech.shared.core.warehouse.IssuedStockDirectoryEntryDto
 import com.hiltech.shared.core.warehouse.StockCatalogDto
 import com.hiltech.shared.core.warehouse.StockItemDto
 import com.hiltech.shared.core.warehouse.StockMovementDto
@@ -33,6 +35,9 @@ data class StockInventoryState(
     val movements: List<StockMovementDto> = emptyList(),
     val loading: Boolean = false,
     val message: String? = null,
+    val issued: IssuedStockDirectoryDto? = null,
+    val issuedSearch: String = "",
+    val issuedWarehouseId: String? = null,
 )
 
 sealed interface StockAction {
@@ -47,6 +52,8 @@ sealed interface StockAction {
     data class Approve(val batchId: String, val rowId: String, val version: Long, val code: String, val name: String) : StockAction
     data class Opening(val item: StockItemDto, val location: String, val quantity: String, val cutoverAt: String) : StockAction
     data class Transfer(val item: StockItemDto, val from: String, val to: String, val quantity: String) : StockAction
+    data class LoadIssued(val item: String, val search: String) : StockAction
+    data class AdjustIssued(val entry: IssuedStockDirectoryEntryDto, val quantity: String, val returnLocation: String?) : StockAction
 }
 
 @Composable
@@ -71,7 +78,10 @@ fun StockInventorySection(state: StockInventoryState, selectedWarehouseId: Strin
         state.nextAfterCode?.let { cursor ->
             OutlinedButton({ dispatch(StockAction.More(cursor)) }, enabled = !state.loading) { Text("Load more items") }
         }
-        state.selected?.let { StockItemDetail(it, state, dispatch) }
+        state.selected?.let {
+            StockItemDetail(it, state, dispatch)
+            selectedWarehouseId?.let { warehouse -> IssuedStockOperations(it, warehouse, state, dispatch) }
+        }
     }
 }
 

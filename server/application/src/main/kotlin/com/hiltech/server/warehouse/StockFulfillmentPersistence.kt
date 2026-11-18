@@ -14,6 +14,12 @@ data class IssuedStockContext(
     val stockItemId: UUID, val employeeId: UUID, val projectId: UUID, val siteId: UUID,
     val workOrderId: UUID, val requirementId: UUID, val outstandingQuantity: String, val version: Long,
 )
+data class IssuedStockDirectoryEntry(
+    val context: IssuedStockContext, val employeeCode: String, val employeeName: String,
+    val workCode: String, val workTitle: String, val workVersion: Long, val unitCode: String,
+)
+data class IssuedStockDirectory(val items: List<IssuedStockDirectoryEntry>, val limited: Boolean)
+
 data class StockFulfillmentReceipt(
     val movementId: UUID, val operationId: UUID, val type: String, val itemId: UUID,
     val employeeId: UUID, val workOrderId: UUID, val requirementId: UUID, val quantity: String,
@@ -32,6 +38,27 @@ class StockFulfillmentPersistence(private val jdbc: JdbcTemplate) {
             r.getObject("work_order_id", UUID::class.java), r.getObject("requirement_id", UUID::class.java),
             r.getBigDecimal("outstanding_qty").toPlainString(), r.getLong("version"))
     }, item, work)
+
+    // Search only Stock contexts with an authoritative recorded ISSUE from this Warehouse.
+    // Authorization for ALL origins is checked separately before constructing a response.
+    fun directory(item: UUID, org: UUID, warehouse: UUID, search: String): List<Triple<IssuedStockContext, String, String>> = jdbc.query("""
+        SELECT b.*, e.employee_code, p.display_name
+        FROM stock_issued_balance b
+        JOIN employee e ON e.id = b.employee_id AND e.organization_id = b.organization_id
+        JOIN person p ON p.id = e.person_id
+        WHERE b.stock_item_id = ? AND b.organization_id = ? AND b.outstanding_qty > 0
+          AND (strpos(lower(e.employee_code), lower(?)) > 0 OR strpos(lower(p.display_name), lower(?)) > 0)
+          AND EXISTS (SELECT 1 FROM stock_movement m JOIN storage_location l ON l.id = m.from_storage_location_id
+            WHERE m.stock_item_id = b.stock_item_id AND m.work_requirement_instance_id = b.requirement_id
+              AND m.recipient_target_id = b.employee_id AND m.movement_type = 'ISSUE' AND l.warehouse_id = ?)
+        ORDER BY e.employee_code, b.work_order_id, b.requirement_id, b.employee_id LIMIT 101
+    """.trimIndent(), { r, _ ->
+        Triple(IssuedStockContext(r.getObject("stock_item_id", UUID::class.java), r.getObject("employee_id", UUID::class.java),
+            r.getObject("project_id", UUID::class.java), r.getObject("site_id", UUID::class.java),
+            r.getObject("work_order_id", UUID::class.java), r.getObject("requirement_id", UUID::class.java),
+            r.getBigDecimal("outstanding_qty").toPlainString(), r.getLong("version")),
+            r.getString("employee_code"), r.getString("display_name"))
+    }, item, org, search, search, warehouse)
 
     // There is not yet an issued custody reassignment policy. Restrict a context
     // to actors authorized for ALL contributing source locations; fail closed.

@@ -36,6 +36,11 @@ class StockFulfillmentController(private val service: StockFulfillmentService) {
     fun consume(request: HttpServletRequest, @PathVariable id: UUID, @RequestBody body: AdjustIssuedStockRequest) =
         service.consume(request.stockContext(body.operationId), id, body)
 
+    @GetMapping("/v1/stock-items/{id}/issued-directory")
+    fun directory(request: HttpServletRequest, @PathVariable id: UUID, @RequestParam warehouseId: UUID,
+        @RequestParam(defaultValue = "") search: String) =
+        service.directory(request.stockActor(), id, warehouseId, search)
+
     @GetMapping("/v1/stock-items/{id}/issued-context")
     fun issued(request: HttpServletRequest, @PathVariable id: UUID, @RequestParam workOrderId: UUID) =
         service.issued(request.stockActor(), id, workOrderId)

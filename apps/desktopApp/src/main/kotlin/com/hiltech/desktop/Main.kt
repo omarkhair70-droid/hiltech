@@ -1174,7 +1174,7 @@ fun main() {
         val organization = signed.identity.organizations.firstOrNull { it.primary }
             ?: signed.identity.organizations.firstOrNull() ?: return
         val actor = signed.identity.identityId
-        val isMutation = action !is StockAction.Refresh && action !is StockAction.Select && action !is StockAction.More
+        val isMutation = action !is StockAction.Refresh && action !is StockAction.Select && action !is StockAction.More && action !is StockAction.LoadIssued
         val operation = pendingStockCommand?.takeIf {
             it.actor == actor && it.action == action && it.warehouseId == setup.selectedWarehouseId
         } ?: PendingStockCommand(actor, setup.selectedWarehouseId, action, java.util.UUID.randomUUID().toString())
@@ -1190,7 +1190,7 @@ fun main() {
             }
             val current = shellState.value as? HiltechShellState.SignedIn ?: return@launch
             val currentSetup = current.warehouse ?: return@launch
-            if (current.identity.identityId != actor) return@launch
+            if (current.identity.identityId != actor || currentSetup.selectedWarehouseId != setup.selectedWarehouseId) return@launch
             val updated = result.fold(
                 onSuccess = { (refreshed, batch) ->
                     if (pendingStockCommand == operation) pendingStockCommand = null

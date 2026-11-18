@@ -158,6 +158,11 @@ class AssetPassportPersistence(private val jdbc: JdbcTemplate) {
         ORDER BY m.ledger_version DESC LIMIT 1
     """.trimIndent(), { rs, _ -> rs.uuid("id") }, requirement, work, at.utc()).singleOrNull()
 
+    fun hasReturnInspection(movement: UUID): Boolean = jdbc.queryForObject(
+        "SELECT EXISTS (SELECT 1 FROM asset_return_inspection WHERE return_movement_id = ?)",
+        Boolean::class.java, movement,
+    ) == true
+
     fun employeeActive(org: UUID, employeeId: UUID): Boolean = jdbc.queryForObject(
         "SELECT EXISTS (SELECT 1 FROM employee WHERE id = ? AND organization_id = ? AND state = 'ACTIVE')",
         Boolean::class.java, employeeId, org,

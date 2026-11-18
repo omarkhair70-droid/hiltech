@@ -12,3 +12,7 @@ Adds scoped IssueReservedStock / ReturnUnused / Consume and issued-context API, 
 
 ## Checkpoint 03 — Asset physical custody (CI pending)
 Implemented core V0031 reserved checkout, employee custody, due return, same-home warehouse storage transfer and basic immutable inspection tied to the actual return. Adds server commands with current Warehouse permissions, versions, idempotency, audit, existing custody authorization projection, and Work readiness facts. Cross-warehouse/employee reassignment, typed accessory inspection and complete operator UI remain open. Basic inspection fails closed for accessory-required types and requires an existing open damage incident for observed damage. No new policy inferred. Synthetic database scenarios are not yet verified on this head.
+
+
+## Checkpoint 04 — Desktop physical operations
+Adds outstanding issued-stock discovery scoped to the selected Warehouse and every contributing origin, by current employee code/name, including non-active Work for return. Returns explicit Work/issued versions and canonical unit. Desktop uses existing stable pending-command identity for consume/return and Asset return/storage transfer/inspection. Basic inspection remains blocked for accessory-controlled types; damage links use existing incident records. Exact-head CI pending. No Android mutation surfaces claimed.

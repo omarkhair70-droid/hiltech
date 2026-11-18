@@ -37,6 +37,10 @@ class WarehouseApiClient(
         post("/v1/stock-items/" + uuid(id) + "/consume", request.operationId,
             json.encodeToString(AdjustIssuedStockDto.serializer(), request), installationId, StockFulfillmentReceiptDto.serializer())
 
+    suspend fun issuedStockDirectory(id: String, warehouse: String, search: String, installationId: String): IssuedStockDirectoryDto =
+        get("/v1/stock-items/" + uuid(id) + "/issued-directory?warehouseId=" + uuid(warehouse) +
+            "&search=" + search.encodeURLQueryComponent(), installationId, IssuedStockDirectoryDto.serializer())
+
     suspend fun issuedStock(id: String, work: String, installationId: String): List<IssuedStockContextDto> =
         get("/v1/stock-items/" + uuid(id) + "/issued-context?workOrderId=" + uuid(work), installationId,
             ListSerializer(IssuedStockContextDto.serializer()))

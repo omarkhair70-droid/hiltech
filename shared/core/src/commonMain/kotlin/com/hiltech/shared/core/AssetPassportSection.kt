@@ -77,6 +77,10 @@ sealed interface AssetAction {
         val id: String, val version: Long, val condition: AssetCondition, val location: String?,
         val employee: String?, val work: String?, val sourceMovement: String, val reason: String,
     ) : Command
+    data class ReturnPhysical(val id: String, val version: Long, val movement: String, val location: String, val condition: AssetCondition) : Command
+    data class TransferPhysical(val id: String, val version: Long, val movement: String, val location: String) : Command
+    data class InspectPhysical(val id: String, val version: Long, val movement: String, val condition: AssetCondition,
+        val notes: String?, val damageIncident: String?) : Command
     data class Approve(
         val batchId: String, val rowId: String, val version: Long, val code: String,
         val name: String, val ownership: String, val condition: AssetCondition,
@@ -171,6 +175,7 @@ private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventor
     custody?.let {
         Text(it.locationCode ?: it.employeeCode?.let { code -> "Employee $code" } ?: "Custody target unavailable")
         it.since?.let { since -> Text("Since $since") }
+        it.expectedReturnAt?.let { due -> Text("Expected return · $due") }
         it.projectId?.let { id -> Text("Project · $id") }
         it.siteId?.let { id -> Text("Site · $id") }
         it.workOrderId?.let { id -> Text("Work order · $id") }
@@ -178,6 +183,7 @@ private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventor
     AssetTags(passport, state.loading, dispatch)
     if (passport.canInitialize || passport.canCorrect) AssetCustodyForm(passport, state, dispatch)
     state.serviceDetail?.let { AssetServiceDetail(asset.id, it, state.loading, dispatch) }
+    if (passport.canOperatePhysical && custody != null) PhysicalAssetOperations(passport, state, dispatch)
     Text("Movement history", style = MaterialTheme.typography.titleSmall)
     val locationCodes = state.locations.associate { it.storageLocationId to it.code }
     if (state.movements.isEmpty()) Text("No movements recorded")

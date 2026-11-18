@@ -42,6 +42,23 @@ class StockFulfillmentService(
         }
     }
 
+    fun directory(actor: UUID, item: UUID, warehouseId: UUID, search: String): IssuedStockDirectory {
+        val master = stock.item(item) ?: unavailable()
+        val facility = warehouse.warehouse(warehouseId)?.takeIf {
+            it.organizationId == master.organizationId && authorization.canReserveResources(actor, it)
+        } ?: unavailable()
+        val query = search.trim()
+        if (query.length > 160) invalid()
+        val rows = fulfillment.directory(item, master.organizationId, facility.warehouseId, query)
+        val visible = rows.take(100).mapNotNull { (context, code, name) ->
+            if (!canAccessOrigins(actor, master.organizationId, item, context.requirementId, context.employeeId)) return@mapNotNull null
+            val order = work.workOrder(context.workOrderId)?.takeIf { it.organizationId == master.organizationId }
+                ?: return@mapNotNull null
+            IssuedStockDirectoryEntry(context, code, name, order.workOrderCode, order.title, order.version, master.baseUnitCode)
+        }
+        return IssuedStockDirectory(visible, rows.size > 100)
+    }
+
     fun issue(context: StockCommandContext, itemId: UUID, body: IssueReservedStockRequest): StockFulfillmentReceipt {
         val org = stock.item(itemId)?.organizationId ?: unavailable()
         requireLocation(context.actor, org, body.storageLocationId)

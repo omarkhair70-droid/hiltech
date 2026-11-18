@@ -30,6 +30,7 @@ data class AssetCatalogView(val types: List<AssetTypeView>, val canRegister: Boo
 data class AssetPassportView(
     val identity: AssetIdentityView, val custody: AssetCustodyView?, val tags: List<AssetTagView>,
     val permittedTagTypes: List<String>, val canInitialize: Boolean, val canCorrect: Boolean,
+    val canOperatePhysical: Boolean = false, val currentReturnInspected: Boolean = false,
 )
 data class AssetTagLookupView(
     val assetCode: String, val name: String?, val typeName: String, val manufacturer: String?, val model: String?,
@@ -222,7 +223,9 @@ class AssetPassportService(
         }.orEmpty()
         return AssetPassportView(asset, custody, assets.tags(id), allowedTags,
             active && custody == null && authorization.canManageMaster(actor, facility),
-            active && custody != null && authorization.canManageWarehouse(actor, facility))
+            active && custody != null && authorization.canManageWarehouse(actor, facility),
+            active && custody != null && facility.active && authorization.canReserveResources(actor, facility),
+            custody?.sourceMovementId?.let(assets::hasReturnInspection) == true)
     }
     private fun asset(id: UUID) = assets.asset(id) ?: throw unavailable()
     internal fun facility(asset: AssetIdentityView): WarehouseSnapshot = asset.warehouseId?.let(warehouse::warehouse)
