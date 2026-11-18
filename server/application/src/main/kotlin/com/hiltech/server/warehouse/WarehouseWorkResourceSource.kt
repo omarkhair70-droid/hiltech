@@ -16,6 +16,7 @@ class WarehouseWorkResourceSource(
     private val stock: StockLedgerPersistence,
     private val warehouse: WarehousePersistencePort,
     private val assets: AssetPassportPersistence,
+    private val fulfillment: StockFulfillmentPersistence,
 ) : WorkResourceSource {
     override fun evaluate(order: WorkOrderSnapshot, requirement: ReadinessRequirementExecutionSnapshot, at: Instant): WorkResourceFact? =
         reservations.demands(order.workOrderId).firstOrNull { it.requirementId == requirement.requirementId }
@@ -96,8 +97,12 @@ class WarehouseWorkResourceSource(
             return WorkResourceFact(false, "STOCK_INACTIVE", item, master?.version ?: demand.version, at)
         }
         val eligible = held.filter { it.storageLocationId?.let { id -> eligible(order, id, at) } == true }
-        val count = eligible.sumOf { requireNotNull(it.quantity).toBigDecimal() }
+        val physical = fulfillment.fact(demand.requirementId, at)
+        val count = eligible.sumOf { requireNotNull(it.quantity).toBigDecimal() } + (physical?.quantity ?: BigDecimal.ZERO)
         if (count >= required) {
+            if (physical != null && physical.quantity.signum() > 0) {
+                return WorkResourceFact(true, "STOCK_FULFILLED", physical.movementId, physical.version, at)
+            }
             val source = eligible.first()
             return WorkResourceFact(true, "STOCK_RESERVED", source.id, source.version, at)
         }

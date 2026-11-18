@@ -49,7 +49,7 @@ internal class ReservationOperatorScenario(
     private val asset = UUID.randomUUID()
     private val type = UUID.randomUUID()
     private val item = UUID.randomUUID()
-    private val source = WarehouseWorkResourceSource(records, AssetServicePersistence(jdbc), stock, warehouse, assets)
+    private val source = WarehouseWorkResourceSource(records, AssetServicePersistence(jdbc), stock, warehouse, assets, StockFulfillmentPersistence(jdbc))
 
     fun exercise(project: () -> Unit) {
         val binding = WarehouseManagerProvisioner(jdbc, org.springframework.transaction.support.TransactionTemplate(manager),

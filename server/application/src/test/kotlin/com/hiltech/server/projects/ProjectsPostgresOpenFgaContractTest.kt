@@ -2281,7 +2281,8 @@ class ProjectsPostgresOpenFgaContractTest {
 
             val reservationWarehouse = JdbcWarehousePersistence(jdbc)
             val reservationSource = WarehouseWorkResourceSource(ReservationPersistence(jdbc), AssetServicePersistence(jdbc),
-                StockLedgerPersistence(jdbc), reservationWarehouse, AssetPassportPersistence(jdbc))
+                StockLedgerPersistence(jdbc), reservationWarehouse, AssetPassportPersistence(jdbc),
+                com.hiltech.server.warehouse.StockFulfillmentPersistence(jdbc))
             val reservationReadiness = ReadinessAssignmentService(
                 JdbcProjectsPersistence(jdbc), JdbcWorkPersistence(jdbc), readinessPersistence,
                 WorkEligibilityResolver(JdbcPeoplePersistence(jdbc), JdbcWorkforceAssignmentPersistence(jdbc),
