@@ -63,3 +63,13 @@ data class IssuedStockDirectoryEntryDto(
 )
 @Serializable
 data class IssuedStockDirectoryDto(val items: List<IssuedStockDirectoryEntryDto>, val limited: Boolean)
+
+@Serializable
+data class StockFulfillmentHistoryRowDto(
+    val movementId: String, val operationId: String, val type: String, val quantity: String, val unitCode: String,
+    val employeeCode: String, val employeeName: String, val workOrderId: String, val requirementId: String,
+    val fromLocationCode: String? = null, val toLocationCode: String? = null, val occurredAt: String,
+)
+
+@Serializable
+data class StockFulfillmentHistoryDto(val items: List<StockFulfillmentHistoryRowDto>, val limited: Boolean)

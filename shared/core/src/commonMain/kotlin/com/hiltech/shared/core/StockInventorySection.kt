@@ -21,6 +21,7 @@ import com.hiltech.shared.core.warehouse.StockBalanceDto
 import com.hiltech.shared.core.warehouse.IssuedStockDirectoryDto
 import com.hiltech.shared.core.warehouse.IssuedStockDirectoryEntryDto
 import com.hiltech.shared.core.warehouse.StockCatalogDto
+import com.hiltech.shared.core.warehouse.StockFulfillmentHistoryDto
 import com.hiltech.shared.core.warehouse.StockItemDto
 import com.hiltech.shared.core.warehouse.StockMovementDto
 import com.hiltech.shared.core.warehouse.StorageLocationDto
@@ -38,6 +39,10 @@ data class StockInventoryState(
     val issued: IssuedStockDirectoryDto? = null,
     val issuedSearch: String = "",
     val issuedWarehouseId: String? = null,
+    val fulfillmentHistory: StockFulfillmentHistoryDto? = null,
+    val historyWarehouseId: String? = null,
+    val historyItemId: String? = null,
+    val historySearch: String = "",
 )
 
 sealed interface StockAction {
@@ -53,6 +58,7 @@ sealed interface StockAction {
     data class Opening(val item: StockItemDto, val location: String, val quantity: String, val cutoverAt: String) : StockAction
     data class Transfer(val item: StockItemDto, val from: String, val to: String, val quantity: String) : StockAction
     data class LoadIssued(val item: String, val search: String) : StockAction
+    data class LoadFulfillmentHistory(val item: String, val search: String) : StockAction
     data class AdjustIssued(val entry: IssuedStockDirectoryEntryDto, val quantity: String, val returnLocation: String?) : StockAction
 }
 
@@ -80,7 +86,10 @@ fun StockInventorySection(state: StockInventoryState, selectedWarehouseId: Strin
         }
         state.selected?.let {
             StockItemDetail(it, state, dispatch)
-            selectedWarehouseId?.let { warehouse -> IssuedStockOperations(it, warehouse, state, dispatch) }
+            selectedWarehouseId?.let { warehouse ->
+                IssuedStockOperations(it, warehouse, state, dispatch)
+                StockFulfillmentHistorySection(it, warehouse, state, dispatch)
+            }
         }
     }
 }

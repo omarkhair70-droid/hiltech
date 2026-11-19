@@ -155,7 +155,8 @@ private fun PhysicalOperatorWorkspace(
         val locations = api.warehouseStorageLocations(warehouse, installationId).items
         val balances = api.stockBalances(id, installationId)
         stockState = stockState.copy(selected = item, locations = locations, balances = balances,
-            issued = null, issuedSearch = "", issuedWarehouseId = null)
+            issued = null, issuedSearch = "", issuedWarehouseId = null,
+            fulfillmentHistory = null, historyWarehouseId = null, historyItemId = null, historySearch = "")
     }
 
     fun assetAction(action: AssetAction) = runTask {
@@ -191,6 +192,13 @@ private fun PhysicalOperatorWorkspace(
     fun stockAction(action: StockAction) = runTask {
         val stock = requireNotNull(stockState.selected)
         when (action) {
+            is StockAction.LoadFulfillmentHistory -> {
+                require(stock.id == action.item)
+                stockState = stockState.copy(fulfillmentHistory = null, historyWarehouseId = null, historyItemId = null)
+                val history = api.stockFulfillmentHistory(stock.id, warehouse, action.search, installationId)
+                stockState = stockState.copy(fulfillmentHistory = history, historyWarehouseId = warehouse,
+                    historyItemId = stock.id, historySearch = action.search)
+            }
             is StockAction.LoadIssued -> {
                 require(stock.id == action.item)
                 stockState = stockState.copy(issued = null, issuedWarehouseId = null)
@@ -304,6 +312,7 @@ private fun PhysicalOperatorWorkspace(
     stockState.selected?.let { item ->
         Text("${item.itemCode} · ${item.name}")
         IssuedStockOperations(item, warehouse, stockState.copy(loading = busy), ::stockAction)
+        StockFulfillmentHistorySection(item, warehouse, stockState.copy(loading = busy), ::stockAction)
     }
 }
 

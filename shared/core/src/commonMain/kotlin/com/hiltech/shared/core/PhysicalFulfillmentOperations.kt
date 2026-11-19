@@ -138,3 +138,31 @@ fun IssuedStockOperations(item: StockItemDto, warehouse: String, state: StockInv
         }
     }
 }
+
+@Composable
+fun StockFulfillmentHistorySection(item: StockItemDto, warehouse: String, state: StockInventoryState, dispatch: (StockAction) -> Unit) {
+    var search by remember(item.id, warehouse) { mutableStateOf("") }
+    val history = state.fulfillmentHistory.takeIf { state.historyWarehouseId == warehouse && state.historyItemId == item.id }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Physical Stock movement history", style = MaterialTheme.typography.titleMedium)
+        Text("Recorded issue, return and consumption, including closed custody.")
+        assetField("Filter history by employee code or name", search) { search = it }
+        OutlinedButton({ dispatch(StockAction.LoadFulfillmentHistory(item.id, search.trim())) }, enabled = !state.loading) {
+            Text("Load physical movement history")
+        }
+        history?.let { page ->
+            Text("Employee filter · ${state.historySearch.ifEmpty { "All authorized" }}")
+            if (page.limited) Text("Showing the latest 100 authorized matches. Refine the employee filter.")
+            if (page.items.isEmpty()) Text("No authorized physical movements match.")
+            page.items.forEach { movement ->
+                Text("${movement.type} · ${movement.quantity} ${movement.unitCode}", style = MaterialTheme.typography.titleSmall)
+                Text("${movement.employeeCode} · ${movement.employeeName}")
+                Text(movement.occurredAt)
+                val route = listOfNotNull(movement.fromLocationCode, movement.toLocationCode).joinToString(" → ")
+                if (route.isNotEmpty()) Text(route)
+                Text("Work · ${movement.workOrderId}")
+                Text("Movement receipt · ${movement.movementId}")
+            }
+        }
+    }
+}

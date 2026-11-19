@@ -41,6 +41,11 @@ class StockFulfillmentController(private val service: StockFulfillmentService) {
         @RequestParam(defaultValue = "") search: String) =
         service.directory(request.stockActor(), id, warehouseId, search)
 
+    @GetMapping("/v1/stock-items/{id}/fulfillment-history")
+    fun history(request: HttpServletRequest, @PathVariable id: UUID, @RequestParam warehouseId: UUID,
+        @RequestParam(defaultValue = "") search: String) =
+        service.history(request.stockActor(), id, warehouseId, search)
+
     @GetMapping("/v1/stock-items/{id}/issued-context")
     fun issued(request: HttpServletRequest, @PathVariable id: UUID, @RequestParam workOrderId: UUID) =
         service.issued(request.stockActor(), id, workOrderId)

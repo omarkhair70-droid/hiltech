@@ -897,6 +897,12 @@ class DesktopIdentityRuntime(
                 ), installationId)
                 return loadStockDetail(state, item.id)
             }
+            is StockAction.LoadFulfillmentHistory -> {
+                val facility = requireNotNull(warehouseId)
+                require(state.selected?.id == action.item)
+                return state.copy(fulfillmentHistory = warehouseApi.stockFulfillmentHistory(action.item, facility, action.search, installationId),
+                    historyWarehouseId = facility, historyItemId = action.item, historySearch = action.search)
+            }
             is StockAction.LoadIssued -> {
                 val facility = requireNotNull(warehouseId)
                 require(state.selected?.id == action.item)
@@ -936,6 +942,7 @@ class DesktopIdentityRuntime(
         balances = warehouseApi.stockBalances(id, installationId),
         movements = warehouseApi.stockMovements(id, installationId),
         issued = null, issuedSearch = "", issuedWarehouseId = null,
+        fulfillmentHistory = null, historyWarehouseId = null, historyItemId = null, historySearch = "",
     )
 
     suspend fun warehouseLocations(warehouseId: String): StorageLocationListDto {

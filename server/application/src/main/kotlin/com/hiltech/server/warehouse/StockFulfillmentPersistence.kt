@@ -5,6 +5,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
 import java.math.BigDecimal
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.UUID
 
@@ -25,6 +26,12 @@ data class StockFulfillmentReceipt(
     val employeeId: UUID, val workOrderId: UUID, val requirementId: UUID, val quantity: String,
     val unitCode: String, val replayed: Boolean,
 )
+data class StockFulfillmentHistoryRow(
+    val movementId: UUID, val operationId: UUID, val type: String, val quantity: String, val unitCode: String,
+    val employeeCode: String, val employeeName: String, val workOrderId: UUID, val requirementId: UUID,
+    val fromLocationCode: String?, val toLocationCode: String?, val occurredAt: String,
+)
+data class StockFulfillmentHistory(val items: List<StockFulfillmentHistoryRow>, val limited: Boolean)
 data class FulfilledStockFact(val movementId: UUID, val quantity: BigDecimal, val version: Long)
 
 @Repository
@@ -67,6 +74,54 @@ class StockFulfillmentPersistence(private val jdbc: JdbcTemplate) {
         WHERE stock_item_id = ? AND work_requirement_instance_id = ? AND recipient_target_id = ?
           AND movement_type = 'ISSUE' AND from_storage_location_id IS NOT NULL
     """.trimIndent(), { r, _ -> r.getObject(1, UUID::class.java) }, item, requirement, employee)
+
+    /**
+     * Read immutable physical movements, including completed/zero custody.
+     * Apply origin and endpoint authorization before the limit, not after it.
+     */
+    fun history(item: UUID, org: UUID, warehouse: UUID, search: String, visible: List<UUID>): StockFulfillmentHistory {
+        if (visible.isEmpty()) return StockFulfillmentHistory(emptyList(), false)
+        val placeholders = visible.joinToString(",") { "?" }
+        val rows = jdbc.query("""
+            SELECT m.id, m.operation_id, m.movement_type, m.quantity, m.unit_code,
+                e.employee_code, p.display_name, m.work_order_id, m.work_requirement_instance_id,
+                f.code AS from_code, t.code AS to_code, m.occurred_at
+            FROM stock_movement m
+            JOIN employee e ON e.id = m.recipient_target_id AND e.organization_id = m.organization_id
+            JOIN person p ON p.id = e.person_id
+            LEFT JOIN storage_location f ON f.id = m.from_storage_location_id
+            LEFT JOIN storage_location t ON t.id = m.to_storage_location_id
+            WHERE m.stock_item_id = ? AND m.organization_id = ?
+              AND m.recipient_target_type = 'EMPLOYEE'
+              AND m.movement_type IN ('ISSUE','RETURN','CONSUME')
+              AND m.work_requirement_instance_id IS NOT NULL
+              AND (strpos(lower(e.employee_code), lower(?)) > 0 OR strpos(lower(p.display_name), lower(?)) > 0)
+              AND EXISTS (
+                  SELECT 1 FROM stock_movement origin JOIN storage_location l ON l.id = origin.from_storage_location_id
+                  WHERE origin.stock_item_id = m.stock_item_id AND origin.organization_id = m.organization_id
+                    AND origin.work_requirement_instance_id = m.work_requirement_instance_id
+                    AND origin.recipient_target_id = m.recipient_target_id
+                    AND origin.movement_type = 'ISSUE' AND l.warehouse_id = ?
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM stock_movement origin
+                  WHERE origin.stock_item_id = m.stock_item_id AND origin.organization_id = m.organization_id
+                    AND origin.work_requirement_instance_id = m.work_requirement_instance_id
+                    AND origin.recipient_target_id = m.recipient_target_id AND origin.movement_type = 'ISSUE'
+                    AND (origin.from_storage_location_id IS NULL OR origin.from_storage_location_id NOT IN ($placeholders))
+              )
+              AND (m.from_storage_location_id IS NULL OR m.from_storage_location_id IN ($placeholders))
+              AND (m.to_storage_location_id IS NULL OR m.to_storage_location_id IN ($placeholders))
+            ORDER BY m.recorded_at DESC, m.id DESC LIMIT 101
+        """.trimIndent(), { r, _ ->
+            StockFulfillmentHistoryRow(r.getObject("id", UUID::class.java), r.getObject("operation_id", UUID::class.java),
+                r.getString("movement_type"), r.getBigDecimal("quantity").toPlainString(), r.getString("unit_code"),
+                r.getString("employee_code"), r.getString("display_name"), r.getObject("work_order_id", UUID::class.java),
+                r.getObject("work_requirement_instance_id", UUID::class.java), r.getString("from_code"), r.getString("to_code"),
+                r.getObject("occurred_at", OffsetDateTime::class.java).toString())
+        }, *(listOf(item, org, search, search, warehouse) + visible + visible + visible).toTypedArray())
+        return StockFulfillmentHistory(rows.take(100), rows.size > 100)
+    }
 
     fun fact(requirement: UUID, at: Instant): FulfilledStockFact? = jdbc.query("""
         SELECT id, allocated, source_version FROM (

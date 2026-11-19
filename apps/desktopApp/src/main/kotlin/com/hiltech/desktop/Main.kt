@@ -1174,12 +1174,14 @@ fun main() {
         val organization = signed.identity.organizations.firstOrNull { it.primary }
             ?: signed.identity.organizations.firstOrNull() ?: return
         val actor = signed.identity.identityId
-        val isMutation = action !is StockAction.Refresh && action !is StockAction.Select && action !is StockAction.More && action !is StockAction.LoadIssued
+        val isMutation = action !is StockAction.Refresh && action !is StockAction.Select && action !is StockAction.More && action !is StockAction.LoadIssued && action !is StockAction.LoadFulfillmentHistory
         val operation = pendingStockCommand?.takeIf {
             it.actor == actor && it.action == action && it.warehouseId == setup.selectedWarehouseId
         } ?: PendingStockCommand(actor, setup.selectedWarehouseId, action, java.util.UUID.randomUUID().toString())
         if (isMutation) pendingStockCommand = operation
-        setState(signed.copy(warehouse = setup.copy(stock = stock.copy(loading = true, message = null))))
+        setState(signed.copy(warehouse = setup.copy(stock =
+            if (action is StockAction.LoadFulfillmentHistory) stock.copy(loading = true, message = null, fulfillmentHistory = null)
+            else stock.copy(loading = true, message = null))))
         scope.launch {
             val result = runCatching {
                 val refreshed = runtime.applyStockAction(
@@ -1199,7 +1201,8 @@ fun main() {
                         stock = refreshed.copy(loading = false, message = if (isMutation) "Stock command recorded" else null))
                 },
                 onFailure = { failure ->
-                    currentSetup.copy(stock = stock.copy(loading = false, message = failure.message ?: "Stock request failed."))
+                    currentSetup.copy(stock = stock.copy(loading = false, message = failure.message ?: "Stock request failed.",
+                        fulfillmentHistory = if (action is StockAction.LoadFulfillmentHistory) null else stock.fulfillmentHistory))
                 },
             )
             setState(current.copy(warehouse = updated))

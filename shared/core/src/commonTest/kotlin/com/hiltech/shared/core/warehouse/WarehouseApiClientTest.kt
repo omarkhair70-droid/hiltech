@@ -25,6 +25,25 @@ class WarehouseApiClientTest {
     private val installation = "55555555-5555-5555-5555-555555555555"
 
     @Test
+    fun physicalStockHistoryUsesWarehouseAndEmployeeScopeAndRetainsReceipt() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/stock-items/$batchId/fulfillment-history", request.url.encodedPath)
+            assertEquals("GET", request.method.value)
+            assertEquals(warehouseId, request.url.parameters["warehouseId"])
+            assertEquals("Employee A", request.url.parameters["search"])
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            respond("""{"items":[{"movementId":"receipt","operationId":"$operation","type":"CONSUME",
+                "quantity":"6.123456","unitCode":"SYNTH-UOM","employeeCode":"SYNTH-EMP","employeeName":"Employee A",
+                "workOrderId":"$org","requirementId":"$batchId","occurredAt":"2026-11-18T12:00:00Z"}],"limited":false}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).stockFulfillmentHistory(batchId, warehouseId, "Employee A", installation)
+        assertEquals("receipt", result.items.single().movementId)
+        assertEquals("6.123456", result.items.single().quantity)
+        assertFalse(result.limited)
+    }
+
+    @Test
     fun reservedStockIssuePreservesExactQuantityAndIdempotency() = runBlocking {
         val command = IssueReservedStockDto(operation, org, batchId, warehouseId, org, warehouseId,
             7, 8, 9, 10, "1.123456", "SYNTH-UOM")
