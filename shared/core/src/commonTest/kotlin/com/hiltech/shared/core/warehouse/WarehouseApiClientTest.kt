@@ -25,6 +25,27 @@ class WarehouseApiClientTest {
     private val installation = "55555555-5555-5555-5555-555555555555"
 
     @Test
+    fun storageTransferPreservesIdempotencyQuantityAndReceipt() = runBlocking {
+        val command = TransferStockDto(operation, 7, warehouseId, org, "1.123456", "SYNTH-UOM")
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/stock-items/$batchId/transfer", request.url.encodedPath)
+            assertEquals("POST", request.method.value)
+            assertEquals(operation, request.headers["Idempotency-Key"])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            assertEquals(command, Json.decodeFromString<TransferStockDto>(body))
+            respond("""{"movement":{"id":"transfer-receipt","operationId":"$operation","type":"TRANSFER",
+                "quantity":"1.123456","unitCode":"SYNTH-UOM","fromStorageLocationId":"$warehouseId",
+                "toStorageLocationId":"$org","occurredAt":"2026-11-18T12:00:00Z","recordedBy":"$org"},"replayed":true}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val receipt = client(http).transferStock(batchId, command, installation)
+        assertEquals("transfer-receipt", receipt.movement.id)
+        assertEquals("1.123456", receipt.movement.quantity)
+        assertTrue(receipt.replayed)
+    }
+
+    @Test
     fun physicalStockHistoryUsesWarehouseAndEmployeeScopeAndRetainsReceipt() = runBlocking {
         val http = HttpClient(MockEngine { request ->
             assertEquals("/v1/stock-items/$batchId/fulfillment-history", request.url.encodedPath)

@@ -134,9 +134,6 @@ private fun StockMasterForm(catalog: StockCatalogDto, loading: Boolean, dispatch
 
 @Composable
 private fun StockItemDetail(item: StockItemDto, state: StockInventoryState, dispatch: (StockAction) -> Unit) {
-    var from by remember(item.id) { mutableStateOf<String?>(null) }
-    var to by remember(item.id) { mutableStateOf<String?>(null) }
-    var quantity by remember(item.id) { mutableStateOf("") }
     var openingLocation by remember(item.id) { mutableStateOf<String?>(null) }
     var openingQuantity by remember(item.id) { mutableStateOf("") }
     var cutover by remember(item.id) { mutableStateOf("") }
@@ -172,11 +169,7 @@ private fun StockItemDetail(item: StockItemDto, state: StockInventoryState, disp
             Text("Initialize opening balance")
         }
     }
-    stockPicker("Transfer from", from, active, canMove) { from = it }
-    stockPicker("Transfer to", to, active.filterNot { it.first == from }, canMove) { to = it }
-    stockField("Transfer quantity (${item.baseUnitCode})", quantity) { quantity = it }
-    Button(onClick = { dispatch(StockAction.Transfer(item, requireNotNull(from), requireNotNull(to), quantity.trim())) },
-        enabled = canMove && from != null && to != null && from != to && quantity.isNotBlank()) { Text("Transfer stock") }
+    StockStorageTransfer(item, state, dispatch = dispatch)
 }
 
 @Composable

@@ -153,8 +153,14 @@ private fun PhysicalOperatorWorkspace(
     suspend fun loadStock(id: String) {
         val item = api.stockItem(id, installationId)
         val locations = api.warehouseStorageLocations(warehouse, installationId).items
-        val balances = api.stockBalances(id, installationId)
-        stockState = stockState.copy(selected = item, locations = locations, balances = balances,
+        val visible = locations.map { it.storageLocationId }.toSet()
+        val balances = api.stockBalances(id, installationId).filter { it.storageLocationId in visible }
+        val movements = api.stockMovements(id, installationId).filter {
+            listOfNotNull(it.fromStorageLocationId, it.toStorageLocationId).let { endpoints ->
+                endpoints.isNotEmpty() && endpoints.all { endpoint -> endpoint in visible }
+            }
+        }
+        stockState = stockState.copy(selected = item, locations = locations, balances = balances, movements = movements,
             issued = null, issuedSearch = "", issuedWarehouseId = null,
             fulfillmentHistory = null, historyWarehouseId = null, historyItemId = null, historySearch = "")
     }
@@ -192,6 +198,21 @@ private fun PhysicalOperatorWorkspace(
     fun stockAction(action: StockAction) = runTask {
         val stock = requireNotNull(stockState.selected)
         when (action) {
+            is StockAction.Transfer -> {
+                require(stock == action.item && stock.active && action.from != action.to)
+                val allowed = stockState.locations.filter { it.warehouseId == warehouse && it.lifecycleState == "ACTIVE" }
+                require(allowed.any { it.storageLocationId == action.from } && allowed.any { it.storageLocationId == action.to })
+                val source = stockState.balances.single { it.storageLocationId == action.from }
+                val destination = stockState.balances.singleOrNull { it.storageLocationId == action.to }
+                val operation = op("transfer-stock", stock.id, stock.version, source.version, destination?.version,
+                    action.from, action.to, action.quantity, stock.baseUnitCode)
+                val response = api.transferStock(stock.id, TransferStockDto(operation, stock.version,
+                    action.from, action.to, action.quantity, stock.baseUnitCode), installationId)
+                receipt = "${response.movement.type} · ${response.movement.id}"
+                stockState = stockState.copy(selected = null, balances = emptyList(), movements = emptyList(),
+                    issued = null, issuedWarehouseId = null, fulfillmentHistory = null)
+                loadStock(stock.id)
+            }
             is StockAction.LoadFulfillmentHistory -> {
                 require(stock.id == action.item)
                 stockState = stockState.copy(fulfillmentHistory = null, historyWarehouseId = null, historyItemId = null)
@@ -283,7 +304,7 @@ private fun PhysicalOperatorWorkspace(
         else Text("Physical operation not authorized.")
     }
 
-    Text("Issued stock return / consumption", style = MaterialTheme.typography.titleMedium)
+    Text("Stock transfer / return / consumption", style = MaterialTheme.typography.titleMedium)
     OutlinedButton({
         runTask {
             stockState = StockInventoryState()
@@ -311,6 +332,14 @@ private fun PhysicalOperatorWorkspace(
     }
     stockState.selected?.let { item ->
         Text("${item.itemCode} · ${item.name}")
+        Text("On hand in this Warehouse", style = MaterialTheme.typography.titleMedium)
+        stockState.balances.forEach { Text("${it.locationCode} · ${it.onHandQuantity} ${item.baseUnitCode}") }
+        StockStorageTransfer(item, stockState.copy(loading = busy), warehouse, ::stockAction)
+        Text("Local storage movement receipts", style = MaterialTheme.typography.titleMedium)
+        stockState.movements.forEach { movement ->
+            Text("${movement.type} · ${movement.quantity} ${movement.unitCode} · ${movement.occurredAt}")
+            Text("Movement receipt · ${movement.id}")
+        }
         IssuedStockOperations(item, warehouse, stockState.copy(loading = busy), ::stockAction)
         StockFulfillmentHistorySection(item, warehouse, stockState.copy(loading = busy), ::stockAction)
     }

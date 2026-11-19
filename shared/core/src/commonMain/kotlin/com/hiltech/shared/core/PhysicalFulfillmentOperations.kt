@@ -166,3 +166,49 @@ fun StockFulfillmentHistorySection(item: StockItemDto, warehouse: String, state:
         }
     }
 }
+
+/** Shared explicit physical transfer review; server owns authorization and conservation. */
+@Composable
+fun StockStorageTransfer(item: StockItemDto, state: StockInventoryState, warehouse: String? = null,
+    dispatch: (StockAction) -> Unit) {
+    val active = state.locations.filter { it.lifecycleState == "ACTIVE" && (warehouse == null || it.warehouseId == warehouse) }
+    val fromChoices = active.filter { location ->
+        state.balances.any { it.storageLocationId == location.storageLocationId && it.onHandQuantity.any { digit -> digit in '1'..'9' } }
+    }
+    var from by remember(item.id, warehouse) { mutableStateOf<String?>(null) }
+    var to by remember(item.id, warehouse, from) { mutableStateOf<String?>(null) }
+    var quantity by remember(item.id, warehouse, from, to) { mutableStateOf("") }
+    val source = state.balances.firstOrNull { it.storageLocationId == from }
+    val destination = state.balances.firstOrNull { it.storageLocationId == to }
+    var review by remember(item.id, item.version, warehouse, from, to, quantity, source?.version, destination?.version) {
+        mutableStateOf(false)
+    }
+    val enabled = item.active && !state.loading
+    val amount = quantity.trim()
+    val valid = enabled && from != to && fromChoices.any { it.storageLocationId == from } &&
+        active.any { it.storageLocationId == to } &&
+        amount.matches(Regex("[0-9]{1,14}(\\.[0-9]{1,6})?")) && amount.any { it in '1'..'9' } &&
+        (!item.serialized || amount.substringAfter('.', "").all { it == '0' })
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Storage transfer", style = MaterialTheme.typography.titleMedium)
+        if (fromChoices.isEmpty()) Text("No visible positive source balance.")
+        assetPicker("Transfer from", from, fromChoices.map { it.storageLocationId to "${it.code} · ${it.name}" }, enabled) { from = it }
+        source?.let { Text("Source on hand · ${it.onHandQuantity} ${item.baseUnitCode}") }
+        assetPicker("Transfer to", to, active.filterNot { it.storageLocationId == from }.map {
+            it.storageLocationId to "${it.code} · ${it.name}"
+        }, enabled) { to = it }
+        assetField("Transfer quantity (${item.baseUnitCode})", quantity) { quantity = it }
+        if (review && valid) {
+            val sourceCode = active.first { it.storageLocationId == from }.code
+            val destinationCode = active.first { it.storageLocationId == to }.code
+            Text("Confirm actual transfer · $amount ${item.baseUnitCode} · $sourceCode → $destinationCode")
+            OutlinedButton({
+                dispatch(StockAction.Transfer(item, requireNotNull(from), requireNotNull(to), amount))
+                review = false
+            }, enabled = enabled) { Text("Record stock transfer") }
+            OutlinedButton({ review = false }, enabled = enabled) { Text("Cancel transfer") }
+        } else {
+            OutlinedButton({ review = true }, enabled = valid) { Text("Review stock transfer") }
+        }
+    }
+}
