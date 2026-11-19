@@ -119,7 +119,7 @@ class StockFulfillmentPersistence(private val jdbc: JdbcTemplate) {
                 r.getString("employee_code"), r.getString("display_name"), r.getObject("work_order_id", UUID::class.java),
                 r.getObject("work_requirement_instance_id", UUID::class.java), r.getString("from_code"), r.getString("to_code"),
                 r.getObject("occurred_at", OffsetDateTime::class.java).toString())
-        }, *(listOf(item, org, search, search, warehouse) + visible + visible + visible).toTypedArray())
+        }, *(listOf<Any>(item, org, search, search, warehouse) + visible + visible + visible).toTypedArray())
         return StockFulfillmentHistory(rows.take(100), rows.size > 100)
     }
 
