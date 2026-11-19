@@ -214,7 +214,7 @@ private fun syntheticAsset(warehouse: HiltechWarehouseState): AssetInventoryStat
             listOf(
                 AssetTagDto("tag-new", "31ed4783-1cdc-4cc8-beb2-908f7c8d6fad", "QR", true, true, "tag-old", corrected),
                 AssetTagDto("tag-old", "57981f24-081b-4c19-8d2e-e336b9576ff2", "QR", false, false, issuedAt = opening, endedAt = corrected),
-            ), listOf("QR"), canCorrect = true),
+            ), listOf("QR"), canCorrect = true, returnInspectionType = type),
         movements = listOf(
             AssetMovementDto("synthetic-correction", "CONTROLLED_CORRECTION", toLocationId = bin.storageLocationId,
                 correctedMovementId = "synthetic-opening", occurredAt = corrected, reason = "Synthetic label reconciliation"),

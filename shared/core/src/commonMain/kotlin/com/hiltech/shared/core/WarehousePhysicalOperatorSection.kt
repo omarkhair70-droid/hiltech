@@ -97,6 +97,18 @@ private fun PhysicalOperatorWorkspace(
     var stockState by remember { mutableStateOf(StockInventoryState()) }
     var stockSearch by remember { mutableStateOf("") }
     var receipt by remember { mutableStateOf<String?>(null) }
+    var refreshWarning by remember { mutableStateOf<String?>(null) }
+
+    suspend fun afterConfirmedReceipt(refresh: suspend () -> Unit) {
+        refreshWarning = null
+        try {
+            refresh()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            refreshWarning = "Operation recorded. Current data refresh failed; reload before another physical operation."
+        }
+    }
 
     fun op(vararg fields: Any?): String = operationId(listOf("warehouse-mobile", warehouse) + fields)
     val fulfillment = remember(api, warehouse, installationId) {
@@ -192,7 +204,7 @@ private fun PhysicalOperatorWorkspace(
         }
         receipt = "${response.kind} · ${response.recordId}"
         assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null, dueReturns = null)
-        loadAsset(id)
+        afterConfirmedReceipt { loadAsset(id) }
     }
 
     fun stockAction(action: StockAction) = runTask {
@@ -211,7 +223,7 @@ private fun PhysicalOperatorWorkspace(
                 receipt = "${response.movement.type} · ${response.movement.id}"
                 stockState = stockState.copy(selected = null, balances = emptyList(), movements = emptyList(),
                     issued = null, issuedWarehouseId = null, fulfillmentHistory = null)
-                loadStock(stock.id)
+                afterConfirmedReceipt { loadStock(stock.id) }
             }
             is StockAction.LoadFulfillmentHistory -> {
                 require(stock.id == action.item)
@@ -240,15 +252,18 @@ private fun PhysicalOperatorWorkspace(
                 receipt = "${response.type} · ${response.movementId}"
                 val search = stockState.issuedSearch
                 stockState = stockState.copy(selected = null, issued = null, issuedWarehouseId = null, balances = emptyList())
-                loadStock(stock.id)
-                val entries = api.issuedStockDirectory(stock.id, warehouse, search, installationId)
-                stockState = stockState.copy(issued = entries, issuedSearch = search, issuedWarehouseId = warehouse)
+                afterConfirmedReceipt {
+                    loadStock(stock.id)
+                    val entries = api.issuedStockDirectory(stock.id, warehouse, search, installationId)
+                    stockState = stockState.copy(issued = entries, issuedSearch = search, issuedWarehouseId = warehouse)
+                }
             }
             else -> error("Unsupported issued stock operation.")
         }
     }
 
     receipt?.let { Text("Last confirmed server receipt · $it") }
+    refreshWarning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     Text("Reserved handoff", style = MaterialTheme.typography.titleMedium)
     OutlinedButton({ runTask { queue = null; queue = api.reservationQueue(warehouse, installationId) } }, enabled = !busy) {
         Text("Load reserved handoffs")
@@ -262,7 +277,7 @@ private fun PhysicalOperatorWorkspace(
                 // Previous detail snapshots may no longer describe current custody.
                 assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null, dueReturns = null)
                 stockState = stockState.copy(selected = null, issued = null, issuedWarehouseId = null, balances = emptyList())
-                queue = api.reservationQueue(warehouse, installationId)
+                afterConfirmedReceipt { queue = api.reservationQueue(warehouse, installationId) }
             },
         ) else Text("Physical handoff is not available for this identity.")
     }

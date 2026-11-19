@@ -12,5 +12,6 @@
         <activity
             android:name=".PhysicalHandoffEvidenceActivity"
             android:exported="true" />
+        <activity android:name=".PhysicalReturnEvidenceActivity" android:exported="true" />
     </application>
 </manifest>

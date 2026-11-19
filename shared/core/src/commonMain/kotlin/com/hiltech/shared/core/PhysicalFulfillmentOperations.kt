@@ -30,7 +30,14 @@ fun PhysicalAssetOperations(passport: AssetPassportDto, state: AssetInventorySta
     var condition by remember(asset.id, asset.version) { mutableStateOf(AssetCondition.UNKNOWN) }
     var notes by remember(asset.id, asset.version) { mutableStateOf("") }
     var incident by remember(asset.id, asset.version) { mutableStateOf<String?>(null) }
-    var review by remember(asset.id, asset.version, location, condition, notes, incident) { mutableStateOf(false) }
+    val incidentChoices = state.serviceDetail?.incidents.orEmpty().filter {
+        it.type == "DAMAGE" && it.state in listOf("OPEN", "UNDER_REVIEW")
+    }
+    val destinationChoices = locations.filterNot { it.first == custody.storageLocationId }
+    var review by remember(asset.id, asset.version, custody.sourceMovementId, passport.currentReturnInspected,
+        type, currentMovement, state.serviceDetail?.availability, destinationChoices, incidentChoices, location, condition, notes, incident) {
+        mutableStateOf(false)
+    }
     val returned = currentMovement?.type == "RETURN"
     val inspect = returned && !passport.currentReturnInspected
     val employee = custody.employeeId != null
@@ -48,15 +55,12 @@ fun PhysicalAssetOperations(passport: AssetPassportDto, state: AssetInventorySta
                 condition = AssetCondition.valueOf(it)
             }
             if (condition == AssetCondition.DAMAGED || condition == AssetCondition.UNFIT) {
-                val incidents = state.serviceDetail?.incidents.orEmpty().filter {
-                    it.type == "DAMAGE" && it.state in listOf("OPEN", "UNDER_REVIEW")
-                }
-                assetPicker("Open damage incident", incident, incidents.map { it.id to it.description }) { incident = it }
-                if (incidents.isEmpty()) Text("Record a damage incident in Asset service before inspection.")
+                assetPicker("Open damage incident", incident, incidentChoices.map { it.id to it.description }, !state.loading) { incident = it }
+                if (incidentChoices.isEmpty()) Text("Record a damage incident in Asset service before inspection.")
             }
             assetField("Inspection notes", notes) { notes = it }
         } else if (employee || available) {
-            assetPicker("Destination storage", location, locations.filterNot { it.first == custody.storageLocationId },
+            assetPicker("Destination storage", location, destinationChoices,
                 !state.loading) { location = it }
             if (employee) {
                 assetPicker("Observed return condition", condition.name, AssetCondition.entries.map { it.name to it.name }) {
@@ -68,8 +72,8 @@ fun PhysicalAssetOperations(passport: AssetPassportDto, state: AssetInventorySta
             return@Column
         }
         val damage = condition == AssetCondition.DAMAGED || condition == AssetCondition.UNFIT
-        val valid = if (inspect) condition != AssetCondition.UNKNOWN && (!damage || incident != null)
-            else location != null && (!employee || condition != AssetCondition.UNKNOWN)
+        val valid = if (inspect) condition != AssetCondition.UNKNOWN && (!damage || incidentChoices.any { it.id == incident })
+            else destinationChoices.any { it.first == location } && (!employee || condition != AssetCondition.UNKNOWN)
         val label = if (inspect) "Record inspection" else if (employee) "Record physical return" else "Record storage transfer"
         OutlinedButton({
             if (!review) review = true
@@ -85,6 +89,10 @@ fun PhysicalAssetOperations(passport: AssetPassportDto, state: AssetInventorySta
         }, enabled = valid && !state.loading) { Text(if (review) label else "Review · $label") }
         if (review) {
             Text("Confirm the actual physical operation for ${asset.assetCode}.")
+            if (!inspect) Text("Destination · ${destinationChoices.firstOrNull { it.first == location }?.second.orEmpty()}")
+            if (inspect || employee) Text("Observed condition · ${condition.name}")
+            if (inspect && damage) Text("Damage incident · ${incidentChoices.firstOrNull { it.id == incident }?.description.orEmpty()}")
+            if (inspect && notes.isNotBlank()) Text("Notes · ${notes.trim()}")
             OutlinedButton({ review = false }, enabled = !state.loading) { Text("Cancel") }
         }
     }
@@ -102,7 +110,14 @@ fun IssuedStockOperations(item: StockItemDto, warehouse: String, state: StockInv
     var amount by remember(item.id, warehouse, selected, entry?.context?.version) { mutableStateOf("") }
     var kind by remember(item.id, warehouse, selected) { mutableStateOf("CONSUME") }
     var location by remember(item.id, warehouse, selected) { mutableStateOf<String?>(null) }
-    var review by remember(item.id, warehouse, selected, entry?.context?.version, amount, kind, location) { mutableStateOf(false) }
+    val returnChoices = state.locations.filter {
+        it.warehouseId == warehouse && it.lifecycleState == "ACTIVE" &&
+            (it.projectId == null || it.projectId == entry?.context?.projectId) &&
+            (it.siteId == null || it.siteId == entry?.context?.siteId)
+    }.map { it.storageLocationId to "${it.code} · ${it.name}" }
+    var review by remember(item.id, item.version, warehouse, selected, entry, returnChoices, amount, kind, location) {
+        mutableStateOf(false)
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Outstanding issued Stock", style = MaterialTheme.typography.titleMedium)
         assetField("Find by employee code or name", search) { search = it }
@@ -119,15 +134,14 @@ fun IssuedStockOperations(item: StockItemDto, warehouse: String, state: StockInv
         Text("Outstanding · ${current.context.outstandingQuantity} ${current.unitCode}")
         assetPicker("Operation", kind, listOf("CONSUME" to "Record consumption", "RETURN" to "Return unused Stock")) { kind = it }
         if (kind == "RETURN") {
-            assetPicker("Return to storage", location, state.locations.filter {
-                it.warehouseId == warehouse && it.lifecycleState == "ACTIVE" &&
-                    (it.projectId == null || it.projectId == current.context.projectId) &&
-                    (it.siteId == null || it.siteId == current.context.siteId)
-            }.map { it.storageLocationId to "${it.code} · ${it.name}" }) { location = it }
+            assetPicker("Return to storage", location, returnChoices, !state.loading) { location = it }
         }
         assetField("Quantity · ${current.unitCode}", amount) { amount = it }
-        val valid = amount.trim().matches(Regex("[0-9]{1,14}(\\.[0-9]{1,6})?")) &&
-            (kind != "RETURN" || location != null)
+        val quantity = amount.trim()
+        val valid = quantity.matches(Regex("[0-9]{1,14}(\\.[0-9]{1,6})?")) &&
+            quantity.any { it in '1'..'9' } &&
+            (!item.serialized || quantity.substringAfter('.', "").all { it == '0' }) &&
+            (kind != "RETURN" || returnChoices.any { it.first == location })
         OutlinedButton({
             if (!review) review = true else {
                 dispatch(StockAction.AdjustIssued(current, amount.trim(), location.takeIf { kind == "RETURN" }))
@@ -136,6 +150,8 @@ fun IssuedStockOperations(item: StockItemDto, warehouse: String, state: StockInv
         }, enabled = valid && !state.loading) { Text(if (review) "Record $kind" else "Review operation") }
         if (review) {
             Text(if (kind == "RETURN") "Confirm actual unused Stock received in storage." else "Confirm actual consumption. Warehouse on-hand will not increase.")
+            Text("Quantity · ${quantity} ${current.unitCode} · ${current.employeeCode}")
+            if (kind == "RETURN") Text("Destination · ${returnChoices.firstOrNull { it.first == location }?.second.orEmpty()}")
             OutlinedButton({ review = false }, enabled = !state.loading) { Text("Cancel") }
         }
     }

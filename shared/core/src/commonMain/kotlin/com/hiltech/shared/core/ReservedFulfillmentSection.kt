@@ -85,10 +85,12 @@ fun ReservedFulfillmentSection(warehouse: String, data: WarehouseReservationQueu
             }
         } else {
             Text("Confirm actual physical handoff to ${recipients.firstOrNull { it.id == employee }?.name.orEmpty()}.")
+            if (reservation.kind == "ASSET") Text("Expected return · ${expectedReturn.optional() ?: "Not specified"}")
             OutlinedButton({
                 val actor = requireNotNull(employee)
+                val due = expectedReturn.optional().takeIf { reservation.kind == "ASSET" }
                 run {
-                    val recorded = port.fulfill(reservation, work, requirement, actor, expectedReturn.optional())
+                    val recorded = port.fulfill(reservation, work, requirement, actor, due)
                     receipt = recorded
                     confirmed = false
                     selected = null

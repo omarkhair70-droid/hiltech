@@ -61,3 +61,27 @@ recorded="$(wait_for_text 'SYNTH-HANDOFF-RECEIPT')"
 [[ "$recorded" == *'No current reserved resources awaiting handoff.'* ]]
 adb exec-out screencap -p > "$report_dir/android-handoff-receipt.png"
 echo 'HILTECH_PHASE5_ANDROID_HANDOFF_PASS synthetic_port=true selection=PASS confirmation=PASS receipt=PASS active_reservation_cleared=PASS'
+
+# Separate debug-only synthetic return/inspection journey using the shared production controls.
+adb shell am force-stop "$package"
+adb shell am start -W -n "$package/.PhysicalReturnEvidenceActivity"
+tap_text 'Destination storage'
+tap_text 'SYNTH-BIN · Synthetic return bin'
+tap_text 'Observed return condition'
+tap_text 'GOOD'
+tap_text 'Review · Record physical return'
+review="$(wait_for_text 'Confirm the actual physical operation for SYNTH-RETURN-TOOL.')"
+[[ "$review" != *'SYNTH-RETURN-RECEIPT'* ]]
+adb exec-out screencap -p > "$report_dir/android-return-review.png"
+tap_text 'Record physical return'
+wait_for_text 'SYNTH-RETURN-RECEIPT' >/dev/null
+wait_for_text 'BLOCKED_INSPECTION' >/dev/null
+tap_text 'Observed condition'
+tap_text 'GOOD'
+tap_text 'Review · Record inspection'
+adb exec-out screencap -p > "$report_dir/android-inspection-review.png"
+tap_text 'Record inspection'
+wait_for_text 'SYNTH-INSPECTION-RECEIPT' >/dev/null
+wait_for_text 'Inspection complete · AVAILABLE' >/dev/null
+adb exec-out screencap -p > "$report_dir/android-inspection-receipt.png"
+echo 'HILTECH_PHASE5_ANDROID_RETURN_PASS synthetic_port=true return=PASS inspection_gate=PASS inspection=PASS receipt=PASS'
