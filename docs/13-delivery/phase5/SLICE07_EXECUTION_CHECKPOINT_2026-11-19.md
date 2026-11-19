@@ -51,3 +51,7 @@ On exact head `60e49c65fdceb950b672b0c7e2b76e780050b80c`, Flyway failed before t
 ### Checkpoint 03 CI repair 03
 
 Exact-head `3188c3d7f151e58a14c056b9c565e30c6c4b870c` verification showed the prior delimiter repair did not persist: GitHub still stored the new PL/pgSQL function as single-dollar `AS $` / `$;`, so Flyway failed across every workflow that migrated V0032. This repair writes the delimiter from two explicit dollar characters and verifies the stored blob after the ref update. No schema or Receiving behavior changes.
+
+### Checkpoint 03 CI repair 04
+
+The repository write path collapses a literal double-dollar PL/pgSQL delimiter to a single dollar. Replaced only this function's quote delimiter with PostgreSQL's equivalent tagged delimiter `$receiving_asset$`, which avoids the transport ambiguity while preserving the exact function body and behavior. Stored blob is verified after ref update.

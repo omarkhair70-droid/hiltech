@@ -204,7 +204,7 @@ ALTER TABLE asset_movement
     ADD FOREIGN KEY (receiving_line_id, organization_id)
         REFERENCES receiving_line(id, organization_id) ON DELETE RESTRICT;
 
-CREATE FUNCTION validate_receiving_asset_movement() RETURNS trigger LANGUAGE plpgsql AS $
+CREATE FUNCTION validate_receiving_asset_movement() RETURNS trigger LANGUAGE plpgsql AS $receiving_asset$
 DECLARE
     line receiving_line%ROWTYPE;
     header receiving_record%ROWTYPE;
@@ -242,7 +242,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$;
+$receiving_asset$;
 CREATE TRIGGER asset_receiving_movement_guard BEFORE INSERT ON asset_movement
 FOR EACH ROW EXECUTE FUNCTION validate_receiving_asset_movement();
 
