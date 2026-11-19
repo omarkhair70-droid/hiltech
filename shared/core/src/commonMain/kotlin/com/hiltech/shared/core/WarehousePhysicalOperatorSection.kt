@@ -289,6 +289,12 @@ private fun PhysicalOperatorWorkspace(
             val due = api.dueAssetReturns(warehouse, installationId)
             assetState = assetState.copy(dueReturns = due)
         }
+    }, more = { afterDue, afterCode, afterId ->
+        runTask {
+            val page = api.dueAssetReturns(warehouse, installationId, afterDue, afterCode, afterId)
+            val previous = assetState.dueReturns?.items.orEmpty()
+            assetState = assetState.copy(dueReturns = page.copy(items = (previous + page.items).distinctBy { it.assetId }))
+        }
     }, select = { id ->
         runTask {
             assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null)

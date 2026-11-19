@@ -781,6 +781,12 @@ class DesktopIdentityRuntime(
                 return loadAssetPassport(ready, action.id)
             }
             AssetAction.RefreshDueReturns -> return state.copy(dueReturns = warehouseApi.dueAssetReturns(warehouseId, installationId))
+            is AssetAction.MoreDueReturns -> {
+                val page = warehouseApi.dueAssetReturns(warehouseId, installationId,
+                    action.afterExpectedReturnAt, action.afterAssetCode, action.afterAssetId)
+                val previous = state.dueReturns?.items.orEmpty()
+                return state.copy(dueReturns = page.copy(items = (previous + page.items).distinctBy { it.assetId }))
+            }
             AssetAction.RefreshServiceQueue -> return refreshAssetServiceQueue(warehouseId, state, null)
             is AssetAction.MoreServiceQueue -> return refreshAssetServiceQueue(warehouseId, state, action.afterCode)
             is AssetAction.Service -> {

@@ -62,6 +62,24 @@ class WarehouseApiClientTest {
     }
 
     @Test
+    fun dueReturnCursorIsStableAndEncoded() = runBlocking {
+        val afterDue = "2026-11-18T12:00:00Z"
+        val afterCode = "SYNTH TOOL/02"
+        val afterId = operation
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/warehouses/$warehouseId/due-asset-returns", request.url.encodedPath)
+            assertEquals(afterDue, request.url.parameters["afterExpectedReturnAt"])
+            assertEquals(afterCode, request.url.parameters["afterAssetCode"])
+            assertEquals(afterId, request.url.parameters["afterAssetId"])
+            respond("""{"items":[],"limited":false,"asOf":"2026-11-18T13:00:00Z"}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val page = client(http).dueAssetReturns(warehouseId, installation, afterDue, afterCode, afterId)
+        assertTrue(page.items.isEmpty())
+        assertFalse(page.limited)
+    }
+
+    @Test
     fun storageTransferPreservesIdempotencyQuantityAndReceipt() = runBlocking {
         val command = TransferStockDto(operation, 7, warehouseId, org, "1.123456", "SYNTH-UOM")
         val http = HttpClient(MockEngine { request ->

@@ -64,6 +64,7 @@ sealed interface AssetAction {
     data class Select(val id: String) : AssetAction
     data object RefreshServiceQueue : AssetAction
     data object RefreshDueReturns : AssetAction
+    data class MoreDueReturns(val afterExpectedReturnAt: String, val afterAssetCode: String, val afterAssetId: String) : AssetAction
     data class MoreServiceQueue(val afterCode: String) : AssetAction
     sealed interface Command : AssetAction
     data class Service(val command: AssetServiceCommand) : Command
@@ -109,7 +110,10 @@ fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispa
         }
         state.message?.let { Text(it) }
         AssetServiceQueue(state, dispatch)
-        AssetDueReturnsSection(state.dueReturns, state.loading, { dispatch(AssetAction.RefreshDueReturns) }) { dispatch(AssetAction.Select(it)) }
+        AssetDueReturnsSection(state.dueReturns, state.loading,
+            refresh = { dispatch(AssetAction.RefreshDueReturns) },
+            more = { due, code, id -> dispatch(AssetAction.MoreDueReturns(due, code, id)) },
+            select = { dispatch(AssetAction.Select(it)) })
         val catalog = state.catalog ?: return@Column
         if (catalog.canRegister) {
             OutlinedButton({ showRegistration = !showRegistration }) {
@@ -368,13 +372,13 @@ private val assetRecordId = Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F
 
 /** Read-only snapshot; selecting a row reloads the authoritative passport. */
 @Composable
-fun AssetDueReturnsSection(queue: AssetDueReturnQueueDto?, busy: Boolean, refresh: () -> Unit, select: (String) -> Unit) {
+fun AssetDueReturnsSection(queue: AssetDueReturnQueueDto?, busy: Boolean, refresh: () -> Unit,
+    more: (String, String, String) -> Unit, select: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Expected Asset returns", style = MaterialTheme.typography.titleMedium)
         OutlinedButton(refresh, enabled = !busy) { Text("Load expected returns") }
         queue?.let { result ->
             Text("As of ${result.asOf} · Server time")
-            if (result.limited) Text("Showing earliest 100 due dates; more returns exist.")
             if (result.items.isEmpty()) Text("No current custody with a recorded return date.")
             result.items.forEach { entry ->
                 Text(listOfNotNull(entry.assetCode, entry.assetName).joinToString(" · "))
@@ -383,6 +387,12 @@ fun AssetDueReturnsSection(queue: AssetDueReturnQueueDto?, busy: Boolean, refres
                     color = if (entry.overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
                 entry.workOrderId?.let { Text("Work · $it") }
                 OutlinedButton({ select(entry.assetId) }, enabled = !busy) { Text("Open ${entry.assetCode}") }
+            }
+            val due = result.nextExpectedReturnAt
+            val code = result.nextAssetCode
+            val id = result.nextAssetId
+            if (result.limited && due != null && code != null && id != null) {
+                OutlinedButton({ more(due, code, id) }, enabled = !busy) { Text("Load more expected returns") }
             }
         }
     }

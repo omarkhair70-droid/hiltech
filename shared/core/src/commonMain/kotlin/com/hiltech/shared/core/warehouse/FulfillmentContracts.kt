@@ -82,4 +82,7 @@ data class AssetDueReturnRowDto(
 )
 
 @Serializable
-data class AssetDueReturnQueueDto(val items: List<AssetDueReturnRowDto>, val limited: Boolean, val asOf: String)
+data class AssetDueReturnQueueDto(
+    val items: List<AssetDueReturnRowDto>, val limited: Boolean, val asOf: String,
+    val nextExpectedReturnAt: String? = null, val nextAssetCode: String? = null, val nextAssetId: String? = null,
+)

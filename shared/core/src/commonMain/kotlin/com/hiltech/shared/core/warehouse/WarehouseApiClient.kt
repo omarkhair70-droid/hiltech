@@ -49,9 +49,19 @@ class WarehouseApiClient(
         get("/v1/stock-items/" + uuid(id) + "/issued-context?workOrderId=" + uuid(work), installationId,
             ListSerializer(IssuedStockContextDto.serializer()))
 
-    suspend fun dueAssetReturns(warehouse: String, installationId: String): AssetDueReturnQueueDto =
-        get("/v1/warehouses/" + uuid(warehouse) + "/due-asset-returns",
-            installationId, AssetDueReturnQueueDto.serializer())
+    suspend fun dueAssetReturns(warehouse: String, installationId: String, afterExpectedReturnAt: String? = null,
+        afterAssetCode: String? = null, afterAssetId: String? = null): AssetDueReturnQueueDto {
+        val supplied = listOf(afterExpectedReturnAt, afterAssetCode, afterAssetId).count { it != null }
+        require(supplied == 0 || supplied == 3) { "Due-return cursor must be complete." }
+        val cursor = if (supplied == 0) "" else {
+            "&afterExpectedReturnAt=" + requireNotNull(afterExpectedReturnAt).encodeURLQueryComponent() +
+                "&afterAssetCode=" + requireNotNull(afterAssetCode).encodeURLQueryComponent() +
+                "&afterAssetId=" + uuid(requireNotNull(afterAssetId))
+        }
+        val path = "/v1/warehouses/" + uuid(warehouse) + "/due-asset-returns" +
+            if (cursor.isEmpty()) "" else "?" + cursor.removePrefix("&")
+        return get(path, installationId, AssetDueReturnQueueDto.serializer())
+    }
 
     suspend fun checkoutReservedAsset(id: String, request: CheckoutReservedAssetDto, installationId: String): PhysicalAssetReceiptDto =
         post("/v1/assets/" + uuid(id) + "/checkout", request.operationId,

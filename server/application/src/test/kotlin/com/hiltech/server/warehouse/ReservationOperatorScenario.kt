@@ -178,6 +178,12 @@ internal class ReservationOperatorScenario(
         assertEquals(checkout, pending.sourceMovementId)
         assertEquals(order.workOrderId, pending.workOrderId)
         assertFalse(pending.overdue)
+        val afterPending = due.dueReturns(org, facility, instant,
+            Instant.parse(pending.expectedReturnAt), pending.assetCode, pending.assetId)
+        assertTrue(afterPending.items.none { it.assetId == asset })
+        val beforePending = due.dueReturns(org, facility, instant,
+            Instant.parse(pending.expectedReturnAt).minusNanos(1), "", UUID(0, 0))
+        assertEquals(asset, beforePending.items.single { it.assetId == asset }.assetId)
         assertTrue(due.dueReturns(org, facility, instant.plusSeconds(3600)).items.single { it.assetId == asset }.overdue)
         assertTrue(due.dueReturns(org, UUID.randomUUID(), instant).items.isEmpty())
         assertTrue(due.dueReturns(UUID.randomUUID(), facility, instant).items.isEmpty())

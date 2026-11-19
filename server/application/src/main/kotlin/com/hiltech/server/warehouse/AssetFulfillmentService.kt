@@ -57,10 +57,15 @@ class AssetFulfillmentService(
         return physical.recipients(facility.organizationId, query)
     }
 
-    fun dueReturns(actor: UUID, warehouseId: UUID): AssetDueReturnQueue {
+    fun dueReturns(actor: UUID, warehouseId: UUID, afterExpectedReturnAt: String? = null,
+        afterAssetCode: String? = null, afterAssetId: UUID? = null): AssetDueReturnQueue {
         val facility = warehouse.warehouse(warehouseId)?.takeIf { authorization.canReserveResources(actor, it) }
             ?: physicalHidden()
-        return physical.dueReturns(facility.organizationId, facility.warehouseId, clock.instant())
+        val supplied = listOf(afterExpectedReturnAt, afterAssetCode, afterAssetId).count { it != null }
+        if (supplied !in listOf(0, 3)) invalidPhysical()
+        val due = afterExpectedReturnAt?.let { runCatching { Instant.parse(it) }.getOrElse { invalidPhysical() } }
+        val code = afterAssetCode?.trim()?.also { if (it.isEmpty() || it.length > 128) invalidPhysical() }
+        return physical.dueReturns(facility.organizationId, facility.warehouseId, clock.instant(), due, code, afterAssetId)
     }
 
     fun checkout(context: AssetCommandContext, id: UUID, request: CheckoutReservedAssetRequest): PhysicalAssetReceipt {

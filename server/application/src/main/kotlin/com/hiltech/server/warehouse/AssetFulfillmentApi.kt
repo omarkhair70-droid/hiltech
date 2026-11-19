@@ -17,8 +17,11 @@ class AssetFulfillmentController(private val service: AssetFulfillmentService) {
         service.recipients(request.assetActor(), id, search)
 
     @GetMapping("/v1/warehouses/{id}/due-asset-returns")
-    fun dueReturns(request: HttpServletRequest, @PathVariable id: UUID) =
-        service.dueReturns(request.assetActor(), id)
+    fun dueReturns(request: HttpServletRequest, @PathVariable id: UUID,
+        @RequestParam(required = false) afterExpectedReturnAt: String?,
+        @RequestParam(required = false) afterAssetCode: String?,
+        @RequestParam(required = false) afterAssetId: UUID?) =
+        service.dueReturns(request.assetActor(), id, afterExpectedReturnAt, afterAssetCode, afterAssetId)
 
     @PostMapping("/v1/assets/{id}/checkout")
     fun checkout(request: HttpServletRequest, @PathVariable id: UUID, @RequestBody body: CheckoutReservedAssetRequest) =

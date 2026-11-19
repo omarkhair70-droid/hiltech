@@ -14,7 +14,10 @@ data class AssetDueReturnRow(
     val employeeName: String, val workOrderId: UUID?, val sourceMovementId: UUID,
     val expectedReturnAt: String, val overdue: Boolean,
 )
-data class AssetDueReturnQueue(val items: List<AssetDueReturnRow>, val limited: Boolean, val asOf: String)
+data class AssetDueReturnQueue(
+    val items: List<AssetDueReturnRow>, val limited: Boolean, val asOf: String,
+    val nextExpectedReturnAt: String? = null, val nextAssetCode: String? = null, val nextAssetId: UUID? = null,
+)
 
 @Repository
 class AssetFulfillmentPersistence(private val jdbc: JdbcTemplate) {
@@ -28,8 +31,14 @@ class AssetFulfillmentPersistence(private val jdbc: JdbcTemplate) {
         rs.getString("employee_code"), rs.getString("display_name")) }, organization, search, search)
 
     /** Only current accountable employee custody with an explicitly recorded due time. */
-    fun dueReturns(org: UUID, warehouse: UUID, at: Instant): AssetDueReturnQueue {
-        val rows = jdbc.query("""
+    fun dueReturns(org: UUID, warehouse: UUID, at: Instant, afterDue: Instant? = null,
+        afterCode: String? = null, afterId: UUID? = null): AssetDueReturnQueue {
+        val cursor = afterDue != null && afterCode != null && afterId != null
+        val cursorClause = if (cursor) """
+              AND (c.expected_return_at > ? OR
+                (c.expected_return_at = ? AND (a.asset_code > ? OR (a.asset_code = ? AND a.id > ?))))
+        """.trimIndent() else ""
+        val sql = """
             SELECT a.id, a.asset_code, a.display_name AS asset_name, e.employee_code,
                 p.display_name AS employee_name, c.current_work_order_id, c.source_movement_id, c.expected_return_at
             FROM asset_custody_projection c
@@ -38,14 +47,23 @@ class AssetFulfillmentPersistence(private val jdbc: JdbcTemplate) {
             JOIN person p ON p.id = e.person_id
             WHERE a.organization_id = ? AND a.warehouse_id = ?
               AND c.current_custodian_target_type = 'EMPLOYEE' AND c.expected_return_at IS NOT NULL
+            $cursorClause
             ORDER BY c.expected_return_at, a.asset_code, a.id LIMIT 101
-        """.trimIndent(), { r, _ ->
+        """.trimIndent()
+        val mapper = { r: java.sql.ResultSet, _: Int ->
             val due = r.getObject("expected_return_at", OffsetDateTime::class.java).toInstant()
             AssetDueReturnRow(r.getObject("id", UUID::class.java), r.getString("asset_code"), r.getString("asset_name"),
                 r.getString("employee_code"), r.getString("employee_name"), r.getObject("current_work_order_id", UUID::class.java),
                 r.getObject("source_movement_id", UUID::class.java), due.toString(), due <= at)
-        }, org, warehouse)
-        return AssetDueReturnQueue(rows.take(100), rows.size > 100, at.toString())
+        }
+        val rows = if (cursor) {
+            val due = requireNotNull(afterDue).atOffset(ZoneOffset.UTC)
+            jdbc.query(sql, mapper, org, warehouse, due, due, afterCode, afterCode, afterId)
+        } else jdbc.query(sql, mapper, org, warehouse)
+        val visible = rows.take(100)
+        val last = visible.lastOrNull().takeIf { rows.size > 100 }
+        return AssetDueReturnQueue(visible, rows.size > 100, at.toString(),
+            last?.expectedReturnAt, last?.assetCode, last?.assetId)
     }
 
     fun id(operation: UUID): UUID = UUID.nameUUIDFromBytes("hiltech:asset-physical:$operation".toByteArray(Charsets.UTF_8))
