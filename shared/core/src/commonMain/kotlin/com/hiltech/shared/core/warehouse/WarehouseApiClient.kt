@@ -299,6 +299,47 @@ class WarehouseApiClient(
             json.encodeToString(CompleteReceivingDto.serializer(), request),
             installationId, ReceivingRecordResultDto.serializer())
 
+    suspend fun createStocktake(
+        request: CreateStocktakeDto, installationId: String,
+    ): StocktakeSessionResultDto =
+        post("/v1/stocktakes", request.operationId,
+            json.encodeToString(CreateStocktakeDto.serializer(), request),
+            installationId, StocktakeSessionResultDto.serializer())
+
+    suspend fun stocktake(id: String, installationId: String): StocktakeDetailDto =
+        get("/v1/stocktakes/" + uuid(id), installationId, StocktakeDetailDto.serializer())
+
+    suspend fun startStocktake(
+        id: String, request: StartStocktakeDto, installationId: String,
+    ): StocktakeSessionResultDto =
+        post("/v1/stocktakes/" + uuid(id) + "/start", request.operationId,
+            json.encodeToString(StartStocktakeDto.serializer(), request),
+            installationId, StocktakeSessionResultDto.serializer())
+
+    suspend fun recordStockCount(
+        id: String, request: RecordStockCountDto, installationId: String,
+    ): StockCountResultDto =
+        post("/v1/stocktakes/" + uuid(id) + "/counts", request.operationId,
+            json.encodeToString(RecordStockCountDto.serializer(), request),
+            installationId, StockCountResultDto.serializer())
+
+    suspend fun submitStocktake(
+        id: String, request: SubmitStocktakeDto, installationId: String,
+    ): StocktakeSubmitResultDto =
+        post("/v1/stocktakes/" + uuid(id) + "/submit", request.operationId,
+            json.encodeToString(SubmitStocktakeDto.serializer(), request),
+            installationId, StocktakeSubmitResultDto.serializer())
+
+    suspend fun stocktakeVariances(id: String, installationId: String): StocktakeVariancesDto =
+        get("/v1/stocktakes/" + uuid(id) + "/variances", installationId, StocktakeVariancesDto.serializer())
+
+    suspend fun requestInventoryAdjustment(
+        discrepancyId: String, request: RequestInventoryAdjustmentDto, installationId: String,
+    ): InventoryAdjustmentRequestResultDto =
+        post("/v1/inventory-discrepancies/" + uuid(discrepancyId) + "/request-adjustment", request.operationId,
+            json.encodeToString(RequestInventoryAdjustmentDto.serializer(), request),
+            installationId, InventoryAdjustmentRequestResultDto.serializer())
+
     suspend fun warehouses(
         organizationId: String,
         installationId: String,

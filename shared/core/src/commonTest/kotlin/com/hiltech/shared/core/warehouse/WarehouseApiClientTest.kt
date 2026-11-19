@@ -359,6 +359,134 @@ class WarehouseApiClientTest {
     }
 
     @Test
+    fun stocktakeRoutesUseAuthenticatedTransportExactVersionsAndCommandKeys() = runBlocking {
+        val sessionId = batchId
+        val snapshotId = "66666666-6666-6666-6666-666666666666"
+        val discrepancyId = "77777777-7777-7777-7777-777777777777"
+        var call = 0
+        val http = HttpClient(MockEngine { request ->
+            call++
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            when (call) {
+                1 -> {
+                    assertEquals("/v1/stocktakes", request.url.encodedPath)
+                    assertEquals(operation, request.headers["Idempotency-Key"])
+                    val sent = Json.decodeFromString<CreateStocktakeDto>(
+                        (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString())
+                    assertEquals(listOf(batchId), sent.stockItemIds)
+                    respond("""{"session":{"id":"$sessionId","organizationId":"$org","warehouseId":"$warehouseId",
+                        "rootStorageLocationId":"$warehouseId","state":"DRAFT","categoryIds":[],"stockItemIds":["$batchId"],
+                        "createdBy":"$org","createdAt":"2026-11-19T18:00:00Z","correlationId":"corr","version":1},
+                        "snapshotLines":[],"replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                2 -> {
+                    assertEquals("/v1/stocktakes/$sessionId", request.url.encodedPath)
+                    assertEquals("GET", request.method.value)
+                    respond("""{"session":{"id":"$sessionId","organizationId":"$org","warehouseId":"$warehouseId",
+                        "rootStorageLocationId":"$warehouseId","state":"DRAFT","categoryIds":[],"stockItemIds":["$batchId"],
+                        "createdBy":"$org","createdAt":"2026-11-19T18:00:00Z","correlationId":"corr","version":1},
+                        "snapshotLines":[],"countRecords":[],"discrepancies":[],"adjustmentRequests":[]}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                3 -> {
+                    assertEquals("/v1/stocktakes/$sessionId/start", request.url.encodedPath)
+                    assertEquals(operation, request.headers["Idempotency-Key"])
+                    respond("""{"session":{"id":"$sessionId","organizationId":"$org","warehouseId":"$warehouseId",
+                        "rootStorageLocationId":"$warehouseId","state":"ACTIVE","categoryIds":[],"stockItemIds":["$batchId"],
+                        "snapshotAt":"2026-11-19T18:01:00Z","createdBy":"$org","createdAt":"2026-11-19T18:00:00Z",
+                        "correlationId":"corr","version":2},"snapshotLines":[{"id":"$snapshotId","sessionId":"$sessionId",
+                        "organizationId":"$org","stockItemId":"$batchId","itemCode":"SYNTH-STOCK",
+                        "storageLocationId":"$warehouseId","locationCode":"BIN-1","expectedOnHand":"6.000000",
+                        "expectedReserved":"0.000000","expectedDamaged":"0.000000","expectedQuarantine":"0.000000",
+                        "unitCode":"EA","balanceVersion":2,"itemVersion":1,"snapshotAt":"2026-11-19T18:01:00Z"}],
+                        "replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                4 -> {
+                    assertEquals("/v1/stocktakes/$sessionId/counts", request.url.encodedPath)
+                    assertEquals(operation, request.headers["Idempotency-Key"])
+                    val sent = Json.decodeFromString<RecordStockCountDto>(
+                        (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString())
+                    assertEquals("5.000000", sent.countedQuantity)
+                    respond("""{"count":{"id":"$operation","sessionId":"$sessionId","snapshotLineId":"$snapshotId",
+                        "organizationId":"$org","stockItemId":"$batchId","storageLocationId":"$warehouseId",
+                        "countedQuantity":"5.000000","unitCode":"EA","countedBy":"$org",
+                        "countedAt":"2026-11-19T18:02:00Z","operationId":"$operation","correlationId":"corr"},
+                        "replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                5 -> {
+                    assertEquals("/v1/stocktakes/$sessionId/submit", request.url.encodedPath)
+                    assertEquals(operation, request.headers["Idempotency-Key"])
+                    respond("""{"session":{"id":"$sessionId","organizationId":"$org","warehouseId":"$warehouseId",
+                        "rootStorageLocationId":"$warehouseId","state":"SUBMITTED","categoryIds":[],"stockItemIds":["$batchId"],
+                        "snapshotAt":"2026-11-19T18:01:00Z","createdBy":"$org","createdAt":"2026-11-19T18:00:00Z",
+                        "correlationId":"corr","version":3},"discrepancies":[{"id":"$discrepancyId","sessionId":"$sessionId",
+                        "snapshotLineId":"$snapshotId","latestCountRecordId":"$operation","organizationId":"$org",
+                        "stockItemId":"$batchId","storageLocationId":"$warehouseId","expectedQuantity":"6.000000",
+                        "countedQuantity":"5.000000","varianceQuantity":"-1.000000","snapshotBalanceVersion":2,
+                        "currentBalanceVersion":2,"sourceChangedSinceSnapshot":false,"state":"OPEN","createdBy":"$org",
+                        "createdAt":"2026-11-19T18:03:00Z","updatedAt":"2026-11-19T18:03:00Z","version":1}],
+                        "replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                6 -> {
+                    assertEquals("/v1/stocktakes/$sessionId/variances", request.url.encodedPath)
+                    assertEquals("GET", request.method.value)
+                    respond("""{"session":{"id":"$sessionId","organizationId":"$org","warehouseId":"$warehouseId",
+                        "rootStorageLocationId":"$warehouseId","state":"SUBMITTED","categoryIds":[],"stockItemIds":["$batchId"],
+                        "snapshotAt":"2026-11-19T18:01:00Z","createdBy":"$org","createdAt":"2026-11-19T18:00:00Z",
+                        "correlationId":"corr","version":3},"discrepancies":[{"id":"$discrepancyId","sessionId":"$sessionId",
+                        "snapshotLineId":"$snapshotId","latestCountRecordId":"$operation","organizationId":"$org",
+                        "stockItemId":"$batchId","storageLocationId":"$warehouseId","expectedQuantity":"6.000000",
+                        "countedQuantity":"5.000000","varianceQuantity":"-1.000000","snapshotBalanceVersion":2,
+                        "currentBalanceVersion":2,"sourceChangedSinceSnapshot":false,"state":"OPEN","createdBy":"$org",
+                        "createdAt":"2026-11-19T18:03:00Z","updatedAt":"2026-11-19T18:03:00Z","version":1}],
+                        "adjustmentRequests":[]}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                7 -> {
+                    assertEquals("/v1/inventory-discrepancies/$discrepancyId/request-adjustment", request.url.encodedPath)
+                    assertEquals(operation, request.headers["Idempotency-Key"])
+                    val sent = Json.decodeFromString<RequestInventoryAdjustmentDto>(
+                        (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString())
+                    assertEquals(1L, sent.discrepancyVersion)
+                    assertEquals("Confirmed physical shortage", sent.reason)
+                    respond("""{"request":{"id":"$operation","discrepancyId":"$discrepancyId","sessionId":"$sessionId",
+                        "organizationId":"$org","stockItemId":"$batchId","storageLocationId":"$warehouseId",
+                        "deltaQuantity":"-1.000000","unitCode":"EA","reason":"Confirmed physical shortage",
+                        "requestedBy":"$org","requestedAt":"2026-11-19T18:04:00Z","version":1},"replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                else -> error("Unexpected request")
+            }
+        })
+
+        val client = client(http)
+        val created = client.createStocktake(
+            CreateStocktakeDto(operation, org, warehouseId, warehouseId, stockItemIds = listOf(batchId)),
+            installation,
+        )
+        assertEquals("DRAFT", created.session.state)
+        assertTrue(client.stocktake(sessionId, installation).countRecords.isEmpty())
+        val started = client.startStocktake(sessionId, StartStocktakeDto(operation, 1), installation)
+        assertEquals(snapshotId, started.snapshotLines.single().id)
+        val counted = client.recordStockCount(
+            sessionId, RecordStockCountDto(operation, 2, snapshotId, "5.000000", "EA"), installation)
+        assertEquals("5.000000", counted.count.countedQuantity)
+        val submitted = client.submitStocktake(sessionId, SubmitStocktakeDto(operation, 2), installation)
+        assertEquals("-1.000000", submitted.discrepancies.single().varianceQuantity)
+        val variances = client.stocktakeVariances(sessionId, installation)
+        assertFalse(variances.discrepancies.single().sourceChangedSinceSnapshot)
+        val adjustment = client.requestInventoryAdjustment(
+            discrepancyId, RequestInventoryAdjustmentDto(operation, 1, "Confirmed physical shortage"), installation)
+        assertEquals("-1.000000", adjustment.request.deltaQuantity)
+        assertTrue(adjustment.request.approvalRequestId == null)
+    }
+
+    @Test
     fun warehouseDirectoryAndCreateUseExistingAuthenticatedTransport() = runBlocking {
         val visited = mutableListOf<Pair<String, String?>>()
         val http = HttpClient(MockEngine { request ->

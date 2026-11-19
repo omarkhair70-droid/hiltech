@@ -36,6 +36,18 @@ data class StocktakeSubmitResult(
     val session: StocktakeSessionView, val discrepancies: List<InventoryDiscrepancyView>, val replayed: Boolean,
 )
 data class InventoryAdjustmentRequestResult(val request: InventoryAdjustmentRequestView, val replayed: Boolean)
+data class StocktakeDetailResult(
+    val session: StocktakeSessionView,
+    val snapshotLines: List<StocktakeSnapshotLineView>,
+    val countRecords: List<StockCountRecordView>,
+    val discrepancies: List<InventoryDiscrepancyView>,
+    val adjustmentRequests: List<InventoryAdjustmentRequestView>,
+)
+data class StocktakeVariancesResult(
+    val session: StocktakeSessionView,
+    val discrepancies: List<InventoryDiscrepancyView>,
+    val adjustmentRequests: List<InventoryAdjustmentRequestView>,
+)
 data class StocktakeStarted(val sessionId: UUID, val actor: UUID, val snapshotAt: String)
 data class StockCountRecorded(val sessionId: UUID, val snapshotLineId: UUID, val countId: UUID, val actor: UUID)
 data class StocktakeSubmitted(val sessionId: UUID, val actor: UUID, val discrepancyCount: Int)
@@ -171,6 +183,34 @@ class StocktakeService(
         }
         return StocktakeSubmitResult(
             stocktakes.session(id) ?: unavailable(), stocktakes.discrepancies(id), replayed,
+        )
+    }
+
+    fun detail(actor: UUID, id: UUID): StocktakeDetailResult {
+        val session = stocktakes.session(id) ?: unavailable()
+        requireCountScope(
+            actor, session.organizationId, session.warehouseId,
+            session.rootStorageLocationId ?: unavailable(),
+        )
+        return StocktakeDetailResult(
+            session = session,
+            snapshotLines = stocktakes.snapshotLines(id),
+            countRecords = stocktakes.countsForSession(id),
+            discrepancies = stocktakes.discrepancies(id),
+            adjustmentRequests = stocktakes.adjustmentRequests(id),
+        )
+    }
+
+    fun variances(actor: UUID, id: UUID): StocktakeVariancesResult {
+        val session = stocktakes.session(id) ?: unavailable()
+        requireCountScope(
+            actor, session.organizationId, session.warehouseId,
+            session.rootStorageLocationId ?: unavailable(),
+        )
+        return StocktakeVariancesResult(
+            session = session,
+            discrepancies = stocktakes.discrepancies(id),
+            adjustmentRequests = stocktakes.adjustmentRequests(id),
         )
     }
 

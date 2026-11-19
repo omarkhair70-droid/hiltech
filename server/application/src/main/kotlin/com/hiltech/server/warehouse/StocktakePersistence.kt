@@ -173,6 +173,12 @@ class StocktakePersistence(private val jdbc: JdbcTemplate) {
         { r, _ -> r.count() }, snapshotLineId,
     )
 
+    fun countsForSession(sessionId: UUID): List<StockCountRecordView> = jdbc.query(
+        """SELECT * FROM stock_count_record WHERE stocktake_session_id = ?
+           ORDER BY snapshot_line_id, counted_at, id""".trimIndent(),
+        { r, _ -> r.count() }, sessionId,
+    )
+
     fun insertCount(id: UUID, operationId: UUID, session: StocktakeSessionView, line: StocktakeSnapshotLineView,
         quantity: BigDecimal, actor: UUID, at: Instant, scanSource: String?, notes: String?,
         supersedes: UUID?, correlationId: String) {
@@ -223,6 +229,12 @@ class StocktakePersistence(private val jdbc: JdbcTemplate) {
         "SELECT * FROM inventory_adjustment_request WHERE inventory_discrepancy_id = ?",
         { r, _ -> r.adjustmentRequest() }, discrepancyId,
     ).singleOrNull()
+
+    fun adjustmentRequests(sessionId: UUID): List<InventoryAdjustmentRequestView> = jdbc.query(
+        """SELECT * FROM inventory_adjustment_request WHERE stocktake_session_id = ?
+           ORDER BY requested_at, id""".trimIndent(),
+        { r, _ -> r.adjustmentRequest() }, sessionId,
+    )
 
     fun insertAdjustmentRequest(
         id: UUID, discrepancy: InventoryDiscrepancyView, unitCode: String, reason: String, actor: UUID, at: Instant,
