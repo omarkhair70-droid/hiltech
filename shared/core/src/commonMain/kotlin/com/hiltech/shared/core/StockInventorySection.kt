@@ -59,6 +59,9 @@ sealed interface StockAction {
     data class Transfer(val item: StockItemDto, val from: String, val to: String, val quantity: String) : StockAction
     data class LoadIssued(val item: String, val search: String) : StockAction
     data class LoadFulfillmentHistory(val item: String, val search: String) : StockAction
+    data class MoreFulfillmentHistory(
+        val item: String, val search: String, val afterRecordedAt: String, val afterMovementId: String,
+    ) : StockAction
     data class AdjustIssued(val entry: IssuedStockDirectoryEntryDto, val quantity: String, val returnLocation: String?) : StockAction
 }
 

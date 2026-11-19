@@ -43,8 +43,10 @@ class StockFulfillmentController(private val service: StockFulfillmentService) {
 
     @GetMapping("/v1/stock-items/{id}/fulfillment-history")
     fun history(request: HttpServletRequest, @PathVariable id: UUID, @RequestParam warehouseId: UUID,
-        @RequestParam(defaultValue = "") search: String) =
-        service.history(request.stockActor(), id, warehouseId, search)
+        @RequestParam(defaultValue = "") search: String,
+        @RequestParam(required = false) afterRecordedAt: String?,
+        @RequestParam(required = false) afterMovementId: UUID?) =
+        service.history(request.stockActor(), id, warehouseId, search, afterRecordedAt, afterMovementId)
 
     @GetMapping("/v1/stock-items/{id}/issued-context")
     fun issued(request: HttpServletRequest, @PathVariable id: UUID, @RequestParam workOrderId: UUID) =

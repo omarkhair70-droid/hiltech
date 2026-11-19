@@ -72,7 +72,10 @@ data class StockFulfillmentHistoryRowDto(
 )
 
 @Serializable
-data class StockFulfillmentHistoryDto(val items: List<StockFulfillmentHistoryRowDto>, val limited: Boolean)
+data class StockFulfillmentHistoryDto(
+    val items: List<StockFulfillmentHistoryRowDto>, val limited: Boolean,
+    val nextRecordedAt: String? = null, val nextMovementId: String? = null,
+)
 
 @Serializable
 data class AssetDueReturnRowDto(

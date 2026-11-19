@@ -31,7 +31,11 @@ data class StockFulfillmentHistoryRow(
     val employeeCode: String, val employeeName: String, val workOrderId: UUID, val requirementId: UUID,
     val fromLocationCode: String?, val toLocationCode: String?, val occurredAt: String,
 )
-data class StockFulfillmentHistory(val items: List<StockFulfillmentHistoryRow>, val limited: Boolean)
+data class StockFulfillmentHistory(
+    val items: List<StockFulfillmentHistoryRow>, val limited: Boolean,
+    val nextRecordedAt: String? = null, val nextMovementId: UUID? = null,
+)
+private data class StockFulfillmentHistoryCursorRow(val row: StockFulfillmentHistoryRow, val recordedAt: String)
 data class FulfilledStockFact(val movementId: UUID, val quantity: BigDecimal, val version: Long)
 
 @Repository
@@ -79,13 +83,18 @@ class StockFulfillmentPersistence(private val jdbc: JdbcTemplate) {
      * Read immutable physical movements, including completed/zero custody.
      * Apply origin and endpoint authorization before the limit, not after it.
      */
-    fun history(item: UUID, org: UUID, warehouse: UUID, search: String, visible: List<UUID>): StockFulfillmentHistory {
+    fun history(item: UUID, org: UUID, warehouse: UUID, search: String, visible: List<UUID>,
+        afterRecordedAt: Instant? = null, afterMovementId: UUID? = null): StockFulfillmentHistory {
         if (visible.isEmpty()) return StockFulfillmentHistory(emptyList(), false)
         val placeholders = visible.joinToString(",") { "?" }
-        val rows = jdbc.query("""
+        val cursor = afterRecordedAt != null && afterMovementId != null
+        val cursorClause = if (cursor) """
+              AND (m.recorded_at < ? OR (m.recorded_at = ? AND m.id < ?))
+        """.trimIndent() else ""
+        val sql = """
             SELECT m.id, m.operation_id, m.movement_type, m.quantity, m.unit_code,
                 e.employee_code, p.display_name, m.work_order_id, m.work_requirement_instance_id,
-                f.code AS from_code, t.code AS to_code, m.occurred_at
+                f.code AS from_code, t.code AS to_code, m.occurred_at, m.recorded_at
             FROM stock_movement m
             JOIN employee e ON e.id = m.recipient_target_id AND e.organization_id = m.organization_id
             JOIN person p ON p.id = e.person_id
@@ -112,15 +121,34 @@ class StockFulfillmentPersistence(private val jdbc: JdbcTemplate) {
               )
               AND (m.from_storage_location_id IS NULL OR m.from_storage_location_id IN ($placeholders))
               AND (m.to_storage_location_id IS NULL OR m.to_storage_location_id IN ($placeholders))
+              $cursorClause
             ORDER BY m.recorded_at DESC, m.id DESC LIMIT 101
-        """.trimIndent(), { r, _ ->
-            StockFulfillmentHistoryRow(r.getObject("id", UUID::class.java), r.getObject("operation_id", UUID::class.java),
+        """.trimIndent()
+        val args = mutableListOf<Any>(item, org, search, search, warehouse).apply {
+            addAll(visible)
+            addAll(visible)
+            addAll(visible)
+            if (cursor) {
+                val at = requireNotNull(afterRecordedAt).atOffset(ZoneOffset.UTC)
+                add(at)
+                add(at)
+                add(requireNotNull(afterMovementId))
+            }
+        }
+        val rows = jdbc.query(sql, { r, _ ->
+            val row = StockFulfillmentHistoryRow(r.getObject("id", UUID::class.java), r.getObject("operation_id", UUID::class.java),
                 r.getString("movement_type"), r.getBigDecimal("quantity").toPlainString(), r.getString("unit_code"),
                 r.getString("employee_code"), r.getString("display_name"), r.getObject("work_order_id", UUID::class.java),
                 r.getObject("work_requirement_instance_id", UUID::class.java), r.getString("from_code"), r.getString("to_code"),
                 r.getObject("occurred_at", OffsetDateTime::class.java).toString())
-        }, *(listOf<Any>(item, org, search, search, warehouse) + visible + visible + visible).toTypedArray())
-        return StockFulfillmentHistory(rows.take(100), rows.size > 100)
+            StockFulfillmentHistoryCursorRow(
+                row,
+                r.getObject("recorded_at", OffsetDateTime::class.java).toInstant().toString(),
+            )
+        }, *args.toTypedArray())
+        val page = rows.take(100)
+        val last = page.lastOrNull().takeIf { rows.size > 100 }
+        return StockFulfillmentHistory(page.map { it.row }, rows.size > 100, last?.recordedAt, last?.row?.movementId)
     }
 
     fun fact(requirement: UUID, at: Instant): FulfilledStockFact? = jdbc.query("""

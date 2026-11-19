@@ -170,7 +170,6 @@ fun StockFulfillmentHistorySection(item: StockItemDto, warehouse: String, state:
         }
         history?.let { page ->
             Text("Employee filter · ${state.historySearch.ifEmpty { "All authorized" }}")
-            if (page.limited) Text("Showing the latest 100 authorized matches. Refine the employee filter.")
             if (page.items.isEmpty()) Text("No authorized physical movements match.")
             page.items.forEach { movement ->
                 Text("${movement.type} · ${movement.quantity} ${movement.unitCode}", style = MaterialTheme.typography.titleSmall)
@@ -180,6 +179,13 @@ fun StockFulfillmentHistorySection(item: StockItemDto, warehouse: String, state:
                 if (route.isNotEmpty()) Text(route)
                 Text("Work · ${movement.workOrderId}")
                 Text("Movement receipt · ${movement.movementId}")
+            }
+            val cursorAt = page.nextRecordedAt
+            val cursorId = page.nextMovementId
+            if (page.limited && cursorAt != null && cursorId != null) {
+                OutlinedButton({
+                    dispatch(StockAction.MoreFulfillmentHistory(item.id, state.historySearch, cursorAt, cursorId))
+                }, enabled = !state.loading) { Text("Load older physical movements") }
             }
         }
     }

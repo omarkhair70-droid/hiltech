@@ -59,16 +59,20 @@ class StockFulfillmentService(
         return IssuedStockDirectory(visible, rows.size > 100)
     }
 
-    fun history(actor: UUID, item: UUID, warehouseId: UUID, search: String): StockFulfillmentHistory {
+    fun history(actor: UUID, item: UUID, warehouseId: UUID, search: String,
+        afterRecordedAt: String? = null, afterMovementId: UUID? = null): StockFulfillmentHistory {
         val master = stock.item(item) ?: unavailable()
         val facility = warehouse.warehouse(warehouseId)?.takeIf {
             it.organizationId == master.organizationId && authorization.canReserveResources(actor, it)
         } ?: unavailable()
         val query = search.trim()
         if (query.length > 160) invalid()
+        val supplied = listOf(afterRecordedAt, afterMovementId).count { it != null }
+        if (supplied !in listOf(0, 2)) invalid()
+        val after = afterRecordedAt?.let { runCatching { Instant.parse(it) }.getOrElse { invalid() } }
         val visible = warehouse.storageLocations(master.organizationId, null).map { it.storageLocationId }
             .filter { canLocation(actor, master.organizationId, it) }
-        return fulfillment.history(item, master.organizationId, facility.warehouseId, query, visible)
+        return fulfillment.history(item, master.organizationId, facility.warehouseId, query, visible, after, afterMovementId)
     }
 
     fun issue(context: StockCommandContext, itemId: UUID, body: IssueReservedStockRequest): StockFulfillmentReceipt {

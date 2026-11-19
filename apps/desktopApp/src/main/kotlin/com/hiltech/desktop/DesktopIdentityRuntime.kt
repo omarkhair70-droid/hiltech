@@ -910,6 +910,15 @@ class DesktopIdentityRuntime(
                 return state.copy(fulfillmentHistory = warehouseApi.stockFulfillmentHistory(action.item, facility, action.search, installationId),
                     historyWarehouseId = facility, historyItemId = action.item, historySearch = action.search)
             }
+            is StockAction.MoreFulfillmentHistory -> {
+                val facility = requireNotNull(warehouseId)
+                require(state.selected?.id == action.item && state.historyWarehouseId == facility &&
+                    state.historyItemId == action.item && state.historySearch == action.search)
+                val page = warehouseApi.stockFulfillmentHistory(action.item, facility, action.search, installationId,
+                    action.afterRecordedAt, action.afterMovementId)
+                val previous = state.fulfillmentHistory?.items.orEmpty()
+                return state.copy(fulfillmentHistory = page.copy(items = (previous + page.items).distinctBy { it.movementId }))
+            }
             is StockAction.LoadIssued -> {
                 val facility = requireNotNull(warehouseId)
                 require(state.selected?.id == action.item)

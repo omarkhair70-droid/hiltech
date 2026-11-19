@@ -232,6 +232,15 @@ private fun PhysicalOperatorWorkspace(
                 stockState = stockState.copy(fulfillmentHistory = history, historyWarehouseId = warehouse,
                     historyItemId = stock.id, historySearch = action.search)
             }
+            is StockAction.MoreFulfillmentHistory -> {
+                require(stock.id == action.item && stockState.historyWarehouseId == warehouse &&
+                    stockState.historyItemId == stock.id && stockState.historySearch == action.search)
+                val page = api.stockFulfillmentHistory(stock.id, warehouse, action.search, installationId,
+                    action.afterRecordedAt, action.afterMovementId)
+                val previous = stockState.fulfillmentHistory?.items.orEmpty()
+                stockState = stockState.copy(fulfillmentHistory =
+                    page.copy(items = (previous + page.items).distinctBy { it.movementId }))
+            }
             is StockAction.LoadIssued -> {
                 require(stock.id == action.item)
                 stockState = stockState.copy(issued = null, issuedWarehouseId = null)

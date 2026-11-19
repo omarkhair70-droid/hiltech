@@ -101,6 +101,25 @@ class WarehouseApiClientTest {
     }
 
     @Test
+    fun physicalStockHistoryCursorIsEncoded() = runBlocking {
+        val after = "2026-11-18T12:34:56Z"
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/stock-items/$batchId/fulfillment-history", request.url.encodedPath)
+            assertEquals(warehouseId, request.url.parameters["warehouseId"])
+            assertEquals("Employee A", request.url.parameters["search"])
+            assertEquals(after, request.url.parameters["afterRecordedAt"])
+            assertEquals(operation, request.url.parameters["afterMovementId"])
+            respond("""{"items":[],"limited":false}""", HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).stockFulfillmentHistory(
+            batchId, warehouseId, "Employee A", installation, after, operation,
+        )
+        assertTrue(result.items.isEmpty())
+        assertFalse(result.limited)
+    }
+
+    @Test
     fun physicalStockHistoryUsesWarehouseAndEmployeeScopeAndRetainsReceipt() = runBlocking {
         val http = HttpClient(MockEngine { request ->
             assertEquals("/v1/stock-items/$batchId/fulfillment-history", request.url.encodedPath)

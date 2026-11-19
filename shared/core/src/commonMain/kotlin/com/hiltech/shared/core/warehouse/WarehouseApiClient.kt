@@ -41,9 +41,17 @@ class WarehouseApiClient(
         get("/v1/stock-items/" + uuid(id) + "/issued-directory?warehouseId=" + uuid(warehouse) +
             "&search=" + search.encodeURLQueryComponent(), installationId, IssuedStockDirectoryDto.serializer())
 
-    suspend fun stockFulfillmentHistory(id: String, warehouse: String, search: String, installationId: String): StockFulfillmentHistoryDto =
-        get("/v1/stock-items/" + uuid(id) + "/fulfillment-history?warehouseId=" + uuid(warehouse) +
-            "&search=" + search.encodeURLQueryComponent(), installationId, StockFulfillmentHistoryDto.serializer())
+    suspend fun stockFulfillmentHistory(id: String, warehouse: String, search: String, installationId: String,
+        afterRecordedAt: String? = null, afterMovementId: String? = null): StockFulfillmentHistoryDto {
+        val supplied = listOf(afterRecordedAt, afterMovementId).count { it != null }
+        require(supplied == 0 || supplied == 2) { "Stock history cursor must be complete." }
+        val cursor = if (supplied == 0) "" else
+            "&afterRecordedAt=" + requireNotNull(afterRecordedAt).encodeURLQueryComponent() +
+                "&afterMovementId=" + uuid(requireNotNull(afterMovementId))
+        return get("/v1/stock-items/" + uuid(id) + "/fulfillment-history?warehouseId=" + uuid(warehouse) +
+            "&search=" + search.encodeURLQueryComponent() + cursor,
+            installationId, StockFulfillmentHistoryDto.serializer())
+    }
 
     suspend fun issuedStock(id: String, work: String, installationId: String): List<IssuedStockContextDto> =
         get("/v1/stock-items/" + uuid(id) + "/issued-context?workOrderId=" + uuid(work), installationId,

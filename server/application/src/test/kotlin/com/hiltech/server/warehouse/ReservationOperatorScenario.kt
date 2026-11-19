@@ -21,6 +21,7 @@ import java.math.BigDecimal
 import org.springframework.transaction.PlatformTransactionManager
 import java.time.Clock
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.UUID
@@ -301,6 +302,13 @@ internal class ReservationOperatorScenario(
         assertTrue(history.items.all { it.workOrderId == order.workOrderId && it.requirementId == previous.requirementId })
         assertTrue(history.items.any { it.movementId == receipt.movementId })
         assertTrue(history.items.any { it.movementId == consumed.movementId })
+        val oldest = history.items.last()
+        val oldestRecordedAt = requireNotNull(jdbc.queryForObject(
+            "SELECT recorded_at FROM stock_movement WHERE id = ?", OffsetDateTime::class.java, oldest.movementId,
+        )).toInstant()
+        assertTrue(service.history(
+            operator, item, facility, "Synthetic no-login", oldestRecordedAt.toString(), oldest.movementId,
+        ).items.isEmpty())
         assertTrue(service.history(operator, item, facility, "no-such-employee").items.isEmpty())
         denied("STOCK_FULFILLMENT_UNAVAILABLE") { service.history(pm, item, facility, "") }
         assertTrue(fulfillment.history(item, org, facility, "", emptyList()).items.isEmpty())
