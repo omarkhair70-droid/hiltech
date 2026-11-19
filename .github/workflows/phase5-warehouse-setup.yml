@@ -11,6 +11,7 @@ on:
       - "database/migrations/V0030__resource_reservations__slice05.sql"
       - "database/migrations/V0031__physical_fulfillment__slice06.sql"
       - "database/migrations/V0032__receiving_discrepancy__slice07.sql"
+      - "database/migrations/V0033__stocktake_adjustment__slice08.sql"
       - "server/application/src/main/kotlin/com/hiltech/server/warehouse/**"
       - "server/application/src/test/kotlin/com/hiltech/server/warehouse/**"
       - "shared/core/src/**/warehouse/**"
@@ -22,9 +23,11 @@ on:
       - "scripts/ci/phase5_android_asset_lookup_smoke.sh"
       - "scripts/ci/phase5_android_physical_handoff_smoke.sh"
       - "scripts/ci/phase5_android_receiving_smoke.sh"
+      - "scripts/ci/phase5_android_stocktake_smoke.sh"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/ReservedFulfillmentSection.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/PhysicalFulfillmentOperations.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehousePhysicalOperatorSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/StocktakeOperatorSection.kt"
       - "scripts/*stage_legacy_inventory.py"
       - ".github/workflows/phase5-warehouse-setup.yml"
   workflow_dispatch:
@@ -70,6 +73,9 @@ jobs:
           test -s build/reports/phase5-warehouse/asset-return-inspection.png
           test -s build/reports/phase5-warehouse/asset-tag-lookup-compose.png
           test -s build/reports/phase5-warehouse/receiving-final.png
+          test -s build/reports/phase5-warehouse/stocktake-count-history.png
+          test -s build/reports/phase5-warehouse/stocktake-adjustment-request.png
+          test -s build/reports/phase5-warehouse/stocktake-adjustment-applied.png
       - name: Upload synthetic render evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -113,7 +119,7 @@ jobs:
           emulator-boot-timeout: 300
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
-          script: bash scripts/ci/phase5_android_asset_lookup_smoke.sh && bash scripts/ci/phase5_android_physical_handoff_smoke.sh && bash scripts/ci/phase5_android_receiving_smoke.sh
+          script: bash scripts/ci/phase5_android_asset_lookup_smoke.sh && bash scripts/ci/phase5_android_physical_handoff_smoke.sh && bash scripts/ci/phase5_android_receiving_smoke.sh && bash scripts/ci/phase5_android_stocktake_smoke.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: hiltech-phase5-asset-android-synthetic

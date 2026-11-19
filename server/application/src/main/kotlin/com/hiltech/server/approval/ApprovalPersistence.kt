@@ -1,6 +1,7 @@
 package com.hiltech.server.approval
 
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -40,6 +41,13 @@ data class ApprovalRequestCreation(
     val safeReasonSummary: String?,
     val correlationId: String,
     val createdAt: Instant,
+)
+
+data class ApprovalSubjectApprovalRecord(
+    val requestId: UUID,
+    val state: ApprovalRequestState,
+    val subjectVersion: Long,
+    val policyKey: String,
 )
 
 data class ApprovalReadRecord(
@@ -113,6 +121,15 @@ interface ApprovalPersistencePort {
         at: Instant,
     ): ApprovalAuthorityBindingSnapshot?
 
+    fun resolveCurrentAuthorityForSubject(
+        subject: ApprovalSubjectRef,
+        authorityKey: String,
+        at: Instant,
+    ): ApprovalAuthorityBindingSnapshot? =
+        resolveCurrentAuthority(subject.organizationId, authorityKey, at)
+
+    fun loadSubjectApproval(subject: ApprovalSubjectRef, policyKey: String): ApprovalSubjectApprovalRecord? = null
+
     fun actorMatchesAuthority(
         actorUserId: UUID,
         authority: ApprovalAuthorityBindingSnapshot,
@@ -168,9 +185,11 @@ interface ApprovalPersistencePort {
 }
 
 @Component
-class JdbcApprovalPersistence(
+class JdbcApprovalPersistence @Autowired constructor(
     private val jdbc: JdbcTemplate,
+    private val subjectAuthoritySources: List<ApprovalSubjectAuthoritySource>,
 ) : ApprovalPersistencePort {
+    constructor(jdbc: JdbcTemplate) : this(jdbc, emptyList())
     override fun isActiveOrganizationMember(
         organizationId: UUID,
         actorUserId: UUID,
@@ -350,6 +369,37 @@ class JdbcApprovalPersistence(
                     at = at,
                 )
             }
+
+    override fun resolveCurrentAuthorityForSubject(
+        subject: ApprovalSubjectRef,
+        authorityKey: String,
+        at: Instant,
+    ): ApprovalAuthorityBindingSnapshot? {
+        val matching = subjectAuthoritySources.filter { it.supports(subject.subjectType) }
+        if (matching.size > 1) return null
+        if (matching.size == 1) return matching.single().resolve(subject, authorityKey, at)
+        return resolveCurrentAuthority(subject.organizationId, authorityKey, at)
+    }
+
+    override fun loadSubjectApproval(
+        subject: ApprovalSubjectRef,
+        policyKey: String,
+    ): ApprovalSubjectApprovalRecord? =
+        jdbc.query(
+            """SELECT id, state, subject_version, policy_key
+               FROM approval_request
+               WHERE organization_id = ? AND subject_type = ? AND subject_id = ?
+                 AND subject_version = ? AND policy_key = ?""".trimIndent(),
+            { rs, _ ->
+                ApprovalSubjectApprovalRecord(
+                    rs.getObject("id", UUID::class.java),
+                    ApprovalRequestState.valueOf(rs.getString("state")),
+                    rs.getLong("subject_version"),
+                    rs.getString("policy_key"),
+                )
+            },
+            subject.organizationId, subject.subjectType, subject.subjectId, subject.subjectVersion, policyKey,
+        ).singleOrNull()
 
     override fun actorMatchesAuthority(
         actorUserId: UUID,

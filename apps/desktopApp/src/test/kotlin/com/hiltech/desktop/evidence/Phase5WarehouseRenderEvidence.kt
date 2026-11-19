@@ -18,6 +18,14 @@ import com.hiltech.shared.core.AssetServiceQueue
 import com.hiltech.shared.core.ProjectResourceResults
 import com.hiltech.shared.core.WarehouseReservationResults
 import com.hiltech.shared.core.ReceivingHumanProofSection
+import com.hiltech.shared.core.StocktakeHumanProofSection
+import com.hiltech.shared.core.warehouse.InventoryAdjustmentRequestDto
+import com.hiltech.shared.core.warehouse.InventoryDiscrepancyDto
+import com.hiltech.shared.core.warehouse.StockCountRecordDto
+import com.hiltech.shared.core.warehouse.StocktakeDetailDto
+import com.hiltech.shared.core.warehouse.StocktakeSessionDto
+import com.hiltech.shared.core.warehouse.StocktakeSnapshotLineDto
+import com.hiltech.shared.core.warehouse.StocktakeVariancesDto
 import com.hiltech.shared.core.warehouse.RequirementCandidatesDto
 import com.hiltech.shared.core.warehouse.ReservationDto
 import com.hiltech.shared.core.warehouse.ReceivingDetailDto
@@ -273,6 +281,182 @@ fun main() = runBlocking<Unit> {
         }
     }
     captureAndClose(receivingScene, directory.resolve("receiving-final.png"))
+
+    val stocktakeSessionId = "11111111-2222-4333-8444-555555555555"
+    val stocktakeSnapshotId = "22222222-3333-4444-8555-666666666666"
+    val firstCountId = "33333333-4444-4555-8666-777777777777"
+    val recountId = "44444444-5555-4666-8777-888888888888"
+    val discrepancyId = "55555555-6666-4777-8888-999999999999"
+    val adjustmentId = "66666666-7777-4888-8999-aaaaaaaaaaaa"
+    val approvalId = "abababab-abab-4bab-8bab-abababababab"
+    val movementId = "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd"
+    val stocktakeSession = StocktakeSessionDto(
+        id = stocktakeSessionId,
+        organizationId = receivingStockLine.organizationId,
+        warehouseId = selectedWarehouse,
+        rootStorageLocationId = bin.storageLocationId,
+        state = "ACTIVE",
+        stockItemIds = listOf(stockItem.id),
+        snapshotAt = "2026-11-19T08:00:00Z",
+        createdBy = "synthetic-operator",
+        createdAt = "2026-11-19T07:59:00Z",
+        correlationId = "synthetic-stocktake-render",
+        version = 2,
+    )
+    val stocktakeSnapshot = StocktakeSnapshotLineDto(
+        id = stocktakeSnapshotId,
+        sessionId = stocktakeSessionId,
+        organizationId = receivingStockLine.organizationId,
+        stockItemId = stockItem.id,
+        itemCode = stockItem.itemCode,
+        storageLocationId = bin.storageLocationId,
+        locationCode = bin.code,
+        expectedOnHand = "6.000000",
+        expectedReserved = "0.000000",
+        expectedDamaged = "0.000000",
+        expectedQuarantine = "0.000000",
+        unitCode = stockItem.baseUnitCode,
+        balanceVersion = 4,
+        itemVersion = stockItem.version,
+        snapshotAt = "2026-11-19T08:00:00Z",
+    )
+    val firstCount = StockCountRecordDto(
+        id = firstCountId,
+        sessionId = stocktakeSessionId,
+        snapshotLineId = stocktakeSnapshotId,
+        organizationId = receivingStockLine.organizationId,
+        stockItemId = stockItem.id,
+        storageLocationId = bin.storageLocationId,
+        countedQuantity = "7.000000",
+        unitCode = stockItem.baseUnitCode,
+        countedBy = "synthetic-counter",
+        countedAt = "2026-11-19T08:05:00Z",
+        scanSource = "SCAN-SYNTH-COUNT-01",
+        notes = "Initial physical count",
+        operationId = "77777777-8888-4999-8aaa-bbbbbbbbbbbb",
+        correlationId = "synthetic-stocktake-render",
+    )
+    val recount = StockCountRecordDto(
+        id = recountId,
+        sessionId = stocktakeSessionId,
+        snapshotLineId = stocktakeSnapshotId,
+        organizationId = receivingStockLine.organizationId,
+        stockItemId = stockItem.id,
+        storageLocationId = bin.storageLocationId,
+        countedQuantity = "5.000000",
+        unitCode = stockItem.baseUnitCode,
+        countedBy = "synthetic-counter",
+        countedAt = "2026-11-19T08:07:00Z",
+        scanSource = "SCAN-SYNTH-COUNT-02",
+        notes = "Verified recount",
+        supersedesCountRecordId = firstCountId,
+        operationId = "88888888-9999-4aaa-8bbb-cccccccccccc",
+        correlationId = "synthetic-stocktake-render",
+    )
+    val activeStocktake = StocktakeDetailDto(
+        session = stocktakeSession,
+        snapshotLines = listOf(stocktakeSnapshot),
+        countRecords = listOf(firstCount, recount),
+        discrepancies = emptyList(),
+        adjustmentRequests = emptyList(),
+    )
+    val countScene = ImageComposeScene(width = 820, height = 1040, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            StocktakeHumanProofSection(detail = activeStocktake, busy = true)
+        }
+    }
+    captureAndClose(countScene, directory.resolve("stocktake-count-history.png"))
+
+    val discrepancy = InventoryDiscrepancyDto(
+        id = discrepancyId,
+        sessionId = stocktakeSessionId,
+        snapshotLineId = stocktakeSnapshotId,
+        latestCountRecordId = recountId,
+        organizationId = receivingStockLine.organizationId,
+        stockItemId = stockItem.id,
+        storageLocationId = bin.storageLocationId,
+        expectedQuantity = "6.000000",
+        countedQuantity = "5.000000",
+        varianceQuantity = "-1.000000",
+        snapshotBalanceVersion = 4,
+        currentBalanceVersion = 4,
+        sourceChangedSinceSnapshot = false,
+        state = "ADJUSTMENT_REQUESTED",
+        createdBy = "synthetic-counter",
+        createdAt = "2026-11-19T08:08:00Z",
+        updatedAt = "2026-11-19T08:09:00Z",
+        version = 2,
+    )
+    val adjustment = InventoryAdjustmentRequestDto(
+        id = adjustmentId,
+        discrepancyId = discrepancyId,
+        sessionId = stocktakeSessionId,
+        organizationId = receivingStockLine.organizationId,
+        stockItemId = stockItem.id,
+        storageLocationId = bin.storageLocationId,
+        deltaQuantity = "-1.000000",
+        unitCode = stockItem.baseUnitCode,
+        reason = "Verified physical shortage after recount",
+        requestedBy = "synthetic-operator",
+        requestedAt = "2026-11-19T08:09:00Z",
+        approvalRequestId = approvalId,
+        approvalStatus = "PENDING",
+        version = 1,
+    )
+    val submittedStocktake = activeStocktake.copy(
+        session = stocktakeSession.copy(state = "SUBMITTED", version = 3),
+        discrepancies = listOf(discrepancy),
+        adjustmentRequests = listOf(adjustment),
+    )
+    val varianceState = StocktakeVariancesDto(
+        session = submittedStocktake.session,
+        discrepancies = listOf(discrepancy),
+        adjustmentRequests = listOf(adjustment),
+    )
+    val adjustmentScene = ImageComposeScene(width = 820, height = 1120, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            StocktakeHumanProofSection(
+                detail = submittedStocktake,
+                variances = varianceState,
+                busy = true,
+            )
+        }
+    }
+    captureAndClose(adjustmentScene, directory.resolve("stocktake-adjustment-request.png"))
+
+    val appliedAdjustment = adjustment.copy(
+        approvalStatus = "APPROVED",
+        appliedMovementId = movementId,
+        appliedBy = "synthetic-approver",
+        appliedAt = "2026-11-19T08:10:00Z",
+        version = 2,
+    )
+    val closedDiscrepancy = discrepancy.copy(
+        state = "CLOSED",
+        updatedAt = "2026-11-19T08:10:00Z",
+        version = 3,
+    )
+    val closedSession = submittedStocktake.session.copy(state = "CLOSED", version = 4)
+    val appliedStocktake = submittedStocktake.copy(
+        session = closedSession,
+        discrepancies = listOf(closedDiscrepancy),
+        adjustmentRequests = listOf(appliedAdjustment),
+    )
+    val appliedVariances = StocktakeVariancesDto(
+        session = closedSession,
+        discrepancies = listOf(closedDiscrepancy),
+        adjustmentRequests = listOf(appliedAdjustment),
+    )
+    val appliedScene = ImageComposeScene(width = 820, height = 1120, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            StocktakeHumanProofSection(
+                detail = appliedStocktake,
+                variances = appliedVariances,
+                busy = true,
+            )
+        }
+    }
+    captureAndClose(appliedScene, directory.resolve("stocktake-adjustment-applied.png"))
 }
 
 @OptIn(ExperimentalComposeUiApi::class)

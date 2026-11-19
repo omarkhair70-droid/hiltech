@@ -13,6 +13,7 @@ import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechProjectsState
 import com.hiltech.shared.core.HiltechWarehouseState
 import com.hiltech.shared.core.WarehouseImportReviewDraft
+import com.hiltech.shared.core.WarehousePhysicalOperatorSection
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
@@ -2759,6 +2760,32 @@ fun main() {
                     ::grantWarehouseAuthority,
                 onEndWarehouseAuthority =
                     ::endWarehouseAuthority,
+                warehouseOperator = {
+                    val signed = shellState.value as? HiltechShellState.SignedIn
+                    val identity = signed?.identity
+                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                        ?: identity?.organizations?.firstOrNull()
+                    if (identity != null && organization != null) {
+                        WarehousePhysicalOperatorSection(
+                            api = runtime.physicalWarehouseApi,
+                            organizationId = organization.organizationId,
+                            installationId = runtime.physicalWarehouseInstallationId,
+                            operationId = { fields ->
+                                val payload =
+                                    (listOf(
+                                        "desktop-warehouse",
+                                        identity.identityId,
+                                        runtime.physicalWarehouseInstallationId,
+                                    ) + fields).joinToString("") { value ->
+                                        value?.toString()?.let { "${it.length}:$it" } ?: "-1:"
+                                    }
+                                java.util.UUID.nameUUIDFromBytes(
+                                    payload.toByteArray(Charsets.UTF_8),
+                                ).toString()
+                            },
+                        )
+                    }
+                },
                 onRefreshProjects =
                     ::refreshProjects,
                 onSelectProject =

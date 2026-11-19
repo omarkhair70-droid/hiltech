@@ -14,5 +14,6 @@
             android:exported="true" />
         <activity android:name=".PhysicalReturnEvidenceActivity" android:exported="true" />
         <activity android:name=".ReceivingEvidenceActivity" android:exported="true" />
+        <activity android:name=".StocktakeEvidenceActivity" android:exported="true" />
     </application>
 </manifest>

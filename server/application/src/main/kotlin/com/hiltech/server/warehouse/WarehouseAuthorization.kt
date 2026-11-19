@@ -318,6 +318,9 @@ interface WarehouseAuthorizationPort {
     fun canViewValue(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean
     fun canViewStorage(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean
     fun canReceiveAt(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean = false
+    fun canCountAt(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean = false
+    fun canRequestAdjustment(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean = false
+    fun canApproveAdjustment(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean = false
     fun canTransferStock(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean
 }
 
@@ -372,6 +375,49 @@ class SpringWarehouseAuthorization(
             guards,
         ))
     }
+
+    override fun canCountAt(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean {
+        val authorization = authorizationProvider.ifAvailable ?: return false
+        val at = clock.instant()
+        if (!sourceAuthority.isOrganizationMemberCurrent(actorUserId, storage.organizationId, at)) return false
+
+        val direct = persistence.currentStorageAuthorityBindings(storage.storageLocationId, at).filter {
+            it.authorityKey != StorageLocationAuthorityKey.LOCATION_VIEWER && principalMatches(actorUserId, it, at)
+        }
+        for (binding in direct) {
+            val guards = buildList {
+                add(RoleTeamAuthorizationRelations.organizationMember(actorUserId, storage.organizationId))
+                add(WarehouseAuthorizationRelations.storageAuthority(binding))
+                if (binding.principalType == InventoryPrincipalType.TEAM) {
+                    add(RoleTeamAuthorizationRelations.teamMember(actorUserId, binding.principalId))
+                }
+            }
+            if (authorization.isAllowed(AuthorizationCheckRequest(
+                    WarehouseAuthorizationRelations.storageAction(actorUserId, storage.storageLocationId, "can_count"),
+                    guards,
+                ))) return true
+        }
+
+        val facility = storage.warehouseId?.let(persistence::warehouse)?.takeIf {
+            it.active && it.organizationId == storage.organizationId
+        } ?: return false
+        return checkWarehouseAction(
+            actorUserId, facility, "can_count",
+            setOf(WarehouseAuthorityKey.WAREHOUSE_MANAGER, WarehouseAuthorityKey.WAREHOUSE_OPERATOR),
+        )
+    }
+
+    override fun canRequestAdjustment(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean =
+        checkWarehouseAction(
+            actorUserId, warehouse, "can_request_adjustment",
+            setOf(WarehouseAuthorityKey.WAREHOUSE_OPERATOR, WarehouseAuthorityKey.WAREHOUSE_MANAGER),
+        )
+
+    override fun canApproveAdjustment(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean =
+        checkWarehouseAction(
+            actorUserId, warehouse, "can_approve_adjustment",
+            setOf(WarehouseAuthorityKey.INVENTORY_ADJUSTMENT_APPROVER),
+        )
 
     override fun canTransferStock(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean {
         val authorization = authorizationProvider.ifAvailable ?: return false

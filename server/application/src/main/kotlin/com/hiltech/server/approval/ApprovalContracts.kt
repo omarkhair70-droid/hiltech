@@ -44,3 +44,13 @@ data class ApprovalAuthorityPrincipal(
     val effectiveFrom: Instant,
     val effectiveTo: Instant?,
 )
+
+interface ApprovalSubjectAuthoritySource {
+    fun supports(subjectType: String): Boolean
+    fun resolve(subject: ApprovalSubjectRef, authorityKey: String, at: Instant): ApprovalAuthorityBindingSnapshot?
+}
+
+interface ApprovalSubjectVersionSource {
+    fun supports(subjectType: String): Boolean
+    fun isCurrent(subject: ApprovalSubjectRef): Boolean
+}
