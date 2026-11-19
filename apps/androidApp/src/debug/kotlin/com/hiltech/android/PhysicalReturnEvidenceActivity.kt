@@ -2,24 +2,19 @@ package com.hiltech.android
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.AssetAction
 import com.hiltech.shared.core.AssetInventoryState
 import com.hiltech.shared.core.PhysicalAssetOperations
+import com.hiltech.shared.core.HiltechShell
+import com.hiltech.shared.core.HiltechShellState
+import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.warehouse.*
 
 /** DEBUG-only UI proof. Synthetic state transitions, not an authoritative API or real equipment. */
@@ -39,45 +34,62 @@ class PhysicalReturnEvidenceActivity : ComponentActivity() {
             canOperatePhysical = true, returnInspectionType = type)
         val returnedMovement = AssetMovementDto("SYNTH-RETURN-RECEIPT", "RETURN",
             fromEmployeeId = "synthetic-employee", toLocationId = bin.storageLocationId, condition = "GOOD", occurredAt = at)
-        setContent {
-            MaterialTheme {
+        // Keep the debug host on the existing Android/Compose dependency boundary.
+        // Only shared/core owns Compose Foundation and Material components.
+        val status = TextView(this).apply {
+            text = "Synthetic return and inspection evidence"
+            textSize = 16f
+        }
+        val content = ComposeView(this).apply {
+            setContent {
                 var passport by remember { mutableStateOf(initial) }
                 var stage by remember { mutableStateOf(0) }
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Synthetic return and inspection evidence")
-                    if (stage >= 1) Text("SYNTH-RETURN-RECEIPT")
-                    if (stage == 1) Text("BLOCKED_INSPECTION")
-                    if (stage == 2) {
-                        Text("SYNTH-INSPECTION-RECEIPT")
-                        Text("Inspection complete · AVAILABLE")
-                    } else {
-                        val state = AssetInventoryState(selected = passport, locations = listOf(bin),
-                            movements = if (stage == 1) listOf(returnedMovement) else emptyList())
-                        PhysicalAssetOperations(passport, state) { action ->
-                            when (action) {
-                                is AssetAction.ReturnPhysical -> {
-                                    check(stage == 0 && action.id == identity.id && action.version == 4L &&
-                                        action.movement == "synthetic-checkout" && action.location == bin.storageLocationId &&
-                                        action.condition == AssetCondition.GOOD)
-                                    passport = passport.copy(identity = identity.copy(version = 5),
-                                        custody = AssetCustodyDto(storageLocationId = bin.storageLocationId, locationCode = bin.code,
-                                            sourceMovementId = returnedMovement.id))
-                                    stage = 1
+                HiltechShell(
+                    state = HiltechShellState.SignedIn(
+                        identity = IdentityBootstrapDto(
+                            identityId = "99999999-9999-4999-8999-999999999999",
+                            identityStatus = "ACTIVE",
+                            identityVersion = 1,
+                            organizations = emptyList(),
+                            teams = emptyList(),
+                        ),
+                    ),
+                    warehouseOperator = {
+                        if (stage < 2) {
+                            val state = AssetInventoryState(selected = passport, locations = listOf(bin),
+                                movements = if (stage == 1) listOf(returnedMovement) else emptyList())
+                            PhysicalAssetOperations(passport, state) { action ->
+                                when (action) {
+                                    is AssetAction.ReturnPhysical -> {
+                                        check(stage == 0 && action.id == identity.id && action.version == 4L &&
+                                            action.movement == "synthetic-checkout" && action.location == bin.storageLocationId &&
+                                            action.condition == AssetCondition.GOOD)
+                                        passport = passport.copy(identity = identity.copy(version = 5),
+                                            custody = AssetCustodyDto(storageLocationId = bin.storageLocationId, locationCode = bin.code,
+                                                sourceMovementId = returnedMovement.id))
+                                        stage = 1
+                                        status.text = "SYNTH-RETURN-RECEIPT · BLOCKED_INSPECTION"
+                                    }
+                                    is AssetAction.InspectPhysical -> {
+                                        check(stage == 1 && action.id == identity.id && action.version == 5L &&
+                                            action.movement == returnedMovement.id && action.condition == AssetCondition.GOOD &&
+                                            action.damageIncident == null)
+                                        passport = passport.copy(identity = identity.copy(version = 6), currentReturnInspected = true)
+                                        stage = 2
+                                        status.text = "SYNTH-INSPECTION-RECEIPT · Inspection complete · AVAILABLE"
+                                    }
+                                    else -> error("Unexpected synthetic action")
                                 }
-                                is AssetAction.InspectPhysical -> {
-                                    check(stage == 1 && action.id == identity.id && action.version == 5L &&
-                                        action.movement == returnedMovement.id && action.condition == AssetCondition.GOOD &&
-                                        action.damageIncident == null)
-                                    passport = passport.copy(identity = identity.copy(version = 6), currentReturnInspected = true)
-                                    stage = 2
-                                }
-                                else -> error("Unexpected synthetic action")
                             }
                         }
-                    }
-                }
+                    },
+                )
             }
         }
+        setContentView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(status, LinearLayout.LayoutParams(-1, -2))
+            addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        })
     }
 }
