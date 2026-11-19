@@ -133,7 +133,7 @@ internal class ReceivingOperatorScenario(
         val discrepancy = service.addDiscrepancy(context(UUID.randomUUID()), shortRecord.id,
             AddReceivingDiscrepancyRequest(receiving.record(shortRecord.id)!!.version, shortLine.id,
                 ReceivingDiscrepancyType.SHORT_QTY, "One unit missing at physical receipt"))
-        assertEquals("5", beforeExpected)
+        assertEquals("5.000000", beforeExpected)
         assertEquals(beforeExpected, receiving.line(shortLine.id)!!.expectedQuantity)
         assertEquals(ReceivingDiscrepancyType.SHORT_QTY, discrepancy.discrepancy.type)
         assertEquals(1, service.detail(operator, shortRecord.id).discrepancies.size)
