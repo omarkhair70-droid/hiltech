@@ -43,3 +43,7 @@ Checkpoint 02 corrected head `4167b74c721af14146f69253e2c5c95a7f6c09b8`: all 13 
 ### Checkpoint 03 CI repair 01
 
 On exact head `294e21ffdec6dbbadc95c84e8f81a3c4d609a762`, server compilation failed in the new ReceivingLine movement lookup because its mapper passed the Asset ID into `AssetMovementView`, whose established read contract starts with movement ID/type and represents occurred time as ISO text. The lookup now reuses the exact existing `movements()` mapper shape over `SELECT * FROM asset_movement`. No schema, transaction, authorization, receiving policy or test gate changed. Corrected-head verification pending.
+
+### Checkpoint 03 CI repair 02
+
+On exact head `60e49c65fdceb950b672b0c7e2b76e780050b80c`, Flyway failed before tests because the newly inserted PostgreSQL trigger function was committed with a single-dollar PL/pgSQL delimiter (`AS $` / `$;`) instead of the repository's required `$$` delimiter. Corrected only the function delimiters; Receiving schema semantics, Asset linkage, authorization and tests are unchanged. Corrected-head verification pending.
