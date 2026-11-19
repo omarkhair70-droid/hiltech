@@ -128,7 +128,8 @@ internal class ReceivingOperatorScenario(
             service.complete(context(UUID.randomUUID()), poOnly.id, CompleteReceivingRequest(poOnly.version))
         }.code)
 
-        jdbc.update("UPDATE storage_location SET lifecycle_state = 'RETIRED' WHERE id = ?", location.storageLocationId)
+        jdbc.update("UPDATE storage_location SET lifecycle_state = 'RETIRED', active_until = ? WHERE id = ?",
+            clock.instant().atOffset(ZoneOffset.UTC), location.storageLocationId)
         assertEquals("RECEIVING_UNAVAILABLE", assertThrows<ProductApiException> {
             service.create(context(UUID.randomUUID()), CreateReceivingRequest(
                 organization, location.storageLocationId, ReceivingSourceType.OTHER))
