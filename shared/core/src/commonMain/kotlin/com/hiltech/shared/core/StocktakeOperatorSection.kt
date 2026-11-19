@@ -15,7 +15,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.warehouse.ApplyInventoryAdjustmentDto
 import com.hiltech.shared.core.warehouse.CreateStocktakeDto
+import com.hiltech.shared.core.warehouse.InventoryAdjustmentRequestDto
 import com.hiltech.shared.core.warehouse.InventoryDiscrepancyDto
 import com.hiltech.shared.core.warehouse.RecordStockCountDto
 import com.hiltech.shared.core.warehouse.RequestInventoryAdjustmentDto
@@ -29,7 +31,7 @@ import com.hiltech.shared.core.warehouse.WarehouseApiClient
 
 /**
  * Slice 08 online physical-count surface shared by Windows and Android.
- * It never mutates StockBalance directly and exposes no approval/apply action.
+ * It never mutates StockBalance directly. Approved corrections apply only through the canonical Stock ledger command.
  */
 @Composable
 fun StocktakeOperatorSection(
@@ -201,6 +203,21 @@ fun StocktakeOperatorSection(
                             onReceipt("ADJUSTMENT REQUESTED · " + response.request.id)
                         }
                     },
+                    onApplyAdjustment = { adjustment ->
+                        runTask {
+                            val response = api.applyInventoryAdjustment(
+                                adjustment.id,
+                                ApplyInventoryAdjustmentDto(
+                                    op("apply-adjustment", adjustment.id, adjustment.version),
+                                    adjustment.version,
+                                ),
+                                installationId,
+                            )
+                            commandGeneration += 1
+                            refresh(current.session.id)
+                            onReceipt("ADJUSTMENT APPLIED · " + response.movement.id)
+                        }
+                    },
                 )
             }
         }
@@ -216,6 +233,7 @@ fun StocktakeHumanProofSection(
     onCount: (StocktakeSnapshotLineDto, String, String?, String?) -> Unit = { _, _, _, _ -> },
     onSubmit: () -> Unit = {},
     onRequestAdjustment: (InventoryDiscrepancyDto, String) -> Unit = { _, _ -> },
+    onApplyAdjustment: (InventoryAdjustmentRequestDto) -> Unit = {},
 ) {
     val session = detail.session
     val requests = (detail.adjustmentRequests + variances?.adjustmentRequests.orEmpty()).distinctBy { it.id }
@@ -340,7 +358,20 @@ fun StocktakeHumanProofSection(
                                 " · " + request.approvalRequestId.take(8)
                         },
                     )
-                    request.appliedMovementId?.let { Text("Applied movement · " + it.take(8)) }
+                    if (request.appliedMovementId != null) {
+                        Text("Applied movement · " + request.appliedMovementId.take(8))
+                        request.appliedBy?.let { Text("Applied by · " + it.take(8)) }
+                        Text("Stocktake reconciliation · " + session.state)
+                    } else if (request.approvalStatus == "APPROVED") {
+                        Button(
+                            onClick = { onApplyAdjustment(request) },
+                            enabled = !busy,
+                        ) { Text("Apply approved adjustment") }
+                    } else if (request.approvalStatus == "PENDING") {
+                        Text("Awaiting inventory adjustment approval.")
+                    } else if (request.approvalStatus != null) {
+                        Text("Adjustment cannot apply while approval is " + request.approvalStatus + ".")
+                    }
                 } else if (!discrepancy.sourceChangedSinceSnapshot &&
                     discrepancy.state in setOf("OPEN", "INVESTIGATING")
                 ) {
@@ -355,7 +386,7 @@ fun StocktakeHumanProofSection(
                         onClick = { onRequestAdjustment(discrepancy, reason.trim()) },
                         enabled = !busy && reason.isNotBlank(),
                     ) { Text("Request adjustment") }
-                    Text("Final apply is unavailable until canonical approval and adjustment-approver authority exist.")
+                    Text("Canonical approval is required before Stock ledger apply.")
                 }
             }
         }

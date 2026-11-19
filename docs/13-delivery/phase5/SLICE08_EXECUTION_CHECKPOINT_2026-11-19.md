@@ -118,3 +118,14 @@ Shared client/UI application controls and final Windows/Android applied-state hu
 ### Checkpoint 07B CI repair 01
 
 Exact head `4299c3c276572e4a72247829696b43eaa7ca9114`: production server compilation, Android APK builds and multiple unrelated render paths succeeded, but every server-test workflow compiling `StocktakeOperatorScenario` failed before execution because the new assertion referenced `StockMovementView.movementType`. The established public view names the field `type`. The repair changes only that assertion to `applied.movement.type`; no Stock ledger, Approval, authorization, reconciliation or idempotency behavior changes. Native OIDC provider verification also reached server test compilation and failed on the same unresolved test symbol after its browser callbacks succeeded. Corrected exact-head CI pending; do not merge.
+
+
+## Checkpoint 08 — Shared approved-apply surface and terminal human proof (WIP)
+
+Exact head `619c30f6bd5d49f1a7bc4341ecd3314c9a6b02f7`: all fourteen inherited workflows PASS after two bounded WorkOrder Policy retries recovered external Gradle dependency-resolution failures without source change. Bootstrap, Approval Stability, Phase 5 Warehouse server/render/Android evidence, Native OIDC and all Phase 3/4 regressions are green. Checkpoint 07B approved exact-once Stock-ledger application is therefore verified.
+
+This checkpoint exposes the already-frozen apply command through the existing shared authenticated Android/Windows transport. `ApplyInventoryAdjustmentDto` carries the command operation id plus exact request version, and `InventoryAdjustmentApplyResultDto` returns the canonical Adjustment request, append-only StockMovement, reconciled Stocktake session and replay state. The shared client calls only `POST /v1/inventory-adjustments/{id}/apply` with the normal idempotency key; no alternate inventory mutation path is introduced.
+
+The shared Stocktake surface now exposes `Apply approved adjustment` only when canonical Approval status is exactly `APPROVED` and the request has no applied movement. PENDING/other approval states remain non-applicable. After successful application the surface shows the applied movement, applier and terminal Stocktake reconciliation state. Server-side current `can_approve_adjustment`, exact request/source versions, canonical Approval, negative-stock guard and ledger projection remain authoritative even if a stale client renders a control.
+
+Shared HTTP contract evidence covers PENDING request -> approved apply -> ADJUSTMENT movement -> CLOSED session. Android synthetic human proof drives the production shared control through request, explicit approved state and the actual Apply button, then requires an applied-movement/CLOSED screenshot. Windows synthetic proof adds `stocktake-adjustment-applied.png`, and Phase 5 CI now requires it. Final Gap Review and independent verification remain before merge; do not start Slice 09.

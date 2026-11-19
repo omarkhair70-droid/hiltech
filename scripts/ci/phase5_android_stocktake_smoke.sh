@@ -124,11 +124,19 @@ adb shell input keyevent KEYCODE_BACK
 tap_clickable_text 'Request adjustment'
 wait_for_text 'SYNTH-STOCKTAKE-ADJUSTMENT-RECEIPT' >/dev/null
 wait_for_text 'Adjustment requested · -1 EA' >/dev/null
-wait_for_text 'Approval · no approval reference recorded' >/dev/null
+wait_for_text 'Approval · APPROVED ·' >/dev/null
+wait_for_text 'Apply approved adjustment' >/dev/null
 adb exec-out screencap -p > "$report_dir/android-stocktake-adjustment.png"
+
+tap_clickable_text 'Apply approved adjustment'
+wait_for_text 'SYNTH-STOCKTAKE-APPLY-RECEIPT' >/dev/null
+wait_for_text 'Applied movement · cdcdcdcd' >/dev/null
+wait_for_text 'Stocktake reconciliation · CLOSED' >/dev/null
+adb exec-out screencap -p > "$report_dir/android-stocktake-applied.png"
 
 test -s "$report_dir/android-stocktake-count.png"
 test -s "$report_dir/android-stocktake-recount.png"
 test -s "$report_dir/android-stocktake-variance.png"
 test -s "$report_dir/android-stocktake-adjustment.png"
-echo 'HILTECH_PHASE5_ANDROID_STOCKTAKE_PASS synthetic=true count=PASS recount=PASS variance=PASS adjustment_request=PASS approval_fake_state=ABSENT'
+test -s "$report_dir/android-stocktake-applied.png"
+echo 'HILTECH_PHASE5_ANDROID_STOCKTAKE_PASS synthetic=true count=PASS recount=PASS variance=PASS adjustment_request=PASS approved_apply=PASS closed=PASS'

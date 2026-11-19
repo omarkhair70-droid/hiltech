@@ -340,6 +340,13 @@ class WarehouseApiClient(
             json.encodeToString(RequestInventoryAdjustmentDto.serializer(), request),
             installationId, InventoryAdjustmentRequestResultDto.serializer())
 
+    suspend fun applyInventoryAdjustment(
+        requestId: String, request: ApplyInventoryAdjustmentDto, installationId: String,
+    ): InventoryAdjustmentApplyResultDto =
+        post("/v1/inventory-adjustments/" + uuid(requestId) + "/apply", request.operationId,
+            json.encodeToString(ApplyInventoryAdjustmentDto.serializer(), request),
+            installationId, InventoryAdjustmentApplyResultDto.serializer())
+
     suspend fun warehouses(
         organizationId: String,
         installationId: String,

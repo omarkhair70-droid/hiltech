@@ -33,6 +33,9 @@ class StocktakeEvidenceActivity : ComponentActivity() {
         val sessionId = "11111111-2222-4333-8444-555555555555"
         val snapshotId = "22222222-3333-4444-8555-666666666666"
         val discrepancyId = "55555555-6666-4777-8888-999999999999"
+        val adjustmentId = "66666666-7777-4888-8999-aaaaaaaaaaaa"
+        val approvalId = "abababab-abab-4bab-8bab-abababababab"
+        val movementId = "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd"
         val at = "2026-11-19T10:00:00Z"
 
         val session = StocktakeSessionDto(
@@ -168,7 +171,7 @@ class StocktakeEvidenceActivity : ComponentActivity() {
                                 check(discrepancy.id == discrepancyId)
                                 check(reason == "Verified shortage")
                                 val request = InventoryAdjustmentRequestDto(
-                                    id = "66666666-7777-4888-8999-aaaaaaaaaaaa",
+                                    id = adjustmentId,
                                     discrepancyId = discrepancy.id,
                                     sessionId = sessionId,
                                     organizationId = organization,
@@ -179,6 +182,8 @@ class StocktakeEvidenceActivity : ComponentActivity() {
                                     reason = reason,
                                     requestedBy = actor,
                                     requestedAt = "2026-11-19T10:09:00Z",
+                                    approvalRequestId = approvalId,
+                                    approvalStatus = "APPROVED",
                                     version = 1,
                                 )
                                 val updated = discrepancy.copy(state = "ADJUSTMENT_REQUESTED", version = 2)
@@ -192,6 +197,34 @@ class StocktakeEvidenceActivity : ComponentActivity() {
                                     listOf(request),
                                 )
                                 status.text = "SYNTH-STOCKTAKE-ADJUSTMENT-RECEIPT"
+                            },
+                            onApplyAdjustment = { request ->
+                                check(request.id == adjustmentId)
+                                check(request.approvalRequestId == approvalId)
+                                check(request.approvalStatus == "APPROVED")
+                                val applied = request.copy(
+                                    appliedMovementId = movementId,
+                                    appliedBy = actor,
+                                    appliedAt = "2026-11-19T10:10:00Z",
+                                    version = 2,
+                                )
+                                val closedDiscrepancy = detail.discrepancies.single().copy(
+                                    state = "CLOSED",
+                                    updatedAt = "2026-11-19T10:10:00Z",
+                                    version = 3,
+                                )
+                                val closedSession = detail.session.copy(state = "CLOSED", version = 4)
+                                detail = detail.copy(
+                                    session = closedSession,
+                                    discrepancies = listOf(closedDiscrepancy),
+                                    adjustmentRequests = listOf(applied),
+                                )
+                                variances = StocktakeVariancesDto(
+                                    closedSession,
+                                    listOf(closedDiscrepancy),
+                                    listOf(applied),
+                                )
+                                status.text = "SYNTH-STOCKTAKE-APPLY-RECEIPT"
                             },
                         )
                     },

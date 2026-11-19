@@ -363,6 +363,10 @@ class WarehouseApiClientTest {
         val sessionId = batchId
         val snapshotId = "66666666-6666-6666-6666-666666666666"
         val discrepancyId = "77777777-7777-7777-7777-777777777777"
+        val adjustmentId = "88888888-8888-4888-8888-888888888888"
+        val approvalId = "99999999-9999-4999-8999-999999999999"
+        val movementId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val applyOperation = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
         var call = 0
         val http = HttpClient(MockEngine { request ->
             call++
@@ -454,10 +458,32 @@ class WarehouseApiClientTest {
                         (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString())
                     assertEquals(1L, sent.discrepancyVersion)
                     assertEquals("Confirmed physical shortage", sent.reason)
-                    respond("""{"request":{"id":"$operation","discrepancyId":"$discrepancyId","sessionId":"$sessionId",
+                    respond("""{"request":{"id":"$adjustmentId","discrepancyId":"$discrepancyId","sessionId":"$sessionId",
                         "organizationId":"$org","stockItemId":"$batchId","storageLocationId":"$warehouseId",
                         "deltaQuantity":"-1.000000","unitCode":"EA","reason":"Confirmed physical shortage",
-                        "requestedBy":"$org","requestedAt":"2026-11-19T18:04:00Z","version":1},"replayed":false}""",
+                        "requestedBy":"$org","requestedAt":"2026-11-19T18:04:00Z",
+                        "approvalRequestId":"$approvalId","approvalStatus":"PENDING","version":1},"replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                8 -> {
+                    assertEquals("/v1/inventory-adjustments/$adjustmentId/apply", request.url.encodedPath)
+                    assertEquals(applyOperation, request.headers["Idempotency-Key"])
+                    val sent = Json.decodeFromString<ApplyInventoryAdjustmentDto>(
+                        (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString())
+                    assertEquals(1L, sent.requestVersion)
+                    respond("""{"request":{"id":"$adjustmentId","discrepancyId":"$discrepancyId","sessionId":"$sessionId",
+                        "organizationId":"$org","stockItemId":"$batchId","storageLocationId":"$warehouseId",
+                        "deltaQuantity":"-1.000000","unitCode":"EA","reason":"Confirmed physical shortage",
+                        "requestedBy":"$org","requestedAt":"2026-11-19T18:04:00Z",
+                        "approvalRequestId":"$approvalId","approvalStatus":"APPROVED",
+                        "appliedMovementId":"$movementId","appliedBy":"$org","appliedAt":"2026-11-19T18:05:00Z","version":2},
+                        "movement":{"id":"$movementId","operationId":"$applyOperation","type":"ADJUSTMENT",
+                        "quantity":"1.000000","unitCode":"EA","fromStorageLocationId":"$warehouseId",
+                        "occurredAt":"2026-11-19T18:05:00Z","recordedBy":"$org"},
+                        "session":{"id":"$sessionId","organizationId":"$org","warehouseId":"$warehouseId",
+                        "rootStorageLocationId":"$warehouseId","state":"CLOSED","categoryIds":[],"stockItemIds":["$batchId"],
+                        "snapshotAt":"2026-11-19T18:01:00Z","createdBy":"$org","createdAt":"2026-11-19T18:00:00Z",
+                        "correlationId":"corr","version":4},"replayed":false}""",
                         HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
                 }
                 else -> error("Unexpected request")
@@ -483,7 +509,17 @@ class WarehouseApiClientTest {
         val adjustment = client.requestInventoryAdjustment(
             discrepancyId, RequestInventoryAdjustmentDto(operation, 1, "Confirmed physical shortage"), installation)
         assertEquals("-1.000000", adjustment.request.deltaQuantity)
-        assertTrue(adjustment.request.approvalRequestId == null)
+        assertEquals(approvalId, adjustment.request.approvalRequestId)
+        assertEquals("PENDING", adjustment.request.approvalStatus)
+        val applied = client.applyInventoryAdjustment(
+            adjustmentId, ApplyInventoryAdjustmentDto(applyOperation, 1), installation)
+        assertEquals("ADJUSTMENT", applied.movement.type)
+        assertEquals("1.000000", applied.movement.quantity)
+        assertEquals(warehouseId, applied.movement.fromStorageLocationId)
+        assertEquals(movementId, applied.request.appliedMovementId)
+        assertEquals("APPROVED", applied.request.approvalStatus)
+        assertEquals("CLOSED", applied.session.state)
+        assertFalse(applied.replayed)
     }
 
     @Test

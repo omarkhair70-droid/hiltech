@@ -128,6 +128,11 @@ data class RequestInventoryAdjustmentDto(
     val discrepancyVersion: Long,
     val reason: String,
 )
+@Serializable
+data class ApplyInventoryAdjustmentDto(
+    val operationId: String,
+    val requestVersion: Long,
+)
 
 @Serializable
 data class StocktakeSessionResultDto(
@@ -146,6 +151,13 @@ data class StocktakeSubmitResultDto(
 @Serializable
 data class InventoryAdjustmentRequestResultDto(
     val request: InventoryAdjustmentRequestDto,
+    val replayed: Boolean,
+)
+@Serializable
+data class InventoryAdjustmentApplyResultDto(
+    val request: InventoryAdjustmentRequestDto,
+    val movement: StockMovementDto,
+    val session: StocktakeSessionDto,
     val replayed: Boolean,
 )
 @Serializable

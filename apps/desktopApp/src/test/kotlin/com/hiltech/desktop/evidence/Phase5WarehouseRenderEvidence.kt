@@ -288,6 +288,8 @@ fun main() = runBlocking<Unit> {
     val recountId = "44444444-5555-4666-8777-888888888888"
     val discrepancyId = "55555555-6666-4777-8888-999999999999"
     val adjustmentId = "66666666-7777-4888-8999-aaaaaaaaaaaa"
+    val approvalId = "abababab-abab-4bab-8bab-abababababab"
+    val movementId = "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd"
     val stocktakeSession = StocktakeSessionDto(
         id = stocktakeSessionId,
         organizationId = receivingStockLine.organizationId,
@@ -397,6 +399,8 @@ fun main() = runBlocking<Unit> {
         reason = "Verified physical shortage after recount",
         requestedBy = "synthetic-operator",
         requestedAt = "2026-11-19T08:09:00Z",
+        approvalRequestId = approvalId,
+        approvalStatus = "PENDING",
         version = 1,
     )
     val submittedStocktake = activeStocktake.copy(
@@ -419,6 +423,40 @@ fun main() = runBlocking<Unit> {
         }
     }
     captureAndClose(adjustmentScene, directory.resolve("stocktake-adjustment-request.png"))
+
+    val appliedAdjustment = adjustment.copy(
+        approvalStatus = "APPROVED",
+        appliedMovementId = movementId,
+        appliedBy = "synthetic-approver",
+        appliedAt = "2026-11-19T08:10:00Z",
+        version = 2,
+    )
+    val closedDiscrepancy = discrepancy.copy(
+        state = "CLOSED",
+        updatedAt = "2026-11-19T08:10:00Z",
+        version = 3,
+    )
+    val closedSession = submittedStocktake.session.copy(state = "CLOSED", version = 4)
+    val appliedStocktake = submittedStocktake.copy(
+        session = closedSession,
+        discrepancies = listOf(closedDiscrepancy),
+        adjustmentRequests = listOf(appliedAdjustment),
+    )
+    val appliedVariances = StocktakeVariancesDto(
+        session = closedSession,
+        discrepancies = listOf(closedDiscrepancy),
+        adjustmentRequests = listOf(appliedAdjustment),
+    )
+    val appliedScene = ImageComposeScene(width = 820, height = 1120, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            StocktakeHumanProofSection(
+                detail = appliedStocktake,
+                variances = appliedVariances,
+                busy = true,
+            )
+        }
+    }
+    captureAndClose(appliedScene, directory.resolve("stocktake-adjustment-applied.png"))
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
