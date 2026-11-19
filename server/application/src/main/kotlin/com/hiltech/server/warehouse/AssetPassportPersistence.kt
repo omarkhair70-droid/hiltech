@@ -96,6 +96,19 @@ class AssetPassportPersistence(private val jdbc: JdbcTemplate) {
         )
     }
 
+    fun movementForReceivingLine(lineId: UUID): AssetMovementView? = jdbc.query(
+        "SELECT * FROM asset_movement WHERE receiving_line_id = ?",
+        { rs, _ ->
+            AssetMovementView(rs.uuid("id"), rs.getString("movement_type"), rs.optionalUuid("from_storage_location_id"),
+                rs.optionalUuid("to_storage_location_id"),
+                rs.optionalUuid("from_custodian_target_id").takeIf { rs.getString("from_custodian_target_type") == "EMPLOYEE" },
+                rs.optionalUuid("to_custodian_target_id").takeIf { rs.getString("to_custodian_target_type") == "EMPLOYEE" },
+                rs.optionalUuid("project_id"), rs.optionalUuid("site_id"), rs.optionalUuid("work_order_id"),
+                rs.optionalUuid("correction_of_movement_id"), rs.optionalUuid("source_import_row_id"),
+                rs.getString("condition_at_transfer"), requireNotNull(rs.instant("occurred_at")).toString(), rs.getString("notes"))
+        }, lineId,
+    ).singleOrNull()
+
     fun tags(assetId: UUID): List<AssetTagView> = jdbc.query(
         "SELECT * FROM asset_tag WHERE asset_id = ? ORDER BY issued_at DESC, id DESC",
         { rs, _ -> rs.tag() }, assetId,
@@ -206,6 +219,7 @@ class AssetPassportPersistence(private val jdbc: JdbcTemplate) {
     internal fun append(
         asset: AssetIdentityView, context: AssetCommandContext, kind: AssetCustodyMovement, prior: AssetCustodyView?,
         target: AssetDestination, condition: AssetCondition, effectiveAt: Instant, now: Instant, reason: String?, source: UUID?,
+        receivingLineId: UUID? = null,
     ): UUID {
         val id = UUID.randomUUID()
         jdbc.update(
@@ -214,13 +228,13 @@ class AssetPassportPersistence(private val jdbc: JdbcTemplate) {
                 to_storage_location_id, from_custodian_target_type, from_custodian_target_id, to_custodian_target_type,
                 to_custodian_target_id, project_id, site_id, work_order_id, occurred_at, recorded_at, recorded_by,
                 source_operation_id, condition_at_transfer, reason_code, notes, correction_of_movement_id,
-                correlation_id, source_import_row_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                correlation_id, source_import_row_id, receiving_line_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(), id, asset.id, asset.organizationId, kind.name, prior?.storageLocationId,
             target.locationId, prior?.employeeId?.let { "EMPLOYEE" }, prior?.employeeId, target.employeeId?.let { "EMPLOYEE" },
             target.employeeId, target.projectId, target.siteId, target.workOrderId, effectiveAt.utc(), now.utc(),
             context.actor, context.operationId, condition.name, kind.name, reason, prior?.sourceMovementId,
-            context.correlationId, source,
+            context.correlationId, source, receivingLineId,
         )
         return id
     }

@@ -273,6 +273,16 @@ private fun PhysicalOperatorWorkspace(
 
     receipt?.let { Text("Last confirmed server receipt · $it") }
     refreshWarning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    ReceivingOperatorSection(
+        api = api,
+        warehouse = warehouse,
+        organizationId = organizationId,
+        installationId = installationId,
+        operationId = operationId,
+        busy = busy,
+        runTask = runTask,
+        onReceipt = { receipt = it },
+    )
     Text("Reserved handoff", style = MaterialTheme.typography.titleMedium)
     OutlinedButton({ runTask { queue = null; queue = api.reservationQueue(warehouse, installationId) } }, enabled = !busy) {
         Text("Load reserved handoffs")

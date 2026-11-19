@@ -238,6 +238,67 @@ class WarehouseApiClient(
         post("/v1/stock-items/" + uuid(id) + "/transfer", request.operationId,
             json.encodeToString(TransferStockDto.serializer(), request), installationId, StockMovementReceiptDto.serializer())
 
+    suspend fun receivingDirectory(
+        warehouseId: String, installationId: String, afterUpdatedAt: String? = null, afterId: String? = null,
+    ): ReceivingDirectoryDto {
+        val supplied = listOf(afterUpdatedAt, afterId).count { it != null }
+        require(supplied == 0 || supplied == 2) { "Receiving cursor must be complete." }
+        val cursor = if (supplied == 0) "" else
+            "&afterUpdatedAt=" + requireNotNull(afterUpdatedAt).encodeURLQueryComponent() +
+                "&afterId=" + uuid(requireNotNull(afterId))
+        return get("/v1/receiving?warehouseId=" + uuid(warehouseId) + cursor,
+            installationId, ReceivingDirectoryDto.serializer())
+    }
+
+    suspend fun receivingDetail(id: String, installationId: String): ReceivingDetailDto =
+        get("/v1/receiving/" + uuid(id), installationId, ReceivingDetailDto.serializer())
+
+    suspend fun createReceiving(request: CreateReceivingDto, installationId: String): ReceivingRecordResultDto =
+        post("/v1/receiving", request.operationId, json.encodeToString(CreateReceivingDto.serializer(), request),
+            installationId, ReceivingRecordResultDto.serializer())
+
+    suspend fun addReceivingStockLine(
+        id: String, request: AddReceivingStockLineDto, installationId: String,
+    ): ReceivingLineResultDto =
+        post("/v1/receiving/" + uuid(id) + "/lines", request.operationId,
+            json.encodeToString(AddReceivingStockLineDto.serializer(), request),
+            installationId, ReceivingLineResultDto.serializer())
+
+    suspend fun receiveStockLine(
+        id: String, request: ReceiveStockLineDto, installationId: String,
+    ): ReceivingStockReceiptDto =
+        post("/v1/receiving/" + uuid(id) + "/receive-line", request.operationId,
+            json.encodeToString(ReceiveStockLineDto.serializer(), request),
+            installationId, ReceivingStockReceiptDto.serializer())
+
+    suspend fun addReceivingAssetLine(
+        id: String, request: AddReceivingAssetLineDto, installationId: String,
+    ): ReceivingLineResultDto =
+        post("/v1/receiving/" + uuid(id) + "/asset-lines", request.operationId,
+            json.encodeToString(AddReceivingAssetLineDto.serializer(), request),
+            installationId, ReceivingLineResultDto.serializer())
+
+    suspend fun receiveAssetLine(
+        id: String, request: ReceiveAssetLineDto, installationId: String,
+    ): ReceivingAssetReceiptDto =
+        post("/v1/receiving/" + uuid(id) + "/receive-asset-line", request.operationId,
+            json.encodeToString(ReceiveAssetLineDto.serializer(), request),
+            installationId, ReceivingAssetReceiptDto.serializer())
+
+    suspend fun addReceivingDiscrepancy(
+        id: String, request: AddReceivingDiscrepancyDto, installationId: String,
+    ): ReceivingDiscrepancyResultDto =
+        post("/v1/receiving/" + uuid(id) + "/discrepancies", request.operationId,
+            json.encodeToString(AddReceivingDiscrepancyDto.serializer(), request),
+            installationId, ReceivingDiscrepancyResultDto.serializer())
+
+    suspend fun completeReceiving(
+        id: String, request: CompleteReceivingDto, installationId: String,
+    ): ReceivingRecordResultDto =
+        post("/v1/receiving/" + uuid(id) + "/complete", request.operationId,
+            json.encodeToString(CompleteReceivingDto.serializer(), request),
+            installationId, ReceivingRecordResultDto.serializer())
+
     suspend fun warehouses(
         organizationId: String,
         installationId: String,

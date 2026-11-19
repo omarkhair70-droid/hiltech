@@ -17,8 +17,13 @@ import com.hiltech.shared.core.AssetPassportSection
 import com.hiltech.shared.core.AssetServiceQueue
 import com.hiltech.shared.core.ProjectResourceResults
 import com.hiltech.shared.core.WarehouseReservationResults
+import com.hiltech.shared.core.ReceivingHumanProofSection
 import com.hiltech.shared.core.warehouse.RequirementCandidatesDto
 import com.hiltech.shared.core.warehouse.ReservationDto
+import com.hiltech.shared.core.warehouse.ReceivingDetailDto
+import com.hiltech.shared.core.warehouse.ReceivingDiscrepancyDto
+import com.hiltech.shared.core.warehouse.ReceivingLineDto
+import com.hiltech.shared.core.warehouse.ReceivingRecordDto
 import com.hiltech.shared.core.warehouse.ResourceCandidateDto
 import com.hiltech.shared.core.warehouse.WarehouseReservationQueueDto
 import com.hiltech.shared.core.warehouse.WarehouseWorkRequestDto
@@ -186,6 +191,88 @@ fun main() = runBlocking<Unit> {
         }
     }
     captureAndClose(inspectionScene, directory.resolve("asset-return-inspection.png"))
+
+    val receivingAt = "2026-11-19T06:30:00Z"
+    val receivingRecordId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    val receivingStockLine = ReceivingLineDto(
+        id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        receivingRecordId = receivingRecordId,
+        organizationId = requireNotNull(state.locations).items.first().organizationId,
+        candidateClass = "STOCK_SERIALIZED",
+        expectedStockItemId = stockItem.id,
+        expectedQuantity = "2.000000",
+        receivedQuantity = "2.000000",
+        unitCode = stockItem.baseUnitCode,
+        condition = AssetCondition.GOOD,
+        serials = listOf("RX-STOCK-001", "RX-STOCK-002"),
+        sourceLineRef = "DELIVERY-LINE-01",
+        receivedBy = "synthetic-operator",
+        receivedAt = receivingAt,
+        version = 2,
+    )
+    val receivingAssetType = requireNotNull(assets.catalog).types.first()
+    val receivingAssetLine = ReceivingLineDto(
+        id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        receivingRecordId = receivingRecordId,
+        organizationId = receivingStockLine.organizationId,
+        candidateClass = "COMPANY_ASSET",
+        expectedAssetTypeDefinitionId = receivingAssetType.id,
+        expectedQuantity = "1.000000",
+        receivedQuantity = "1.000000",
+        condition = AssetCondition.GOOD,
+        serials = listOf("RX-ASSET-001"),
+        sourceLineRef = "DELIVERY-LINE-02",
+        receivedAssetId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        receivedBy = "synthetic-operator",
+        receivedAt = receivingAt,
+        version = 2,
+    )
+    val receivingDetail = ReceivingDetailDto(
+        record = ReceivingRecordDto(
+            id = receivingRecordId,
+            organizationId = receivingStockLine.organizationId,
+            destinationStorageLocationId = requireNotNull(state.locations).items.first().storageLocationId,
+            sourceType = "PO",
+            sourceRef = "PO-SYNTH-204",
+            deliveryDocumentRef = "DELIVERY-SYNTH-88",
+            state = "RECEIVED_WITH_DISCREPANCY",
+            createdBy = "synthetic-operator",
+            createdAt = "2026-11-19T06:00:00Z",
+            updatedAt = receivingAt,
+            receivedBy = "synthetic-operator",
+            receivedAt = receivingAt,
+            correlationId = "synthetic-receiving-render",
+            version = 6,
+        ),
+        lines = listOf(receivingStockLine, receivingAssetLine),
+        discrepancies = listOf(
+            ReceivingDiscrepancyDto(
+                id = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+                receivingRecordId = receivingRecordId,
+                receivingLineId = receivingStockLine.id,
+                organizationId = receivingStockLine.organizationId,
+                type = "SHORT_QTY",
+                description = "Synthetic discrepancy retained without rewriting expected source",
+                createdBy = "synthetic-operator",
+                createdAt = receivingAt,
+                version = 1,
+            ),
+        ),
+    )
+    val receivingScene = ImageComposeScene(width = 900, height = 1180, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            ReceivingHumanProofSection(
+                detail = receivingDetail,
+                stockItems = listOf(stockItem.copy(classification = "STOCK_SERIALIZED", serialized = true)),
+                assetCatalog = AssetCatalogDto(listOf(receivingAssetType), false),
+                receiveStock = { _, _, _, _ -> error("Final Receiving render is read-only.") },
+                receiveAsset = { _, _, _, _, _, _, _, _, _ -> error("Final Receiving render is read-only.") },
+                discrepancy = { _, _, _ -> error("Final Receiving render is read-only.") },
+                complete = { error("Final Receiving render is read-only.") },
+            )
+        }
+    }
+    captureAndClose(receivingScene, directory.resolve("receiving-final.png"))
 }
 
 @OptIn(ExperimentalComposeUiApi::class)

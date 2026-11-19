@@ -259,6 +259,106 @@ class WarehouseApiClientTest {
     }
 
     @Test
+    fun assetReceivingRoutesPreserveExplicitTypeAndAssetIdentity() = runBlocking {
+        var call = 0
+        val lineId = "66666666-6666-6666-6666-666666666666"
+        val assetTypeId = "77777777-7777-7777-7777-777777777777"
+        val assetId = "88888888-8888-8888-8888-888888888888"
+        val http = HttpClient(MockEngine { request ->
+            call++
+            assertEquals(operation, request.headers["Idempotency-Key"])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            when (call) {
+                1 -> {
+                    assertEquals("/v1/receiving/$batchId/asset-lines", request.url.encodedPath)
+                    val body=(request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    val sent=Json.decodeFromString<AddReceivingAssetLineDto>(body)
+                    assertEquals(assetTypeId, sent.assetTypeId)
+                    respond("""{"line":{"id":"$lineId","receivingRecordId":"$batchId","organizationId":"$org",
+                        "candidateClass":"COMPANY_ASSET","expectedAssetTypeDefinitionId":"$assetTypeId",
+                        "expectedQuantity":"1.000000","serials":[],"version":1},"replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                2 -> {
+                    assertEquals("/v1/receiving/$batchId/receive-asset-line", request.url.encodedPath)
+                    val body=(request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    val sent=Json.decodeFromString<ReceiveAssetLineDto>(body)
+                    assertEquals(lineId, sent.lineId)
+                    assertEquals("SYNTH-RX-ASSET", sent.assetCode)
+                    assertEquals("RX-SER-001", sent.serialNumber)
+                    respond("""{"line":{"id":"$lineId","receivingRecordId":"$batchId","organizationId":"$org",
+                        "candidateClass":"COMPANY_ASSET","expectedAssetTypeDefinitionId":"$assetTypeId",
+                        "expectedQuantity":"1.000000","receivedQuantity":"1.000000","condition":"GOOD",
+                        "serials":["RX-SER-001"],"receivedAssetId":"$assetId","receivedBy":"$org",
+                        "receivedAt":"2026-11-19T04:00:00Z","version":2},
+                        "asset":{"id":"$assetId","organizationId":"$org","warehouseId":"$warehouseId",
+                        "assetCode":"SYNTH-RX-ASSET","name":"Synthetic received tool","serialNumber":"RX-SER-001",
+                        "typeId":"$assetTypeId","typeName":"Synthetic received Asset type","typeRevision":1,
+                        "condition":"GOOD","lifecycle":"ACTIVE","duplicateSerial":false,"version":2},
+                        "movementId":"$operation","replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                else -> error("Unexpected request")
+            }
+        })
+        val client=client(http)
+        val line=client.addReceivingAssetLine(batchId,
+            AddReceivingAssetLineDto(operation, 3, assetTypeId, "ASSET-LINE"), installation)
+        assertEquals("COMPANY_ASSET", line.line.candidateClass)
+        val receipt=client.receiveAssetLine(batchId,
+            ReceiveAssetLineDto(operation, lineId, 4, 1, "SYNTH-RX-ASSET", "Synthetic received tool",
+                serialNumber="RX-SER-001", ownershipType="COMPANY", condition=AssetCondition.GOOD), installation)
+        assertEquals(assetId, receipt.line.receivedAssetId)
+        assertEquals(assetId, receipt.asset.id)
+        assertFalse(receipt.replayed)
+    }
+
+    @Test
+    fun receivingRoutesPreserveExpectedSourceAndIdempotencyKey() = runBlocking {
+        var call = 0
+        val lineId = "66666666-6666-6666-6666-666666666666"
+        val http = HttpClient(MockEngine { request ->
+            call++
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            when (call) {
+                1 -> {
+                    assertEquals("/v1/receiving", request.url.encodedPath)
+                    assertEquals(warehouseId, request.url.parameters["warehouseId"])
+                    respond("""{"items":[{"id":"$batchId","organizationId":"$org",
+                        "destinationStorageLocationId":"$warehouseId","sourceType":"OTHER","state":"IN_PROGRESS",
+                        "createdBy":"$org","createdAt":"2026-11-19T03:00:00Z","updatedAt":"2026-11-19T03:01:00Z",
+                        "correlationId":"corr","version":3}],"limited":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                2 -> {
+                    assertEquals("/v1/receiving/$batchId/discrepancies", request.url.encodedPath)
+                    assertEquals(operation, request.headers["Idempotency-Key"])
+                    val body=(request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    val sent=Json.decodeFromString<AddReceivingDiscrepancyDto>(body)
+                    assertEquals("SHORT_QTY", sent.type)
+                    assertEquals(lineId, sent.lineId)
+                    respond("""{"discrepancy":{"id":"$operation","receivingRecordId":"$batchId",
+                        "receivingLineId":"$lineId","organizationId":"$org","type":"SHORT_QTY",
+                        "description":"One missing","createdBy":"$org","createdAt":"2026-11-19T03:02:00Z","version":1},
+                        "record":{"id":"$batchId","organizationId":"$org","destinationStorageLocationId":"$warehouseId",
+                        "sourceType":"OTHER","state":"IN_PROGRESS","createdBy":"$org",
+                        "createdAt":"2026-11-19T03:00:00Z","updatedAt":"2026-11-19T03:02:00Z",
+                        "correlationId":"corr","version":4},"replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                else -> error("Unexpected request")
+            }
+        })
+        val client=client(http)
+        assertEquals(batchId, client.receivingDirectory(warehouseId, installation).items.single().id)
+        val discrepancy=client.addReceivingDiscrepancy(batchId,
+            AddReceivingDiscrepancyDto(operation, 3, lineId, "SHORT_QTY", "One missing"), installation)
+        assertEquals("SHORT_QTY", discrepancy.discrepancy.type)
+        assertFalse(discrepancy.replayed)
+    }
+
+    @Test
     fun warehouseDirectoryAndCreateUseExistingAuthenticatedTransport() = runBlocking {
         val visited = mutableListOf<Pair<String, String?>>()
         val http = HttpClient(MockEngine { request ->
