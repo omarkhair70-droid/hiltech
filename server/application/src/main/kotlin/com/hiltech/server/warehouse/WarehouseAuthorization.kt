@@ -320,6 +320,7 @@ interface WarehouseAuthorizationPort {
     fun canReceiveAt(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean = false
     fun canCountAt(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean = false
     fun canRequestAdjustment(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean = false
+    fun canApproveAdjustment(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean = false
     fun canTransferStock(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean
 }
 
@@ -410,6 +411,12 @@ class SpringWarehouseAuthorization(
         checkWarehouseAction(
             actorUserId, warehouse, "can_request_adjustment",
             setOf(WarehouseAuthorityKey.WAREHOUSE_OPERATOR, WarehouseAuthorityKey.WAREHOUSE_MANAGER),
+        )
+
+    override fun canApproveAdjustment(actorUserId: UUID, warehouse: WarehouseSnapshot): Boolean =
+        checkWarehouseAction(
+            actorUserId, warehouse, "can_approve_adjustment",
+            setOf(WarehouseAuthorityKey.INVENTORY_ADJUSTMENT_APPROVER),
         )
 
     override fun canTransferStock(actorUserId: UUID, storage: StorageLocationSnapshot): Boolean {

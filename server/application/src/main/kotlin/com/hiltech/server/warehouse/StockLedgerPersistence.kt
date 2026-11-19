@@ -23,6 +23,13 @@ data class StockItemView(
 data class StockUnitView(val code: String, val name: String)
 data class StockCategoryView(val id: UUID, val name: String, val revision: Int)
 data class StockBalanceView(val storageLocationId: UUID, val locationCode: String, val onHandQuantity: String, val version: Long)
+internal data class StockAdjustmentBalance(
+    val onHand: BigDecimal,
+    val reserved: BigDecimal,
+    val damaged: BigDecimal,
+    val quarantine: BigDecimal,
+    val version: Long,
+)
 data class StockMovementView(
     val id: UUID, val operationId: UUID, val type: String, val quantity: String, val unitCode: String,
     val fromStorageLocationId: UUID?, val toStorageLocationId: UUID?, val sourceImportRowId: UUID?,
@@ -144,6 +151,60 @@ class StockLedgerPersistence(private val jdbc: JdbcTemplate) {
     fun movementForReceivingLine(lineId: UUID): StockMovementView? = jdbc.query(
         "SELECT * FROM stock_movement WHERE receiving_line_id = ?", { row, _ -> row.stockMovement() }, lineId,
     ).singleOrNull()
+
+    fun movementForAdjustmentRequest(requestId: UUID): StockMovementView? = jdbc.query(
+        "SELECT * FROM stock_movement WHERE inventory_adjustment_request_id = ?",
+        { row, _ -> row.stockMovement() }, requestId,
+    ).singleOrNull()
+
+    internal fun adjustmentBalance(
+        itemId: UUID,
+        locationId: UUID,
+        lock: Boolean = false,
+    ): StockAdjustmentBalance? = jdbc.query(
+        """SELECT on_hand_qty, reserved_qty, damaged_qty, quarantine_qty, version
+           FROM stock_balance
+           WHERE stock_item_id = ? AND storage_location_id = ?""" +
+            if (lock) " FOR UPDATE" else "",
+        { row, _ ->
+            StockAdjustmentBalance(
+                row.getBigDecimal("on_hand_qty"),
+                row.getBigDecimal("reserved_qty"),
+                row.getBigDecimal("damaged_qty"),
+                row.getBigDecimal("quarantine_qty"),
+                row.getLong("version"),
+            )
+        },
+        itemId, locationId,
+    ).singleOrNull()
+
+    internal fun appendAdjustment(
+        item: StockItemView,
+        operationId: UUID,
+        actor: UUID,
+        delta: BigDecimal,
+        locationId: UUID,
+        adjustmentRequestId: UUID,
+        occurredAt: Instant,
+        now: Instant,
+        correlationId: String,
+    ): UUID {
+        require(delta.signum() != 0)
+        val movementId = UUID.randomUUID()
+        val from = if (delta.signum() < 0) locationId else null
+        val to = if (delta.signum() > 0) locationId else null
+        jdbc.update(
+            """INSERT INTO stock_movement (
+                id, stock_item_id, organization_id, operation_id, quantity, unit_code,
+                movement_type, from_storage_location_id, to_storage_location_id, source_import_row_id,
+                occurred_at, recorded_at, recorded_by, correlation_id, reason_code,
+                inventory_adjustment_request_id
+               ) VALUES (?, ?, ?, ?, ?, ?, 'ADJUSTMENT', ?, ?, NULL, ?, ?, ?, ?, 'ADJUSTMENT', ?)""".trimIndent(),
+            movementId, item.id, item.organizationId, operationId, delta.abs(), item.baseUnitCode,
+            from, to, occurredAt.utc(), now.utc(), actor, correlationId, adjustmentRequestId,
+        )
+        return movementId
+    }
 
     internal fun appendReceiving(
         item: StockItemView, operationId: UUID, actor: UUID, quantity: BigDecimal,

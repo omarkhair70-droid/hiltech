@@ -235,6 +235,77 @@ internal class StocktakeOperatorScenario(
         assertEquals("APPROVED", approved.approvalStatus)
         assertTrue(approved.appliedMovementId == null)
         assertEquals("6.000000", stock.balances(item).single().onHandQuantity)
+
+        assertTrue(authority.canApproveAdjustment(operator, requireNotNull(warehouse.warehouse(facility))))
+        assertFalse(authority.canApproveAdjustment(unauthorized, requireNotNull(warehouse.warehouse(facility))))
+
+        assertEquals("STOCKTAKE_UNAVAILABLE", assertThrows<ProductApiException> {
+            service.applyAdjustment(
+                context(UUID.randomUUID(), unauthorized),
+                adjustment.request.id,
+                ApplyInventoryAdjustmentRequest(adjustment.request.version),
+            )
+        }.code)
+
+        val pendingCreated = service.create(context(UUID.randomUUID()), CreateStocktakeRequest(
+            organization, facility, location.storageLocationId, stockItemIds = listOf(item)))
+        val pendingStarted = service.start(
+            context(UUID.randomUUID()), pendingCreated.session.id, StartStocktakeRequest(pendingCreated.session.version))
+        val pendingSnapshot = pendingStarted.snapshotLines.single()
+        service.recordCount(
+            context(UUID.randomUUID()), pendingStarted.session.id,
+            RecordStockCountRequest(
+                pendingStarted.session.version, pendingSnapshot.id, "4", pendingSnapshot.unitCode,
+                "SCAN-SYNTH-PENDING", "Pending approval proof",
+            ),
+        )
+        val pendingSubmitted = service.submit(
+            context(UUID.randomUUID()), pendingStarted.session.id, SubmitStocktakeRequest(pendingStarted.session.version))
+        val pendingDiscrepancy = pendingSubmitted.discrepancies.single()
+        val pendingRequest = service.requestAdjustment(
+            context(UUID.randomUUID()), pendingDiscrepancy.id,
+            RequestInventoryAdjustmentRequest(pendingDiscrepancy.version, "Pending approval must not apply"),
+        ).request
+        assertEquals("PENDING", pendingRequest.approvalStatus)
+        assertEquals("INVENTORY_ADJUSTMENT_APPROVAL_REQUIRED", assertThrows<ProductApiException> {
+            service.applyAdjustment(
+                context(UUID.randomUUID()), pendingRequest.id,
+                ApplyInventoryAdjustmentRequest(pendingRequest.version),
+            )
+        }.code)
+        assertEquals("6.000000", stock.balances(item).single().onHandQuantity)
+        assertTrue(stock.movementForAdjustmentRequest(pendingRequest.id) == null)
+
+        val applyOp = UUID.randomUUID()
+        val applied = service.applyAdjustment(
+            context(applyOp),
+            adjustment.request.id,
+            ApplyInventoryAdjustmentRequest(adjustment.request.version),
+        )
+        assertFalse(applied.replayed)
+        assertEquals("ADJUSTMENT", applied.movement.movementType)
+        assertEquals("1.000000", applied.movement.quantity)
+        assertEquals(location.storageLocationId, applied.movement.fromStorageLocationId)
+        assertTrue(applied.movement.toStorageLocationId == null)
+        assertEquals("5.000000", stock.balances(item).single().onHandQuantity)
+        assertEquals(applied.movement.id, applied.request.appliedMovementId)
+        assertEquals("APPROVED", applied.request.approvalStatus)
+        assertEquals(2L, applied.request.version)
+        assertEquals("CLOSED", stocktakes.discrepancy(cleanDiscrepancy.id)!!.state)
+        assertEquals(StocktakeState.CLOSED, applied.session.state)
+
+        val applyReplay = service.applyAdjustment(
+            context(applyOp),
+            adjustment.request.id,
+            ApplyInventoryAdjustmentRequest(adjustment.request.version),
+        )
+        assertTrue(applyReplay.replayed)
+        assertEquals(applied.movement.id, applyReplay.movement.id)
+        assertEquals("5.000000", stock.balances(item).single().onHandQuantity)
+        assertEquals(1, jdbc.queryForObject(
+            "SELECT count(*) FROM stock_movement WHERE inventory_adjustment_request_id = ?",
+            Int::class.java, adjustment.request.id,
+        ))
     }
 
     private fun approvalSource() = InventoryAdjustmentApprovalSource(stocktakes, warehouse)

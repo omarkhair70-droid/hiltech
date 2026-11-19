@@ -220,8 +220,8 @@ class StocktakePersistence(private val jdbc: JdbcTemplate) {
         { r, _ -> r.discrepancy() }, id,
     ).singleOrNull()
 
-    fun adjustmentRequest(id: UUID): InventoryAdjustmentRequestView? = jdbc.query(
-        "SELECT * FROM inventory_adjustment_request WHERE id = ?",
+    fun adjustmentRequest(id: UUID, lock: Boolean = false): InventoryAdjustmentRequestView? = jdbc.query(
+        "SELECT * FROM inventory_adjustment_request WHERE id = ?" + if (lock) " FOR UPDATE" else "",
         { r, _ -> r.adjustmentRequest() }, id,
     ).singleOrNull()
 
@@ -267,6 +267,46 @@ class StocktakePersistence(private val jdbc: JdbcTemplate) {
            WHERE id = ? AND version = ? AND state IN ('OPEN','INVESTIGATING')""".trimIndent(),
         at.utc(), id, version,
     ) == 1
+
+    fun markApplied(
+        id: UUID,
+        version: Long,
+        movementId: UUID,
+        actor: UUID,
+        at: Instant,
+    ): Boolean = jdbc.update(
+        """UPDATE inventory_adjustment_request
+           SET approval_status = 'APPROVED', applied_movement_id = ?, applied_by = ?, applied_at = ?,
+               version = version + 1
+           WHERE id = ? AND version = ? AND approval_request_id IS NOT NULL
+             AND applied_movement_id IS NULL""".trimIndent(),
+        movementId, actor, at.utc(), id, version,
+    ) == 1
+
+    fun closeDiscrepancy(id: UUID, version: Long, at: Instant): Boolean = jdbc.update(
+        """UPDATE inventory_discrepancy
+           SET state = 'CLOSED', updated_at = ?, version = version + 1
+           WHERE id = ? AND version = ? AND state = 'ADJUSTMENT_REQUESTED'""".trimIndent(),
+        at.utc(), id, version,
+    ) == 1
+
+    fun reconcileSession(id: UUID, version: Long, actor: UUID, at: Instant): Boolean {
+        val unresolved = jdbc.queryForObject(
+            """SELECT count(*) FROM inventory_discrepancy
+               WHERE stocktake_session_id = ? AND state NOT IN ('CLOSED','RESOLVED_NO_ADJUSTMENT')""".trimIndent(),
+            Int::class.java, id,
+        ) ?: 0
+        val next = if (unresolved == 0) "CLOSED" else "RECONCILING"
+        return jdbc.update(
+            """UPDATE stocktake_session
+               SET state = ?, updated_at = ?,
+                   closed_by = CASE WHEN ? = 'CLOSED' THEN ? ELSE closed_by END,
+                   closed_at = CASE WHEN ? = 'CLOSED' THEN ? ELSE closed_at END,
+                   version = version + 1
+               WHERE id = ? AND version = ? AND state IN ('SUBMITTED','RECONCILING')""".trimIndent(),
+            next, at.utc(), next, actor, next, at.utc(), id, version,
+        ) == 1
+    }
 
     fun submit(id: UUID, version: Long, actor: UUID, at: Instant): Boolean = jdbc.update(
         """UPDATE stocktake_session

@@ -32,6 +32,10 @@ data class RequestInventoryAdjustmentApiRequest(
     val discrepancyVersion: Long,
     val reason: String,
 )
+data class ApplyInventoryAdjustmentApiRequest(
+    val operationId: UUID,
+    val requestVersion: Long,
+)
 
 @RestController
 class StocktakeController(private val service: StocktakeService) {
@@ -96,6 +100,17 @@ class StocktakeController(private val service: StocktakeService) {
         request.stocktakeContext(body.operationId),
         id,
         RequestInventoryAdjustmentRequest(body.discrepancyVersion, body.reason),
+    )
+
+    @PostMapping("/v1/inventory-adjustments/{id}/apply")
+    fun applyAdjustment(
+        request: HttpServletRequest,
+        @PathVariable id: UUID,
+        @RequestBody body: ApplyInventoryAdjustmentApiRequest,
+    ) = service.applyAdjustment(
+        request.stocktakeContext(body.operationId),
+        id,
+        ApplyInventoryAdjustmentRequest(body.requestVersion),
     )
 }
 

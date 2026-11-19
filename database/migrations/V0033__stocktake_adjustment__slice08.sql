@@ -222,3 +222,230 @@ END;
 $stocktake_count$;
 CREATE TRIGGER stock_count_record_guard BEFORE INSERT OR UPDATE OR DELETE ON stock_count_record
 FOR EACH ROW EXECUTE FUNCTION guard_stock_count_record();
+
+
+-- Slice 08 final reconciliation invariants.
+ALTER TABLE inventory_discrepancy
+    ADD CONSTRAINT inventory_discrepancy_variance_truth_check CHECK (
+        expected_quantity >= 0 AND counted_quantity >= 0
+        AND variance_quantity = counted_quantity - expected_quantity
+    );
+
+CREATE FUNCTION guard_inventory_discrepancy_mutation()
+RETURNS trigger LANGUAGE plpgsql AS $inventory_discrepancy_guard$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'Inventory discrepancy history is durable' USING ERRCODE = '23514';
+    END IF;
+    IF NEW.version <> OLD.version + 1
+        OR (to_jsonb(NEW) - ARRAY['state','updated_at','version'])
+           IS DISTINCT FROM
+           (to_jsonb(OLD) - ARRAY['state','updated_at','version'])
+        OR NOT (
+            (OLD.state = 'OPEN' AND NEW.state IN ('INVESTIGATING','RESOLVED_NO_ADJUSTMENT','ADJUSTMENT_REQUESTED'))
+            OR (OLD.state = 'INVESTIGATING' AND NEW.state IN ('RESOLVED_NO_ADJUSTMENT','ADJUSTMENT_REQUESTED'))
+            OR (OLD.state = 'ADJUSTMENT_REQUESTED' AND NEW.state = 'CLOSED')
+        ) THEN
+        RAISE EXCEPTION 'Invalid Inventory discrepancy transition' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$inventory_discrepancy_guard$;
+CREATE TRIGGER inventory_discrepancy_guard
+BEFORE UPDATE OR DELETE ON inventory_discrepancy
+FOR EACH ROW EXECUTE FUNCTION guard_inventory_discrepancy_mutation();
+
+CREATE FUNCTION guard_inventory_adjustment_request_mutation()
+RETURNS trigger LANGUAGE plpgsql AS $inventory_adjustment_guard$
+DECLARE
+    core_same boolean :=
+        (to_jsonb(NEW) - ARRAY['approval_request_id','approval_status','applied_movement_id',
+                               'applied_by','applied_at','version'])
+        IS NOT DISTINCT FROM
+        (to_jsonb(OLD) - ARRAY['approval_request_id','approval_status','applied_movement_id',
+                               'applied_by','applied_at','version']);
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'Inventory adjustment request history is durable' USING ERRCODE = '23514';
+    END IF;
+    IF NOT core_same THEN
+        RAISE EXCEPTION 'Inventory adjustment request core is immutable' USING ERRCODE = '23514';
+    END IF;
+    IF OLD.approval_request_id IS NULL
+        AND NEW.approval_request_id IS NOT NULL
+        AND NEW.approval_status = 'PENDING'
+        AND NEW.applied_movement_id IS NULL
+        AND NEW.applied_by IS NULL
+        AND NEW.applied_at IS NULL
+        AND NEW.version = OLD.version THEN
+        RETURN NEW;
+    END IF;
+    IF OLD.approval_request_id IS NOT NULL
+        AND NEW.approval_request_id = OLD.approval_request_id
+        AND OLD.applied_movement_id IS NULL
+        AND NEW.approval_status = 'APPROVED'
+        AND NEW.applied_movement_id IS NOT NULL
+        AND NEW.applied_by IS NOT NULL
+        AND NEW.applied_at IS NOT NULL
+        AND NEW.version = OLD.version + 1 THEN
+        RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'Invalid Inventory adjustment request transition' USING ERRCODE = '23514';
+END;
+$inventory_adjustment_guard$;
+CREATE TRIGGER inventory_adjustment_request_guard
+BEFORE UPDATE OR DELETE ON inventory_adjustment_request
+FOR EACH ROW EXECUTE FUNCTION guard_inventory_adjustment_request_mutation();
+
+-- Slice 08 Checkpoint 07B: approved Inventory Adjustment is an append-only Stock ledger movement.
+ALTER TABLE stock_movement
+    ADD COLUMN inventory_adjustment_request_id uuid UNIQUE
+        REFERENCES inventory_adjustment_request(id) ON DELETE RESTRICT,
+    ADD CONSTRAINT stock_movement_inventory_adjustment_reference_check CHECK (
+        (movement_type = 'ADJUSTMENT' AND inventory_adjustment_request_id IS NOT NULL)
+        OR
+        (movement_type <> 'ADJUSTMENT' AND inventory_adjustment_request_id IS NULL)
+    );
+
+-- The existing projector continues to own every pre-Slice-08 movement.
+-- ADJUSTMENT has a stricter projector because it must prove Approval + discrepancy truth.
+DROP TRIGGER IF EXISTS stock_movement_projects_balance ON stock_movement;
+CREATE TRIGGER stock_movement_projects_balance AFTER INSERT ON stock_movement
+FOR EACH ROW WHEN (NEW.movement_type <> 'ADJUSTMENT')
+EXECUTE FUNCTION project_stock_movement();
+
+CREATE FUNCTION project_inventory_adjustment_movement()
+RETURNS trigger LANGUAGE plpgsql AS $inventory_adjustment_movement$
+DECLARE
+    request_row inventory_adjustment_request%ROWTYPE;
+    discrepancy_row inventory_discrepancy%ROWTYPE;
+    session_row stocktake_session%ROWTYPE;
+    approval_row approval_request%ROWTYPE;
+    item_row stock_item%ROWTYPE;
+    location_row storage_location%ROWTYPE;
+    balance_row stock_balance%ROWTYPE;
+    absolute_delta numeric(20,6);
+BEGIN
+    SELECT * INTO STRICT request_row
+      FROM inventory_adjustment_request
+      WHERE id = NEW.inventory_adjustment_request_id
+      FOR UPDATE;
+    SELECT * INTO STRICT discrepancy_row
+      FROM inventory_discrepancy
+      WHERE id = request_row.inventory_discrepancy_id
+      FOR UPDATE;
+    SELECT * INTO STRICT session_row
+      FROM stocktake_session
+      WHERE id = request_row.stocktake_session_id
+      FOR UPDATE;
+
+    IF request_row.applied_movement_id IS NOT NULL
+        OR discrepancy_row.state <> 'ADJUSTMENT_REQUESTED'
+        OR discrepancy_row.source_changed_since_snapshot
+        OR session_row.state NOT IN ('SUBMITTED','RECONCILING')
+        OR request_row.delta_quantity <> discrepancy_row.variance_quantity
+        OR request_row.organization_id <> NEW.organization_id
+        OR request_row.stock_item_id <> NEW.stock_item_id
+        OR discrepancy_row.stock_item_id <> NEW.stock_item_id
+        OR request_row.storage_location_id <> discrepancy_row.storage_location_id THEN
+        RAISE EXCEPTION 'Adjustment request is not currently applicable' USING ERRCODE = '23514';
+    END IF;
+
+    IF request_row.approval_request_id IS NULL THEN
+        RAISE EXCEPTION 'Adjustment requires canonical Approval' USING ERRCODE = '23514';
+    END IF;
+    SELECT * INTO STRICT approval_row
+      FROM approval_request
+      WHERE id = request_row.approval_request_id
+      FOR SHARE;
+    IF approval_row.organization_id <> request_row.organization_id
+        OR approval_row.subject_type <> 'INVENTORY_ADJUSTMENT_REQUEST'
+        OR approval_row.subject_id <> request_row.id
+        OR approval_row.subject_version <> request_row.version
+        OR approval_row.policy_key <> 'INVENTORY_ADJUSTMENT_STANDARD'
+        OR approval_row.state <> 'APPROVED' THEN
+        RAISE EXCEPTION 'Adjustment Approval is not approved for this exact request' USING ERRCODE = '23514';
+    END IF;
+
+    SELECT * INTO STRICT item_row FROM stock_item WHERE id = NEW.stock_item_id FOR NO KEY UPDATE;
+    SELECT * INTO STRICT location_row FROM storage_location WHERE id = request_row.storage_location_id FOR SHARE;
+    IF NOT item_row.active
+        OR item_row.organization_id <> request_row.organization_id
+        OR item_row.unit_of_measure_code <> request_row.unit_code
+        OR NEW.unit_code <> request_row.unit_code
+        OR NOT EXISTS (
+            SELECT 1 FROM stock_unit u
+            WHERE u.organization_id = item_row.organization_id
+              AND u.code = request_row.unit_code AND u.active
+        )
+        OR location_row.organization_id <> request_row.organization_id
+        OR location_row.warehouse_id IS DISTINCT FROM session_row.warehouse_id
+        OR location_row.lifecycle_state <> 'ACTIVE'
+        OR (location_row.active_from IS NOT NULL AND location_row.active_from > NEW.recorded_at)
+        OR (location_row.active_until IS NOT NULL AND location_row.active_until <= NEW.recorded_at)
+        OR NOT EXISTS (
+            SELECT 1 FROM warehouse w
+            WHERE w.id = session_row.warehouse_id
+              AND w.organization_id = request_row.organization_id
+              AND w.active
+        ) THEN
+        RAISE EXCEPTION 'Adjustment Stock or location truth is unavailable' USING ERRCODE = '23514';
+    END IF;
+
+    absolute_delta := abs(request_row.delta_quantity);
+    IF NEW.quantity <> absolute_delta
+        OR NEW.reason_code <> 'ADJUSTMENT'
+        OR NEW.source_import_row_id IS NOT NULL
+        OR NEW.receiving_line_id IS NOT NULL
+        OR NEW.project_id IS NOT NULL
+        OR NEW.site_id IS NOT NULL
+        OR NEW.work_order_id IS NOT NULL
+        OR NEW.work_requirement_instance_id IS NOT NULL
+        OR NEW.fulfilled_reservation_id IS NOT NULL
+        OR NEW.recipient_target_type IS NOT NULL
+        OR NEW.recipient_target_id IS NOT NULL
+        OR NEW.purchase_receipt_id IS NOT NULL
+        OR (request_row.delta_quantity > 0 AND
+            (NEW.from_storage_location_id IS NOT NULL
+             OR NEW.to_storage_location_id IS DISTINCT FROM request_row.storage_location_id))
+        OR (request_row.delta_quantity < 0 AND
+            (NEW.from_storage_location_id IS DISTINCT FROM request_row.storage_location_id
+             OR NEW.to_storage_location_id IS NOT NULL)) THEN
+        RAISE EXCEPTION 'Adjustment movement does not match approved request' USING ERRCODE = '23514';
+    END IF;
+
+    SELECT * INTO STRICT balance_row FROM stock_balance
+      WHERE stock_item_id = request_row.stock_item_id
+        AND storage_location_id = request_row.storage_location_id
+      FOR UPDATE;
+    IF balance_row.version <> discrepancy_row.current_balance_version THEN
+        RAISE EXCEPTION 'Stock changed after discrepancy reconciliation' USING ERRCODE = '23514';
+    END IF;
+
+    IF request_row.delta_quantity < 0 THEN
+        IF balance_row.on_hand_qty - balance_row.reserved_qty -
+           balance_row.damaged_qty - balance_row.quarantine_qty < absolute_delta THEN
+            RAISE EXCEPTION 'Adjustment would make available Stock negative' USING ERRCODE = '23514';
+        END IF;
+        UPDATE stock_balance
+        SET on_hand_qty = on_hand_qty - absolute_delta,
+            updated_at = greatest(updated_at, NEW.recorded_at),
+            version = version + 1
+        WHERE stock_item_id = request_row.stock_item_id
+          AND storage_location_id = request_row.storage_location_id;
+    ELSE
+        UPDATE stock_balance
+        SET on_hand_qty = on_hand_qty + absolute_delta,
+            updated_at = greatest(updated_at, NEW.recorded_at),
+            version = version + 1
+        WHERE stock_item_id = request_row.stock_item_id
+          AND storage_location_id = request_row.storage_location_id;
+    END IF;
+    RETURN NEW;
+END;
+$inventory_adjustment_movement$;
+
+CREATE TRIGGER stock_movement_projects_inventory_adjustment
+AFTER INSERT ON stock_movement
+FOR EACH ROW WHEN (NEW.movement_type = 'ADJUSTMENT')
+EXECUTE FUNCTION project_inventory_adjustment_movement();

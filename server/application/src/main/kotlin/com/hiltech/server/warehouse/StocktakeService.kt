@@ -26,6 +26,7 @@ data class CreateStocktakeRequest(
 data class StartStocktakeRequest(val sessionVersion: Long)
 data class SubmitStocktakeRequest(val sessionVersion: Long)
 data class RequestInventoryAdjustmentRequest(val discrepancyVersion: Long, val reason: String)
+data class ApplyInventoryAdjustmentRequest(val requestVersion: Long)
 data class RecordStockCountRequest(
     val sessionVersion: Long, val snapshotLineId: UUID, val countedQuantity: String, val unitCode: String,
     val scanSource: String? = null, val notes: String? = null,
@@ -39,6 +40,12 @@ data class StocktakeSubmitResult(
     val session: StocktakeSessionView, val discrepancies: List<InventoryDiscrepancyView>, val replayed: Boolean,
 )
 data class InventoryAdjustmentRequestResult(val request: InventoryAdjustmentRequestView, val replayed: Boolean)
+data class InventoryAdjustmentApplyResult(
+    val request: InventoryAdjustmentRequestView,
+    val movement: StockMovementView,
+    val session: StocktakeSessionView,
+    val replayed: Boolean,
+)
 data class StocktakeDetailResult(
     val session: StocktakeSessionView,
     val snapshotLines: List<StocktakeSnapshotLineView>,
@@ -56,6 +63,9 @@ data class StockCountRecorded(val sessionId: UUID, val snapshotLineId: UUID, val
 data class StocktakeSubmitted(val sessionId: UUID, val actor: UUID, val discrepancyCount: Int)
 data class InventoryAdjustmentRequested(
     val requestId: UUID, val discrepancyId: UUID, val sessionId: UUID, val actor: UUID,
+)
+data class InventoryAdjustmentApplied(
+    val requestId: UUID, val discrepancyId: UUID, val movementId: UUID, val sessionId: UUID, val actor: UUID,
 )
 
 @Service
@@ -295,6 +305,98 @@ class StocktakeService(
         return InventoryAdjustmentRequestResult(canonicalAdjustment(stored), replayed)
     }
 
+    fun applyAdjustment(
+        context: StocktakeCommandContext,
+        id: UUID,
+        request: ApplyInventoryAdjustmentRequest,
+    ): InventoryAdjustmentApplyResult {
+        val visible = stocktakes.adjustmentRequest(id) ?: unavailable()
+        val visibleSession = stocktakes.session(visible.sessionId) ?: unavailable()
+        warehouse.warehouse(visibleSession.warehouseId)?.takeIf {
+            it.active && it.organizationId == visible.organizationId &&
+                authorization.canApproveAdjustment(context.actor, it)
+        } ?: unavailable()
+
+        val replayed = execute(
+            context,
+            "INVENTORY_ADJUSTMENT_APPLIED",
+            "INVENTORY_ADJUSTMENT_REQUEST",
+            id,
+            request.requestVersion,
+        ) {
+            val current = stocktakes.adjustmentRequest(id, lock = true) ?: unavailable()
+            if (current.version != request.requestVersion || current.appliedMovementId != null) stale()
+
+            val session = stocktakes.session(current.sessionId, lock = true) ?: unavailable()
+            val facility = warehouse.warehouse(session.warehouseId)?.takeIf {
+                it.active && it.organizationId == current.organizationId &&
+                    authorization.canApproveAdjustment(context.actor, it)
+            } ?: unavailable()
+            val discrepancy = stocktakes.discrepancy(current.discrepancyId, lock = true) ?: unavailable()
+            if (discrepancy.state != "ADJUSTMENT_REQUESTED" ||
+                discrepancy.sourceChangedSinceSnapshot
+            ) reconciliationRequired()
+
+            val approvalId = current.approvalRequestId ?: approvalRequired()
+            val approval = approvals.subjectStatus(
+                adjustmentSubject(current),
+                INVENTORY_ADJUSTMENT_POLICY_KEY,
+            ) ?: approvalRequired()
+            if (approval.approvalRequestId != approvalId ||
+                approval.state != ApprovalRequestState.APPROVED
+            ) approvalRequired()
+
+            val item = stock.item(current.stockItemId)?.takeIf {
+                it.active && it.organizationId == current.organizationId &&
+                    it.baseUnitCode == current.unitCode
+            } ?: unavailable()
+            val location = warehouse.storageLocation(current.storageLocationId)?.takeIf {
+                it.organizationId == current.organizationId &&
+                    it.warehouseId == facility.warehouseId &&
+                    it.lifecycleState == StorageLocationLifecycle.ACTIVE &&
+                    (it.activeFrom == null || it.activeFrom <= clock.instant()) &&
+                    (it.activeUntil == null || it.activeUntil > clock.instant())
+            } ?: unavailable()
+
+            val delta = BigDecimal(current.deltaQuantity)
+            if (delta.compareTo(BigDecimal(discrepancy.varianceQuantity)) != 0) stale()
+            val balance = stock.adjustmentBalance(item.id, location.storageLocationId, lock = true)
+                ?: unavailable()
+            if (balance.version != discrepancy.currentBalanceVersion) reconciliationRequired()
+            val absolute = delta.abs()
+            if (delta.signum() < 0 &&
+                balance.onHand.subtract(balance.reserved).subtract(balance.damaged).subtract(balance.quarantine)
+                    .compareTo(absolute) < 0
+            ) negativeStock()
+
+            val at = clock.instant().truncatedTo(ChronoUnit.MICROS)
+            val movementId = stock.appendAdjustment(
+                item = item,
+                operationId = context.operationId,
+                actor = context.actor,
+                delta = delta,
+                locationId = location.storageLocationId,
+                adjustmentRequestId = current.id,
+                occurredAt = at,
+                now = at,
+                correlationId = context.correlationId,
+            )
+            if (!stocktakes.markApplied(current.id, current.version, movementId, context.actor, at)) stale()
+            if (!stocktakes.closeDiscrepancy(discrepancy.id, discrepancy.version, at)) stale()
+            if (!stocktakes.reconcileSession(session.id, session.version, context.actor, at)) stale()
+            events.publishEvent(
+                InventoryAdjustmentApplied(current.id, discrepancy.id, movementId, session.id, context.actor),
+            )
+        }
+
+        val applied = stocktakes.adjustmentRequest(id) ?: unavailable()
+        val movement = applied.appliedMovementId?.let(stock::movement)
+            ?: stock.movementForAdjustmentRequest(id)
+            ?: unavailable()
+        val session = stocktakes.session(applied.sessionId) ?: unavailable()
+        return InventoryAdjustmentApplyResult(canonicalAdjustment(applied), movement, session, replayed)
+    }
+
     private fun adjustmentSubject(request: InventoryAdjustmentRequestView) = ApprovalSubjectRef(
         organizationId = request.organizationId,
         subjectType = INVENTORY_ADJUSTMENT_SUBJECT_TYPE,
@@ -303,10 +405,13 @@ class StocktakeService(
     )
 
     private fun canonicalAdjustment(request: InventoryAdjustmentRequestView): InventoryAdjustmentRequestView {
+        if (request.appliedMovementId != null) {
+            return request.copy(approvalStatus = "APPROVED")
+        }
         val status = approvals.subjectStatus(adjustmentSubject(request), INVENTORY_ADJUSTMENT_POLICY_KEY)
         return request.copy(
             approvalRequestId = status?.approvalRequestId ?: request.approvalRequestId,
-            approvalStatus = status?.state?.name,
+            approvalStatus = status?.state?.name ?: request.approvalStatus,
         )
     }
 
@@ -366,5 +471,15 @@ class StocktakeService(
         "INVENTORY_ADJUSTMENT_APPROVAL_UNAVAILABLE",
         "Inventory adjustment approval is not currently configured or available.",
         HttpStatus.SERVICE_UNAVAILABLE,
+    )
+    private fun approvalRequired(): Nothing = throw ProductApiException(
+        "INVENTORY_ADJUSTMENT_APPROVAL_REQUIRED",
+        "This exact Inventory Adjustment request requires canonical approval.",
+        HttpStatus.CONFLICT,
+    )
+    private fun negativeStock(): Nothing = throw ProductApiException(
+        "INVENTORY_ADJUSTMENT_NEGATIVE_STOCK",
+        "The approved adjustment would consume Stock that is reserved, damaged, quarantined or unavailable.",
+        HttpStatus.CONFLICT,
     )
 }
