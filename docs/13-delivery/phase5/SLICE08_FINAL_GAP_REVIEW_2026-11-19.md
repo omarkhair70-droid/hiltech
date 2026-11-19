@@ -242,3 +242,58 @@ The remaining blocker is not a coding-performance problem and must not be papere
 The prior owner-reality blocker is resolved. Inventory adjustment approval is not tied to Mohamed, Ahmed, Omar or another named person. The current Warehouse INVENTORY_ADJUSTMENT_APPROVER is canonical and may be a USER or TEAM; multiple humans are represented by one TEAM for the current SINGLE Approval contract.
 
 SLICE08_INVENTORY_ADJUSTMENT_APPROVAL_DECISION_2026-11-19.md freezes the controlled subject/policy/authority contract. The remaining blocker is implementation/verification only: approved exact-once ADJUSTMENT application, negative-result denial, applied linkage, discrepancy closure and terminal Stocktake reconciliation. Merge remains unauthorized until those gaps and the repeated Final Gap Review are complete.
+
+
+---
+
+## Final re-review — PASS / MERGE READY SUBJECT TO CLOSURE-HEAD CI
+
+Implementation head reviewed: `138632e1a68a6039bced7794461a94cb1e3619b8`
+
+All fourteen triggered workflows are PASS, including Phase 5 Warehouse server/shared tests, Windows Stocktake applied-state render, Android Stocktake count/recount/variance/request/approved-apply evidence, Bootstrap, Approval Stability, Native OIDC and inherited Phase 3/4 regressions.
+
+### Frozen contract coverage
+
+- all five Slice 08 persistence records exist in V0033;
+- count/recount is append-only and never edits StockBalance;
+- snapshot expected quantities and source versions are retained;
+- variance is deterministic as counted minus expected;
+- stale post-snapshot inventory becomes reconciliation context and cannot silently apply;
+- non-zero discrepancy creates auditable adjustment context;
+- adjustment request preserves exact discrepancy/item/location/delta/reason/requester;
+- canonical Approval subject/policy is linked to the request;
+- requester/counter authority never silently becomes final authority;
+- final application revalidates current `INVENTORY_ADJUSTMENT_APPROVER`;
+- PENDING/no Approval cannot apply;
+- negative available Stock cannot be produced by adjustment;
+- approved application appends exactly one `ADJUSTMENT` StockMovement;
+- StockBalance changes only through the Stock ledger projection;
+- applied movement/actor/time are linked to the request;
+- discrepancy closes and the Stocktake becomes CLOSED when no unresolved discrepancy remains, otherwise RECONCILING;
+- command replay does not create a second movement;
+- all eight frozen HTTP routes exist;
+- shared Android/Windows client uses the authenticated idempotent transport;
+- Windows shows count history, variance, canonical approval state and final applied movement/reconciliation;
+- Android evidence drives the production shared count/recount/request/approved-apply controls online.
+
+### Terminal lifecycle clarification
+
+The frozen persistence model also names `INVESTIGATING`, `RESOLVED_NO_ADJUSTMENT` and `CANCELLED`. The frozen API list provides no separate transition route for those paths and the authorization matrix freezes no authority/reason contract for a no-adjustment resolution command. They therefore remain reserved lifecycle states rather than an invented production command. The required adjustment path closes through authoritative APPROVED application and the implemented reconciliation rule.
+
+### Independent review
+
+PR #110 has no open Conversation comments or inline review threads at this review point. A separate contract-to-code verification pass is recorded in `SLICE08_INDEPENDENT_VERIFICATION_2026-11-19.md` and reports no remaining Slice 08 blocker.
+
+`PHASE5_SLICE08_PRE_APPROVAL_VERTICAL = VERIFIED`
+
+`PHASE5_SLICE08_APPROVAL_APPLICATION = VERIFIED`
+
+`PHASE5_SLICE08_WINDOWS_ANDROID_PROOF = VERIFIED`
+
+`PHASE5_SLICE08_FINAL_GAP_REVIEW = PASS`
+
+`PHASE5_SLICE08_INDEPENDENT_VERIFICATION = PASS`
+
+`PHASE5_SLICE08_MERGE_AUTHORIZED = AFTER_CLOSURE_HEAD_CI_PASS`
+
+`PHASE5_SLICE09_AUTHORIZED = NO_UNTIL_SLICE08_POST_MERGE_VERIFICATION`

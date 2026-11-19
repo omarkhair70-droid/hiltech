@@ -129,3 +129,14 @@ This checkpoint exposes the already-frozen apply command through the existing sh
 The shared Stocktake surface now exposes `Apply approved adjustment` only when canonical Approval status is exactly `APPROVED` and the request has no applied movement. PENDING/other approval states remain non-applicable. After successful application the surface shows the applied movement, applier and terminal Stocktake reconciliation state. Server-side current `can_approve_adjustment`, exact request/source versions, canonical Approval, negative-stock guard and ledger projection remain authoritative even if a stale client renders a control.
 
 Shared HTTP contract evidence covers PENDING request -> approved apply -> ADJUSTMENT movement -> CLOSED session. Android synthetic human proof drives the production shared control through request, explicit approved state and the actual Apply button, then requires an applied-movement/CLOSED screenshot. Windows synthetic proof adds `stocktake-adjustment-applied.png`, and Phase 5 CI now requires it. Final Gap Review and independent verification remain before merge; do not start Slice 09.
+
+
+## Checkpoint 09 — Final Gap Review + independent verification (closure review)
+
+Exact implementation head `138632e1a68a6039bced7794461a94cb1e3619b8`: all fourteen triggered workflows PASS. Checkpoint 08 shared transport, Windows applied-state render and Android production-control apply proof are verified.
+
+A fresh contract-to-code review was performed from the frozen Slice 08 contract, Phase-5 decision register, authorization matrix and current repository files rather than from prior checkpoint claims. Persistence, snapshot/count history, deterministic variance, stale-source reconciliation, explicit adjustment request, canonical Approval linkage, current `INVENTORY_ADJUSTMENT_APPROVER` revalidation, approved exact-once ADJUSTMENT movement, negative-stock denial, applied linkage, Stocktake reconciliation, all frozen API routes, Windows history/approval/application state and mobile online count/recount/apply evidence are present and verified.
+
+The prior Final Gap Review blockers are superseded. `INVESTIGATING`, `RESOLVED_NO_ADJUSTMENT` and `CANCELLED` remain valid persistence lifecycle vocabulary, but the frozen Slice 08 API and authorization matrix define no standalone transition command/policy for those optional paths. Adding such an endpoint would invent authority semantics; their non-exposure does not block the fully frozen adjustment flow.
+
+Independent verification is recorded in `SLICE08_INDEPENDENT_VERIFICATION_2026-11-19.md` with PASS verdict. This closure-documentation commit must itself complete exact-head CI before PR #110 is marked ready or merged. Slice 09 remains unauthorized until Slice 08 is merged and post-merge verification passes.
