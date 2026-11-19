@@ -145,8 +145,14 @@ class StocktakePersistence(private val jdbc: JdbcTemplate) {
     ).singleOrNull()
 
     fun latestCount(snapshotLineId: UUID): StockCountRecordView? = jdbc.query(
-        """SELECT * FROM stock_count_record WHERE snapshot_line_id = ?
-           ORDER BY counted_at DESC, id DESC LIMIT 1""".trimIndent(),
+        """SELECT c.* FROM stock_count_record c
+           WHERE c.snapshot_line_id = ?
+             AND NOT EXISTS (
+                 SELECT 1 FROM stock_count_record newer
+                 WHERE newer.snapshot_line_id = c.snapshot_line_id
+                   AND newer.supersedes_count_record_id = c.id
+             )
+           LIMIT 1""".trimIndent(),
         { r, _ -> r.count() }, snapshotLineId,
     ).singleOrNull()
 
