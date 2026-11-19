@@ -47,3 +47,7 @@ On exact head `294e21ffdec6dbbadc95c84e8f81a3c4d609a762`, server compilation fai
 ### Checkpoint 03 CI repair 02
 
 On exact head `60e49c65fdceb950b672b0c7e2b76e780050b80c`, Flyway failed before tests because the newly inserted PostgreSQL trigger function was committed with a single-dollar PL/pgSQL delimiter (`AS $` / `$;`) instead of the repository's required `$$` delimiter. Corrected only the function delimiters; Receiving schema semantics, Asset linkage, authorization and tests are unchanged. Corrected-head verification pending.
+
+### Checkpoint 03 CI repair 03
+
+Exact-head `3188c3d7f151e58a14c056b9c565e30c6c4b870c` verification showed the prior delimiter repair did not persist: GitHub still stored the new PL/pgSQL function as single-dollar `AS $` / `$;`, so Flyway failed across every workflow that migrated V0032. This repair writes the delimiter from two explicit dollar characters and verifies the stored blob after the ref update. No schema or Receiving behavior changes.
