@@ -100,6 +100,7 @@ private fun PhysicalOperatorWorkspace(
 
     fun op(vararg fields: Any?): String = operationId(listOf("warehouse-mobile", warehouse) + fields)
     val fulfillment = remember(api, warehouse, installationId) {
+        val retries = ExactHandoffRetry()
         object : ReservedFulfillmentUiPort {
             override suspend fun recipients(warehouse: String, search: String) =
                 api.fulfillmentRecipients(warehouse, search, installationId)
@@ -108,16 +109,19 @@ private fun PhysicalOperatorWorkspace(
                 reservation: ReservationDto, work: WarehouseWorkRequestDto,
                 requirement: RequirementCandidatesDto, employee: String, expectedReturn: String?,
             ): String {
+                val intent = listOf(reservation.kind, reservation.id, reservation.version, work.workOrderId,
+                    work.workVersion, requirement.demand.requirementId, requirement.demand.requirementVersion, employee, expectedReturn)
+                return retries.execute(reservation.id, intent) {
                 if (reservation.kind == "ASSET") {
                     val passport = api.assetPassport(reservation.resourceId, installationId)
                     val custody = requireNotNull(passport.custody)
                     val operation = op("checkout", reservation.id, reservation.version, work.workVersion,
                         passport.identity.version, custody.sourceMovementId, employee, expectedReturn)
-                    return api.checkoutReservedAsset(reservation.resourceId,
-                        CheckoutReservedAssetDto(operation, passport.identity.version, custody.sourceMovementId,
-                            work.workOrderId, work.workVersion, reservation.id, reservation.version, employee, expectedReturn),
-                        installationId).recordId
-                }
+                    val request = CheckoutReservedAssetDto(operation, passport.identity.version, custody.sourceMovementId,
+                        work.workOrderId, work.workVersion, reservation.id, reservation.version, employee, expectedReturn)
+                    val send: suspend () -> String = { api.checkoutReservedAsset(reservation.resourceId, request, installationId).recordId }
+                    send
+                } else {
                 require(reservation.kind == "STOCK")
                 val location = requireNotNull(reservation.storageLocationId)
                 val balance = api.stockBalances(reservation.resourceId, installationId)
@@ -126,10 +130,13 @@ private fun PhysicalOperatorWorkspace(
                 val unit = requireNotNull(reservation.unitCode)
                 val operation = op("issue", reservation.id, reservation.version, work.workVersion,
                     requirement.demand.requirementVersion, balance.version, employee, quantity, unit, location)
-                return api.issueReservedStock(reservation.resourceId,
-                    IssueReservedStockDto(operation, work.workOrderId, reservation.requirementId, employee,
-                        reservation.id, location, work.workVersion, requirement.demand.requirementVersion,
-                        reservation.version, balance.version, quantity, unit), installationId).movementId
+                val request = IssueReservedStockDto(operation, work.workOrderId, reservation.requirementId, employee,
+                    reservation.id, location, work.workVersion, requirement.demand.requirementVersion,
+                    reservation.version, balance.version, quantity, unit)
+                val send: suspend () -> String = { api.issueReservedStock(reservation.resourceId, request, installationId).movementId }
+                send
+                }
+                }
             }
         }
     }
@@ -212,22 +219,23 @@ private fun PhysicalOperatorWorkspace(
         }
     }
 
-    receipt?.let { Text("Server receipt · $it") }
+    receipt?.let { Text("Last confirmed server receipt · $it") }
     Text("Reserved handoff", style = MaterialTheme.typography.titleMedium)
     OutlinedButton({ runTask { queue = null; queue = api.reservationQueue(warehouse, installationId) } }, enabled = !busy) {
         Text("Load reserved handoffs")
     }
     queue?.let { data ->
-        if (data.canReserve) ReservedFulfillmentSection(warehouse, data, fulfillment, busy) { action ->
-            runTask {
-                action()
+        if (data.canReserve) ReservedFulfillmentSection(warehouse, data, fulfillment, busy,
+            run = { action -> runTask { action() } },
+            onRecorded = { recorded ->
+                receipt = "HANDOFF · $recorded"
                 queue = null
                 // Previous detail snapshots may no longer describe current custody.
                 assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null)
                 stockState = stockState.copy(selected = null, issued = null, issuedWarehouseId = null, balances = emptyList())
                 queue = api.reservationQueue(warehouse, installationId)
-            }
-        } else Text("Physical handoff is not available for this identity.")
+            },
+        ) else Text("Physical handoff is not available for this identity.")
     }
 
     Text("Asset return / inspection / storage transfer", style = MaterialTheme.typography.titleMedium)

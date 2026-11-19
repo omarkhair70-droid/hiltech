@@ -102,12 +102,10 @@ fun WarehouseReservations(warehouse: String, port: ReservationUiPort) {
             }
         })
         if (data.canReserve) port.fulfillment?.let { fulfillment ->
-            ReservedFulfillmentSection(warehouse, data, fulfillment, task.busy, { action ->
-                task.launch {
-                    action()
-                    refresh()
-                }
-            })
+            ReservedFulfillmentSection(warehouse, data, fulfillment, task.busy,
+                run = { action -> task.launch { action() } },
+                onRecorded = { refresh() },
+            )
         }
     }
 }

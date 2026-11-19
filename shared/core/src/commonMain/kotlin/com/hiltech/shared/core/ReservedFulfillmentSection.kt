@@ -25,7 +25,9 @@ interface ReservedFulfillmentUiPort {
 
 @Composable
 fun ReservedFulfillmentSection(warehouse: String, data: WarehouseReservationQueueDto, port: ReservedFulfillmentUiPort,
-    busy: Boolean, run: (suspend () -> Unit) -> Unit) {
+    busy: Boolean, run: (suspend () -> Unit) -> Unit,
+    onRecorded: suspend (String) -> Unit = {},
+) {
     val actionable = data.reservations.filter { reservation ->
         reservation.state == "ACTIVE" && data.requests.any { work ->
             work.workOrderId == reservation.workOrderId &&
@@ -38,11 +40,12 @@ fun ReservedFulfillmentSection(warehouse: String, data: WarehouseReservationQueu
     var loaded by remember(warehouse, port) { mutableStateOf(false) }
     var employee by remember(warehouse, selected) { mutableStateOf<String?>(null) }
     var expectedReturn by remember(warehouse, selected) { mutableStateOf("") }
-    var confirmed by remember(warehouse, selected, employee, expectedReturn) { mutableStateOf(false) }
     var receipt by remember(warehouse) { mutableStateOf<String?>(null) }
     val reservation = actionable.firstOrNull { it.id == selected }
     val work = data.requests.firstOrNull { it.workOrderId == reservation?.workOrderId }
     val requirement = work?.requirements?.firstOrNull { it.demand.requirementId == reservation?.requirementId }
+    var confirmed by remember(warehouse, selected, employee, expectedReturn, reservation?.version, work?.workVersion,
+        requirement?.demand?.requirementVersion) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Physical handoff", style = MaterialTheme.typography.titleMedium)
         receipt?.let { Text("Recorded movement · $it") }
@@ -61,8 +64,11 @@ fun ReservedFulfillmentSection(warehouse: String, data: WarehouseReservationQueu
         assetField("Find active employee by name or code", search) { search = it }
         OutlinedButton({
             run {
-                recipients = port.recipients(warehouse, search.trim())
                 employee = null
+                recipients = emptyList()
+                confirmed = false
+                loaded = false
+                recipients = port.recipients(warehouse, search.trim())
                 loaded = true
             }
         }, enabled = !busy) { Text("Find eligible employees") }
@@ -82,9 +88,11 @@ fun ReservedFulfillmentSection(warehouse: String, data: WarehouseReservationQueu
             OutlinedButton({
                 val actor = requireNotNull(employee)
                 run {
-                    receipt = port.fulfill(reservation, work, requirement, actor, expectedReturn.optional())
+                    val recorded = port.fulfill(reservation, work, requirement, actor, expectedReturn.optional())
+                    receipt = recorded
                     confirmed = false
                     selected = null
+                    onRecorded(recorded)
                 }
             }, enabled = !busy && recipients.any { it.id == employee }) {
                 Text(if (reservation.kind == "ASSET") "Record checkout" else "Record stock issue")
