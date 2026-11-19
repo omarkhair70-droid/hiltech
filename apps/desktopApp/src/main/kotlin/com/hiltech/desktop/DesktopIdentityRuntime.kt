@@ -4,6 +4,13 @@ import com.hiltech.shared.core.StockAction
 import com.hiltech.shared.core.StockInventoryState
 import com.hiltech.shared.core.AssetAction
 import com.hiltech.shared.core.ReservationUiPort
+import com.hiltech.shared.core.ReservedFulfillmentUiPort
+import com.hiltech.shared.core.warehouse.CheckoutReservedAssetDto
+import com.hiltech.shared.core.warehouse.ReturnPhysicalAssetDto
+import com.hiltech.shared.core.warehouse.TransferPhysicalAssetDto
+import com.hiltech.shared.core.warehouse.InspectPhysicalReturnDto
+import com.hiltech.shared.core.warehouse.AdjustIssuedStockDto
+import com.hiltech.shared.core.warehouse.IssueReservedStockDto
 import com.hiltech.shared.core.warehouse.WorkResourceCandidatesDto
 import com.hiltech.shared.core.warehouse.WorkResourceDemandDto
 import com.hiltech.shared.core.warehouse.ResourceCandidateDto
@@ -691,6 +698,36 @@ class DesktopIdentityRuntime(
     }
 
     val reservationPort: ReservationUiPort = object : ReservationUiPort {
+        override val fulfillment: ReservedFulfillmentUiPort = object : ReservedFulfillmentUiPort {
+            override suspend fun recipients(warehouse: String, search: String) =
+                warehouseApi.fulfillmentRecipients(warehouse, search, installationId)
+
+            override suspend fun fulfill(reservation: ReservationDto, work: com.hiltech.shared.core.warehouse.WarehouseWorkRequestDto,
+                requirement: com.hiltech.shared.core.warehouse.RequirementCandidatesDto, employee: String, expectedReturn: String?): String {
+                val operation = reservationOperation("physical-fulfill", reservation.id, reservation.version,
+                    work.workVersion, requirement.demand.requirementVersion, employee, expectedReturn)
+                if (reservation.kind == "ASSET") {
+                    val passport = warehouseApi.assetPassport(reservation.resourceId, installationId)
+                    val custody = requireNotNull(passport.custody) { "Asset custody is not established." }
+                    val receipt = warehouseApi.checkoutReservedAsset(reservation.resourceId,
+                        CheckoutReservedAssetDto(operation, passport.identity.version, custody.sourceMovementId,
+                            work.workOrderId, work.workVersion, reservation.id, reservation.version, employee, expectedReturn),
+                        installationId)
+                    return receipt.recordId
+                }
+                require(reservation.kind == "STOCK")
+                val location = requireNotNull(reservation.storageLocationId)
+                val balance = warehouseApi.stockBalances(reservation.resourceId, installationId)
+                    .singleOrNull { it.storageLocationId == location } ?: error("Stock capacity is unavailable.")
+                val receipt = warehouseApi.issueReservedStock(reservation.resourceId,
+                    IssueReservedStockDto(operation, work.workOrderId, reservation.requirementId, employee,
+                        reservation.id, location, work.workVersion, requirement.demand.requirementVersion,
+                        reservation.version, balance.version, requireNotNull(reservation.quantity), requireNotNull(reservation.unitCode)),
+                    installationId)
+                return receipt.movementId
+            }
+        }
+
         override suspend fun catalog(work: String) = warehouseApi.workResourceCatalog(work, installationId)
         override suspend fun candidates(work: String) = warehouseApi.workResourceCandidates(work, installationId)
         override suspend fun reservations(work: String) = warehouseApi.workReservations(work, installationId)
@@ -743,6 +780,13 @@ class DesktopIdentityRuntime(
                 )
                 return loadAssetPassport(ready, action.id)
             }
+            AssetAction.RefreshDueReturns -> return state.copy(dueReturns = warehouseApi.dueAssetReturns(warehouseId, installationId))
+            is AssetAction.MoreDueReturns -> {
+                val page = warehouseApi.dueAssetReturns(warehouseId, installationId,
+                    action.afterExpectedReturnAt, action.afterAssetCode, action.afterAssetId)
+                val previous = state.dueReturns?.items.orEmpty()
+                return state.copy(dueReturns = page.copy(items = (previous + page.items).distinctBy { it.assetId }))
+            }
             AssetAction.RefreshServiceQueue -> return refreshAssetServiceQueue(warehouseId, state, null)
             is AssetAction.MoreServiceQueue -> return refreshAssetServiceQueue(warehouseId, state, action.afterCode)
             is AssetAction.Service -> {
@@ -768,6 +812,21 @@ class DesktopIdentityRuntime(
             is AssetAction.Correct -> warehouseApi.correctAssetCustody(action.id, CorrectAssetCustodyDto(
                 operationId, action.version, action.condition, action.sourceMovement, action.reason, action.location, action.employee, action.work,
             ), installationId).identity.id
+            is AssetAction.ReturnPhysical -> {
+                warehouseApi.returnPhysicalAsset(action.id, ReturnPhysicalAssetDto(operationId, action.version,
+                    action.movement, action.location, action.condition), installationId)
+                return loadAssetPassport(refreshAssetServiceQueue(warehouseId, state.copy(dueReturns = null), null), action.id)
+            }
+            is AssetAction.TransferPhysical -> {
+                warehouseApi.transferPhysicalAsset(action.id, TransferPhysicalAssetDto(operationId, action.version,
+                    action.movement, action.location), installationId)
+                return loadAssetPassport(refreshAssetServiceQueue(warehouseId, state.copy(dueReturns = null), null), action.id)
+            }
+            is AssetAction.InspectPhysical -> {
+                warehouseApi.inspectPhysicalReturn(action.id, action.movement, InspectPhysicalReturnDto(operationId,
+                    action.version, action.condition, action.notes, action.damageIncident), installationId)
+                return loadAssetPassport(refreshAssetServiceQueue(warehouseId, state.copy(dueReturns = null), null), action.id)
+            }
             is AssetAction.Approve -> warehouseApi.approveAssetImport(action.batchId, action.rowId, ApproveAssetImportDto(
                 operationId, action.version, action.code, action.name, action.ownership, action.condition,
             ), installationId).identity.takeIf { it.warehouseId == warehouseId }?.id
@@ -777,7 +836,7 @@ class DesktopIdentityRuntime(
         val refreshed = state.copy(catalog = warehouseApi.assetCatalog(warehouseId, installationId), search = search,
             items = page, nextAfterCode = page.lastOrNull()?.assetCode?.takeIf { page.size == 100 },
             locations = warehouseApi.storageLocations(organizationId, installationId).items,
-            selected = null, movements = emptyList(), serviceDetail = null)
+            selected = null, movements = emptyList(), serviceDetail = null, dueReturns = null)
         val withQueue = refreshAssetServiceQueue(warehouseId, refreshed, null)
         return if (selectedId == null) withQueue else loadAssetPassport(withQueue, selectedId)
     }
@@ -845,6 +904,40 @@ class DesktopIdentityRuntime(
                 ), installationId)
                 return loadStockDetail(state, item.id)
             }
+            is StockAction.LoadFulfillmentHistory -> {
+                val facility = requireNotNull(warehouseId)
+                require(state.selected?.id == action.item)
+                return state.copy(fulfillmentHistory = warehouseApi.stockFulfillmentHistory(action.item, facility, action.search, installationId),
+                    historyWarehouseId = facility, historyItemId = action.item, historySearch = action.search)
+            }
+            is StockAction.MoreFulfillmentHistory -> {
+                val facility = requireNotNull(warehouseId)
+                require(state.selected?.id == action.item && state.historyWarehouseId == facility &&
+                    state.historyItemId == action.item && state.historySearch == action.search)
+                val page = warehouseApi.stockFulfillmentHistory(action.item, facility, action.search, installationId,
+                    action.afterRecordedAt, action.afterMovementId)
+                val previous = state.fulfillmentHistory?.items.orEmpty()
+                return state.copy(fulfillmentHistory = page.copy(items = (previous + page.items).distinctBy { it.movementId }))
+            }
+            is StockAction.LoadIssued -> {
+                val facility = requireNotNull(warehouseId)
+                require(state.selected?.id == action.item)
+                return state.copy(issued = warehouseApi.issuedStockDirectory(action.item, facility, action.search, installationId),
+                    issuedSearch = action.search, issuedWarehouseId = facility)
+            }
+            is StockAction.AdjustIssued -> {
+                val entry = action.entry
+                val issued = entry.context
+                val facility = requireNotNull(warehouseId)
+                require(state.selected?.id == issued.stockItemId && state.issuedWarehouseId == facility)
+                val request = AdjustIssuedStockDto(operationId, issued.workOrderId, issued.requirementId, issued.employeeId,
+                    entry.workVersion, issued.version, action.quantity, entry.unitCode, action.returnLocation)
+                if (action.returnLocation == null) warehouseApi.consumeIssuedStock(issued.stockItemId, request, installationId)
+                else warehouseApi.returnUnusedStock(issued.stockItemId, request, installationId)
+                return loadStockDetail(state, issued.stockItemId).copy(
+                    issued = warehouseApi.issuedStockDirectory(issued.stockItemId, facility, state.issuedSearch, installationId),
+                    issuedSearch = state.issuedSearch, issuedWarehouseId = facility)
+            }
             is StockAction.Transfer -> {
                 val item = action.item
                 warehouseApi.transferStock(item.id, TransferStockDto(
@@ -864,6 +957,8 @@ class DesktopIdentityRuntime(
         selected = warehouseApi.stockItem(id, installationId),
         balances = warehouseApi.stockBalances(id, installationId),
         movements = warehouseApi.stockMovements(id, installationId),
+        issued = null, issuedSearch = "", issuedWarehouseId = null,
+        fulfillmentHistory = null, historyWarehouseId = null, historyItemId = null, historySearch = "",
     )
 
     suspend fun warehouseLocations(warehouseId: String): StorageLocationListDto {

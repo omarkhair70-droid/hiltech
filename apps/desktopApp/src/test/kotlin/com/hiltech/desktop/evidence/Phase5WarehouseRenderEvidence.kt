@@ -43,6 +43,11 @@ import com.hiltech.shared.core.warehouse.AssetTagDto
 import com.hiltech.shared.core.warehouse.AssetTagLookupDto
 import com.hiltech.shared.core.warehouse.AssetTypeDto
 import com.hiltech.shared.core.StockInventorySection
+import com.hiltech.shared.core.PhysicalAssetOperations
+import com.hiltech.shared.core.IssuedStockOperations
+import com.hiltech.shared.core.warehouse.IssuedStockContextDto
+import com.hiltech.shared.core.warehouse.IssuedStockDirectoryDto
+import com.hiltech.shared.core.warehouse.IssuedStockDirectoryEntryDto
 import com.hiltech.shared.core.StockInventoryState
 import com.hiltech.shared.core.WarehouseSetupSection
 import com.hiltech.shared.core.warehouse.InventoryImportBatchDto
@@ -147,6 +152,40 @@ fun main() = runBlocking<Unit> {
         }
     }
     captureAndClose(workScene, directory.resolve("work-resource-reservations.png"))
+    val selectedWarehouse = requireNotNull(state.selectedWarehouseId)
+    val stockItem = requireNotNull(stock.selected)
+    val issuedContext = IssuedStockContextDto(stockItem.id, "synthetic-employee", "synthetic-project", "synthetic-site",
+        "synthetic-work", "synthetic-requirement", "6.123456", 3)
+    val issuedState = stock.copy(issuedWarehouseId = selectedWarehouse, issued = IssuedStockDirectoryDto(
+        listOf(IssuedStockDirectoryEntryDto(issuedContext, "SYNTH-EMP", "Synthetic employee",
+            "SYNTH-WORK", "Synthetic installation", 5, stockItem.baseUnitCode)), false))
+    val issuedScene = ImageComposeScene(width = 720, height = 610, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            IssuedStockOperations(stockItem, selectedWarehouse, issuedState) {}
+        }
+    }
+    captureAndClose(issuedScene, directory.resolve("stock-issued-custody.png"))
+    val passport = requireNotNull(assets.selected)
+    val bin = assets.locations.first()
+    val returning = passport.copy(canOperatePhysical = true, custody = AssetCustodyDto(
+        employeeId = "synthetic-employee", employeeCode = "SYNTH-EMP",
+        workOrderId = "synthetic-work", sourceMovementId = "synthetic-checkout", expectedReturnAt = expiry))
+    val returnScene = ImageComposeScene(width = 720, height = 610, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            PhysicalAssetOperations(returning, assets.copy(selected = returning), {})
+        }
+    }
+    captureAndClose(returnScene, directory.resolve("asset-physical-return.png"))
+    val returned = passport.copy(canOperatePhysical = true, currentReturnInspected = false,
+        custody = AssetCustodyDto(storageLocationId = bin.storageLocationId, locationCode = bin.code,
+            sourceMovementId = "synthetic-return"))
+    val inspectionScene = ImageComposeScene(width = 720, height = 610, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            PhysicalAssetOperations(returned, assets.copy(selected = returned, movements = listOf(
+                AssetMovementDto("synthetic-return", "RETURN", toLocationId = bin.storageLocationId, occurredAt = expiry))), {})
+        }
+    }
+    captureAndClose(inspectionScene, directory.resolve("asset-return-inspection.png"))
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -175,7 +214,7 @@ private fun syntheticAsset(warehouse: HiltechWarehouseState): AssetInventoryStat
             listOf(
                 AssetTagDto("tag-new", "31ed4783-1cdc-4cc8-beb2-908f7c8d6fad", "QR", true, true, "tag-old", corrected),
                 AssetTagDto("tag-old", "57981f24-081b-4c19-8d2e-e336b9576ff2", "QR", false, false, issuedAt = opening, endedAt = corrected),
-            ), listOf("QR"), canCorrect = true),
+            ), listOf("QR"), canCorrect = true, returnInspectionType = type),
         movements = listOf(
             AssetMovementDto("synthetic-correction", "CONTROLLED_CORRECTION", toLocationId = bin.storageLocationId,
                 correctedMovementId = "synthetic-opening", occurredAt = corrected, reason = "Synthetic label reconciliation"),

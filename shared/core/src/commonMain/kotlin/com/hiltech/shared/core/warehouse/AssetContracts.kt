@@ -25,6 +25,7 @@ data class AssetCustodyDto(
     val storageLocationId: String? = null, val locationCode: String? = null,
     val employeeId: String? = null, val employeeCode: String? = null, val projectId: String? = null,
     val siteId: String? = null, val workOrderId: String? = null, val sourceMovementId: String, val since: String? = null,
+    val expectedReturnAt: String? = null,
 )
 
 @Serializable
@@ -40,6 +41,8 @@ data class AssetCatalogDto(val types: List<AssetTypeDto>, val canRegister: Boole
 data class AssetPassportDto(
     val identity: AssetIdentityDto, val custody: AssetCustodyDto? = null, val tags: List<AssetTagDto>,
     val permittedTagTypes: List<String> = emptyList(), val canInitialize: Boolean = false, val canCorrect: Boolean = false,
+    val canOperatePhysical: Boolean = false, val currentReturnInspected: Boolean = false,
+    val returnInspectionType: AssetTypeDto? = null,
 )
 
 @Serializable

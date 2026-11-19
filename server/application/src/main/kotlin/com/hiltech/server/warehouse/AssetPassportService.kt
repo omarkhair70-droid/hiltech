@@ -30,6 +30,8 @@ data class AssetCatalogView(val types: List<AssetTypeView>, val canRegister: Boo
 data class AssetPassportView(
     val identity: AssetIdentityView, val custody: AssetCustodyView?, val tags: List<AssetTagView>,
     val permittedTagTypes: List<String>, val canInitialize: Boolean, val canCorrect: Boolean,
+    val canOperatePhysical: Boolean = false, val currentReturnInspected: Boolean = false,
+    val returnInspectionType: AssetTypeView? = null,
 )
 data class AssetTagLookupView(
     val assetCode: String, val name: String?, val typeName: String, val manufacturer: String?, val model: String?,
@@ -222,7 +224,10 @@ class AssetPassportService(
         }.orEmpty()
         return AssetPassportView(asset, custody, assets.tags(id), allowedTags,
             active && custody == null && authorization.canManageMaster(actor, facility),
-            active && custody != null && authorization.canManageWarehouse(actor, facility))
+            active && custody != null && authorization.canManageWarehouse(actor, facility),
+            active && custody != null && facility.active && authorization.canReserveResources(actor, facility),
+            custody?.sourceMovementId?.let(assets::hasReturnInspection) == true,
+            type?.takeIf { it.revision == asset.typeRevision && authorization.canReserveResources(actor, facility) })
     }
     private fun asset(id: UUID) = assets.asset(id) ?: throw unavailable()
     internal fun facility(asset: AssetIdentityView): WarehouseSnapshot = asset.warehouseId?.let(warehouse::warehouse)
@@ -315,7 +320,7 @@ class AssetPassportService(
         events.publishEvent(AssetCustodyMovementPosted(id, asset.id, asset.organizationId, type, context.actor, context.correlationId, occurred))
     }
 
-    private fun project(context: AssetCommandContext, asset: AssetIdentityView, target: AssetDestination?, at: Instant, prior: AssetCustodyView? = null) {
+    internal fun project(context: AssetCommandContext, asset: AssetIdentityView, target: AssetDestination?, at: Instant, prior: AssetCustodyView? = null) {
         fun relation(type: String, id: UUID, key: String, desired: AuthorizationDesiredState) {
             val tuple = assetTuple(type, id, key, asset.id)
             projection.write(AuthorizationProjectionIntent(

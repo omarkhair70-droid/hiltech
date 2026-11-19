@@ -18,7 +18,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.warehouse.StockBalanceDto
+import com.hiltech.shared.core.warehouse.IssuedStockDirectoryDto
+import com.hiltech.shared.core.warehouse.IssuedStockDirectoryEntryDto
 import com.hiltech.shared.core.warehouse.StockCatalogDto
+import com.hiltech.shared.core.warehouse.StockFulfillmentHistoryDto
 import com.hiltech.shared.core.warehouse.StockItemDto
 import com.hiltech.shared.core.warehouse.StockMovementDto
 import com.hiltech.shared.core.warehouse.StorageLocationDto
@@ -33,6 +36,13 @@ data class StockInventoryState(
     val movements: List<StockMovementDto> = emptyList(),
     val loading: Boolean = false,
     val message: String? = null,
+    val issued: IssuedStockDirectoryDto? = null,
+    val issuedSearch: String = "",
+    val issuedWarehouseId: String? = null,
+    val fulfillmentHistory: StockFulfillmentHistoryDto? = null,
+    val historyWarehouseId: String? = null,
+    val historyItemId: String? = null,
+    val historySearch: String = "",
 )
 
 sealed interface StockAction {
@@ -47,6 +57,12 @@ sealed interface StockAction {
     data class Approve(val batchId: String, val rowId: String, val version: Long, val code: String, val name: String) : StockAction
     data class Opening(val item: StockItemDto, val location: String, val quantity: String, val cutoverAt: String) : StockAction
     data class Transfer(val item: StockItemDto, val from: String, val to: String, val quantity: String) : StockAction
+    data class LoadIssued(val item: String, val search: String) : StockAction
+    data class LoadFulfillmentHistory(val item: String, val search: String) : StockAction
+    data class MoreFulfillmentHistory(
+        val item: String, val search: String, val afterRecordedAt: String, val afterMovementId: String,
+    ) : StockAction
+    data class AdjustIssued(val entry: IssuedStockDirectoryEntryDto, val quantity: String, val returnLocation: String?) : StockAction
 }
 
 @Composable
@@ -71,7 +87,13 @@ fun StockInventorySection(state: StockInventoryState, selectedWarehouseId: Strin
         state.nextAfterCode?.let { cursor ->
             OutlinedButton({ dispatch(StockAction.More(cursor)) }, enabled = !state.loading) { Text("Load more items") }
         }
-        state.selected?.let { StockItemDetail(it, state, dispatch) }
+        state.selected?.let {
+            StockItemDetail(it, state, dispatch)
+            selectedWarehouseId?.let { warehouse ->
+                IssuedStockOperations(it, warehouse, state, dispatch)
+                StockFulfillmentHistorySection(it, warehouse, state, dispatch)
+            }
+        }
     }
 }
 
@@ -115,9 +137,6 @@ private fun StockMasterForm(catalog: StockCatalogDto, loading: Boolean, dispatch
 
 @Composable
 private fun StockItemDetail(item: StockItemDto, state: StockInventoryState, dispatch: (StockAction) -> Unit) {
-    var from by remember(item.id) { mutableStateOf<String?>(null) }
-    var to by remember(item.id) { mutableStateOf<String?>(null) }
-    var quantity by remember(item.id) { mutableStateOf("") }
     var openingLocation by remember(item.id) { mutableStateOf<String?>(null) }
     var openingQuantity by remember(item.id) { mutableStateOf("") }
     var cutover by remember(item.id) { mutableStateOf("") }
@@ -153,11 +172,7 @@ private fun StockItemDetail(item: StockItemDto, state: StockInventoryState, disp
             Text("Initialize opening balance")
         }
     }
-    stockPicker("Transfer from", from, active, canMove) { from = it }
-    stockPicker("Transfer to", to, active.filterNot { it.first == from }, canMove) { to = it }
-    stockField("Transfer quantity (${item.baseUnitCode})", quantity) { quantity = it }
-    Button(onClick = { dispatch(StockAction.Transfer(item, requireNotNull(from), requireNotNull(to), quantity.trim())) },
-        enabled = canMove && from != null && to != null && from != to && quantity.isNotBlank()) { Text("Transfer stock") }
+    StockStorageTransfer(item, state, dispatch = dispatch)
 }
 
 @Composable

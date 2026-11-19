@@ -21,6 +21,72 @@ class WarehouseApiClient(
         explicitNulls = false
     },
 ) {
+    suspend fun fulfillmentRecipients(warehouse: String, search: String, installationId: String): List<FulfillmentEmployeeChoiceDto> =
+        get("/v1/warehouses/" + uuid(warehouse) + "/fulfillment-recipients?search=" + search.encodeURLQueryComponent(),
+            installationId, ListSerializer(FulfillmentEmployeeChoiceDto.serializer()))
+
+    suspend fun issueReservedStock(id: String, request: IssueReservedStockDto, installationId: String): StockFulfillmentReceiptDto =
+        post("/v1/stock-items/" + uuid(id) + "/issue", request.operationId,
+            json.encodeToString(IssueReservedStockDto.serializer(), request), installationId, StockFulfillmentReceiptDto.serializer())
+
+    suspend fun returnUnusedStock(id: String, request: AdjustIssuedStockDto, installationId: String): StockFulfillmentReceiptDto =
+        post("/v1/stock-items/" + uuid(id) + "/return-unused", request.operationId,
+            json.encodeToString(AdjustIssuedStockDto.serializer(), request), installationId, StockFulfillmentReceiptDto.serializer())
+
+    suspend fun consumeIssuedStock(id: String, request: AdjustIssuedStockDto, installationId: String): StockFulfillmentReceiptDto =
+        post("/v1/stock-items/" + uuid(id) + "/consume", request.operationId,
+            json.encodeToString(AdjustIssuedStockDto.serializer(), request), installationId, StockFulfillmentReceiptDto.serializer())
+
+    suspend fun issuedStockDirectory(id: String, warehouse: String, search: String, installationId: String): IssuedStockDirectoryDto =
+        get("/v1/stock-items/" + uuid(id) + "/issued-directory?warehouseId=" + uuid(warehouse) +
+            "&search=" + search.encodeURLQueryComponent(), installationId, IssuedStockDirectoryDto.serializer())
+
+    suspend fun stockFulfillmentHistory(id: String, warehouse: String, search: String, installationId: String,
+        afterRecordedAt: String? = null, afterMovementId: String? = null): StockFulfillmentHistoryDto {
+        val supplied = listOf(afterRecordedAt, afterMovementId).count { it != null }
+        require(supplied == 0 || supplied == 2) { "Stock history cursor must be complete." }
+        val cursor = if (supplied == 0) "" else
+            "&afterRecordedAt=" + requireNotNull(afterRecordedAt).encodeURLQueryComponent() +
+                "&afterMovementId=" + uuid(requireNotNull(afterMovementId))
+        return get("/v1/stock-items/" + uuid(id) + "/fulfillment-history?warehouseId=" + uuid(warehouse) +
+            "&search=" + search.encodeURLQueryComponent() + cursor,
+            installationId, StockFulfillmentHistoryDto.serializer())
+    }
+
+    suspend fun issuedStock(id: String, work: String, installationId: String): List<IssuedStockContextDto> =
+        get("/v1/stock-items/" + uuid(id) + "/issued-context?workOrderId=" + uuid(work), installationId,
+            ListSerializer(IssuedStockContextDto.serializer()))
+
+    suspend fun dueAssetReturns(warehouse: String, installationId: String, afterExpectedReturnAt: String? = null,
+        afterAssetCode: String? = null, afterAssetId: String? = null): AssetDueReturnQueueDto {
+        val supplied = listOf(afterExpectedReturnAt, afterAssetCode, afterAssetId).count { it != null }
+        require(supplied == 0 || supplied == 3) { "Due-return cursor must be complete." }
+        val cursor = if (supplied == 0) "" else {
+            "&afterExpectedReturnAt=" + requireNotNull(afterExpectedReturnAt).encodeURLQueryComponent() +
+                "&afterAssetCode=" + requireNotNull(afterAssetCode).encodeURLQueryComponent() +
+                "&afterAssetId=" + uuid(requireNotNull(afterAssetId))
+        }
+        val path = "/v1/warehouses/" + uuid(warehouse) + "/due-asset-returns" +
+            if (cursor.isEmpty()) "" else "?" + cursor.removePrefix("&")
+        return get(path, installationId, AssetDueReturnQueueDto.serializer())
+    }
+
+    suspend fun checkoutReservedAsset(id: String, request: CheckoutReservedAssetDto, installationId: String): PhysicalAssetReceiptDto =
+        post("/v1/assets/" + uuid(id) + "/checkout", request.operationId,
+            json.encodeToString(CheckoutReservedAssetDto.serializer(), request), installationId, PhysicalAssetReceiptDto.serializer())
+
+    suspend fun returnPhysicalAsset(id: String, request: ReturnPhysicalAssetDto, installationId: String): PhysicalAssetReceiptDto =
+        post("/v1/assets/" + uuid(id) + "/return", request.operationId,
+            json.encodeToString(ReturnPhysicalAssetDto.serializer(), request), installationId, PhysicalAssetReceiptDto.serializer())
+
+    suspend fun transferPhysicalAsset(id: String, request: TransferPhysicalAssetDto, installationId: String): PhysicalAssetReceiptDto =
+        post("/v1/assets/" + uuid(id) + "/transfer", request.operationId,
+            json.encodeToString(TransferPhysicalAssetDto.serializer(), request), installationId, PhysicalAssetReceiptDto.serializer())
+
+    suspend fun inspectPhysicalReturn(id: String, returned: String, request: InspectPhysicalReturnDto, installationId: String): PhysicalAssetReceiptDto =
+        post("/v1/assets/" + uuid(id) + "/returns/" + uuid(returned) + "/inspect", request.operationId,
+            json.encodeToString(InspectPhysicalReturnDto.serializer(), request), installationId, PhysicalAssetReceiptDto.serializer())
+
     suspend fun workResourceCatalog(work: String, installationId: String): WorkResourceCatalogDto =
         get("/v1/work-orders/" + uuid(work) + "/resource-catalog", installationId, WorkResourceCatalogDto.serializer())
 

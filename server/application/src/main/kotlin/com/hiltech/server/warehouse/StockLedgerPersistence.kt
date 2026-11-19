@@ -128,6 +128,7 @@ class StockLedgerPersistence(private val jdbc: JdbcTemplate) {
         return jdbc.query(
             """
             SELECT * FROM stock_movement WHERE stock_item_id = ?
+              AND work_requirement_instance_id IS NULL
               AND (from_storage_location_id IS NULL OR from_storage_location_id IN ($placeholders))
               AND (to_storage_location_id IS NULL OR to_storage_location_id IN ($placeholders))
             ORDER BY recorded_at DESC, id DESC LIMIT 100

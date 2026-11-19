@@ -234,6 +234,7 @@ fun HiltechShell(
     onProjectCommandCenterAction: (ProjectCommandCenterUiAction) -> Unit = {},
     onRefreshFieldWork: () -> Unit = {},
     onSelectFieldWork: (String) -> Unit = {},
+    warehouseOperator: @Composable () -> Unit = {},
 ) {
     MaterialTheme {
         Column(
@@ -444,6 +445,8 @@ fun HiltechShell(
                                 onSelectFieldWork,
                         )
                     }
+
+                    warehouseOperator()
 
                     state.warehouse?.let { warehouse ->
                         WarehouseSetupSection(

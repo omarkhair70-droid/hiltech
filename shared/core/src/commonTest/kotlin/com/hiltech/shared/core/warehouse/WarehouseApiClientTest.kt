@@ -25,6 +25,172 @@ class WarehouseApiClientTest {
     private val installation = "55555555-5555-5555-5555-555555555555"
 
     @Test
+    fun passportCarriesAssignedInspectionRevisionWithoutCatalogLookup() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/assets/$batchId", request.url.encodedPath)
+            respond("""{"identity":{"id":"$batchId","organizationId":"$org","warehouseId":"$warehouseId",
+                "assetCode":"SYNTH-TOOL","typeId":"$operation","typeName":"Synthetic type","typeRevision":3,
+                "condition":"GOOD","lifecycle":"ACTIVE","duplicateSerial":false,"version":7},
+                "tags":[],"canOperatePhysical":true,"returnInspectionType":{"id":"$operation","name":"Synthetic type",
+                "revision":3,"serialRequired":false,"calibrationRequired":false,"highValueOrRestricted":false,
+                "allowedTagTypes":[],"operatorMayTag":false,"inspectionRequiredOnReturn":true}}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val passport = client(http).assetPassport(batchId, installation)
+        assertEquals(passport.identity.typeId, passport.returnInspectionType?.id)
+        assertEquals(passport.identity.typeRevision, passport.returnInspectionType?.revision)
+        assertTrue(passport.returnInspectionType?.inspectionRequiredOnReturn == true)
+    }
+
+    @Test
+    fun dueReturnSnapshotUsesWarehouseAndServerTime() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/warehouses/$warehouseId/due-asset-returns", request.url.encodedPath)
+            assertEquals("GET", request.method.value)
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            respond("""{"items":[{"assetId":"$batchId","assetCode":"SYNTH-TOOL","employeeCode":"SYNTH-EMP",
+                "employeeName":"Synthetic recipient","sourceMovementId":"$operation",
+                "expectedReturnAt":"2026-11-18T12:00:00Z","overdue":true}],"limited":false,
+                "asOf":"2026-11-18T13:00:00Z"}""", HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).dueAssetReturns(warehouseId, installation)
+        assertEquals("2026-11-18T13:00:00Z", result.asOf)
+        assertTrue(result.items.single().overdue)
+        assertEquals(operation, result.items.single().sourceMovementId)
+        assertFalse(result.limited)
+    }
+
+    @Test
+    fun dueReturnCursorIsStableAndEncoded() = runBlocking {
+        val afterDue = "2026-11-18T12:00:00Z"
+        val afterCode = "SYNTH TOOL/02"
+        val afterId = operation
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/warehouses/$warehouseId/due-asset-returns", request.url.encodedPath)
+            assertEquals(afterDue, request.url.parameters["afterExpectedReturnAt"])
+            assertEquals(afterCode, request.url.parameters["afterAssetCode"])
+            assertEquals(afterId, request.url.parameters["afterAssetId"])
+            respond("""{"items":[],"limited":false,"asOf":"2026-11-18T13:00:00Z"}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val page = client(http).dueAssetReturns(warehouseId, installation, afterDue, afterCode, afterId)
+        assertTrue(page.items.isEmpty())
+        assertFalse(page.limited)
+    }
+
+    @Test
+    fun storageTransferPreservesIdempotencyQuantityAndReceipt() = runBlocking {
+        val command = TransferStockDto(operation, 7, warehouseId, org, "1.123456", "SYNTH-UOM")
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/stock-items/$batchId/transfer", request.url.encodedPath)
+            assertEquals("POST", request.method.value)
+            assertEquals(operation, request.headers["Idempotency-Key"])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            assertEquals(command, Json.decodeFromString<TransferStockDto>(body))
+            respond("""{"movement":{"id":"transfer-receipt","operationId":"$operation","type":"TRANSFER",
+                "quantity":"1.123456","unitCode":"SYNTH-UOM","fromStorageLocationId":"$warehouseId",
+                "toStorageLocationId":"$org","occurredAt":"2026-11-18T12:00:00Z","recordedBy":"$org"},"replayed":true}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val receipt = client(http).transferStock(batchId, command, installation)
+        assertEquals("transfer-receipt", receipt.movement.id)
+        assertEquals("1.123456", receipt.movement.quantity)
+        assertTrue(receipt.replayed)
+    }
+
+    @Test
+    fun physicalStockHistoryCursorIsEncoded() = runBlocking {
+        val after = "2026-11-18T12:34:56Z"
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/stock-items/$batchId/fulfillment-history", request.url.encodedPath)
+            assertEquals(warehouseId, request.url.parameters["warehouseId"])
+            assertEquals("Employee A", request.url.parameters["search"])
+            assertEquals(after, request.url.parameters["afterRecordedAt"])
+            assertEquals(operation, request.url.parameters["afterMovementId"])
+            respond("""{"items":[],"limited":false}""", HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).stockFulfillmentHistory(
+            batchId, warehouseId, "Employee A", installation, after, operation,
+        )
+        assertTrue(result.items.isEmpty())
+        assertFalse(result.limited)
+    }
+
+    @Test
+    fun physicalStockHistoryUsesWarehouseAndEmployeeScopeAndRetainsReceipt() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/stock-items/$batchId/fulfillment-history", request.url.encodedPath)
+            assertEquals("GET", request.method.value)
+            assertEquals(warehouseId, request.url.parameters["warehouseId"])
+            assertEquals("Employee A", request.url.parameters["search"])
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            respond("""{"items":[{"movementId":"receipt","operationId":"$operation","type":"CONSUME",
+                "quantity":"6.123456","unitCode":"SYNTH-UOM","employeeCode":"SYNTH-EMP","employeeName":"Employee A",
+                "workOrderId":"$org","requirementId":"$batchId","occurredAt":"2026-11-18T12:00:00Z"}],"limited":false}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).stockFulfillmentHistory(batchId, warehouseId, "Employee A", installation)
+        assertEquals("receipt", result.items.single().movementId)
+        assertEquals("6.123456", result.items.single().quantity)
+        assertFalse(result.limited)
+    }
+
+    @Test
+    fun reservedStockIssuePreservesExactQuantityAndIdempotency() = runBlocking {
+        val command = IssueReservedStockDto(operation, org, batchId, warehouseId, org, warehouseId,
+            7, 8, 9, 10, "1.123456", "SYNTH-UOM")
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/stock-items/$batchId/issue", request.url.encodedPath)
+            assertEquals("POST", request.method.value)
+            assertEquals(operation, request.headers["Idempotency-Key"])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            assertEquals(command, Json.decodeFromString<IssueReservedStockDto>(body))
+            respond("""{"movementId":"synthetic-issue","operationId":"$operation","type":"ISSUE","itemId":"$batchId",
+                "employeeId":"$warehouseId","workOrderId":"$org","requirementId":"$batchId","quantity":"1.123456",
+                "unitCode":"SYNTH-UOM","replayed":false}""", HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        assertEquals("1.123456", client(http).issueReservedStock(batchId, command, installation).quantity)
+    }
+
+    @Test
+    fun issuedDirectoryIsScopedToWarehouseAndPreservesVersion() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/stock-items/$batchId/issued-directory", request.url.encodedPath)
+            assertEquals(warehouseId, request.url.parameters["warehouseId"])
+            assertEquals("Employee A", request.url.parameters["search"])
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            respond("""{"items":[{"context":{"stockItemId":"$batchId","employeeId":"$org","projectId":"$org",
+                "siteId":"$org","workOrderId":"$org","requirementId":"$batchId","outstandingQuantity":"2.123456","version":3},
+                "employeeCode":"SYNTH-EMP","employeeName":"Employee A","workCode":"WORK",
+                "workTitle":"Synthetic task","workVersion":9,"unitCode":"SYNTH-UOM"}],"limited":false}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).issuedStockDirectory(batchId, warehouseId, "Employee A", installation)
+        assertEquals("2.123456", result.items.single().context.outstandingQuantity)
+        assertEquals(9L, result.items.single().workVersion)
+        assertFalse(result.limited)
+    }
+
+    @Test
+    fun physicalAssetInspectionBindsTheExactReturnAndCommandKey() = runBlocking {
+        val command = InspectPhysicalReturnDto(operation, 7, AssetCondition.GOOD, "Synthetic condition check")
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/assets/$batchId/returns/$warehouseId/inspect", request.url.encodedPath)
+            assertEquals(operation, request.headers["Idempotency-Key"])
+            val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            assertEquals(command, Json.decodeFromString<InspectPhysicalReturnDto>(body))
+            respond("""{"recordId":"synthetic-inspection","assetId":"$batchId","kind":"INSPECT","replayed":true}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        assertTrue(client(http).inspectPhysicalReturn(batchId, warehouseId, command, installation).replayed)
+    }
+
+    @Test
     fun assetLookupUsesOnlyTheOpaqueSegmentAndTheAuthenticatedReadTransport() = runBlocking {
         val http = HttpClient(MockEngine { request ->
             assertEquals("/v1/assets/by-tag/synthetic-opaque-tag", request.url.encodedPath)

@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.warehouse.AssetCatalogDto
+import com.hiltech.shared.core.warehouse.AssetDueReturnQueueDto
 import com.hiltech.shared.core.warehouse.AssetCondition
 import com.hiltech.shared.core.warehouse.AssetIdentityDto
 import com.hiltech.shared.core.warehouse.AssetMovementDto
@@ -52,6 +53,7 @@ data class AssetInventoryState(
     val serviceQueue: List<AssetServiceQueueEntryDto>? = null,
     val serviceQueueCursor: String? = null,
     val serviceDetail: AssetServiceDetailDto? = null,
+    val dueReturns: AssetDueReturnQueueDto? = null,
 )
 
 data class AssetLookupState(val result: AssetTagLookupDto? = null, val loading: Boolean = false, val message: String? = null)
@@ -61,6 +63,8 @@ sealed interface AssetAction {
     data class More(val afterCode: String) : AssetAction
     data class Select(val id: String) : AssetAction
     data object RefreshServiceQueue : AssetAction
+    data object RefreshDueReturns : AssetAction
+    data class MoreDueReturns(val afterExpectedReturnAt: String, val afterAssetCode: String, val afterAssetId: String) : AssetAction
     data class MoreServiceQueue(val afterCode: String) : AssetAction
     sealed interface Command : AssetAction
     data class Service(val command: AssetServiceCommand) : Command
@@ -77,6 +81,10 @@ sealed interface AssetAction {
         val id: String, val version: Long, val condition: AssetCondition, val location: String?,
         val employee: String?, val work: String?, val sourceMovement: String, val reason: String,
     ) : Command
+    data class ReturnPhysical(val id: String, val version: Long, val movement: String, val location: String, val condition: AssetCondition) : Command
+    data class TransferPhysical(val id: String, val version: Long, val movement: String, val location: String) : Command
+    data class InspectPhysical(val id: String, val version: Long, val movement: String, val condition: AssetCondition,
+        val notes: String?, val damageIncident: String?) : Command
     data class Approve(
         val batchId: String, val rowId: String, val version: Long, val code: String,
         val name: String, val ownership: String, val condition: AssetCondition,
@@ -102,6 +110,10 @@ fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispa
         }
         state.message?.let { Text(it) }
         AssetServiceQueue(state, dispatch)
+        AssetDueReturnsSection(state.dueReturns, state.loading,
+            refresh = { dispatch(AssetAction.RefreshDueReturns) },
+            more = { due, code, id -> dispatch(AssetAction.MoreDueReturns(due, code, id)) },
+            select = { dispatch(AssetAction.Select(it)) })
         val catalog = state.catalog ?: return@Column
         if (catalog.canRegister) {
             OutlinedButton({ showRegistration = !showRegistration }) {
@@ -171,6 +183,7 @@ private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventor
     custody?.let {
         Text(it.locationCode ?: it.employeeCode?.let { code -> "Employee $code" } ?: "Custody target unavailable")
         it.since?.let { since -> Text("Since $since") }
+        it.expectedReturnAt?.let { due -> Text("Expected return · $due") }
         it.projectId?.let { id -> Text("Project · $id") }
         it.siteId?.let { id -> Text("Site · $id") }
         it.workOrderId?.let { id -> Text("Work order · $id") }
@@ -178,16 +191,34 @@ private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventor
     AssetTags(passport, state.loading, dispatch)
     if (passport.canInitialize || passport.canCorrect) AssetCustodyForm(passport, state, dispatch)
     state.serviceDetail?.let { AssetServiceDetail(asset.id, it, state.loading, dispatch) }
-    Text("Movement history", style = MaterialTheme.typography.titleSmall)
-    val locationCodes = state.locations.associate { it.storageLocationId to it.code }
-    if (state.movements.isEmpty()) Text("No movements recorded")
-    state.movements.forEach {
-        val from = it.fromLocationId?.let { id -> locationCodes[id] ?: id } ?: it.fromEmployeeId
-        val to = it.toLocationId?.let { id -> locationCodes[id] ?: id } ?: it.toEmployeeId
-        Text("${it.type.replace('_', ' ')} · ${it.occurredAt}")
-        if (from != null || to != null) Text(listOfNotNull(from, to).joinToString(" → "))
-        it.reason?.let { reason -> Text(reason) }
-        it.correctedMovementId?.let { id -> Text("Corrects $id") }
+    if (passport.canOperatePhysical && custody != null) PhysicalAssetOperations(passport, state, dispatch)
+    AssetMovementHistory(state.movements, state.locations)
+}
+
+/** The same immutable movement receipts on Windows and Android. */
+@Composable
+fun AssetMovementHistory(movements: List<AssetMovementDto>, locations: List<StorageLocationDto>) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        OutlinedButton({ expanded = !expanded }) {
+            Text(if (expanded) "Hide Asset movement history" else "Show Asset movement history")
+        }
+        if (expanded) {
+            val locationCodes = locations.associate { it.storageLocationId to it.code }
+            if (movements.isEmpty()) Text("No movements recorded")
+            if (movements.size >= 100) Text("Showing at most the latest 100 movements.")
+            movements.forEach {
+                val from = it.fromLocationId?.let { id -> locationCodes[id] ?: id } ?: it.fromEmployeeId
+                val to = it.toLocationId?.let { id -> locationCodes[id] ?: id } ?: it.toEmployeeId
+                Text("${it.type.replace('_', ' ')} · ${it.occurredAt}")
+                if (from != null || to != null) Text(listOfNotNull(from, to).joinToString(" → "))
+                it.condition?.let { condition -> Text("Condition · $condition") }
+                it.workOrderId?.let { work -> Text("Work · $work") }
+                SelectionContainer { Text("Movement receipt · ${it.id}") }
+                it.reason?.let { reason -> Text(reason) }
+                it.correctedMovementId?.let { id -> Text("Corrects $id") }
+            }
+        }
     }
 }
 
@@ -338,3 +369,31 @@ internal fun String.optional() = trim().ifEmpty { null }
 private fun AssetInventoryState.locationChoices() = locations.filter { it.lifecycleState == "ACTIVE" }
     .map { it.storageLocationId to "${it.code} · ${it.name}" }
 private val assetRecordId = Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
+
+/** Read-only snapshot; selecting a row reloads the authoritative passport. */
+@Composable
+fun AssetDueReturnsSection(queue: AssetDueReturnQueueDto?, busy: Boolean, refresh: () -> Unit,
+    more: (String, String, String) -> Unit, select: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Expected Asset returns", style = MaterialTheme.typography.titleMedium)
+        OutlinedButton(refresh, enabled = !busy) { Text("Load expected returns") }
+        queue?.let { result ->
+            Text("As of ${result.asOf} · Server time")
+            if (result.items.isEmpty()) Text("No current custody with a recorded return date.")
+            result.items.forEach { entry ->
+                Text(listOfNotNull(entry.assetCode, entry.assetName).joinToString(" · "))
+                Text("${entry.employeeCode} · ${entry.employeeName}")
+                Text("${if (entry.overdue) "Overdue" else "Expected"} · ${entry.expectedReturnAt}",
+                    color = if (entry.overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                entry.workOrderId?.let { Text("Work · $it") }
+                OutlinedButton({ select(entry.assetId) }, enabled = !busy) { Text("Open ${entry.assetCode}") }
+            }
+            val due = result.nextExpectedReturnAt
+            val code = result.nextAssetCode
+            val id = result.nextAssetId
+            if (result.limited && due != null && code != null && id != null) {
+                OutlinedButton({ more(due, code, id) }, enabled = !busy) { Text("Load more expected returns") }
+            }
+        }
+    }
+}

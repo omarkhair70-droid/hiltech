@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - "database/migrations/V0023__work_order_policy_binding__slice03.sql"
+      - "database/migrations/V0031__physical_fulfillment__slice06.sql"
+      - "server/application/src/main/kotlin/com/hiltech/server/warehouse/StockFulfillment*.kt"
+      - "server/application/src/test/kotlin/com/hiltech/server/warehouse/ReservationOperatorScenario.kt"
       - "server/application/src/main/kotlin/com/hiltech/server/work/**"
       - "server/application/src/main/kotlin/com/hiltech/server/projects/ProjectsAuthorization.kt"
       - "server/application/src/test/kotlin/com/hiltech/server/projects/ProjectsPostgresOpenFgaContractTest.kt"

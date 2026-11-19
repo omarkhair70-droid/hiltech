@@ -1133,7 +1133,8 @@ fun main() {
         }
         if (command != null) pendingAssetCommand = command
         val request = ++assetRequestSequence
-        setState(signed.copy(warehouse = setup.copy(assets = assets.copy(loading = true, message = null))))
+        setState(signed.copy(warehouse = setup.copy(assets = assets.copy(loading = true, message = null,
+            dueReturns = if (action == AssetAction.RefreshDueReturns || command != null) null else assets.dueReturns))))
         scope.launch {
             val result = runCatching {
                 val refreshed = runtime.applyAssetAction(organization.organizationId, facility, assets, action, command?.operationId.orEmpty())
@@ -1154,7 +1155,8 @@ fun main() {
                 onFailure = {
                     val message = (it as? HiltechApiException)?.message ?: "Asset request failed. Try again."
                     val fallback = if ((it as? HiltechApiException)?.code == "ASSET_UNAVAILABLE") AssetInventoryState() else assets
-                    currentSetup.copy(assets = fallback.copy(loading = false, message = message))
+                    currentSetup.copy(assets = fallback.copy(loading = false, message = message,
+                        dueReturns = if (action == AssetAction.RefreshDueReturns || command != null) null else fallback.dueReturns))
                 },
             )
             setState(current.copy(warehouse = updated))
@@ -1174,12 +1176,14 @@ fun main() {
         val organization = signed.identity.organizations.firstOrNull { it.primary }
             ?: signed.identity.organizations.firstOrNull() ?: return
         val actor = signed.identity.identityId
-        val isMutation = action !is StockAction.Refresh && action !is StockAction.Select && action !is StockAction.More
+        val isMutation = action !is StockAction.Refresh && action !is StockAction.Select && action !is StockAction.More && action !is StockAction.LoadIssued && action !is StockAction.LoadFulfillmentHistory
         val operation = pendingStockCommand?.takeIf {
             it.actor == actor && it.action == action && it.warehouseId == setup.selectedWarehouseId
         } ?: PendingStockCommand(actor, setup.selectedWarehouseId, action, java.util.UUID.randomUUID().toString())
         if (isMutation) pendingStockCommand = operation
-        setState(signed.copy(warehouse = setup.copy(stock = stock.copy(loading = true, message = null))))
+        setState(signed.copy(warehouse = setup.copy(stock =
+            if (action is StockAction.LoadFulfillmentHistory) stock.copy(loading = true, message = null, fulfillmentHistory = null)
+            else stock.copy(loading = true, message = null))))
         scope.launch {
             val result = runCatching {
                 val refreshed = runtime.applyStockAction(
@@ -1190,7 +1194,7 @@ fun main() {
             }
             val current = shellState.value as? HiltechShellState.SignedIn ?: return@launch
             val currentSetup = current.warehouse ?: return@launch
-            if (current.identity.identityId != actor) return@launch
+            if (current.identity.identityId != actor || currentSetup.selectedWarehouseId != setup.selectedWarehouseId) return@launch
             val updated = result.fold(
                 onSuccess = { (refreshed, batch) ->
                     if (pendingStockCommand == operation) pendingStockCommand = null
@@ -1199,7 +1203,8 @@ fun main() {
                         stock = refreshed.copy(loading = false, message = if (isMutation) "Stock command recorded" else null))
                 },
                 onFailure = { failure ->
-                    currentSetup.copy(stock = stock.copy(loading = false, message = failure.message ?: "Stock request failed."))
+                    currentSetup.copy(stock = stock.copy(loading = false, message = failure.message ?: "Stock request failed.",
+                        fulfillmentHistory = if (action is StockAction.LoadFulfillmentHistory) null else stock.fulfillmentHistory))
                 },
             )
             setState(current.copy(warehouse = updated))

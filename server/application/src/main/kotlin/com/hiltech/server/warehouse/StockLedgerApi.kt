@@ -75,11 +75,11 @@ class StockLedgerController(private val service: StockLedgerService) {
     ) = service.approveImport(request.stockContext(body.operationId), batchId, rowId, body)
 }
 
-private fun HttpServletRequest.stockActor(): UUID =
+internal fun HttpServletRequest.stockActor(): UUID =
     HiltechRequestContext.current(this).identityId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
         ?: throw ProductApiException("UNAUTHENTICATED", "Authentication is required.", HttpStatus.UNAUTHORIZED)
 
-private fun HttpServletRequest.stockContext(operationId: UUID): StockCommandContext {
+internal fun HttpServletRequest.stockContext(operationId: UUID): StockCommandContext {
     val actor = stockActor()
     val context = HiltechRequestContext.current(this)
     IdempotencyKeyContract.requireMatches(context.idempotencyKey, operationId)
