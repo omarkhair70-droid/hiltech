@@ -31,7 +31,7 @@ data class StockCountRecordView(
     val countedBy: UUID, val countedAt: String, val scanSource: String?, val notes: String?,
     val supersedesCountRecordId: UUID?, val operationId: UUID, val correlationId: String,
 )
-internal data class StocktakeSnapshotCandidate(
+data class StocktakeSnapshotCandidate(
     val stockItemId: UUID, val itemCode: String, val storageLocationId: UUID, val locationCode: String,
     val onHand: BigDecimal, val reserved: BigDecimal, val damaged: BigDecimal, val quarantine: BigDecimal,
     val unitCode: String, val balanceVersion: Long, val itemVersion: Long,
