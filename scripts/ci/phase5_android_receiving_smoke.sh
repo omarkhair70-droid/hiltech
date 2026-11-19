@@ -69,6 +69,8 @@ wait_for_text() {
 wait_for_text 'SYNTH-RECEIVING-READY' >/dev/null
 focus_text 'Receiving search / scan'
 adb shell input text 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+adb shell input keyevent KEYCODE_BACK
+sleep 1
 tap_text 'Open scanned Receiving receipt'
 wait_for_text 'SYNTH-RECEIVING-SEARCH-PASS' >/dev/null
 adb exec-out screencap -p > "$report_dir/android-receiving-search.png"
@@ -77,6 +79,8 @@ tap_text 'Condition · unknown'
 tap_text 'good'
 focus_text 'Serials · comma or new line separated'
 adb shell input text 'SER-001,SER-002'
+adb shell input keyevent KEYCODE_BACK
+sleep 1
 tap_text 'Record Stock receipt'
 wait_for_text 'SYNTH-RECEIVING-STOCK-RECEIPT' >/dev/null
 wait_for_text 'Serial evidence · SER-001, SER-002' >/dev/null
@@ -84,6 +88,8 @@ adb exec-out screencap -p > "$report_dir/android-receiving-stock-receipt.png"
 
 focus_text 'Physical discrepancy description'
 adb shell input text 'Short%sdelivery'
+adb shell input keyevent KEYCODE_BACK
+sleep 1
 tap_text 'Record discrepancy'
 wait_for_text 'SYNTH-RECEIVING-DISCREPANCY-RECEIPT' >/dev/null
 wait_for_text 'SHORT QTY · Short delivery' >/dev/null
