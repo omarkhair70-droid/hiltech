@@ -173,6 +173,14 @@ internal class ReservationOperatorScenario(
         assertEquals(employee, assets.custody(asset)?.employeeId)
         assertEquals(timestamp.plusHours(1), jdbc.queryForObject(
             "SELECT expected_return_at FROM asset_custody_projection WHERE asset_id = ?", java.time.OffsetDateTime::class.java, asset))
+        val due = AssetFulfillmentPersistence(jdbc)
+        val pending = due.dueReturns(org, facility, instant).items.single { it.assetId == asset }
+        assertEquals(checkout, pending.sourceMovementId)
+        assertEquals(order.workOrderId, pending.workOrderId)
+        assertFalse(pending.overdue)
+        assertTrue(due.dueReturns(org, facility, instant.plusSeconds(3600)).items.single { it.assetId == asset }.overdue)
+        assertTrue(due.dueReturns(org, UUID.randomUUID(), instant).items.isEmpty())
+        assertTrue(due.dueReturns(UUID.randomUUID(), facility, instant).items.isEmpty())
         assertThrows<DataIntegrityViolationException> { checkoutTo(employee, UUID.randomUUID()) }
         val returned = UUID.randomUUID()
         jdbc.update("""INSERT INTO asset_movement (id, asset_id, organization_id, movement_type,
@@ -184,6 +192,7 @@ internal class ReservationOperatorScenario(
             operator, UUID.randomUUID(), checkout)
         assertEquals(location, assets.custody(asset)?.storageLocationId)
         assertEquals(null, assets.custody(asset)?.employeeId)
+        assertTrue(due.dueReturns(org, facility, instant.plusSeconds(2)).items.none { it.assetId == asset })
         val serviceRecords = AssetServicePersistence(jdbc)
         assertEquals("BLOCKED_INSPECTION", serviceRecords.availability(asset, instant.plusSeconds(1))?.state)
         val inspection = UUID.randomUUID()

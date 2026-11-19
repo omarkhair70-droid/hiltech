@@ -191,7 +191,7 @@ private fun PhysicalOperatorWorkspace(
             else -> error("Unsupported physical operation.")
         }
         receipt = "${response.kind} · ${response.recordId}"
-        assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null)
+        assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null, dueReturns = null)
         loadAsset(id)
     }
 
@@ -260,7 +260,7 @@ private fun PhysicalOperatorWorkspace(
                 receipt = "HANDOFF · $recorded"
                 queue = null
                 // Previous detail snapshots may no longer describe current custody.
-                assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null)
+                assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null, dueReturns = null)
                 stockState = stockState.copy(selected = null, issued = null, issuedWarehouseId = null, balances = emptyList())
                 queue = api.reservationQueue(warehouse, installationId)
             },
@@ -268,6 +268,18 @@ private fun PhysicalOperatorWorkspace(
     }
 
     Text("Asset return / inspection / storage transfer", style = MaterialTheme.typography.titleMedium)
+    AssetDueReturnsSection(assetState.dueReturns, busy, refresh = {
+        runTask {
+            assetState = assetState.copy(dueReturns = null)
+            val due = api.dueAssetReturns(warehouse, installationId)
+            assetState = assetState.copy(dueReturns = due)
+        }
+    }, select = { id ->
+        runTask {
+            assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null)
+            loadAsset(id)
+        }
+    })
     OutlinedTextField(assetSearch, { assetSearch = it }, label = { Text("Asset code, serial, name or tag") }, singleLine = true, enabled = !busy)
     OutlinedButton({
         runTask {

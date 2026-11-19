@@ -780,6 +780,7 @@ class DesktopIdentityRuntime(
                 )
                 return loadAssetPassport(ready, action.id)
             }
+            AssetAction.RefreshDueReturns -> return state.copy(dueReturns = warehouseApi.dueAssetReturns(warehouseId, installationId))
             AssetAction.RefreshServiceQueue -> return refreshAssetServiceQueue(warehouseId, state, null)
             is AssetAction.MoreServiceQueue -> return refreshAssetServiceQueue(warehouseId, state, action.afterCode)
             is AssetAction.Service -> {
@@ -808,17 +809,17 @@ class DesktopIdentityRuntime(
             is AssetAction.ReturnPhysical -> {
                 warehouseApi.returnPhysicalAsset(action.id, ReturnPhysicalAssetDto(operationId, action.version,
                     action.movement, action.location, action.condition), installationId)
-                return loadAssetPassport(refreshAssetServiceQueue(warehouseId, state, null), action.id)
+                return loadAssetPassport(refreshAssetServiceQueue(warehouseId, state.copy(dueReturns = null), null), action.id)
             }
             is AssetAction.TransferPhysical -> {
                 warehouseApi.transferPhysicalAsset(action.id, TransferPhysicalAssetDto(operationId, action.version,
                     action.movement, action.location), installationId)
-                return loadAssetPassport(refreshAssetServiceQueue(warehouseId, state, null), action.id)
+                return loadAssetPassport(refreshAssetServiceQueue(warehouseId, state.copy(dueReturns = null), null), action.id)
             }
             is AssetAction.InspectPhysical -> {
                 warehouseApi.inspectPhysicalReturn(action.id, action.movement, InspectPhysicalReturnDto(operationId,
                     action.version, action.condition, action.notes, action.damageIncident), installationId)
-                return loadAssetPassport(refreshAssetServiceQueue(warehouseId, state, null), action.id)
+                return loadAssetPassport(refreshAssetServiceQueue(warehouseId, state.copy(dueReturns = null), null), action.id)
             }
             is AssetAction.Approve -> warehouseApi.approveAssetImport(action.batchId, action.rowId, ApproveAssetImportDto(
                 operationId, action.version, action.code, action.name, action.ownership, action.condition,
@@ -829,7 +830,7 @@ class DesktopIdentityRuntime(
         val refreshed = state.copy(catalog = warehouseApi.assetCatalog(warehouseId, installationId), search = search,
             items = page, nextAfterCode = page.lastOrNull()?.assetCode?.takeIf { page.size == 100 },
             locations = warehouseApi.storageLocations(organizationId, installationId).items,
-            selected = null, movements = emptyList(), serviceDetail = null)
+            selected = null, movements = emptyList(), serviceDetail = null, dueReturns = null)
         val withQueue = refreshAssetServiceQueue(warehouseId, refreshed, null)
         return if (selectedId == null) withQueue else loadAssetPassport(withQueue, selectedId)
     }

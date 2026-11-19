@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.warehouse.AssetCatalogDto
+import com.hiltech.shared.core.warehouse.AssetDueReturnQueueDto
 import com.hiltech.shared.core.warehouse.AssetCondition
 import com.hiltech.shared.core.warehouse.AssetIdentityDto
 import com.hiltech.shared.core.warehouse.AssetMovementDto
@@ -52,6 +53,7 @@ data class AssetInventoryState(
     val serviceQueue: List<AssetServiceQueueEntryDto>? = null,
     val serviceQueueCursor: String? = null,
     val serviceDetail: AssetServiceDetailDto? = null,
+    val dueReturns: AssetDueReturnQueueDto? = null,
 )
 
 data class AssetLookupState(val result: AssetTagLookupDto? = null, val loading: Boolean = false, val message: String? = null)
@@ -61,6 +63,7 @@ sealed interface AssetAction {
     data class More(val afterCode: String) : AssetAction
     data class Select(val id: String) : AssetAction
     data object RefreshServiceQueue : AssetAction
+    data object RefreshDueReturns : AssetAction
     data class MoreServiceQueue(val afterCode: String) : AssetAction
     sealed interface Command : AssetAction
     data class Service(val command: AssetServiceCommand) : Command
@@ -106,6 +109,7 @@ fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispa
         }
         state.message?.let { Text(it) }
         AssetServiceQueue(state, dispatch)
+        AssetDueReturnsSection(state.dueReturns, state.loading, { dispatch(AssetAction.RefreshDueReturns) }) { dispatch(AssetAction.Select(it)) }
         val catalog = state.catalog ?: return@Column
         if (catalog.canRegister) {
             OutlinedButton({ showRegistration = !showRegistration }) {
@@ -344,3 +348,25 @@ internal fun String.optional() = trim().ifEmpty { null }
 private fun AssetInventoryState.locationChoices() = locations.filter { it.lifecycleState == "ACTIVE" }
     .map { it.storageLocationId to "${it.code} · ${it.name}" }
 private val assetRecordId = Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
+
+/** Read-only snapshot; selecting a row reloads the authoritative passport. */
+@Composable
+fun AssetDueReturnsSection(queue: AssetDueReturnQueueDto?, busy: Boolean, refresh: () -> Unit, select: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Expected Asset returns", style = MaterialTheme.typography.titleMedium)
+        OutlinedButton(refresh, enabled = !busy) { Text("Load expected returns") }
+        queue?.let { result ->
+            Text("As of ${result.asOf} · Server time")
+            if (result.limited) Text("Showing earliest 100 due dates; more returns exist.")
+            if (result.items.isEmpty()) Text("No current custody with a recorded return date.")
+            result.items.forEach { entry ->
+                Text(listOfNotNull(entry.assetCode, entry.assetName).joinToString(" · "))
+                Text("${entry.employeeCode} · ${entry.employeeName}")
+                Text("${if (entry.overdue) "Overdue" else "Expected"} · ${entry.expectedReturnAt}",
+                    color = if (entry.overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                entry.workOrderId?.let { Text("Work · $it") }
+                OutlinedButton({ select(entry.assetId) }, enabled = !busy) { Text("Open ${entry.assetCode}") }
+            }
+        }
+    }
+}

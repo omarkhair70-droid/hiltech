@@ -1133,7 +1133,8 @@ fun main() {
         }
         if (command != null) pendingAssetCommand = command
         val request = ++assetRequestSequence
-        setState(signed.copy(warehouse = setup.copy(assets = assets.copy(loading = true, message = null))))
+        setState(signed.copy(warehouse = setup.copy(assets = assets.copy(loading = true, message = null,
+            dueReturns = if (action == AssetAction.RefreshDueReturns || command != null) null else assets.dueReturns))))
         scope.launch {
             val result = runCatching {
                 val refreshed = runtime.applyAssetAction(organization.organizationId, facility, assets, action, command?.operationId.orEmpty())
@@ -1154,7 +1155,8 @@ fun main() {
                 onFailure = {
                     val message = (it as? HiltechApiException)?.message ?: "Asset request failed. Try again."
                     val fallback = if ((it as? HiltechApiException)?.code == "ASSET_UNAVAILABLE") AssetInventoryState() else assets
-                    currentSetup.copy(assets = fallback.copy(loading = false, message = message))
+                    currentSetup.copy(assets = fallback.copy(loading = false, message = message,
+                        dueReturns = if (action == AssetAction.RefreshDueReturns || command != null) null else fallback.dueReturns))
                 },
             )
             setState(current.copy(warehouse = updated))

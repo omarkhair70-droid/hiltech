@@ -25,6 +25,25 @@ class WarehouseApiClientTest {
     private val installation = "55555555-5555-5555-5555-555555555555"
 
     @Test
+    fun dueReturnSnapshotUsesWarehouseAndServerTime() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/warehouses/$warehouseId/due-asset-returns", request.url.encodedPath)
+            assertEquals("GET", request.method.value)
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            respond("""{"items":[{"assetId":"$batchId","assetCode":"SYNTH-TOOL","employeeCode":"SYNTH-EMP",
+                "employeeName":"Synthetic recipient","sourceMovementId":"$operation",
+                "expectedReturnAt":"2026-11-18T12:00:00Z","overdue":true}],"limited":false,
+                "asOf":"2026-11-18T13:00:00Z"}""", HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).dueAssetReturns(warehouseId, installation)
+        assertEquals("2026-11-18T13:00:00Z", result.asOf)
+        assertTrue(result.items.single().overdue)
+        assertEquals(operation, result.items.single().sourceMovementId)
+        assertFalse(result.limited)
+    }
+
+    @Test
     fun storageTransferPreservesIdempotencyQuantityAndReceipt() = runBlocking {
         val command = TransferStockDto(operation, 7, warehouseId, org, "1.123456", "SYNTH-UOM")
         val http = HttpClient(MockEngine { request ->

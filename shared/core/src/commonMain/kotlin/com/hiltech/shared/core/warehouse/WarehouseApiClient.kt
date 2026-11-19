@@ -49,6 +49,10 @@ class WarehouseApiClient(
         get("/v1/stock-items/" + uuid(id) + "/issued-context?workOrderId=" + uuid(work), installationId,
             ListSerializer(IssuedStockContextDto.serializer()))
 
+    suspend fun dueAssetReturns(warehouse: String, installationId: String): AssetDueReturnQueueDto =
+        get("/v1/warehouses/" + uuid(warehouse) + "/due-asset-returns",
+            installationId, AssetDueReturnQueueDto.serializer())
+
     suspend fun checkoutReservedAsset(id: String, request: CheckoutReservedAssetDto, installationId: String): PhysicalAssetReceiptDto =
         post("/v1/assets/" + uuid(id) + "/checkout", request.operationId,
             json.encodeToString(CheckoutReservedAssetDto.serializer(), request), installationId, PhysicalAssetReceiptDto.serializer())

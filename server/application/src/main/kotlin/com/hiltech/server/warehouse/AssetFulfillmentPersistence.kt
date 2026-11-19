@@ -3,10 +3,18 @@ package com.hiltech.server.warehouse
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.UUID
 
 data class FulfillmentEmployeeChoice(val id: UUID, val code: String, val name: String)
+
+data class AssetDueReturnRow(
+    val assetId: UUID, val assetCode: String, val assetName: String?, val employeeCode: String,
+    val employeeName: String, val workOrderId: UUID?, val sourceMovementId: UUID,
+    val expectedReturnAt: String, val overdue: Boolean,
+)
+data class AssetDueReturnQueue(val items: List<AssetDueReturnRow>, val limited: Boolean, val asOf: String)
 
 @Repository
 class AssetFulfillmentPersistence(private val jdbc: JdbcTemplate) {
@@ -18,6 +26,27 @@ class AssetFulfillmentPersistence(private val jdbc: JdbcTemplate) {
         ORDER BY e.employee_code, e.id LIMIT 100
     """.trimIndent(), { rs, _ -> FulfillmentEmployeeChoice(rs.getObject("id", UUID::class.java),
         rs.getString("employee_code"), rs.getString("display_name")) }, organization, search, search)
+
+    /** Only current accountable employee custody with an explicitly recorded due time. */
+    fun dueReturns(org: UUID, warehouse: UUID, at: Instant): AssetDueReturnQueue {
+        val rows = jdbc.query("""
+            SELECT a.id, a.asset_code, a.display_name AS asset_name, e.employee_code,
+                p.display_name AS employee_name, c.current_work_order_id, c.source_movement_id, c.expected_return_at
+            FROM asset_custody_projection c
+            JOIN asset a ON a.id = c.asset_id
+            JOIN employee e ON e.id = c.current_custodian_target_id AND e.organization_id = a.organization_id
+            JOIN person p ON p.id = e.person_id
+            WHERE a.organization_id = ? AND a.warehouse_id = ?
+              AND c.current_custodian_target_type = 'EMPLOYEE' AND c.expected_return_at IS NOT NULL
+            ORDER BY c.expected_return_at, a.asset_code, a.id LIMIT 101
+        """.trimIndent(), { r, _ ->
+            val due = r.getObject("expected_return_at", OffsetDateTime::class.java).toInstant()
+            AssetDueReturnRow(r.getObject("id", UUID::class.java), r.getString("asset_code"), r.getString("asset_name"),
+                r.getString("employee_code"), r.getString("employee_name"), r.getObject("current_work_order_id", UUID::class.java),
+                r.getObject("source_movement_id", UUID::class.java), due.toString(), due <= at)
+        }, org, warehouse)
+        return AssetDueReturnQueue(rows.take(100), rows.size > 100, at.toString())
+    }
 
     fun id(operation: UUID): UUID = UUID.nameUUIDFromBytes("hiltech:asset-physical:$operation".toByteArray(Charsets.UTF_8))
 
