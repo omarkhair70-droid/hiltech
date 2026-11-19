@@ -141,10 +141,11 @@ class ReceivingService(
         requireDestination(context.actor, visible.organizationId, visible.destinationStorageLocationId)
         val replayed = execute(context, "RECEIVING_COMPLETED", "RECEIVING", id, request.recordVersion) {
             val record = receiving.record(id, lock = true) ?: unavailable()
-            if (record.version != request.recordVersion || record.state != ReceivingState.IN_PROGRESS) stale()
+            if (record.version != request.recordVersion) stale()
             requireDestination(context.actor, record.organizationId, record.destinationStorageLocationId)
             val lines = receiving.lines(record.id)
             if (lines.isEmpty() || lines.any { it.receivedAt == null }) incomplete()
+            if (record.state != ReceivingState.IN_PROGRESS) stale()
             val target = if (receiving.hasDiscrepancy(record.id))
                 ReceivingState.RECEIVED_WITH_DISCREPANCY else ReceivingState.RECEIVED
             if (!receiving.complete(record.id, record.version, target, context.actor,

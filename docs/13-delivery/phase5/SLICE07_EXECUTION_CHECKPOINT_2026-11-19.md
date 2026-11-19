@@ -17,3 +17,7 @@ First internal vertical path supports create Receiving -> add explicit Stock lin
 PostgreSQL/OpenFGA scenario covers unauthorized receiver, exact-once quantity, duplicate operation replay, wrong-unit denial, serialized Stock staying Stock, source-only completion denial and inactive destination denial.
 
 Asset creation from Receiving, discrepancy commands/review, API and Windows/Android surfaces remain later Slice 07 checkpoints. Exact-head CI pending. Do not merge.
+
+### Checkpoint 01 CI repair
+
+Exact-head c3d14a0c969b73ac120cf485da33e9dce4d19307 compiled and migrated V0032 successfully, and Warehouse contract passed. The real PostgreSQL/OpenFGA contract exposed one semantic ordering defect: attempting to complete a source-only DRAFT Receiving record returned RECEIVING_VERSION_CONFLICT before proving that no physical lines exist. Completion now checks the exact base version and current authority, then fails RECEIVING_INCOMPLETE for zero/unreceived lines before requiring IN_PROGRESS lifecycle. This preserves the frozen rule that PO/invoice/source references alone cannot become received inventory. No gate weakened; corrected exact-head CI pending.
