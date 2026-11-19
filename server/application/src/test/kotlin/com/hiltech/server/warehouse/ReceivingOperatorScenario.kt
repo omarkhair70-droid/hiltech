@@ -120,6 +120,29 @@ internal class ReceivingOperatorScenario(
                     stock.item(item)!!.version, "1", "BOX", AssetCondition.GOOD))
         }.code)
 
+        val shortRecord = service.create(context(UUID.randomUUID()), CreateReceivingRequest(
+            organization, location.storageLocationId, ReceivingSourceType.OTHER, sourceRef = "SHORT-DELIVERY",
+        )).record
+        val shortLine = service.addStockLine(context(UUID.randomUUID()), shortRecord.id,
+            AddReceivingStockLineRequest(shortRecord.version, item, stock.item(item)!!.version,
+                ReceivingCandidateClass.STOCK_QUANTITY, "5", "EA", "SHORT-LINE")).line
+        service.receiveStockLine(context(UUID.randomUUID()), shortRecord.id, shortLine.id,
+            ReceiveStockLineRequest(receiving.record(shortRecord.id)!!.version, shortLine.version,
+                stock.item(item)!!.version, "4", "EA", AssetCondition.GOOD))
+        val beforeExpected = receiving.line(shortLine.id)!!.expectedQuantity
+        val discrepancy = service.addDiscrepancy(context(UUID.randomUUID()), shortRecord.id,
+            AddReceivingDiscrepancyRequest(receiving.record(shortRecord.id)!!.version, shortLine.id,
+                ReceivingDiscrepancyType.SHORT_QTY, "One unit missing at physical receipt"))
+        assertEquals("5", beforeExpected)
+        assertEquals(beforeExpected, receiving.line(shortLine.id)!!.expectedQuantity)
+        assertEquals(ReceivingDiscrepancyType.SHORT_QTY, discrepancy.discrepancy.type)
+        assertEquals(1, service.detail(operator, shortRecord.id).discrepancies.size)
+        assertTrue(service.directory(operator, facility).items.any { it.id == shortRecord.id })
+        val shortCurrent = receiving.record(shortRecord.id)!!
+        assertEquals(ReceivingState.RECEIVED_WITH_DISCREPANCY,
+            service.complete(context(UUID.randomUUID()), shortRecord.id,
+                CompleteReceivingRequest(shortCurrent.version)).record.state)
+
         val poOnly = service.create(context(UUID.randomUUID()), CreateReceivingRequest(
             organization, location.storageLocationId, ReceivingSourceType.PO,
             sourceRef = "PO-SYNTH-ONLY", deliveryDocumentRef = "INVOICE-TOTAL-IS-NOT-A-LINE",

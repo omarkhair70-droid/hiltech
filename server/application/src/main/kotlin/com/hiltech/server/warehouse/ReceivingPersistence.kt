@@ -15,11 +15,14 @@ import java.util.UUID
 enum class ReceivingSourceType { PO, TRANSFER, RETURN, INITIALIZATION, OTHER }
 enum class ReceivingState { DRAFT, IN_PROGRESS, RECEIVED, RECEIVED_WITH_DISCREPANCY, CANCELLED }
 enum class ReceivingCandidateClass { STOCK_QUANTITY, STOCK_SERIALIZED, COMPANY_ASSET }
+enum class ReceivingDiscrepancyType {
+    SHORT_QTY, OVER_QTY, WRONG_ITEM, DAMAGED_ON_RECEIPT, SERIAL_MISMATCH, UNEXPECTED_ITEM, DOCUMENT_MISMATCH
+}
 
 data class ReceivingRecordView(
     val id: UUID, val organizationId: UUID, val destinationStorageLocationId: UUID,
     val sourceType: ReceivingSourceType, val sourceRef: String?, val deliveryDocumentRef: String?,
-    val state: ReceivingState, val createdBy: UUID, val createdAt: String,
+    val state: ReceivingState, val createdBy: UUID, val createdAt: String, val updatedAt: String,
     val receivedBy: UUID?, val receivedAt: String?, val correlationId: String, val version: Long,
 )
 data class ReceivingLineView(
@@ -28,6 +31,18 @@ data class ReceivingLineView(
     val receivedQuantity: String?, val unitCode: String?, val condition: AssetCondition?,
     val serials: List<String>, val sourceLineRef: String?, val receivedBy: UUID?, val receivedAt: String?, val version: Long,
 )
+data class ReceivingDiscrepancyView(
+    val id: UUID, val receivingRecordId: UUID, val receivingLineId: UUID?, val organizationId: UUID,
+    val type: ReceivingDiscrepancyType, val description: String, val createdBy: UUID, val createdAt: String, val version: Long,
+)
+data class ReceivingDetailView(
+    val record: ReceivingRecordView, val lines: List<ReceivingLineView>, val discrepancies: List<ReceivingDiscrepancyView>,
+)
+data class ReceivingDirectoryView(
+    val items: List<ReceivingRecordView>, val limited: Boolean,
+    val nextUpdatedAt: String? = null, val nextId: UUID? = null,
+)
+private data class ReceivingCursorRow(val record: ReceivingRecordView, val updatedAt: String)
 
 @Repository
 class ReceivingPersistence(private val jdbc: JdbcTemplate) {
@@ -45,6 +60,38 @@ class ReceivingPersistence(private val jdbc: JdbcTemplate) {
         "SELECT * FROM receiving_line WHERE receiving_record_id = ? ORDER BY created_at, id",
         { r, _ -> r.line() }, recordId,
     )
+
+    fun discrepancies(recordId: UUID): List<ReceivingDiscrepancyView> = jdbc.query(
+        "SELECT * FROM receiving_discrepancy WHERE receiving_record_id = ? ORDER BY created_at, id",
+        { r, _ -> r.discrepancy() }, recordId,
+    )
+
+    fun directory(org: UUID, locations: List<UUID>, afterUpdatedAt: Instant? = null,
+        afterId: UUID? = null): ReceivingDirectoryView {
+        if (locations.isEmpty()) return ReceivingDirectoryView(emptyList(), false)
+        val placeholders = locations.joinToString(",") { "?" }
+        val cursor = afterUpdatedAt != null && afterId != null
+        val cursorClause = if (cursor)
+            "AND (updated_at < ? OR (updated_at = ? AND id < ?))" else ""
+        val sql = """SELECT * FROM receiving_record
+            WHERE organization_id = ? AND destination_storage_location_id IN ($placeholders)
+            $cursorClause
+            ORDER BY updated_at DESC, id DESC LIMIT 101""".trimIndent()
+        val args = mutableListOf<Any>(org).apply {
+            addAll(locations)
+            if (cursor) {
+                val at = requireNotNull(afterUpdatedAt).atOffset(ZoneOffset.UTC)
+                add(at); add(at); add(requireNotNull(afterId))
+            }
+        }
+        val rows = jdbc.query(sql, { r, _ ->
+            val record = r.record()
+            ReceivingCursorRow(record, requireNotNull(r.instant("updated_at")).toString())
+        }, *args.toTypedArray())
+        val page = rows.take(100)
+        val last = page.lastOrNull().takeIf { rows.size > 100 }
+        return ReceivingDirectoryView(page.map { it.record }, rows.size > 100, last?.updatedAt, last?.record?.id)
+    }
 
     fun insertRecord(id: UUID, org: UUID, destination: UUID, sourceType: ReceivingSourceType,
         sourceRef: String?, documentRef: String?, actor: UUID, at: Instant, correlationId: String) {
@@ -93,11 +140,22 @@ class ReceivingPersistence(private val jdbc: JdbcTemplate) {
         Boolean::class.java, recordId,
     ) == true
 
+    fun insertDiscrepancy(id: UUID, record: ReceivingRecordView, lineId: UUID?, type: ReceivingDiscrepancyType,
+        description: String, actor: UUID, at: Instant) {
+        jdbc.update(
+            """INSERT INTO receiving_discrepancy (id, receiving_record_id, receiving_line_id, organization_id,
+                discrepancy_type, description, created_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""".trimIndent(),
+            id, record.id, lineId, record.organizationId, type.name, description, actor, at.atOffset(ZoneOffset.UTC),
+        )
+    }
+
     private fun ResultSet.record() = ReceivingRecordView(
         getObject("id", UUID::class.java), getObject("organization_id", UUID::class.java),
         getObject("destination_storage_location_id", UUID::class.java), ReceivingSourceType.valueOf(getString("source_type")),
         getString("source_ref"), getString("delivery_document_ref"), ReceivingState.valueOf(getString("state")),
         getObject("created_by", UUID::class.java), requireNotNull(instant("created_at")).toString(),
+        requireNotNull(instant("updated_at")).toString(),
         getObject("received_by", UUID::class.java), instant("received_at")?.toString(),
         getString("correlation_id"), getLong("version"),
     )
@@ -113,6 +171,13 @@ class ReceivingPersistence(private val jdbc: JdbcTemplate) {
             getString("source_line_ref"), getObject("received_by", UUID::class.java), instant("received_at")?.toString(), getLong("version"),
         )
     }
+
+    private fun ResultSet.discrepancy() = ReceivingDiscrepancyView(
+        getObject("id", UUID::class.java), getObject("receiving_record_id", UUID::class.java),
+        getObject("receiving_line_id", UUID::class.java), getObject("organization_id", UUID::class.java),
+        ReceivingDiscrepancyType.valueOf(getString("discrepancy_type")), getString("description"),
+        getObject("created_by", UUID::class.java), requireNotNull(instant("created_at")).toString(), getLong("version"),
+    )
 
     private fun ResultSet.instant(name: String): Instant? = getObject(name, OffsetDateTime::class.java)?.toInstant()
 }

@@ -25,3 +25,9 @@ Exact-head c3d14a0c969b73ac120cf485da33e9dce4d19307 compiled and migrated V0032 
 ### Checkpoint 01 CI repair 2
 
 Exact-head 8acfed81ae67c3eb8c63012987aef0a037262d35 progressed through V0032 migration and compilation. The real contract then reached the inactive-destination fixture, where the test attempted to set StorageLocation lifecycle to RETIRED without the required active_until timestamp. PostgreSQL correctly rejected the invalid fixture via ck_storage_location_retirement_time. The fixture now records a valid retirement timestamp and still requires Receiving creation to fail closed at the retired destination. Production Receiving logic and database gates are unchanged. Corrected exact-head CI pending.
+
+## Checkpoint 02 — Receiving API + typed discrepancy truth (WIP)
+
+Exact-head 7751d56fea5fa707b6f4d79a6e8ef5971b4e704a: all triggered workflows PASS after one bounded rerun of the Phase 1 Android shell job, whose first attempt timed out while the emulator remained on session bootstrap; desktop/provider OIDC jobs were already PASS and no production change was needed.
+
+Adds Warehouse-scoped Receiving directory/detail reads using current `canReceiveAt` authority, deterministic keyset pagination by updated timestamp/id, and the frozen API surface for create, add Stock line, receive line, record discrepancy and complete. Adds append-only typed discrepancy commands without rewriting expected line truth; PostgreSQL/OpenFGA scenario proves SHORT_QTY records review context while expected quantity remains unchanged and completion becomes RECEIVED_WITH_DISCREPANCY. Shared DTO/client transport covers receiving directory and discrepancy idempotency. Asset receiving and human UI surfaces remain later checkpoints. Exact-head CI pending; do not merge.

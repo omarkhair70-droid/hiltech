@@ -29,10 +29,19 @@ data class ReceiveStockLineRequest(
     val recordVersion: Long, val lineVersion: Long, val stockItemVersion: Long,
     val quantity: String, val unitCode: String, val condition: AssetCondition, val serials: List<String> = emptyList(),
 )
+data class AddReceivingDiscrepancyRequest(
+    val recordVersion: Long, val lineId: UUID? = null, val type: ReceivingDiscrepancyType, val description: String,
+)
 data class CompleteReceivingRequest(val recordVersion: Long)
 data class ReceivingRecordResult(val record: ReceivingRecordView, val replayed: Boolean)
 data class ReceivingLineResult(val line: ReceivingLineView, val replayed: Boolean)
 data class ReceivingStockReceipt(val line: ReceivingLineView, val movement: StockMovementView, val replayed: Boolean)
+data class ReceivingDiscrepancyResult(
+    val discrepancy: ReceivingDiscrepancyView, val record: ReceivingRecordView, val replayed: Boolean,
+)
+data class ReceivingDiscrepancyRecorded(
+    val receivingId: UUID, val discrepancyId: UUID, val lineId: UUID?, val type: ReceivingDiscrepancyType, val actor: UUID,
+)
 data class ReceivingStockReceived(
     val receivingId: UUID, val lineId: UUID, val movementId: UUID, val stockItemId: UUID, val actor: UUID,
 )
@@ -48,6 +57,24 @@ class ReceivingService(
     private val events: ApplicationEventPublisher,
     private val clock: Clock,
 ) {
+    fun directory(actor: UUID, warehouseId: UUID, afterUpdatedAt: String? = null,
+        afterId: UUID? = null): ReceivingDirectoryView {
+        val facility = warehouse.warehouse(warehouseId)?.takeIf { it.active } ?: unavailable()
+        val supplied = listOf(afterUpdatedAt, afterId).count { it != null }
+        if (supplied !in listOf(0, 2)) invalid()
+        val after = afterUpdatedAt?.let { runCatching { java.time.Instant.parse(it) }.getOrElse { invalid() } }
+        val visible = warehouse.storageLocations(facility.organizationId, null)
+            .filter { it.warehouseId == facility.warehouseId && authorization.canReceiveAt(actor, it) }
+            .map { it.storageLocationId }
+        return receiving.directory(facility.organizationId, visible, after, afterId)
+    }
+
+    fun detail(actor: UUID, id: UUID): ReceivingDetailView {
+        val record = receiving.record(id) ?: unavailable()
+        requireVisible(actor, record)
+        return ReceivingDetailView(record, receiving.lines(id), receiving.discrepancies(id))
+    }
+
     fun create(context: ReceivingCommandContext, request: CreateReceivingRequest): ReceivingRecordResult {
         val destination = requireDestination(context.actor, request.organizationId, request.destinationStorageLocationId)
         val source = optionalText(request.sourceRef, 255)
@@ -136,6 +163,32 @@ class ReceivingService(
         )
     }
 
+    fun addDiscrepancy(context: ReceivingCommandContext, id: UUID,
+        request: AddReceivingDiscrepancyRequest): ReceivingDiscrepancyResult {
+        val visible = receiving.record(id) ?: unavailable()
+        requireVisible(context.actor, visible)
+        val description = request.description.trim().takeIf { it.length in 1..2000 } ?: invalid()
+        val discrepancyId = UUID.nameUUIDFromBytes(
+            ("hiltech:receiving-discrepancy:" + context.operationId).toByteArray(Charsets.UTF_8),
+        )
+        val replayed = execute(context, "RECEIVING_DISCREPANCY_RECORDED", "RECEIVING_DISCREPANCY", discrepancyId,
+            id, request.recordVersion, request.lineId, request.type, description) {
+            val record = receiving.record(id, lock = true) ?: unavailable()
+            if (record.version != request.recordVersion ||
+                record.state !in listOf(ReceivingState.DRAFT, ReceivingState.IN_PROGRESS)) stale()
+            requireDestination(context.actor, record.organizationId, record.destinationStorageLocationId)
+            request.lineId?.let { lineId ->
+                receiving.line(lineId, lock = true)?.takeIf { it.receivingRecordId == record.id } ?: unavailable()
+            }
+            val now = clock.instant().truncatedTo(ChronoUnit.MICROS)
+            receiving.insertDiscrepancy(discrepancyId, record, request.lineId, request.type, description, context.actor, now)
+            if (!receiving.touchInProgress(record.id, record.version, now)) stale()
+            events.publishEvent(ReceivingDiscrepancyRecorded(record.id, discrepancyId, request.lineId, request.type, context.actor))
+        }
+        val discrepancy = receiving.discrepancies(id).singleOrNull { it.id == discrepancyId } ?: unavailable()
+        return ReceivingDiscrepancyResult(discrepancy, receiving.record(id) ?: unavailable(), replayed)
+    }
+
     fun complete(context: ReceivingCommandContext, id: UUID, request: CompleteReceivingRequest): ReceivingRecordResult {
         val visible = receiving.record(id) ?: unavailable()
         requireDestination(context.actor, visible.organizationId, visible.destinationStorageLocationId)
@@ -152,6 +205,14 @@ class ReceivingService(
                     clock.instant().truncatedTo(ChronoUnit.MICROS))) stale()
         }
         return ReceivingRecordResult(receiving.record(id) ?: unavailable(), replayed)
+    }
+
+    private fun requireVisible(actor: UUID, record: ReceivingRecordView) {
+        val location = warehouse.storageLocation(record.destinationStorageLocationId)?.takeIf {
+            it.organizationId == record.organizationId && authorization.canReceiveAt(actor, it)
+        } ?: unavailable()
+        val warehouseId = location.warehouseId ?: unavailable()
+        warehouse.warehouse(warehouseId)?.takeIf { it.organizationId == record.organizationId } ?: unavailable()
     }
 
     private fun requireDestination(actor: UUID, org: UUID, id: UUID): StorageLocationSnapshot {

@@ -259,6 +259,51 @@ class WarehouseApiClientTest {
     }
 
     @Test
+    fun receivingRoutesPreserveExpectedSourceAndIdempotencyKey() = runBlocking {
+        var call = 0
+        val lineId = "66666666-6666-6666-6666-666666666666"
+        val http = HttpClient(MockEngine { request ->
+            call++
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            when (call) {
+                1 -> {
+                    assertEquals("/v1/receiving", request.url.encodedPath)
+                    assertEquals(warehouseId, request.url.parameters["warehouseId"])
+                    respond("""{"items":[{"id":"$batchId","organizationId":"$org",
+                        "destinationStorageLocationId":"$warehouseId","sourceType":"OTHER","state":"IN_PROGRESS",
+                        "createdBy":"$org","createdAt":"2026-11-19T03:00:00Z","updatedAt":"2026-11-19T03:01:00Z",
+                        "correlationId":"corr","version":3}],"limited":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                2 -> {
+                    assertEquals("/v1/receiving/$batchId/discrepancies", request.url.encodedPath)
+                    assertEquals(operation, request.headers["Idempotency-Key"])
+                    val body=(request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    val sent=Json.decodeFromString<AddReceivingDiscrepancyDto>(body)
+                    assertEquals("SHORT_QTY", sent.type)
+                    assertEquals(lineId, sent.lineId)
+                    respond("""{"discrepancy":{"id":"$operation","receivingRecordId":"$batchId",
+                        "receivingLineId":"$lineId","organizationId":"$org","type":"SHORT_QTY",
+                        "description":"One missing","createdBy":"$org","createdAt":"2026-11-19T03:02:00Z","version":1},
+                        "record":{"id":"$batchId","organizationId":"$org","destinationStorageLocationId":"$warehouseId",
+                        "sourceType":"OTHER","state":"IN_PROGRESS","createdBy":"$org",
+                        "createdAt":"2026-11-19T03:00:00Z","updatedAt":"2026-11-19T03:02:00Z",
+                        "correlationId":"corr","version":4},"replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                else -> error("Unexpected request")
+            }
+        })
+        val client=client(http)
+        assertEquals(batchId, client.receivingDirectory(warehouseId, installation).items.single().id)
+        val discrepancy=client.addReceivingDiscrepancy(batchId,
+            AddReceivingDiscrepancyDto(operation, 3, lineId, "SHORT_QTY", "One missing"), installation)
+        assertEquals("SHORT_QTY", discrepancy.discrepancy.type)
+        assertFalse(discrepancy.replayed)
+    }
+
+    @Test
     fun warehouseDirectoryAndCreateUseExistingAuthenticatedTransport() = runBlocking {
         val visited = mutableListOf<Pair<String, String?>>()
         val http = HttpClient(MockEngine { request ->
