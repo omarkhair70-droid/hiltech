@@ -218,6 +218,13 @@ class DesktopIdentityRuntime(
     private val warehouseApi =
         WarehouseApiClient(productApi)
 
+    internal val physicalWarehouseApi: WarehouseApiClient
+        get() = warehouseApi
+
+    internal val physicalWarehouseInstallationId: String
+        get() = installationId
+
+
     private val planningApi =
         PlanningApiClient(productApi)
 
