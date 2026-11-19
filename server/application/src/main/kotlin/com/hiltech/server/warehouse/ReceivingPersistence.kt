@@ -29,7 +29,8 @@ data class ReceivingLineView(
     val id: UUID, val receivingRecordId: UUID, val organizationId: UUID, val candidateClass: ReceivingCandidateClass,
     val expectedStockItemId: UUID?, val expectedAssetTypeDefinitionId: UUID?, val expectedQuantity: String?,
     val receivedQuantity: String?, val unitCode: String?, val condition: AssetCondition?,
-    val serials: List<String>, val sourceLineRef: String?, val receivedBy: UUID?, val receivedAt: String?, val version: Long,
+    val serials: List<String>, val sourceLineRef: String?, val receivedAssetId: UUID?,
+    val receivedBy: UUID?, val receivedAt: String?, val version: Long,
 )
 data class ReceivingDiscrepancyView(
     val id: UUID, val receivingRecordId: UUID, val receivingLineId: UUID?, val organizationId: UUID,
@@ -115,6 +116,24 @@ class ReceivingPersistence(private val jdbc: JdbcTemplate) {
         )
     }
 
+    fun insertAssetLine(id: UUID, record: ReceivingRecordView, assetTypeId: UUID,
+        sourceLineRef: String?, actor: UUID, at: Instant) {
+        jdbc.update(
+            """INSERT INTO receiving_line (id, receiving_record_id, organization_id, candidate_class,
+                expected_asset_type_definition_id, expected_quantity, source_line_ref, created_by, created_at)
+                VALUES (?, ?, ?, 'COMPANY_ASSET', ?, 1, ?, ?, ?)""".trimIndent(),
+            id, record.id, record.organizationId, assetTypeId, sourceLineRef, actor, at.atOffset(ZoneOffset.UTC),
+        )
+    }
+
+    fun markAssetLineReceived(id: UUID, version: Long, assetId: UUID, condition: AssetCondition,
+        serial: String?, actor: UUID, at: Instant): Boolean = jdbc.update(
+        """UPDATE receiving_line SET received_quantity = 1, condition_received = ?,
+               serials = ?::jsonb, received_asset_id = ?, received_by = ?, received_at = ?, version = version + 1
+           WHERE id = ? AND version = ? AND received_at IS NULL""".trimIndent(),
+        condition.name, Json.encodeToString(listOfNotNull(serial)), assetId, actor, at.atOffset(ZoneOffset.UTC), id, version,
+    ) == 1
+
     fun touchInProgress(id: UUID, version: Long, at: Instant): Boolean = jdbc.update(
         """UPDATE receiving_record SET state = 'IN_PROGRESS', updated_at = ?, version = version + 1
            WHERE id = ? AND version = ? AND state IN ('DRAFT','IN_PROGRESS')""".trimIndent(),
@@ -168,7 +187,8 @@ class ReceivingPersistence(private val jdbc: JdbcTemplate) {
             getObject("expected_stock_item_id", UUID::class.java), getObject("expected_asset_type_definition_id", UUID::class.java),
             getBigDecimal("expected_quantity")?.toPlainString(), getBigDecimal("received_quantity")?.toPlainString(),
             getString("unit_code"), getString("condition_received")?.let(AssetCondition::valueOf), serials,
-            getString("source_line_ref"), getObject("received_by", UUID::class.java), instant("received_at")?.toString(), getLong("version"),
+            getString("source_line_ref"), getObject("received_asset_id", UUID::class.java),
+            getObject("received_by", UUID::class.java), instant("received_at")?.toString(), getLong("version"),
         )
     }
 

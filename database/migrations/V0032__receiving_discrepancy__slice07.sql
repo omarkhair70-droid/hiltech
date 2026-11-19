@@ -41,6 +41,7 @@ CREATE TABLE receiving_line (
         CHECK (condition_received IS NULL OR condition_received IN ('GOOD','FAIR','DAMAGED','UNFIT')),
     serials jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(serials) = 'array'),
     source_line_ref varchar(255),
+    received_asset_id uuid,
     created_by uuid NOT NULL REFERENCES user_identity(id) ON DELETE RESTRICT,
     created_at timestamptz NOT NULL,
     received_by uuid REFERENCES user_identity(id) ON DELETE RESTRICT,
@@ -54,6 +55,8 @@ CREATE TABLE receiving_line (
         REFERENCES stock_item(id, organization_id) ON DELETE RESTRICT,
     FOREIGN KEY (expected_stock_item_id, unit_code)
         REFERENCES stock_item(id, unit_of_measure_code) ON DELETE RESTRICT,
+    FOREIGN KEY (received_asset_id, organization_id)
+        REFERENCES asset(id, organization_id) ON DELETE RESTRICT,
     CHECK (
         (candidate_class IN ('STOCK_QUANTITY','STOCK_SERIALIZED')
             AND expected_stock_item_id IS NOT NULL AND expected_asset_type_definition_id IS NULL AND unit_code IS NOT NULL)
@@ -62,9 +65,16 @@ CREATE TABLE receiving_line (
             AND expected_stock_item_id IS NULL AND expected_asset_type_definition_id IS NOT NULL)
     ),
     CHECK (
-        (received_at IS NULL AND received_by IS NULL AND received_quantity IS NULL AND condition_received IS NULL)
+        (received_at IS NULL AND received_by IS NULL AND received_quantity IS NULL AND condition_received IS NULL
+            AND received_asset_id IS NULL)
         OR
         (received_at IS NOT NULL AND received_by IS NOT NULL AND received_quantity IS NOT NULL AND condition_received IS NOT NULL)
+    ),
+    CHECK (
+        (candidate_class = 'COMPANY_ASSET' AND
+            (received_at IS NULL OR (received_quantity = 1 AND received_asset_id IS NOT NULL)))
+        OR
+        (candidate_class <> 'COMPANY_ASSET' AND received_asset_id IS NULL)
     )
 );
 
@@ -139,8 +149,8 @@ BEGIN
         RETURN NEW;
     END IF;
     IF header.state <> 'IN_PROGRESS' OR OLD.received_at IS NOT NULL OR NEW.version <> OLD.version + 1
-        OR (to_jsonb(NEW) - ARRAY['received_quantity','condition_received','serials','received_by','received_at','version'])
-           IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['received_quantity','condition_received','serials','received_by','received_at','version'])
+        OR (to_jsonb(NEW) - ARRAY['received_quantity','condition_received','serials','received_asset_id','received_by','received_at','version'])
+           IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['received_quantity','condition_received','serials','received_asset_id','received_by','received_at','version'])
         OR NEW.received_at IS NULL OR NEW.received_by IS NULL OR NEW.received_quantity IS NULL
         OR NEW.condition_received IS NULL THEN
         RAISE EXCEPTION 'Invalid Receiving line receipt' USING ERRCODE = '23514';
@@ -165,6 +175,11 @@ BEGIN
     IF NEW.candidate_class = 'STOCK_QUANTITY' AND jsonb_array_length(NEW.serials) <> 0 THEN
         RAISE EXCEPTION 'Serial evidence does not change Stock classification' USING ERRCODE = '23514';
     END IF;
+    IF NEW.candidate_class = 'COMPANY_ASSET' AND (
+        NEW.received_quantity <> 1 OR NEW.received_asset_id IS NULL OR jsonb_array_length(NEW.serials) > 1
+    ) THEN
+        RAISE EXCEPTION 'Asset Receiving requires one explicitly classified Asset' USING ERRCODE = '23514';
+    END IF;
     RETURN NEW;
 END;
 $$;
@@ -183,6 +198,54 @@ ALTER TABLE stock_movement
     ADD COLUMN receiving_line_id uuid UNIQUE,
     ADD FOREIGN KEY (receiving_line_id, organization_id)
         REFERENCES receiving_line(id, organization_id) ON DELETE RESTRICT;
+
+ALTER TABLE asset_movement
+    ADD COLUMN receiving_line_id uuid UNIQUE,
+    ADD FOREIGN KEY (receiving_line_id, organization_id)
+        REFERENCES receiving_line(id, organization_id) ON DELETE RESTRICT;
+
+CREATE FUNCTION validate_receiving_asset_movement() RETURNS trigger LANGUAGE plpgsql AS $
+DECLARE
+    line receiving_line%ROWTYPE;
+    header receiving_record%ROWTYPE;
+    passport asset%ROWTYPE;
+BEGIN
+    IF NEW.receiving_line_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+    SELECT * INTO line FROM receiving_line WHERE id = NEW.receiving_line_id FOR SHARE;
+    SELECT * INTO header FROM receiving_record WHERE id = line.receiving_record_id FOR SHARE;
+    SELECT * INTO passport FROM asset WHERE id = NEW.asset_id FOR SHARE;
+    IF line.id IS NULL OR header.id IS NULL OR passport.id IS NULL
+        OR line.candidate_class <> 'COMPANY_ASSET'
+        OR line.received_asset_id IS DISTINCT FROM passport.id
+        OR line.expected_asset_type_definition_id IS DISTINCT FROM passport.asset_type_definition_id
+        OR line.received_quantity IS DISTINCT FROM 1::numeric
+        OR line.received_by IS DISTINCT FROM NEW.recorded_by
+        OR line.received_at IS DISTINCT FROM NEW.occurred_at
+        OR line.condition_received::text IS DISTINCT FROM NEW.condition_at_transfer
+        OR header.state <> 'IN_PROGRESS'
+        OR header.organization_id <> passport.organization_id
+        OR header.destination_storage_location_id IS DISTINCT FROM NEW.to_storage_location_id
+        OR NEW.movement_type <> 'REGISTER_INITIAL_LOCATION'
+        OR NEW.from_storage_location_id IS NOT NULL
+        OR NEW.to_storage_location_id IS NULL
+        OR NEW.to_custodian_target_id IS NOT NULL
+        OR NEW.source_import_row_id IS NOT NULL THEN
+        RAISE EXCEPTION 'Asset Receiving movement must match the exact Receiving line' USING ERRCODE = '23514';
+    END IF;
+    IF (passport.serial_number IS NULL AND jsonb_array_length(line.serials) <> 0)
+        OR (passport.serial_number IS NOT NULL AND (
+            jsonb_array_length(line.serials) <> 1 OR line.serials ->> 0 IS DISTINCT FROM passport.serial_number
+        )) THEN
+        RAISE EXCEPTION 'Asset Receiving serial evidence must match created Asset identity' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$;
+CREATE TRIGGER asset_receiving_movement_guard BEFORE INSERT ON asset_movement
+FOR EACH ROW EXECUTE FUNCTION validate_receiving_asset_movement();
+
 
 CREATE OR REPLACE FUNCTION project_stock_movement() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE

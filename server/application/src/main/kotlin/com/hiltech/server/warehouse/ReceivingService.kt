@@ -29,6 +29,14 @@ data class ReceiveStockLineRequest(
     val recordVersion: Long, val lineVersion: Long, val stockItemVersion: Long,
     val quantity: String, val unitCode: String, val condition: AssetCondition, val serials: List<String> = emptyList(),
 )
+data class AddReceivingAssetLineRequest(
+    val recordVersion: Long, val assetTypeId: UUID, val sourceLineRef: String? = null,
+)
+data class ReceiveAssetLineRequest(
+    val recordVersion: Long, val lineVersion: Long, val assetCode: String, val name: String,
+    val manufacturer: String? = null, val model: String? = null, val serialNumber: String? = null,
+    val ownershipType: String, val condition: AssetCondition, val tagType: String? = null,
+)
 data class AddReceivingDiscrepancyRequest(
     val recordVersion: Long, val lineId: UUID? = null, val type: ReceivingDiscrepancyType, val description: String,
 )
@@ -36,6 +44,9 @@ data class CompleteReceivingRequest(val recordVersion: Long)
 data class ReceivingRecordResult(val record: ReceivingRecordView, val replayed: Boolean)
 data class ReceivingLineResult(val line: ReceivingLineView, val replayed: Boolean)
 data class ReceivingStockReceipt(val line: ReceivingLineView, val movement: StockMovementView, val replayed: Boolean)
+data class ReceivingAssetReceipt(
+    val line: ReceivingLineView, val asset: AssetIdentityView, val movementId: UUID, val tag: AssetTagView?, val replayed: Boolean,
+)
 data class ReceivingDiscrepancyResult(
     val discrepancy: ReceivingDiscrepancyView, val record: ReceivingRecordView, val replayed: Boolean,
 )
@@ -50,6 +61,7 @@ data class ReceivingStockReceived(
 class ReceivingService(
     private val receiving: ReceivingPersistence,
     private val stock: StockLedgerPersistence,
+    private val assetWriter: ReceivingAssetWriter,
     private val warehouse: WarehousePersistencePort,
     private val authorization: WarehouseAuthorizationPort,
     private val commands: IdempotentCommandExecutor,
@@ -118,6 +130,25 @@ class ReceivingService(
         return ReceivingLineResult(receiving.line(lineId) ?: unavailable(), replayed)
     }
 
+    fun addAssetLine(context: ReceivingCommandContext, recordId: UUID,
+        request: AddReceivingAssetLineRequest): ReceivingLineResult {
+        val visible = receiving.record(recordId) ?: unavailable()
+        requireDestination(context.actor, visible.organizationId, visible.destinationStorageLocationId)
+        val sourceLine = optionalText(request.sourceLineRef, 255)
+        val lineId = UUID.nameUUIDFromBytes(("hiltech:receiving-line:" + context.operationId).toByteArray(Charsets.UTF_8))
+        val replayed = execute(context, "RECEIVING_ASSET_LINE_ADDED", "RECEIVING_LINE", lineId,
+            recordId, request.recordVersion, request.assetTypeId, sourceLine) {
+            val record = receiving.record(recordId, lock = true) ?: unavailable()
+            if (record.version != request.recordVersion ||
+                record.state !in listOf(ReceivingState.DRAFT, ReceivingState.IN_PROGRESS)) stale()
+            requireDestination(context.actor, record.organizationId, record.destinationStorageLocationId)
+            assetWriter.requireActiveType(record.organizationId, request.assetTypeId)
+            receiving.insertAssetLine(lineId, record, request.assetTypeId, sourceLine, context.actor, clock.instant())
+            if (!receiving.touchInProgress(record.id, record.version, clock.instant())) stale()
+        }
+        return ReceivingLineResult(receiving.line(lineId) ?: unavailable(), replayed)
+    }
+
     fun receiveStockLine(context: ReceivingCommandContext, recordId: UUID, lineId: UUID,
         request: ReceiveStockLineRequest): ReceivingStockReceipt {
         val visible = receiving.record(recordId) ?: unavailable()
@@ -161,6 +192,38 @@ class ReceivingService(
             stock.movementForReceivingLine(lineId) ?: unavailable(),
             replayed,
         )
+    }
+
+    fun receiveAssetLine(context: ReceivingCommandContext, recordId: UUID, lineId: UUID,
+        request: ReceiveAssetLineRequest): ReceivingAssetReceipt {
+        val visible = receiving.record(recordId) ?: unavailable()
+        requireDestination(context.actor, visible.organizationId, visible.destinationStorageLocationId)
+        if (request.condition == AssetCondition.UNKNOWN) invalid()
+        var movementId: UUID? = null
+        var assetId: UUID? = null
+        val replayed = execute(context, "RECEIVING_ASSET_RECEIVED", "RECEIVING_LINE", lineId,
+            recordId, request.recordVersion, lineId, request.lineVersion, request.assetCode, request.name,
+            request.manufacturer, request.model, request.serialNumber, request.ownershipType, request.condition, request.tagType) {
+            val record = receiving.record(recordId, lock = true) ?: unavailable()
+            if (record.version != request.recordVersion || record.state != ReceivingState.IN_PROGRESS) stale()
+            val destination = requireDestination(context.actor, record.organizationId, record.destinationStorageLocationId)
+            val line = receiving.line(lineId, lock = true)?.takeIf {
+                it.receivingRecordId == record.id && it.candidateClass == ReceivingCandidateClass.COMPANY_ASSET
+            } ?: unavailable()
+            if (line.version != request.lineVersion || line.receivedAt != null) stale()
+            val typeId = line.expectedAssetTypeDefinitionId ?: invalid()
+            val now = clock.instant().truncatedTo(ChronoUnit.MICROS)
+            val receipt = assetWriter.receive(context, record, line, destination, typeId, request, now)
+            assetId = receipt.asset.id
+            movementId = receipt.movementId
+            if (!receiving.markAssetLineReceived(line.id, line.version, receipt.asset.id, request.condition,
+                    receipt.asset.serialNumber, context.actor, now)) stale()
+            if (!receiving.touchInProgress(record.id, record.version, now)) stale()
+        }
+        val line = receiving.line(lineId) ?: unavailable()
+        val asset = line.receivedAssetId?.let(assetWriter::asset) ?: unavailable()
+        val movement = assetWriter.receivingMovement(lineId) ?: unavailable()
+        return ReceivingAssetReceipt(line, asset, movement.id, assetWriter.primaryTag(asset.id), replayed)
     }
 
     fun addDiscrepancy(context: ReceivingCommandContext, id: UUID,

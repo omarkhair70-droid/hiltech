@@ -28,6 +28,7 @@ internal class ReceivingOperatorScenario(
     private val unauthorized: UUID,
 ) {
     private val stock = StockLedgerPersistence(jdbc)
+    private val assets = AssetPassportPersistence(jdbc)
     private val receiving = ReceivingPersistence(jdbc)
     private val facility = UUID.randomUUID()
     private lateinit var location: StorageLocationSnapshot
@@ -143,6 +144,34 @@ internal class ReceivingOperatorScenario(
             service.complete(context(UUID.randomUUID()), shortRecord.id,
                 CompleteReceivingRequest(shortCurrent.version)).record.state)
 
+        val assetType = seedAssetType()
+        val assetRecord = service.create(context(UUID.randomUUID()), CreateReceivingRequest(
+            organization, location.storageLocationId, ReceivingSourceType.OTHER, sourceRef = "EXPLICIT-ASSET",
+        )).record
+        val assetLine = service.addAssetLine(context(UUID.randomUUID()), assetRecord.id,
+            AddReceivingAssetLineRequest(assetRecord.version, assetType, "ASSET-LINE")).line
+        val assetRecordVersion = receiving.record(assetRecord.id)!!.version
+        val assetOp = UUID.randomUUID()
+        val assetRequest = ReceiveAssetLineRequest(assetRecordVersion, assetLine.version,
+            "SYNTH-RX-ASSET", "Synthetic received tool", serialNumber = "RX-SER-001",
+            ownershipType = "COMPANY", condition = AssetCondition.GOOD)
+        val assetReceipt = service.receiveAssetLine(context(assetOp), assetRecord.id, assetLine.id, assetRequest)
+        assertEquals(assetLine.id, receiving.line(assetLine.id)!!.id)
+        assertEquals(assetReceipt.asset.id, receiving.line(assetLine.id)!!.receivedAssetId)
+        assertEquals(location.storageLocationId, assets.custody(assetReceipt.asset.id)!!.storageLocationId)
+        assertEquals("REGISTER_INITIAL_LOCATION",
+            jdbc.queryForObject("SELECT movement_type FROM asset_movement WHERE id = ?", String::class.java, assetReceipt.movementId))
+        assertEquals(assetLine.id,
+            jdbc.queryForObject("SELECT receiving_line_id FROM asset_movement WHERE id = ?", UUID::class.java, assetReceipt.movementId))
+        val assetCount = jdbc.queryForObject("SELECT count(*) FROM asset WHERE id = ?", Long::class.java, assetReceipt.asset.id)
+        val replayAsset = service.receiveAssetLine(context(assetOp), assetRecord.id, assetLine.id, assetRequest)
+        assertTrue(replayAsset.replayed)
+        assertEquals(assetCount, jdbc.queryForObject("SELECT count(*) FROM asset WHERE id = ?", Long::class.java, assetReceipt.asset.id))
+
+        val serializedStillStock = receiving.line(serializedLine.id)!!
+        assertEquals(ReceivingCandidateClass.STOCK_SERIALIZED, serializedStillStock.candidateClass)
+        assertEquals(null, serializedStillStock.receivedAssetId)
+
         val poOnly = service.create(context(UUID.randomUUID()), CreateReceivingRequest(
             organization, location.storageLocationId, ReceivingSourceType.PO,
             sourceRef = "PO-SYNTH-ONLY", deliveryDocumentRef = "INVOICE-TOTAL-IS-NOT-A-LINE",
@@ -157,6 +186,20 @@ internal class ReceivingOperatorScenario(
             service.create(context(UUID.randomUUID()), CreateReceivingRequest(
                 organization, location.storageLocationId, ReceivingSourceType.OTHER))
         }.code)
+    }
+
+    private fun seedAssetType(): UUID {
+        val at = clock.instant().atOffset(ZoneOffset.UTC)
+        val id = UUID.randomUUID()
+        jdbc.update("""INSERT INTO config_revision (id, scope_type, scope_organization_id, family, code, name,
+            lifecycle_state, revision_number, created_at, created_by, activated_at, activated_by)
+            VALUES (?, 'ORGANIZATION', ?, 'asset-types', 'SYNTH-RECEIVE-ASSET', 'Synthetic received Asset type',
+            'ACTIVE', 1, ?, ?, ?, ?)""", id, organization, at, operator, at, operator)
+        jdbc.update("""INSERT INTO asset_type_definition
+            (config_revision_id, calibration_required, high_value_or_restricted, serial_required,
+             allowed_tag_types, operator_may_tag, inspection_required_on_return)
+            VALUES (?, false, false, true, '{}', false, false)""", id)
+        return id
     }
 
     private fun seedStock() {
@@ -174,10 +217,17 @@ internal class ReceivingOperatorScenario(
             category, 1, "EA", StockClassification.STOCK_SERIALIZED, true, false, true, null, 1))
     }
 
-    private fun service() = ReceivingService(
-        receiving, stock, warehouse, authority, executor(), JdbcAuditEventWriter(jdbc),
-        ApplicationEventPublisher { }, clock,
-    )
+    private fun service(): ReceivingService {
+        val events = ApplicationEventPublisher { }
+        val writer = ReceivingAssetWriter(
+            assets, warehouse, authority,
+            com.hiltech.server.security.AuthorizationProjectionIntentWriter { }, events,
+        )
+        return ReceivingService(
+            receiving, stock, writer, warehouse, authority, executor(), JdbcAuditEventWriter(jdbc),
+            events, clock,
+        )
+    }
 
     private fun executor() = JdbcIdempotentCommandExecutor(
         jdbc, manager, clock, HiltechTelemetryRuntime(OpenTelemetry.noop()) {},
