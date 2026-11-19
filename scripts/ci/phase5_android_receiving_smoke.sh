@@ -43,7 +43,7 @@ for node in root.iter("node"):
         current=node
         while current is not None:
             if current.attrib.get("clickable")=="true" and current.attrib.get("enabled")=="true":
-                x1,y1,x2,y2=map(int,re.findall(r"\\d+",current.attrib["bounds"]))
+                x1,y1,x2,y2=map(int,re.findall(r"\d+",current.attrib["bounds"]))
                 print((x1+x2)//2,(y1+y2)//2)
                 sys.exit(0)
             current=parent.get(current)
