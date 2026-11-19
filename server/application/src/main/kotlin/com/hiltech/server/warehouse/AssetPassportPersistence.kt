@@ -97,19 +97,16 @@ class AssetPassportPersistence(private val jdbc: JdbcTemplate) {
     }
 
     fun movementForReceivingLine(lineId: UUID): AssetMovementView? = jdbc.query(
-        """SELECT m.id, m.asset_id, m.movement_type, m.from_storage_location_id, m.to_storage_location_id,
-            m.from_custodian_target_id, m.to_custodian_target_id, m.project_id, m.site_id, m.work_order_id,
-            m.correction_of_movement_id, m.source_import_row_id, m.condition_at_transfer, m.occurred_at, m.reason_code
-           FROM asset_movement m WHERE m.receiving_line_id = ?""".trimIndent(),
-        { rs, _ -> AssetMovementView(
-            rs.getObject("id", UUID::class.java), rs.getObject("asset_id", UUID::class.java), rs.getString("movement_type"),
-            rs.getObject("from_storage_location_id", UUID::class.java), rs.getObject("to_storage_location_id", UUID::class.java),
-            rs.getObject("from_custodian_target_id", UUID::class.java), rs.getObject("to_custodian_target_id", UUID::class.java),
-            rs.getObject("project_id", UUID::class.java), rs.getObject("site_id", UUID::class.java),
-            rs.getObject("work_order_id", UUID::class.java), rs.getObject("correction_of_movement_id", UUID::class.java),
-            rs.getObject("source_import_row_id", UUID::class.java), rs.getString("condition_at_transfer"),
-            rs.getObject("occurred_at", OffsetDateTime::class.java).toInstant(), rs.getString("reason_code"),
-        ) }, lineId,
+        "SELECT * FROM asset_movement WHERE receiving_line_id = ?",
+        { rs, _ ->
+            AssetMovementView(rs.uuid("id"), rs.getString("movement_type"), rs.optionalUuid("from_storage_location_id"),
+                rs.optionalUuid("to_storage_location_id"),
+                rs.optionalUuid("from_custodian_target_id").takeIf { rs.getString("from_custodian_target_type") == "EMPLOYEE" },
+                rs.optionalUuid("to_custodian_target_id").takeIf { rs.getString("to_custodian_target_type") == "EMPLOYEE" },
+                rs.optionalUuid("project_id"), rs.optionalUuid("site_id"), rs.optionalUuid("work_order_id"),
+                rs.optionalUuid("correction_of_movement_id"), rs.optionalUuid("source_import_row_id"),
+                rs.getString("condition_at_transfer"), requireNotNull(rs.instant("occurred_at")).toString(), rs.getString("notes"))
+        }, lineId,
     ).singleOrNull()
 
     fun tags(assetId: UUID): List<AssetTagView> = jdbc.query(
