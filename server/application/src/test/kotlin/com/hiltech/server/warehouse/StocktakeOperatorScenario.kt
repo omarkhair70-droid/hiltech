@@ -1,6 +1,13 @@
 package com.hiltech.server.warehouse
 
 import com.hiltech.server.audit.JdbcAuditEventWriter
+import com.hiltech.server.approval.ApprovalAuthorizationPort
+import com.hiltech.server.approval.ApprovalDecisionType
+import com.hiltech.server.approval.ApprovalEngineService
+import com.hiltech.server.approval.ApprovalPolicyProvisioner
+import com.hiltech.server.approval.FailClosedApprovalSubjectVersionGuard
+import com.hiltech.server.approval.JdbcApprovalPersistence
+import com.hiltech.server.security.AuthorizationProjectionIntentWriter
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
 import com.hiltech.server.telemetry.HiltechTelemetryRuntime
@@ -40,6 +47,19 @@ internal class StocktakeOperatorScenario(
             com.hiltech.server.security.JdbcRoleTeamSourceAuthority(jdbc), bridge,
             JdbcAuditEventWriter(jdbc), clock,
         ).provision(organization, facility, operator, operator, "SYNTH-STOCKTAKE", "Synthetic stocktake warehouse")
+        project()
+        WarehouseAdjustmentApprovalProvisioner(
+            jdbc = jdbc,
+            transaction = org.springframework.transaction.support.TransactionTemplate(manager),
+            persistence = warehouse,
+            source = com.hiltech.server.security.JdbcRoleTeamSourceAuthority(jdbc),
+            projection = bridge,
+            audit = JdbcAuditEventWriter(jdbc),
+            policy = ApprovalPolicyProvisioner(jdbc),
+            clock = clock,
+        ).provision(
+            organization, facility, operator, InventoryPrincipalType.USER, operator,
+        )
         project()
 
         location = WarehouseStorageLocationCreateService(
@@ -182,8 +202,8 @@ internal class StocktakeOperatorScenario(
         assertEquals(cleanSnapshot.unitCode, adjustment.request.unitCode)
         assertEquals("Confirmed physical shortage", adjustment.request.reason)
         assertEquals(operator, adjustment.request.requestedBy)
-        assertTrue(adjustment.request.approvalRequestId == null)
-        assertTrue(adjustment.request.approvalStatus == null)
+        assertTrue(adjustment.request.approvalRequestId != null)
+        assertEquals("PENDING", adjustment.request.approvalStatus)
         assertTrue(adjustment.request.appliedMovementId == null)
         assertEquals("ADJUSTMENT_REQUESTED", stocktakes.discrepancy(cleanDiscrepancy.id)!!.state)
         assertEquals("6.000000", stock.balances(item).single().onHandQuantity)
@@ -199,6 +219,45 @@ internal class StocktakeOperatorScenario(
             Int::class.java, cleanDiscrepancy.id,
         ))
         assertEquals("6.000000", stock.balances(item).single().onHandQuantity)
+
+        val approvalId = requireNotNull(adjustment.request.approvalRequestId)
+        val decision = approvalEngine().decide(
+            actorUserId = operator,
+            operationId = UUID.randomUUID(),
+            approvalRequestId = approvalId,
+            decision = ApprovalDecisionType.APPROVE,
+            comment = null,
+            correlationId = "synthetic-stocktake-approval",
+        )
+        assertEquals("APPROVED", decision.state.name)
+        val approved = service.variances(operator, cleanStarted.session.id).adjustmentRequests.single()
+        assertEquals(approvalId, approved.approvalRequestId)
+        assertEquals("APPROVED", approved.approvalStatus)
+        assertTrue(approved.appliedMovementId == null)
+        assertEquals("6.000000", stock.balances(item).single().onHandQuantity)
+    }
+
+    private fun approvalSource() = InventoryAdjustmentApprovalSource(stocktakes, warehouse)
+
+    private fun approvalEngine(): ApprovalEngineService {
+        val source = approvalSource()
+        return ApprovalEngineService(
+            persistence = JdbcApprovalPersistence(jdbc, listOf(source)),
+            idempotency = executor(),
+            projectionWriter = AuthorizationProjectionIntentWriter { },
+            authorization = object : ApprovalAuthorizationPort {
+                override fun canDecide(
+                    actorUserId: UUID,
+                    approvalRequestId: UUID,
+                    assignmentPrincipalType: com.hiltech.server.approval.ApprovalPrincipalType,
+                    assignmentPrincipalId: UUID,
+                ): Boolean = true
+            },
+            subjectVersionGuard = FailClosedApprovalSubjectVersionGuard(listOf(source)),
+            audit = JdbcAuditEventWriter(jdbc),
+            events = ApplicationEventPublisher { },
+            clock = clock,
+        )
     }
 
     private fun seedStock() {
@@ -239,7 +298,7 @@ internal class StocktakeOperatorScenario(
     }
 
     private fun service() = StocktakeService(
-        stocktakes, stock, warehouse, authority, executor(), JdbcAuditEventWriter(jdbc),
+        stocktakes, stock, warehouse, authority, approvalEngine(), executor(), JdbcAuditEventWriter(jdbc),
         ApplicationEventPublisher { }, clock,
     )
 

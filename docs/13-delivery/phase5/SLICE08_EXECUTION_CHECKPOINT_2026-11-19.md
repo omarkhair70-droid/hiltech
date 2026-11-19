@@ -82,3 +82,14 @@ The Phase 5 emulator gate now executes `phase5_android_stocktake_smoke.sh` after
 Exact head `a5a29b3163ac005cc2a0f53142a8a3c200158151`: all 13 inherited workflows PASS after bounded external Android-runner retries; Phase 5 Stocktake Android/Windows human proof is PASS. Final contract-to-code review is recorded in `SLICE08_FINAL_GAP_REVIEW_2026-11-19.md`.
 
 Result: pre-approval Stocktake/variance/adjustment-request vertical is verified, but Slice 08 is **not merge-ready**. Frozen remaining obligations are canonical Approval linkage, explicit `INVENTORY_ADJUSTMENT_APPROVER` revalidation, approved exact-once `ADJUSTMENT` StockMovement, negative-stock denial, applied-movement linkage, discrepancy closure and terminal Stocktake reconciliation. Repository reality explicitly forbids seeding an Adjustment Approver until official Warehouse responsibility/approval mapping is confirmed, and no production Inventory Adjustment ApprovalPolicy/subject-version contract is frozen. The discrepancy `INVESTIGATING / RESOLVED_NO_ADJUSTMENT` and Stocktake `RECONCILING / CLOSED` terminal transition semantics also lack an authorized command/API rule. Do not infer them, do not merge, and do not start Slice 09.
+
+
+## Checkpoint 07A — Canonical Inventory Adjustment Approval linkage (WIP)
+
+Exact head ff8b3156c9684a52e757eb1384b45ace19aa0526: all thirteen workflows PASS after the bounded Native OIDC Android dependency-resolution retry completed successfully without source change.
+
+Owner clarification is frozen in SLICE08_INVENTORY_ADJUSTMENT_APPROVAL_DECISION_2026-11-19.md: authority is name-independent and configurable as one current Warehouse INVENTORY_ADJUSTMENT_APPROVER USER or TEAM; multiple humans use a TEAM. The canonical policy is INVENTORY_ADJUSTMENT_STANDARD, subject INVENTORY_ADJUSTMENT_REQUEST, explicit SINGLE decision, with no silent requester/approver bypass.
+
+This checkpoint adds subject-aware Approval authority/version sources while unsupported subjects remain fail-closed. Trusted provisioning sets/replaces the privileged Warehouse authority, projects it to OpenFGA and ensures the Approval-owned policy; ordinary delegated Warehouse grants remain unable to grant it. Adjustment request creation now creates/recovers and links a canonical ApprovalRequest with deterministic idempotency, leaves the material subject version unchanged while linking approval metadata, and reads status from canonical Approval truth. The PostgreSQL/OpenFGA scenario proves that an operator who is also the configured approver still receives an explicit PENDING request, explicitly approves it, and StockBalance remains unchanged.
+
+Final ADJUSTMENT movement/application, negative-result denial, applied linkage and terminal reconciliation remain Checkpoint 07B after this exact head is green. Do not merge and do not start Slice 09.

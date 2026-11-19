@@ -1,5 +1,8 @@
 package com.hiltech.server.warehouse
 
+import com.hiltech.server.approval.ApprovalEngineService
+import com.hiltech.server.approval.ApprovalRequestState
+import com.hiltech.server.approval.ApprovalSubjectRef
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.IdempotentCommandExecutor
@@ -61,6 +64,7 @@ class StocktakeService(
     private val stock: StockLedgerPersistence,
     private val warehouse: WarehousePersistencePort,
     private val authorization: WarehouseAuthorizationPort,
+    private val approvals: ApprovalEngineService,
     private val commands: IdempotentCommandExecutor,
     private val audit: AuditEventWriter,
     private val events: ApplicationEventPublisher,
@@ -197,7 +201,7 @@ class StocktakeService(
             snapshotLines = stocktakes.snapshotLines(id),
             countRecords = stocktakes.countsForSession(id),
             discrepancies = stocktakes.discrepancies(id),
-            adjustmentRequests = stocktakes.adjustmentRequests(id),
+            adjustmentRequests = stocktakes.adjustmentRequests(id).map(::canonicalAdjustment),
         )
     }
 
@@ -210,7 +214,7 @@ class StocktakeService(
         return StocktakeVariancesResult(
             session = session,
             discrepancies = stocktakes.discrepancies(id),
-            adjustmentRequests = stocktakes.adjustmentRequests(id),
+            adjustmentRequests = stocktakes.adjustmentRequests(id).map(::canonicalAdjustment),
         )
     }
 
@@ -260,7 +264,50 @@ class StocktakeService(
                 InventoryAdjustmentRequested(requestId, current.id, current.sessionId, context.actor),
             )
         }
-        return InventoryAdjustmentRequestResult(stocktakes.adjustmentRequest(requestId) ?: unavailable(), replayed)
+        var stored = stocktakes.adjustmentRequest(requestId) ?: unavailable()
+        var subject = adjustmentSubject(stored)
+        var status = approvals.subjectStatus(subject, INVENTORY_ADJUSTMENT_POLICY_KEY)
+        if (status == null) {
+            val approvalOperationId = UUID.nameUUIDFromBytes(
+                ("hiltech:inventory-adjustment-approval:" + stored.id).toByteArray(Charsets.UTF_8),
+            )
+            val approval = approvals.requestException(
+                actorUserId = context.actor,
+                operationId = approvalOperationId,
+                subject = subject,
+                policyKey = INVENTORY_ADJUSTMENT_POLICY_KEY,
+                reasonCode = INVENTORY_ADJUSTMENT_REASON_CODE,
+                safeReasonSummary = stored.reason,
+                correlationId = context.correlationId,
+                allowAuthorityBypass = false,
+            )
+            val approvalId = approval.approvalRequestId
+                ?.takeIf { approval.approvalRequired && approval.state == ApprovalRequestState.PENDING }
+                ?: approvalUnavailable()
+            if (!stocktakes.linkApproval(stored.id, approvalId)) approvalUnavailable()
+            stored = stocktakes.adjustmentRequest(requestId) ?: unavailable()
+            subject = adjustmentSubject(stored)
+            status = approvals.subjectStatus(subject, INVENTORY_ADJUSTMENT_POLICY_KEY)
+                ?: approvalUnavailable()
+        } else if (!stocktakes.linkApproval(stored.id, status.approvalRequestId)) {
+            approvalUnavailable()
+        }
+        return InventoryAdjustmentRequestResult(canonicalAdjustment(stored), replayed)
+    }
+
+    private fun adjustmentSubject(request: InventoryAdjustmentRequestView) = ApprovalSubjectRef(
+        organizationId = request.organizationId,
+        subjectType = INVENTORY_ADJUSTMENT_SUBJECT_TYPE,
+        subjectId = request.id,
+        subjectVersion = request.version,
+    )
+
+    private fun canonicalAdjustment(request: InventoryAdjustmentRequestView): InventoryAdjustmentRequestView {
+        val status = approvals.subjectStatus(adjustmentSubject(request), INVENTORY_ADJUSTMENT_POLICY_KEY)
+        return request.copy(
+            approvalRequestId = status?.approvalRequestId ?: request.approvalRequestId,
+            approvalStatus = status?.state?.name,
+        )
     }
 
     private fun requireCountScope(actor: UUID, org: UUID, warehouseId: UUID, rootId: UUID): StorageLocationSnapshot {
@@ -314,5 +361,10 @@ class StocktakeService(
         "STOCKTAKE_RECONCILIATION_REQUIRED",
         "Authoritative inventory changed after the Stocktake snapshot; reconcile before requesting adjustment.",
         HttpStatus.CONFLICT,
+    )
+    private fun approvalUnavailable(): Nothing = throw ProductApiException(
+        "INVENTORY_ADJUSTMENT_APPROVAL_UNAVAILABLE",
+        "Inventory adjustment approval is not currently configured or available.",
+        HttpStatus.SERVICE_UNAVAILABLE,
     )
 }

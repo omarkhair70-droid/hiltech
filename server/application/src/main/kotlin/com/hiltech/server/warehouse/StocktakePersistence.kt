@@ -230,6 +230,17 @@ class StocktakePersistence(private val jdbc: JdbcTemplate) {
         { r, _ -> r.adjustmentRequest() }, discrepancyId,
     ).singleOrNull()
 
+    fun linkApproval(id: UUID, approvalRequestId: UUID): Boolean {
+        val updated = jdbc.update(
+            """UPDATE inventory_adjustment_request
+               SET approval_request_id = ?, approval_status = 'PENDING'
+               WHERE id = ? AND approval_request_id IS NULL AND applied_movement_id IS NULL""".trimIndent(),
+            approvalRequestId, id,
+        )
+        if (updated == 1) return true
+        return adjustmentRequest(id)?.approvalRequestId == approvalRequestId
+    }
+
     fun adjustmentRequests(sessionId: UUID): List<InventoryAdjustmentRequestView> = jdbc.query(
         """SELECT * FROM inventory_adjustment_request WHERE stocktake_session_id = ?
            ORDER BY requested_at, id""".trimIndent(),

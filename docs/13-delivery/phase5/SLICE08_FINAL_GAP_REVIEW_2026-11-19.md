@@ -233,3 +233,12 @@ The remaining blocker is not a coding-performance problem and must not be papere
 `CONTRACT_CLARIFICATION_REQUIRED = INVENTORY_ADJUSTMENT_APPROVAL_SUBJECT_POLICY_AND_TERMINAL_RECONCILIATION`
 
 `NEXT = FREEZE_OWNER_REALITY_AND_APPROVAL_CONTRACT_THEN_IMPLEMENT_PRIVILEGED_ADJUSTMENT_APPLICATION`
+
+
+---
+
+## Owner clarification addendum — 2026-11-19
+
+The prior owner-reality blocker is resolved. Inventory adjustment approval is not tied to Mohamed, Ahmed, Omar or another named person. The current Warehouse INVENTORY_ADJUSTMENT_APPROVER is canonical and may be a USER or TEAM; multiple humans are represented by one TEAM for the current SINGLE Approval contract.
+
+SLICE08_INVENTORY_ADJUSTMENT_APPROVAL_DECISION_2026-11-19.md freezes the controlled subject/policy/authority contract. The remaining blocker is implementation/verification only: approved exact-once ADJUSTMENT application, negative-result denial, applied linkage, discrepancy closure and terminal Stocktake reconciliation. Merge remains unauthorized until those gaps and the repeated Final Gap Review are complete.

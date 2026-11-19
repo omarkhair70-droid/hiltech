@@ -391,11 +391,14 @@ class ApprovalReadService(
     ): Boolean {
         val authority =
             persistence
-                .resolveCurrentAuthority(
-                    organizationId =
-                        record.organizationId,
-                    authorityKey =
-                        record.authorityKey,
+                .resolveCurrentAuthorityForSubject(
+                    subject = ApprovalSubjectRef(
+                        organizationId = record.organizationId,
+                        subjectType = record.subjectType,
+                        subjectId = record.subjectId,
+                        subjectVersion = record.subjectVersion,
+                    ),
+                    authorityKey = record.authorityKey,
                     at = now,
                 ) ?: return false
 

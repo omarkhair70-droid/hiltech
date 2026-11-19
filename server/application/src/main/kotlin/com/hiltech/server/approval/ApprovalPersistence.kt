@@ -42,6 +42,13 @@ data class ApprovalRequestCreation(
     val createdAt: Instant,
 )
 
+data class ApprovalSubjectApprovalRecord(
+    val requestId: UUID,
+    val state: ApprovalRequestState,
+    val subjectVersion: Long,
+    val policyKey: String,
+)
+
 data class ApprovalReadRecord(
     val requestId: UUID,
     val organizationId: UUID,
@@ -113,6 +120,15 @@ interface ApprovalPersistencePort {
         at: Instant,
     ): ApprovalAuthorityBindingSnapshot?
 
+    fun resolveCurrentAuthorityForSubject(
+        subject: ApprovalSubjectRef,
+        authorityKey: String,
+        at: Instant,
+    ): ApprovalAuthorityBindingSnapshot? =
+        resolveCurrentAuthority(subject.organizationId, authorityKey, at)
+
+    fun loadSubjectApproval(subject: ApprovalSubjectRef, policyKey: String): ApprovalSubjectApprovalRecord? = null
+
     fun actorMatchesAuthority(
         actorUserId: UUID,
         authority: ApprovalAuthorityBindingSnapshot,
@@ -170,6 +186,7 @@ interface ApprovalPersistencePort {
 @Component
 class JdbcApprovalPersistence(
     private val jdbc: JdbcTemplate,
+    private val subjectAuthoritySources: List<ApprovalSubjectAuthoritySource> = emptyList(),
 ) : ApprovalPersistencePort {
     override fun isActiveOrganizationMember(
         organizationId: UUID,
@@ -350,6 +367,37 @@ class JdbcApprovalPersistence(
                     at = at,
                 )
             }
+
+    override fun resolveCurrentAuthorityForSubject(
+        subject: ApprovalSubjectRef,
+        authorityKey: String,
+        at: Instant,
+    ): ApprovalAuthorityBindingSnapshot? {
+        val matching = subjectAuthoritySources.filter { it.supports(subject.subjectType) }
+        if (matching.size > 1) return null
+        return matching.singleOrNull()?.resolve(subject, authorityKey, at)
+            ?: resolveCurrentAuthority(subject.organizationId, authorityKey, at)
+    }
+
+    override fun loadSubjectApproval(
+        subject: ApprovalSubjectRef,
+        policyKey: String,
+    ): ApprovalSubjectApprovalRecord? =
+        jdbc.query(
+            """SELECT id, state, subject_version, policy_key
+               FROM approval_request
+               WHERE organization_id = ? AND subject_type = ? AND subject_id = ?
+                 AND subject_version = ? AND policy_key = ?""".trimIndent(),
+            { rs, _ ->
+                ApprovalSubjectApprovalRecord(
+                    rs.getObject("id", UUID::class.java),
+                    ApprovalRequestState.valueOf(rs.getString("state")),
+                    rs.getLong("subject_version"),
+                    rs.getString("policy_key"),
+                )
+            },
+            subject.organizationId, subject.subjectType, subject.subjectId, subject.subjectVersion, policyKey,
+        ).singleOrNull()
 
     override fun actorMatchesAuthority(
         actorUserId: UUID,

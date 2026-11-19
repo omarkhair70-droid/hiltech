@@ -50,16 +50,25 @@ data class ApprovalDecisionResult(
     val replayed: Boolean,
 )
 
+data class ApprovalSubjectStatus(
+    val approvalRequestId: UUID,
+    val state: ApprovalRequestState,
+    val subjectVersion: Long,
+    val policyKey: String,
+)
+
 fun interface ApprovalSubjectVersionGuard {
     fun isCurrent(subject: ApprovalSubjectRef): Boolean
 }
 
 @Component
-class FailClosedApprovalSubjectVersionGuard :
-    ApprovalSubjectVersionGuard {
-    override fun isCurrent(
-        subject: ApprovalSubjectRef,
-    ): Boolean = false
+class FailClosedApprovalSubjectVersionGuard(
+    private val sources: List<ApprovalSubjectVersionSource> = emptyList(),
+) : ApprovalSubjectVersionGuard {
+    override fun isCurrent(subject: ApprovalSubjectRef): Boolean {
+        val matching = sources.filter { it.supports(subject.subjectType) }
+        return matching.singleOrNull()?.isCurrent(subject) ?: false
+    }
 }
 
 @Component
@@ -176,6 +185,7 @@ class ApprovalEngineService(
         reasonCode: String,
         safeReasonSummary: String?,
         correlationId: String,
+        allowAuthorityBypass: Boolean = true,
     ): ApprovalRequestResult {
         val now = clock.instant()
         requireActiveMember(
@@ -242,14 +252,13 @@ class ApprovalEngineService(
             )
         val authority =
             resolveAuthority(
-                organizationId =
-                    subject.organizationId,
-                authorityKey =
-                    authorityKey,
+                subject = normalizedSubject,
+                authorityKey = authorityKey,
                 at = now,
             )
 
         if (
+            allowAuthorityBypass &&
             persistence.actorMatchesAuthority(
                 actorUserId =
                     actorUserId,
@@ -293,6 +302,7 @@ class ApprovalEngineService(
                         ?.trim()
                         ?.take(500)
                         .orEmpty(),
+                    allowAuthorityBypass,
                 ).joinToString("|"),
             )
 
@@ -625,10 +635,13 @@ class ApprovalEngineService(
 
                 val authority =
                     resolveAuthority(
-                        organizationId =
-                            context.organizationId,
-                        authorityKey =
-                            context.authorityKey,
+                        subject = ApprovalSubjectRef(
+                            organizationId = context.organizationId,
+                            subjectType = context.subjectType,
+                            subjectId = context.subjectId,
+                            subjectVersion = context.subjectVersion,
+                        ),
+                        authorityKey = context.authorityKey,
                         at = now,
                     )
 
@@ -897,16 +910,38 @@ class ApprovalEngineService(
                 HttpStatus.UNPROCESSABLE_ENTITY,
         )
 
+    fun subjectStatus(
+        subject: ApprovalSubjectRef,
+        policyKey: String,
+    ): ApprovalSubjectStatus? =
+        persistence.loadSubjectApproval(subject, policyKey)?.let {
+            ApprovalSubjectStatus(it.requestId, it.state, it.subjectVersion, it.policyKey)
+        }
+
     private fun resolveAuthority(
         organizationId: UUID,
         authorityKey: String,
         at: java.time.Instant,
     ): ApprovalAuthorityBindingSnapshot =
         persistence.resolveCurrentAuthority(
-            organizationId =
-                organizationId,
-            authorityKey =
-                authorityKey,
+            organizationId = organizationId,
+            authorityKey = authorityKey,
+            at = at,
+        ) ?: throw ProductApiException(
+            code = "APPROVAL_AUTHORITY_UNAVAILABLE",
+            message = "The required approval authority is not currently assigned.",
+            status = HttpStatus.SERVICE_UNAVAILABLE,
+            retryable = false,
+        )
+
+    private fun resolveAuthority(
+        subject: ApprovalSubjectRef,
+        authorityKey: String,
+        at: java.time.Instant,
+    ): ApprovalAuthorityBindingSnapshot =
+        persistence.resolveCurrentAuthorityForSubject(
+            subject = subject,
+            authorityKey = authorityKey,
             at = at,
         ) ?: throw ProductApiException(
             code =
