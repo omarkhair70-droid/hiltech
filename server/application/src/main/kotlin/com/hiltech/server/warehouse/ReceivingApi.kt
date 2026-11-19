@@ -23,6 +23,14 @@ data class ReceiveStockLineApiRequest(
     val stockItemVersion: Long, val quantity: String, val unitCode: String,
     val condition: AssetCondition, val serials: List<String> = emptyList(),
 )
+data class AddReceivingAssetLineApiRequest(
+    val operationId: UUID, val recordVersion: Long, val assetTypeId: UUID, val sourceLineRef: String? = null,
+)
+data class ReceiveAssetLineApiRequest(
+    val operationId: UUID, val lineId: UUID, val recordVersion: Long, val lineVersion: Long,
+    val assetCode: String, val name: String, val manufacturer: String? = null, val model: String? = null,
+    val serialNumber: String? = null, val ownershipType: String, val condition: AssetCondition, val tagType: String? = null,
+)
 data class AddReceivingDiscrepancyApiRequest(
     val operationId: UUID, val recordVersion: Long, val lineId: UUID? = null,
     val type: ReceivingDiscrepancyType, val description: String,
@@ -57,6 +65,17 @@ class ReceivingController(private val service: ReceivingService) {
         service.receiveStockLine(request.receivingContext(body.operationId), id, body.lineId, ReceiveStockLineRequest(
             body.recordVersion, body.lineVersion, body.stockItemVersion, body.quantity,
             body.unitCode, body.condition, body.serials))
+
+    @PostMapping("/v1/receiving/{id}/asset-lines")
+    fun assetLine(request: HttpServletRequest, @PathVariable id: UUID, @RequestBody body: AddReceivingAssetLineApiRequest) =
+        service.addAssetLine(request.receivingContext(body.operationId), id,
+            AddReceivingAssetLineRequest(body.recordVersion, body.assetTypeId, body.sourceLineRef))
+
+    @PostMapping("/v1/receiving/{id}/receive-asset-line")
+    fun receiveAsset(request: HttpServletRequest, @PathVariable id: UUID, @RequestBody body: ReceiveAssetLineApiRequest) =
+        service.receiveAssetLine(request.receivingContext(body.operationId), id, body.lineId, ReceiveAssetLineRequest(
+            body.recordVersion, body.lineVersion, body.assetCode, body.name, body.manufacturer, body.model,
+            body.serialNumber, body.ownershipType, body.condition, body.tagType))
 
     @PostMapping("/v1/receiving/{id}/discrepancies")
     fun discrepancy(request: HttpServletRequest, @PathVariable id: UUID,

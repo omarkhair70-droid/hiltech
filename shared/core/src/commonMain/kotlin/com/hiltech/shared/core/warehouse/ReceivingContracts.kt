@@ -16,7 +16,7 @@ data class ReceivingLineDto(
     val expectedStockItemId: String? = null, val expectedAssetTypeDefinitionId: String? = null,
     val expectedQuantity: String? = null, val receivedQuantity: String? = null, val unitCode: String? = null,
     val condition: AssetCondition? = null, val serials: List<String> = emptyList(), val sourceLineRef: String? = null,
-    val receivedBy: String? = null, val receivedAt: String? = null, val version: Long,
+    val receivedAssetId: String? = null, val receivedBy: String? = null, val receivedAt: String? = null, val version: Long,
 )
 
 @Serializable
@@ -54,6 +54,16 @@ data class ReceiveStockLineDto(
     val serials: List<String> = emptyList(),
 )
 @Serializable
+data class AddReceivingAssetLineDto(
+    val operationId: String, val recordVersion: Long, val assetTypeId: String, val sourceLineRef: String? = null,
+)
+@Serializable
+data class ReceiveAssetLineDto(
+    val operationId: String, val lineId: String, val recordVersion: Long, val lineVersion: Long,
+    val assetCode: String, val name: String, val manufacturer: String? = null, val model: String? = null,
+    val serialNumber: String? = null, val ownershipType: String, val condition: AssetCondition, val tagType: String? = null,
+)
+@Serializable
 data class AddReceivingDiscrepancyDto(
     val operationId: String, val recordVersion: Long, val lineId: String? = null,
     val type: String, val description: String,
@@ -67,6 +77,11 @@ data class ReceivingRecordResultDto(val record: ReceivingRecordDto, val replayed
 data class ReceivingLineResultDto(val line: ReceivingLineDto, val replayed: Boolean)
 @Serializable
 data class ReceivingStockReceiptDto(val line: ReceivingLineDto, val movement: StockMovementDto, val replayed: Boolean)
+@Serializable
+data class ReceivingAssetReceiptDto(
+    val line: ReceivingLineDto, val asset: AssetIdentityDto, val movementId: String,
+    val tag: AssetTagDto? = null, val replayed: Boolean,
+)
 @Serializable
 data class ReceivingDiscrepancyResultDto(
     val discrepancy: ReceivingDiscrepancyDto, val record: ReceivingRecordDto, val replayed: Boolean,

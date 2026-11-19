@@ -271,6 +271,20 @@ class WarehouseApiClient(
             json.encodeToString(ReceiveStockLineDto.serializer(), request),
             installationId, ReceivingStockReceiptDto.serializer())
 
+    suspend fun addReceivingAssetLine(
+        id: String, request: AddReceivingAssetLineDto, installationId: String,
+    ): ReceivingLineResultDto =
+        post("/v1/receiving/" + uuid(id) + "/asset-lines", request.operationId,
+            json.encodeToString(AddReceivingAssetLineDto.serializer(), request),
+            installationId, ReceivingLineResultDto.serializer())
+
+    suspend fun receiveAssetLine(
+        id: String, request: ReceiveAssetLineDto, installationId: String,
+    ): ReceivingAssetReceiptDto =
+        post("/v1/receiving/" + uuid(id) + "/receive-asset-line", request.operationId,
+            json.encodeToString(ReceiveAssetLineDto.serializer(), request),
+            installationId, ReceivingAssetReceiptDto.serializer())
+
     suspend fun addReceivingDiscrepancy(
         id: String, request: AddReceivingDiscrepancyDto, installationId: String,
     ): ReceivingDiscrepancyResultDto =
