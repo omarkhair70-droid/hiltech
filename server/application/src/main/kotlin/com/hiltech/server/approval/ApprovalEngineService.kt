@@ -17,6 +17,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 import java.time.Clock
 import java.util.UUID
@@ -62,9 +63,11 @@ fun interface ApprovalSubjectVersionGuard {
 }
 
 @Component
-class FailClosedApprovalSubjectVersionGuard(
-    private val sources: List<ApprovalSubjectVersionSource> = emptyList(),
+class FailClosedApprovalSubjectVersionGuard @Autowired constructor(
+    private val sources: List<ApprovalSubjectVersionSource>,
 ) : ApprovalSubjectVersionGuard {
+    constructor() : this(emptyList())
+
     override fun isCurrent(subject: ApprovalSubjectRef): Boolean {
         val matching = sources.filter { it.supports(subject.subjectType) }
         return matching.singleOrNull()?.isCurrent(subject) ?: false

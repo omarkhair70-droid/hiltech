@@ -1,6 +1,7 @@
 package com.hiltech.server.approval
 
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -184,10 +185,11 @@ interface ApprovalPersistencePort {
 }
 
 @Component
-class JdbcApprovalPersistence(
+class JdbcApprovalPersistence @Autowired constructor(
     private val jdbc: JdbcTemplate,
-    private val subjectAuthoritySources: List<ApprovalSubjectAuthoritySource> = emptyList(),
+    private val subjectAuthoritySources: List<ApprovalSubjectAuthoritySource>,
 ) : ApprovalPersistencePort {
+    constructor(jdbc: JdbcTemplate) : this(jdbc, emptyList())
     override fun isActiveOrganizationMember(
         organizationId: UUID,
         actorUserId: UUID,
@@ -375,8 +377,8 @@ class JdbcApprovalPersistence(
     ): ApprovalAuthorityBindingSnapshot? {
         val matching = subjectAuthoritySources.filter { it.supports(subject.subjectType) }
         if (matching.size > 1) return null
-        return matching.singleOrNull()?.resolve(subject, authorityKey, at)
-            ?: resolveCurrentAuthority(subject.organizationId, authorityKey, at)
+        if (matching.size == 1) return matching.single().resolve(subject, authorityKey, at)
+        return resolveCurrentAuthority(subject.organizationId, authorityKey, at)
     }
 
     override fun loadSubjectApproval(
