@@ -67,8 +67,9 @@ adb shell am force-stop "$package"
 adb shell am start -W -n "$package/.PhysicalReturnEvidenceActivity"
 tap_text 'Destination storage'
 tap_text 'SYNTH-BIN · Synthetic return bin'
-tap_text 'Observed return condition'
+tap_text 'Observed return condition · UNKNOWN'
 tap_text 'GOOD'
+wait_for_text 'Observed return condition · GOOD' >/dev/null
 tap_text 'Review · Record physical return'
 review="$(wait_for_text 'Confirm the actual physical operation for SYNTH-RETURN-TOOL.')"
 [[ "$review" != *'SYNTH-RETURN-RECEIPT'* ]]
@@ -79,6 +80,9 @@ wait_for_text 'BLOCKED_INSPECTION' >/dev/null
 tap_text 'Observed condition'
 tap_text 'GOOD'
 tap_text 'Review · Record inspection'
+inspection_review="$(wait_for_text 'Confirm the actual physical operation for SYNTH-RETURN-TOOL.')"
+[[ "$inspection_review" != *'SYNTH-INSPECTION-RECEIPT'* ]]
+[[ "$inspection_review" == *'BLOCKED_INSPECTION'* ]]
 adb exec-out screencap -p > "$report_dir/android-inspection-review.png"
 tap_text 'Record inspection'
 wait_for_text 'SYNTH-INSPECTION-RECEIPT' >/dev/null
