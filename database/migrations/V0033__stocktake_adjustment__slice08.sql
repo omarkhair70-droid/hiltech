@@ -203,9 +203,14 @@ BEGIN
         OR NEW.counted_at < snapshot_row.snapshot_at THEN
         RAISE EXCEPTION 'Count does not match active Stocktake snapshot truth' USING ERRCODE = '23514';
     END IF;
-    SELECT id INTO latest_id FROM stock_count_record
-      WHERE snapshot_line_id = NEW.snapshot_line_id
-      ORDER BY counted_at DESC, id DESC LIMIT 1;
+    SELECT c.id INTO latest_id FROM stock_count_record c
+      WHERE c.snapshot_line_id = NEW.snapshot_line_id
+        AND NOT EXISTS (
+            SELECT 1 FROM stock_count_record newer
+            WHERE newer.snapshot_line_id = c.snapshot_line_id
+              AND newer.supersedes_count_record_id = c.id
+        )
+      LIMIT 1;
     IF latest_id IS NULL AND NEW.supersedes_count_record_id IS NOT NULL THEN
         RAISE EXCEPTION 'First count cannot supersede history' USING ERRCODE = '23514';
     END IF;

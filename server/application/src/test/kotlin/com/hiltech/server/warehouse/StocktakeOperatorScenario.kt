@@ -126,6 +126,79 @@ internal class StocktakeOperatorScenario(
         assertEquals(discrepancy.id, submitReplay.discrepancies.single().id)
         assertEquals(1, stocktakes.discrepancies(started.session.id).size)
         assertEquals("6.000000", stock.balances(item).single().onHandQuantity)
+
+        assertEquals("STOCKTAKE_RECONCILIATION_REQUIRED", assertThrows<ProductApiException> {
+            service.requestAdjustment(
+                context(UUID.randomUUID()), discrepancy.id,
+                RequestInventoryAdjustmentRequest(discrepancy.version, "Must reconcile post-snapshot receiving"),
+            )
+        }.code)
+        assertEquals(0, jdbc.queryForObject(
+            "SELECT count(*) FROM inventory_adjustment_request WHERE inventory_discrepancy_id = ?",
+            Int::class.java, discrepancy.id,
+        ))
+
+        val cleanCreated = service.create(context(UUID.randomUUID()), CreateStocktakeRequest(
+            organization, facility, location.storageLocationId, stockItemIds = listOf(item)))
+        val cleanStarted = service.start(
+            context(UUID.randomUUID()), cleanCreated.session.id, StartStocktakeRequest(cleanCreated.session.version))
+        val cleanSnapshot = cleanStarted.snapshotLines.single()
+        assertEquals("6.000000", cleanSnapshot.expectedOnHand)
+        service.recordCount(
+            context(UUID.randomUUID()), cleanStarted.session.id,
+            RecordStockCountRequest(
+                cleanStarted.session.version, cleanSnapshot.id, "5", cleanSnapshot.unitCode,
+                "SCAN-SYNTH-003", "Confirmed physical shortage",
+            ),
+        )
+        val cleanSubmitted = service.submit(
+            context(UUID.randomUUID()), cleanStarted.session.id, SubmitStocktakeRequest(cleanStarted.session.version))
+        val cleanDiscrepancy = cleanSubmitted.discrepancies.single()
+        assertEquals("-1.000000", cleanDiscrepancy.varianceQuantity)
+        assertFalse(cleanDiscrepancy.sourceChangedSinceSnapshot)
+        assertFalse(authority.canRequestAdjustment(unauthorized, requireNotNull(warehouse.warehouse(facility))))
+        assertTrue(authority.canRequestAdjustment(operator, requireNotNull(warehouse.warehouse(facility))))
+
+        assertEquals("STOCKTAKE_UNAVAILABLE", assertThrows<ProductApiException> {
+            service.requestAdjustment(
+                context(UUID.randomUUID(), unauthorized), cleanDiscrepancy.id,
+                RequestInventoryAdjustmentRequest(cleanDiscrepancy.version, "Unauthorized shortage correction"),
+            )
+        }.code)
+        assertEquals("INVALID_STOCKTAKE", assertThrows<ProductApiException> {
+            service.requestAdjustment(
+                context(UUID.randomUUID()), cleanDiscrepancy.id,
+                RequestInventoryAdjustmentRequest(cleanDiscrepancy.version, "   "),
+            )
+        }.code)
+
+        val adjustmentOp = UUID.randomUUID()
+        val adjustment = service.requestAdjustment(
+            context(adjustmentOp), cleanDiscrepancy.id,
+            RequestInventoryAdjustmentRequest(cleanDiscrepancy.version, "Confirmed physical shortage"),
+        )
+        assertEquals(cleanDiscrepancy.id, adjustment.request.discrepancyId)
+        assertEquals("-1.000000", adjustment.request.deltaQuantity)
+        assertEquals(cleanSnapshot.unitCode, adjustment.request.unitCode)
+        assertEquals("Confirmed physical shortage", adjustment.request.reason)
+        assertEquals(operator, adjustment.request.requestedBy)
+        assertTrue(adjustment.request.approvalRequestId == null)
+        assertTrue(adjustment.request.approvalStatus == null)
+        assertTrue(adjustment.request.appliedMovementId == null)
+        assertEquals("ADJUSTMENT_REQUESTED", stocktakes.discrepancy(cleanDiscrepancy.id)!!.state)
+        assertEquals("6.000000", stock.balances(item).single().onHandQuantity)
+
+        val adjustmentReplay = service.requestAdjustment(
+            context(adjustmentOp), cleanDiscrepancy.id,
+            RequestInventoryAdjustmentRequest(cleanDiscrepancy.version, "Confirmed physical shortage"),
+        )
+        assertTrue(adjustmentReplay.replayed)
+        assertEquals(adjustment.request.id, adjustmentReplay.request.id)
+        assertEquals(1, jdbc.queryForObject(
+            "SELECT count(*) FROM inventory_adjustment_request WHERE inventory_discrepancy_id = ?",
+            Int::class.java, cleanDiscrepancy.id,
+        ))
+        assertEquals("6.000000", stock.balances(item).single().onHandQuantity)
     }
 
     private fun seedStock() {

@@ -43,6 +43,13 @@ data class InventoryDiscrepancyView(
     val snapshotBalanceVersion: Long, val currentBalanceVersion: Long, val sourceChangedSinceSnapshot: Boolean,
     val state: String, val createdBy: UUID, val createdAt: String, val updatedAt: String, val version: Long,
 )
+data class InventoryAdjustmentRequestView(
+    val id: UUID, val discrepancyId: UUID, val sessionId: UUID, val organizationId: UUID,
+    val stockItemId: UUID, val storageLocationId: UUID, val deltaQuantity: String, val unitCode: String,
+    val reason: String, val requestedBy: UUID, val requestedAt: String, val approvalRequestId: UUID?,
+    val approvalStatus: String?, val appliedMovementId: UUID?, val appliedBy: UUID?, val appliedAt: String?,
+    val version: Long,
+)
 
 @Repository
 class StocktakePersistence(private val jdbc: JdbcTemplate) {
@@ -202,6 +209,42 @@ class StocktakePersistence(private val jdbc: JdbcTemplate) {
         { r, _ -> r.discrepancy() }, sessionId,
     )
 
+    fun discrepancy(id: UUID, lock: Boolean = false): InventoryDiscrepancyView? = jdbc.query(
+        "SELECT * FROM inventory_discrepancy WHERE id = ?" + if (lock) " FOR UPDATE" else "",
+        { r, _ -> r.discrepancy() }, id,
+    ).singleOrNull()
+
+    fun adjustmentRequest(id: UUID): InventoryAdjustmentRequestView? = jdbc.query(
+        "SELECT * FROM inventory_adjustment_request WHERE id = ?",
+        { r, _ -> r.adjustmentRequest() }, id,
+    ).singleOrNull()
+
+    fun adjustmentRequestForDiscrepancy(discrepancyId: UUID): InventoryAdjustmentRequestView? = jdbc.query(
+        "SELECT * FROM inventory_adjustment_request WHERE inventory_discrepancy_id = ?",
+        { r, _ -> r.adjustmentRequest() }, discrepancyId,
+    ).singleOrNull()
+
+    fun insertAdjustmentRequest(
+        id: UUID, discrepancy: InventoryDiscrepancyView, unitCode: String, reason: String, actor: UUID, at: Instant,
+    ) {
+        jdbc.update(
+            """INSERT INTO inventory_adjustment_request (id, inventory_discrepancy_id, stocktake_session_id,
+                organization_id, stock_item_id, storage_location_id, delta_quantity, unit_code, reason,
+                requested_by, requested_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""".trimIndent(),
+            id, discrepancy.id, discrepancy.sessionId, discrepancy.organizationId, discrepancy.stockItemId,
+            discrepancy.storageLocationId, BigDecimal(discrepancy.varianceQuantity), unitCode, reason,
+            actor, at.utc(),
+        )
+    }
+
+    fun markAdjustmentRequested(id: UUID, version: Long, at: Instant): Boolean = jdbc.update(
+        """UPDATE inventory_discrepancy
+           SET state = 'ADJUSTMENT_REQUESTED', updated_at = ?, version = version + 1
+           WHERE id = ? AND version = ? AND state IN ('OPEN','INVESTIGATING')""".trimIndent(),
+        at.utc(), id, version,
+    ) == 1
+
     fun submit(id: UUID, version: Long, actor: UUID, at: Instant): Boolean = jdbc.update(
         """UPDATE stocktake_session
            SET state = 'SUBMITTED', submitted_by = ?, submitted_at = ?, updated_at = ?, version = version + 1
@@ -242,6 +285,15 @@ class StocktakePersistence(private val jdbc: JdbcTemplate) {
         getLong("current_balance_version"), getBoolean("source_changed_since_snapshot"), getString("state"),
         uuid("created_by"), requireNotNull(instant("created_at")).toString(),
         requireNotNull(instant("updated_at")).toString(), getLong("version"),
+    )
+
+    private fun ResultSet.adjustmentRequest() = InventoryAdjustmentRequestView(
+        uuid("id"), uuid("inventory_discrepancy_id"), uuid("stocktake_session_id"), uuid("organization_id"),
+        uuid("stock_item_id"), uuid("storage_location_id"), getBigDecimal("delta_quantity").toPlainString(),
+        getString("unit_code"), getString("reason"), uuid("requested_by"),
+        requireNotNull(instant("requested_at")).toString(), optionalUuid("approval_request_id"),
+        getString("approval_status"), optionalUuid("applied_movement_id"), optionalUuid("applied_by"),
+        instant("applied_at")?.toString(), getLong("version"),
     )
 
     private fun jsonIds(values: List<UUID>): String = json.encodeToString(values.map(UUID::toString))

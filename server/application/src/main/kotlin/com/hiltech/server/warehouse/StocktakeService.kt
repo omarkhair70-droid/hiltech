@@ -22,6 +22,7 @@ data class CreateStocktakeRequest(
 )
 data class StartStocktakeRequest(val sessionVersion: Long)
 data class SubmitStocktakeRequest(val sessionVersion: Long)
+data class RequestInventoryAdjustmentRequest(val discrepancyVersion: Long, val reason: String)
 data class RecordStockCountRequest(
     val sessionVersion: Long, val snapshotLineId: UUID, val countedQuantity: String, val unitCode: String,
     val scanSource: String? = null, val notes: String? = null,
@@ -34,9 +35,13 @@ data class StockCountResult(val count: StockCountRecordView, val replayed: Boole
 data class StocktakeSubmitResult(
     val session: StocktakeSessionView, val discrepancies: List<InventoryDiscrepancyView>, val replayed: Boolean,
 )
+data class InventoryAdjustmentRequestResult(val request: InventoryAdjustmentRequestView, val replayed: Boolean)
 data class StocktakeStarted(val sessionId: UUID, val actor: UUID, val snapshotAt: String)
 data class StockCountRecorded(val sessionId: UUID, val snapshotLineId: UUID, val countId: UUID, val actor: UUID)
 data class StocktakeSubmitted(val sessionId: UUID, val actor: UUID, val discrepancyCount: Int)
+data class InventoryAdjustmentRequested(
+    val requestId: UUID, val discrepancyId: UUID, val sessionId: UUID, val actor: UUID,
+)
 
 @Service
 class StocktakeService(
@@ -169,6 +174,55 @@ class StocktakeService(
         )
     }
 
+    fun requestAdjustment(
+        context: StocktakeCommandContext, discrepancyId: UUID, request: RequestInventoryAdjustmentRequest,
+    ): InventoryAdjustmentRequestResult {
+        val visible = stocktakes.discrepancy(discrepancyId) ?: unavailable()
+        val session = stocktakes.session(visible.sessionId) ?: unavailable()
+        val facility = warehouse.warehouse(session.warehouseId)?.takeIf {
+            it.active && it.organizationId == visible.organizationId &&
+                authorization.canRequestAdjustment(context.actor, it)
+        } ?: unavailable()
+        if (visible.sourceChangedSinceSnapshot) reconciliationRequired()
+        val line = stocktakes.snapshotLine(visible.snapshotLineId)?.takeIf {
+            it.sessionId == session.id && it.organizationId == facility.organizationId &&
+                it.stockItemId == visible.stockItemId && it.storageLocationId == visible.storageLocationId
+        } ?: unavailable()
+        val reason = requiredText(request.reason, 2000)
+        val requestId = UUID.nameUUIDFromBytes(
+            ("hiltech:inventory-adjustment-request:" + context.operationId).toByteArray(Charsets.UTF_8),
+        )
+        val replayed = execute(
+            context, "INVENTORY_ADJUSTMENT_REQUESTED", "INVENTORY_ADJUSTMENT_REQUEST", requestId,
+            discrepancyId, request.discrepancyVersion, visible.varianceQuantity, line.unitCode, reason,
+        ) {
+            val current = stocktakes.discrepancy(discrepancyId, lock = true) ?: unavailable()
+            if (current.version != request.discrepancyVersion ||
+                current.state !in setOf("OPEN", "INVESTIGATING")) stale()
+            if (current.sourceChangedSinceSnapshot) reconciliationRequired()
+            val currentSession = stocktakes.session(current.sessionId) ?: unavailable()
+            val currentFacility = warehouse.warehouse(currentSession.warehouseId)?.takeIf {
+                it.active && it.organizationId == current.organizationId &&
+                    authorization.canRequestAdjustment(context.actor, it)
+            } ?: unavailable()
+            val currentLine = stocktakes.snapshotLine(current.snapshotLineId)?.takeIf {
+                it.sessionId == currentSession.id && it.organizationId == currentFacility.organizationId &&
+                    it.stockItemId == current.stockItemId && it.storageLocationId == current.storageLocationId
+            } ?: unavailable()
+            val delta = BigDecimal(current.varianceQuantity)
+            if (delta.compareTo(BigDecimal.ZERO) == 0) invalid()
+            val at = clock.instant().truncatedTo(ChronoUnit.MICROS)
+            stocktakes.insertAdjustmentRequest(
+                requestId, current, currentLine.unitCode, reason, context.actor, at,
+            )
+            if (!stocktakes.markAdjustmentRequested(current.id, current.version, at)) stale()
+            events.publishEvent(
+                InventoryAdjustmentRequested(requestId, current.id, current.sessionId, context.actor),
+            )
+        }
+        return InventoryAdjustmentRequestResult(stocktakes.adjustmentRequest(requestId) ?: unavailable(), replayed)
+    }
+
     private fun requireCountScope(actor: UUID, org: UUID, warehouseId: UUID, rootId: UUID): StorageLocationSnapshot {
         val facility = warehouse.warehouse(warehouseId)?.takeIf { it.active && it.organizationId == org } ?: unavailable()
         return warehouse.storageLocation(rootId)?.takeIf {
@@ -204,6 +258,7 @@ class StocktakeService(
     private fun optionalText(raw: String?, max: Int): String? = raw?.trim()?.takeIf { it.isNotEmpty() }?.also {
         if (it.length > max) invalid()
     }
+    private fun requiredText(raw: String, max: Int): String = optionalText(raw, max) ?: invalid()
 
     private fun unavailable(): Nothing = throw ProductApiException(
         "STOCKTAKE_UNAVAILABLE", "Stocktake context is unavailable.", HttpStatus.NOT_FOUND)
@@ -215,4 +270,9 @@ class StocktakeService(
         "STOCKTAKE_SCOPE_EMPTY", "Stocktake scope has no authoritative Stock balances.", HttpStatus.CONFLICT)
     private fun incomplete(): Nothing = throw ProductApiException(
         "STOCKTAKE_INCOMPLETE", "Every Stocktake snapshot line requires a physical count.", HttpStatus.CONFLICT)
+    private fun reconciliationRequired(): Nothing = throw ProductApiException(
+        "STOCKTAKE_RECONCILIATION_REQUIRED",
+        "Authoritative inventory changed after the Stocktake snapshot; reconcile before requesting adjustment.",
+        HttpStatus.CONFLICT,
+    )
 }
