@@ -69,6 +69,7 @@ internal fun ReceivingOperatorSection(
     var stockCursor by remember(warehouse) { mutableStateOf<String?>(null) }
     var assetCatalog by remember(warehouse) { mutableStateOf<AssetCatalogDto?>(null) }
     var createOpen by remember(warehouse) { mutableStateOf(false) }
+    var receivingSearch by remember(warehouse) { mutableStateOf("") }
 
     suspend fun loadDirectory() {
         directory = api.receivingDirectory(warehouse, installationId)
@@ -131,28 +132,28 @@ internal fun ReceivingOperatorSection(
 
         val currentDirectory = directory
         if (currentDirectory != null) {
-            if (currentDirectory.items.isEmpty()) Text("No Receiving records are visible in this Warehouse.")
-            assetPicker(
-                "Receiving",
-                detail?.record?.id,
-                currentDirectory.items.map {
-                    it.id to listOfNotNull(it.sourceType, it.sourceRef, it.state).joinToString(" · ")
-                },
-                !busy,
-            ) { id -> runTask { loadDetail(id) } }
-
-            val nextAt = currentDirectory.nextUpdatedAt
-            val nextId = currentDirectory.nextId
-            if (currentDirectory.limited && nextAt != null && nextId != null) {
-                OutlinedButton({
-                    runTask {
-                        val page = api.receivingDirectory(warehouse, installationId, nextAt, nextId)
-                        directory = page.copy(
-                            items = (currentDirectory.items + page.items).distinctBy { it.id },
-                        )
+            ReceivingDirectorySection(
+                directory = currentDirectory,
+                selectedId = detail?.record?.id,
+                busy = busy,
+                search = receivingSearch,
+                changeSearch = { receivingSearch = it },
+                open = { id -> runTask { loadDetail(id) } },
+                more = if (currentDirectory.limited &&
+                    currentDirectory.nextUpdatedAt != null && currentDirectory.nextId != null) {
+                    {
+                        runTask {
+                            val page = api.receivingDirectory(
+                                warehouse, installationId,
+                                requireNotNull(currentDirectory.nextUpdatedAt), requireNotNull(currentDirectory.nextId),
+                            )
+                            directory = page.copy(
+                                items = (currentDirectory.items + page.items).distinctBy { it.id },
+                            )
+                        }
                     }
-                }, enabled = !busy) { Text("Load older Receiving records") }
-            }
+                } else null,
+            )
         }
 
         detail?.let { loaded ->
@@ -317,12 +318,79 @@ private fun ReceivingCreateForm(
     ) { Text("Create Receiving record") }
 }
 
+private val receivingRecordId = Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
+
+@Composable
+fun ReceivingDirectorySection(
+    directory: ReceivingDirectoryDto,
+    selectedId: String?,
+    busy: Boolean,
+    search: String,
+    changeSearch: (String) -> Unit,
+    open: (String) -> Unit,
+    more: (() -> Unit)? = null,
+) {
+    if (directory.items.isEmpty()) Text("No Receiving records are visible in this Warehouse.")
+    assetField("Receiving search / scan", search, changeSearch)
+    val needle = search.trim()
+    val visible = if (needle.isEmpty()) directory.items else directory.items.filter { item ->
+        listOfNotNull(item.id, item.sourceType, item.sourceRef, item.deliveryDocumentRef, item.state)
+            .any { it.contains(needle, ignoreCase = true) }
+    }
+    if (needle.isNotEmpty() && visible.isEmpty()) Text("No loaded Receiving record matches this search.")
+    assetPicker(
+        "Receiving",
+        selectedId,
+        visible.map { it.id to listOfNotNull(it.sourceType, it.sourceRef, it.state).joinToString(" · ") },
+        !busy,
+    ) { open(it) }
+    if (receivingRecordId.matches(needle)) {
+        OutlinedButton({ open(needle) }, enabled = !busy) { Text("Open scanned Receiving receipt") }
+    }
+    more?.let { OutlinedButton(it, enabled = !busy) { Text("Load older Receiving records") } }
+}
+
+@Composable
+fun ReceivingHumanProofSection(
+    detail: ReceivingDetailDto,
+    stockItems: List<StockItemDto>,
+    assetCatalog: AssetCatalogDto?,
+    busy: Boolean = false,
+    receiveStock: (ReceivingLineDto, String, AssetCondition, List<String>) -> Unit,
+    receiveAsset: (
+        ReceivingLineDto, String, String, String?, String?, String?, String, AssetCondition, String?
+    ) -> Unit,
+    discrepancy: (String?, String, String) -> Unit,
+    complete: () -> Unit,
+) {
+    ReceivingDetail(
+        detail = detail,
+        stockItems = stockItems,
+        assetCatalog = assetCatalog,
+        busy = busy,
+        showAddLines = false,
+        loadMoreStock = null,
+        addStock = { _, _, _ -> Unit },
+        addAsset = { _, _ -> Unit },
+        receiveStock = receiveStock,
+        receiveAsset = { line, form ->
+            receiveAsset(
+                line, form.code, form.name, form.manufacturer, form.model, form.serial,
+                form.ownership, form.condition, form.tagType,
+            )
+        },
+        discrepancy = discrepancy,
+        complete = complete,
+    )
+}
+
 @Composable
 private fun ReceivingDetail(
     detail: ReceivingDetailDto,
     stockItems: List<StockItemDto>,
     assetCatalog: AssetCatalogDto?,
     busy: Boolean,
+    showAddLines: Boolean = true,
     loadMoreStock: (() -> Unit)?,
     addStock: (StockItemDto, String?, String?) -> Unit,
     addAsset: (AssetTypeDto, String?) -> Unit,
@@ -345,7 +413,7 @@ private fun ReceivingDetail(
     Text("Receiving receipt · ${record.id}")
     Text("Version · ${record.version}")
 
-    if (editable) {
+    if (editable && showAddLines) {
         ReceivingAddLineForms(stockItems, assetCatalog, busy, loadMoreStock, addStock, addAsset)
     }
 
