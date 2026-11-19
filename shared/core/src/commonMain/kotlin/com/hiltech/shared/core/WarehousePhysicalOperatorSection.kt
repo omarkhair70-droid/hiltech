@@ -314,6 +314,9 @@ private fun PhysicalOperatorWorkspace(
         }
         if (passport.canOperatePhysical) PhysicalAssetOperations(passport, assetState.copy(loading = busy), ::assetAction)
         else Text("Physical operation not authorized.")
+        key(passport.identity.id) {
+            AssetMovementHistory(assetState.movements, assetState.locations)
+        }
     }
 
     Text("Stock transfer / return / consumption", style = MaterialTheme.typography.titleMedium)

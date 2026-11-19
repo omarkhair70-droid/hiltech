@@ -42,6 +42,7 @@ data class AssetPassportDto(
     val identity: AssetIdentityDto, val custody: AssetCustodyDto? = null, val tags: List<AssetTagDto>,
     val permittedTagTypes: List<String> = emptyList(), val canInitialize: Boolean = false, val canCorrect: Boolean = false,
     val canOperatePhysical: Boolean = false, val currentReturnInspected: Boolean = false,
+    val returnInspectionType: AssetTypeDto? = null,
 )
 
 @Serializable

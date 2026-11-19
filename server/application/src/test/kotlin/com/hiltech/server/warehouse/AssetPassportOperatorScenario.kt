@@ -113,6 +113,8 @@ internal class AssetPassportOperatorScenario(
         project()
         val passport = service.passport(manager, id)
         assertEquals(AssetCondition.FAIR, passport.identity.condition)
+        assertEquals(passport.identity.typeId, passport.returnInspectionType?.id)
+        assertEquals(passport.identity.typeRevision, passport.returnInspectionType?.revision)
         assertEquals(bin, passport.custody?.storageLocationId)
         val movements = service.movements(manager, id)
         assertEquals(listOf("CONTROLLED_CORRECTION", "INITIALIZE_OPENING_CUSTODY"), movements.map { it.type })

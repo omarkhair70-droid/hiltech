@@ -25,6 +25,24 @@ class WarehouseApiClientTest {
     private val installation = "55555555-5555-5555-5555-555555555555"
 
     @Test
+    fun passportCarriesAssignedInspectionRevisionWithoutCatalogLookup() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/assets/$batchId", request.url.encodedPath)
+            respond("""{"identity":{"id":"$batchId","organizationId":"$org","warehouseId":"$warehouseId",
+                "assetCode":"SYNTH-TOOL","typeId":"$operation","typeName":"Synthetic type","typeRevision":3,
+                "condition":"GOOD","lifecycle":"ACTIVE","duplicateSerial":false,"version":7},
+                "tags":[],"canOperatePhysical":true,"returnInspectionType":{"id":"$operation","name":"Synthetic type",
+                "revision":3,"serialRequired":false,"calibrationRequired":false,"highValueOrRestricted":false,
+                "allowedTagTypes":[],"operatorMayTag":false,"inspectionRequiredOnReturn":true}}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val passport = client(http).assetPassport(batchId, installation)
+        assertEquals(passport.identity.typeId, passport.returnInspectionType?.id)
+        assertEquals(passport.identity.typeRevision, passport.returnInspectionType?.revision)
+        assertTrue(passport.returnInspectionType?.inspectionRequiredOnReturn == true)
+    }
+
+    @Test
     fun dueReturnSnapshotUsesWarehouseAndServerTime() = runBlocking {
         val http = HttpClient(MockEngine { request ->
             assertEquals("/v1/warehouses/$warehouseId/due-asset-returns", request.url.encodedPath)

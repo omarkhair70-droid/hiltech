@@ -188,16 +188,33 @@ private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventor
     if (passport.canInitialize || passport.canCorrect) AssetCustodyForm(passport, state, dispatch)
     state.serviceDetail?.let { AssetServiceDetail(asset.id, it, state.loading, dispatch) }
     if (passport.canOperatePhysical && custody != null) PhysicalAssetOperations(passport, state, dispatch)
-    Text("Movement history", style = MaterialTheme.typography.titleSmall)
-    val locationCodes = state.locations.associate { it.storageLocationId to it.code }
-    if (state.movements.isEmpty()) Text("No movements recorded")
-    state.movements.forEach {
-        val from = it.fromLocationId?.let { id -> locationCodes[id] ?: id } ?: it.fromEmployeeId
-        val to = it.toLocationId?.let { id -> locationCodes[id] ?: id } ?: it.toEmployeeId
-        Text("${it.type.replace('_', ' ')} · ${it.occurredAt}")
-        if (from != null || to != null) Text(listOfNotNull(from, to).joinToString(" → "))
-        it.reason?.let { reason -> Text(reason) }
-        it.correctedMovementId?.let { id -> Text("Corrects $id") }
+    AssetMovementHistory(state.movements, state.locations)
+}
+
+/** The same immutable movement receipts on Windows and Android. */
+@Composable
+fun AssetMovementHistory(movements: List<AssetMovementDto>, locations: List<StorageLocationDto>) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        OutlinedButton({ expanded = !expanded }) {
+            Text(if (expanded) "Hide Asset movement history" else "Show Asset movement history")
+        }
+        if (expanded) {
+            val locationCodes = locations.associate { it.storageLocationId to it.code }
+            if (movements.isEmpty()) Text("No movements recorded")
+            if (movements.size >= 100) Text("Showing at most the latest 100 movements.")
+            movements.forEach {
+                val from = it.fromLocationId?.let { id -> locationCodes[id] ?: id } ?: it.fromEmployeeId
+                val to = it.toLocationId?.let { id -> locationCodes[id] ?: id } ?: it.toEmployeeId
+                Text("${it.type.replace('_', ' ')} · ${it.occurredAt}")
+                if (from != null || to != null) Text(listOfNotNull(from, to).joinToString(" → "))
+                it.condition?.let { condition -> Text("Condition · $condition") }
+                it.workOrderId?.let { work -> Text("Work · $work") }
+                SelectionContainer { Text("Movement receipt · ${it.id}") }
+                it.reason?.let { reason -> Text(reason) }
+                it.correctedMovementId?.let { id -> Text("Corrects $id") }
+            }
+        }
     }
 }
 

@@ -20,7 +20,9 @@ fun PhysicalAssetOperations(passport: AssetPassportDto, state: AssetInventorySta
     val asset = passport.identity
     val custody = passport.custody ?: return
     val currentMovement = state.movements.firstOrNull { it.id == custody.sourceMovementId }
-    val type = state.catalog?.types?.firstOrNull { it.id == asset.typeId }
+    // The passport carries the exact assigned revision, even when opened directly
+    // from the due-return queue or when that revision is no longer in the active catalog.
+    val type = passport.returnInspectionType?.takeIf { it.id == asset.typeId && it.revision == asset.typeRevision }
     val locations = state.locations.filter {
         it.lifecycleState == "ACTIVE" && it.warehouseId == asset.warehouseId
     }.map { it.storageLocationId to "${it.code} · ${it.name}" }
