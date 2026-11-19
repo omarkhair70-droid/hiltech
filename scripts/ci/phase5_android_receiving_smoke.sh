@@ -32,6 +32,24 @@ x1,y1,x2,y2=map(int,re.findall(r"\d+",matches[0].attrib["bounds"]))
 print((x1+x2)//2,(y1+y2)//2)
 ' "$1"
 }
+position_clickable_exact() {
+  python3 -c '
+import re, sys
+from xml.etree import ElementTree as ET
+root=ET.fromstring(sys.stdin.read())
+parent={child:p for p in root.iter() for child in p}
+for node in root.iter("node"):
+    if node.attrib.get("text")==sys.argv[1] and node.attrib.get("enabled")=="true":
+        current=node
+        while current is not None:
+            if current.attrib.get("clickable")=="true" and current.attrib.get("enabled")=="true":
+                x1,y1,x2,y2=map(int,re.findall(r"\\d+",current.attrib["bounds"]))
+                print((x1+x2)//2,(y1+y2)//2)
+                sys.exit(0)
+            current=parent.get(current)
+sys.exit(1)
+' "$1"
+}
 tap_match() {
   local mode="$1" expected="$2" xy x y xml
   for ((attempt=0; attempt<18; attempt++)); do
@@ -54,6 +72,23 @@ tap_match() {
   return 1
 }
 tap_text() { tap_match exact "$1"; }
+tap_clickable_text() {
+  local expected="$1" xy x y xml
+  for ((attempt=0; attempt<18; attempt++)); do
+    xml="$(dump_ui || true)"
+    xy="$(printf '%s' "$xml" | position_clickable_exact "$expected" 2>/dev/null || true)"
+    if [[ -n "$xy" ]]; then
+      read -r x y <<< "$xy"
+      adb shell input tap "$x" "$y"
+      sleep 1
+      return 0
+    fi
+    adb shell input swipe 500 1750 500 700 350
+    sleep 1
+  done
+  printf 'Missing enabled clickable control: %s\n%s\n' "$expected" "$xml" >&2
+  return 1
+}
 focus_text() { tap_match contains "$1"; }
 wait_for_text() {
   local expected="$1" xml
@@ -90,7 +125,7 @@ focus_text 'Physical discrepancy description'
 adb shell input text 'Short%sdelivery'
 adb shell input keyevent KEYCODE_BACK
 sleep 1
-tap_text 'Record discrepancy'
+tap_clickable_text 'Record discrepancy'
 wait_for_text 'SYNTH-RECEIVING-DISCREPANCY-RECEIPT' >/dev/null
 wait_for_text 'SHORT QTY · Short delivery' >/dev/null
 adb exec-out screencap -p > "$report_dir/android-receiving-discrepancy.png"

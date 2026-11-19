@@ -79,3 +79,8 @@ Checkpoint 06A exact head `889bcebd63dcac94783f6615f9e8074efbdb8f65`: 13/13 work
 ### Checkpoint 06B Android evidence repair 01
 
 Exact head `9f779f26fbd247bafa87f1fbf5a25d435e9f8825`: Windows Receiving render PASS and 12/13 workflows PASS. Android evidence reached the real shared Receiving detail, proved exact receipt scan/search, selected GOOD condition and populated both serialized Stock serials. The script then failed before callback execution because the soft keyboard remained open after text entry and intercepted the bottom receipt control; UI hierarchy showed the enabled Record Stock receipt control and correct entered values, with no crash or production error. Evidence automation now dismisses the keyboard after scan, serial and discrepancy text entry before tapping action buttons. No production Receiving code, policy or gate changed.
+
+
+### Checkpoint 06B Android evidence repair 02
+
+Exact head `868efef11b33d103f74da61dc4b8e8800339e0b4`: Windows Receiving proof remained PASS and the Phase 5 Android evidence failed only after the discrepancy description was entered. The captured UI hierarchy contains two enabled text nodes named `Record discrepancy`: the section heading and the button label. The generic exact-text tap helper selected the first heading, so the discrepancy callback never executed and `SYNTH-RECEIVING-DISCREPANCY-RECEIPT` could not appear. Evidence automation now resolves this exact action text to its nearest enabled clickable ancestor before tapping. The same production control, enabled-state requirement and receipt assertions remain in force; no Receiving production code, policy, source truth or CI gate is weakened. Corrected exact-head CI pending; do not merge.
