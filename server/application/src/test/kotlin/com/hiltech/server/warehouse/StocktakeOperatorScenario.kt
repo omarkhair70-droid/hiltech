@@ -283,7 +283,7 @@ internal class StocktakeOperatorScenario(
             ApplyInventoryAdjustmentRequest(adjustment.request.version),
         )
         assertFalse(applied.replayed)
-        assertEquals("ADJUSTMENT", applied.movement.movementType)
+        assertEquals("ADJUSTMENT", applied.movement.type)
         assertEquals("1.000000", applied.movement.quantity)
         assertEquals(location.storageLocationId, applied.movement.fromStorageLocationId)
         assertTrue(applied.movement.toStorageLocationId == null)

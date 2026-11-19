@@ -113,3 +113,8 @@ Inventory discrepancy variance truth is constrained to non-negative expected/cou
 Application requires current `can_approve_adjustment` authority in addition to canonical Approval status. The command is idempotent: one operation creates one StockMovement, links it to the request, closes the discrepancy, and closes the Stocktake when no unresolved discrepancy remains (otherwise it enters RECONCILING). The PostgreSQL/OpenFGA scenario proves unauthorized apply denial, PENDING Approval cannot apply, explicit approval remains non-mutating, approved -1 application changes authoritative Stock from 6 to 5 through one ADJUSTMENT movement, closes the discrepancy/session and replays without a second movement. HTTP exposes the frozen `POST /v1/inventory-adjustments/{id}/apply` endpoint.
 
 Shared client/UI application controls and final Windows/Android applied-state human proof remain the next Slice 08 checkpoint after this exact head is green. Do not merge and do not start Slice 09.
+
+
+### Checkpoint 07B CI repair 01
+
+Exact head `4299c3c276572e4a72247829696b43eaa7ca9114`: production server compilation, Android APK builds and multiple unrelated render paths succeeded, but every server-test workflow compiling `StocktakeOperatorScenario` failed before execution because the new assertion referenced `StockMovementView.movementType`. The established public view names the field `type`. The repair changes only that assertion to `applied.movement.type`; no Stock ledger, Approval, authorization, reconciliation or idempotency behavior changes. Native OIDC provider verification also reached server test compilation and failed on the same unresolved test symbol after its browser callbacks succeeded. Corrected exact-head CI pending; do not merge.
