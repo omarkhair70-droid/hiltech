@@ -29,7 +29,9 @@ class ReceivingAssetWriter(
     fun primaryTag(assetId: UUID): AssetTagView? = assets.tags(assetId).singleOrNull { it.active && it.primary }
 
     fun receive(context: ReceivingCommandContext, record: ReceivingRecordView, line: ReceivingLineView,
-        destination: StorageLocationSnapshot, typeId: UUID, request: ReceiveAssetLineRequest, now: Instant): ReceivingAssetWriteResult {
+        destination: StorageLocationSnapshot, typeId: UUID, request: ReceiveAssetLineRequest, now: Instant,
+        markLineReceived: (AssetIdentityView) -> Unit,
+    ): ReceivingAssetWriteResult {
         val warehouseId = destination.warehouseId ?: receivingAssetUnavailable()
         val facility = warehouse.warehouse(warehouseId)?.takeIf {
             it.active && it.organizationId == record.organizationId && destination.organizationId == record.organizationId
@@ -52,6 +54,7 @@ class ReceivingAssetWriter(
         assets.insert(assetId, record.organizationId, warehouseId, code, name, type, manufacturer, model, serial,
             ownership, request.condition, null, context.actor, now)
         var asset = assets.asset(assetId) ?: receivingAssetUnavailable()
+        markLineReceived(asset)
         writeRelation(asset, "warehouse", warehouseId, "warehouse", now, context)
         val target = AssetDestination(destination.storageLocationId, null, destination.projectId, destination.siteId, null)
         val movementId = assets.append(asset, AssetCommandContext(context.operationId, context.actor, context.correlationId),

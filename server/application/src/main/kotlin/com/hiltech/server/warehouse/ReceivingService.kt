@@ -213,11 +213,12 @@ class ReceivingService(
             if (line.version != request.lineVersion || line.receivedAt != null) stale()
             val typeId = line.expectedAssetTypeDefinitionId ?: invalid()
             val now = clock.instant().truncatedTo(ChronoUnit.MICROS)
-            val receipt = assetWriter.receive(context, record, line, destination, typeId, request, now)
+            val receipt = assetWriter.receive(context, record, line, destination, typeId, request, now) { asset ->
+                if (!receiving.markAssetLineReceived(line.id, line.version, asset.id, request.condition,
+                        asset.serialNumber, context.actor, now)) stale()
+            }
             assetId = receipt.asset.id
             movementId = receipt.movementId
-            if (!receiving.markAssetLineReceived(line.id, line.version, receipt.asset.id, request.condition,
-                    receipt.asset.serialNumber, context.actor, now)) stale()
             if (!receiving.touchInProgress(record.id, record.version, now)) stale()
         }
         val line = receiving.line(lineId) ?: unavailable()

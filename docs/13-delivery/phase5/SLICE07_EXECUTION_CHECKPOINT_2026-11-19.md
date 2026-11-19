@@ -55,3 +55,7 @@ Exact-head `3188c3d7f151e58a14c056b9c565e30c6c4b870c` verification showed the pr
 ### Checkpoint 03 CI repair 04
 
 The repository write path collapses a literal double-dollar PL/pgSQL delimiter to a single dollar. Replaced only this function's quote delimiter with PostgreSQL's equivalent tagged delimiter `$receiving_asset$`, which avoids the transport ambiguity while preserving the exact function body and behavior. Stored blob is verified after ref update.
+
+### Checkpoint 03 CI repair 05
+
+Exact head `fad35de0b56dd01ac724bb7802796e5d5ba924b0` migrated and compiled, but the shared PostgreSQL/OpenFGA contract failed during explicit Asset receipt with `RECEIVING_CONFLICT`. Root cause: the new Asset movement guard correctly requires the ReceivingLine to already contain the received Asset/quantity/condition/actor/time, while the service appended REGISTER_INITIAL_LOCATION before marking the line. The transaction is reordered without weakening the guard: create Asset identity -> mark the same ReceivingLine received -> append the initial custody movement -> optional tag -> header version touch. All steps remain inside the same idempotent command transaction, so any later failure rolls back the Asset and line mark together. Corrected-head CI pending.
