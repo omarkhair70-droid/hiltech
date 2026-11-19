@@ -21,3 +21,12 @@ Submit/variance reconciliation, canonical Approval integration, ADJUSTMENT movem
 ### Checkpoint 01 CI repair 01
 
 Exact head `6860e9d0f8dba8083cd83d506a7f75fd8b5c4d30`: multiple server workflows failed at Kotlin compilation because the new public persistence methods `snapshotCandidates` and `insertSnapshot` exposed `StocktakeSnapshotCandidate` while that DTO was declared `internal`. The DTO is now public to match the repository persistence API visibility; no Stocktake schema, snapshot/count semantics, authorization, or test gate changed. A separate Shared HTTP client job also hit external dependency-resolution failures and is not treated as a product regression. Corrected-head verification pending.
+
+
+## Checkpoint 02 — Submit + deterministic variance/discrepancy reconciliation (WIP)
+
+Checkpoint 01 corrected head `7885aeadf43db7f8779d4f2a6f41daddd57302d1`: Phase 5 Warehouse Setup and Bootstrap PASS. The only failing workflow was the unrelated Phase 4 Assigned Work Android render, whose contract job passed and whose APK build could not resolve multiple Compose/Ktor/Coroutines artifacts from configured public repositories; no Slice 08 source regression was identified.
+
+Adds the next bounded Stocktake vertical without pulling forward adjustment approval/application. Submit requires an ACTIVE exact-version session and a latest physical count for every immutable snapshot line. It uses only the latest recount per line, computes exact variance as counted quantity minus snapshot expected on-hand quantity, and creates one deterministic OPEN InventoryDiscrepancy for each non-zero variance. The discrepancy preserves the exact snapshot balance version, the current balance version at submission, the latest count record, and whether authoritative inventory changed since the snapshot. Submission itself never writes StockBalance and transitions the session only to SUBMITTED.
+
+The PostgreSQL/OpenFGA scenario now proves incomplete submission is denied, the latest recount drives variance, a post-snapshot Receiving movement remains visible as source-changed reconciliation context, the snapshot remains unchanged, a +1 variance is materialized exactly once under idempotent replay, and StockBalance remains 6 throughout submission. Approval integration, adjustment request/application, API, Windows/mobile surfaces and final human proof remain later Slice 08 checkpoints. Exact-head CI pending; do not merge.

@@ -36,6 +36,13 @@ data class StocktakeSnapshotCandidate(
     val onHand: BigDecimal, val reserved: BigDecimal, val damaged: BigDecimal, val quarantine: BigDecimal,
     val unitCode: String, val balanceVersion: Long, val itemVersion: Long,
 )
+data class InventoryDiscrepancyView(
+    val id: UUID, val sessionId: UUID, val snapshotLineId: UUID, val latestCountRecordId: UUID,
+    val organizationId: UUID, val stockItemId: UUID, val storageLocationId: UUID,
+    val expectedQuantity: String, val countedQuantity: String, val varianceQuantity: String,
+    val snapshotBalanceVersion: Long, val currentBalanceVersion: Long, val sourceChangedSinceSnapshot: Boolean,
+    val state: String, val createdBy: UUID, val createdAt: String, val updatedAt: String, val version: Long,
+)
 
 @Repository
 class StocktakePersistence(private val jdbc: JdbcTemplate) {
@@ -166,6 +173,36 @@ class StocktakePersistence(private val jdbc: JdbcTemplate) {
         )
     }
 
+    fun insertDiscrepancy(
+        id: UUID, session: StocktakeSessionView, line: StocktakeSnapshotLineView, latestCount: StockCountRecordView,
+        counted: BigDecimal, variance: BigDecimal, currentBalanceVersion: Long, sourceChanged: Boolean,
+        actor: UUID, at: Instant,
+    ) {
+        jdbc.update(
+            """INSERT INTO inventory_discrepancy (id, stocktake_session_id, snapshot_line_id,
+                latest_count_record_id, organization_id, stock_item_id, storage_location_id,
+                expected_quantity, counted_quantity, variance_quantity, snapshot_balance_version,
+                current_balance_version, source_changed_since_snapshot, state, created_by, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)""".trimIndent(),
+            id, session.id, line.id, latestCount.id, session.organizationId, line.stockItemId,
+            line.storageLocationId, BigDecimal(line.expectedOnHand), counted, variance, line.balanceVersion,
+            currentBalanceVersion, sourceChanged, actor, at.utc(), at.utc(),
+        )
+    }
+
+    fun discrepancies(sessionId: UUID): List<InventoryDiscrepancyView> = jdbc.query(
+        """SELECT * FROM inventory_discrepancy WHERE stocktake_session_id = ?
+           ORDER BY snapshot_line_id, id""".trimIndent(),
+        { r, _ -> r.discrepancy() }, sessionId,
+    )
+
+    fun submit(id: UUID, version: Long, actor: UUID, at: Instant): Boolean = jdbc.update(
+        """UPDATE stocktake_session
+           SET state = 'SUBMITTED', submitted_by = ?, submitted_at = ?, updated_at = ?, version = version + 1
+           WHERE id = ? AND version = ? AND state = 'ACTIVE'""".trimIndent(),
+        actor, at.utc(), at.utc(), id, version,
+    ) == 1
+
     private fun ResultSet.session() = StocktakeSessionView(
         uuid("id"), uuid("organization_id"), uuid("warehouse_id"), optionalUuid("root_storage_location_id"),
         StocktakeState.valueOf(getString("state")),
@@ -189,6 +226,16 @@ class StocktakePersistence(private val jdbc: JdbcTemplate) {
         getString("unit_code"), uuid("counted_by"), requireNotNull(instant("counted_at")).toString(),
         getString("scan_source"), getString("notes"), optionalUuid("supersedes_count_record_id"),
         uuid("operation_id"), getString("correlation_id"),
+    )
+
+    private fun ResultSet.discrepancy() = InventoryDiscrepancyView(
+        uuid("id"), uuid("stocktake_session_id"), uuid("snapshot_line_id"), uuid("latest_count_record_id"),
+        uuid("organization_id"), uuid("stock_item_id"), uuid("storage_location_id"),
+        getBigDecimal("expected_quantity").toPlainString(), getBigDecimal("counted_quantity").toPlainString(),
+        getBigDecimal("variance_quantity").toPlainString(), getLong("snapshot_balance_version"),
+        getLong("current_balance_version"), getBoolean("source_changed_since_snapshot"), getString("state"),
+        uuid("created_by"), requireNotNull(instant("created_at")).toString(),
+        requireNotNull(instant("updated_at")).toString(), getLong("version"),
     )
 
     private fun jsonIds(values: List<UUID>): String = json.encodeToString(values.map(UUID::toString))

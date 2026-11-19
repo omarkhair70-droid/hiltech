@@ -77,6 +77,10 @@ internal class StocktakeOperatorScenario(
         assertEquals("5.000000", snapshot.expectedOnHand)
         assertEquals(1L, snapshot.balanceVersion)
 
+        assertEquals("STOCKTAKE_INCOMPLETE", assertThrows<ProductApiException> {
+            service.submit(context(UUID.randomUUID()), started.session.id, SubmitStocktakeRequest(started.session.version))
+        }.code)
+
         receive("1", "STOCKTAKE-AFTER-SNAPSHOT")
         val current = stock.balances(item).single()
         assertEquals("6.000000", current.onHandQuantity)
@@ -98,6 +102,29 @@ internal class StocktakeOperatorScenario(
                 "SCAN-SYNTH-002", "Verified recount"))
         assertEquals(first.count.id, recount.count.supersedesCountRecordId)
         assertEquals(2, stocktakes.counts(snapshot.id).size)
+        assertEquals("6.000000", stock.balances(item).single().onHandQuantity)
+
+        val submitOp = UUID.randomUUID()
+        val submitted = service.submit(
+            context(submitOp), started.session.id, SubmitStocktakeRequest(started.session.version))
+        assertEquals(StocktakeState.SUBMITTED, submitted.session.state)
+        val discrepancy = submitted.discrepancies.single()
+        assertEquals(snapshot.id, discrepancy.snapshotLineId)
+        assertEquals(recount.count.id, discrepancy.latestCountRecordId)
+        assertEquals("5.000000", discrepancy.expectedQuantity)
+        assertEquals("6.000000", discrepancy.countedQuantity)
+        assertEquals("1.000000", discrepancy.varianceQuantity)
+        assertEquals(snapshot.balanceVersion, discrepancy.snapshotBalanceVersion)
+        assertEquals(current.version, discrepancy.currentBalanceVersion)
+        assertTrue(discrepancy.sourceChangedSinceSnapshot)
+        assertEquals("OPEN", discrepancy.state)
+        assertEquals("6.000000", stock.balances(item).single().onHandQuantity)
+
+        val submitReplay = service.submit(
+            context(submitOp), started.session.id, SubmitStocktakeRequest(started.session.version))
+        assertTrue(submitReplay.replayed)
+        assertEquals(discrepancy.id, submitReplay.discrepancies.single().id)
+        assertEquals(1, stocktakes.discrepancies(started.session.id).size)
         assertEquals("6.000000", stock.balances(item).single().onHandQuantity)
     }
 

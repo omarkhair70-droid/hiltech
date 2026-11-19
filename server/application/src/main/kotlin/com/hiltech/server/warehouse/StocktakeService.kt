@@ -21,6 +21,7 @@ data class CreateStocktakeRequest(
     val categoryIds: List<UUID> = emptyList(), val stockItemIds: List<UUID> = emptyList(),
 )
 data class StartStocktakeRequest(val sessionVersion: Long)
+data class SubmitStocktakeRequest(val sessionVersion: Long)
 data class RecordStockCountRequest(
     val sessionVersion: Long, val snapshotLineId: UUID, val countedQuantity: String, val unitCode: String,
     val scanSource: String? = null, val notes: String? = null,
@@ -30,8 +31,12 @@ data class StocktakeSessionResult(
     val replayed: Boolean,
 )
 data class StockCountResult(val count: StockCountRecordView, val replayed: Boolean)
+data class StocktakeSubmitResult(
+    val session: StocktakeSessionView, val discrepancies: List<InventoryDiscrepancyView>, val replayed: Boolean,
+)
 data class StocktakeStarted(val sessionId: UUID, val actor: UUID, val snapshotAt: String)
 data class StockCountRecorded(val sessionId: UUID, val snapshotLineId: UUID, val countId: UUID, val actor: UUID)
+data class StocktakeSubmitted(val sessionId: UUID, val actor: UUID, val discrepancyCount: Int)
 
 @Service
 class StocktakeService(
@@ -123,6 +128,47 @@ class StocktakeService(
         return StockCountResult(stocktakes.count(countId) ?: unavailable(), replayed)
     }
 
+    fun submit(context: StocktakeCommandContext, id: UUID, request: SubmitStocktakeRequest): StocktakeSubmitResult {
+        val visible = stocktakes.session(id) ?: unavailable()
+        requireCountScope(context.actor, visible.organizationId, visible.warehouseId,
+            visible.rootStorageLocationId ?: unavailable())
+        val replayed = execute(context, "STOCKTAKE_SUBMITTED", "STOCKTAKE", id, request.sessionVersion) {
+            val session = stocktakes.session(id, lock = true) ?: unavailable()
+            if (session.version != request.sessionVersion || session.state != StocktakeState.ACTIVE) stale()
+            requireCountScope(context.actor, session.organizationId, session.warehouseId,
+                session.rootStorageLocationId ?: unavailable())
+            val lines = stocktakes.snapshotLines(session.id)
+            if (lines.isEmpty()) empty()
+            val latestCounts = lines.associateWith { stocktakes.latestCount(it.id) }
+            if (latestCounts.values.any { it == null }) incomplete()
+            val at = clock.instant().truncatedTo(ChronoUnit.MICROS)
+            var discrepancyCount = 0
+            latestCounts.forEach { (line, countOrNull) ->
+                val count = requireNotNull(countOrNull)
+                val counted = BigDecimal(count.countedQuantity)
+                val expected = BigDecimal(line.expectedOnHand)
+                val variance = counted.subtract(expected)
+                val current = stock.balances(line.stockItemId)
+                    .singleOrNull { it.storageLocationId == line.storageLocationId } ?: unavailable()
+                if (variance.compareTo(BigDecimal.ZERO) != 0) {
+                    val discrepancyId = UUID.nameUUIDFromBytes(
+                        ("hiltech:inventory-discrepancy:" + session.id + ":" + line.id).toByteArray(Charsets.UTF_8),
+                    )
+                    stocktakes.insertDiscrepancy(
+                        discrepancyId, session, line, count, counted, variance, current.version,
+                        current.version != line.balanceVersion, context.actor, at,
+                    )
+                    discrepancyCount += 1
+                }
+            }
+            if (!stocktakes.submit(session.id, session.version, context.actor, at)) stale()
+            events.publishEvent(StocktakeSubmitted(session.id, context.actor, discrepancyCount))
+        }
+        return StocktakeSubmitResult(
+            stocktakes.session(id) ?: unavailable(), stocktakes.discrepancies(id), replayed,
+        )
+    }
+
     private fun requireCountScope(actor: UUID, org: UUID, warehouseId: UUID, rootId: UUID): StorageLocationSnapshot {
         val facility = warehouse.warehouse(warehouseId)?.takeIf { it.active && it.organizationId == org } ?: unavailable()
         return warehouse.storageLocation(rootId)?.takeIf {
@@ -167,4 +213,6 @@ class StocktakeService(
         "INVALID_STOCKTAKE", "Invalid Stocktake input.", HttpStatus.BAD_REQUEST)
     private fun empty(): Nothing = throw ProductApiException(
         "STOCKTAKE_SCOPE_EMPTY", "Stocktake scope has no authoritative Stock balances.", HttpStatus.CONFLICT)
+    private fun incomplete(): Nothing = throw ProductApiException(
+        "STOCKTAKE_INCOMPLETE", "Every Stocktake snapshot line requires a physical count.", HttpStatus.CONFLICT)
 }
