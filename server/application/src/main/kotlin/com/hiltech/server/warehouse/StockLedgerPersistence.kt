@@ -141,6 +141,26 @@ class StockLedgerPersistence(private val jdbc: JdbcTemplate) {
         "SELECT * FROM stock_movement WHERE operation_id = ?", { row, _ -> row.stockMovement() }, operationId,
     ).singleOrNull()
 
+    fun movementForReceivingLine(lineId: UUID): StockMovementView? = jdbc.query(
+        "SELECT * FROM stock_movement WHERE receiving_line_id = ?", { row, _ -> row.stockMovement() }, lineId,
+    ).singleOrNull()
+
+    internal fun appendReceiving(
+        item: StockItemView, operationId: UUID, actor: UUID, quantity: BigDecimal,
+        to: UUID, receivingLineId: UUID, occurredAt: Instant, now: Instant, correlationId: String,
+    ): UUID {
+        val movementId = UUID.randomUUID()
+        jdbc.update(
+            """INSERT INTO stock_movement (id, stock_item_id, organization_id, operation_id, quantity, unit_code,
+                movement_type, from_storage_location_id, to_storage_location_id, source_import_row_id,
+                occurred_at, recorded_at, recorded_by, correlation_id, reason_code, receiving_line_id)
+               VALUES (?, ?, ?, ?, ?, ?, 'RECEIVE', NULL, ?, NULL, ?, ?, ?, ?, 'RECEIVE', ?)""".trimIndent(),
+            movementId, item.id, item.organizationId, operationId, quantity, item.baseUnitCode, to,
+            occurredAt.utc(), now.utc(), actor, correlationId, receivingLineId,
+        )
+        return movementId
+    }
+
     internal fun append(
         item: StockItemView, operationId: UUID, actor: UUID, type: StockMovementType, quantity: BigDecimal,
         from: UUID?, to: UUID, sourceRow: UUID?, occurredAt: Instant, now: Instant, correlationId: String,

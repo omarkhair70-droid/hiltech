@@ -10,6 +10,7 @@ on:
       - "database/migrations/V0029__asset_availability_service__slice04.sql"
       - "database/migrations/V0030__resource_reservations__slice05.sql"
       - "database/migrations/V0031__physical_fulfillment__slice06.sql"
+      - "database/migrations/V0032__receiving_discrepancy__slice07.sql"
       - "server/application/src/main/kotlin/com/hiltech/server/warehouse/**"
       - "server/application/src/test/kotlin/com/hiltech/server/warehouse/**"
       - "shared/core/src/**/warehouse/**"

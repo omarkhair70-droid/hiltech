@@ -4,6 +4,7 @@ import com.hiltech.server.warehouse.AssetPassportPersistence
 import com.hiltech.server.warehouse.AssetServicePersistence
 import com.hiltech.server.warehouse.JdbcWarehousePersistence
 import com.hiltech.server.warehouse.ReservationOperatorScenario
+import com.hiltech.server.warehouse.ReceivingOperatorScenario
 import com.hiltech.server.warehouse.ReservationPersistence
 import com.hiltech.server.warehouse.SpringWarehouseAuthorization
 import com.hiltech.server.warehouse.StockLedgerPersistence
@@ -2297,6 +2298,13 @@ class ProjectsPostgresOpenFgaContractTest {
                 JdbcProjectsPersistence(jdbc), projectAuthorization, JdbcWorkPersistence(jdbc), reservationReadiness,
                 clock, ids.teamUser, ids.admin, firstSlice04Order, secondPlanned.workOrder,
             ).exercise { drain(processor, clock.instant().plusSeconds(5)) }
+
+            ReceivingOperatorScenario(
+                jdbc, txManager, reservationWarehouse,
+                SpringWarehouseAuthorization(provider, sourceAuthority, reservationWarehouse, clock),
+                WarehouseAuthorizationProjectionBridge(reservationWarehouse, writer, clock),
+                clock, ids.organization, ids.admin, ids.ordinaryMember,
+            ).exercise { drain(processor, clock.instant().plusSeconds(6)) }
 
             val resourceDelegate = UUID.randomUUID()
             val delegateAt = clock.instant().atOffset(ZoneOffset.UTC)
