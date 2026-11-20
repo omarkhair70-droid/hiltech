@@ -41,9 +41,12 @@ class StockLedgerService(
         return StockCatalogView(ledger.units(org), ledger.categories(org, clock.instant()))
     }
 
-    fun items(actor: UUID, org: UUID, afterCode: String?): List<StockItemView> {
+    fun items(actor: UUID, org: UUID, afterCode: String?): List<StockItemView> =
+        items(actor, org, "", afterCode)
+
+    fun items(actor: UUID, org: UUID, search: String, afterCode: String?): List<StockItemView> {
         requireCatalogAccess(actor, org)
-        return ledger.items(org, afterCode)
+        return ledger.items(org, search.trim().take(160), afterCode)
     }
 
     fun item(actor: UUID, id: UUID): StockItemView {

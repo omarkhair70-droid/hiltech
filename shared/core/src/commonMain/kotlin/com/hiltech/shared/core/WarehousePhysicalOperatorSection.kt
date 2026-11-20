@@ -272,6 +272,15 @@ private fun PhysicalOperatorWorkspace(
         }
     }
 
+    WarehouseQuickScanSection(
+        api = api,
+        warehouseId = warehouse,
+        organizationId = organizationId,
+        installationId = installationId,
+        busy = busy,
+        runTask = runTask,
+    )
+
     Text("Warehouse home", style = MaterialTheme.typography.titleMedium)
     OutlinedButton(
         onClick = {

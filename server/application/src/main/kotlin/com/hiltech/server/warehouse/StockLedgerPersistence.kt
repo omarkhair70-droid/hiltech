@@ -49,13 +49,26 @@ class StockLedgerPersistence(private val jdbc: JdbcTemplate) {
         { row, _ -> row.stockItem() }, id,
     ).singleOrNull()
 
-    fun items(organizationId: UUID, afterCode: String?): List<StockItemView> = jdbc.query(
-        """
-        $itemSelect WHERE organization_id = ? AND item_code > COALESCE(?::varchar, '')
-        ORDER BY item_code LIMIT 100
-        """.trimIndent(),
-        { row, _ -> row.stockItem() }, organizationId, afterCode,
-    )
+    fun items(organizationId: UUID, afterCode: String?): List<StockItemView> =
+        items(organizationId, "", afterCode)
+
+    fun items(organizationId: UUID, rawSearch: String, afterCode: String?): List<StockItemView> {
+        val search = rawSearch.trim().take(160)
+        return jdbc.query(
+            """
+            $itemSelect
+            WHERE i.organization_id = ? AND i.item_code > COALESCE(?::varchar, '')
+              AND (
+                ? = '' OR
+                position(lower(?) in lower(i.item_code)) > 0 OR
+                position(lower(?) in lower(coalesce(i.part_number, ''))) > 0
+              )
+            ORDER BY i.item_code LIMIT 100
+            """.trimIndent(),
+            { row, _ -> row.stockItem() },
+            organizationId, afterCode, search, search, search,
+        )
+    }
 
     fun units(organizationId: UUID): List<StockUnitView> = jdbc.query(
         "SELECT code, name FROM stock_unit WHERE organization_id = ? AND active ORDER BY code",

@@ -64,6 +64,8 @@ import com.hiltech.shared.core.warehouse.IssuedStockDirectoryEntryDto
 import com.hiltech.shared.core.StockInventoryState
 import com.hiltech.shared.core.WarehouseSetupSection
 import com.hiltech.shared.core.WarehouseCommandCenterSection
+import com.hiltech.shared.core.WarehouseQuickScanControls
+import com.hiltech.shared.core.WarehouseQuickScanState
 import com.hiltech.shared.core.warehouse.WarehouseCommandCenterDto
 import com.hiltech.shared.core.warehouse.WarehouseCommandCenterItemDto
 import com.hiltech.shared.core.warehouse.WarehouseCommandCenterQueueDto
@@ -191,6 +193,59 @@ fun main() = runBlocking<Unit> {
         }
     }
     captureAndClose(commandCenterScene, directory.resolve("warehouse-command-center.png"))
+
+    val quickAssetId = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
+    val quickState = WarehouseQuickScanState(
+        assetTagResult = AssetTagLookupDto(
+            assetCode = "SYNTH-PASSPORT",
+            name = "Synthetic instrument",
+            typeName = "Synthetic Asset type",
+            serialNumber = "SYNTH-SERIAL",
+            condition = AssetCondition.GOOD,
+            locationCode = "TEST-WH-1",
+            assetId = quickAssetId,
+        ),
+        assetSearchResults = listOf(
+            AssetIdentityDto(
+                id = quickAssetId,
+                organizationId = requireNotNull(state.directory).items.single().organizationId,
+                warehouseId = requireNotNull(state.selectedWarehouseId),
+                assetCode = "SYNTH-PASSPORT",
+                name = "Synthetic instrument",
+                serialNumber = "SYNTH-SERIAL",
+                typeId = "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
+                typeName = "Synthetic Asset type",
+                typeRevision = 1,
+                condition = AssetCondition.GOOD,
+                lifecycle = "ACTIVE",
+                duplicateSerial = false,
+                version = 4,
+            ),
+        ),
+        stockSearchResults = listOf(
+            StockItemDto(
+                id = "cccccccc-1111-4111-8111-cccccccccccc",
+                organizationId = requireNotNull(state.directory).items.single().organizationId,
+                itemCode = "SYNTH-STOCK-01",
+                name = "Synthetic cable",
+                partNumber = "SYNTH-PART-01",
+                categoryDefinitionId = "dddddddd-1111-4111-8111-dddddddddddd",
+                categoryRevision = 1,
+                baseUnitCode = "EA",
+                classification = "STOCK_QUANTITY",
+                serialized = false,
+                lotTracked = false,
+                active = true,
+                version = 2,
+            ),
+        ),
+    )
+    val quickScene = ImageComposeScene(width = 720, height = 980, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            WarehouseQuickScanControls(quickState, false, {}, {}, {})
+        }
+    }
+    captureAndClose(quickScene, directory.resolve("warehouse-quick-scan.png"))
 
     val stock = syntheticStock(state)
     val inventory = ImageComposeScene(width = 940, height = 940, coroutineContext = coroutineContext) {

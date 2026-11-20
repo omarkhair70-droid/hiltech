@@ -44,8 +44,12 @@ class StockLedgerController(private val service: StockLedgerService) {
         service.registerUnit(request.stockContext(body.operationId), body.warehouseId, body.code, body.name)
 
     @GetMapping("/v1/stock-items")
-    fun items(request: HttpServletRequest, @RequestParam organizationId: UUID, @RequestParam(required = false) afterCode: String?) =
-        service.items(request.stockActor(), organizationId, afterCode)
+    fun items(
+        request: HttpServletRequest,
+        @RequestParam organizationId: UUID,
+        @RequestParam(required = false) search: String?,
+        @RequestParam(required = false) afterCode: String?,
+    ) = service.items(request.stockActor(), organizationId, search.orEmpty(), afterCode)
 
     @PostMapping("/v1/stock-items")
     fun create(request: HttpServletRequest, @RequestBody body: CreateStockItemRequest) =

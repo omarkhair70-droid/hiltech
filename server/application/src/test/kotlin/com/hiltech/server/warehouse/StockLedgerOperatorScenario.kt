@@ -63,6 +63,10 @@ internal class StockLedgerOperatorScenario(
         assertEquals(item.id, service.approveImport(context(approve.operationId), batch, row, approve).id)
         assertEquals(native.partNumber, item.partNumber)
         assertEquals(row, item.sourceImportRowId)
+        assertEquals(item.id, service.items(actor, org, "SYNTH-IMPORT", null).single().id)
+        val byPartNumber = service.items(actor, org, "SYNTH-DUP", null).map { it.id }.toSet()
+        assertTrue(native.id in byPartNumber && item.id in byPartNumber)
+        assertTrue(service.items(actor, org, "0123456789012", null).isEmpty())
         assertTrue(service.balances(actor, item.id).isEmpty())
         val opening = InitializeStockOpeningRequest(
             UUID.randomUUID(), item.version, row, source, "10.123456", unit.code, clock.instant().toString(),

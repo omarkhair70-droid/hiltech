@@ -7,6 +7,9 @@
             android:name=".AssetLookupEvidenceActivity"
             android:exported="true" />
         <activity
+            android:name=".WarehouseQuickScanEvidenceActivity"
+            android:exported="true" />
+        <activity
             android:name=".AssignedWorkEvidenceActivity"
             android:exported="true" />
         <activity

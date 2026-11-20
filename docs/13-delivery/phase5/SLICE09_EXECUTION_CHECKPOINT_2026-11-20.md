@@ -39,3 +39,20 @@ The shared Command Center DTO/UI and Windows render expose requirement id, Work/
 Exact head `6c39cb63b96d8853800eef6c1653b1a6a6d9ec96`: Phase 5 Warehouse server/shared contract and Windows Command Center render PASS; Phase 5 Android evidence and Native OIDC PASS. Phase 4 server contracts and Bootstrap local-platform all failed on the same new assertion in `ReservationOperatorScenario`: expected `STOCK_RESERVED_FOR_OTHER_WORK`, actual canonical Phase-5 fact `STOCK_SHORTAGE`.
 
 The source behavior is correct and unchanged. Synthetic Stock starts at 10; one Work reservation holds 8; the competing Work requirement needs 8 while only 2 remain free. `WarehouseWorkResourceSource.fact(...)` therefore returns `STOCK_SHORTAGE` because free + held-for-this-demand cannot cover the required quantity. The repair changes only the expectation to the canonical reason and preserves its StockItem source id. No readiness, reservation, authorization, projection or Command Center product logic changes. Corrected exact-head CI pending.
+
+
+### Checkpoint 02 verification note
+
+Corrected head `7b31ea9ad54480df31d501ae49affcb051a2a1e7`: Phase 5 Warehouse server/shared contract, Windows Command Center render, Android Warehouse evidence, Phase 4 Readiness, Project Site, Planning and WorkOrder policy contracts, Bootstrap, Native OIDC and Phase 3 inherited gates PASS. Phase 4 Review/Progress server contract also PASS. Its desktop Slice05 render failed twice only because the external repository did not resolve `org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.144.6`; the same Compose/desktop stack built and rendered in other exact-head workflows. No source or dependency change is justified by that isolated repository-resolution failure.
+
+## Checkpoint 03 — Arabic-first Quick Scan canonical lookup (WIP)
+
+Quick Scan remains read-only and reuses prior authoritative reads. AssetTag resolution now returns the safe canonical Asset id alongside the already-redacted lookup surface, allowing scan and manual Asset directory search to prove they point to the same Asset. No acquisition cost, currency, tag history or private incident source is added.
+
+Stock lookup adds an optional authenticated directory search over canonical `item_code` and `part_number` only. Supplier barcode is deliberately not interpreted: no authoritative barcode mapping exists in the frozen Phase-5 model, so the UI states that the mapping is unavailable rather than guessing.
+
+The shared Arabic-first Quick Scan surface is mounted into the Warehouse physical workspace on Windows and Android. It supports opaque AssetTag entry, manual Asset fallback and Stock code/part-number search. It exposes canonical ids so operators can verify they are looking at the same object before using existing prior-slice commands.
+
+Server scenarios prove AssetTag and manual Asset search return the same Asset id, Stock item-code and part-number search return the same canonical StockItem(s), and an arbitrary numeric barcode string does not silently resolve as Stock. Shared-client tests prove authenticated opaque AssetTag lookup returns the canonical id and Stock search transports only the explicit search query. Desktop evidence adds `warehouse-quick-scan.png`. Dedicated Android evidence drives the actual shared Quick Scan controls and captures tag resolution, scan/search canonical match and Stock part-number search while asserting the no-barcode-mapping message.
+
+Exact-head CI pending. No mutation engine, camera-specific truth, barcode mapping or new persistence is introduced.

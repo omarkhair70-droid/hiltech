@@ -208,6 +208,21 @@ class WarehouseApiClient(
             (afterCode?.let { "&afterCode=" + it.encodeURLQueryComponent() } ?: ""),
             installationId, ListSerializer(StockItemDto.serializer()))
 
+    suspend fun searchStockItems(
+        organizationId: String,
+        search: String,
+        installationId: String,
+    ): List<StockItemDto> {
+        val query = search.trim()
+        require(query.isNotEmpty() && query.length <= 160)
+        return get(
+            "/v1/stock-items?organizationId=" + uuid(organizationId) +
+                "&search=" + query.encodeURLQueryComponent(),
+            installationId,
+            ListSerializer(StockItemDto.serializer()),
+        )
+    }
+
     suspend fun stockItem(id: String, installationId: String): StockItemDto =
         get("/v1/stock-items/" + uuid(id), installationId, StockItemDto.serializer())
 
