@@ -9,12 +9,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.network.HiltechApiException
 import com.hiltech.shared.core.warehouse.*
@@ -58,26 +61,35 @@ fun WarehousePhysicalOperatorSection(
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Warehouse physical operations", style = MaterialTheme.typography.titleLarge)
-        Text("Online only · record actual handoff, return and consumption.")
+    WarehouseArabicFirstFrame {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("عمليات المخزن / Warehouse physical operations", style = MaterialTheme.typography.titleLarge)
+        Text("أونلاين فقط · سجّل التسليم والمرتجع والاستهلاك الفعلي / Online only.")
         OutlinedButton({
             runTask {
                 warehouses = null
                 warehouseId = null
                 warehouses = api.warehouses(organizationId, installationId).items.filter { it.active }
             }
-        }, enabled = !busy) { Text(if (busy) "Working…" else "Load accessible warehouses") }
+        }, enabled = !busy) { Text(if (busy) "جاري التنفيذ… / Working…" else "تحميل المخازن المتاحة / Load accessible warehouses") }
         message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         val options = warehouses ?: return@Column
-        if (options.isEmpty()) Text("No accessible active warehouses.")
-        OperatorChoice("Warehouse", warehouseId, options.map { it.warehouseId to "${it.code} · ${it.name}" }, !busy) {
+        if (options.isEmpty()) Text("لا توجد مخازن فعالة متاحة / No accessible active warehouses.")
+        OperatorChoice("المخزن / Warehouse", warehouseId, options.map { it.warehouseId to "${it.code} · ${it.name}" }, !busy) {
             warehouseId = it
         }
         val facility = warehouseId ?: return@Column
         key(facility) {
             PhysicalOperatorWorkspace(api, facility, organizationId, installationId, operationId, busy, ::runTask)
         }
+        }
+    }
+}
+
+@Composable
+fun WarehouseArabicFirstFrame(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        content()
     }
 }
 
@@ -287,7 +299,8 @@ private fun PhysicalOperatorWorkspace(
         runTask = runTask,
     )
 
-    Text("Warehouse home", style = MaterialTheme.typography.titleMedium)
+    Text("الرئيسية / Warehouse Home", style = MaterialTheme.typography.titleMedium)
+    Text("البحث السريع · إصدار / Checkout اليوم · المرتجعات المستحقة · الاستلام · الجرد · الاستثناءات")
     OutlinedButton(
         onClick = {
             runTask {
@@ -296,7 +309,7 @@ private fun PhysicalOperatorWorkspace(
             }
         },
         enabled = !busy,
-    ) { Text("Load command center") }
+    ) { Text("تحميل مركز العمليات / Load command center") }
     commandCenter?.let { snapshot ->
         WarehouseCommandCenterSection(
             snapshot = snapshot,
@@ -338,15 +351,15 @@ private fun PhysicalOperatorWorkspace(
         )
     }
     storageLocationDrill?.let { locations ->
-        Text("StorageLocation drill", style = MaterialTheme.typography.titleMedium)
-        if (locations.isEmpty()) Text("No visible storage locations.")
+        Text("مواقع التخزين / StorageLocation drill", style = MaterialTheme.typography.titleMedium)
+        if (locations.isEmpty()) Text("لا توجد مواقع تخزين مرئية / No visible storage locations.")
         locations.forEach { location ->
             Text(location.code + " · " + location.name + " · " + location.lifecycleState)
         }
     }
-    workResourceDrillContext?.let { Text("Resource drill · $it") }
+    workResourceDrillContext?.let { Text("مورد أمر العمل / Resource drill · $it") }
 
-    receipt?.let { Text("Last confirmed server receipt · $it") }
+    receipt?.let { Text("آخر إيصال مؤكد / Last confirmed server receipt · $it") }
     refreshWarning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     ReceivingOperatorSection(
         api = api,
@@ -372,9 +385,9 @@ private fun PhysicalOperatorWorkspace(
         requestedStocktakeId = stocktakeDrillId,
         requestedOpenGeneration = stocktakeDrillGeneration,
     )
-    Text("Reserved handoff", style = MaterialTheme.typography.titleMedium)
+    Text("إصدار / Checkout اليوم · Reserved handoff", style = MaterialTheme.typography.titleMedium)
     OutlinedButton({ runTask { queue = null; queue = api.reservationQueue(warehouse, installationId) } }, enabled = !busy) {
-        Text("Load reserved handoffs")
+        Text("تحميل إصدار / Checkout اليوم · Load reserved handoffs")
     }
     queue?.let { data ->
         WarehousePhysicalHandoffAuthorityGate(data.canReserve) {
@@ -392,7 +405,7 @@ private fun PhysicalOperatorWorkspace(
         }
     }
 
-    Text("Asset return / inspection / storage transfer", style = MaterialTheme.typography.titleMedium)
+    Text("المرتجعات المستحقة / Returns Due · Asset return / inspection / storage transfer", style = MaterialTheme.typography.titleMedium)
     AssetDueReturnsSection(assetState.dueReturns, busy, refresh = {
         runTask {
             assetState = assetState.copy(dueReturns = null)
@@ -411,7 +424,7 @@ private fun PhysicalOperatorWorkspace(
             loadAsset(id)
         }
     })
-    OutlinedTextField(assetSearch, { assetSearch = it }, label = { Text("Asset code, serial, name or tag") }, singleLine = true, enabled = !busy)
+    OutlinedTextField(assetSearch, { assetSearch = it }, label = { Text("بحث الأصل: كود / مسلسل / اسم / Tag · Asset code, serial, name or tag") }, singleLine = true, enabled = !busy)
     OutlinedButton({
         runTask {
             assetState = AssetInventoryState(search = assetSearch.trim())
@@ -420,7 +433,7 @@ private fun PhysicalOperatorWorkspace(
             assetState = assetState.copy(catalog = catalog, items = items,
                 nextAfterCode = items.lastOrNull()?.assetCode?.takeIf { items.size == 100 })
         }
-    }, enabled = !busy) { Text("Search assets") }
+    }, enabled = !busy) { Text("بحث الأصول / Search assets") }
     OperatorChoice("Asset", assetState.selected?.identity?.id,
         assetState.items.map { it.id to listOfNotNull(it.assetCode, it.name).joinToString(" · ") }, !busy) { id ->
         runTask {
@@ -435,7 +448,7 @@ private fun PhysicalOperatorWorkspace(
                 assetState = assetState.copy(items = (assetState.items + page).distinctBy { it.id },
                     nextAfterCode = page.lastOrNull()?.assetCode?.takeIf { page.size == 100 })
             }
-        }, enabled = !busy) { Text("Load more assets") }
+        }, enabled = !busy) { Text("تحميل المزيد من الأصول / Load more assets") }
     }
     assetState.selected?.let { passport ->
         Text("${passport.identity.assetCode} · ${passport.identity.condition}")
@@ -444,13 +457,13 @@ private fun PhysicalOperatorWorkspace(
             custody.expectedReturnAt?.let { Text("Expected return · $it") }
         }
         if (passport.canOperatePhysical) PhysicalAssetOperations(passport, assetState.copy(loading = busy), ::assetAction)
-        else Text("Physical operation not authorized.")
+        else Text("العملية الفعلية غير مصرح بها / Physical operation not authorized.")
         key(passport.identity.id) {
             AssetMovementHistory(assetState.movements, assetState.locations)
         }
     }
 
-    Text("Stock transfer / return / consumption", style = MaterialTheme.typography.titleMedium)
+    Text("المخزون / Stock · transfer / return / consumption", style = MaterialTheme.typography.titleMedium)
     OutlinedButton({
         runTask {
             stockState = StockInventoryState()
@@ -458,8 +471,8 @@ private fun PhysicalOperatorWorkspace(
             stockState = stockState.copy(items = page,
                 nextAfterCode = page.lastOrNull()?.itemCode?.takeIf { page.size == 100 })
         }
-    }, enabled = !busy) { Text("Load stock catalog") }
-    OutlinedTextField(stockSearch, { stockSearch = it }, label = { Text("Filter loaded stock by code or name") }, singleLine = true, enabled = !busy)
+    }, enabled = !busy) { Text("تحميل أصناف المخزون / Load stock catalog") }
+    OutlinedTextField(stockSearch, { stockSearch = it }, label = { Text("فلترة المخزون بالكود أو الاسم / Filter loaded stock by code or name") }, singleLine = true, enabled = !busy)
     val filtered = stockState.items.filter { it.itemCode.contains(stockSearch, true) || it.name.contains(stockSearch, true) }
     OperatorChoice("Stock item", stockState.selected?.id, filtered.map { it.id to "${it.itemCode} · ${it.name}" }, !busy) { id ->
         runTask {
@@ -474,14 +487,14 @@ private fun PhysicalOperatorWorkspace(
                 stockState = stockState.copy(items = (stockState.items + page).distinctBy { it.id },
                     nextAfterCode = page.lastOrNull()?.itemCode?.takeIf { page.size == 100 })
             }
-        }, enabled = !busy) { Text("Load more stock") }
+        }, enabled = !busy) { Text("تحميل المزيد من المخزون / Load more stock") }
     }
     stockState.selected?.let { item ->
         Text("${item.itemCode} · ${item.name}")
-        Text("On hand in this Warehouse", style = MaterialTheme.typography.titleMedium)
+        Text("المتاح فعليًا في المخزن / On hand in this Warehouse", style = MaterialTheme.typography.titleMedium)
         stockState.balances.forEach { Text("${it.locationCode} · ${it.onHandQuantity} ${item.baseUnitCode}") }
         StockStorageTransfer(item, stockState.copy(loading = busy), warehouse, ::stockAction)
-        Text("Local storage movement receipts", style = MaterialTheme.typography.titleMedium)
+        Text("حركات التخزين / Local storage movement receipts", style = MaterialTheme.typography.titleMedium)
         stockState.movements.forEach { movement ->
             Text("${movement.type} · ${movement.quantity} ${movement.unitCode} · ${movement.occurredAt}")
             Text("Movement receipt · ${movement.id}")
@@ -499,8 +512,8 @@ fun WarehousePhysicalHandoffAuthorityGate(
     if (canOperate) {
         authorizedContent()
     } else {
-        Text("Physical handoff is not available for this identity.")
-        Text("Warehouse mutation authority · denied", color = MaterialTheme.colorScheme.error)
+        Text("التسليم الفعلي غير متاح لهذه الهوية. · Physical handoff is not available for this identity.")
+        Text("سلطة تعديل المخزن · مرفوضة · Warehouse mutation authority · denied", color = MaterialTheme.colorScheme.error)
     }
 }
 

@@ -30,7 +30,7 @@ fun WarehouseCommandCenterSection(
             Text("متاح صفري · " + inventory.zeroAvailableLineCount)
         }
         if (!inventory.lowStockPolicyConfigured) {
-            Text("Low stock: غير محسوب — " + (inventory.lowStockPolicyReason ?: "POLICY_UNAVAILABLE"))
+            Text("المخزون المنخفض / Low stock: غير محسوب — " + (inventory.lowStockPolicyReason ?: "POLICY_UNAVAILABLE"))
         }
         OutlinedButton(onClick = onOpenStorageLocations) { Text("فتح مواقع التخزين") }
         Queue("مرتجعات متوقعة / متأخرة", snapshot.dueReturns, onDrill)
@@ -58,7 +58,7 @@ private fun Queue(
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(item.label + " · " + item.state)
                 Text(item.reasonCodes.joinToString() + " · source " + item.sourceType + "/" + item.sourceId)
-                item.dueAt?.let { Text("Due · " + it) }
+                item.dueAt?.let { Text("الموعد / Due · " + it) }
                 val context = listOfNotNull(
                     item.projectId?.let { "Project/$it" },
                     item.siteId?.let { "Site/$it" },

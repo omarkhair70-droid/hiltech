@@ -96,3 +96,14 @@ The Inventory overview opens current StorageLocations through the existing Wareh
 Receiving and Stocktake shared components accept external open requests but continue to use their existing authenticated detail APIs and current authorization. Asset and Stock use their existing physical-operator loaders. No new mutation, persistence, threshold, source truth or navigation authority is introduced.
 
 Server wire proof asserts source evidence and drill target coexist. Windows synthetic evidence renders representative Asset, Stock, Receiving and Stocktake drill controls. Exact-head CI pending. If green, proceed only to Slice 09 / Phase 5 Final Gap Review; do not merge or start Phase 6 before that review.
+
+
+## Checkpoint 06 — Arabic-first / RTL mobile closure (WIP)
+
+Exact head `d4935bc3bfa3e7c69aea7248c9a2c7b2fd1bdba0`: all twelve workflows PASS after direct Inventory drill-through. A fresh contract-to-code review found one remaining presentation gap before Final Gap Review: Quick Scan and Command Center were Arabic-first, but the shared Warehouse operator entry and primary Receive/Count/Handoff/Returns controls still led with English and the Warehouse workspace did not itself enforce RTL layout.
+
+This checkpoint changes presentation only. The production shared Warehouse operator is wrapped in `WarehouseArabicFirstFrame`, which provides `LayoutDirection.Rtl` through Compose `LocalLayoutDirection`. Primary navigation and operational headings are Arabic-first with English retained as a secondary suffix for technical clarity and existing evidence compatibility. Warehouse Home explicitly names the frozen mobile actions: Quick Scan, Issue/Checkout Today, Returns Due, Receive, Count and Exceptions. Receiving, Stocktake, reserved handoff, returns, inventory and authority-denied labels are Arabic-first while canonical ids/status/reason codes remain unchanged.
+
+The DEBUG Android closure host uses the same production RTL frame rather than a synthetic layout direction. Its smoke now requires Arabic-first Quick Scan plus Arabic revoked-authority/physical-handoff-denied text in addition to the existing English compatibility assertions and restricted-value sweep.
+
+No API, command, authority, persistence, mutation, idempotency, source truth or Phase-6 behavior changes. Exact-head CI pending. If green, repeat the Slice 09 / Phase 5 Final Gap Review; do not merge before that review.

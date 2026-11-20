@@ -31,6 +31,9 @@ for ((page=0; page<7; page++)); do
   adb shell input swipe 500 1700 500 650 300
   sleep 1
 done
+[[ "$all_xml" == *'البحث السريع / Quick Scan'* ]]
+[[ "$all_xml" == *'سلطة تعديل المخزن · مرفوضة'* ]]
+[[ "$all_xml" == *'التسليم الفعلي غير متاح لهذه الهوية.'* ]]
 [[ "$all_xml" == *'Warehouse mutation authority · denied'* ]]
 [[ "$all_xml" == *'Physical handoff is not available for this identity.'* ]]
 [[ "$all_xml" != *'UNEXPECTED AUTHORIZED MUTATION'* ]]

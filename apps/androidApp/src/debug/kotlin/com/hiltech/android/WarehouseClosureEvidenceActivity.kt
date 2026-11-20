@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.remember
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
+import com.hiltech.shared.core.WarehouseArabicFirstFrame
 import com.hiltech.shared.core.WarehousePhysicalHandoffAuthorityGate
 import com.hiltech.shared.core.WarehouseQuickScanControls
 import com.hiltech.shared.core.WarehouseQuickScanState
@@ -42,6 +43,7 @@ class WarehouseClosureEvidenceActivity : ComponentActivity() {
                     ),
                 ),
                 warehouseOperator = {
+                    WarehouseArabicFirstFrame {
                     WarehouseQuickScanControls(
                         state = safeState,
                         busy = true,
@@ -51,6 +53,7 @@ class WarehouseClosureEvidenceActivity : ComponentActivity() {
                     )
                     WarehousePhysicalHandoffAuthorityGate(canOperate = false) {
                         error("Revoked authority must not expose physical handoff controls.")
+                    }
                     }
                 },
             )
