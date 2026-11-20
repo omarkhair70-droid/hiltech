@@ -3,10 +3,7 @@ package com.hiltech.android
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.remember
-import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.WarehousePhysicalHandoffAuthorityGate
@@ -45,17 +42,15 @@ class WarehouseClosureEvidenceActivity : ComponentActivity() {
                     ),
                 ),
                 warehouseOperator = {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        WarehouseQuickScanControls(
-                            state = safeState,
-                            busy = true,
-                            onAssetTagLookup = {},
-                            onAssetSearch = {},
-                            onStockSearch = {},
-                        )
-                        WarehousePhysicalHandoffAuthorityGate(canOperate = false) {
-                            error("Revoked authority must not expose physical handoff controls.")
-                        }
+                    WarehouseQuickScanControls(
+                        state = safeState,
+                        busy = true,
+                        onAssetTagLookup = {},
+                        onAssetSearch = {},
+                        onStockSearch = {},
+                    )
+                    WarehousePhysicalHandoffAuthorityGate(canOperate = false) {
+                        error("Revoked authority must not expose physical handoff controls.")
                     }
                 },
             )

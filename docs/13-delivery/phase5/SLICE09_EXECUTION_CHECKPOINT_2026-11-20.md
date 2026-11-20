@@ -76,3 +76,10 @@ The authoritative mutation proof already exists in `RoleTeamAuthorizationPostgre
 Android closure evidence now renders the same production safe Quick Scan result plus the same production physical-handoff authority gate in revoked state. The smoke scrolls the whole shared surface, requires `Warehouse mutation authority · denied`, and rejects acquisition/candidate/purchase/unit-cost/currency/payroll/invoice-value labels. A server MockMvc wire test independently asserts Command Center alerts retain sourceType/sourceId/reasonCodes while restricted Finance/value keys are absent.
 
 Still open before Final Gap Review: direct Inventory drill controls from Command Center into the existing detailed Asset/Stock/Receiving/Stocktake/Work surfaces, then exact-head re-verification and Phase 5 Final Gap Review. Do not merge or start Phase 6.
+
+
+### Checkpoint 04 CI repair 01
+
+Exact head `a4d55a9df3fdb16bb4dcb3041ea22464f0d5b905`: Warehouse server/shared-client verification and Windows render PASS. Android-building workflows (Phase 5, Bootstrap foundation, Native OIDC Android shell, Onboarding Android and Assigned Work Android) all failed at the same debug Kotlin compile point before runtime evidence because `WarehouseClosureEvidenceActivity` imported Compose Foundation layout symbols (`Column`, `Arrangement`, `dp`) that the Android application module does not directly depend on. Shared Compose already owns layout dependencies.
+
+The repair removes the debug-only local Foundation layout wrapper and invokes the two production shared composables sequentially inside the existing composable `warehouseOperator` slot. No dependency is added and no authority, Quick Scan, redaction or mutation behavior changes. Corrected exact-head CI pending; do not merge.
