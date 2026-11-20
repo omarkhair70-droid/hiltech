@@ -121,14 +121,14 @@ adb exec-out screencap -p > "$report_dir/android-stocktake-variance.png"
 focus_text 'Adjustment reason'
 adb shell input text 'Verified%sshortage'
 adb shell input keyevent KEYCODE_BACK
-tap_clickable_text 'Request adjustment'
+tap_clickable_text 'طلب تسوية / Request adjustment'
 wait_for_text 'SYNTH-STOCKTAKE-ADJUSTMENT-RECEIPT' >/dev/null
 wait_for_text 'Adjustment requested · -1 EA' >/dev/null
 wait_for_text 'Approval · APPROVED ·' >/dev/null
 wait_for_text 'Apply approved adjustment' >/dev/null
 adb exec-out screencap -p > "$report_dir/android-stocktake-adjustment.png"
 
-tap_clickable_text 'Apply approved adjustment'
+tap_clickable_text 'تطبيق التسوية المعتمدة / Apply approved adjustment'
 wait_for_text 'SYNTH-STOCKTAKE-APPLY-RECEIPT' >/dev/null
 wait_for_text 'Applied movement · cdcdcdcd' >/dev/null
 wait_for_text 'Stocktake reconciliation · CLOSED' >/dev/null

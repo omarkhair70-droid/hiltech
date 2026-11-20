@@ -107,3 +107,8 @@ This checkpoint changes presentation only. The production shared Warehouse opera
 The DEBUG Android closure host uses the same production RTL frame rather than a synthetic layout direction. Its smoke now requires Arabic-first Quick Scan plus Arabic revoked-authority/physical-handoff-denied text in addition to the existing English compatibility assertions and restricted-value sweep.
 
 No API, command, authority, persistence, mutation, idempotency, source truth or Phase-6 behavior changes. Exact-head CI pending. If green, repeat the Slice 09 / Phase 5 Final Gap Review; do not merge before that review.
+
+
+### Checkpoint 06 CI repair 01
+
+Exact head `9953c579be9b5fcf70d4ddead19a9a9746688d66`: ten of twelve workflows PASS. Warehouse server/shared contracts and Windows evidence PASS; the Android APK builds and Asset lookup, checkout/handoff and return evidence PASS. Receiving smoke stops at the old exact English label `Open scanned Receiving receipt`; the UI dump contains the enabled bilingual control. Update the Receiving and Stocktake smoke selectors to the exact current Arabic-first bilingual button labels, preserving the clickable-ancestor checks and every existing receipt, discrepancy, adjustment, and reconciliation assertion. No product behavior or authorization changes. The independent Phase 4 Project Site contract PASS; its desktop render could not resolve Skiko runtime 0.144.6 from the external repositories. Corrected exact-head CI pending; do not merge.
