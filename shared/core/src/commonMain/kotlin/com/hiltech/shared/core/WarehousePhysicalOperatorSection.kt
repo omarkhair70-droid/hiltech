@@ -91,6 +91,7 @@ private fun PhysicalOperatorWorkspace(
     busy: Boolean,
     runTask: (suspend () -> Unit) -> Unit,
 ) {
+    var commandCenter by remember { mutableStateOf<WarehouseCommandCenterDto?>(null) }
     var queue by remember { mutableStateOf<WarehouseReservationQueueDto?>(null) }
     var assetSearch by remember { mutableStateOf("") }
     var assetState by remember { mutableStateOf(AssetInventoryState()) }
@@ -270,6 +271,18 @@ private fun PhysicalOperatorWorkspace(
             else -> error("Unsupported issued stock operation.")
         }
     }
+
+    Text("Warehouse home", style = MaterialTheme.typography.titleMedium)
+    OutlinedButton(
+        onClick = {
+            runTask {
+                commandCenter = null
+                commandCenter = api.warehouseCommandCenter(warehouse, installationId)
+            }
+        },
+        enabled = !busy,
+    ) { Text("Load command center") }
+    commandCenter?.let { WarehouseCommandCenterSection(it) }
 
     receipt?.let { Text("Last confirmed server receipt · $it") }
     refreshWarning?.let { Text(it, color = MaterialTheme.colorScheme.error) }

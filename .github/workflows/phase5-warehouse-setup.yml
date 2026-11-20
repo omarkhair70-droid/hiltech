@@ -27,6 +27,7 @@ on:
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/ReservedFulfillmentSection.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/PhysicalFulfillmentOperations.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehousePhysicalOperatorSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehouseCommandCenterSection.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/StocktakeOperatorSection.kt"
       - "scripts/*stage_legacy_inventory.py"
       - ".github/workflows/phase5-warehouse-setup.yml"
@@ -63,6 +64,7 @@ jobs:
           set -euo pipefail
           ./gradlew :apps:desktopApp:renderPhase5WarehouseEvidence
           test -s build/reports/phase5-warehouse/warehouse-setup.png
+          test -s build/reports/phase5-warehouse/warehouse-command-center.png
           test -s build/reports/phase5-warehouse/import-review.png
           test -s build/reports/phase5-warehouse/stock-inventory.png
           test -s build/reports/phase5-warehouse/asset-passport.png

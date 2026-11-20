@@ -43,6 +43,41 @@ class WarehouseApiClientTest {
     }
 
     @Test
+    fun warehouseCommandCenterUsesAuthenticatedReadAndPreservesSourceReasons() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/warehouses/$warehouseId/command-center", request.url.encodedPath)
+            assertEquals("GET", request.method.value)
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            respond(
+                """{"warehouseId":"$warehouseId","organizationId":"$org","warehouseCode":"WH-1",
+                    "warehouseName":"Main","asOf":"2026-11-20T00:00:00Z",
+                    "inventory":{"balanceLineCount":3,"stockItemCount":2,"zeroOnHandLineCount":1,
+                    "zeroAvailableLineCount":1,"lowStockPolicyConfigured":false,
+                    "lowStockPolicyReason":"LOW_STOCK_THRESHOLD_NOT_CONFIGURED"},
+                    "dueReturns":{"items":[],"limited":false},
+                    "activeReservations":{"items":[{"sourceType":"STOCK_RESERVATION","sourceId":"$batchId",
+                    "label":"FIBER-01","state":"ACTIVE","reasonCodes":["ACTIVE_RESERVATION"],
+                    "workOrderId":"$operation"}],"limited":false},
+                    "assetExceptions":{"items":[],"limited":false},
+                    "receivingQueue":{"items":[],"limited":false},
+                    "stocktakeQueue":{"items":[],"limited":false},
+                    "importExceptions":{"items":[],"limited":false},
+                    "recentMovements":{"items":[],"limited":false}}""",
+                HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val result = client(http).warehouseCommandCenter(warehouseId, installation)
+        assertEquals(2, result.inventory.stockItemCount)
+        assertFalse(result.inventory.lowStockPolicyConfigured)
+        val reservation = result.activeReservations.items.single()
+        assertEquals("STOCK_RESERVATION", reservation.sourceType)
+        assertEquals(listOf("ACTIVE_RESERVATION"), reservation.reasonCodes)
+        assertEquals(operation, reservation.workOrderId)
+    }
+
+    @Test
     fun dueReturnSnapshotUsesWarehouseAndServerTime() = runBlocking {
         val http = HttpClient(MockEngine { request ->
             assertEquals("/v1/warehouses/$warehouseId/due-asset-returns", request.url.encodedPath)

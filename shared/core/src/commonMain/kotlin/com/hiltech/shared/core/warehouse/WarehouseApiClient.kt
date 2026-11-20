@@ -347,6 +347,16 @@ class WarehouseApiClient(
             json.encodeToString(ApplyInventoryAdjustmentDto.serializer(), request),
             installationId, InventoryAdjustmentApplyResultDto.serializer())
 
+    suspend fun warehouseCommandCenter(
+        warehouseId: String,
+        installationId: String,
+    ): WarehouseCommandCenterDto =
+        get(
+            "/v1/warehouses/" + uuid(warehouseId) + "/command-center",
+            installationId,
+            WarehouseCommandCenterDto.serializer(),
+        )
+
     suspend fun warehouses(
         organizationId: String,
         installationId: String,

@@ -63,6 +63,11 @@ import com.hiltech.shared.core.warehouse.IssuedStockDirectoryDto
 import com.hiltech.shared.core.warehouse.IssuedStockDirectoryEntryDto
 import com.hiltech.shared.core.StockInventoryState
 import com.hiltech.shared.core.WarehouseSetupSection
+import com.hiltech.shared.core.WarehouseCommandCenterSection
+import com.hiltech.shared.core.warehouse.WarehouseCommandCenterDto
+import com.hiltech.shared.core.warehouse.WarehouseCommandCenterItemDto
+import com.hiltech.shared.core.warehouse.WarehouseCommandCenterQueueDto
+import com.hiltech.shared.core.warehouse.WarehouseInventoryOverviewDto
 import com.hiltech.shared.core.warehouse.InventoryImportBatchDto
 import com.hiltech.shared.core.warehouse.InventoryImportRowDto
 import com.hiltech.shared.core.warehouse.StockBalanceDto
@@ -104,6 +109,49 @@ fun main() = runBlocking<Unit> {
     } finally {
         scene.close()
     }
+    val commandCenter = WarehouseCommandCenterDto(
+        warehouseId = requireNotNull(state.selectedWarehouseId),
+        organizationId = requireNotNull(state.directory).items.single().organizationId,
+        warehouseCode = "TEST-WH",
+        warehouseName = "Synthetic warehouse",
+        asOf = "2026-11-20T00:00:00Z",
+        inventory = WarehouseInventoryOverviewDto(4, 3, 1, 2, false, "LOW_STOCK_THRESHOLD_NOT_CONFIGURED"),
+        dueReturns = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("ASSET_MOVEMENT", "return-source", "SYNTH-TOOL", "OVERDUE",
+                listOf("RETURN_OVERDUE"), dueAt = "2026-11-19T16:00:00Z", workOrderId = "synthetic-work"),
+        ), false),
+        activeReservations = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("STOCK_RESERVATION", "reservation-source", "FIBER-01", "ACTIVE",
+                listOf("ACTIVE_RESERVATION"), workOrderId = "synthetic-work"),
+        ), false),
+        assetExceptions = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("ASSET_CALIBRATION", "calibration-source", "SYNTH-METER",
+                "BLOCKED_CALIBRATION", listOf("CALIBRATION_EXPIRED"), dueAt = "2026-11-18T12:00:00Z"),
+        ), false),
+        receivingQueue = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("RECEIVING", "receiving-source", "OTHER · delivery-17",
+                "RECEIVED_WITH_DISCREPANCY", listOf("RECEIVING_RECEIVED_WITH_DISCREPANCY")),
+        ), false),
+        stocktakeQueue = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("INVENTORY_ADJUSTMENT_REQUEST", "adjustment-source",
+                "FIBER-01 · adjustment", "PENDING", listOf("ADJUSTMENT_PENDING")),
+        ), false),
+        importExceptions = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("INVENTORY_IMPORT_ROW", "import-row-source", "LEGACY-PART",
+                "NEEDS_REVIEW", listOf("UNKNOWN_UOM","LEGACY_COLUMN_SEMANTICS_AMBIGUOUS")),
+        ), false),
+        recentMovements = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("STOCK_MOVEMENT", "movement-source", "FIBER-01",
+                "ISSUE", listOf("ISSUE"), occurredAt = "2026-11-19T23:00:00Z", workOrderId = "synthetic-work"),
+        ), false),
+    )
+    val commandCenterScene = ImageComposeScene(width = 980, height = 1320, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            WarehouseCommandCenterSection(commandCenter)
+        }
+    }
+    captureAndClose(commandCenterScene, directory.resolve("warehouse-command-center.png"))
+
     val stock = syntheticStock(state)
     val inventory = ImageComposeScene(width = 940, height = 940, coroutineContext = coroutineContext) {
         Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
