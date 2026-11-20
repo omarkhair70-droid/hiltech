@@ -32,3 +32,10 @@ Unsatisfied `ASSET_AVAILABLE` / `STOCK_AVAILABLE` facts are shown as `READY_TO_R
 The Warehouse integration scenario now proves the Command Center Stock overview against the actual StockBalance projection, proves a material requirement reports `STOCK_AVAILABLE` from the Phase-5 source, then proves a competing reservation changes another Work requirement to `STOCK_RESERVED_FOR_OTHER_WORK` with the real StockItem source id. It explicitly asserts no `SOURCE_PENDING_PHASE5` reason remains in these implemented material paths.
 
 The shared Command Center DTO/UI and Windows render expose requirement id, Work/Project/Site context, canonical reason, fact source id/version/as-of and candidate count. Still open: richer direct drill-through controls, Arabic-first mobile home/Quick Scan, scan/search canonical-object proof, revoked-authority mutation proof, restricted-value proof, dedicated Android Slice 09 evidence and final closure.
+
+
+### Checkpoint 02 CI repair 01
+
+Exact head `6c39cb63b96d8853800eef6c1653b1a6a6d9ec96`: Phase 5 Warehouse server/shared contract and Windows Command Center render PASS; Phase 5 Android evidence and Native OIDC PASS. Phase 4 server contracts and Bootstrap local-platform all failed on the same new assertion in `ReservationOperatorScenario`: expected `STOCK_RESERVED_FOR_OTHER_WORK`, actual canonical Phase-5 fact `STOCK_SHORTAGE`.
+
+The source behavior is correct and unchanged. Synthetic Stock starts at 10; one Work reservation holds 8; the competing Work requirement needs 8 while only 2 remain free. `WarehouseWorkResourceSource.fact(...)` therefore returns `STOCK_SHORTAGE` because free + held-for-this-demand cannot cover the required quantity. The repair changes only the expectation to the canonical reason and preserves its StockItem source id. No readiness, reservation, authorization, projection or Command Center product logic changes. Corrected exact-head CI pending.

@@ -137,7 +137,7 @@ internal class ReservationOperatorScenario(
             it.workOrderId == loserWork && it.requirementFamily == "MATERIAL"
         }
         assertEquals("BLOCKED", blockedReadiness.state)
-        assertEquals("STOCK_RESERVED_FOR_OTHER_WORK", blockedReadiness.reasonCode)
+        assertEquals("STOCK_SHORTAGE", blockedReadiness.reasonCode)
         assertEquals(item, blockedReadiness.factSourceId)
         assertFalse(blockedReadiness.reasonCode == "SOURCE_PENDING_PHASE5")
         assertEquals("RESERVATION_VERSION_CONFLICT", (reservations.single { it.isFailure }.exceptionOrNull() as ProductApiException).code)
