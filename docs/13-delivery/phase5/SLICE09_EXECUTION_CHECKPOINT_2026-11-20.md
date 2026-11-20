@@ -56,3 +56,10 @@ The shared Arabic-first Quick Scan surface is mounted into the Warehouse physica
 Server scenarios prove AssetTag and manual Asset search return the same Asset id, Stock item-code and part-number search return the same canonical StockItem(s), and an arbitrary numeric barcode string does not silently resolve as Stock. Shared-client tests prove authenticated opaque AssetTag lookup returns the canonical id and Stock search transports only the explicit search query. Desktop evidence adds `warehouse-quick-scan.png`. Dedicated Android evidence drives the actual shared Quick Scan controls and captures tag resolution, scan/search canonical match and Stock part-number search while asserting the no-barcode-mapping message.
 
 Exact-head CI pending. No mutation engine, camera-specific truth, barcode mapping or new persistence is introduced.
+
+
+### Checkpoint 03 CI repair 01
+
+Exact head `16b0caeef1d7f3ed85861e731fa65294a2076647`: Warehouse server/shared-client contracts, Windows render, Bootstrap, Native OIDC and all inherited product workflows PASS. Phase 5 Android failed only in the new Quick Scan smoke after AssetTag resolution and manual Asset search both returned the same canonical Asset id. The UI dump shows `Asset result · SYNTH-PASSPORT · 11111111-2222-4333-8444-555555555555`, but the synthetic proof text `Scan/search canonical match · PASS` is below the initial Android viewport. The smoke previously used a non-scrolling `wait_for_text` for that assertion.
+
+The repair uses the existing scroll-aware `focus_text` helper to locate the canonical-match evidence before capture. It changes no Quick Scan lookup, API, authorization, redaction, canonical id, Stock search or barcode behavior. Corrected exact-head CI pending; do not merge.

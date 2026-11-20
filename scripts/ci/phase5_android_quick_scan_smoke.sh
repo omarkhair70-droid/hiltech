@@ -100,7 +100,7 @@ adb shell input text 'SYNTH-PASSPORT'
 adb shell input keyevent KEYCODE_BACK
 tap_exact 'بحث Asset / Search Asset'
 wait_for_text 'SYNTH-QUICK-SCAN-ASSET-SEARCH-RECEIPT' >/dev/null
-wait_for_text 'Scan/search canonical match · PASS' >/dev/null
+focus_text 'Scan/search canonical match · PASS'
 adb exec-out screencap -p > "$report_dir/android-quick-scan-asset-match.png"
 
 focus_text 'Stock code / part number'
