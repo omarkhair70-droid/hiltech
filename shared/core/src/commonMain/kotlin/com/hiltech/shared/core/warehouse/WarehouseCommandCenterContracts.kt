@@ -24,6 +24,8 @@ data class WarehouseCommandCenterItemDto(
     val projectId: String? = null,
     val siteId: String? = null,
     val workOrderId: String? = null,
+    val drillType: String? = null,
+    val drillId: String? = null,
 )
 
 @Serializable

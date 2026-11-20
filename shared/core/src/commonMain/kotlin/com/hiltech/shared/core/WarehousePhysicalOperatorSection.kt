@@ -99,6 +99,12 @@ private fun PhysicalOperatorWorkspace(
     var stockSearch by remember { mutableStateOf("") }
     var receipt by remember { mutableStateOf<String?>(null) }
     var refreshWarning by remember { mutableStateOf<String?>(null) }
+    var storageLocationDrill by remember(warehouse) { mutableStateOf<List<StorageLocationDto>?>(null) }
+    var receivingDrillId by remember(warehouse) { mutableStateOf<String?>(null) }
+    var receivingDrillGeneration by remember(warehouse) { mutableStateOf(0L) }
+    var stocktakeDrillId by remember(warehouse) { mutableStateOf<String?>(null) }
+    var stocktakeDrillGeneration by remember(warehouse) { mutableStateOf(0L) }
+    var workResourceDrillContext by remember(warehouse) { mutableStateOf<String?>(null) }
 
     suspend fun afterConfirmedReceipt(refresh: suspend () -> Unit) {
         refreshWarning = null
@@ -291,7 +297,54 @@ private fun PhysicalOperatorWorkspace(
         },
         enabled = !busy,
     ) { Text("Load command center") }
-    commandCenter?.let { WarehouseCommandCenterSection(it) }
+    commandCenter?.let { snapshot ->
+        WarehouseCommandCenterSection(
+            snapshot = snapshot,
+            onOpenStorageLocations = {
+                runTask {
+                    storageLocationDrill = api.warehouseStorageLocations(warehouse, installationId).items
+                        .filter { it.warehouseId == warehouse }
+                }
+            },
+            onDrill = { drillType, drillId ->
+                when (drillType) {
+                    "ASSET" -> runTask {
+                        assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null)
+                        loadAsset(drillId)
+                    }
+                    "STOCK_ITEM" -> runTask {
+                        stockState = stockState.copy(
+                            selected = null, issued = null, issuedWarehouseId = null, balances = emptyList(),
+                        )
+                        loadStock(drillId)
+                    }
+                    "RECEIVING" -> {
+                        receivingDrillId = drillId
+                        receivingDrillGeneration += 1
+                    }
+                    "STOCKTAKE" -> {
+                        stocktakeDrillId = drillId
+                        stocktakeDrillGeneration += 1
+                    }
+                }
+            },
+            onOpenWorkResource = { workOrderId, requirementId ->
+                workResourceDrillContext = "Work/$workOrderId · requirement/$requirementId"
+                runTask {
+                    queue = null
+                    queue = api.reservationQueue(warehouse, installationId)
+                }
+            },
+        )
+    }
+    storageLocationDrill?.let { locations ->
+        Text("StorageLocation drill", style = MaterialTheme.typography.titleMedium)
+        if (locations.isEmpty()) Text("No visible storage locations.")
+        locations.forEach { location ->
+            Text(location.code + " · " + location.name + " · " + location.lifecycleState)
+        }
+    }
+    workResourceDrillContext?.let { Text("Resource drill · $it") }
 
     receipt?.let { Text("Last confirmed server receipt · $it") }
     refreshWarning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -304,6 +357,8 @@ private fun PhysicalOperatorWorkspace(
         busy = busy,
         runTask = runTask,
         onReceipt = { receipt = it },
+        requestedRecordId = receivingDrillId,
+        requestedOpenGeneration = receivingDrillGeneration,
     )
     StocktakeOperatorSection(
         api = api,
@@ -314,6 +369,8 @@ private fun PhysicalOperatorWorkspace(
         busy = busy,
         runTask = runTask,
         onReceipt = { receipt = it },
+        requestedStocktakeId = stocktakeDrillId,
+        requestedOpenGeneration = stocktakeDrillGeneration,
     )
     Text("Reserved handoff", style = MaterialTheme.typography.titleMedium)
     OutlinedButton({ runTask { queue = null; queue = api.reservationQueue(warehouse, installationId) } }, enabled = !busy) {

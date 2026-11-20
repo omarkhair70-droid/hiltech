@@ -34,6 +34,8 @@ data class WarehouseCommandCenterItem(
     val projectId: UUID?,
     val siteId: UUID?,
     val workOrderId: UUID?,
+    val drillType: String? = null,
+    val drillId: UUID? = null,
 )
 
 data class WarehouseCommandCenterQueue(
@@ -112,6 +114,7 @@ class JdbcWarehouseCommandCenterReadPort(private val jdbc: JdbcTemplate) : Wareh
 
         val dueReturns = page(jdbc.query(
             """SELECT 'ASSET_MOVEMENT' AS source_type, c.source_movement_id AS source_id,
+                      'ASSET' AS drill_type, a.id AS drill_id,
                       a.asset_code AS label,
                       CASE WHEN c.expected_return_at < ? THEN 'OVERDUE' ELSE 'EXPECTED_RETURN' END AS state,
                       CASE WHEN c.expected_return_at < ? THEN 'RETURN_OVERDUE' ELSE 'RETURN_EXPECTED' END AS reason_codes,
@@ -126,7 +129,8 @@ class JdbcWarehouseCommandCenterReadPort(private val jdbc: JdbcTemplate) : Wareh
         ))
 
         val reservations = page(jdbc.query(
-            """SELECT 'ASSET_RESERVATION' AS source_type, r.id AS source_id, a.asset_code AS label,
+            """SELECT 'ASSET_RESERVATION' AS source_type, r.id AS source_id,
+                      'ASSET' AS drill_type, r.asset_id AS drill_id, a.asset_code AS label,
                       r.state, 'ACTIVE_RESERVATION' AS reason_codes,
                       r.recorded_at AS occurred_at, r.end_at AS due_at,
                       r.project_id, r.site_id, r.work_order_id
@@ -136,7 +140,7 @@ class JdbcWarehouseCommandCenterReadPort(private val jdbc: JdbcTemplate) : Wareh
                  AND (r.start_at IS NULL OR r.start_at <= ?)
                  AND (r.end_at IS NULL OR r.end_at > ?)
                UNION ALL
-               SELECT 'STOCK_RESERVATION', r.id, i.item_code, r.state, 'ACTIVE_RESERVATION',
+               SELECT 'STOCK_RESERVATION', r.id, 'STOCK_ITEM', r.stock_item_id, i.item_code, r.state, 'ACTIVE_RESERVATION',
                       r.recorded_at, r.end_at, r.project_id, r.site_id, r.work_order_id
                FROM stock_reservation r
                JOIN stock_item i ON i.id = r.stock_item_id
@@ -151,7 +155,8 @@ class JdbcWarehouseCommandCenterReadPort(private val jdbc: JdbcTemplate) : Wareh
         ))
 
         val assetExceptions = page(jdbc.query(
-            """SELECT reasons.source_type, reasons.source_id, a.asset_code AS label,
+            """SELECT reasons.source_type, reasons.source_id, 'ASSET' AS drill_type, a.id AS drill_id,
+                      a.asset_code AS label,
                       reasons.state, reasons.code AS reason_codes,
                       NULL::timestamptz AS occurred_at, reasons.due_at,
                       NULL::uuid AS project_id, NULL::uuid AS site_id, NULL::uuid AS work_order_id
@@ -168,6 +173,7 @@ class JdbcWarehouseCommandCenterReadPort(private val jdbc: JdbcTemplate) : Wareh
 
         val receiving = page(jdbc.query(
             """SELECT 'RECEIVING' AS source_type, r.id AS source_id,
+                      'RECEIVING' AS drill_type, r.id AS drill_id,
                       r.source_type || coalesce(' · ' || r.source_ref, '') AS label,
                       r.state, 'RECEIVING_' || r.state AS reason_codes,
                       r.updated_at AS occurred_at, NULL::timestamptz AS due_at,
@@ -182,6 +188,7 @@ class JdbcWarehouseCommandCenterReadPort(private val jdbc: JdbcTemplate) : Wareh
 
         val stocktakes = page(jdbc.query(
             """SELECT 'STOCKTAKE_SESSION' AS source_type, s.id AS source_id,
+                      'STOCKTAKE' AS drill_type, s.id AS drill_id,
                       'Stocktake ' || left(s.id::text, 8) AS label, s.state,
                       'STOCKTAKE_' || s.state AS reason_codes,
                       s.updated_at AS occurred_at, NULL::timestamptz AS due_at,
@@ -189,7 +196,7 @@ class JdbcWarehouseCommandCenterReadPort(private val jdbc: JdbcTemplate) : Wareh
                FROM stocktake_session s
                WHERE s.warehouse_id = ? AND s.state NOT IN ('CLOSED','CANCELLED')
                UNION ALL
-               SELECT 'INVENTORY_ADJUSTMENT_REQUEST', a.id,
+               SELECT 'INVENTORY_ADJUSTMENT_REQUEST', a.id, 'STOCKTAKE', s.id,
                       i.item_code || ' · adjustment', coalesce(a.approval_status, 'PENDING'),
                       CASE WHEN a.approval_request_id IS NULL THEN 'APPROVAL_REFERENCE_MISSING'
                            ELSE 'ADJUSTMENT_' || coalesce(a.approval_status, 'PENDING') END,
@@ -204,6 +211,7 @@ class JdbcWarehouseCommandCenterReadPort(private val jdbc: JdbcTemplate) : Wareh
 
         val imports = if (includeImportExceptions) page(jdbc.query(
             """SELECT 'INVENTORY_IMPORT_ROW' AS source_type, r.id AS source_id,
+                      NULL::text AS drill_type, NULL::uuid AS drill_id,
                       coalesce(r.normalized_part_number, r.normalized_description, 'Import row ' || r.source_row_number) AS label,
                       r.review_state AS state, array_to_string(r.issue_codes, ',') AS reason_codes,
                       r.updated_at AS occurred_at, NULL::timestamptz AS due_at,
@@ -218,7 +226,8 @@ class JdbcWarehouseCommandCenterReadPort(private val jdbc: JdbcTemplate) : Wareh
 
         val movements = page(jdbc.query(
             """SELECT * FROM (
-                   SELECT 'STOCK_MOVEMENT' AS source_type, m.id AS source_id, i.item_code AS label,
+                   SELECT 'STOCK_MOVEMENT' AS source_type, m.id AS source_id,
+                          'STOCK_ITEM' AS drill_type, m.stock_item_id AS drill_id, i.item_code AS label,
                           m.movement_type AS state, m.movement_type AS reason_codes,
                           m.occurred_at, NULL::timestamptz AS due_at,
                           m.project_id, m.site_id, m.work_order_id
@@ -228,7 +237,7 @@ class JdbcWarehouseCommandCenterReadPort(private val jdbc: JdbcTemplate) : Wareh
                    LEFT JOIN storage_location t ON t.id = m.to_storage_location_id
                    WHERE f.warehouse_id = ? OR t.warehouse_id = ?
                    UNION ALL
-                   SELECT 'ASSET_MOVEMENT', m.id, a.asset_code, m.movement_type, m.movement_type,
+                   SELECT 'ASSET_MOVEMENT', m.id, 'ASSET', m.asset_id, a.asset_code, m.movement_type, m.movement_type,
                           m.occurred_at, m.expected_return_at, m.project_id, m.site_id, m.work_order_id
                    FROM asset_movement m
                    JOIN asset a ON a.id = m.asset_id
@@ -258,6 +267,8 @@ class JdbcWarehouseCommandCenterReadPort(private val jdbc: JdbcTemplate) : Wareh
         projectId = rs.getObject("project_id", UUID::class.java),
         siteId = rs.getObject("site_id", UUID::class.java),
         workOrderId = rs.getObject("work_order_id", UUID::class.java),
+        drillType = rs.getString("drill_type"),
+        drillId = rs.getObject("drill_id", UUID::class.java),
     )
 
     private fun ResultSet.instant(name: String): Instant? =

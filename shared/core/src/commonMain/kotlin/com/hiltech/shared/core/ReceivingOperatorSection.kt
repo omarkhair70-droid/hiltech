@@ -10,6 +10,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -61,6 +62,8 @@ internal fun ReceivingOperatorSection(
     busy: Boolean,
     runTask: (suspend () -> Unit) -> Unit,
     onReceipt: (String) -> Unit,
+    requestedRecordId: String? = null,
+    requestedOpenGeneration: Long = 0L,
 ) {
     var directory by remember(warehouse) { mutableStateOf<ReceivingDirectoryDto?>(null) }
     var detail by remember(warehouse) { mutableStateOf<ReceivingDetailDto?>(null) }
@@ -96,6 +99,16 @@ internal fun ReceivingOperatorSection(
 
     fun op(vararg fields: Any?): String =
         operationId(listOf("receiving-ui", warehouse) + fields)
+
+    LaunchedEffect(warehouse, requestedRecordId, requestedOpenGeneration) {
+        requestedRecordId?.let { requested ->
+            runTask {
+                loadDirectory()
+                loadSupport()
+                loadDetail(requested)
+            }
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HorizontalDivider()

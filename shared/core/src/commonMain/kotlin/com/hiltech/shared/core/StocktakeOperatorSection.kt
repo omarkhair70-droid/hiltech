@@ -9,6 +9,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +44,8 @@ fun StocktakeOperatorSection(
     busy: Boolean,
     runTask: (suspend () -> Unit) -> Unit,
     onReceipt: (String) -> Unit,
+    requestedStocktakeId: String? = null,
+    requestedOpenGeneration: Long = 0L,
 ) {
     var locations by remember(warehouse) { mutableStateOf<List<StorageLocationDto>?>(null) }
     var rootId by remember(warehouse) { mutableStateOf<String?>(null) }
@@ -60,6 +63,15 @@ fun StocktakeOperatorSection(
             api.stocktakeVariances(id, installationId)
         } else {
             null
+        }
+    }
+
+    LaunchedEffect(warehouse, requestedStocktakeId, requestedOpenGeneration) {
+        requestedStocktakeId?.let { requested ->
+            runTask {
+                openId = requested
+                refresh(requested)
+            }
         }
     }
 

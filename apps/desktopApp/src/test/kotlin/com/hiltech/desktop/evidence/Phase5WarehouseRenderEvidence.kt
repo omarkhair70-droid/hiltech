@@ -120,11 +120,13 @@ fun main() = runBlocking<Unit> {
         inventory = WarehouseInventoryOverviewDto(4, 3, 1, 2, false, "LOW_STOCK_THRESHOLD_NOT_CONFIGURED"),
         dueReturns = WarehouseCommandCenterQueueDto(listOf(
             WarehouseCommandCenterItemDto("ASSET_MOVEMENT", "return-source", "SYNTH-TOOL", "OVERDUE",
-                listOf("RETURN_OVERDUE"), dueAt = "2026-11-19T16:00:00Z", workOrderId = "synthetic-work"),
+                listOf("RETURN_OVERDUE"), dueAt = "2026-11-19T16:00:00Z", workOrderId = "synthetic-work",
+                drillType = "ASSET", drillId = "synthetic-asset"),
         ), false),
         activeReservations = WarehouseCommandCenterQueueDto(listOf(
             WarehouseCommandCenterItemDto("STOCK_RESERVATION", "reservation-source", "FIBER-01", "ACTIVE",
-                listOf("ACTIVE_RESERVATION"), workOrderId = "synthetic-work"),
+                listOf("ACTIVE_RESERVATION"), workOrderId = "synthetic-work",
+                drillType = "STOCK_ITEM", drillId = "synthetic-stock-item"),
         ), false),
         assetExceptions = WarehouseCommandCenterQueueDto(listOf(
             WarehouseCommandCenterItemDto("ASSET_CALIBRATION", "calibration-source", "SYNTH-METER",
@@ -132,11 +134,13 @@ fun main() = runBlocking<Unit> {
         ), false),
         receivingQueue = WarehouseCommandCenterQueueDto(listOf(
             WarehouseCommandCenterItemDto("RECEIVING", "receiving-source", "OTHER · delivery-17",
-                "RECEIVED_WITH_DISCREPANCY", listOf("RECEIVING_RECEIVED_WITH_DISCREPANCY")),
+                "RECEIVED_WITH_DISCREPANCY", listOf("RECEIVING_RECEIVED_WITH_DISCREPANCY"),
+                drillType = "RECEIVING", drillId = "receiving-source"),
         ), false),
         stocktakeQueue = WarehouseCommandCenterQueueDto(listOf(
             WarehouseCommandCenterItemDto("INVENTORY_ADJUSTMENT_REQUEST", "adjustment-source",
-                "FIBER-01 · adjustment", "PENDING", listOf("ADJUSTMENT_PENDING")),
+                "FIBER-01 · adjustment", "PENDING", listOf("ADJUSTMENT_PENDING"),
+                drillType = "STOCKTAKE", drillId = "synthetic-stocktake"),
         ), false),
         importExceptions = WarehouseCommandCenterQueueDto(listOf(
             WarehouseCommandCenterItemDto("INVENTORY_IMPORT_ROW", "import-row-source", "LEGACY-PART",
@@ -144,7 +148,8 @@ fun main() = runBlocking<Unit> {
         ), false),
         recentMovements = WarehouseCommandCenterQueueDto(listOf(
             WarehouseCommandCenterItemDto("STOCK_MOVEMENT", "movement-source", "FIBER-01",
-                "ISSUE", listOf("ISSUE"), occurredAt = "2026-11-19T23:00:00Z", workOrderId = "synthetic-work"),
+                "ISSUE", listOf("ISSUE"), occurredAt = "2026-11-19T23:00:00Z", workOrderId = "synthetic-work",
+                drillType = "STOCK_ITEM", drillId = "synthetic-stock-item"),
         ), false),
         projectResourceReadiness = com.hiltech.shared.core.warehouse.WarehouseProjectResourceReadinessQueueDto(
             visible = true,

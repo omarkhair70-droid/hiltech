@@ -20,6 +20,7 @@ class WarehouseCommandCenterApiTest {
         val warehouse = UUID.randomUUID()
         val organization = UUID.randomUUID()
         val source = UUID.randomUUID()
+        val asset = UUID.randomUUID()
         val item = WarehouseCommandCenterItem(
             sourceType = "ASSET_MOVEMENT",
             sourceId = source,
@@ -31,6 +32,8 @@ class WarehouseCommandCenterApiTest {
             projectId = null,
             siteId = null,
             workOrderId = null,
+            drillType = "ASSET",
+            drillId = asset,
         )
         val empty = WarehouseCommandCenterQueue(emptyList(), false)
         val snapshot = WarehouseCommandCenterSnapshot(
@@ -60,6 +63,9 @@ class WarehouseCommandCenterApiTest {
 
         assertTrue(json.contains("\"sourceType\":\"ASSET_MOVEMENT\""))
         assertTrue(json.contains(source.toString()))
+        assertTrue(json.contains("drillType"))
+        assertTrue(json.contains("ASSET"))
+        assertTrue(json.contains(asset.toString()))
         assertTrue(json.contains("RETURN_OVERDUE"))
         for (forbidden in listOf(
             "acquisitionCost", "acquisition_cost", "candidateValue", "candidate_value",

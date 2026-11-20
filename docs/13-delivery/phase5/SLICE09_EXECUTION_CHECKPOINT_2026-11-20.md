@@ -83,3 +83,16 @@ Still open before Final Gap Review: direct Inventory drill controls from Command
 Exact head `a4d55a9df3fdb16bb4dcb3041ea22464f0d5b905`: Warehouse server/shared-client verification and Windows render PASS. Android-building workflows (Phase 5, Bootstrap foundation, Native OIDC Android shell, Onboarding Android and Assigned Work Android) all failed at the same debug Kotlin compile point before runtime evidence because `WarehouseClosureEvidenceActivity` imported Compose Foundation layout symbols (`Column`, `Arrangement`, `dp`) that the Android application module does not directly depend on. Shared Compose already owns layout dependencies.
 
 The repair removes the debug-only local Foundation layout wrapper and invokes the two production shared composables sequentially inside the existing composable `warehouseOperator` slot. No dependency is added and no authority, Quick Scan, redaction or mutation behavior changes. Corrected exact-head CI pending; do not merge.
+
+
+## Checkpoint 05 — Direct Inventory drill-through (WIP)
+
+Exact head `8875b05eb8b40a2996a298956493fa480a386837`: all twelve workflows PASS after Checkpoint 04 Android closure repair, including Phase 5 Warehouse server/shared contract, Windows render, Android closure evidence, Bootstrap and Native OIDC.
+
+Command Center drill now separates provenance from navigation. `sourceType/sourceId` remain the canonical evidence/reason source; optional `drillType/drillId` identify the existing object the operator can open. Asset custody/service/movement alerts drill to Asset passport/custody/movements/service data. Stock reservations/movements drill to StockItem balances/movements/issued contexts. Receiving drills to the existing Receiving detail API. Stocktake and pending Adjustment alerts drill to the original Stocktake detail/variance/approval surface. Import review rows deliberately retain no physical-operator drill because import review remains separately authorized.
+
+The Inventory overview opens current StorageLocations through the existing Warehouse read. Project/Work readiness opens the current Warehouse reservation/request queue while preserving the exact Work/requirement context; no cross-shell Project visibility is assumed.
+
+Receiving and Stocktake shared components accept external open requests but continue to use their existing authenticated detail APIs and current authorization. Asset and Stock use their existing physical-operator loaders. No new mutation, persistence, threshold, source truth or navigation authority is introduced.
+
+Server wire proof asserts source evidence and drill target coexist. Windows synthetic evidence renders representative Asset, Stock, Receiving and Stocktake drill controls. Exact-head CI pending. If green, proceed only to Slice 09 / Phase 5 Final Gap Review; do not merge or start Phase 6 before that review.
