@@ -19,3 +19,16 @@ There is no frozen reorder threshold/source policy in Phase 5, so low-stock is e
 The shared Ktor client exposes the authenticated read. The shared physical Warehouse workspace can load the same Command Center on Windows and Android. Desktop synthetic evidence adds `warehouse-command-center.png`.
 
 Still open: Project/Work shortage/readiness drill, richer source drill-through, Arabic-first mobile home + Quick Scan, same-object scan/search proof, revoked-authority mutation proof, restricted-value proof, dedicated Android Slice 09 evidence, Final Gap Review, and Phase 5 closure.
+
+
+## Checkpoint 02 — Project / Work resource readiness drill (WIP)
+
+Exact head `27a1902bbcae9273c76baa2ee9210c5d03bd395d`: all eleven inherited workflows PASS after one bounded retry of external dependency-resolution/provider-smoke failures. Phase 5 Warehouse server/shared contract, Windows Command Center render and Android evidence are PASS.
+
+This checkpoint composes Project/Work resource readiness from the existing `WarehouseWorkResourceSource` used by Phase 4 readiness. It does not create a second shortage/readiness table or recalculate resource truth independently. For each open Work Order with a concrete resource request, the selected Warehouse is evaluated with its real local candidates and the canonical fact reason/source/version.
+
+Unsatisfied `ASSET_AVAILABLE` / `STOCK_AVAILABLE` facts are shown as `READY_TO_RESERVE`; shortage, reservation collision, calibration/maintenance/incident and location reasons remain `BLOCKED` with their exact existing reason code. Satisfied reservations/fulfillment are omitted from the attention queue. The read is permission-scoped: detailed Work resource readiness is returned only to an identity that currently holds Warehouse resource-reservation authority.
+
+The Warehouse integration scenario now proves the Command Center Stock overview against the actual StockBalance projection, proves a material requirement reports `STOCK_AVAILABLE` from the Phase-5 source, then proves a competing reservation changes another Work requirement to `STOCK_RESERVED_FOR_OTHER_WORK` with the real StockItem source id. It explicitly asserts no `SOURCE_PENDING_PHASE5` reason remains in these implemented material paths.
+
+The shared Command Center DTO/UI and Windows render expose requirement id, Work/Project/Site context, canonical reason, fact source id/version/as-of and candidate count. Still open: richer direct drill-through controls, Arabic-first mobile home/Quick Scan, scan/search canonical-object proof, revoked-authority mutation proof, restricted-value proof, dedicated Android Slice 09 evidence and final closure.

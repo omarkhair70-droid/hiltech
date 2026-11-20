@@ -55,6 +55,8 @@ data class WarehouseCommandCenterSnapshot(
     val stocktakeQueue: WarehouseCommandCenterQueue,
     val importExceptions: WarehouseCommandCenterQueue,
     val recentMovements: WarehouseCommandCenterQueue,
+    val projectResourceReadiness: WarehouseProjectResourceReadinessQueue =
+        WarehouseProjectResourceReadinessQueue(false, emptyList(), false),
 )
 
 interface WarehouseCommandCenterAccessPort {
@@ -266,14 +268,18 @@ class JdbcWarehouseCommandCenterReadPort(private val jdbc: JdbcTemplate) : Wareh
 class WarehouseCommandCenterService(
     private val access: WarehouseCommandCenterAccessPort,
     private val read: WarehouseCommandCenterReadPort,
+    private val projectResources: WarehouseProjectResourceReadinessSource,
     private val clock: Clock,
 ) {
     fun snapshot(actorUserId: UUID, warehouseId: UUID): WarehouseCommandCenterSnapshot {
         val warehouse = access.requireWarehouse(actorUserId, warehouseId)
+        val at = clock.instant()
         return read.snapshot(
             warehouse,
-            clock.instant(),
+            at,
             access.canReadImportExceptions(actorUserId, warehouse.organizationId),
+        ).copy(
+            projectResourceReadiness = projectResources.queue(actorUserId, warehouse, at),
         )
     }
 }

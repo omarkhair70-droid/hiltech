@@ -33,6 +33,32 @@ data class WarehouseCommandCenterQueueDto(
 )
 
 @Serializable
+data class WarehouseProjectResourceReadinessItemDto(
+    val workOrderId: String,
+    val workOrderCode: String,
+    val title: String,
+    val projectId: String,
+    val siteId: String,
+    val requirementId: String,
+    val requirementKey: String,
+    val requirementFamily: String,
+    val resourceKind: String,
+    val state: String,
+    val reasonCode: String,
+    val factSourceId: String? = null,
+    val factSourceVersion: Long? = null,
+    val sourceAsOf: String,
+    val candidateCount: Int,
+)
+
+@Serializable
+data class WarehouseProjectResourceReadinessQueueDto(
+    val visible: Boolean,
+    val items: List<WarehouseProjectResourceReadinessItemDto>,
+    val limited: Boolean,
+)
+
+@Serializable
 data class WarehouseCommandCenterDto(
     val warehouseId: String,
     val organizationId: String,
@@ -47,4 +73,6 @@ data class WarehouseCommandCenterDto(
     val stocktakeQueue: WarehouseCommandCenterQueueDto,
     val importExceptions: WarehouseCommandCenterQueueDto,
     val recentMovements: WarehouseCommandCenterQueueDto,
+    val projectResourceReadiness: WarehouseProjectResourceReadinessQueueDto =
+        WarehouseProjectResourceReadinessQueueDto(false, emptyList(), false),
 )

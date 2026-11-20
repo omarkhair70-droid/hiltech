@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.warehouse.WarehouseCommandCenterDto
 import com.hiltech.shared.core.warehouse.WarehouseCommandCenterQueueDto
+import com.hiltech.shared.core.warehouse.WarehouseProjectResourceReadinessQueueDto
 
 @Composable
 fun WarehouseCommandCenterSection(snapshot: WarehouseCommandCenterDto) {
@@ -27,6 +28,7 @@ fun WarehouseCommandCenterSection(snapshot: WarehouseCommandCenterDto) {
         }
         Queue("مرتجعات متوقعة / متأخرة", snapshot.dueReturns)
         Queue("حجوزات فعالة", snapshot.activeReservations)
+        ProjectResourceReadiness(snapshot.projectResourceReadiness)
         Queue("أصول محجوبة / صيانة / معايرة", snapshot.assetExceptions)
         Queue("الاستلام", snapshot.receivingQueue)
         Queue("الجرد / التسويات", snapshot.stocktakeQueue)
@@ -56,4 +58,35 @@ private fun Queue(title: String, queue: WarehouseCommandCenterQueueDto) {
         }
         if (queue.limited) Text("عرض أول 50 عنصرًا — افتح المصدر للتفاصيل الكاملة.")
     }
+}
+
+
+@Composable
+private fun ProjectResourceReadiness(queue: WarehouseProjectResourceReadinessQueueDto) {
+    Text("جاهزية موارد المشاريع / أوامر العمل", style = MaterialTheme.typography.titleMedium)
+    if (!queue.visible) {
+        Text("غير متاحة لهذه الهوية — صلاحية حجز موارد المخزن مطلوبة.")
+        return
+    }
+    if (queue.items.isEmpty()) {
+        Text("لا توجد متطلبات موارد غير مكتملة مرتبطة بهذا المخزن.")
+        return
+    }
+    queue.items.forEach { item ->
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(item.workOrderCode + " · " + item.title + " · " + item.state)
+            Text(
+                item.resourceKind + " · " + item.requirementKey + " · " + item.reasonCode +
+                    " · candidates " + item.candidateCount,
+            )
+            Text(
+                "requirement " + item.requirementId +
+                    (item.factSourceId?.let { " · fact source $it" } ?: "") +
+                    (item.factSourceVersion?.let { " v$it" } ?: "") +
+                    " · asOf " + item.sourceAsOf,
+            )
+            Text("Project/" + item.projectId + " · Site/" + item.siteId + " · Work/" + item.workOrderId)
+        }
+    }
+    if (queue.limited) Text("عرض أول 50 متطلب موارد — افتح أمر العمل للتفاصيل الكاملة.")
 }

@@ -63,7 +63,14 @@ class WarehouseApiClientTest {
                     "receivingQueue":{"items":[],"limited":false},
                     "stocktakeQueue":{"items":[],"limited":false},
                     "importExceptions":{"items":[],"limited":false},
-                    "recentMovements":{"items":[],"limited":false}}""",
+                    "recentMovements":{"items":[],"limited":false},
+                    "projectResourceReadiness":{"visible":true,"items":[{
+                    "workOrderId":"$operation","workOrderCode":"WO-1","title":"Synthetic work",
+                    "projectId":"$org","siteId":"$batchId","requirementId":"$warehouseId",
+                    "requirementKey":"FIBER-MATERIAL","requirementFamily":"MATERIAL","resourceKind":"STOCK",
+                    "state":"BLOCKED","reasonCode":"STOCK_SHORTAGE","factSourceId":"$batchId",
+                    "factSourceVersion":4,"sourceAsOf":"2026-11-20T00:00:00Z","candidateCount":1}],
+                    "limited":false}}""",
                 HttpStatusCode.OK,
                 headersOf(HttpHeaders.ContentType, "application/json"),
             )
@@ -75,6 +82,11 @@ class WarehouseApiClientTest {
         assertEquals("STOCK_RESERVATION", reservation.sourceType)
         assertEquals(listOf("ACTIVE_RESERVATION"), reservation.reasonCodes)
         assertEquals(operation, reservation.workOrderId)
+        val readiness = result.projectResourceReadiness
+        assertTrue(readiness.visible)
+        assertEquals("STOCK_SHORTAGE", readiness.items.single().reasonCode)
+        assertEquals("BLOCKED", readiness.items.single().state)
+        assertFalse(readiness.items.any { it.reasonCode == "SOURCE_PENDING_PHASE5" })
     }
 
     @Test
