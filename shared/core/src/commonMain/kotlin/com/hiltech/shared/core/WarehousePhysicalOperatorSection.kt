@@ -320,17 +320,19 @@ private fun PhysicalOperatorWorkspace(
         Text("Load reserved handoffs")
     }
     queue?.let { data ->
-        if (data.canReserve) ReservedFulfillmentSection(warehouse, data, fulfillment, busy,
-            run = { action -> runTask { action() } },
-            onRecorded = { recorded ->
-                receipt = "HANDOFF · $recorded"
-                queue = null
-                // Previous detail snapshots may no longer describe current custody.
-                assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null, dueReturns = null)
-                stockState = stockState.copy(selected = null, issued = null, issuedWarehouseId = null, balances = emptyList())
-                afterConfirmedReceipt { queue = api.reservationQueue(warehouse, installationId) }
-            },
-        ) else Text("Physical handoff is not available for this identity.")
+        WarehousePhysicalHandoffAuthorityGate(data.canReserve) {
+            ReservedFulfillmentSection(warehouse, data, fulfillment, busy,
+                run = { action -> runTask { action() } },
+                onRecorded = { recorded ->
+                    receipt = "HANDOFF · $recorded"
+                    queue = null
+                    // Previous detail snapshots may no longer describe current custody.
+                    assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null, dueReturns = null)
+                    stockState = stockState.copy(selected = null, issued = null, issuedWarehouseId = null, balances = emptyList())
+                    afterConfirmedReceipt { queue = api.reservationQueue(warehouse, installationId) }
+                },
+            )
+        }
     }
 
     Text("Asset return / inspection / storage transfer", style = MaterialTheme.typography.titleMedium)
@@ -429,6 +431,19 @@ private fun PhysicalOperatorWorkspace(
         }
         IssuedStockOperations(item, warehouse, stockState.copy(loading = busy), ::stockAction)
         StockFulfillmentHistorySection(item, warehouse, stockState.copy(loading = busy), ::stockAction)
+    }
+}
+
+@Composable
+fun WarehousePhysicalHandoffAuthorityGate(
+    canOperate: Boolean,
+    authorizedContent: @Composable () -> Unit,
+) {
+    if (canOperate) {
+        authorizedContent()
+    } else {
+        Text("Physical handoff is not available for this identity.")
+        Text("Warehouse mutation authority · denied", color = MaterialTheme.colorScheme.error)
     }
 }
 

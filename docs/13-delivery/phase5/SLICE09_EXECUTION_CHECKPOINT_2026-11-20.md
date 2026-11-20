@@ -63,3 +63,16 @@ Exact-head CI pending. No mutation engine, camera-specific truth, barcode mappin
 Exact head `16b0caeef1d7f3ed85861e731fa65294a2076647`: Warehouse server/shared-client contracts, Windows render, Bootstrap, Native OIDC and all inherited product workflows PASS. Phase 5 Android failed only in the new Quick Scan smoke after AssetTag resolution and manual Asset search both returned the same canonical Asset id. The UI dump shows `Asset result · SYNTH-PASSPORT · 11111111-2222-4333-8444-555555555555`, but the synthetic proof text `Scan/search canonical match · PASS` is below the initial Android viewport. The smoke previously used a non-scrolling `wait_for_text` for that assertion.
 
 The repair uses the existing scroll-aware `focus_text` helper to locate the canonical-match evidence before capture. It changes no Quick Scan lookup, API, authorization, redaction, canonical id, Stock search or barcode behavior. Corrected exact-head CI pending; do not merge.
+
+
+## Checkpoint 04 — Authorization / restricted-value closure proof (WIP)
+
+Exact head `0354696341ecc3f469529a888108887a8d858ed5`: all twelve inherited workflows PASS, including corrected Android Quick Scan canonical-match evidence, Phase 5 Warehouse server/shared contract, Windows render, Bootstrap and Native OIDC.
+
+This checkpoint adds no new authority or mutation semantics. The production Warehouse physical handoff condition is factored into a shared `WarehousePhysicalHandoffAuthorityGate`; the real operator surface still renders Slices 05/06 fulfillment only when the current reservation queue says the identity can reserve/fulfill, otherwise it exposes a clear denied state.
+
+The authoritative mutation proof already exists in `RoleTeamAuthorizationPostgresOpenFgaContractTest`: after current PostgreSQL Warehouse authority is ended, the test deliberately confirms stale OpenFGA tuples can still exist, then current-source authorization denies the actor and `StockLedgerOperatorScenario.assertTransferDenied` proves an actual Stock transfer command returns `STOCK_UNAVAILABLE`. Asset/service commands are denied in the same revoked-source scenario. Slice 09 therefore reuses the established mutation engine and its fail-closed source guard rather than creating a dashboard permission.
+
+Android closure evidence now renders the same production safe Quick Scan result plus the same production physical-handoff authority gate in revoked state. The smoke scrolls the whole shared surface, requires `Warehouse mutation authority · denied`, and rejects acquisition/candidate/purchase/unit-cost/currency/payroll/invoice-value labels. A server MockMvc wire test independently asserts Command Center alerts retain sourceType/sourceId/reasonCodes while restricted Finance/value keys are absent.
+
+Still open before Final Gap Review: direct Inventory drill controls from Command Center into the existing detailed Asset/Stock/Receiving/Stocktake/Work surfaces, then exact-head re-verification and Phase 5 Final Gap Review. Do not merge or start Phase 6.

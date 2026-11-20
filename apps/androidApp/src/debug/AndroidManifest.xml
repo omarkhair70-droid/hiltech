@@ -10,6 +10,9 @@
             android:name=".WarehouseQuickScanEvidenceActivity"
             android:exported="true" />
         <activity
+            android:name=".WarehouseClosureEvidenceActivity"
+            android:exported="true" />
+        <activity
             android:name=".AssignedWorkEvidenceActivity"
             android:exported="true" />
         <activity
