@@ -607,7 +607,18 @@ class MainActivity : ComponentActivity() {
             ?: return null
         if (!requirement.offlineCaptureAllowedByPolicy ||
             requirement.allowedContentTypes.isEmpty()) return null
-        return PendingEvidenceCapture(signed.identity.identityId, bundle.workOrderId, key)
+        val binding = bundle.binding ?: return null
+        return PendingEvidenceCapture(
+            actorId = signed.identity.identityId,
+            workOrderId = bundle.workOrderId,
+            requirementKey = key,
+            assignmentId = bundle.assignment.assignmentId,
+            assignmentVersion = bundle.assignment.version,
+            workOrderVersion = bundle.workOrderVersion,
+            bindingRevision = binding.bindingRevision,
+            evidencePolicyId = binding.evidencePolicy.id,
+            evidencePolicyRevision = binding.evidencePolicy.revision,
+        )
     }
 
     private fun selectEvidenceFile(key: String) {
@@ -659,16 +670,41 @@ class MainActivity : ComponentActivity() {
             runCatching {
                 val file = read(evidenceId)
                 val signed = shellState as? HiltechShellState.SignedIn
-                    ?: throw IllegalStateException("Current session is no longer verified.")
-                val current = signed.field
-                    ?: throw IllegalStateException("Assigned Work is no longer selected.")
-                val bundle = current.selectedBundle
-                    ?: throw IllegalStateException("A current JobBundle is required.")
-                if (signed.identity.identityId != request.actorId ||
-                    current.cachedBundleAt != null ||
-                    current.selectedWorkOrderId != request.workOrderId ||
-                    bundle.workOrderId != request.workOrderId) {
-                    throw IllegalStateException("Assigned Work changed during evidence capture.")
+                if (signed != null && signed.identity.identityId != request.actorId) {
+                    throw IllegalStateException("Evidence belongs to a different technician.")
+                }
+                val selected = signed?.field
+                // Normal path: the originally verified, non-cached JobBundle
+                // still exists even when the network drops during camera capture.
+                val inSessionBundle = selected?.takeIf {
+                    it.selectedWorkOrderId == request.workOrderId &&
+                        it.cachedBundleAt == null
+                }?.selectedBundle
+                val bundle = inSessionBundle ?: run {
+                    if (selected?.selectedWorkOrderId != null &&
+                        selected.selectedWorkOrderId != request.workOrderId) {
+                        throw IllegalStateException("Selected WorkOrder changed during capture.")
+                    }
+                    // Activity recreation can deliver camera/picker results before
+                    // MainActivity's asynchronous login and Today refresh completes.
+                    // Restore current online identity and request a fresh server
+                    // JobBundle; a stale offline cache is never capture authority.
+                    val verified = identityRuntime.restoreIdentity()
+                        ?: throw IllegalStateException("Technician must sign in again before Evidence capture.")
+                    if (verified.identityId != request.actorId) {
+                        throw IllegalStateException("Technician identity changed during Evidence capture.")
+                    }
+                    val source = hiltechApplication.fieldAssignedWorkOfflineRepository.jobBundle(
+                        request.actorId, request.workOrderId,
+                        hiltechApplication.installationId,
+                    )
+                    if (source.cached || source.fetchedAtEpochMs != null) {
+                        throw IllegalStateException("Current online JobBundle is required to recover camera capture.")
+                    }
+                    source.value
+                }
+                if (!request.matches(bundle)) {
+                    throw IllegalStateException("WorkOrder, assignment or EvidencePolicy changed during capture.")
                 }
                 val row = hiltechApplication.fieldEvidenceQueue.capture(
                     actorId = request.actorId,
