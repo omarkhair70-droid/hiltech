@@ -290,13 +290,24 @@ class MainActivity : ComponentActivity() {
                     ),
                 )
             }.onFailure { failure ->
+                if (failure is kotlinx.coroutines.CancellationException) return@onFailure
                 val current = shellState as? HiltechShellState.SignedIn ?: return@onFailure
                 if (current.identity.identityId != identityId) return@onFailure
+                val denied = failure is HiltechApiException &&
+                    (failure.httpStatus == 401 || failure.httpStatus == 403 ||
+                        failure.httpStatus == 404 || failure.code == "REAUTH_REQUIRED")
                 shellState = current.copy(
-                    field = (current.field ?: previous).copy(
-                        loading = false,
-                        errorMessage = failure.message ?: "Assigned Work could not be loaded.",
-                    ),
+                    field = if (denied) {
+                        HiltechFieldState(
+                            loading = false,
+                            errorMessage = "تعذر تأكيد صلاحيتك الحالية. لا يمكن عرض تكليف محفوظ.",
+                        )
+                    } else {
+                        (current.field ?: previous).copy(
+                            loading = false,
+                            errorMessage = failure.message ?: "Assigned Work could not be loaded.",
+                        )
+                    },
                 )
             }
         }
@@ -334,10 +345,21 @@ class MainActivity : ComponentActivity() {
                     ),
                 )
             }.onFailure { failure ->
+                if (failure is kotlinx.coroutines.CancellationException) return@onFailure
                 val current = shellState as? HiltechShellState.SignedIn ?: return@onFailure
                 if (current.identity.identityId != identityId ||
                     current.field?.selectedWorkOrderId != workOrderId) return@onFailure
-                if (failure is HiltechApiException && failure.code == "OBJECT_NOT_VISIBLE") {
+                val denied = failure is HiltechApiException &&
+                    (failure.httpStatus == 401 || failure.httpStatus == 403 ||
+                        failure.code == "REAUTH_REQUIRED")
+                if (denied) {
+                    shellState = current.copy(
+                        field = HiltechFieldState(
+                            loading = false,
+                            errorMessage = "تعذر تأكيد صلاحيتك الحالية. لا يمكن عرض تكليف محفوظ.",
+                        ),
+                    )
+                } else if (failure is HiltechApiException && failure.code == "OBJECT_NOT_VISIBLE") {
                     shellState = current.copy(
                         field = (current.field ?: HiltechFieldState()).copy(
                             loading = false,
