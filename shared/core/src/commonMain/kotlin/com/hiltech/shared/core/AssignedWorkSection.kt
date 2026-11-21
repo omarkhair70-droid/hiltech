@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.field.FieldExecutionIntent
+import com.hiltech.shared.core.field.FieldQueuedIntent
 import com.hiltech.shared.core.work.FieldTodayItemDto
 import com.hiltech.shared.core.work.TechnicianJobBundleDto
 
@@ -27,6 +29,8 @@ data class HiltechFieldState(
     val errorMessage: String? = null,
     val cachedTodayAt: Long? = null,
     val cachedBundleAt: Long? = null,
+    val pendingFieldIntent: FieldQueuedIntent? = null,
+    val fieldIntentMessage: String? = null,
 )
 
 @Composable
@@ -34,6 +38,8 @@ fun AssignedWorkSection(
     state: HiltechFieldState,
     onRefresh: () -> Unit,
     onSelectWork: (String) -> Unit,
+    captureFieldIntent: Boolean = false,
+    onQueueFieldIntent: (FieldExecutionIntent, String?) -> Unit = { _, _ -> },
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -66,6 +72,10 @@ fun AssignedWorkSection(
                             JobBundleDetail(
                                 bundle = it,
                                 cached = state.cachedBundleAt != null,
+                                captureFieldIntent = captureFieldIntent,
+                                pending = state.pendingFieldIntent,
+                                feedback = state.fieldIntentMessage,
+                                onQueue = onQueueFieldIntent,
                                 modifier =
                                     Modifier.weight(1f),
                             )
@@ -90,6 +100,10 @@ fun AssignedWorkSection(
                             JobBundleDetail(
                                 bundle = it,
                                 cached = state.cachedBundleAt != null,
+                                captureFieldIntent = captureFieldIntent,
+                                pending = state.pendingFieldIntent,
+                                feedback = state.fieldIntentMessage,
+                                onQueue = onQueueFieldIntent,
                                 modifier =
                                     Modifier.fillMaxWidth(),
                             )
@@ -249,6 +263,10 @@ private fun TodayCard(
 private fun JobBundleDetail(
     bundle: TechnicianJobBundleDto,
     cached: Boolean,
+    captureFieldIntent: Boolean,
+    pending: FieldQueuedIntent?,
+    feedback: String?,
+    onQueue: (FieldExecutionIntent, String?) -> Unit,
     modifier: Modifier,
 ) {
     Column(
@@ -313,6 +331,14 @@ private fun JobBundleDetail(
                 bundle.workOrderVersion +
                 " · asOf " +
                 bundle.asOf,
+        )
+
+        FieldExecutionControls(
+            bundle = bundle,
+            enabled = captureFieldIntent && !cached,
+            pending = pending,
+            feedback = feedback,
+            onQueue = onQueue,
         )
 
         bundle.binding?.let {
@@ -522,7 +548,11 @@ private fun JobBundleDetail(
                     .titleMedium,
         )
         Text(
-            "القراءة فقط. أوامر التنفيذ والتقاط الأدلة والمزامنة الفعلية غير مفعّلة في Slice 01.",
+            if (captureFieldIntent && !cached) {
+                "الأوامر تحفظ محليًا ولا تصبح حالة مؤكدة إلا بعد قبول السيرفر."
+            } else {
+                "القراءة فقط. أوامر التنفيذ والتقاط الأدلة والمزامنة الفعلية غير مفعّلة في Slice 01."
+            },
         )
     }
 }
