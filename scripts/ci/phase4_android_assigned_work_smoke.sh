@@ -89,7 +89,13 @@ scroll_until_text "التقاط/رفع Evidence من الموبايل مش مت�
 scroll_until_text "SOURCE_PENDING_PHASE5" 30
 adb exec-out screencap -p > "$REPORT_DIR/android-job-bundle-blocked.png"
 test -s "$REPORT_DIR/android-job-bundle-blocked.png"
-scroll_until_text "القراءة والسياق متاحين دلوقتي" 30
+scroll_until_text "القراءة فقط. أوامر التنفيذ" 30
+
+render_mode "cached" "نسخة محفوظة بدون اتصال" "android-offline-today-cached.png"
+scroll_until_text "نسخة محفوظة للقراءة فقط" 30
+adb exec-out screencap -p > "$REPORT_DIR/android-offline-bundle-cached.png"
+test -s "$REPORT_DIR/android-offline-bundle-cached.png"
+scroll_until_text "القراءة فقط. أوامر التنفيذ" 30
 
 render_mode "revoked" "مفيش WorkOrder حالي متعيّن ليك" "android-assignment-revoked.png"
 

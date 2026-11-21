@@ -90,6 +90,16 @@ private fun fixtureState(
                 selectedBundle = null,
             )
 
+        "cached" ->
+            HiltechFieldState(
+                loading = false,
+                today = listOf(todayItem(actionable = false)),
+                selectedWorkOrderId = WORK_ORDER_ID,
+                selectedBundle = jobBundle(),
+                cachedTodayAt = 1_700_000_000_000L,
+                cachedBundleAt = 1_700_000_000_100L,
+            )
+
         "detail" ->
             HiltechFieldState(
                 loading = false,
