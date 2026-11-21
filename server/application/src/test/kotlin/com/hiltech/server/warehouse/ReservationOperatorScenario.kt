@@ -412,10 +412,14 @@ internal class ReservationOperatorScenario(
                 .none { it.operationId == proposedOperation },
                 "A reconciled report must leave the pending review queue.")
             assertThrows<DataIntegrityViolationException> {
-                jdbc.update(
-                    "UPDATE field_material_usage_reconciliation SET reason = 'mutated' WHERE report_operation_id = ?",
-                    proposedOperation,
-                )
+                TransactionTemplate(manager).apply {
+                    propagationBehavior = TransactionDefinition.PROPAGATION_NESTED
+                }.executeWithoutResult {
+                    jdbc.update(
+                        "UPDATE field_material_usage_reconciliation SET reason = 'mutated' WHERE report_operation_id = ?",
+                        proposedOperation,
+                    )
+                }
             }
             assertThrows<DataIntegrityViolationException> {
                 jdbc.update("UPDATE field_material_usage_report SET state = 'RECONCILED' WHERE operation_id = ?",
