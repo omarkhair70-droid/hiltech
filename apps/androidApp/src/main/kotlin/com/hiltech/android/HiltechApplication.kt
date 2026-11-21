@@ -7,6 +7,11 @@ import com.hiltech.android.sync.AndroidSessionTokenProvider
 import com.hiltech.android.sync.AndroidSyncRuntime
 import com.hiltech.android.sync.AndroidVerifiedActorProvider
 import com.hiltech.shared.core.field.FieldExecutionQueue
+import com.hiltech.shared.core.field.FieldEvidenceQueue
+import com.hiltech.shared.core.evidence.EvidenceApiClient
+import com.hiltech.android.field.AndroidFieldEvidenceFiles
+import com.hiltech.android.field.AndroidFieldEvidenceSyncRuntime
+import com.hiltech.android.field.FieldEvidenceOnlineIdentity
 import com.hiltech.shared.core.local.buildHiltechLocalDatabase
 import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
 import com.hiltech.shared.core.network.HiltechApiClient
@@ -92,6 +97,31 @@ class HiltechApplication : Application() {
 
     val fieldExecutionQueue by lazy {
         FieldExecutionQueue(localDatabase)
+    }
+
+    val fieldEvidenceQueue by lazy {
+        FieldEvidenceQueue(localDatabase)
+    }
+
+    val fieldEvidenceFiles by lazy {
+        AndroidFieldEvidenceFiles(this)
+    }
+
+    private val evidenceApi by lazy {
+        EvidenceApiClient(productApi, httpClient)
+    }
+
+    val fieldEvidenceSyncRuntime by lazy {
+        AndroidFieldEvidenceSyncRuntime(
+            db = localDatabase,
+            files = fieldEvidenceFiles,
+            assignedWork = fieldAssignedWorkApi,
+            evidence = evidenceApi,
+            onlineIdentity = FieldEvidenceOnlineIdentity {
+                identityRuntime.restoreIdentity()?.identityId
+            },
+            installationId = installationId,
+        )
     }
 
     val fieldOfflineReadCache by lazy {
