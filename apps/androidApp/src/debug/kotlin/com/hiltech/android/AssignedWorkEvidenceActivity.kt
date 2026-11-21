@@ -3,6 +3,7 @@ package com.hiltech.android
 import android.os.Bundle
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.view.Gravity
 import java.io.File
 import java.io.FileOutputStream
 import com.hiltech.shared.core.local.LocalEvidenceStates
@@ -40,6 +41,18 @@ import com.hiltech.shared.core.work.TechnicianJobBundleDto
 
 class AssignedWorkEvidenceActivity :
     ComponentActivity() {
+    // Debug-only, high-contrast visual markers make emulator screenshots
+    // independently reviewable instead of showing an empty startup surface.
+    private fun proofMarkerView(marker: String, explanation: String) =
+        TextView(this).apply {
+            text = "$marker\n\n$explanation"
+            textSize = 22f
+            gravity = Gravity.CENTER
+            setPadding(40, 40, 40, 40)
+            setTextColor(Color.BLACK)
+            setBackgroundColor(Color.WHITE)
+        }
+
     override fun onCreate(
         savedInstanceState: Bundle?,
     ) {
@@ -87,7 +100,10 @@ class AssignedWorkEvidenceActivity :
                     )
                 }
                 photo.delete()
-                setContentView(TextView(this).apply { text = "PHASE6_S03_EVIDENCE_SAVED_LOCAL_READY" })
+                setContentView(proofMarkerView(
+                    "PHASE6_S03_EVIDENCE_SAVED_LOCAL_READY",
+                    "Local private Evidence bytes and Room metadata saved.",
+                ))
                 return
             }
 
@@ -111,11 +127,14 @@ class AssignedWorkEvidenceActivity :
                 val rejected = runBlocking {
                     runCatching { app.fieldEvidenceFiles.readAndVerify(row) }.isFailure
                 }
-                setContentView(TextView(this).apply {
-                    text = if (rejected && row.localState == LocalEvidenceStates.LOCAL_READY) {
+                setContentView(proofMarkerView(
+                    if (rejected && row.localState == LocalEvidenceStates.LOCAL_READY) {
                         "PHASE6_S03_CORRUPTION_REJECTED_BYTES_PRESERVED"
-                    } else "PHASE6_S03_CORRUPTION_PROOF_FAILED"
-                })
+                    } else {
+                        "PHASE6_S03_CORRUPTION_PROOF_FAILED"
+                    },
+                    "Same-size file tampering rejected; Evidence is not READY.",
+                ))
                 return
             }
             setContent {
