@@ -1,5 +1,4 @@
-[Reading 174 lines from line 1 (total: 175 lines, 0 remaining)]
-
+-- Phase 6 Slice 04C — authoritative controlled document revisions for Work requirements.
 -- The field app reads only safe metadata. Publication/binding authority remains an
 -- external/control-plane concern; this migration does not invent a role or approval endpoint.
 
@@ -243,5 +242,3 @@ $$;
 CREATE TRIGGER work_document_binding_history_guard
 BEFORE UPDATE OR DELETE ON work_document_revision_binding
 FOR EACH ROW EXECUTE FUNCTION guard_work_document_binding_history();
-
-[executed on device: DESKTOP-L9O2KSP (022bb228-ba9d-462a-adf0-934892797c7b)]
