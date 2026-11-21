@@ -157,6 +157,110 @@ class JdbcEvidencePersistence(
     override fun insertReservation(
         value: EvidenceReservationInsert,
     ) {
+        // Serialize competing reservations for the same WorkOrder inside the
+        // idempotent command transaction. A client-side maxCount check is not
+        // authoritative when two technicians reserve concurrently.
+        val lockedWorkOrder =
+            jdbc.query(
+                "SELECT id FROM work_order WHERE id = ? FOR UPDATE",
+                { rs, _ -> rs.getObject("id", UUID::class.java) },
+                value.policy.workOrderId,
+            ).singleOrNull()
+        if (lockedWorkOrder == null) {
+            throw org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.CONFLICT,
+                "WorkOrder is no longer available for Evidence reservation.",
+            )
+        }
+
+        val maxCount =
+            jdbc.query(
+                """
+                SELECT epr.max_count
+                FROM work_order wo
+                JOIN work_policy_binding wpb
+                  ON wpb.id = wo.current_policy_binding_id
+                 AND wpb.work_order_id = wo.id
+                JOIN evidence_policy_requirement epr
+                  ON epr.config_revision_id = wpb.evidence_policy_id
+                 AND epr.requirement_key = ?
+                WHERE wo.id = ?
+                  AND wpb.evidence_policy_id = ?
+                  AND wpb.evidence_policy_revision = ?
+                """.trimIndent(),
+                { rs, _ -> (rs.getObject("max_count") as? Number)?.toInt() },
+                value.policy.requirementKey,
+                value.policy.workOrderId,
+                value.policy.evidencePolicyId,
+                value.policy.evidencePolicyRevision,
+            ).singleOrNull()
+
+        // A missing or changed binding must not become an unlimited quota.
+        val stillBound =
+            jdbc.queryForObject(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM work_order wo
+                    JOIN work_policy_binding wpb
+                      ON wpb.id = wo.current_policy_binding_id
+                     AND wpb.work_order_id = wo.id
+                    JOIN evidence_policy_requirement epr
+                      ON epr.config_revision_id = wpb.evidence_policy_id
+                     AND epr.requirement_key = ?
+                    WHERE wo.id = ?
+                      AND wpb.evidence_policy_id = ?
+                      AND wpb.evidence_policy_revision = ?
+                )
+                """.trimIndent(),
+                Boolean::class.java,
+                value.policy.requirementKey,
+                value.policy.workOrderId,
+                value.policy.evidencePolicyId,
+                value.policy.evidencePolicyRevision,
+            ) == true
+        if (!stillBound) {
+            throw org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.CONFLICT,
+                "The bound Evidence policy has changed. Refresh the JobBundle.",
+            )
+        }
+        if (maxCount != null) {
+            val used =
+                jdbc.queryForObject(
+                    """
+                    SELECT COUNT(*)
+                    FROM evidence e
+                    WHERE e.work_order_id = ?
+                      AND e.evidence_requirement_key = ?
+                      AND e.target_type = 'WORK_ORDER'
+                      AND (
+                          e.storage_state IN (
+                              'READY', 'QUARANTINED', 'UPLOADED_UNVERIFIED'
+                          )
+                          OR (
+                              e.storage_state = 'RESERVED'
+                              AND EXISTS (
+                                  SELECT 1 FROM evidence_upload_session us
+                                  WHERE us.evidence_id = e.id
+                                    AND us.expires_at > ?
+                              )
+                          )
+                      )
+                    """.trimIndent(),
+                    Long::class.java,
+                    value.policy.workOrderId,
+                    value.policy.requirementKey,
+                    value.createdAt.atOffset(ZoneOffset.UTC),
+                ) ?: 0L
+            if (used >= maxCount) {
+                throw com.hiltech.server.platform.ProductApiException(
+                    code = "EVIDENCE_MAX_COUNT_EXCEEDED",
+                    message = "The bound Evidence requirement has reached its maximum count.",
+                    status = org.springframework.http.HttpStatus.CONFLICT,
+                )
+            }
+        }
+
         jdbc.update(
             """
             INSERT INTO evidence (

@@ -1,6 +1,10 @@
 package com.hiltech.android
 
 import android.content.Intent
+import android.net.Uri
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -10,6 +14,8 @@ import com.hiltech.android.sync.HiltechSyncWorker
 import com.hiltech.shared.core.field.FieldExecutionIntent
 import java.util.UUID
 import android.os.Bundle
+import com.hiltech.android.field.PendingEvidenceCapture
+import com.hiltech.android.field.PendingEvidenceCaptureState
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
@@ -51,6 +57,27 @@ class MainActivity : ComponentActivity() {
         get() =
             hiltechApplication.identityRuntime
 
+    private var pendingEvidenceCapture: PendingEvidenceCapture? = null
+
+    private val chooseEvidenceDocument =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            val request = pendingEvidenceCapture
+            pendingEvidenceCapture = null
+            if (uri != null && request != null) captureEvidenceUri(request, uri)
+        }
+
+    private val takeEvidencePhoto =
+        registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+            val request = pendingEvidenceCapture
+            pendingEvidenceCapture = null
+            val photo = request?.cameraFile
+            if (success && request != null && photo != null) {
+                captureEvidenceCamera(request, photo)
+            } else {
+                photo?.delete()
+            }
+        }
+
     private var assetLookupSequence = 0
 
     private var shellState:
@@ -64,6 +91,12 @@ class MainActivity : ComponentActivity() {
         savedInstanceState: Bundle?,
     ) {
         super.onCreate(savedInstanceState)
+        // Android may destroy this Activity while the system picker or camera
+        // is open. Recover its scoped request before ActivityResult delivery.
+        pendingEvidenceCapture = PendingEvidenceCaptureState.restore(
+            savedInstanceState,
+            File(filesDir, "field-camera"),
+        )
 
         setContent {
             HiltechShell(
@@ -85,6 +118,9 @@ class MainActivity : ComponentActivity() {
                     ::selectFieldWork,
                 captureFieldIntent = true,
                 onQueueFieldIntent = ::queueFieldExecution,
+                captureEvidence = true,
+                onSelectEvidenceFile = ::selectEvidenceFile,
+                onTakeEvidencePhoto = ::startEvidencePhoto,
                 warehouseOperator = {
                     val signed = shellState as? HiltechShellState.SignedIn
                     val identity = signed?.identity
@@ -120,6 +156,11 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleCallbackIntent(intent)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        PendingEvidenceCaptureState.save(outState, pendingEvidenceCapture)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onDestroy() {
@@ -327,6 +368,13 @@ class MainActivity : ComponentActivity() {
                 val pending = selectedId?.let { id ->
                     runCatching { hiltechApplication.fieldExecutionQueue.outstanding(identityId, id) }.getOrNull()
                 }
+                val localEvidence = selectedId?.let { id ->
+                    runCatching {
+                        hiltechApplication.fieldEvidenceQueue.list(
+                            identityId, hiltechApplication.installationId, id,
+                        )
+                    }.getOrDefault(emptyList())
+                } ?: emptyList()
                 shellState = current.copy(
                     field = HiltechFieldState(
                         loading = false,
@@ -336,6 +384,7 @@ class MainActivity : ComponentActivity() {
                         cachedTodayAt = snapshot.fetchedAtEpochMs,
                         cachedBundleAt = selectedResult?.getOrNull()?.fetchedAtEpochMs,
                         pendingFieldIntent = pending,
+                        localEvidence = localEvidence,
                         errorMessage = selectedResult?.exceptionOrNull()
                             ?.takeUnless { notVisible }?.message,
                     ),
@@ -428,6 +477,11 @@ class MainActivity : ComponentActivity() {
                 val pending = runCatching {
                     hiltechApplication.fieldExecutionQueue.outstanding(identityId, workOrderId)
                 }.getOrNull()
+                val localEvidence = runCatching {
+                    hiltechApplication.fieldEvidenceQueue.list(
+                        identityId, hiltechApplication.installationId, workOrderId,
+                    )
+                }.getOrDefault(emptyList())
                 val current = shellState as? HiltechShellState.SignedIn ?: return@onSuccess
                 if (current.identity.identityId != identityId ||
                     current.field?.selectedWorkOrderId != workOrderId) return@onSuccess
@@ -438,6 +492,7 @@ class MainActivity : ComponentActivity() {
                         cachedBundleAt = snapshot.fetchedAtEpochMs,
                         pendingFieldIntent = pending,
                         fieldIntentMessage = null,
+                        localEvidence = localEvidence,
                         errorMessage = null,
                     ),
                 )
@@ -539,6 +594,165 @@ class MainActivity : ComponentActivity() {
                     fieldIntentMessage = failure.message ?: "تعذر حفظ أمر العمل محليًا.",
                 ))
             }
+        }
+    }
+
+    private fun eligibleEvidenceRequirement(key: String): PendingEvidenceCapture? {
+        val signed = shellState as? HiltechShellState.SignedIn ?: return null
+        val field = signed.field ?: return null
+        val bundle = field.selectedBundle ?: return null
+        if (field.cachedBundleAt != null || field.selectedWorkOrderId != bundle.workOrderId ||
+            !bundle.executionCapabilities.evidenceCaptureOffline) return null
+        val requirement = bundle.evidenceRequirements.singleOrNull { it.requirementKey == key }
+            ?: return null
+        if (!requirement.offlineCaptureAllowedByPolicy ||
+            requirement.allowedContentTypes.isEmpty()) return null
+        val binding = bundle.binding ?: return null
+        return PendingEvidenceCapture(
+            actorId = signed.identity.identityId,
+            workOrderId = bundle.workOrderId,
+            requirementKey = key,
+            assignmentId = bundle.assignment.assignmentId,
+            assignmentVersion = bundle.assignment.version,
+            workOrderVersion = bundle.workOrderVersion,
+            bindingRevision = binding.bindingRevision,
+            evidencePolicyId = binding.evidencePolicy.id,
+            evidencePolicyRevision = binding.evidencePolicy.revision,
+        )
+    }
+
+    private fun selectEvidenceFile(key: String) {
+        val request = eligibleEvidenceRequirement(key) ?: return
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        val bundle = signed.field?.selectedBundle ?: return
+        val types = bundle.evidenceRequirements.singleOrNull { it.requirementKey == key }
+            ?.allowedContentTypes?.toTypedArray() ?: return
+        pendingEvidenceCapture = request
+        chooseEvidenceDocument.launch(types)
+    }
+
+    private fun startEvidencePhoto(key: String) {
+        val request = eligibleEvidenceRequirement(key) ?: return
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        val bundle = signed.field?.selectedBundle ?: return
+        if (bundle.evidenceRequirements.none {
+                it.requirementKey == key && "image/jpeg" in it.allowedContentTypes
+            }) return
+        val dir = File(filesDir, "field-camera")
+        if (!dir.exists() && !dir.mkdirs()) return
+        val photo = File(dir, UUID.randomUUID().toString() + ".jpg")
+        val uri = FileProvider.getUriForFile(
+            this, packageName + ".field-evidence", photo,
+        )
+        pendingEvidenceCapture = request.copy(cameraFile = photo)
+        takeEvidencePhoto.launch(uri)
+    }
+
+    private fun captureEvidenceUri(request: PendingEvidenceCapture, uri: Uri) {
+        saveFieldEvidence(request) { evidenceId ->
+            hiltechApplication.fieldEvidenceFiles.importFromUri(evidenceId, uri)
+        }
+    }
+
+    private fun captureEvidenceCamera(request: PendingEvidenceCapture, photo: File) {
+        saveFieldEvidence(request) { evidenceId ->
+            hiltechApplication.fieldEvidenceFiles.saveFromFile(evidenceId, "image/jpeg", photo)
+        }
+    }
+
+    private fun saveFieldEvidence(
+        request: PendingEvidenceCapture,
+        read: suspend (String) -> com.hiltech.android.field.PrivateFieldEvidenceFile,
+    ) {
+        val evidenceId = UUID.randomUUID().toString()
+        scope.launch {
+            var staged = false
+            runCatching {
+                val file = read(evidenceId)
+                val signed = shellState as? HiltechShellState.SignedIn
+                if (signed != null && signed.identity.identityId != request.actorId) {
+                    throw IllegalStateException("Evidence belongs to a different technician.")
+                }
+                val selected = signed?.field
+                // Normal path: the originally verified, non-cached JobBundle
+                // still exists even when the network drops during camera capture.
+                val inSessionBundle = selected?.takeIf {
+                    it.selectedWorkOrderId == request.workOrderId &&
+                        it.cachedBundleAt == null
+                }?.selectedBundle
+                val bundle = inSessionBundle ?: run {
+                    if (selected?.selectedWorkOrderId != null &&
+                        selected.selectedWorkOrderId != request.workOrderId) {
+                        throw IllegalStateException("Selected WorkOrder changed during capture.")
+                    }
+                    // Activity recreation can deliver camera/picker results before
+                    // MainActivity's asynchronous login and Today refresh completes.
+                    // Restore current online identity and request a fresh server
+                    // JobBundle; a stale offline cache is never capture authority.
+                    val verified = identityRuntime.restoreIdentity()
+                        ?: throw IllegalStateException("Technician must sign in again before Evidence capture.")
+                    if (verified.identityId != request.actorId) {
+                        throw IllegalStateException("Technician identity changed during Evidence capture.")
+                    }
+                    val source = hiltechApplication.fieldAssignedWorkOfflineRepository.jobBundle(
+                        request.actorId, request.workOrderId,
+                        hiltechApplication.installationId,
+                    )
+                    if (source.cached || source.fetchedAtEpochMs != null) {
+                        throw IllegalStateException("Current online JobBundle is required to recover camera capture.")
+                    }
+                    source.value
+                }
+                if (!request.matches(bundle)) {
+                    throw IllegalStateException("WorkOrder, assignment or EvidencePolicy changed during capture.")
+                }
+                val row = hiltechApplication.fieldEvidenceQueue.capture(
+                    actorId = request.actorId,
+                    installationId = hiltechApplication.installationId,
+                    bundle = bundle,
+                    requirementKey = request.requirementKey,
+                    contentType = file.contentType,
+                    sizeBytes = file.sizeBytes,
+                    sha256 = file.sha256,
+                    localFileRef = file.fileRef,
+                    evidenceId = evidenceId,
+                    capturedAtEpochMs = System.currentTimeMillis(),
+                    verifiedOnlineThisSession = true,
+                )
+                staged = true
+                val records = hiltechApplication.fieldEvidenceQueue.list(
+                    request.actorId, hiltechApplication.installationId, request.workOrderId,
+                )
+                val active = shellState as? HiltechShellState.SignedIn
+                val visibleField = active?.field
+                if (active?.identity?.identityId == request.actorId &&
+                    visibleField != null &&
+                    visibleField.selectedWorkOrderId == request.workOrderId) {
+                    shellState = active.copy(
+                        field = visibleField.copy(
+                            localEvidence = records,
+                            evidenceMessage = "الدليل محفوظ محليًا (LOCAL_READY)، ولم يُعتمد على السيرفر.",
+                        ),
+                    )
+                }
+                scheduleFieldCommandReplay(request.actorId)
+                row
+            }.onFailure { failure ->
+                if (failure is kotlinx.coroutines.CancellationException) return@onFailure
+                if (!staged) {
+                    hiltechApplication.fieldEvidenceFiles.removeAfterFailedCapture(evidenceId)
+                }
+                val active = shellState as? HiltechShellState.SignedIn
+                val visibleField = active?.field
+                if (active?.identity?.identityId == request.actorId &&
+                    visibleField != null &&
+                    visibleField.selectedWorkOrderId == request.workOrderId) {
+                    shellState = active.copy(field = visibleField.copy(
+                        evidenceMessage = failure.message ?: "تعذر حفظ الدليل، ولم يتم رفعه.",
+                    ))
+                }
+            }
+            if (staged) request.cameraFile?.delete()
         }
     }
 
