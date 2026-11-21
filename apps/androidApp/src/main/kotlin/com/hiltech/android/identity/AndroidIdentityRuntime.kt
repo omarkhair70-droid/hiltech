@@ -77,6 +77,10 @@ class AndroidIdentityRuntime(
         return store.loadVerifiedOfflineFieldIdentity(installationId)
     }
 
+    fun invalidateOfflineReadIdentity() {
+        store.invalidateVerifiedOfflineFieldIdentity()
+    }
+
     suspend fun beginSignIn(
         forceReauthentication: Boolean = false,
     ): String {

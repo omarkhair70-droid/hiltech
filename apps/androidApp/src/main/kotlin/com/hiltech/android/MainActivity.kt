@@ -137,7 +137,11 @@ class MainActivity : ComponentActivity() {
                 }
             }.onFailure { failure ->
                 if (failure is kotlinx.coroutines.CancellationException) return@onFailure
-                // Never turn an explicit 401/403/404 or a revoked identity into an offline session.
+                // An explicit denial makes all cached read leases unusable until next verified bootstrap.
+                if (AndroidIdentityRuntime.isAccessDenied(failure) ||
+                    (failure is HiltechApiException && failure.httpStatus in setOf(401, 403, 404))) {
+                    identityRuntime.invalidateOfflineReadIdentity()
+                }
                 if (failure is HiltechApiException && failure.code == "NETWORK_UNAVAILABLE") {
                     val local = runCatching {
                         identityRuntime.restoreOfflineReadIdentity()?.let { identityId ->
@@ -293,8 +297,15 @@ class MainActivity : ComponentActivity() {
                 }
                 val current = shellState as? HiltechShellState.SignedIn ?: return@onSuccess
                 if (current.identity.identityId != identityId) return@onSuccess
-                val notVisible = (selectedResult?.exceptionOrNull() as? HiltechApiException)
-                    ?.code == "OBJECT_NOT_VISIBLE"
+                val bundleError = selectedResult?.exceptionOrNull() as? HiltechApiException
+                if (bundleError?.httpStatus in setOf(401, 403, 404)) {
+                    identityRuntime.invalidateOfflineReadIdentity()
+                    shellState = current.copy(field = HiltechFieldState(
+                        errorMessage = "تعذر تأكيد صلاحيتك الحالية. لا يمكن عرض تكليف محفوظ.",
+                    ))
+                    return@onSuccess
+                }
+                val notVisible = bundleError?.code == "OBJECT_NOT_VISIBLE"
                 shellState = current.copy(
                     field = HiltechFieldState(
                         loading = false,
@@ -314,6 +325,7 @@ class MainActivity : ComponentActivity() {
                 val denied = failure is HiltechApiException &&
                     (failure.httpStatus == 401 || failure.httpStatus == 403 ||
                         failure.httpStatus == 404 || failure.code == "REAUTH_REQUIRED")
+                if (denied) identityRuntime.invalidateOfflineReadIdentity()
                 shellState = current.copy(
                     field = if (denied) {
                         HiltechFieldState(
@@ -406,7 +418,8 @@ class MainActivity : ComponentActivity() {
                     current.field?.selectedWorkOrderId != workOrderId) return@onFailure
                 val denied = failure is HiltechApiException &&
                     (failure.httpStatus == 401 || failure.httpStatus == 403 ||
-                        failure.code == "REAUTH_REQUIRED")
+                        failure.httpStatus == 404 || failure.code == "REAUTH_REQUIRED")
+                if (denied) identityRuntime.invalidateOfflineReadIdentity()
                 if (denied) {
                     shellState = current.copy(
                         field = HiltechFieldState(
