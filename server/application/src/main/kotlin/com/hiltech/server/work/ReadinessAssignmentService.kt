@@ -36,6 +36,7 @@ class ReadinessAssignmentService(
     private val events: ApplicationEventPublisher,
     private val clock: Clock,
     private val resourceSource: WorkResourceSource = WorkResourceSource { _, _, _ -> null },
+    private val documentSource: WorkDocumentSource = WorkDocumentSource { _, _, _ -> null },
 ) {
     fun readiness(
         actorUserId: UUID,
@@ -1078,7 +1079,17 @@ class ReadinessAssignmentService(
             "DRAWING_REVISION",
             "DOCUMENT",
             ->
-                RequirementEvaluation(
+                documentSource.evaluate(order, requirement, at)?.let { fact ->
+                    RequirementEvaluation(
+                        state = if (fact.satisfied) "SATISFIED" else "BLOCKED",
+                        reasonCode = fact.reason,
+                        satisfiedByRef =
+                            fact.sourceId?.let { id ->
+                                "document:" + id + ":" + (fact.sourceVersion ?: 0)
+                            },
+                        sourceAsOf = fact.asOf,
+                    )
+                } ?: RequirementEvaluation(
                     state = "BLOCKED",
                     reasonCode =
                         "AUTHORITATIVE_DOCUMENT_SOURCE_UNAVAILABLE",

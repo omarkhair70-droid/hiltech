@@ -199,6 +199,8 @@ data class FieldDocumentRefResponse(
     val code: String,
     val title: String,
     val revision: String?,
+    val currentRevision: String?,
+    val status: String,
     val sourceType: String,
 )
 
@@ -543,6 +545,9 @@ private fun TechnicianJobBundle.response() =
                     code = it.code,
                     title = it.title,
                     revision = it.revision,
+                    currentRevision =
+                        it.currentRevision,
+                    status = it.status,
                     sourceType =
                         it.sourceType,
                 )
