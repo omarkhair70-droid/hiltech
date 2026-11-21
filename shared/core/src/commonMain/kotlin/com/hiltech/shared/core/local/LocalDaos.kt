@@ -61,6 +61,18 @@ interface PendingCommandDao {
     @Query(
         """
         SELECT * FROM pending_command
+        WHERE actor_user_identity_id = :identityId AND target_type = 'WorkOrder'
+          AND target_id = :workOrderId
+          AND command_type IN ('StartWork', 'BlockWork', 'ResumeWork')
+          AND state NOT IN ('APPLIED', 'CANCELLED_LOCAL', 'FAILED_TERMINAL')
+        ORDER BY local_sequence DESC
+        """,
+    )
+    suspend fun outstandingFieldCommand(identityId: String, workOrderId: String): List<PendingCommandEntity>
+
+    @Query(
+        """
+        SELECT * FROM pending_command
         WHERE state IN ('PENDING', 'RETRYABLE')
           AND (next_retry_at_epoch_ms IS NULL OR next_retry_at_epoch_ms <= :nowEpochMs)
         ORDER BY local_sequence ASC
