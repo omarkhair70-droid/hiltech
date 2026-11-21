@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.mockito.ArgumentCaptor
 import org.mockito.Mockito
 import java.math.BigDecimal
 import java.time.Clock
@@ -117,16 +116,20 @@ class FieldMaterialUsageReportServiceTest {
         assertFalse(result.stockMoved)
         assertFalse(result.replayed)
         assertEquals(1, calls)
-        val captured = ArgumentCaptor.forClass(FieldMaterialUsageReportRecord::class.java)
-        Mockito.verify(reports).insertPending(captured.capture())
-        assertEquals(employeeId, captured.value.employeeId)
-        assertEquals(workId, captured.value.workOrderId)
-        assertEquals(itemId, captured.value.stockItemId)
-        assertEquals(requirementId, captured.value.requirementId)
-        assertEquals(0, captured.value.quantity.compareTo(BigDecimal("2.5")))
-        val auditRecord = ArgumentCaptor.forClass(AuditEventRecord::class.java)
-        Mockito.verify(audit).append(auditRecord.capture())
-        assertEquals("FIELD_MATERIAL_USAGE_REPORTED", auditRecord.value.action)
+        // Java Mockito captors return null, which is not valid for these Kotlin
+        // non-null parameters. Inspect actual recorded invocations instead.
+        val pendingCall = Mockito.mockingDetails(reports).invocations
+            .single { it.method.name == "insertPending" }
+        val inserted = pendingCall.arguments.single() as FieldMaterialUsageReportRecord
+        assertEquals(employeeId, inserted.employeeId)
+        assertEquals(workId, inserted.workOrderId)
+        assertEquals(itemId, inserted.stockItemId)
+        assertEquals(requirementId, inserted.requirementId)
+        assertEquals(0, inserted.quantity.compareTo(BigDecimal("2.5")))
+        val auditCall = Mockito.mockingDetails(audit).invocations
+            .single { it.method.name == "append" }
+        val recorded = auditCall.arguments.single() as AuditEventRecord
+        assertEquals("FIELD_MATERIAL_USAGE_REPORTED", recorded.action)
     }
 
     @Test
