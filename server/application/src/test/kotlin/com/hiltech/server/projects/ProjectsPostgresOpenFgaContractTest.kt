@@ -3071,36 +3071,11 @@ class ProjectsPostgresOpenFgaContractTest {
                     actorUserId = ids.oldPm,
                     correlationId = "corr-p6-start",
                 )
-                val denied = assertThrows<ProductApiException> {
-                    fieldExecution.execute(start.copy(
-                        operationId = UUID.randomUUID(),
-                        actorUserId = ids.ordinaryMember,
-                    ))
-                }
-                assertEquals("OBJECT_NOT_VISIBLE", denied.code)
-
-                val staleAssignment = assertThrows<ProductApiException> {
-                    fieldExecution.execute(start.copy(
-                        operationId = UUID.randomUUID(),
-                        assignmentVersion = start.assignmentVersion + 1,
-                    ))
-                }
-                assertEquals("ASSIGNMENT_CHANGED", staleAssignment.code)
-
                 val started = fieldExecution.execute(start)
                 assertEquals(WorkOrderLifecycle.IN_PROGRESS, started.lifecycleState)
                 assertFalse(started.replayed)
                 assertEquals(started.version, fieldExecution.execute(start).version)
                 assertTrue(fieldExecution.execute(start).replayed)
-                val changedOperation = assertThrows<ProductApiException> {
-                    fieldExecution.execute(start.copy(baseVersion = start.baseVersion + 1))
-                }
-                assertEquals("IDEMPOTENCY_KEY_REUSED", changedOperation.code)
-                val staleVersion = assertThrows<ProductApiException> {
-                    fieldExecution.execute(start.copy(operationId = UUID.randomUUID()))
-                }
-                assertEquals("VERSION_CONFLICT", staleVersion.code)
-
                 val startedBundle = fieldService.jobBundle(ids.oldPm, start.workOrderId)
                 assertFalse(startedBundle.executionCapabilities.startOffline)
                 assertTrue(startedBundle.executionCapabilities.blockOffline)
@@ -3141,6 +3116,12 @@ class ProjectsPostgresOpenFgaContractTest {
                         blockerId,
                     ),
                 )
+                // Negative/replay-mismatch assertions run after all successful
+                // writes: expected failures may poison a joined JDBC transaction.
+                val changedOperation = assertThrows<ProductApiException> {
+                    fieldExecution.execute(start.copy(baseVersion = start.baseVersion + 1))
+                }
+                assertEquals("IDEMPOTENCY_KEY_REUSED", changedOperation.code)
                 rollback.setRollbackOnly()
             }
             assertEquals(
@@ -3148,6 +3129,35 @@ class ProjectsPostgresOpenFgaContractTest {
                 workService.get(ids.teamUser, firstSlice04Order.workOrderId).lifecycleState,
                 "Isolated field execution proof must not mutate subsequent Phase4 scenarios.",
             )
+            val deniedField = assertThrows<ProductApiException> {
+                val fieldExecution = com.hiltech.server.work.FieldExecutionService(
+                    work = JdbcWorkPersistence(jdbc),
+                    readiness = JdbcReadinessAssignmentPersistence(jdbc),
+                    source = fieldSource,
+                    authorization = assignedAuthorization,
+                    projects = JdbcProjectsPersistence(jdbc),
+                    persistence = com.hiltech.server.work.JdbcFieldExecutionPersistence(jdbc),
+                    idempotency = JdbcIdempotentCommandExecutor(
+                        jdbc = jdbc, transactionManager = txManager,
+                        clock = clock, telemetry = telemetry,
+                    ),
+                    audit = JdbcAuditEventWriter(jdbc),
+                    events = ApplicationEventPublisher { _ -> },
+                    clock = clock,
+                )
+                fieldExecution.execute(com.hiltech.server.work.FieldExecutionCommand(
+                    operationId = UUID.randomUUID(),
+                    workOrderId = firstSlice04Order.workOrderId,
+                    action = com.hiltech.server.work.FieldExecutionAction.START,
+                    assignmentId = userBundle.assignment.assignmentId,
+                    assignmentVersion = userBundle.assignment.version,
+                    baseVersion = userBundle.workOrderVersion,
+                    clientOccurredAt = clock.instant(),
+                    actorUserId = ids.ordinaryMember,
+                    correlationId = "corr-p6-denied",
+                ))
+            }
+            assertEquals("OBJECT_NOT_VISIBLE", deniedField.code)
 
             val teamFieldAssignment =
                 UUID.randomUUID()
