@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.field.FieldExecutionIntent
 import com.hiltech.shared.core.field.FieldQueuedIntent
 import com.hiltech.shared.core.local.LocalEvidenceEntity
+import com.hiltech.shared.core.work.FieldPersonalIssuedStockSnapshotDto
 import com.hiltech.shared.core.work.FieldTodayItemDto
 import com.hiltech.shared.core.work.TechnicianJobBundleDto
 
@@ -34,6 +35,9 @@ data class HiltechFieldState(
     val fieldIntentMessage: String? = null,
     val localEvidence: List<LocalEvidenceEntity> = emptyList(),
     val evidenceMessage: String? = null,
+    val personalIssuedStock: FieldPersonalIssuedStockSnapshotDto? = null,
+    val personalIssuedStockLoading: Boolean = false,
+    val personalIssuedStockError: String? = null,
 )
 
 @Composable
@@ -46,6 +50,8 @@ fun AssignedWorkSection(
     captureEvidence: Boolean = false,
     onSelectEvidenceFile: (String) -> Unit = {},
     onTakeEvidencePhoto: (String) -> Unit = {},
+    onRefreshPersonalIssuedStock: (String) -> Unit = {},
+    showPersonalIssuedStock: Boolean = false,
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -87,6 +93,11 @@ fun AssignedWorkSection(
                                 evidenceFeedback = state.evidenceMessage,
                                 onSelectEvidenceFile = onSelectEvidenceFile,
                                 onTakeEvidencePhoto = onTakeEvidencePhoto,
+                                personalIssuedStock = state.personalIssuedStock,
+                                personalIssuedStockLoading = state.personalIssuedStockLoading,
+                                personalIssuedStockError = state.personalIssuedStockError,
+                                onRefreshPersonalIssuedStock = onRefreshPersonalIssuedStock,
+                                showPersonalIssuedStock = showPersonalIssuedStock,
                                 modifier =
                                     Modifier.weight(1f),
                             )
@@ -120,6 +131,11 @@ fun AssignedWorkSection(
                                 evidenceFeedback = state.evidenceMessage,
                                 onSelectEvidenceFile = onSelectEvidenceFile,
                                 onTakeEvidencePhoto = onTakeEvidencePhoto,
+                                personalIssuedStock = state.personalIssuedStock,
+                                personalIssuedStockLoading = state.personalIssuedStockLoading,
+                                personalIssuedStockError = state.personalIssuedStockError,
+                                onRefreshPersonalIssuedStock = onRefreshPersonalIssuedStock,
+                                showPersonalIssuedStock = showPersonalIssuedStock,
                                 modifier =
                                     Modifier.fillMaxWidth(),
                             )
@@ -288,6 +304,11 @@ private fun JobBundleDetail(
     evidenceFeedback: String?,
     onSelectEvidenceFile: (String) -> Unit,
     onTakeEvidencePhoto: (String) -> Unit,
+    personalIssuedStock: FieldPersonalIssuedStockSnapshotDto?,
+    personalIssuedStockLoading: Boolean,
+    personalIssuedStockError: String?,
+    onRefreshPersonalIssuedStock: (String) -> Unit,
+    showPersonalIssuedStock: Boolean,
     modifier: Modifier,
 ) {
     Column(
@@ -516,6 +537,47 @@ private fun JobBundleDetail(
                             ),
                     )
                 }
+        }
+
+        // S04A: Own issued balance comes from an independent, live authorized
+        // server GET. Never render personal stock from offline cached JobBundle.
+        if (showPersonalIssuedStock && cached) {
+            Text("خاماتي المصروفة: يلزم الاتصال للتحقق من الرصيد والصلاحية الحاليين.")
+        } else if (showPersonalIssuedStock) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("خاماتي المصروفة — قراءة فقط",
+                    style = MaterialTheme.typography.titleMedium)
+                OutlinedButton(onClick = { onRefreshPersonalIssuedStock(bundle.workOrderId) }) {
+                    Text("تحديث")
+                }
+            }
+            if (personalIssuedStockLoading) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CircularProgressIndicator()
+                    Text("بنراجع الخامات المصروفة لك على السيرفر…")
+                }
+            }
+            personalIssuedStockError?.let { Text("تعذر عرض الخامات المصروفة: " + it) }
+            val live = personalIssuedStock?.takeIf {
+                it.workOrderId == bundle.workOrderId &&
+                    it.workOrderVersion == bundle.workOrderVersion
+            }
+            live?.let { issued ->
+                Text("تاريخ بيانات السيرفر: " + issued.asOf)
+                when (issued.status) {
+                    "EMPLOYEE_CONTEXT_UNAVAILABLE" ->
+                        Text("لا توجد عهدة خامات شخصية متاحة لحسابك الحالي.")
+                    "NO_ISSUED_CONTEXT" ->
+                        Text("لا توجد سجلات خامات مصروفة لك في التكليف ده.")
+                    "SOURCE_CURRENT" -> issued.items.forEach { item ->
+                        Text("• " + item.stockItemName + " (" + item.stockItemCode +
+                            ") · المتبقي في عهدتك " + item.outstandingQuantity +
+                            " " + item.unitCode + " · إصدار المصدر " + item.sourceVersion)
+                    }
+                    else -> Text("حالة المصدر غير معروفة، يلزم إعادة التحقق.")
+                }
+                Text("الأرقام دي رصيد متبقٍ من الخامات المصروفة لك؛ مش رصيد المخزن أو كمية تم استهلاكها.")
+            }
         }
 
         if (bundle.blockers.isNotEmpty()) {

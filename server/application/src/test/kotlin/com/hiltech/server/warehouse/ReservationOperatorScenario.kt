@@ -6,6 +6,7 @@ import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
 import com.hiltech.server.projects.ProjectAuthorizationPort
 import com.hiltech.server.projects.ProjectsPersistencePort
 import com.hiltech.server.telemetry.HiltechTelemetryRuntime
+import com.hiltech.server.work.JdbcFieldPersonalIssuedStockRead
 import com.hiltech.server.work.ReadinessAssignmentService
 import com.hiltech.server.work.WorkOrderSnapshot
 import com.hiltech.server.work.WorkPersistencePort
@@ -295,6 +296,28 @@ internal class ReservationOperatorScenario(
         assertTrue(source.fact(order, demand, instant).satisfied)
         denied("STOCK_FULFILLMENT_UNAVAILABLE") { service.issued(pm, item, order.workOrderId) }
         assertEquals("8.000000", service.issued(operator, item, order.workOrderId).single().outstandingQuantity)
+        // S04A actual PostgreSQL read-source proof on Phase5 canonical issued balance:
+        // current Work + own Employee scope, MATERIAL only, exact UOM and source version.
+        val personalStock = JdbcFieldPersonalIssuedStockRead(jdbc)
+        val ownRows = personalStock.ownForWorkOrder(
+            org, order.projectId, order.siteId, order.workOrderId, employee,
+        )
+        assertEquals(1, ownRows.size)
+        assertEquals(employee, ownRows.single().employeeId)
+        assertEquals(previous.requirementId, ownRows.single().requirementId)
+        assertEquals(item, ownRows.single().stockItemId)
+        assertEquals("SYNTH-RSV", ownRows.single().unitCode)
+        assertEquals("8.000000", ownRows.single().outstandingQuantity)
+        assertTrue(ownRows.single().sourceVersion >= 1)
+        assertTrue(personalStock.ownForWorkOrder(
+            org, order.projectId, order.siteId, order.workOrderId, UUID.randomUUID(),
+        ).isEmpty(), "Another employee must not see this issued balance.")
+        assertTrue(personalStock.ownForWorkOrder(
+            UUID.randomUUID(), order.projectId, order.siteId, order.workOrderId, employee,
+        ).isEmpty(), "Cross-org reads must not include issued balance.")
+        assertTrue(personalStock.ownForWorkOrder(
+            org, order.projectId, UUID.randomUUID(), order.workOrderId, employee,
+        ).isEmpty(), "Wrong site must not reveal personal issued context.")
         denied("STOCK_FULFILLMENT_UNAVAILABLE") { service.directory(pm, item, facility, "") }
         val directory = service.directory(operator, item, facility, "Synthetic no-login")
         assertFalse(directory.limited)
@@ -320,9 +343,15 @@ internal class ReservationOperatorScenario(
         val consumed = service.consume(stockContext(consume.operationId), item, consume)
         assertEquals(consumed.copy(replayed = true), service.consume(stockContext(consume.operationId), item, consume))
         assertEquals(0, BigDecimal("2").compareTo(balance("stock_balance", "on_hand_qty")))
+        assertEquals("2.000000", personalStock.ownForWorkOrder(
+            org, order.projectId, order.siteId, order.workOrderId, employee,
+        ).single().outstandingQuantity, "Consumption changes the canonical projection, not a local copy.")
         val returned = consume.copy(operationId = UUID.randomUUID(), quantity = "2", storageLocationId = location,
             issuedVersion = service.issued(operator, item, order.workOrderId).single().version)
         service.returnUnused(stockContext(returned.operationId), item, returned)
+        assertEquals("0.000000", personalStock.ownForWorkOrder(
+            org, order.projectId, order.siteId, order.workOrderId, employee,
+        ).single().outstandingQuantity, "Returned stock reconciles the same source row.")
         assertTrue(service.directory(operator, item, facility, "").items.isEmpty())
         val history = service.history(operator, item, facility, "Synthetic no-login")
         assertFalse(history.limited)

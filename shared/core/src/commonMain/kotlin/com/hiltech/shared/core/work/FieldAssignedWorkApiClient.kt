@@ -63,6 +63,27 @@ class FieldAssignedWorkApiClient(
         )
     }
 
+    /** No offline fallback or persisted personal stock: source auth is checked on every GET. */
+    suspend fun personalIssuedStock(
+        workOrderId: String,
+        installationId: String,
+    ): FieldPersonalIssuedStockSnapshotDto {
+        require(UUID.matches(workOrderId.trim())) {
+            "WorkOrder id must use canonical UUID format."
+        }
+        return api.request(
+            HttpMethod.Get,
+            "/v1/work-orders/" + workOrderId.trim() + "/my-issued-stock",
+            HiltechRequestOptions(installationId = installationId),
+            decode = {
+                json.decodeFromString(
+                    FieldPersonalIssuedStockSnapshotDto.serializer(),
+                    it,
+                )
+            },
+        )
+    }
+
     private companion object {
         val UUID =
             Regex(

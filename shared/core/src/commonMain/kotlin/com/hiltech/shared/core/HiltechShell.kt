@@ -239,6 +239,8 @@ fun HiltechShell(
     onProjectCommandCenterAction: (ProjectCommandCenterUiAction) -> Unit = {},
     onRefreshFieldWork: () -> Unit = {},
     onSelectFieldWork: (String) -> Unit = {},
+    onRefreshPersonalIssuedStock: (String) -> Unit = {},
+    showPersonalIssuedStock: Boolean = false,
     captureFieldIntent: Boolean = false,
     onQueueFieldIntent:
         (com.hiltech.shared.core.field.FieldExecutionIntent, String?) -> Unit = { _, _ -> },
@@ -477,6 +479,8 @@ fun HiltechShell(
                             captureEvidence = captureEvidence,
                             onSelectEvidenceFile = onSelectEvidenceFile,
                             onTakeEvidencePhoto = onTakeEvidencePhoto,
+                            onRefreshPersonalIssuedStock = onRefreshPersonalIssuedStock,
+                            showPersonalIssuedStock = showPersonalIssuedStock,
                         )
                     }
 
