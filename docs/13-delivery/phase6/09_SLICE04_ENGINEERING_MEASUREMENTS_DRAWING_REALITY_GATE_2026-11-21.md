@@ -107,6 +107,17 @@ The search found historical HILTECH/company material and copper/fiber imagery, b
 
 Accordingly, this is a confirmed reality gap rather than an unsearched implementation TODO.
 
+### Connected-source verification
+
+The source search was extended beyond the repository and local filesystem:
+
+- connected Gmail for `omar.khair70@gmail.com` was searched for HILTECH + OTDR / Fluke / drawing / measurement / test-report terms, including attachment-bearing messages;
+- matching mail consisted of partnership/training/outreach material and HILTECH introduction PDFs, not an executed HILTECH OTDR/Fluke test result or engineering acceptance record;
+- a direct attachment-bearing search for a fiber `test report` returned no matching executed report;
+- connected Google Drive was searched for `HILTECH OTDR`, `HILTECH Fluke`, `HILTECH drawing`, `HILTECH test report`, and `HILTECH measurement`; all returned no matching source artifact.
+
+This verifies the S04C gap across the currently available repository, local-device, Gmail and Drive sources. It should not be treated as a request to keep searching the same stores repeatedly; a new HILTECH source artifact or explicit engineering-owner input is required to change this state.
+
 ## 5. Minimum source packet that unblocks S04C
 
 S04C implementation can resume as soon as the following **representative evidence** is available. It does not require a complete company manual.
