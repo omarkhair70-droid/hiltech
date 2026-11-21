@@ -43,6 +43,8 @@ CREATE TABLE field_engineering_test_result (
     operation_id uuid PRIMARY KEY,
     organization_id uuid NOT NULL REFERENCES organization(id) ON DELETE RESTRICT,
     work_order_id uuid NOT NULL REFERENCES work_order(id) ON DELETE RESTRICT,
+    assignment_id uuid NOT NULL REFERENCES work_assignment(id) ON DELETE RESTRICT,
+    assignment_version bigint NOT NULL CHECK (assignment_version >= 1),
     captured_by_user_id uuid NOT NULL REFERENCES user_identity(id) ON DELETE RESTRICT,
     device_installation_id uuid NOT NULL,
     work_order_version bigint NOT NULL CHECK (work_order_version >= 1),
