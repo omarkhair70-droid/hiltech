@@ -386,10 +386,76 @@ class JdbcFieldAssignedWorkPersistence(
 
     override fun safeDocumentRefs(
         workOrderId: UUID,
-    ): List<FieldSafeDocumentRef> {
-        // Phase 0-4 has Evidence metadata and document requirement
-        // definitions, but no authoritative Project/Work document-revision
-        // source. Slice 06 must not fabricate a current drawing/document.
-        return emptyList()
-    }
+    ): List<FieldSafeDocumentRef> =
+        jdbc.query(
+            """
+            SELECT
+                d.id document_id,
+                d.code,
+                d.title,
+                bound.revision_code bound_revision,
+                current.revision_code current_revision,
+                CASE
+                    WHEN d.lifecycle_state <> 'ACTIVE' THEN 'WITHDRAWN'
+                    WHEN bound.lifecycle_state = 'WITHDRAWN' THEN 'WITHDRAWN'
+                    WHEN current.id IS NULL THEN 'SOURCE_MISSING'
+                    WHEN current.id <> bound.id THEN 'STALE'
+                    WHEN bound.lifecycle_state = 'APPROVED' THEN 'CURRENT'
+                    ELSE 'NOT_APPROVED'
+                END document_status,
+                CASE
+                    WHEN bound.content_evidence_id IS NOT NULL THEN 'EVIDENCE'
+                    ELSE 'EXTERNAL_REF'
+                END source_type
+            FROM work_document_revision_binding b
+            JOIN work_requirement_instance ri
+              ON ri.id = b.requirement_instance_id
+             AND ri.work_order_id = b.work_order_id
+             AND ri.requirement_family = 'DOCUMENT'
+            JOIN work_order wo
+              ON wo.id = b.work_order_id
+            JOIN controlled_document d
+              ON d.id = b.document_id
+             AND d.organization_id = wo.organization_id
+             AND d.project_id = wo.project_id
+             AND (d.site_id IS NULL OR d.site_id = wo.site_id)
+            JOIN controlled_document_revision bound
+              ON bound.id = b.revision_id
+             AND bound.document_id = d.id
+            LEFT JOIN controlled_document_revision current
+              ON current.id = d.current_revision_id
+             AND current.document_id = d.id
+            WHERE b.work_order_id = ?
+              AND b.superseded_at IS NULL
+            ORDER BY d.code, bound.revision_sequence
+            """.trimIndent(),
+            { rs, _ ->
+                FieldSafeDocumentRef(
+                    documentId =
+                        rs.getObject(
+                            "document_id",
+                            UUID::class.java,
+                        ),
+                    code = rs.getString("code"),
+                    title = rs.getString("title"),
+                    revision =
+                        rs.getString(
+                            "bound_revision",
+                        ),
+                    currentRevision =
+                        rs.getString(
+                            "current_revision",
+                        ),
+                    status =
+                        rs.getString(
+                            "document_status",
+                        ),
+                    sourceType =
+                        rs.getString(
+                            "source_type",
+                        ),
+                )
+            },
+            workOrderId,
+        )
 }

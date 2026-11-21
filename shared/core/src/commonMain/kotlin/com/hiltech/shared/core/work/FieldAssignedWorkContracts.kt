@@ -243,6 +243,8 @@ data class FieldDocumentRefDto(
     val code: String,
     val title: String,
     val revision: String? = null,
+    val currentRevision: String? = null,
+    val status: String = "CURRENT",
     val sourceType: String,
 )
 

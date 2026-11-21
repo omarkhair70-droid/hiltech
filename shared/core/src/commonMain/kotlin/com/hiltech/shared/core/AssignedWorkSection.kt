@@ -703,18 +703,30 @@ private fun JobBundleDetail(
             )
             bundle.safeDocumentRefs
                 .forEach {
+                    val revisionText =
+                        it.revision?.let { revision ->
+                            " · r" + revision
+                        }.orEmpty()
+                    val stateText =
+                        when (it.status) {
+                            "CURRENT" -> " · CURRENT"
+                            "STALE" ->
+                                " · STALE" +
+                                    it.currentRevision
+                                        ?.let { current ->
+                                            " → current r" + current
+                                        }.orEmpty()
+                            "WITHDRAWN" -> " · WITHDRAWN"
+                            "SOURCE_MISSING" -> " · SOURCE MISSING"
+                            else -> " · " + it.status
+                        }
                     Text(
                         "• " +
                             it.code +
                             " · " +
                             it.title +
-                            (
-                                it.revision
-                                    ?.let { revision ->
-                                        " · r" + revision
-                                    }
-                                    ?: ""
-                            ),
+                            revisionText +
+                            stateText,
                     )
                 }
         } else {

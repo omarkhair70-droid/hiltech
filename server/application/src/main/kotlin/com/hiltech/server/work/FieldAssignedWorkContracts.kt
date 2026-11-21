@@ -85,6 +85,8 @@ data class FieldSafeDocumentRef(
     val code: String,
     val title: String,
     val revision: String?,
+    val currentRevision: String?,
+    val status: String,
     val sourceType: String,
 )
 
