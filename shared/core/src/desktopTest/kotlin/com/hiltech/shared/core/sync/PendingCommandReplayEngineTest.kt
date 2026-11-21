@@ -118,6 +118,44 @@ class PendingCommandReplayEngineTest {
         assertEquals(12, conflict.currentServerVersion)
     }
 
+    @Test
+    fun authenticatedActorAndInstallationPreventCrossAccountReplay() = withDatabase { db ->
+        val own = "00000000-0000-4000-8000-000000007101"
+        val foreign = "00000000-0000-4000-8000-000000007102"
+        val foreignDevice = "00000000-0000-4000-8000-000000007103"
+        val actor = "00000000-0000-0000-0000-000000009001"
+        db.pendingCommandDao().insert(
+            pendingCommand(own, sequence = 1).copy(deviceId = "device-42"),
+        )
+        db.pendingCommandDao().insert(
+            pendingCommand(foreign, sequence = 2).copy(
+                actorUserIdentityId = "00000000-0000-0000-0000-000000009099",
+                deviceId = "device-42",
+            ),
+        )
+        db.pendingCommandDao().insert(
+            pendingCommand(foreignDevice, sequence = 3).copy(
+                deviceId = "other-device",
+            ),
+        )
+        val called = mutableListOf<String>()
+        val engine = PendingCommandReplayEngine(
+            database = db,
+            transport = PendingCommandTransport { command ->
+                called.add(command.operationId)
+                CommandTransportResult.Applied(8, "scope-ok")
+            },
+            clock = FixedClock(1_700_000_010_000L),
+            replayScope = CommandReplayScope(actor, "device-42"),
+        )
+        val result = engine.replayOnce()
+        assertEquals(listOf(own), called)
+        assertEquals(1, result.applied)
+        assertEquals(PendingCommandStates.APPLIED, db.pendingCommandDao().get(own)?.state)
+        assertEquals(PendingCommandStates.PENDING, db.pendingCommandDao().get(foreign)?.state)
+        assertEquals(PendingCommandStates.PENDING, db.pendingCommandDao().get(foreignDevice)?.state)
+    }
+
     private fun zeroJitterPolicy(): FirstSliceRetryBackoffPolicy =
         FirstSliceRetryBackoffPolicy(RetryJitterSource { 0.0 })
 
