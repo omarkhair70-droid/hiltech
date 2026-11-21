@@ -127,9 +127,9 @@ class AndroidEncryptedOidcStore(
 
     suspend fun loadVerifiedOfflineFieldIdentity(installationId: String): String? {
         val tokens = load() ?: return null
-        val sealed = readEncrypted(VERIFIED_FIELD_IDENTITY_KEY) ?: return null
+        val encryptedSnapshot = readEncrypted(VERIFIED_FIELD_IDENTITY_KEY) ?: return null
         val verified = runCatching {
-            json.decodeFromString(VerifiedOfflineFieldIdentity.serializer(), sealed)
+            json.decodeFromString(VerifiedOfflineFieldIdentity.serializer(), encryptedSnapshot)
         }.getOrElse {
             clearValue(VERIFIED_FIELD_IDENTITY_KEY)
             return null
