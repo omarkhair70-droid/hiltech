@@ -42,6 +42,7 @@ class FieldAssignedAssetLookupServiceTest {
     private fun allowed(custodyWorkId: UUID = workId) {
         Mockito.`when`(source.isCurrentAssignedUser(actor, workId, now)).thenReturn(true)
         Mockito.`when`(authorization.canUseAssignedWork(actor, workId, "can_view")).thenReturn(true)
+        Mockito.`when`(order.workOrderId).thenReturn(workId)
         Mockito.`when`(order.organizationId).thenReturn(org)
         Mockito.`when`(order.projectId).thenReturn(project)
         Mockito.`when`(order.siteId).thenReturn(site)
