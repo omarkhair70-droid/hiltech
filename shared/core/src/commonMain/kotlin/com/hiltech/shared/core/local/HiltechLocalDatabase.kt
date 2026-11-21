@@ -28,7 +28,7 @@ import kotlinx.coroutines.Dispatchers
     ],
     version = OfflineSchemaContract.ROOM_SCHEMA_VERSION,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 @ConstructedBy(HiltechLocalDatabaseConstructor::class)
 abstract class HiltechLocalDatabase : RoomDatabase() {

@@ -56,7 +56,7 @@ class HiltechLocalDatabaseTest {
                 reopenedDatabase.close()
             }
 
-            assertEquals(2, OfflineSchemaContract.ROOM_SCHEMA_VERSION)
+            assertEquals(3, OfflineSchemaContract.ROOM_SCHEMA_VERSION)
             assertEquals(setOf(1), OfflineSchemaContract.supportedPendingPayloadVersions)
         } finally {
             tempDir.deleteRecursively()
