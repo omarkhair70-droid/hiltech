@@ -40,11 +40,15 @@ class JdbcFieldMaterialUsageReportPersistence(
     override fun totalPending(workOrder: UUID, employee: UUID, requirement: UUID, item: UUID): BigDecimal =
         jdbc.queryForObject(
             """
-            SELECT COALESCE(SUM(quantity), 0)
-            FROM field_material_usage_report
-            WHERE work_order_id = ? AND employee_id = ?
-              AND requirement_id = ? AND stock_item_id = ?
-              AND state = 'PENDING_REVIEW'
+            SELECT COALESCE(SUM(r.quantity), 0)
+            FROM field_material_usage_report r
+            WHERE r.work_order_id = ? AND r.employee_id = ?
+              AND r.requirement_id = ? AND r.stock_item_id = ?
+              AND r.state = 'PENDING_REVIEW'
+              AND NOT EXISTS (
+                  SELECT 1 FROM field_material_usage_reconciliation x
+                  WHERE x.report_operation_id = r.operation_id
+              )
             """.trimIndent(),
             BigDecimal::class.java, workOrder, employee, requirement, item,
         ) ?: BigDecimal.ZERO
