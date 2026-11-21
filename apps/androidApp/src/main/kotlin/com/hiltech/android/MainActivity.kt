@@ -682,10 +682,12 @@ class MainActivity : ComponentActivity() {
                     request.actorId, hiltechApplication.installationId, request.workOrderId,
                 )
                 val active = shellState as? HiltechShellState.SignedIn
+                val visibleField = active?.field
                 if (active?.identity?.identityId == request.actorId &&
-                    active.field?.selectedWorkOrderId == request.workOrderId) {
+                    visibleField != null &&
+                    visibleField.selectedWorkOrderId == request.workOrderId) {
                     shellState = active.copy(
-                        field = active.field.copy(
+                        field = visibleField.copy(
                             localEvidence = records,
                             evidenceMessage = "الدليل محفوظ محليًا (LOCAL_READY)، ولم يُعتمد على السيرفر.",
                         ),
@@ -699,9 +701,11 @@ class MainActivity : ComponentActivity() {
                     hiltechApplication.fieldEvidenceFiles.removeAfterFailedCapture(evidenceId)
                 }
                 val active = shellState as? HiltechShellState.SignedIn
+                val visibleField = active?.field
                 if (active?.identity?.identityId == request.actorId &&
-                    active.field?.selectedWorkOrderId == request.workOrderId) {
-                    shellState = active.copy(field = active.field.copy(
+                    visibleField != null &&
+                    visibleField.selectedWorkOrderId == request.workOrderId) {
+                    shellState = active.copy(field = visibleField.copy(
                         evidenceMessage = failure.message ?: "تعذر حفظ الدليل، ولم يتم رفعه.",
                     ))
                 }
