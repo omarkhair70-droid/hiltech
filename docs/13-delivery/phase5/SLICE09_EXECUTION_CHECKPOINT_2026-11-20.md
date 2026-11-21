@@ -1,7 +1,7 @@
 # Phase 5 / Slice 09 — Execution Checkpoint
 
 Date: 2026-11-20
-Status: **CHECKPOINT 01 WIP / DO NOT MERGE**
+Status: **CHECKPOINT 06 ENGINEERING CI VERIFIED / FINAL GAP REVIEW ADDED / MERGE PENDING DOC-HEAD CI + OWNER REVIEW**
 
 Base main: `96a7b10ff15f5e790b40d1071f4f51da7d98170a` — Slice 08 merge commit.
 Post-merge Bootstrap push run `44632228363`: **PASS**.
@@ -112,3 +112,10 @@ No API, command, authority, persistence, mutation, idempotency, source truth or 
 ### Checkpoint 06 CI repair 01
 
 Exact head `9953c579be9b5fcf70d4ddead19a9a9746688d66`: ten of twelve workflows PASS. Warehouse server/shared contracts and Windows evidence PASS; the Android APK builds and Asset lookup, checkout/handoff and return evidence PASS. Receiving smoke stops at the old exact English label `Open scanned Receiving receipt`; the UI dump contains the enabled bilingual control. Update the Receiving and Stocktake smoke selectors to the exact current Arabic-first bilingual button labels, preserving the clickable-ancestor checks and every existing receipt, discrepancy, adjustment, and reconciliation assertion. No product behavior or authorization changes. The independent Phase 4 Project Site contract PASS; its desktop render could not resolve Skiko runtime 0.144.6 from the external repositories. Corrected exact-head CI pending; do not merge.
+
+
+## Checkpoint 07 — Final engineering verification and handoff (2026-11-21)
+
+Implementation head `6d182685e6cc631f0b0f2457ecde22116a64a23f` passed 12/12 triggered workflows, including Phase 5 Warehouse Setup (run `44794707208`), Bootstrap (`44794707229`), Native OIDC (`44794707042`), Android RTL/Receiving/Stocktake smoke, and inherited Phase 3/4 regressions. Phase-5 Windows synthetic and Android synthetic artifacts are present.
+
+See `15_PHASE5_FINAL_GAP_REVIEW_2026-11-21.md` for the contract-to-code audit and the explicit distinction between engineering verification and unverified real inventory/source/operator/production cutover acceptance. This documentation change must pass new exact-head CI before any merge.
