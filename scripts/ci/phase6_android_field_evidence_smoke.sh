@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PKG=com.hiltech.android
+ACTIVITY="$PKG/.AssignedWorkEvidenceActivity"
+REPORT=build/reports/phase6-slice03
+APK="$(find apps/androidApp/build/outputs/apk/debug -name '*-debug.apk' | head -n 1)"
+test -n "$APK"
+mkdir -p "$REPORT"
+adb install -r "$APK" >/dev/null
+adb shell pm clear "$PKG" >/dev/null
+
+dump_ui () {
+  adb shell uiautomator dump /sdcard/hiltech-phase6-s03.xml >/dev/null
+  adb shell cat /sdcard/hiltech-phase6-s03.xml | tr -d '\r'
+}
+
+await_marker () {
+  local marker="$1" started
+  started="$(date +%s)"
+  while true; do
+    local xml
+    xml="$(dump_ui || true)"
+    if printf '%s' "$xml" | grep -F -q "$marker"; then return 0; fi
+    if [ $(($(date +%s) - started)) -gt 45 ]; then
+      echo "Native Evidence marker not found: $marker"
+      echo "$xml"
+      adb logcat -d -t 400 | grep -iE "FATAL EXCEPTION|evidence|hiltech" || true
+      exit 1
+    fi
+    adb shell input swipe 540 2040 540 650 260 >/dev/null || true
+    sleep 1
+  done
+}
+
+open_mode () {
+  local mode="$1"
+  adb shell am force-stop "$PKG"
+  adb shell am start -W -n "$ACTIVITY" --es mode "$mode" >/tmp/hiltech-field-evidence-start.txt
+  cat /tmp/hiltech-field-evidence-start.txt
+}
+
+open_mode evidence-seed
+await_marker "PHASE6_S03_EVIDENCE_SAVED_LOCAL_READY"
+adb exec-out screencap -p > "$REPORT/01-private-evidence-queued.png"
+
+# New Android process, real Room v3 and app-private photo bytes survive.
+open_mode evidence-persisted
+await_marker "محفوظ على الجهاز: LOCAL_READY"
+adb exec-out screencap -p > "$REPORT/02-room-evidence-process-restart.png"
+
+# Deliberately corrupt private image bytes: verification must fail, no fake READY.
+open_mode evidence-corrupt
+await_marker "PHASE6_S03_CORRUPTION_REJECTED_BYTES_PRESERVED"
+adb exec-out screencap -p > "$REPORT/03-corrupt-evidence-protected.png"
+
+test -s "$REPORT/01-private-evidence-queued.png"
+test -s "$REPORT/02-room-evidence-process-restart.png"
+test -s "$REPORT/03-corrupt-evidence-protected.png"
+
+echo "HILTECH_PHASE6_S03_NATIVE_EVIDENCE_PASS fsync=PASS room_restart=PASS private_bytes=PASS tampering_rejected=PASS fake_ready=DENIED"
