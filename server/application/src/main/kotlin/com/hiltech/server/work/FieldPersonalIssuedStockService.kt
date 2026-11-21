@@ -43,7 +43,7 @@ class FieldPersonalIssuedStockService(
     private val people: PeoplePersistencePort,
     private val stock: FieldPersonalIssuedStockReadPort,
     private val clock: Clock,
-    @Value("${hiltech.field.personal-issued-stock.enabled:false}")
+    @Value("\${hiltech.field.personal-issued-stock.enabled:false}")
     private val rolloutEnabled: Boolean = false,
 ) {
     @Transactional(readOnly = true)
