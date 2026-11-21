@@ -261,6 +261,7 @@ class MainActivity : ComponentActivity() {
         refreshPeople()
         refreshOnboarding()
         refreshFieldWork()
+        scheduleFieldCommandReplay(identity.identityId)
     }
 
     private fun lookupAssetTag(code: String) {
@@ -483,6 +484,20 @@ class MainActivity : ComponentActivity() {
     }
 
 
+    private fun scheduleFieldCommandReplay(identityId: String) {
+        WorkManager.getInstance(this).enqueueUniqueWork(
+            "hiltech-field-execution-sync-" + identityId,
+            ExistingWorkPolicy.KEEP,
+            OneTimeWorkRequestBuilder<HiltechSyncWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build(),
+                )
+                .build(),
+        )
+    }
+
     private fun queueFieldExecution(action: FieldExecutionIntent, reason: String?) {
         val signed = shellState as? HiltechShellState.SignedIn ?: return
         val identityId = signed.identity.identityId
@@ -514,17 +529,7 @@ class MainActivity : ComponentActivity() {
                         fieldIntentMessage = "الأمر محفوظ على الجهاز. لم يتم تأكيد تطبيقه من السيرفر.",
                     ),
                 )
-                WorkManager.getInstance(this@MainActivity).enqueueUniqueWork(
-                    "hiltech-field-execution-sync-" + identityId,
-                    ExistingWorkPolicy.KEEP,
-                    OneTimeWorkRequestBuilder<HiltechSyncWorker>()
-                        .setConstraints(
-                            Constraints.Builder()
-                                .setRequiredNetworkType(NetworkType.CONNECTED)
-                                .build(),
-                        )
-                        .build(),
-                )
+                scheduleFieldCommandReplay(identityId)
             }.onFailure { failure ->
                 if (failure is kotlinx.coroutines.CancellationException) return@onFailure
                 val current = shellState as? HiltechShellState.SignedIn ?: return@onFailure
