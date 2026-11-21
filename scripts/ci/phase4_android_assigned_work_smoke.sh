@@ -105,6 +105,23 @@ if echo "$OFFLINE_XML" | grep -F -q "Me / Sessions"; then
   exit 1
 fi
 
+# A native cold-start round trip: same secure OIDC store, persisted Room, real MainActivity,
+# configured to unreachable .invalid endpoints; no debug fixture UI on the restored screen.
+render_mode "cold-seed" "PHASE6_COLD_OFFLINE_SEEDED" "android-cold-seed-confirm.png"
+sleep 1
+adb shell am force-stop "$PKG"
+adb shell am start -W -n "$PKG/.MainActivity" >/tmp/hiltech-phase6-cold-start.out
+cat /tmp/hiltech-phase6-cold-start.out
+wait_for_text "وضع القراءة بدون إنترنت" 60
+wait_for_text "نسخة محفوظة بدون اتصال" 10
+OFFLINE_REAL_XML="$(dump_ui)"
+if echo "$OFFLINE_REAL_XML" | grep -F -q "Me / Sessions"; then
+  echo "Production cold-start offline screen must not render admin/session tools."
+  exit 1
+fi
+adb exec-out screencap -p > "$REPORT_DIR/android-production-offline-cold-start.png"
+test -s "$REPORT_DIR/android-production-offline-cold-start.png"
+
 render_mode "revoked" "مفيش WorkOrder حالي متعيّن ليك" "android-assignment-revoked.png"
 
 echo "HILTECH_PHASE4_SLICE06_ANDROID_RENDER_PASS rtl=PASS today=PASS detail=PASS waiting=PASS phase5_pending=PASS execution_controls_absent=PASS fake_sync_absent=PASS revoke_empty=PASS"

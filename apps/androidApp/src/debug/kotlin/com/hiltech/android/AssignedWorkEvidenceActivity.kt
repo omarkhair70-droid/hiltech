@@ -3,6 +3,10 @@ package com.hiltech.android
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.material3.Text
+import com.hiltech.android.identity.AndroidEncryptedOidcStore
+import com.hiltech.shared.core.identity.auth.NativeOidcTokenSet
+import kotlinx.coroutines.runBlocking
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.HiltechFieldState
@@ -31,6 +35,32 @@ class AssignedWorkEvidenceActivity :
         val mode =
             intent.getStringExtra("mode")
                 ?: "today"
+
+        if (mode == "cold-seed") {
+            // Debug-only evidence: persist a token-bound verified identity and Room bundle,
+            // then force-stop the process and launch the real production MainActivity offline.
+            val app = application as HiltechApplication
+            val identity = fixtureIdentity()
+            runBlocking {
+                val now = System.currentTimeMillis()
+                val store = AndroidEncryptedOidcStore(this@AssignedWorkEvidenceActivity)
+                store.save(
+                    NativeOidcTokenSet(
+                        accessToken = "phase6-debug-offline-token",
+                        refreshToken = null,
+                        tokenType = "Bearer",
+                        scope = "openid",
+                        obtainedAtEpochMs = now - 1_000,
+                        expiresAtEpochMs = now + 600_000,
+                    ),
+                )
+                store.saveVerifiedFieldIdentity(identity, app.installationId)
+                app.fieldOfflineReadCache.saveToday(identity.identityId, listOf(todayItem(actionable = true)))
+                app.fieldOfflineReadCache.saveBundle(identity.identityId, jobBundle())
+            }
+            setContent { Text("PHASE6_COLD_OFFLINE_SEEDED") }
+            return
+        }
 
         setContent {
             HiltechShell(
