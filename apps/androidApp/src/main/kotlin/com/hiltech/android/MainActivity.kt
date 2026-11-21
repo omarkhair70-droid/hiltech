@@ -1,6 +1,14 @@
 package com.hiltech.android
 
 import android.content.Intent
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.hiltech.android.sync.HiltechSyncWorker
+import com.hiltech.shared.core.field.FieldExecutionIntent
+import java.util.UUID
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -75,6 +83,8 @@ class MainActivity : ComponentActivity() {
                     ::refreshFieldWork,
                 onSelectFieldWork =
                     ::selectFieldWork,
+                captureFieldIntent = true,
+                onQueueFieldIntent = ::queueFieldExecution,
                 warehouseOperator = {
                     val signed = shellState as? HiltechShellState.SignedIn
                     val identity = signed?.identity
@@ -410,6 +420,9 @@ class MainActivity : ComponentActivity() {
                     identityId, workOrderId, hiltechApplication.installationId,
                 )
             }.onSuccess { snapshot ->
+                val pending = runCatching {
+                    hiltechApplication.fieldExecutionQueue.outstanding(identityId, workOrderId)
+                }.getOrNull()
                 val current = shellState as? HiltechShellState.SignedIn ?: return@onSuccess
                 if (current.identity.identityId != identityId ||
                     current.field?.selectedWorkOrderId != workOrderId) return@onSuccess
@@ -418,6 +431,8 @@ class MainActivity : ComponentActivity() {
                         loading = false,
                         selectedBundle = snapshot.value,
                         cachedBundleAt = snapshot.fetchedAtEpochMs,
+                        pendingFieldIntent = pending,
+                        fieldIntentMessage = null,
                         errorMessage = null,
                     ),
                 )
@@ -459,6 +474,61 @@ class MainActivity : ComponentActivity() {
                         ),
                     )
                 }
+            }
+        }
+    }
+
+
+    private fun queueFieldExecution(action: FieldExecutionIntent, reason: String?) {
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        val identityId = signed.identity.identityId
+        val field = signed.field ?: return
+        val bundle = field.selectedBundle ?: return
+        if (field.cachedBundleAt != null || field.selectedWorkOrderId != bundle.workOrderId) return
+        if (field.pendingFieldIntent != null) return
+
+        scope.launch {
+            runCatching {
+                hiltechApplication.fieldExecutionQueue.queue(
+                    identityId = identityId,
+                    installationId = hiltechApplication.installationId,
+                    bundle = bundle,
+                    action = action,
+                    operationId = UUID.randomUUID().toString(),
+                    nowEpochMs = System.currentTimeMillis(),
+                    verifiedOnlineThisSession = true,
+                    explanation = reason,
+                )
+            }.onSuccess { pending ->
+                val current = shellState as? HiltechShellState.SignedIn ?: return@onSuccess
+                if (current.identity.identityId != identityId ||
+                    current.field?.selectedWorkOrderId != bundle.workOrderId) return@onSuccess
+                val latestField = current.field ?: return@onSuccess
+                shellState = current.copy(
+                    field = latestField.copy(
+                        pendingFieldIntent = pending,
+                        fieldIntentMessage = "الأمر محفوظ على الجهاز. لم يتم تأكيد تطبيقه من السيرفر.",
+                    ),
+                )
+                WorkManager.getInstance(this@MainActivity).enqueueUniqueWork(
+                    "hiltech-field-execution-sync-" + identityId,
+                    ExistingWorkPolicy.KEEP,
+                    OneTimeWorkRequestBuilder<HiltechSyncWorker>()
+                        .setConstraints(
+                            Constraints.Builder()
+                                .setRequiredNetworkType(NetworkType.CONNECTED)
+                                .build(),
+                        )
+                        .build(),
+                )
+            }.onFailure { failure ->
+                if (failure is kotlinx.coroutines.CancellationException) return@onFailure
+                val current = shellState as? HiltechShellState.SignedIn ?: return@onFailure
+                if (current.identity.identityId != identityId ||
+                    current.field?.selectedWorkOrderId != bundle.workOrderId) return@onFailure
+                shellState = current.copy(field = (current.field ?: HiltechFieldState()).copy(
+                    fieldIntentMessage = failure.message ?: "تعذر حفظ أمر العمل محليًا.",
+                ))
             }
         }
     }
