@@ -40,19 +40,36 @@ open_mode () {
   cat /tmp/hiltech-field-evidence-start.txt
 }
 
+capture_verified_marker () {
+  local marker="$1" screenshot="$2" xml
+  await_marker "$marker"
+  # UI hierarchy can expose a marker one frame before the compositor draws it.
+  # Require stability on both sides of the screenshot to reject startup blanks.
+  sleep 2
+  xml="$(dump_ui || true)"
+  if ! printf '%s' "$xml" | grep -F -q "$marker"; then
+    echo "Evidence marker disappeared before screenshot: $marker"
+    exit 1
+  fi
+  adb exec-out screencap -p > "$screenshot"
+  test -s "$screenshot"
+  xml="$(dump_ui || true)"
+  if ! printf '%s' "$xml" | grep -F -q "$marker"; then
+    echo "Evidence marker disappeared after screenshot: $marker"
+    exit 1
+  fi
+}
+
 open_mode evidence-seed
-await_marker "PHASE6_S03_EVIDENCE_SAVED_LOCAL_READY"
-adb exec-out screencap -p > "$REPORT/01-private-evidence-queued.png"
+capture_verified_marker "PHASE6_S03_EVIDENCE_SAVED_LOCAL_READY" "$REPORT/01-private-evidence-queued.png"
 
 # New Android process, real Room v3 and app-private photo bytes survive.
 open_mode evidence-persisted
-await_marker "محفوظ على الجهاز: LOCAL_READY"
-adb exec-out screencap -p > "$REPORT/02-room-evidence-process-restart.png"
+capture_verified_marker "محفوظ على الجهاز: LOCAL_READY" "$REPORT/02-room-evidence-process-restart.png"
 
 # Deliberately corrupt private image bytes: verification must fail, no fake READY.
 open_mode evidence-corrupt
-await_marker "PHASE6_S03_CORRUPTION_REJECTED_BYTES_PRESERVED"
-adb exec-out screencap -p > "$REPORT/03-corrupt-evidence-protected.png"
+capture_verified_marker "PHASE6_S03_CORRUPTION_REJECTED_BYTES_PRESERVED" "$REPORT/03-corrupt-evidence-protected.png"
 
 test -s "$REPORT/01-private-evidence-queued.png"
 test -s "$REPORT/02-room-evidence-process-restart.png"
