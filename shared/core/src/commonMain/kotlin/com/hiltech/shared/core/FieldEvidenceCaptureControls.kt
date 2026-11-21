@@ -43,13 +43,8 @@ internal fun FieldEvidenceCaptureControls(
                     },
                 )
             }
-            val count = captured.count {
-                it.localState !in setOf(
-                    LocalEvidenceStates.READY,
-                    LocalEvidenceStates.REJECTED,
-                    LocalEvidenceStates.DISCARDED_EXPLICITLY,
-                )
-            }
+            val count = com.hiltech.shared.core.field.FieldEvidenceCapturePolicy
+                .unreflectedLocalCount(bundle, requirement.requirementKey, captured)
             val allowed = enabled &&
                 bundle.executionCapabilities.evidenceCaptureOffline &&
                 requirement.offlineCaptureAllowedByPolicy &&

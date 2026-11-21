@@ -32,14 +32,9 @@ class FieldEvidenceQueue(private val db: HiltechLocalDatabase) {
         return db.withWriteTransaction {
             require(db.evidenceQueueDao().get(evidenceId) == null) { "Evidence ID is already used." }
             val local = db.evidenceQueueDao().forWorkOrder(actorId, installationId, bundle.workOrderId)
-            val existing = local.count {
-                it.requirementKey == requirementKey &&
-                    it.localState !in setOf(
-                        LocalEvidenceStates.DISCARDED_EXPLICITLY,
-                        LocalEvidenceStates.REJECTED,
-                        LocalEvidenceStates.READY,
-                    )
-            }
+            val existing = FieldEvidenceCapturePolicy.unreflectedLocalCount(
+                bundle, requirementKey, local,
+            )
             val bound = FieldEvidenceCapturePolicy.bind(
                 bundle = bundle,
                 actorId = actorId,

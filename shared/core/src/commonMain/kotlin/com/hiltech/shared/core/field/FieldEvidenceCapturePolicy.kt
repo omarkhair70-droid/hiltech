@@ -2,6 +2,8 @@ package com.hiltech.shared.core.field
 
 import com.hiltech.shared.core.work.FieldEvidenceRequirementDto
 import com.hiltech.shared.core.work.TechnicianJobBundleDto
+import com.hiltech.shared.core.local.LocalEvidenceEntity
+import com.hiltech.shared.core.local.LocalEvidenceStates
 
 /** Client capture hint only; server source authority and bound EvidencePolicy are rechecked on reserve/finalize. */
 data class FieldEvidenceCaptureBinding(
@@ -18,6 +20,32 @@ data class FieldEvidenceCaptureBinding(
 
 object FieldEvidenceCapturePolicy {
     const val MAX_BYTES: Long = 16L * 1024L * 1024L
+
+    /**
+     * Count not-yet-reflected local captures as well as remote READY evidence.
+     * A local READY row with serverEvidenceId already in the JobBundle is ONE
+     * logical evidence, not two. Reject/explicit discard never consume quota.
+     */
+    fun unreflectedLocalCount(
+        bundle: TechnicianJobBundleDto,
+        requirementKey: String,
+        local: List<LocalEvidenceEntity>,
+    ): Int {
+        val alreadyShown = bundle.existingEvidence
+            .filter { it.requirementKey == requirementKey && it.storageState == "READY" }
+            .map { it.evidenceId }
+            .toSet()
+        return local.count { item ->
+            item.requirementKey == requirementKey &&
+                item.localState !in setOf(
+                    LocalEvidenceStates.REJECTED,
+                    LocalEvidenceStates.DISCARDED_EXPLICITLY,
+                ) &&
+                (item.serverEvidenceId == null || item.serverEvidenceId !in alreadyShown)
+        }
+    }
+
+
 
     fun bind(
         bundle: TechnicianJobBundleDto,

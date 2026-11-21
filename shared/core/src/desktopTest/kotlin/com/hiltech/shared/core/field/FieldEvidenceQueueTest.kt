@@ -118,6 +118,57 @@ class FieldEvidenceQueueTest {
         }
     }
 
+    @Test fun locallyReadyEvidenceStillConsumesQuotaIfServerBundleIsStale() = runBlocking {
+        val directory = Files.createTempDirectory("hiltech-evidence-local-ready-quota").toFile()
+        val db = buildHiltechLocalDatabase(getDesktopDatabaseBuilder(directory.resolve("db").absolutePath))
+        try {
+            val queue = FieldEvidenceQueue(db)
+            val b = bundle()
+            queue.capture(actor, device, b, "PHOTO", "image/jpeg", 50, sha,
+                "$evidenceId.bin", evidenceId, 1, verifiedOnlineThisSession = true)
+            assertEquals(1, db.evidenceQueueDao().casUploadState(
+                evidenceId, actor, device,
+                LocalEvidenceStates.LOCAL_READY, LocalEvidenceStates.READY,
+                "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "session-1",
+                "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", null, 2,
+            ))
+            assertFailsWith<IllegalArgumentException> {
+                queue.capture(actor, device, b, "PHOTO", "image/jpeg", 50, sha,
+                    "66666666-6666-4666-8666-666666666666.bin",
+                    "66666666-6666-4666-8666-666666666666", 3,
+                    verifiedOnlineThisSession = true)
+            }
+        } finally { db.close(); directory.deleteRecursively() }
+    }
+
+    @Test fun identicalServerAndLocallyReadyEvidenceCountsExactlyOnce() {
+        val b = bundle().copy(
+            evidenceRequirements = bundle().evidenceRequirements.map { it.copy(maxCount = 2) },
+            existingEvidence = listOf(com.hiltech.shared.core.work.FieldEvidenceMetadataDto(
+                evidenceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                requirementKey = "PHOTO", evidenceTypeCode = "PHOTO",
+                contentType = "image/jpeg", storageState = "READY",
+                capturedAt = "2026-11-21T06:00:00Z", version = 1,
+            )),
+        )
+        val row = com.hiltech.shared.core.local.LocalEvidenceEntity(
+            evidenceId = evidenceId, workOrderId = workId, targetType = "WORK_ORDER",
+            targetId = workId, requirementKey = "PHOTO",
+            evidencePolicyId = b.binding!!.evidencePolicy.id, evidencePolicyRevision = 1,
+            evidenceTypeCode = "PHOTO", localFileRef = "$evidenceId.bin",
+            sha256 = sha, contentType = "image/jpeg", sizeBytes = 10,
+            capturedAtEpochMs = 1, capturedByUserId = actor, sourceDeviceId = device,
+            localState = LocalEvidenceStates.READY, uploadSessionId = "session-1",
+            remoteObjectRef = null,
+            finalizedServerEvidenceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            uploadAttemptCount = 1, lastUploadErrorCode = null, updatedAtEpochMs = 2,
+            serverEvidenceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        )
+        assertEquals(0, FieldEvidenceCapturePolicy.unreflectedLocalCount(b, "PHOTO", listOf(row)))
+        assertEquals(1, FieldEvidenceCapturePolicy.unreflectedLocalCount(
+            b.copy(existingEvidence = emptyList()), "PHOTO", listOf(row)))
+    }
+
     private fun bundle(): TechnicianJobBundleDto {
         val ref = FieldConfigRefDto("88888888-8888-4888-8888-888888888888", "CONF", "Config", 1)
         return TechnicianJobBundleDto(
