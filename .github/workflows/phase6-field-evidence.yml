@@ -106,8 +106,8 @@ jobs:
           with open("/tmp/hiltech-evidence-fga.json", encoding="utf-8") as f:
               data = json.load(f)
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
-              f.write(f'HILTECH_FGA_STORE_ID={data["store"]["id"]}\\n')
-              f.write(f'HILTECH_FGA_MODEL_ID={data["model"]["authorization_model_id"]}\\n')
+              f.write(f'HILTECH_FGA_STORE_ID={data["store"]["id"]}\n')
+              f.write(f'HILTECH_FGA_MODEL_ID={data["model"]["authorization_model_id"]}\n')
           PY
       - name: Prove server enforces maxCount under two simultaneous reservations
         env:
@@ -130,7 +130,7 @@ jobs:
         if: failure()
         run: |
           find server/application/build/test-results -name '*.xml' -type f \
-            -print -exec cat {} \\; || true
+            -print -exec cat {} \; || true
           docker compose --env-file infrastructure/local/.env.example \
             -f infrastructure/local/docker-compose.yml logs --no-color --tail=100 postgres openfga moto || true
       - name: Tear down test services
