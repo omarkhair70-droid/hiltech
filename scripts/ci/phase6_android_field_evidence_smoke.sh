@@ -60,6 +60,12 @@ capture_verified_marker () {
   fi
 }
 
+# Android may kill an Activity while the picker/camera is foreground.
+# Verify a saved state round trip preserves the original actor/WorkOrder
+# request and its private camera filename without granting new authority.
+open_mode evidence-callback-state
+capture_verified_marker "PHASE6_S03_EXTERNAL_CAPTURE_CONTEXT_RESTORED" "$REPORT/00-callback-context-restored.png"
+
 open_mode evidence-seed
 capture_verified_marker "PHASE6_S03_EVIDENCE_SAVED_LOCAL_READY" "$REPORT/01-private-evidence-queued.png"
 
@@ -71,8 +77,9 @@ capture_verified_marker "محفوظ على الجهاز: LOCAL_READY" "$REPORT/0
 open_mode evidence-corrupt
 capture_verified_marker "PHASE6_S03_CORRUPTION_REJECTED_BYTES_PRESERVED" "$REPORT/03-corrupt-evidence-protected.png"
 
+test -s "$REPORT/00-callback-context-restored.png"
 test -s "$REPORT/01-private-evidence-queued.png"
 test -s "$REPORT/02-room-evidence-process-restart.png"
 test -s "$REPORT/03-corrupt-evidence-protected.png"
 
-echo "HILTECH_PHASE6_S03_NATIVE_EVIDENCE_PASS fsync=PASS room_restart=PASS private_bytes=PASS tampering_rejected=PASS fake_ready=DENIED"
+echo "HILTECH_PHASE6_S03_NATIVE_EVIDENCE_PASS callback_bundle_restore=PASS fsync=PASS room_restart=PASS private_bytes=PASS tampering_rejected=PASS fake_ready=DENIED"
