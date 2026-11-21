@@ -1060,7 +1060,7 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
             val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
             try {
                 val attempts = (1..2).map {
-                    pool.submit<java.lang.String> {
+                    pool.submit<String> {
                         start.await()
                         try {
                             reserve(
