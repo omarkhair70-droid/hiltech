@@ -30,7 +30,7 @@ Review of the actual S02→S03 offline sequence identified an unavoidable confli
 
 **Narrow accepted engineering exception:** a captured WorkOrder version V may be followed by source version V+1 **only** when Room contains an APPLIED S02 Start/Block/Resume command for the **same actor, installation and WorkOrder**, with `base_version=V` and the **server-confirmed** `last_server_version=V+1`. Current assignment ID/version, bound EvidencePolicy ID/revision, source-authorized capture allowance, current status and server Evidence authorization must still match. Persist the *original* capture version; do not alter/rebase the Evidence row. Any unrelated/unknown source change, different device/actor, missing authoritative S02 ACK, or greater version drift remains REVIEW_REQUIRED with bytes preserved.
 
-When Evidence has **already been finalized** but is awaiting a server scan (`UPLOADED_UNVERIFIED` with server evidence ID), a metadata-only READY/status read is authorized by the existing Evidence endpoint itself. It must not be blocked by subsequent WorkOrder version changes; no new reservation/upload/command is performed in that path.
+When Evidence has **already been finalized** but is awaiting a server scan (`UPLOADED_UNVERIFIED` or `RETRYABLE` with persisted finalized server evidence ID), a metadata-only READY/status read is authorized by the existing Evidence endpoint itself. It must not be blocked by subsequent WorkOrder version changes; no new reservation/upload/command is performed in that path.
 
 No new backend lifecycle, FGA permission, EvidencePolicy or material authorization is introduced by this exception.
 

@@ -153,6 +153,26 @@ class FieldEvidenceUploadCoordinatorTest {
         assertEquals(LocalEvidenceStates.READY, db.evidenceQueueDao().get(id)?.localState)
     }
 
+    @Test fun transientMetadataErrorAfterQuarantineMustNotReserveOrUploadAgain() = withDb { db ->
+        db.evidenceQueueDao().insert(row().copy(
+            localState = LocalEvidenceStates.RETRYABLE,
+            serverEvidenceId = remoteId,
+            finalizedServerEvidenceId = remoteId,
+            uploadSessionId = session,
+            lastUploadErrorCode = "NETWORK_UNAVAILABLE",
+        ))
+        val remote = FakeRemote().apply {
+            bundleState = bundle().copy(workOrderVersion = 99)
+            metadataState = "READY"
+        }
+        val verified = engine(db, remote).replayOnce(actor, device)
+        assertEquals(1, verified.ready)
+        assertEquals(0, remote.reserves)
+        assertEquals(0, remote.uploads)
+        assertEquals(0, remote.finalizes)
+        assertEquals(LocalEvidenceStates.READY, db.evidenceQueueDao().get(id)?.localState)
+    }
+
     private fun engine(db: HiltechLocalDatabase, remote: FakeRemote) =
         FieldEvidenceUploadCoordinator(
             db, remote,

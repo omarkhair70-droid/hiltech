@@ -101,8 +101,7 @@ class FieldEvidenceUploadCoordinator(
 
         // Metadata-only follow-up is authorized by the server Evidence endpoint.
         // Once finalized, later WorkOrder edits must not erase a verified READY result.
-        if (row.localState == LocalEvidenceStates.UPLOADED_UNVERIFIED &&
-            row.finalizedServerEvidenceId != null) {
+        if (row.finalizedServerEvidenceId != null) {
             return verifyMetadata(row, actorId, installationId, row.finalizedServerEvidenceId)
         }
 
