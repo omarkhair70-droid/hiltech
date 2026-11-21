@@ -72,9 +72,17 @@ data class FieldMaterialUsageReconciliationRecord(
     val correlationId: String,
 )
 
+interface FieldMaterialUsageReconciliationPersistencePort {
+    fun source(reportOperationId: UUID, lock: Boolean = false): FieldMaterialUsageReviewSource?
+    fun reconciliation(reportOperationId: UUID): FieldMaterialUsageReconciliationRecord?
+    fun insert(record: FieldMaterialUsageReconciliationRecord)
+}
+
 @Repository
-class FieldMaterialUsageReconciliationPersistence(private val jdbc: JdbcTemplate) {
-    fun source(reportOperationId: UUID, lock: Boolean = false): FieldMaterialUsageReviewSource? {
+class FieldMaterialUsageReconciliationPersistence(
+    private val jdbc: JdbcTemplate,
+) : FieldMaterialUsageReconciliationPersistencePort {
+    override fun source(reportOperationId: UUID, lock: Boolean): FieldMaterialUsageReviewSource? {
         val suffix = if (lock) " FOR UPDATE" else ""
         return jdbc.query(
             """
@@ -104,7 +112,7 @@ class FieldMaterialUsageReconciliationPersistence(private val jdbc: JdbcTemplate
         ).singleOrNull()
     }
 
-    fun reconciliation(reportOperationId: UUID): FieldMaterialUsageReconciliationRecord? =
+    override fun reconciliation(reportOperationId: UUID): FieldMaterialUsageReconciliationRecord? =
         jdbc.query(
             """
             SELECT operation_id, report_operation_id, organization_id, warehouse_id,
@@ -131,7 +139,7 @@ class FieldMaterialUsageReconciliationPersistence(private val jdbc: JdbcTemplate
             reportOperationId,
         ).singleOrNull()
 
-    fun insert(record: FieldMaterialUsageReconciliationRecord) {
+    override fun insert(record: FieldMaterialUsageReconciliationRecord) {
         val inserted = jdbc.update(
             """
             INSERT INTO field_material_usage_reconciliation (
@@ -150,7 +158,7 @@ class FieldMaterialUsageReconciliationPersistence(private val jdbc: JdbcTemplate
 
 @Service
 class FieldMaterialUsageReconciliationService(
-    private val persistence: FieldMaterialUsageReconciliationPersistence,
+    private val persistence: FieldMaterialUsageReconciliationPersistencePort,
     private val warehouse: WarehousePersistencePort,
     private val authorization: WarehouseAuthorizationPort,
     private val fulfillment: StockFulfillmentPersistence,
