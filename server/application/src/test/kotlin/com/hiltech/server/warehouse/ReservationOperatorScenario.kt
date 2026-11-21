@@ -6,6 +6,8 @@ import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
 import com.hiltech.server.projects.ProjectAuthorizationPort
 import com.hiltech.server.projects.ProjectsPersistencePort
 import com.hiltech.server.telemetry.HiltechTelemetryRuntime
+import com.hiltech.server.work.FieldMaterialUsageReportRecord
+import com.hiltech.server.work.JdbcFieldMaterialUsageReportPersistence
 import com.hiltech.server.work.JdbcFieldPersonalIssuedStockRead
 import com.hiltech.server.work.ReadinessAssignmentService
 import com.hiltech.server.work.WorkOrderSnapshot
@@ -309,6 +311,39 @@ internal class ReservationOperatorScenario(
         assertEquals("SYNTH-RSV", ownRows.single().unitCode)
         assertEquals("8.000000", ownRows.single().outstandingQuantity)
         assertTrue(ownRows.single().sourceVersion >= 1)
+        // S04B PostgreSQL source proof: the reported usage claim must be
+        // persisted exactly once, immutable and leave stock movement unchanged.
+        val assignmentForReport = requireNotNull(jdbc.queryForObject(
+            "SELECT id FROM work_assignment WHERE work_order_id = ? ORDER BY id LIMIT 1",
+            UUID::class.java, order.workOrderId,
+        ))
+        val usageReports = JdbcFieldMaterialUsageReportPersistence(jdbc)
+        val proposedOperation = UUID.randomUUID()
+        val beforeMovementCount = requireNotNull(jdbc.queryForObject(
+            "SELECT count(*) FROM stock_movement WHERE work_order_id = ? AND stock_item_id = ?",
+            Int::class.java, order.workOrderId, item,
+        ))
+        usageReports.insertPending(FieldMaterialUsageReportRecord(
+            proposedOperation, org, order.projectId, order.siteId, order.workOrderId,
+            operator, employee, assignmentForReport, 1L, order.version,
+            previous.requirementId, item, ownRows.single().sourceVersion,
+            BigDecimal("3.000000"), "SYNTH-RSV", instant, instant,
+            "synthetic-field-usage-report",
+        ))
+        assertEquals(BigDecimal("3.000000"), usageReports.totalPending(
+            order.workOrderId, employee, previous.requirementId, item,
+        ), "A pending report must be counted but is not consumed stock.")
+        assertEquals(beforeMovementCount, jdbc.queryForObject(
+            "SELECT count(*) FROM stock_movement WHERE work_order_id = ? AND stock_item_id = ?",
+            Int::class.java, order.workOrderId, item,
+        ), "S04B report must NOT append a StockMovement.")
+        assertEquals("8.000000", personalStock.ownForWorkOrder(
+            org, order.projectId, order.siteId, order.workOrderId, employee,
+        ).single().outstandingQuantity, "S04B report must not change issued custody.")
+        assertThrows<DataIntegrityViolationException> {
+            jdbc.update("UPDATE field_material_usage_report SET state = 'RECONCILED' WHERE operation_id = ?",
+                proposedOperation)
+        }
         assertTrue(personalStock.ownForWorkOrder(
             org, order.projectId, order.siteId, order.workOrderId, UUID.randomUUID(),
         ).isEmpty(), "Another employee must not see this issued balance.")
