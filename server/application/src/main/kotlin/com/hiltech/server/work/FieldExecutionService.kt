@@ -83,6 +83,15 @@ class FieldExecutionService(
             FieldExecutionAction.BLOCK -> "FIELD_BLOCK_WORK"
             FieldExecutionAction.RESUME -> "FIELD_RESUME_WORK"
         }
+        val relation = when (command.action) {
+            FieldExecutionAction.START -> "can_start"
+            FieldExecutionAction.BLOCK -> "can_block"
+            FieldExecutionAction.RESUME -> "can_resume"
+        }
+        // This precheck runs even for an idempotent retry that returns a saved result.
+        // A former assignee is not allowed to retrieve old operation data after revocation.
+        if (!source.isCurrentAssignedUser(command.actorUserId, command.workOrderId, clock.instant()) ||
+            !authorization.canUseAssignedWork(command.actorUserId, command.workOrderId, relation)) hidden()
         val spec = IdempotentCommandSpec(
             operationId = command.operationId,
             actorUserId = command.actorUserId,
@@ -103,11 +112,6 @@ class FieldExecutionService(
             val assignment = readiness.activeAssignment(command.workOrderId) ?: hidden()
 
             // Recheck current membership and OpenFGA at application time, not when locally queued.
-            val relation = when (command.action) {
-                FieldExecutionAction.START -> "can_start"
-                FieldExecutionAction.BLOCK -> "can_block"
-                FieldExecutionAction.RESUME -> "can_resume"
-            }
             if (!source.isCurrentAssignedUser(command.actorUserId, command.workOrderId, now) ||
                 !authorization.canUseAssignedWork(command.actorUserId, command.workOrderId, relation)) hidden()
             if (assignment.assignmentId != command.assignmentId ||
