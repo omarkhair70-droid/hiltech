@@ -113,6 +113,30 @@ class KtorPendingCommandTransport(
             )
         }
 
+        // Never erase a pending field intent just because a session needs re-authentication.
+        if (status == 401) {
+            return CommandTransportResult.Retryable(
+                code = "REAUTH_REQUIRED",
+                correlationId = error.correlationId,
+                retryAfterMs = 900_000L,
+            )
+        }
+
+        if (command.commandType in setOf("StartWork", "BlockWork", "ResumeWork") &&
+            status in setOf(403, 404, 409)) {
+            return CommandTransportResult.Conflict(
+                conflictType = when (status) {
+                    403 -> "PERMISSION_REVOKED"
+                    404 -> "ASSIGNMENT_UNAVAILABLE"
+                    else -> error.code.takeUnless { it == "HTTP_ERROR" } ?: "FIELD_STATE_CONFLICT"
+                },
+                currentVersion = error.currentVersion,
+                safeServerStateJson = "{}",
+                allowedRecoveryActionsJson = """["REVIEW_LOCAL_WORK","CONTACT_SUPERVISOR"]""",
+                correlationId = error.correlationId,
+            )
+        }
+
         if (status == 429 || status >= 500 || error.retryable || error.code == "FAILED_RETRYABLE") {
             return CommandTransportResult.Retryable(
                 code = error.code,

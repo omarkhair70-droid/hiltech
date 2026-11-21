@@ -203,13 +203,40 @@ class KtorPendingCommandTransportTest {
         )
 
         assertEquals(
-            CommandTransportResult.Terminal(
+            CommandTransportResult.Retryable(
                 code = "REAUTH_REQUIRED",
                 correlationId = "reauth-corr",
-                currentVersion = null,
+                retryAfterMs = 900_000L,
             ),
             reauth,
         )
+    }
+
+    @Test
+    fun fieldAccessDenialAndStaleVersionPreserveLocalIntentAsConflict() = runBlocking {
+        for ((status, expected) in listOf(
+            HttpStatusCode.Forbidden to "PERMISSION_REVOKED",
+            HttpStatusCode.NotFound to "ASSIGNMENT_UNAVAILABLE",
+            HttpStatusCode.Conflict to "VERSION_CONFLICT",
+        )) {
+            val engine = MockEngine {
+                respond(
+                    content = """{"code":"VERSION_CONFLICT","message":"Work was changed","correlationId":"source-conflict","retryable":false}""",
+                    status = status,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            }
+            val result = transport(engine).execute(
+                command(
+                    operationId = "field-deny-op",
+                    commandType = "StartWork",
+                    targetType = "WorkOrder",
+                    targetId = "work-42",
+                ),
+            ) as CommandTransportResult.Conflict
+            assertEquals(expected, result.conflictType)
+            assertTrue(result.allowedRecoveryActionsJson.contains("REVIEW_LOCAL_WORK"))
+        }
     }
 
     @Test

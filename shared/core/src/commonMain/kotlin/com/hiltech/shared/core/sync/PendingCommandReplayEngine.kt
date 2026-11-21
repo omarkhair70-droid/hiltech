@@ -8,6 +8,11 @@ import com.hiltech.shared.core.local.PendingCommandStates
 import kotlinx.coroutines.CancellationException
 import kotlin.random.Random
 
+data class CommandReplayScope(
+    val actorIdentityId: String,
+    val installationId: String,
+)
+
 sealed interface CommandTransportResult {
     data class Applied(
         val currentVersion: Long?,
@@ -93,10 +98,15 @@ class PendingCommandReplayEngine(
     private val transport: PendingCommandTransport,
     private val clock: SyncClock = SystemSyncClock,
     private val backoffPolicy: FirstSliceRetryBackoffPolicy = FirstSliceRetryBackoffPolicy(),
+    private val replayScope: CommandReplayScope? = null,
 ) {
     suspend fun replayOnce(): ReplaySummary {
         val now = clock.nowEpochMs()
-        val candidates = database.pendingCommandDao().listSyncable(now)
+        val candidates = database.pendingCommandDao().listSyncable(now).filter { command ->
+            replayScope == null ||
+                (command.actorUserIdentityId == replayScope.actorIdentityId &&
+                    command.deviceId == replayScope.installationId)
+        }
 
         var attempted = 0
         var applied = 0

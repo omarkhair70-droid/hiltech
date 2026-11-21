@@ -5,6 +5,8 @@ import android.content.Context
 import com.hiltech.android.identity.AndroidIdentityRuntime
 import com.hiltech.android.sync.AndroidSessionTokenProvider
 import com.hiltech.android.sync.AndroidSyncRuntime
+import com.hiltech.android.sync.AndroidVerifiedActorProvider
+import com.hiltech.shared.core.field.FieldExecutionQueue
 import com.hiltech.shared.core.local.buildHiltechLocalDatabase
 import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
 import com.hiltech.shared.core.network.HiltechApiClient
@@ -88,6 +90,10 @@ class HiltechApplication : Application() {
         )
     }
 
+    val fieldExecutionQueue by lazy {
+        FieldExecutionQueue(localDatabase)
+    }
+
     val fieldOfflineReadCache by lazy {
         FieldOfflineReadCache(localDatabase)
     }
@@ -106,6 +112,9 @@ class HiltechApplication : Application() {
             apiBaseUrl = BuildConfig.HILTECH_API_BASE_URL,
             sessionTokenProvider = AndroidSessionTokenProvider {
                 identityRuntime.currentAccessToken()
+            },
+            verifiedActorProvider = AndroidVerifiedActorProvider {
+                identityRuntime.restoreIdentity()?.identityId
             },
             installationId = installationId,
             clientVersion = BuildConfig.VERSION_NAME,

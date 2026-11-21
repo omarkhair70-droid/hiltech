@@ -169,7 +169,21 @@ class FieldAssignedWorkService(
             waitingReasonCodes =
                 waiting,
             executionCapabilities =
-                FieldExecutionCapabilities(),
+                FieldExecutionCapabilities(
+                    startOffline = order.lifecycleState == WorkOrderLifecycle.ASSIGNED &&
+                        order.readinessState == WorkReadiness.READY &&
+                        context.project.lifecycleState == "ACTIVE" &&
+                        authorization.canUseAssignedWork(actorUserId, workOrderId, "can_start"),
+                    blockOffline = order.lifecycleState == WorkOrderLifecycle.IN_PROGRESS &&
+                        authorization.canUseAssignedWork(actorUserId, workOrderId, "can_block"),
+                    resumeOffline = order.lifecycleState == WorkOrderLifecycle.BLOCKED &&
+                        order.readinessState == WorkReadiness.READY &&
+                        context.project.lifecycleState == "ACTIVE" &&
+                        blockers.count { it.blockerTypeCode == "FIELD_EXECUTION" } == 1 &&
+                        authorization.canUseAssignedWork(actorUserId, workOrderId, "can_resume"),
+                    // Permission to stage a local intent is never permission to apply it offline.
+                    authoritativeOfflineQueue = false,
+                ),
             asOf = now,
         )
     }
@@ -218,7 +232,8 @@ class FieldAssignedWorkService(
             order.lifecycleState ==
                 WorkOrderLifecycle.ASSIGNED &&
                 order.readinessState ==
-                    WorkReadiness.READY
+                    WorkReadiness.READY &&
+                context.project.lifecycleState == "ACTIVE"
 
         return FieldTodayItem(
             workOrderId =

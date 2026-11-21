@@ -239,6 +239,9 @@ fun HiltechShell(
     onProjectCommandCenterAction: (ProjectCommandCenterUiAction) -> Unit = {},
     onRefreshFieldWork: () -> Unit = {},
     onSelectFieldWork: (String) -> Unit = {},
+    captureFieldIntent: Boolean = false,
+    onQueueFieldIntent:
+        (com.hiltech.shared.core.field.FieldExecutionIntent, String?) -> Unit = { _, _ -> },
     warehouseOperator: @Composable () -> Unit = {},
 ) {
     MaterialTheme {
@@ -466,6 +469,8 @@ fun HiltechShell(
                                 onRefreshFieldWork,
                             onSelectWork =
                                 onSelectFieldWork,
+                            captureFieldIntent = captureFieldIntent,
+                            onQueueFieldIntent = onQueueFieldIntent,
                         )
                     }
 

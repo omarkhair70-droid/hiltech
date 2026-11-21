@@ -61,6 +61,18 @@ interface PendingCommandDao {
     @Query(
         """
         SELECT * FROM pending_command
+        WHERE actor_user_identity_id = :identityId AND target_type = 'WorkOrder'
+          AND target_id = :workOrderId
+          AND command_type IN ('StartWork', 'BlockWork', 'ResumeWork')
+          AND state NOT IN ('APPLIED', 'CANCELLED_LOCAL')
+        ORDER BY local_sequence DESC
+        """,
+    )
+    suspend fun outstandingFieldCommand(identityId: String, workOrderId: String): List<PendingCommandEntity>
+
+    @Query(
+        """
+        SELECT * FROM pending_command
         WHERE state IN ('PENDING', 'RETRYABLE')
           AND (next_retry_at_epoch_ms IS NULL OR next_retry_at_epoch_ms <= :nowEpochMs)
         ORDER BY local_sequence ASC
@@ -123,6 +135,21 @@ interface PendingCommandDao {
 
     @Query(
         """
+        SELECT MIN(next_retry_at_epoch_ms)
+        FROM pending_command
+        WHERE actor_user_identity_id = :identityId
+          AND device_id = :installationId
+          AND state = 'RETRYABLE'
+          AND next_retry_at_epoch_ms IS NOT NULL
+        """,
+    )
+    suspend fun earliestRetryAtForActor(
+        identityId: String,
+        installationId: String,
+    ): Long?
+
+    @Query(
+        """
         SELECT COUNT(*)
         FROM pending_command
         WHERE state = 'FAILED_TERMINAL'
@@ -130,6 +157,38 @@ interface PendingCommandDao {
         """,
     )
     suspend fun terminalCountByResultCode(resultCode: String): Int
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM pending_command
+        WHERE actor_user_identity_id = :identityId
+          AND device_id = :installationId
+          AND state = 'RETRYABLE'
+          AND last_result_code = 'REAUTH_REQUIRED'
+        """,
+    )
+    suspend fun pausedForReauthCount(
+        identityId: String,
+        installationId: String,
+    ): Int
+
+    @Query(
+        """
+        UPDATE pending_command
+        SET state = 'PENDING',
+            next_retry_at_epoch_ms = NULL,
+            updated_at_epoch_ms = :nowEpochMs
+        WHERE actor_user_identity_id = :identityId
+          AND device_id = :installationId
+          AND state = 'RETRYABLE'
+          AND last_result_code = 'REAUTH_REQUIRED'
+        """,
+    )
+    suspend fun releaseReauthenticatedCommands(
+        identityId: String,
+        installationId: String,
+        nowEpochMs: Long,
+    ): Int
 }
 
 @Dao

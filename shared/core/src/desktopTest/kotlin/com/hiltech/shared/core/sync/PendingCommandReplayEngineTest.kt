@@ -118,6 +118,85 @@ class PendingCommandReplayEngineTest {
         assertEquals(12, conflict.currentServerVersion)
     }
 
+    @Test
+    fun authenticatedActorAndInstallationPreventCrossAccountReplay() = withDatabase { db ->
+        val own = "00000000-0000-4000-8000-000000007101"
+        val foreign = "00000000-0000-4000-8000-000000007102"
+        val foreignDevice = "00000000-0000-4000-8000-000000007103"
+        val actor = "00000000-0000-0000-0000-000000009001"
+        db.pendingCommandDao().insert(
+            pendingCommand(own, sequence = 1).copy(deviceId = "device-42"),
+        )
+        db.pendingCommandDao().insert(
+            pendingCommand(foreign, sequence = 2).copy(
+                actorUserIdentityId = "00000000-0000-0000-0000-000000009099",
+                deviceId = "device-42",
+            ),
+        )
+        db.pendingCommandDao().insert(
+            pendingCommand(foreignDevice, sequence = 3).copy(
+                deviceId = "other-device",
+            ),
+        )
+        val called = mutableListOf<String>()
+        val engine = PendingCommandReplayEngine(
+            database = db,
+            transport = PendingCommandTransport { command ->
+                called.add(command.operationId)
+                CommandTransportResult.Applied(8, "scope-ok")
+            },
+            clock = FixedClock(1_700_000_010_000L),
+            replayScope = CommandReplayScope(actor, "device-42"),
+        )
+        val result = engine.replayOnce()
+        assertEquals(listOf(own), called)
+        assertEquals(1, result.applied)
+        assertEquals(PendingCommandStates.APPLIED, db.pendingCommandDao().get(own)?.state)
+        assertEquals(PendingCommandStates.PENDING, db.pendingCommandDao().get(foreign)?.state)
+        assertEquals(PendingCommandStates.PENDING, db.pendingCommandDao().get(foreignDevice)?.state)
+    }
+
+    @Test
+    fun reauthUnlocksOnlyMatchingActorDeviceWithoutLosingOriginalOperation() = withDatabase { db ->
+        val own = "00000000-0000-4000-8000-000000008101"
+        val otherActor = "00000000-0000-4000-8000-000000008102"
+        val otherDevice = "00000000-0000-4000-8000-000000008103"
+        val actor = "00000000-0000-0000-0000-000000009001"
+        val paused = pendingCommand(own, sequence = 1).copy(
+            deviceId = "device-42",
+            state = PendingCommandStates.RETRYABLE,
+            lastResultCode = "REAUTH_REQUIRED",
+            nextRetryAtEpochMs = 1_700_001_000_000L,
+        )
+        db.pendingCommandDao().insert(paused)
+        db.pendingCommandDao().insert(paused.copy(
+            operationId = otherActor, localSequence = 2,
+            actorUserIdentityId = "00000000-0000-0000-0000-000000009099",
+        ))
+        db.pendingCommandDao().insert(paused.copy(
+            operationId = otherDevice, localSequence = 3,
+            deviceId = "other-device",
+        ))
+        val released = db.pendingCommandDao().releaseReauthenticatedCommands(
+            actor, "device-42", 1_700_000_001_000L,
+        )
+        assertEquals(1, released)
+        val ownAfter = assertNotNull(db.pendingCommandDao().get(own))
+        assertEquals(PendingCommandStates.PENDING, ownAfter.state)
+        assertEquals(null, ownAfter.nextRetryAtEpochMs)
+        assertEquals(paused.payloadJson, ownAfter.payloadJson)
+        assertEquals(own, ownAfter.operationId)
+        assertEquals(PendingCommandStates.RETRYABLE, db.pendingCommandDao().get(otherActor)?.state)
+        assertEquals(PendingCommandStates.RETRYABLE, db.pendingCommandDao().get(otherDevice)?.state)
+        assertEquals(0, db.pendingCommandDao().pausedForReauthCount(actor, "device-42"))
+        assertEquals(1, db.pendingCommandDao().pausedForReauthCount(
+            "00000000-0000-0000-0000-000000009099", "device-42",
+        ))
+        assertEquals(1, db.pendingCommandDao().pausedForReauthCount(actor, "other-device"))
+        assertEquals(null, db.pendingCommandDao().earliestRetryAtForActor(actor, "device-42"))
+        assertEquals(1_700_001_000_000L, db.pendingCommandDao().earliestRetryAtForActor(actor, "other-device"))
+    }
+
     private fun zeroJitterPolicy(): FirstSliceRetryBackoffPolicy =
         FirstSliceRetryBackoffPolicy(RetryJitterSource { 0.0 })
 
