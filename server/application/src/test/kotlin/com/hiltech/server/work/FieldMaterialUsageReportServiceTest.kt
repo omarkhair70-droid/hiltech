@@ -1,5 +1,6 @@
 package com.hiltech.server.work
 
+import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.people.EmployeeAggregateSnapshot
 import com.hiltech.server.people.EmployeeState
@@ -123,7 +124,9 @@ class FieldMaterialUsageReportServiceTest {
         assertEquals(itemId, captured.value.stockItemId)
         assertEquals(requirementId, captured.value.requirementId)
         assertEquals(0, captured.value.quantity.compareTo(BigDecimal("2.5")))
-        Mockito.verify(audit).append(Mockito.any())
+        val auditRecord = ArgumentCaptor.forClass(AuditEventRecord::class.java)
+        Mockito.verify(audit).append(auditRecord.capture())
+        assertEquals("FIELD_MATERIAL_USAGE_REPORTED", auditRecord.value.action)
     }
 
     @Test
@@ -147,7 +150,7 @@ class FieldMaterialUsageReportServiceTest {
         authorize()
         assertEquals("FIELD_ISSUED_STOCK_VERSION_CONFLICT",
             assertThrows<ProductApiException> { service.report(command(version = 3)) }.code)
-        Mockito.verify(reports, Mockito.never()).insertPending(Mockito.any())
+        Mockito.verifyNoInteractions(reports)
     }
 
     @Test
@@ -157,7 +160,8 @@ class FieldMaterialUsageReportServiceTest {
             .thenReturn(BigDecimal("7.25"))
         assertEquals("FIELD_MATERIAL_USAGE_EXCEEDS_OUTSTANDING",
             assertThrows<ProductApiException> { service.report(command(quantity = "1.000000")) }.code)
-        Mockito.verify(reports, Mockito.never()).insertPending(Mockito.any())
+        Mockito.verify(reports).totalPending(workId, employeeId, requirementId, itemId)
+        Mockito.verifyNoMoreInteractions(reports)
     }
 
     @Test
@@ -165,7 +169,7 @@ class FieldMaterialUsageReportServiceTest {
         authorize(serialized = true)
         assertEquals("FIELD_MATERIAL_USAGE_INVALID",
             assertThrows<ProductApiException> { service.report(command(quantity = "0.5")) }.code)
-        Mockito.verify(reports, Mockito.never()).insertPending(Mockito.any())
+        Mockito.verifyNoInteractions(reports)
     }
 
     @Test
@@ -184,6 +188,6 @@ class FieldMaterialUsageReportServiceTest {
         authorize(lifecycle = WorkOrderLifecycle.ASSIGNED)
         assertEquals("FIELD_WORK_NOT_ACTIVE",
             assertThrows<ProductApiException> { service.report(command()) }.code)
-        Mockito.verify(reports, Mockito.never()).insertPending(Mockito.any())
+        Mockito.verifyNoInteractions(reports)
     }
 }
