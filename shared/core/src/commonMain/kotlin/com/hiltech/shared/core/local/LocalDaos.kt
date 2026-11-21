@@ -64,7 +64,7 @@ interface PendingCommandDao {
         WHERE actor_user_identity_id = :identityId AND target_type = 'WorkOrder'
           AND target_id = :workOrderId
           AND command_type IN ('StartWork', 'BlockWork', 'ResumeWork')
-          AND state NOT IN ('APPLIED', 'CANCELLED_LOCAL', 'FAILED_TERMINAL')
+          AND state NOT IN ('APPLIED', 'CANCELLED_LOCAL')
         ORDER BY local_sequence DESC
         """,
     )
