@@ -3039,6 +3039,116 @@ class ProjectsPostgresOpenFgaContractTest {
                     .authoritativeOfflineQueue,
             )
 
+            // Phase 6 Slice02: real PostgreSQL + active FGA assignment + idempotency
+            // execution test. Roll back the isolated scenario so later Phase04
+            // reassignment and revoked-membership assertions keep the original source.
+            transaction.execute { rollback ->
+                val fieldExecution = com.hiltech.server.work.FieldExecutionService(
+                    work = JdbcWorkPersistence(jdbc),
+                    readiness = JdbcReadinessAssignmentPersistence(jdbc),
+                    source = fieldSource,
+                    authorization = assignedAuthorization,
+                    projects = JdbcProjectsPersistence(jdbc),
+                    persistence = com.hiltech.server.work.JdbcFieldExecutionPersistence(jdbc),
+                    idempotency = JdbcIdempotentCommandExecutor(
+                        jdbc = jdbc,
+                        transactionManager = txManager,
+                        clock = clock,
+                        telemetry = telemetry,
+                    ),
+                    audit = JdbcAuditEventWriter(jdbc),
+                    events = ApplicationEventPublisher { event -> published += event },
+                    clock = clock,
+                )
+                val start = com.hiltech.server.work.FieldExecutionCommand(
+                    operationId = UUID.randomUUID(),
+                    workOrderId = firstSlice04Order.workOrderId,
+                    action = com.hiltech.server.work.FieldExecutionAction.START,
+                    assignmentId = userBundle.assignment.assignmentId,
+                    assignmentVersion = userBundle.assignment.version,
+                    baseVersion = userBundle.workOrderVersion,
+                    clientOccurredAt = clock.instant(),
+                    actorUserId = ids.oldPm,
+                    correlationId = "corr-p6-start",
+                )
+                val denied = assertThrows<ProductApiException> {
+                    fieldExecution.execute(start.copy(
+                        operationId = UUID.randomUUID(),
+                        actorUserId = ids.ordinaryMember,
+                    ))
+                }
+                assertEquals("OBJECT_NOT_VISIBLE", denied.code)
+
+                val staleAssignment = assertThrows<ProductApiException> {
+                    fieldExecution.execute(start.copy(
+                        operationId = UUID.randomUUID(),
+                        assignmentVersion = start.assignmentVersion + 1,
+                    ))
+                }
+                assertEquals("ASSIGNMENT_CHANGED", staleAssignment.code)
+
+                val started = fieldExecution.execute(start)
+                assertEquals(WorkOrderLifecycle.IN_PROGRESS, started.lifecycleState)
+                assertFalse(started.replayed)
+                assertEquals(started.version, fieldExecution.execute(start).version)
+                assertTrue(fieldExecution.execute(start).replayed)
+                val changedOperation = assertThrows<ProductApiException> {
+                    fieldExecution.execute(start.copy(baseVersion = start.baseVersion + 1))
+                }
+                assertEquals("IDEMPOTENCY_KEY_REUSED", changedOperation.code)
+                val staleVersion = assertThrows<ProductApiException> {
+                    fieldExecution.execute(start.copy(operationId = UUID.randomUUID()))
+                }
+                assertEquals("VERSION_CONFLICT", staleVersion.code)
+
+                val startedBundle = fieldService.jobBundle(ids.oldPm, start.workOrderId)
+                assertFalse(startedBundle.executionCapabilities.startOffline)
+                assertTrue(startedBundle.executionCapabilities.blockOffline)
+                val block = start.copy(
+                    operationId = UUID.randomUUID(),
+                    action = com.hiltech.server.work.FieldExecutionAction.BLOCK,
+                    baseVersion = started.version,
+                    reason = "Blocked access at field location",
+                    correlationId = "corr-p6-block",
+                )
+                val blocked = fieldExecution.execute(block)
+                assertEquals(WorkOrderLifecycle.BLOCKED, blocked.lifecycleState)
+                val blockerId = requireNotNull(blocked.blockerId)
+                val blockedBundle = fieldService.jobBundle(ids.oldPm, start.workOrderId)
+                assertEquals(blockerId, blockedBundle.blockers.single {
+                    it.blockerTypeCode == "FIELD_EXECUTION"
+                }.blockerId)
+                assertTrue(blockedBundle.executionCapabilities.resumeOffline)
+                val resume = block.copy(
+                    operationId = UUID.randomUUID(),
+                    action = com.hiltech.server.work.FieldExecutionAction.RESUME,
+                    baseVersion = blocked.version,
+                    reason = "Site access restored",
+                    blockerId = blockerId,
+                    correlationId = "corr-p6-resume",
+                )
+                val resumed = fieldExecution.execute(resume)
+                assertEquals(WorkOrderLifecycle.IN_PROGRESS, resumed.lifecycleState)
+                assertTrue(fieldExecution.execute(resume).replayed)
+                assertTrue(fieldService.jobBundle(ids.oldPm, start.workOrderId).blockers.none {
+                    it.blockerId == blockerId
+                })
+                assertEquals(
+                    "RESOLVED",
+                    jdbc.queryForObject(
+                        "SELECT state FROM work_blocker WHERE id = ?",
+                        String::class.java,
+                        blockerId,
+                    ),
+                )
+                rollback.setRollbackOnly()
+            }
+            assertEquals(
+                WorkOrderLifecycle.ASSIGNED,
+                workService.get(ids.teamUser, firstSlice04Order.workOrderId).lifecycleState,
+                "Isolated field execution proof must not mutate subsequent Phase4 scenarios.",
+            )
+
             val teamFieldAssignment =
                 UUID.randomUUID()
             jdbc.update(
