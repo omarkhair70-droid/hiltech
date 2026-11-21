@@ -42,8 +42,8 @@ FOR EACH ROW EXECUTE FUNCTION enforce_engineering_test_template_ref();
 CREATE TABLE field_engineering_test_result (
     operation_id uuid PRIMARY KEY,
     organization_id uuid NOT NULL REFERENCES organization(id) ON DELETE RESTRICT,
-    work_order_id uuid NOT NULL REFERENCES work_order(id) ON DELETE RESTRICT,
-    assignment_id uuid NOT NULL REFERENCES work_assignment(id) ON DELETE RESTRICT,
+    work_order_id uuid NOT NULL,
+    assignment_id uuid NOT NULL,
     assignment_version bigint NOT NULL CHECK (assignment_version >= 1),
     captured_by_user_id uuid NOT NULL REFERENCES user_identity(id) ON DELETE RESTRICT,
     device_installation_id uuid NOT NULL,
@@ -70,6 +70,12 @@ CREATE TABLE field_engineering_test_result (
     created_at timestamptz NOT NULL,
     correlation_id varchar(128) NOT NULL CHECK (length(btrim(correlation_id)) > 0),
     version bigint NOT NULL DEFAULT 1 CHECK (version >= 1),
+    CONSTRAINT fk_field_engineering_test_work_org
+        FOREIGN KEY (work_order_id, organization_id)
+        REFERENCES work_order(id, organization_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_field_engineering_test_assignment_work
+        FOREIGN KEY (assignment_id, work_order_id)
+        REFERENCES work_assignment(id, work_order_id) ON DELETE RESTRICT,
     CHECK (supersedes_result_id IS NULL OR supersedes_result_id <> operation_id)
 );
 
