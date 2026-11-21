@@ -25,6 +25,7 @@ data class FieldPersonalIssuedStockRow(
     val outstandingQuantity: String,
     val sourceVersion: Long,
     val updatedAt: Instant,
+    val serialized: Boolean = false,
 )
 
 interface FieldPersonalIssuedStockReadPort {
@@ -53,7 +54,7 @@ class JdbcFieldPersonalIssuedStockRead(
             SELECT b.organization_id, b.project_id, b.site_id,
                    b.work_order_id, b.employee_id, b.requirement_id,
                    b.stock_item_id, s.item_code, s.name AS item_name,
-                   s.unit_of_measure_code, b.outstanding_qty, b.version,
+                   s.unit_of_measure_code, s.serialized, b.outstanding_qty, b.version,
                    b.updated_at
             FROM stock_issued_balance b
             JOIN work_resource_request req
@@ -92,6 +93,7 @@ class JdbcFieldPersonalIssuedStockRead(
                     outstandingQuantity = row.getBigDecimal("outstanding_qty").toPlainString(),
                     sourceVersion = row.getLong("version"),
                     updatedAt = row.getObject("updated_at", OffsetDateTime::class.java).toInstant(),
+                    serialized = row.getBoolean("serialized"),
                 )
             },
             organizationId, projectId, siteId, workOrderId, employeeId,

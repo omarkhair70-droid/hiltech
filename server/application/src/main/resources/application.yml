@@ -24,6 +24,12 @@ hiltech:
     personal-issued-stock:
       enabled: ${HILTECH_FIELD_PERSONAL_ISSUED_STOCK_ENABLED:false}
 
+  # S04B reports are append-only proposals, NEVER a stock consumption.
+  # Remains OFF until field/supervisor/warehouse authority and review are signed off.
+  field:
+    material-usage-report:
+      enabled: ${HILTECH_FIELD_MATERIAL_USAGE_REPORT_ENABLED:false}
+
   activity:
     cursor-signing-key: ${HILTECH_ACTIVITY_CURSOR_SIGNING_KEY:}
 

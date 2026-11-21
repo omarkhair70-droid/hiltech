@@ -1,0 +1,33 @@
+name: Phase 6 — Field Material Usage Report (No Stock Mutation)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "database/migrations/V0034__field_material_usage_report__phase6_slice04b.sql"
+      - "server/application/src/main/kotlin/com/hiltech/server/work/FieldMaterialUsageReport*"
+      - "server/application/src/main/kotlin/com/hiltech/server/work/FieldPersonalIssuedStockPersistence.kt"
+      - "server/application/src/main/resources/application.yml"
+      - "server/application/src/test/kotlin/com/hiltech/server/work/FieldMaterialUsageReport*"
+      - ".github/workflows/phase6-field-material-usage-report.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pending-report-policy-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+      - name: Source authorization and no stock write
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.work.FieldMaterialUsageReportServiceTest \
+            --no-configuration-cache --console=plain
