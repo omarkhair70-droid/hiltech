@@ -1,6 +1,13 @@
 package com.hiltech.android
 
 import android.os.Bundle
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import com.hiltech.shared.core.field.FieldExecutionIntent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import android.widget.TextView
@@ -59,6 +66,69 @@ class AssignedWorkEvidenceActivity :
                 app.fieldOfflineReadCache.saveBundle(identity.identityId, jobBundle())
             }
             setContentView(TextView(this).apply { text = "PHASE6_COLD_OFFLINE_SEEDED" })
+            return
+        }
+
+        if (mode == "field-command-start" || mode == "field-command-persisted") {
+            // Debug-only native proof: actual shared execution controls write to
+            // production Room queue; no synthetic identity is authorized for any
+            // production endpoint or WorkOrder mutation.
+            val app = application as HiltechApplication
+            val sourceBundle = jobBundle().copy(
+                lifecycleState = "ASSIGNED",
+                readinessState = "READY",
+                blockers = emptyList(),
+                waitingReasonCodes = emptyList(),
+                executionCapabilities = FieldExecutionCapabilitiesDto(
+                    startOffline = true,
+                    blockOffline = false,
+                    resumeOffline = false,
+                    evidenceCaptureOffline = false,
+                    submitOffline = false,
+                    authoritativeOfflineQueue = false,
+                ),
+            )
+            val existing = if (mode == "field-command-persisted") {
+                runBlocking {
+                    app.fieldExecutionQueue.outstanding(fixtureIdentity().identityId, WORK_ORDER_ID)
+                }
+            } else null
+            val initial = fixtureState("detail").copy(
+                today = listOf(todayItem(actionable = true)),
+                selectedBundle = sourceBundle,
+                pendingFieldIntent = existing,
+                fieldIntentMessage = null,
+            )
+            setContent {
+                var field by remember { mutableStateOf(initial) }
+                HiltechShell(
+                    state = HiltechShellState.SignedIn(
+                        identity = fixtureIdentity(),
+                        field = field,
+                    ),
+                    captureFieldIntent = true,
+                    onQueueFieldIntent = { action: FieldExecutionIntent, explanation: String? ->
+                        lifecycleScope.launch {
+                            runCatching {
+                                app.fieldExecutionQueue.queue(
+                                    identityId = fixtureIdentity().identityId,
+                                    installationId = app.installationId,
+                                    bundle = sourceBundle,
+                                    action = action,
+                                    operationId = java.util.UUID.randomUUID().toString(),
+                                    nowEpochMs = System.currentTimeMillis(),
+                                    verifiedOnlineThisSession = true,
+                                    explanation = explanation,
+                                )
+                            }.onSuccess {
+                                field = field.copy(pendingFieldIntent = it)
+                            }.onFailure {
+                                field = field.copy(fieldIntentMessage = it.message)
+                            }
+                        }
+                    },
+                )
+            }
             return
         }
 
