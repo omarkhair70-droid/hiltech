@@ -19,7 +19,6 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicReference
 
 class FieldMaterialUsageReconciliationServiceTest {
     private val actor = UUID.randomUUID()
@@ -36,7 +35,11 @@ class FieldMaterialUsageReconciliationServiceTest {
     private val now = Instant.parse("2026-11-21T20:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
 
-    private val persistence = Mockito.mock(FieldMaterialUsageReconciliationPersistence::class.java)
+    private val source = FieldMaterialUsageReviewSource(
+        reportId, org, project, site, workId, employee, requirement, item,
+        9, 4, BigDecimal("2.000000"), "M",
+    )
+    private val persistence = FakePersistence(source)
     private val warehouses = Mockito.mock(WarehousePersistencePort::class.java)
     private val authorization = Mockito.mock(WarehouseAuthorizationPort::class.java)
     private val fulfillment = Mockito.mock(StockFulfillmentPersistence::class.java)
@@ -45,13 +48,24 @@ class FieldMaterialUsageReconciliationServiceTest {
     private val audit = Mockito.mock(AuditEventWriter::class.java)
     private val location = Mockito.mock(StorageLocationSnapshot::class.java)
     private val order = Mockito.mock(WorkOrderSnapshot::class.java)
-    private val stored = AtomicReference<FieldMaterialUsageReconciliationRecord?>()
-
-    private val source = FieldMaterialUsageReviewSource(
-        reportId, org, project, site, workId, employee, requirement, item,
-        9, 4, BigDecimal("2.000000"), "M",
-    )
     private val facility = WarehouseSnapshot(warehouseId, org, "WH-A", "Warehouse", null, true, 1)
+
+    private class FakePersistence(
+        private val sourceValue: FieldMaterialUsageReviewSource,
+    ) : FieldMaterialUsageReconciliationPersistencePort {
+        var resolution: FieldMaterialUsageReconciliationRecord? = null
+
+        override fun source(reportOperationId: UUID, lock: Boolean): FieldMaterialUsageReviewSource? =
+            sourceValue.takeIf { it.operationId == reportOperationId }
+
+        override fun reconciliation(reportOperationId: UUID): FieldMaterialUsageReconciliationRecord? =
+            resolution?.takeIf { it.reportOperationId == reportOperationId }
+
+        override fun insert(record: FieldMaterialUsageReconciliationRecord) {
+            check(resolution == null)
+            resolution = record
+        }
+    }
 
     private class ImmediateCommands : IdempotentCommandExecutor {
         override fun execute(
@@ -67,13 +81,6 @@ class FieldMaterialUsageReconciliationServiceTest {
         )
 
     private fun allowed() {
-        Mockito.`when`(persistence.source(reportId)).thenReturn(source)
-        Mockito.`when`(persistence.source(reportId, true)).thenReturn(source)
-        Mockito.`when`(persistence.reconciliation(reportId)).thenAnswer { stored.get() }
-        Mockito.doAnswer {
-            stored.set(it.arguments.single() as FieldMaterialUsageReconciliationRecord)
-            null
-        }.`when`(persistence).insert(Mockito.any(FieldMaterialUsageReconciliationRecord::class.java))
         Mockito.`when`(warehouses.warehouse(warehouseId)).thenReturn(facility)
         Mockito.`when`(authorization.canReserveResources(actor, facility)).thenReturn(true)
         Mockito.`when`(fulfillment.origins(item, requirement, employee)).thenReturn(listOf(locationId))
@@ -88,18 +95,17 @@ class FieldMaterialUsageReconciliationServiceTest {
         Mockito.`when`(work.workOrder(workId)).thenReturn(order)
     }
 
-    private fun request(decision: String, reason: String? = null) =
-        FieldMaterialUsageReconciliationRequest(UUID.randomUUID(), decision, 9, 4, reason)
-
     @Test fun `feature is unavailable while rollout flag is off`() {
+        val operation = UUID.randomUUID()
         val error = assertThrows<ProductApiException> {
             service(false).reconcile(
-                StockCommandContext(UUID.randomUUID(), actor, "test"),
-                warehouseId, reportId, request("REJECT", "Not used"),
+                StockCommandContext(operation, actor, "test"),
+                warehouseId, reportId,
+                FieldMaterialUsageReconciliationRequest(operation, "REJECT", 9, 4, "Not used"),
             )
         }
         assertEquals("FIELD_MATERIAL_REVIEW_UNAVAILABLE", error.code)
-        Mockito.verifyNoInteractions(persistence)
+        assertEquals(null, persistence.resolution)
     }
 
     @Test fun `consume creates canonical movement link once`() {
@@ -107,22 +113,22 @@ class FieldMaterialUsageReconciliationServiceTest {
         Mockito.`when`(fulfillment.issued(item, workId)).thenReturn(
             listOf(IssuedStockContext(item, employee, project, site, workId, requirement, "5.000000", 4)),
         )
-        val movement = UUID.randomUUID()
-        Mockito.`when`(
-            stockService.consume(
-                Mockito.any(StockCommandContext::class.java),
-                Mockito.eq(item),
-                Mockito.any(AdjustIssuedStockRequest::class.java),
-            ),
-        ).thenAnswer {
-            val body = it.arguments[2] as AdjustIssuedStockRequest
-            StockFulfillmentReceipt(
-                movement, body.operationId, "CONSUME", item, employee, workId,
-                requirement, body.quantity, body.unitCode, replayed = false,
-            )
-        }
-
         val operation = UUID.randomUUID()
+        val stockOperation = UUID.nameUUIDFromBytes(
+            "hiltech:field-material-usage:consume:$reportId".toByteArray(Charsets.UTF_8),
+        )
+        val stockContext = StockCommandContext(stockOperation, actor, "consume-test")
+        val stockRequest = AdjustIssuedStockRequest(
+            stockOperation, workId, requirement, employee, 9, 4, "2", "M",
+        )
+        val movement = UUID.randomUUID()
+        Mockito.`when`(stockService.consume(stockContext, item, stockRequest)).thenReturn(
+            StockFulfillmentReceipt(
+                movement, stockOperation, "CONSUME", item, employee, workId,
+                requirement, "2", "M", replayed = false,
+            ),
+        )
+
         val result = service().reconcile(
             StockCommandContext(operation, actor, "consume-test"),
             warehouseId, reportId,
@@ -131,13 +137,9 @@ class FieldMaterialUsageReconciliationServiceTest {
 
         assertTrue(result.stockMoved)
         assertEquals(movement, result.movementId)
-        assertEquals(FieldMaterialUsageDecision.CONSUME, stored.get()!!.decision)
-        assertEquals(movement, stored.get()!!.stockMovementId)
-        Mockito.verify(stockService, Mockito.times(1)).consume(
-            Mockito.any(StockCommandContext::class.java),
-            Mockito.eq(item),
-            Mockito.any(AdjustIssuedStockRequest::class.java),
-        )
+        assertEquals(FieldMaterialUsageDecision.CONSUME, persistence.resolution!!.decision)
+        assertEquals(movement, persistence.resolution!!.stockMovementId)
+        Mockito.verify(stockService, Mockito.times(1)).consume(stockContext, item, stockRequest)
     }
 
     @Test fun `reject records terminal review without stock movement`() {
@@ -150,8 +152,8 @@ class FieldMaterialUsageReconciliationServiceTest {
         )
 
         assertFalse(result.stockMoved)
-        assertEquals(FieldMaterialUsageDecision.REJECT, stored.get()!!.decision)
-        assertEquals("Returned unused", stored.get()!!.reason)
+        assertEquals(FieldMaterialUsageDecision.REJECT, persistence.resolution!!.decision)
+        assertEquals("Returned unused", persistence.resolution!!.reason)
         Mockito.verifyNoInteractions(stockService)
     }
 
@@ -170,7 +172,7 @@ class FieldMaterialUsageReconciliationServiceTest {
         }
 
         assertEquals("FIELD_MATERIAL_USAGE_ISSUED_STOCK_CHANGED", error.code)
-        assertEquals(null, stored.get())
+        assertEquals(null, persistence.resolution)
         Mockito.verifyNoInteractions(stockService)
     }
 }
