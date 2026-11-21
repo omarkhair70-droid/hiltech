@@ -25,6 +25,8 @@ data class HiltechFieldState(
     val selectedWorkOrderId: String? = null,
     val selectedBundle: TechnicianJobBundleDto? = null,
     val errorMessage: String? = null,
+    val cachedTodayAt: Long? = null,
+    val cachedBundleAt: Long? = null,
 )
 
 @Composable
@@ -63,6 +65,8 @@ fun AssignedWorkSection(
                         ?.let {
                             JobBundleDetail(
                                 bundle = it,
+                                cached = state.cachedBundleAt != null,
+                                cached = state.cachedBundleAt != null,
                                 modifier =
                                     Modifier.weight(1f),
                             )
@@ -133,6 +137,11 @@ private fun TodayColumn(
                 CircularProgressIndicator()
                 Text("بنجيب آخر تكليفاتك…")
             }
+        }
+
+        if (state.cachedTodayAt != null) {
+            Text("نسخة محفوظة بدون اتصال — قد يكون التكليف أو الجاهزية اتغيروا.")
+            Text("آخر وقت من السيرفر: " + (state.today.firstOrNull()?.bundleAsOf ?: "غير متاح"))
         }
 
         state.errorMessage?.let {
@@ -239,6 +248,7 @@ private fun TodayCard(
 @Composable
 private fun JobBundleDetail(
     bundle: TechnicianJobBundleDto,
+    cached: Boolean,
     modifier: Modifier,
 ) {
     Column(
@@ -246,6 +256,10 @@ private fun JobBundleDetail(
         verticalArrangement =
             Arrangement.spacedBy(8.dp),
     ) {
+        if (cached) {
+            Text("نسخة محفوظة للقراءة فقط — يلزم اتصال لتأكيد التكليف وحالته الحالية.")
+            Text("وقت بيانات السيرفر: " + bundle.asOf)
+        }
         Text(
             "تفاصيل الشغل",
             style =
@@ -508,7 +522,7 @@ private fun JobBundleDetail(
                     .titleMedium,
         )
         Text(
-            "القراءة والسياق متاحين دلوقتي. أوامر التنفيذ، Evidence capture، وOffline Sync هتتفعّل في Phase 6.",
+            "القراءة فقط. أوامر التنفيذ والتقاط الأدلة والمزامنة الفعلية غير مفعّلة في Slice 01.",
         )
     }
 }

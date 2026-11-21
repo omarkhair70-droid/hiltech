@@ -15,6 +15,8 @@ import com.hiltech.shared.core.people.PeopleApiClient
 import com.hiltech.shared.core.people.WorkforceAssignmentApiClient
 import com.hiltech.shared.core.warehouse.WarehouseApiClient
 import com.hiltech.shared.core.work.FieldAssignedWorkApiClient
+import com.hiltech.shared.core.work.FieldAssignedWorkOfflineRepository
+import com.hiltech.shared.core.work.FieldOfflineReadCache
 import java.util.UUID
 
 class HiltechApplication : Application() {
@@ -83,6 +85,13 @@ class HiltechApplication : Application() {
         FieldAssignedWorkApiClient by lazy {
         FieldAssignedWorkApiClient(
             productApi,
+        )
+    }
+
+    val fieldAssignedWorkOfflineRepository by lazy {
+        FieldAssignedWorkOfflineRepository(
+            fieldAssignedWorkApi,
+            FieldOfflineReadCache(localDatabase),
         )
     }
 
