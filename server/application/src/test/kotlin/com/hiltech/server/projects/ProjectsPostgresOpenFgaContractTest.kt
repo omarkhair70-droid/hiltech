@@ -2967,6 +2967,37 @@ class ProjectsPostgresOpenFgaContractTest {
                 },
                 "Current USER assignment must appear in Today after authorization projection.",
             )
+            // S04A end-to-end authorization proof against the live seeded
+            // PostgreSQL source and current OpenFGA WorkAssignment relation.
+            // The Phase5 issued row was addressed to a *different* Employee;
+            // never leak that person's (even zero) balance to this actor.
+            val personalStockService =
+                com.hiltech.server.work.FieldPersonalIssuedStockService(
+                    assignments = fieldSource,
+                    workAuthorization = assignedAuthorization,
+                    work = JdbcWorkPersistence(jdbc),
+                    people = JdbcPeoplePersistence(jdbc),
+                    stock = com.hiltech.server.work.JdbcFieldPersonalIssuedStockRead(jdbc),
+                    clock = clock,
+                )
+            assertEquals(
+                "NO_ISSUED_CONTEXT",
+                personalStockService.ownIssued(
+                    ids.oldPm,
+                    firstSlice04Order.workOrderId,
+                ).status,
+                "An assigned actor with a real Employee must not inherit somebody else's issued balance.",
+            )
+            assertEquals(
+                "OBJECT_NOT_VISIBLE",
+                assertThrows<ProductApiException> {
+                    personalStockService.ownIssued(
+                        ids.teamUser,
+                        firstSlice04Order.workOrderId,
+                    )
+                }.code,
+                "A project manager's role does not grant another technician's personal issued stock.",
+            )
             val userBundle =
                 fieldService.jobBundle(
                     ids.oldPm,
@@ -3684,6 +3715,16 @@ class ProjectsPostgresOpenFgaContractTest {
                     clock.instant(),
                 ),
                 "Subcontractor business assignment must not fabricate mobile identity access.",
+            )
+            assertEquals(
+                "OBJECT_NOT_VISIBLE",
+                assertThrows<ProductApiException> {
+                    personalStockService.ownIssued(
+                        ids.oldPm,
+                        firstSlice04Order.workOrderId,
+                    )
+                }.code,
+                "Reassignment must revoke personal-issued-stock read immediately even if OpenFGA projection lags.",
             )
             val revokedBundle =
                 assertThrows<ProductApiException> {
