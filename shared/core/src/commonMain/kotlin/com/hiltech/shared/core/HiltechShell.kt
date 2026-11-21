@@ -242,6 +242,9 @@ fun HiltechShell(
     captureFieldIntent: Boolean = false,
     onQueueFieldIntent:
         (com.hiltech.shared.core.field.FieldExecutionIntent, String?) -> Unit = { _, _ -> },
+    captureEvidence: Boolean = false,
+    onSelectEvidenceFile: (String) -> Unit = {},
+    onTakeEvidencePhoto: (String) -> Unit = {},
     warehouseOperator: @Composable () -> Unit = {},
 ) {
     MaterialTheme {
@@ -471,6 +474,9 @@ fun HiltechShell(
                                 onSelectFieldWork,
                             captureFieldIntent = captureFieldIntent,
                             onQueueFieldIntent = onQueueFieldIntent,
+                            captureEvidence = captureEvidence,
+                            onSelectEvidenceFile = onSelectEvidenceFile,
+                            onTakeEvidencePhoto = onTakeEvidencePhoto,
                         )
                     }
 
