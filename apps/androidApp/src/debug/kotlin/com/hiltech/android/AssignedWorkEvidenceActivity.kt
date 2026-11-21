@@ -102,9 +102,9 @@ class AssignedWorkEvidenceActivity :
             )
             val valid = restoredCamera == cameraRequest &&
                 restoredPicker == cameraRequest.copy(cameraFile = null) &&
-                restoredCamera.matches(source) &&
-                !restoredCamera.matches(changedAssignment) &&
-                !restoredCamera.matches(changedPolicy) &&
+                restoredCamera?.matches(source) == true &&
+                restoredCamera?.matches(changedAssignment) == false &&
+                restoredCamera?.matches(changedPolicy) == false &&
                 PendingEvidenceCaptureState.restore(Bundle(), cameraDirectory) == null
             setContentView(proofMarkerView(
                 if (valid) "PHASE6_S03_EXTERNAL_CAPTURE_CONTEXT_RESTORED"
