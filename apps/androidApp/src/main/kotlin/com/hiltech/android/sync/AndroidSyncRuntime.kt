@@ -49,7 +49,11 @@ class AndroidSyncRuntime(
             verifiedActorProvider.currentVerifiedActorId()
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
+            if (failure is com.hiltech.shared.core.network.HiltechApiException &&
+                failure.httpStatus in setOf(401, 403, 404)) {
+                return AndroidSyncRunResult.ReauthenticationRequired
+            }
             // A network outage is retryable; no business command is attempted without bootstrap.
             return AndroidSyncRunResult.Retry
         }?.takeIf { it.isNotBlank() }
@@ -82,7 +86,7 @@ class AndroidSyncRuntime(
 
         if (
             database.pendingCommandDao()
-                .terminalCountByResultCode("REAUTH_REQUIRED") > 0
+                .pausedForReauthCount() > 0
         ) {
             return AndroidSyncRunResult.ReauthenticationRequired
         }

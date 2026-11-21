@@ -142,6 +142,15 @@ interface PendingCommandDao {
         """,
     )
     suspend fun terminalCountByResultCode(resultCode: String): Int
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM pending_command
+        WHERE state = 'RETRYABLE'
+          AND last_result_code = 'REAUTH_REQUIRED'
+        """,
+    )
+    suspend fun pausedForReauthCount(): Int
 }
 
 @Dao
