@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
 
     private var assetLookupSequence = 0
     private var personalIssuedStockSequence = 0
+    private var assignedAssetLookupSequence = 0
 
     private var shellState:
         HiltechShellState by mutableStateOf(
@@ -120,6 +121,8 @@ class MainActivity : ComponentActivity() {
                 onRefreshPersonalIssuedStock =
                     ::refreshPersonalIssuedStockSelected,
                 showPersonalIssuedStock = BuildConfig.HILTECH_PERSONAL_ISSUED_STOCK_ENABLED,
+                onLookupAssignedAssetTag = ::lookupAssignedAssetTag,
+                showAssignedAssetLookup = BuildConfig.HILTECH_ASSIGNED_ASSET_LOOKUP_ENABLED,
                 captureFieldIntent = true,
                 onQueueFieldIntent = ::queueFieldExecution,
                 captureEvidence = true,
@@ -287,6 +290,7 @@ class MainActivity : ComponentActivity() {
         assetLookupSequence++
         // Drop any previous-session response even if the same actor signs in again.
         personalIssuedStockSequence++
+        assignedAssetLookupSequence++
         shellState =
             HiltechShellState.SignedIn(
                 identity = identity,
@@ -485,6 +489,7 @@ class MainActivity : ComponentActivity() {
                 personalIssuedStock = null,
                 personalIssuedStockLoading = false,
                 personalIssuedStockError = null,
+                assignedAssetLookup = AssetLookupState(),
                 errorMessage = null,
             ),
         )
@@ -516,6 +521,7 @@ class MainActivity : ComponentActivity() {
                         personalIssuedStock = null,
                         personalIssuedStockLoading = false,
                         personalIssuedStockError = null,
+                        assignedAssetLookup = AssetLookupState(),
                         errorMessage = null,
                     ),
                 )
@@ -561,6 +567,66 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+
+    private fun lookupAssignedAssetTag(workOrderId: String, code: String) {
+        if (!BuildConfig.HILTECH_ASSIGNED_ASSET_LOOKUP_ENABLED) return
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        val field = signed.field ?: return
+        val actorId = signed.identity.identityId
+        if (field.selectedWorkOrderId != workOrderId ||
+            field.selectedBundle?.workOrderId != workOrderId ||
+            field.cachedBundleAt != null) return
+
+        val request = ++assignedAssetLookupSequence
+        shellState = signed.copy(
+            field = field.copy(assignedAssetLookup = AssetLookupState(loading = true)),
+        )
+        scope.launch {
+            val result = runCatching {
+                hiltechApplication.fieldAssignedWorkApi.assignedAssetTag(
+                    workOrderId, code, hiltechApplication.installationId,
+                )
+            }
+            if (result.exceptionOrNull() is kotlinx.coroutines.CancellationException) return@launch
+            val current = shellState as? HiltechShellState.SignedIn ?: return@launch
+            val selected = current.field ?: return@launch
+            if (request != assignedAssetLookupSequence ||
+                current.identity.identityId != actorId ||
+                selected.selectedWorkOrderId != workOrderId ||
+                selected.selectedBundle?.workOrderId != workOrderId ||
+                selected.cachedBundleAt != null) return@launch
+
+            val failure = result.exceptionOrNull() as? HiltechApiException
+            if (failure?.httpStatus in setOf(401, 403) || failure?.code == "REAUTH_REQUIRED") {
+                identityRuntime.invalidateOfflineReadIdentity()
+                runCatching { hiltechApplication.fieldOfflineReadCache.clearIdentity(actorId) }
+                shellState = current.copy(
+                    field = HiltechFieldState(
+                        today = selected.today,
+                        errorMessage = "صلاحية عرض التكليف اتغيرت. يلزم إعادة التأكد من السيرفر.",
+                    ),
+                )
+                return@launch
+            }
+
+            val lookup = result.fold(
+                onSuccess = { AssetLookupState(result = it) },
+                onFailure = {
+                    val unavailable = (it as? HiltechApiException)?.code ==
+                        "FIELD_ASSET_LOOKUP_UNAVAILABLE"
+                    AssetLookupState(
+                        message = if (unavailable) {
+                            "الأصل غير متاح داخل التكليف الحالي."
+                        } else {
+                            "تعذر قراءة AssetTag. حاول مرة تانية."
+                        },
+                    )
+                },
+            )
+            shellState = current.copy(field = selected.copy(assignedAssetLookup = lookup))
         }
     }
 
