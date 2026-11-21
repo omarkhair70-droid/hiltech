@@ -1,5 +1,8 @@
 # HILTECH Production Implementation Order
 
+> **Current-state reconciliation (2026-11-21):** The frozen v1.3 phase order below is historical and its heading “PHASE 5 … SLICE 01 NEXT” is **not** the current execution status. Phase 5 engineering was merged, while real warehouse/operator acceptance remains separate ([Phase5 Gap Review](phase5/15_PHASE5_FINAL_GAP_REVIEW_2026-11-21.md)). Phase 6 S01/S02 were merged; [S03 #115](https://github.com/omarkhair70-droid/hiltech/pull/115) passed 15/15 exact-head checks but is **unmerged / review pending**; [S04 #118](https://github.com/omarkhair70-droid/hiltech/pull/118) is an **unmerged contract-only PR**, not implemented. For Phase 7–13, use the [source-based reuse and delta audit](07_TO_13_SOURCE_REUSE_AND_DELTA_GATE_2026-11-21.md) rather than repeating foundations or assuming design documents are production. **This note does not amend the frozen implementation order or authorize phase completion.**
+
+
 Status: **FROZEN v1.3 / PHASE 0–4 VERIFIED / COMPLETE / PHASE 5 PLAN FROZEN / SLICE 01 NEXT**
 
 ## Core Rule
