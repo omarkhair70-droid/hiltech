@@ -7,10 +7,10 @@ import android.util.Base64
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.OfflineFieldReadLeasePolicy
 import com.hiltech.shared.core.identity.auth.OfflineFieldReadLeaseProof
+import com.hiltech.shared.core.identity.auth.VerifiedOfflineFieldIdentity
 import com.hiltech.shared.core.identity.auth.NativeAuthorizationAttempt
 import com.hiltech.shared.core.identity.auth.NativeOidcTokenSet
 import com.hiltech.shared.core.identity.auth.OidcTokenStore
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.security.MessageDigest
 import java.security.KeyStore
@@ -18,13 +18,6 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-
-@Serializable
-private data class VerifiedOfflineFieldIdentity(
-    val identity: IdentityBootstrapDto,
-    val installationId: String,
-    val accessTokenDigest: String,
-)
 
 class AndroidEncryptedOidcStore(
     context: Context,
