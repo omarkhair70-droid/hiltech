@@ -41,6 +41,14 @@ jobs:
             --tests com.hiltech.server.work.FieldExecutionTransitionPolicyTest \
             --console=plain
 
+      - name: Verify persisted Room field intent and scoped command replay
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests com.hiltech.shared.core.field.FieldExecutionQueueTest \
+            --tests com.hiltech.shared.core.sync.PendingCommandReplayEngineTest \
+            --tests com.hiltech.shared.core.sync.KtorPendingCommandTransportTest \
+            --console=plain
+
       - name: Compile native Android field code
         run: |
           ./gradlew :apps:androidApp:assembleDebug \
