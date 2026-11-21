@@ -6,6 +6,7 @@ import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
 import com.hiltech.server.projects.ProjectAuthorizationPort
 import com.hiltech.server.projects.ProjectsPersistencePort
 import com.hiltech.server.telemetry.HiltechTelemetryRuntime
+import com.hiltech.server.warehouse.JdbcFieldUsageWarehouseReviewRead
 import com.hiltech.server.work.FieldMaterialUsageReportRecord
 import com.hiltech.server.work.JdbcFieldMaterialUsageReportPersistence
 import com.hiltech.server.work.JdbcFieldPersonalIssuedStockRead
@@ -356,6 +357,19 @@ internal class ReservationOperatorScenario(
             assertEquals(BigDecimal("3.000000"), usageReports.totalPending(
                 order.workOrderId, employee, previous.requirementId, item,
             ), "A pending report must be counted but is not consumed stock.")
+            // Warehouse review SQL can expose only reports with a real ISSUE from
+            // the chosen Warehouse. It does not infer a warehouse from the report.
+            val warehouseReviewSource = JdbcFieldUsageWarehouseReviewRead(jdbc)
+            val pendingInOrigin = warehouseReviewSource.pending(org, facility)
+            assertEquals(proposedOperation, pendingInOrigin.single {
+                it.operationId == proposedOperation
+            }.operationId)
+            assertTrue(warehouseReviewSource.pending(org, UUID.randomUUID())
+                .none { it.operationId == proposedOperation },
+                "A different warehouse must not read an origin-bound personal claim.")
+            assertTrue(warehouseReviewSource.pending(UUID.randomUUID(), facility)
+                .none { it.operationId == proposedOperation },
+                "A different organization must not read the personal claim.")
             assertEquals(beforeMovementCount, jdbc.queryForObject(
                 "SELECT count(*) FROM stock_movement WHERE work_order_id = ? AND stock_item_id = ?",
                 Int::class.java, order.workOrderId, item,
