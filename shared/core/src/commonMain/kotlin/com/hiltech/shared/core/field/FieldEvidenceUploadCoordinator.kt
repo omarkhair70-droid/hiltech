@@ -99,12 +99,24 @@ class FieldEvidenceUploadCoordinator(
             return ReplayResult.REVIEW
         }
 
-        // Network-only source refresh before any request. Fresh current identity is
-        // checked by AndroidSyncRuntime before the coordinator can be called.
+        // Metadata-only follow-up is authorized by the server Evidence endpoint.
+        // Once finalized, later WorkOrder edits must not erase a verified READY result.
+        if (row.localState == LocalEvidenceStates.UPLOADED_UNVERIFIED &&
+            row.finalizedServerEvidenceId != null) {
+            return verifyMetadata(row, actorId, installationId, row.finalizedServerEvidenceId)
+        }
+
+        // Source recheck is mandatory before any NEW reservation, upload or finalize.
         val bundle = remote.currentBundle(row.workOrderId, installationId)
+        val versionAllowed = bundle.workOrderVersion == row.workOrderVersion ||
+            (bundle.workOrderVersion == row.workOrderVersion + 1 &&
+                db.pendingCommandDao().provenFieldVersionAdvancement(
+                    actorId, installationId, row.workOrderId,
+                    row.workOrderVersion, bundle.workOrderVersion,
+                ))
         val activeBinding = bundle.binding
         if (bundle.workOrderId != row.workOrderId ||
-            bundle.workOrderVersion != row.workOrderVersion ||
+            !versionAllowed ||
             bundle.assignment.assignmentId != row.assignmentId ||
             bundle.assignment.version != row.assignmentVersion ||
             activeBinding == null ||
@@ -126,11 +138,6 @@ class FieldEvidenceUploadCoordinator(
         if (buffer.size.toLong() != row.sizeBytes) {
             move(row, actorId, installationId, LocalEvidenceStates.REJECTED, error = "LOCAL_SIZE_CHANGED")
             return ReplayResult.REVIEW
-        }
-
-        if (row.localState == LocalEvidenceStates.UPLOADED_UNVERIFIED &&
-            row.finalizedServerEvidenceId != null) {
-            return verifyMetadata(row, actorId, installationId, row.finalizedServerEvidenceId)
         }
 
         var current = row

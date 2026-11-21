@@ -69,6 +69,26 @@ interface PendingCommandDao {
         """,
     )
     suspend fun outstandingFieldCommand(identityId: String, workOrderId: String): List<PendingCommandEntity>
+    @Query(
+        """
+        SELECT EXISTS (
+          SELECT 1 FROM pending_command
+          WHERE actor_user_identity_id = :actorId AND device_id = :installationId
+            AND target_type = 'WorkOrder' AND target_id = :workOrderId
+            AND command_type IN ('StartWork', 'BlockWork', 'ResumeWork')
+            AND state = 'APPLIED'
+            AND base_version = :capturedVersion
+            AND last_server_version = :currentVersion
+        )
+        """,
+    )
+    suspend fun provenFieldVersionAdvancement(
+        actorId: String,
+        installationId: String,
+        workOrderId: String,
+        capturedVersion: Long,
+        currentVersion: Long,
+    ): Boolean
 
     @Query(
         """
