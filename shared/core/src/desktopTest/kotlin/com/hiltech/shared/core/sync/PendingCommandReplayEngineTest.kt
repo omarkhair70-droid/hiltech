@@ -188,6 +188,13 @@ class PendingCommandReplayEngineTest {
         assertEquals(own, ownAfter.operationId)
         assertEquals(PendingCommandStates.RETRYABLE, db.pendingCommandDao().get(otherActor)?.state)
         assertEquals(PendingCommandStates.RETRYABLE, db.pendingCommandDao().get(otherDevice)?.state)
+        assertEquals(0, db.pendingCommandDao().pausedForReauthCount(actor, "device-42"))
+        assertEquals(1, db.pendingCommandDao().pausedForReauthCount(
+            "00000000-0000-0000-0000-000000009099", "device-42",
+        ))
+        assertEquals(1, db.pendingCommandDao().pausedForReauthCount(actor, "other-device"))
+        assertEquals(null, db.pendingCommandDao().earliestRetryAtForActor(actor, "device-42"))
+        assertEquals(1_700_001_000_000L, db.pendingCommandDao().earliestRetryAtForActor(actor, "other-device"))
     }
 
     private fun zeroJitterPolicy(): FirstSliceRetryBackoffPolicy =
