@@ -6,6 +6,8 @@ import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
 import com.hiltech.server.projects.ProjectAuthorizationPort
 import com.hiltech.server.projects.ProjectsPersistencePort
 import com.hiltech.server.telemetry.HiltechTelemetryRuntime
+import com.hiltech.server.work.FieldMaterialUsageReportRecord
+import com.hiltech.server.work.JdbcFieldMaterialUsageReportPersistence
 import com.hiltech.server.work.JdbcFieldPersonalIssuedStockRead
 import com.hiltech.server.work.ReadinessAssignmentService
 import com.hiltech.server.work.WorkOrderSnapshot
@@ -20,6 +22,8 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.dao.DataIntegrityViolationException
 import java.math.BigDecimal
 import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Clock
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -309,6 +313,62 @@ internal class ReservationOperatorScenario(
         assertEquals("SYNTH-RSV", ownRows.single().unitCode)
         assertEquals("8.000000", ownRows.single().outstandingQuantity)
         assertTrue(ownRows.single().sourceVersion >= 1)
+        // S04B PostgreSQL source proof is deliberately rolled back after
+        // verifying DB invariants: no synthetic WorkAssignment may alter the
+        // Phase4 test's real assignment history or its authorization projection.
+        TransactionTemplate(manager).apply {
+            propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW
+        }.executeWithoutResult { local ->
+            // S04B PostgreSQL source proof: the reported usage claim must be
+            // persisted exactly once, immutable and leave stock movement unchanged.
+            // This physical-fulfilment fixture predates the field assignment
+            // process. A synthetic ENDED assignment supplies historical FK identity
+            // without granting active authorization or altering Work readiness.
+            val assignmentForReport = UUID.randomUUID()
+            jdbc.update("""
+                INSERT INTO work_assignment (
+                  id, work_order_id, organization_id, project_id,
+                  target_type, target_id, lead,
+                  assigned_at, assigned_by, valid_from, valid_until,
+                  state, source_operation_id, version
+                ) VALUES (
+                  ?, ?, ?, ?, 'USER', ?, false,
+                  ?, ?, ?, ?, 'ENDED', ?, 1
+                )
+            """.trimIndent(),
+                assignmentForReport, order.workOrderId, org, order.projectId,
+                operator, timestamp, operator, instant.minusSeconds(60).atOffset(ZoneOffset.UTC),
+                timestamp, UUID.randomUUID(),
+            )
+            val usageReports = JdbcFieldMaterialUsageReportPersistence(jdbc)
+            val proposedOperation = UUID.randomUUID()
+            val beforeMovementCount = requireNotNull(jdbc.queryForObject(
+                "SELECT count(*) FROM stock_movement WHERE work_order_id = ? AND stock_item_id = ?",
+                Int::class.java, order.workOrderId, item,
+            ))
+            usageReports.insertPending(FieldMaterialUsageReportRecord(
+                proposedOperation, org, order.projectId, order.siteId, order.workOrderId,
+                operator, employee, assignmentForReport, 1L, order.version,
+                previous.requirementId, item, ownRows.single().sourceVersion,
+                BigDecimal("3.000000"), "SYNTH-RSV", instant, instant,
+                "synthetic-field-usage-report",
+            ))
+            assertEquals(BigDecimal("3.000000"), usageReports.totalPending(
+                order.workOrderId, employee, previous.requirementId, item,
+            ), "A pending report must be counted but is not consumed stock.")
+            assertEquals(beforeMovementCount, jdbc.queryForObject(
+                "SELECT count(*) FROM stock_movement WHERE work_order_id = ? AND stock_item_id = ?",
+                Int::class.java, order.workOrderId, item,
+            ), "S04B report must NOT append a StockMovement.")
+            assertEquals("8.000000", personalStock.ownForWorkOrder(
+                org, order.projectId, order.siteId, order.workOrderId, employee,
+            ).single().outstandingQuantity, "S04B report must not change issued custody.")
+            assertThrows<DataIntegrityViolationException> {
+                jdbc.update("UPDATE field_material_usage_report SET state = 'RECONCILED' WHERE operation_id = ?",
+                    proposedOperation)
+            }
+            local.setRollbackOnly()
+        }
         assertTrue(personalStock.ownForWorkOrder(
             org, order.projectId, order.siteId, order.workOrderId, UUID.randomUUID(),
         ).isEmpty(), "Another employee must not see this issued balance.")

@@ -23,6 +23,11 @@ hiltech:
   field:
     personal-issued-stock:
       enabled: ${HILTECH_FIELD_PERSONAL_ISSUED_STOCK_ENABLED:false}
+    # S04B: pending-only reports, NOT a stock consumption.
+    # OFF until role, review and warehouse reconciliation are approved.
+    material-usage-report:
+      enabled: ${HILTECH_FIELD_MATERIAL_USAGE_REPORT_ENABLED:false}
+
 
   activity:
     cursor-signing-key: ${HILTECH_ACTIVITY_CURSOR_SIGNING_KEY:}
