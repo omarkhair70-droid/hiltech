@@ -66,7 +66,6 @@ fun AssignedWorkSection(
                             JobBundleDetail(
                                 bundle = it,
                                 cached = state.cachedBundleAt != null,
-                                cached = state.cachedBundleAt != null,
                                 modifier =
                                     Modifier.weight(1f),
                             )
@@ -90,6 +89,7 @@ fun AssignedWorkSection(
                         ?.let {
                             JobBundleDetail(
                                 bundle = it,
+                                cached = state.cachedBundleAt != null,
                                 modifier =
                                     Modifier.fillMaxWidth(),
                             )
