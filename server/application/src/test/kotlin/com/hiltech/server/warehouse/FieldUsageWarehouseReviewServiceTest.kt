@@ -77,4 +77,23 @@ class FieldUsageWarehouseReviewServiceTest {
             assertThrows<ProductApiException> { service().pending(actor, id) }.code)
         Mockito.verifyNoInteractions(read, stock)
     }
+    @Test fun `review scans beyond hidden candidates without dropping a visible claim`() {
+        allowedWarehouse()
+        origin()
+        val hidden = List(101) { report(UUID.randomUUID()) }
+        val later = report()
+        Mockito.`when`(read.pending(org, id, 0)).thenReturn(hidden)
+        Mockito.`when`(read.pending(org, id, 101)).thenReturn(listOf(later))
+        val page = service().pending(actor, id)
+        assertEquals(listOf(later.operationId), page.rows.map { it.operationId })
+        assertTrue(!page.limited)
+    }
+    @Test fun `review indicates more work when there are 101 authorized claims`() {
+        allowedWarehouse()
+        origin()
+        Mockito.`when`(read.pending(org, id, 0)).thenReturn(List(101) { report() })
+        val page = service().pending(actor, id)
+        assertEquals(100, page.rows.size)
+        assertTrue(page.limited)
+    }
 }
