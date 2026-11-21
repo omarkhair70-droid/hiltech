@@ -14,6 +14,8 @@ import com.hiltech.android.sync.HiltechSyncWorker
 import com.hiltech.shared.core.field.FieldExecutionIntent
 import java.util.UUID
 import android.os.Bundle
+import com.hiltech.android.field.PendingEvidenceCapture
+import com.hiltech.android.field.PendingEvidenceCaptureState
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
@@ -55,13 +57,6 @@ class MainActivity : ComponentActivity() {
         get() =
             hiltechApplication.identityRuntime
 
-    private data class PendingEvidenceCapture(
-        val actorId: String,
-        val workOrderId: String,
-        val requirementKey: String,
-        val cameraFile: File? = null,
-    )
-
     private var pendingEvidenceCapture: PendingEvidenceCapture? = null
 
     private val chooseEvidenceDocument =
@@ -96,6 +91,12 @@ class MainActivity : ComponentActivity() {
         savedInstanceState: Bundle?,
     ) {
         super.onCreate(savedInstanceState)
+        // Android may destroy this Activity while the system picker or camera
+        // is open. Recover its scoped request before ActivityResult delivery.
+        pendingEvidenceCapture = PendingEvidenceCaptureState.restore(
+            savedInstanceState,
+            File(filesDir, "field-camera"),
+        )
 
         setContent {
             HiltechShell(
@@ -155,6 +156,11 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleCallbackIntent(intent)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        PendingEvidenceCaptureState.save(outState, pendingEvidenceCapture)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onDestroy() {
