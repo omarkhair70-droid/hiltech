@@ -1032,6 +1032,67 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
         )
     }
 
+    @Test
+    fun concurrentReservationsRespectServerSideMaxCount() {
+        assumeTrue(enabled)
+        val now = Instant.parse("2026-11-21T08:00:00Z")
+        val fixture = fixture(now)
+        fixture.use {
+            drain(fixture.processor, now.plusSeconds(1))
+            // A bounded policy is read from Postgres, never trusted from Android.
+            fixture.jdbc.update(
+                """
+                UPDATE evidence_policy_requirement
+                SET max_count = 1
+                WHERE config_revision_id = (
+                    SELECT wpb.evidence_policy_id
+                    FROM work_order wo
+                    JOIN work_policy_binding wpb
+                      ON wpb.id = wo.current_policy_binding_id
+                    WHERE wo.id = ?
+                )
+                  AND requirement_key = 'after-photo'
+                """.trimIndent(),
+                fixture.workOrderId,
+            )
+
+            val start = java.util.concurrent.CountDownLatch(1)
+            val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+            try {
+                val attempts = (1..2).map {
+                    pool.submit<java.lang.String> {
+                        start.await()
+                        try {
+                            reserve(
+                                fixture = fixture,
+                                operationId = UUID.randomUUID(),
+                                requirementKey = "after-photo",
+                                evidenceType = "PHOTO",
+                                contentType = "image/jpeg",
+                                bytes = jpegBytes(4096),
+                                capturedAt = now,
+                            )
+                            "RESERVED"
+                        } catch (error: ProductApiException) {
+                            error.code
+                        }
+                    }
+                }
+                start.countDown()
+                val outcomes = attempts.map {
+                    it.get(30, java.util.concurrent.TimeUnit.SECONDS)
+                }
+                assertEquals(1, outcomes.count { it == "RESERVED" })
+                assertEquals(
+                    1,
+                    outcomes.count { it == "EVIDENCE_MAX_COUNT_EXCEEDED" },
+                )
+            } finally {
+                pool.shutdownNow()
+            }
+        }
+    }
+
     private fun reserve(
         fixture: Fixture,
         operationId: UUID,
