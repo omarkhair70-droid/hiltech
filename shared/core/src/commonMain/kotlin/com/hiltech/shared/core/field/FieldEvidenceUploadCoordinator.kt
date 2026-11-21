@@ -43,6 +43,7 @@ class FieldEvidenceUploadCoordinator(
     private val remote: FieldEvidenceRemote,
     private val bytes: FieldEvidenceBytes,
     private val nowEpochMs: () -> Long,
+    private val formatEpochUtc: (Long) -> String,
 ) {
     suspend fun replayOnce(actorId: String, installationId: String): FieldEvidenceReplaySummary {
         require(actorId.isNotBlank() && installationId.isNotBlank())
@@ -146,8 +147,8 @@ class FieldEvidenceUploadCoordinator(
                     originalFileName = null, // do not leak a selected private filename
                     sizeBytes = row.sizeBytes,
                     expectedSha256 = row.sha256,
-                    capturedAt = epochToIso(row.capturedAtEpochMs),
-                    clientOccurredAt = epochToIso(row.capturedAtEpochMs),
+                    capturedAt = formatEpochUtc(row.capturedAtEpochMs),
+                    clientOccurredAt = formatEpochUtc(row.capturedAtEpochMs),
                 ),
                 installationId,
             )
@@ -252,12 +253,6 @@ class FieldEvidenceUploadCoordinator(
             atEpochMs = nowEpochMs(),
         )
         return if (changed == 1) db.evidenceQueueDao().get(row.evidenceId) else null
-    }
-
-    private fun epochToIso(time: Long): String {
-        // CommonMain avoids java.time dependency; same UTC ISO form used by API.
-        val seconds = time / 1000L
-        return kotlinx.datetime.Instant.fromEpochSeconds(seconds).toString()
     }
 
     private fun finalizeOperationId(original: String): String {
