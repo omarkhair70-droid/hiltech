@@ -13,6 +13,7 @@ on:
       - "server/application/src/main/kotlin/com/hiltech/server/work/FieldAssignedWorkApi.kt"
       - "server/application/src/main/resources/application.yml"
       - "server/application/src/test/kotlin/com/hiltech/server/work/FieldEngineeringTestServiceTest.kt"
+      - "server/application/src/test/kotlin/com/hiltech/server/work/FieldEngineeringTestPostgresContractTest.kt"
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/work/FieldAssignedWorkContracts.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/work/FieldAssignedWorkApiClient.kt"
@@ -71,7 +72,10 @@ jobs:
           HILTECH_DB_PASSWORD: hiltech-app-local
           HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
         run: |
-          ./gradlew :server:application:test             --tests com.hiltech.server.DatabaseMigrationContractTest             --rerun-tasks --no-configuration-cache --console=plain
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --tests com.hiltech.server.work.FieldEngineeringTestPostgresContractTest \
+            --rerun-tasks --no-configuration-cache --console=plain
       - name: Test report on failure
         if: failure()
         run: |
