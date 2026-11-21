@@ -156,6 +156,40 @@ class PendingCommandReplayEngineTest {
         assertEquals(PendingCommandStates.PENDING, db.pendingCommandDao().get(foreignDevice)?.state)
     }
 
+    @Test
+    fun reauthUnlocksOnlyMatchingActorDeviceWithoutLosingOriginalOperation() = withDatabase { db ->
+        val own = "00000000-0000-4000-8000-000000008101"
+        val otherActor = "00000000-0000-4000-8000-000000008102"
+        val otherDevice = "00000000-0000-4000-8000-000000008103"
+        val actor = "00000000-0000-0000-0000-000000009001"
+        val paused = pendingCommand(own, sequence = 1).copy(
+            deviceId = "device-42",
+            state = PendingCommandStates.RETRYABLE,
+            lastResultCode = "REAUTH_REQUIRED",
+            nextRetryAtEpochMs = 1_700_001_000_000L,
+        )
+        db.pendingCommandDao().insert(paused)
+        db.pendingCommandDao().insert(paused.copy(
+            operationId = otherActor, localSequence = 2,
+            actorUserIdentityId = "00000000-0000-0000-0000-000000009099",
+        ))
+        db.pendingCommandDao().insert(paused.copy(
+            operationId = otherDevice, localSequence = 3,
+            deviceId = "other-device",
+        ))
+        val released = db.pendingCommandDao().releaseReauthenticatedCommands(
+            actor, "device-42", 1_700_000_001_000L,
+        )
+        assertEquals(1, released)
+        val ownAfter = assertNotNull(db.pendingCommandDao().get(own))
+        assertEquals(PendingCommandStates.PENDING, ownAfter.state)
+        assertEquals(null, ownAfter.nextRetryAtEpochMs)
+        assertEquals(paused.payloadJson, ownAfter.payloadJson)
+        assertEquals(own, ownAfter.operationId)
+        assertEquals(PendingCommandStates.RETRYABLE, db.pendingCommandDao().get(otherActor)?.state)
+        assertEquals(PendingCommandStates.RETRYABLE, db.pendingCommandDao().get(otherDevice)?.state)
+    }
+
     private fun zeroJitterPolicy(): FirstSliceRetryBackoffPolicy =
         FirstSliceRetryBackoffPolicy(RetryJitterSource { 0.0 })
 
