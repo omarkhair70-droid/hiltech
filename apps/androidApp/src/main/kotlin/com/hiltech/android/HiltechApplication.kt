@@ -6,6 +6,7 @@ import com.hiltech.android.identity.AndroidIdentityRuntime
 import com.hiltech.android.sync.AndroidSessionTokenProvider
 import com.hiltech.android.sync.AndroidSyncRuntime
 import com.hiltech.android.sync.AndroidVerifiedActorProvider
+import com.hiltech.shared.core.field.FieldExecutionQueue
 import com.hiltech.shared.core.local.buildHiltechLocalDatabase
 import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
 import com.hiltech.shared.core.network.HiltechApiClient
@@ -87,6 +88,10 @@ class HiltechApplication : Application() {
         FieldAssignedWorkApiClient(
             productApi,
         )
+    }
+
+    val fieldExecutionQueue by lazy {
+        FieldExecutionQueue(localDatabase)
     }
 
     val fieldOfflineReadCache by lazy {
