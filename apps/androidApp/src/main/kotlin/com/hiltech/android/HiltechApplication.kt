@@ -8,6 +8,7 @@ import com.hiltech.android.sync.AndroidSyncRuntime
 import com.hiltech.android.sync.AndroidVerifiedActorProvider
 import com.hiltech.shared.core.field.FieldExecutionQueue
 import com.hiltech.shared.core.field.FieldEvidenceQueue
+import com.hiltech.shared.core.field.FieldMaterialUsageQueue
 import com.hiltech.shared.core.evidence.EvidenceApiClient
 import com.hiltech.android.field.AndroidFieldEvidenceFiles
 import com.hiltech.android.field.AndroidFieldEvidenceSyncRuntime
@@ -97,6 +98,10 @@ class HiltechApplication : Application() {
 
     val fieldExecutionQueue by lazy {
         FieldExecutionQueue(localDatabase)
+    }
+
+    val fieldMaterialUsageQueue by lazy {
+        FieldMaterialUsageQueue(localDatabase)
     }
 
     val fieldEvidenceQueue by lazy {

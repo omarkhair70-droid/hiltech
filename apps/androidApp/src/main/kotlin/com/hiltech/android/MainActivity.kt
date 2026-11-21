@@ -28,6 +28,7 @@ import com.hiltech.shared.core.AssetLookupState
 import com.hiltech.shared.core.FieldEngineeringTestDraft
 import com.hiltech.shared.core.HiltechFieldState
 import com.hiltech.shared.core.work.FieldEngineeringTestCaptureDto
+import com.hiltech.shared.core.work.FieldPersonalIssuedStockLineDto
 import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechShell
@@ -125,6 +126,8 @@ class MainActivity : ComponentActivity() {
                 onRefreshPersonalIssuedStock =
                     ::refreshPersonalIssuedStockSelected,
                 showPersonalIssuedStock = BuildConfig.HILTECH_PERSONAL_ISSUED_STOCK_ENABLED,
+                onQueueMaterialUsage = ::queueMaterialUsage,
+                showMaterialUsageReporting = BuildConfig.HILTECH_MATERIAL_USAGE_REPORTING_ENABLED,
                 onLookupAssignedAssetTag = ::lookupAssignedAssetTag,
                 showAssignedAssetLookup = BuildConfig.HILTECH_ASSIGNED_ASSET_LOOKUP_ENABLED,
                 onSubmitEngineeringTest = ::submitEngineeringTest,
@@ -453,6 +456,8 @@ class MainActivity : ComponentActivity() {
                 personalIssuedStock = null,
                 personalIssuedStockLoading = false,
                 personalIssuedStockError = null,
+                materialUsageIntents = emptyList(),
+                materialUsageMessage = null,
             ),
         )
         scope.launch {
@@ -460,6 +465,13 @@ class MainActivity : ComponentActivity() {
                 hiltechApplication.fieldOfflineReadCache
                     .cachedBundle(offline.identityId, workOrderId)
             }.getOrNull()
+            val materialIntents = runCatching {
+                hiltechApplication.fieldMaterialUsageQueue.list(
+                    offline.identityId,
+                    hiltechApplication.installationId,
+                    workOrderId,
+                )
+            }.getOrDefault(emptyList())
             val current = shellState as? HiltechShellState.OfflineFieldReadOnly ?: return@launch
             if (current.identityId != offline.identityId ||
                 current.field.selectedWorkOrderId != workOrderId) return@launch
@@ -468,6 +480,8 @@ class MainActivity : ComponentActivity() {
                     loading = false,
                     selectedBundle = snapshot?.value,
                     cachedBundleAt = snapshot?.fetchedAtEpochMs,
+                    materialUsageIntents = materialIntents,
+                    materialUsageMessage = null,
                     errorMessage = if (snapshot == null) {
                         "تفاصيل العمل دي مش متخزنة على الجهاز. يلزم اتصال بالإنترنت."
                     } else null,
@@ -495,6 +509,8 @@ class MainActivity : ComponentActivity() {
                 personalIssuedStock = null,
                 personalIssuedStockLoading = false,
                 personalIssuedStockError = null,
+                materialUsageIntents = emptyList(),
+                materialUsageMessage = null,
                 assignedAssetLookup = AssetLookupState(),
                 engineeringTestSubmitting = false,
                 engineeringTestMessage = null,
@@ -515,6 +531,11 @@ class MainActivity : ComponentActivity() {
                         identityId, hiltechApplication.installationId, workOrderId,
                     )
                 }.getOrDefault(emptyList())
+                val materialIntents = runCatching {
+                    hiltechApplication.fieldMaterialUsageQueue.list(
+                        identityId, hiltechApplication.installationId, workOrderId,
+                    )
+                }.getOrDefault(emptyList())
                 val current = shellState as? HiltechShellState.SignedIn ?: return@onSuccess
                 if (current.identity.identityId != identityId ||
                     current.field?.selectedWorkOrderId != workOrderId) return@onSuccess
@@ -526,6 +547,8 @@ class MainActivity : ComponentActivity() {
                         pendingFieldIntent = pending,
                         fieldIntentMessage = null,
                         localEvidence = localEvidence,
+                        materialUsageIntents = materialIntents,
+                        materialUsageMessage = null,
                         personalIssuedStock = null,
                         personalIssuedStockLoading = false,
                         personalIssuedStockError = null,
@@ -811,6 +834,13 @@ class MainActivity : ComponentActivity() {
                     workOrderId, hiltechApplication.installationId,
                 )
             }
+            val materialIntents = runCatching {
+                hiltechApplication.fieldMaterialUsageQueue.list(
+                    actorId,
+                    hiltechApplication.installationId,
+                    workOrderId,
+                )
+            }.getOrDefault(emptyList())
             if (result.exceptionOrNull() is kotlinx.coroutines.CancellationException) return@launch
             val current = shellState as? HiltechShellState.SignedIn ?: return@launch
             val selected = current.field ?: return@launch
@@ -838,12 +868,14 @@ class MainActivity : ComponentActivity() {
                         personalIssuedStock = null,
                         personalIssuedStockLoading = false,
                         personalIssuedStockError = "مصدر الخامات اتغير؛ حدّث التكليف قبل القراءة.",
+                        materialUsageIntents = materialIntents,
                     ))
                 } else {
                     shellState = current.copy(field = selected.copy(
                         personalIssuedStock = projection,
                         personalIssuedStockLoading = false,
                         personalIssuedStockError = null,
+                        materialUsageIntents = materialIntents,
                     ))
                 }
             }.onFailure { failure ->
@@ -851,6 +883,7 @@ class MainActivity : ComponentActivity() {
                     personalIssuedStock = null,
                     personalIssuedStockLoading = false,
                     personalIssuedStockError = failure.message ?: "تعذر قراءة الرصيد الحالي.",
+                    materialUsageIntents = materialIntents,
                 ))
             }
         }
@@ -868,6 +901,70 @@ class MainActivity : ComponentActivity() {
                 )
                 .build(),
         )
+    }
+
+    private fun queueMaterialUsage(
+        item: FieldPersonalIssuedStockLineDto,
+        quantity: String,
+    ) {
+        if (!BuildConfig.HILTECH_MATERIAL_USAGE_REPORTING_ENABLED) return
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        val identityId = signed.identity.identityId
+        val field = signed.field ?: return
+        val bundle = field.selectedBundle ?: return
+        val issued = field.personalIssuedStock ?: return
+        if (field.cachedBundleAt != null ||
+            field.selectedWorkOrderId != bundle.workOrderId ||
+            issued.workOrderId != bundle.workOrderId ||
+            issued.workOrderVersion != bundle.workOrderVersion ||
+            issued.status != "SOURCE_CURRENT") return
+
+        scope.launch {
+            runCatching {
+                hiltechApplication.fieldMaterialUsageQueue.queue(
+                    identityId = identityId,
+                    installationId = hiltechApplication.installationId,
+                    bundle = bundle,
+                    issued = issued,
+                    item = item,
+                    quantity = quantity,
+                    operationId = UUID.randomUUID().toString(),
+                    nowEpochMs = System.currentTimeMillis(),
+                    verifiedOnlineThisSession = true,
+                )
+            }.onSuccess {
+                val intents = runCatching {
+                    hiltechApplication.fieldMaterialUsageQueue.list(
+                        identityId,
+                        hiltechApplication.installationId,
+                        bundle.workOrderId,
+                    )
+                }.getOrDefault(emptyList())
+                val current = shellState as? HiltechShellState.SignedIn ?: return@onSuccess
+                if (current.identity.identityId != identityId ||
+                    current.field?.selectedWorkOrderId != bundle.workOrderId) return@onSuccess
+                val latest = current.field ?: return@onSuccess
+                shellState = current.copy(
+                    field = latest.copy(
+                        materialUsageIntents = intents,
+                        materialUsageMessage =
+                            "اتحفظ بلاغ الاستخدام محليًا. الرصيد مش هيتغير إلا بعد قبول السيرفر ومراجعة المخزن.",
+                    ),
+                )
+                scheduleFieldCommandReplay(identityId)
+            }.onFailure { failure ->
+                if (failure is kotlinx.coroutines.CancellationException) return@onFailure
+                val current = shellState as? HiltechShellState.SignedIn ?: return@onFailure
+                if (current.identity.identityId != identityId ||
+                    current.field?.selectedWorkOrderId != bundle.workOrderId) return@onFailure
+                shellState = current.copy(
+                    field = (current.field ?: HiltechFieldState()).copy(
+                        materialUsageMessage =
+                            failure.message ?: "تعذر حفظ بلاغ استخدام الخامة.",
+                    ),
+                )
+            }
+        }
     }
 
     private fun queueFieldExecution(action: FieldExecutionIntent, reason: String?) {

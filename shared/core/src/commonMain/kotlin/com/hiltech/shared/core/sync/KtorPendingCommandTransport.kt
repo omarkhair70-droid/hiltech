@@ -49,6 +49,7 @@ object FrozenOfflineCommandRoutes {
             "StartWork" -> "/v1/work-orders/${command.targetId}/start"
             "BlockWork" -> "/v1/work-orders/${command.targetId}/block"
             "ResumeWork" -> "/v1/work-orders/${command.targetId}/resume"
+            "ReportMaterialUsage" -> "/v1/work-orders/${command.targetId}/material-usage-reports"
             "SubmitWorkCompletion" -> "/v1/work-orders/${command.targetId}/submit-completion"
             "ReportAssetDamage" -> "/v1/assets/${command.targetId}/report-damage"
             "FinalizeEvidence" -> "/v1/evidence/${command.targetId}/finalize"
@@ -137,6 +138,24 @@ class KtorPendingCommandTransport(
             )
         }
 
+        if (command.commandType == "ReportMaterialUsage" &&
+            status in setOf(403, 404, 409)) {
+            return CommandTransportResult.Conflict(
+                conflictType =
+                    error.code.takeUnless { it == "HTTP_ERROR" }
+                        ?: when (status) {
+                            403 -> "PERMISSION_REVOKED"
+                            404 -> "MATERIAL_SOURCE_UNAVAILABLE"
+                            else -> "MATERIAL_SOURCE_CONFLICT"
+                        },
+                currentVersion = error.currentVersion,
+                safeServerStateJson = "{}",
+                allowedRecoveryActionsJson =
+                    """["REFRESH_ISSUED_STOCK","REVIEW_LOCAL_WORK","CONTACT_SUPERVISOR"]""",
+                correlationId = error.correlationId,
+            )
+        }
+
         if (status == 429 || status >= 500 || error.retryable || error.code == "FAILED_RETRYABLE") {
             return CommandTransportResult.Retryable(
                 code = error.code,
@@ -157,12 +176,16 @@ class KtorPendingCommandTransport(
         val payload = json.parseToJsonElement(command.payloadJson).jsonObject
 
         val merged = buildJsonObject {
-            payload.forEach { (key, value) -> put(key, value) }
+            payload.forEach { (key, value) ->
+                if (!key.startsWith("_local")) put(key, value)
+            }
             put("operationId", JsonPrimitive(command.operationId))
-            if (command.baseVersion != null) {
-                put("baseVersion", JsonPrimitive(command.baseVersion))
-            } else {
-                put("baseVersion", JsonNull)
+            if (command.commandType != "ReportMaterialUsage") {
+                if (command.baseVersion != null) {
+                    put("baseVersion", JsonPrimitive(command.baseVersion))
+                } else {
+                    put("baseVersion", JsonNull)
+                }
             }
             put(
                 "clientOccurredAt",
