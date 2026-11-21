@@ -6,6 +6,7 @@ import com.hiltech.shared.core.sync.CorrelationIdProvider
 import com.hiltech.shared.core.sync.KtorPendingCommandTransport
 import com.hiltech.shared.core.sync.NativeClientMetadata
 import com.hiltech.shared.core.sync.PendingCommandReplayEngine
+import com.hiltech.shared.core.sync.CommandReplayScope
 import com.hiltech.shared.core.sync.ReplaySummary
 import com.hiltech.shared.core.sync.TraceParentProvider
 import io.ktor.client.HttpClient
@@ -13,6 +14,11 @@ import java.util.UUID
 
 fun interface AndroidSessionTokenProvider {
     suspend fun currentAccessToken(): String?
+}
+
+/** Online, current-source identity bootstrap is required before replaying any local command. */
+fun interface AndroidVerifiedActorProvider {
+    suspend fun currentVerifiedActorId(): String?
 }
 
 sealed interface AndroidSyncRunResult {
@@ -30,6 +36,7 @@ class AndroidSyncRuntime(
     private val httpClient: HttpClient,
     private val apiBaseUrl: String,
     private val sessionTokenProvider: AndroidSessionTokenProvider,
+    private val verifiedActorProvider: AndroidVerifiedActorProvider,
     private val installationId: String,
     private val clientVersion: String,
 ) {
@@ -37,6 +44,16 @@ class AndroidSyncRuntime(
         if (apiBaseUrl.isBlank()) {
             return AndroidSyncRunResult.RuntimeNotConfigured
         }
+
+        val verifiedActor = try {
+            verifiedActorProvider.currentVerifiedActorId()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // A network outage is retryable; no business command is attempted without bootstrap.
+            return AndroidSyncRunResult.Retry
+        }?.takeIf { it.isNotBlank() }
+            ?: return AndroidSyncRunResult.ReauthenticationRequired
 
         val accessToken = sessionTokenProvider.currentAccessToken()
             ?.takeIf { it.isNotBlank() }
@@ -60,6 +77,7 @@ class AndroidSyncRuntime(
         val summary = PendingCommandReplayEngine(
             database = database,
             transport = transport,
+            replayScope = CommandReplayScope(verifiedActor, installationId),
         ).replayOnce()
 
         if (
