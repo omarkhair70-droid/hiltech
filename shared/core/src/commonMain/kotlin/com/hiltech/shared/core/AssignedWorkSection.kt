@@ -51,6 +51,7 @@ fun AssignedWorkSection(
     onSelectEvidenceFile: (String) -> Unit = {},
     onTakeEvidencePhoto: (String) -> Unit = {},
     onRefreshPersonalIssuedStock: (String) -> Unit = {},
+    showPersonalIssuedStock: Boolean = false,
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -96,6 +97,7 @@ fun AssignedWorkSection(
                                 personalIssuedStockLoading = state.personalIssuedStockLoading,
                                 personalIssuedStockError = state.personalIssuedStockError,
                                 onRefreshPersonalIssuedStock = onRefreshPersonalIssuedStock,
+                                showPersonalIssuedStock = showPersonalIssuedStock,
                                 modifier =
                                     Modifier.weight(1f),
                             )
@@ -133,6 +135,7 @@ fun AssignedWorkSection(
                                 personalIssuedStockLoading = state.personalIssuedStockLoading,
                                 personalIssuedStockError = state.personalIssuedStockError,
                                 onRefreshPersonalIssuedStock = onRefreshPersonalIssuedStock,
+                                showPersonalIssuedStock = showPersonalIssuedStock,
                                 modifier =
                                     Modifier.fillMaxWidth(),
                             )
@@ -305,6 +308,7 @@ private fun JobBundleDetail(
     personalIssuedStockLoading: Boolean,
     personalIssuedStockError: String?,
     onRefreshPersonalIssuedStock: (String) -> Unit,
+    showPersonalIssuedStock: Boolean,
     modifier: Modifier,
 ) {
     Column(
@@ -537,9 +541,9 @@ private fun JobBundleDetail(
 
         // S04A: Own issued balance comes from an independent, live authorized
         // server GET. Never render personal stock from offline cached JobBundle.
-        if (cached) {
+        if (showPersonalIssuedStock && cached) {
             Text("خاماتي المصروفة: يلزم الاتصال للتحقق من الرصيد والصلاحية الحاليين.")
-        } else {
+        } else if (showPersonalIssuedStock) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("خاماتي المصروفة — قراءة فقط",
                     style = MaterialTheme.typography.titleMedium)

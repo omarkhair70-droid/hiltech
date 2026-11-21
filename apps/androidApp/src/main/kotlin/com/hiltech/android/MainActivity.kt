@@ -119,6 +119,7 @@ class MainActivity : ComponentActivity() {
                     ::selectFieldWork,
                 onRefreshPersonalIssuedStock =
                     ::refreshPersonalIssuedStockSelected,
+                showPersonalIssuedStock = true,
                 captureFieldIntent = true,
                 onQueueFieldIntent = ::queueFieldExecution,
                 captureEvidence = true,
@@ -284,6 +285,8 @@ class MainActivity : ComponentActivity() {
         identity: IdentityBootstrapDto,
     ) {
         assetLookupSequence++
+        // Drop any previous-session response even if the same actor signs in again.
+        personalIssuedStockSequence++
         shellState =
             HiltechShellState.SignedIn(
                 identity = identity,
@@ -1189,6 +1192,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun signOut() {
+        personalIssuedStockSequence++
         val actor = when (val state = shellState) {
             is HiltechShellState.SignedIn -> state.identity.identityId
             is HiltechShellState.OfflineFieldReadOnly -> state.identityId
