@@ -23,15 +23,42 @@ Technicians need to record which **already-issued** materials they used, consult
 | Documents | `FieldAssignedWorkService` safe document refs and source revision | Read-only document identity/revision is known; no authorized local drawing edit/overwrite contract is established. |
 | Technical measurement | **Not found as a canonical S04 WorkType-specific source in inspected contracts** | No invented universal OTDR/Fluke form, thresholds, calibrated instrument identity or pass/fail math. Requires approved WorkType and field engineer source. |
 
-## Concrete S04A read-source findings from main (review checkpoint)
+## Concrete S04A source and identity proof (review checkpoint — corrected)
 
-The existing `StockFulfillmentPersistence.issued(item, work)` reads `stock_issued_balance` and returns `outstandingQuantity` and `version`, per `stockItemId`, `employeeId`, `workOrderId` and `requirementId`. That outstanding quantity is **not** interchangeable with total ever issued, available stock, or inferred field consumption. A proposed `issuedQuantity` field cannot be populated by this projection without a separately justified movement aggregation and source-time rule.
+The previous draft incorrectly said that no verified identity-to-employee mapping was found. **The canonical mapping already exists and is explicitly implemented.** It must be reused, not reconstructed from names, emails, employee codes or phone numbers.
 
-The existing `StockFulfillmentService.issued(actor, item, work)` is **warehouse-authorized**: it checks warehouse-resource privileges and that every originating storage location can be accessed. The field JobBundle uses a different gate: `WorkAssignmentSourceAuthorityPort.isCurrentAssignedUser(actor, work, now)` plus `WorkAssignmentAuthorizationPort.canUseAssignedWork(actor, work, "can_view")`. Neither proves an arbitrary `stock_issued_balance.employee_id` is the currently assigned technician's own employee record. **Do not join employee and identity by guesswork.**
+### Authoritative source chain (verified from main)
 
-The first field-safe material read therefore needs a reviewed identity-to-employee/custody binding and explicit per-row authorization. A query must constrain the current organization/WorkOrder/requirement and allowed employee, then select stock balance rows; forbid widening to other employees' `issued-context` or directory, or exposing all warehouse origin details. Version and unit must come from canonical source, not a stale client WorkOrder DTO. Without that mapping, S04A may show only existing safe `resourceRequirements` and `safeDocumentRefs`, with an honest `ISSUED_CONTEXT_NOT_AUTHORIZED` placeholder; not simulated quantities.
+- `database/migrations/V0015__people_employee_employment__core.sql` defines `user_identity.person_id → person.id ← employee.person_id`. `employee` has a **unique `(organization_id, person_id)`** constraint, so within one organization the Person resolves to at most one Employee. This does **not** imply that every identity has an Employee.
+- `PeoplePersistence.loadOwnEmployee(identityId, organizationId, at)` already implements exactly that Person link and checks `user_identity.status = ACTIVE` plus a current `organization_membership`. `WorkforceAssignmentPersistence.ownAssignment` independently uses the same Person/Employee link for an actor's own assignment. Reuse these existing semantics; do not expose HR data or use People admin directory permissions as a shortcut.
+- `WorkAssignmentAuthorization.currentAssignmentRows` checks that the current actor participates in the **actual WorkOrder assignment** (USER/TEAM/CREW/SUBCONTRACTOR_ORGANIZATION), including current user and organization membership. `FieldAssignedWorkService.requireCurrentAssignedRead` combines this source check with the WorkOrder-scoped `can_view` authorization.
+- `StockFulfillmentPersistence.issued(item, work)` reads canonical `stock_issued_balance`, whose key includes `stock_item_id`, `employee_id` and `requirement_id` and whose row additionally binds `organization_id`/`project_id`/`site_id`/`work_order_id`. Migration `V0031__physical_fulfillment__slice06.sql` enforces nonnegative `outstanding_qty numeric(20,6)` and connects the requirement to this WorkOrder. The row exposes **outstanding**, not total historical issued quantity or consumption.
+- `StockFulfillmentService.issued` is a separate **warehouse-authorized** API with origin-location checks. Field read must not reuse that endpoint as if `can_view` meant `canReserveResources`/`canTransferStock`.
 
-No new field endpoint, FGA relation, DB migration, or operation was implemented by this preflight.
+### Scoped Field read algorithm to freeze before code
+
+1. On a new **online** request with a WorkOrder ID, verify authenticated identity, current active assignment for that WorkOrder **and** WorkOrder `can_view` through existing Field assignment/authorization ports; load WorkOrder's current organization/project/site source. Any failed gate returns the existing not-visible response, not stock rows.
+2. Resolve exactly one `employee.id` in the same organization by `user_identity.person_id = employee.person_id`, using current active membership and identity status from `loadOwnEmployee` semantics. Require an **ACTIVE Employee and current eligible employment**, if production fulfillment requires it; do not treat an external subcontractor organization membership as an employee custody identity. Absent or ineligible Employee means **no authorized personal issued-stock projection**; never fall back to the crew, project or warehouse directory.
+3. Read **only** `stock_issued_balance` rows constrained to `organization_id`, `work_order_id`, the WorkOrder's project/site and `employee_id`. Verify each `requirement_id` belongs to that WorkOrder and its current MATERIAL resource request. Join the canonical StockItem **base UOM** and expose `outstandingQuantity` as an exact decimal string, source `version` and `asOf`; do not fabricate `issuedQuantity`, `usedQuantity` or physical warehouse balances.
+4. Return a per-request safe projection, not an employee directory and not a stock movement audit trail. No HR details, item costs, source bins, payroll identifiers, other technicians' balances or stock mutation buttons.
+5. If authorization changes or the actor's employment is revoked/reassigned, deny next online read and never treat cached WorkOrder/Room content as write authority. Treat `no rows` separately from `not permitted`; don't infer that `outstanding=0` proves nothing was ever issued.
+
+### Negative and concurrency matrix required before S04A implementation
+
+| Scenario | Required result |
+| --- | --- |
+| Same active assigned actor, matching Employee/person/org and own issued row | Only that Employee's outstanding quantity/version/base UOM shown |
+| Another Employee on same WorkOrder or a member of the same crew | Other Employee's issued rows **not visible** |
+| TEAM/CREW membership without matching personal Employee | Do not infer custody from team/crew or return another person's stock |
+| SUBCONTRACTOR_ORGANIZATION assignment without employee link | No personal stock rows; fail closed |
+| Unassigned/revoked WorkOrder, denied `can_view`, inactive membership or user | No existence or stock disclosure |
+| Employee OFFBOARDING/FORMER, ended employment (per active fulfillment source policy) | No new authorized personal issued-stock read |
+| Same Person in separate organizations | Resolve only the WorkOrder organization; never cross org |
+| Inactive/changed stock item or source version | Show source state as authoritative, never invent a consumed quantity |
+| Warehouse returns/consumes concurrently with read | Display a versioned snapshot only; no local stock mutation or fabricated consistency |
+| Repeated requests or malformed WorkOrder ID | Read-only, no ledger mutation; invalid/foreign ID fails closed |
+
+This is an architectural **source proof**, not an approved permission expansion or tested S04 endpoint. New implementation and PostgreSQL/OpenFGA negative tests require S03 merge and explicit S04A source contract acceptance.
 
 ## Slice boundary and safe delivery sequence
 
