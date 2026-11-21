@@ -24,6 +24,16 @@ Base: S02 merge `13c49c8b07060bd5495f6dcb8f219efe18ffb5c5`, postmerge Bootstrap 
 - Finalize result `READY` means verified; `QUARANTINED` / `REJECTED` must **never** display READY or count toward completion. Keep the local file until READY or explicit user-authorized discard. A metadata read may confirm READY after an uncertain response; do not assume 2xx binary PUT is READY.
 - The existing binary API does not implement a typed form Evidence payload. Don't serialize arbitrary forms into fake JPEG/PDF; typed forms require a separately frozen Policy/schema authority.
 
+## Change control CR-S03-001 — causally proven S02 version advancement
+
+Review of the actual S02→S03 offline sequence identified an unavoidable conflict: a photo may be captured against WorkOrder version V while the same technician's queued StartWork changes the authoritative version to V+1 immediately before Evidence replay. Pure exact-version equality would incorrectly strand normal offline captures.
+
+**Narrow accepted engineering exception:** a captured WorkOrder version V may be followed by source version V+1 **only** when Room contains an APPLIED S02 Start/Block/Resume command for the **same actor, installation and WorkOrder**, with `base_version=V` and the **server-confirmed** `last_server_version=V+1`. Current assignment ID/version, bound EvidencePolicy ID/revision, source-authorized capture allowance, current status and server Evidence authorization must still match. Persist the *original* capture version; do not alter/rebase the Evidence row. Any unrelated/unknown source change, different device/actor, missing authoritative S02 ACK, or greater version drift remains REVIEW_REQUIRED with bytes preserved.
+
+When Evidence has **already been finalized** but is awaiting a server scan (`UPLOADED_UNVERIFIED` with server evidence ID), a metadata-only READY/status read is authorized by the existing Evidence endpoint itself. It must not be blocked by subsequent WorkOrder version changes; no new reservation/upload/command is performed in that path.
+
+No new backend lifecycle, FGA permission, EvidencePolicy or material authorization is introduced by this exception.
+
 ## Failure and reality gates
 
 1. Local evidence/command Room v1→v2→v3 migrations preserving pending writes, evidence rows and actor isolation.
