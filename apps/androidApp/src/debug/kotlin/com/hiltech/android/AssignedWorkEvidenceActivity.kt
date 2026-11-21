@@ -68,10 +68,18 @@ class AssignedWorkEvidenceActivity :
             // Activity recreation while an external camera/picker is open.
             val cameraDirectory = File(filesDir, "field-camera")
             val cameraName = java.util.UUID.randomUUID().toString() + ".jpg"
+            val source = jobBundle()
+            val binding = requireNotNull(source.binding)
             val cameraRequest = PendingEvidenceCapture(
                 actorId = fixtureIdentity().identityId,
                 workOrderId = WORK_ORDER_ID,
                 requirementKey = "INSTALLATION-PHOTO",
+                assignmentId = source.assignment.assignmentId,
+                assignmentVersion = source.assignment.version,
+                workOrderVersion = source.workOrderVersion,
+                bindingRevision = binding.bindingRevision,
+                evidencePolicyId = binding.evidencePolicy.id,
+                evidencePolicyRevision = binding.evidencePolicy.revision,
                 cameraFile = File(cameraDirectory, cameraName),
             )
             val cameraBundle = Bundle()
@@ -86,8 +94,17 @@ class AssignedWorkEvidenceActivity :
             val restoredPicker = PendingEvidenceCaptureState.restore(
                 pickerBundle, cameraDirectory,
             )
+            val changedAssignment = source.copy(
+                assignment = source.assignment.copy(version = source.assignment.version + 1),
+            )
+            val changedPolicy = source.copy(
+                binding = binding.copy(bindingRevision = binding.bindingRevision + 1),
+            )
             val valid = restoredCamera == cameraRequest &&
                 restoredPicker == cameraRequest.copy(cameraFile = null) &&
+                restoredCamera.matches(source) &&
+                !restoredCamera.matches(changedAssignment) &&
+                !restoredCamera.matches(changedPolicy) &&
                 PendingEvidenceCaptureState.restore(Bundle(), cameraDirectory) == null
             setContentView(proofMarkerView(
                 if (valid) "PHASE6_S03_EXTERNAL_CAPTURE_CONTEXT_RESTORED"
