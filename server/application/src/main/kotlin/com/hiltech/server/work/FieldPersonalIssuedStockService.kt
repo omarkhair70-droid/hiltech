@@ -80,7 +80,7 @@ class FieldPersonalIssuedStockService(
                     it.projectId != order.projectId ||
                     it.siteId != order.siteId ||
                     it.workOrderId != order.workOrderId ||
-                    it.outstandingQuantity.toBigDecimalOrNull()?.signum() == -1 ||
+                    (it.outstandingQuantity.toBigDecimalOrNull()?.signum()?.let { sign -> sign < 0 } ?: true) ||
                     it.sourceVersion < 1 ||
                     it.unitCode.isBlank()
             }) {

@@ -79,6 +79,7 @@ class MainActivity : ComponentActivity() {
         }
 
     private var assetLookupSequence = 0
+    private var personalIssuedStockSequence = 0
 
     private var shellState:
         HiltechShellState by mutableStateOf(
@@ -116,6 +117,8 @@ class MainActivity : ComponentActivity() {
                     ::refreshFieldWork,
                 onSelectFieldWork =
                     ::selectFieldWork,
+                onRefreshPersonalIssuedStock =
+                    ::refreshPersonalIssuedStockSelected,
                 captureFieldIntent = true,
                 onQueueFieldIntent = ::queueFieldExecution,
                 captureEvidence = true,
@@ -383,12 +386,20 @@ class MainActivity : ComponentActivity() {
                         selectedBundle = selectedResult?.getOrNull()?.value,
                         cachedTodayAt = snapshot.fetchedAtEpochMs,
                         cachedBundleAt = selectedResult?.getOrNull()?.fetchedAtEpochMs,
+                        personalIssuedStock = null,
+                        personalIssuedStockLoading = false,
+                        personalIssuedStockError = null,
                         pendingFieldIntent = pending,
                         localEvidence = localEvidence,
                         errorMessage = selectedResult?.exceptionOrNull()
                             ?.takeUnless { notVisible }?.message,
                     ),
                 )
+                if (!notVisible && selectedId != null &&
+                    selectedResult?.getOrNull()?.value != null &&
+                    selectedResult.getOrNull()?.fetchedAtEpochMs == null) {
+                    refreshPersonalIssuedStock(selectedId, identityId)
+                }
             }.onFailure { failure ->
                 if (failure is kotlinx.coroutines.CancellationException) return@onFailure
                 val current = shellState as? HiltechShellState.SignedIn ?: return@onFailure
@@ -426,6 +437,9 @@ class MainActivity : ComponentActivity() {
                 selectedBundle = null,
                 cachedBundleAt = null,
                 errorMessage = null,
+                personalIssuedStock = null,
+                personalIssuedStockLoading = false,
+                personalIssuedStockError = null,
             ),
         )
         scope.launch {
@@ -465,6 +479,9 @@ class MainActivity : ComponentActivity() {
                 selectedWorkOrderId = workOrderId,
                 selectedBundle = null,
                 cachedBundleAt = null,
+                personalIssuedStock = null,
+                personalIssuedStockLoading = false,
+                personalIssuedStockError = null,
                 errorMessage = null,
             ),
         )
@@ -493,9 +510,15 @@ class MainActivity : ComponentActivity() {
                         pendingFieldIntent = pending,
                         fieldIntentMessage = null,
                         localEvidence = localEvidence,
+                        personalIssuedStock = null,
+                        personalIssuedStockLoading = false,
+                        personalIssuedStockError = null,
                         errorMessage = null,
                     ),
                 )
+                if (snapshot.fetchedAtEpochMs == null) {
+                    refreshPersonalIssuedStock(workOrderId, identityId)
+                }
             }.onFailure { failure ->
                 if (failure is kotlinx.coroutines.CancellationException) return@onFailure
                 val current = shellState as? HiltechShellState.SignedIn ?: return@onFailure
@@ -538,6 +561,76 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+
+    private fun refreshPersonalIssuedStockSelected(workOrderId: String) {
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        if (signed.field?.selectedWorkOrderId != workOrderId) return
+        refreshPersonalIssuedStock(workOrderId, signed.identity.identityId)
+    }
+
+    /** S04A: read-only, never cached, never shared across actor or WorkOrder. */
+    private fun refreshPersonalIssuedStock(workOrderId: String, actorId: String) {
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        val field = signed.field ?: return
+        if (signed.identity.identityId != actorId ||
+            field.selectedWorkOrderId != workOrderId ||
+            field.cachedBundleAt != null ||
+            field.selectedBundle?.workOrderId != workOrderId) return
+        val request = ++personalIssuedStockSequence
+        shellState = signed.copy(field = field.copy(
+            personalIssuedStock = null,
+            personalIssuedStockLoading = true,
+            personalIssuedStockError = null,
+        ))
+        scope.launch {
+            val result = runCatching {
+                hiltechApplication.fieldAssignedWorkApi.personalIssuedStock(
+                    workOrderId, hiltechApplication.installationId,
+                )
+            }
+            if (result.exceptionOrNull() is kotlinx.coroutines.CancellationException) return@launch
+            val current = shellState as? HiltechShellState.SignedIn ?: return@launch
+            val selected = current.field ?: return@launch
+            if (request != personalIssuedStockSequence ||
+                current.identity.identityId != actorId ||
+                selected.selectedWorkOrderId != workOrderId ||
+                selected.cachedBundleAt != null ||
+                selected.selectedBundle?.workOrderId != workOrderId) return@launch
+
+            val denied = result.exceptionOrNull() as? HiltechApiException
+            if (denied?.httpStatus in setOf(401, 403, 404)) {
+                identityRuntime.invalidateOfflineReadIdentity()
+                runCatching { hiltechApplication.fieldOfflineReadCache.clearIdentity(actorId) }
+                shellState = current.copy(field = HiltechFieldState(
+                    today = selected.today,
+                    errorMessage = "صلاحية عرض التكليف اتغيرت. يلزم إعادة التأكد من السيرفر.",
+                ))
+                return@launch
+            }
+            result.onSuccess { projection ->
+                if (projection.workOrderId != workOrderId ||
+                    projection.workOrderVersion != selected.selectedBundle.workOrderVersion) {
+                    shellState = current.copy(field = selected.copy(
+                        personalIssuedStock = null,
+                        personalIssuedStockLoading = false,
+                        personalIssuedStockError = "مصدر الخامات اتغير؛ حدّث التكليف قبل القراءة.",
+                    ))
+                } else {
+                    shellState = current.copy(field = selected.copy(
+                        personalIssuedStock = projection,
+                        personalIssuedStockLoading = false,
+                        personalIssuedStockError = null,
+                    ))
+                }
+            }.onFailure { failure ->
+                shellState = current.copy(field = selected.copy(
+                    personalIssuedStock = null,
+                    personalIssuedStockLoading = false,
+                    personalIssuedStockError = failure.message ?: "تعذر قراءة الرصيد الحالي.",
+                ))
+            }
+        }
+    }
 
     private fun scheduleFieldCommandReplay(identityId: String) {
         WorkManager.getInstance(this).enqueueUniqueWork(

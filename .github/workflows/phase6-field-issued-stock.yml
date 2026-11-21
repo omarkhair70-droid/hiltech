@@ -5,6 +5,12 @@ on:
     branches: [main]
     paths:
       - "server/application/src/main/kotlin/com/hiltech/server/work/FieldPersonalIssuedStock*"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/work/FieldPersonalIssuedStock*"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/work/FieldAssignedWorkApiClient.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/AssignedWorkSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/HiltechShell.kt"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/work/FieldPersonalIssuedStock*"
+      - "apps/androidApp/src/main/kotlin/com/hiltech/android/MainActivity.kt"
       - "server/application/src/test/kotlin/com/hiltech/server/work/FieldPersonalIssuedStock*"
       - ".github/workflows/phase6-field-issued-stock.yml"
   workflow_dispatch:
@@ -29,4 +35,13 @@ jobs:
         run: |
           ./gradlew :server:application:test \
             --tests com.hiltech.server.work.FieldPersonalIssuedStockServiceTest \
+            --no-configuration-cache --console=plain
+      - name: Verify shared read client transport and compile Android UI
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests com.hiltech.shared.core.work.FieldPersonalIssuedStockApiClientTest \
+            --no-configuration-cache --console=plain
+          ./gradlew :apps:androidApp:assembleDebug \
+            -Philtech.apiBaseUrl=https://api.hiltech.invalid \
+            -Philtech.oidcIssuerUri=https://identity.hiltech.invalid/realms/hiltech \
             --no-configuration-cache --console=plain
