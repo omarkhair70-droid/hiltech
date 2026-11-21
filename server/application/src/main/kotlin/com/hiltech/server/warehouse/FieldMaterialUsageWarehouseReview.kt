@@ -36,12 +36,12 @@ data class FieldUsageWarehouseReviewPage(
 )
 
 interface FieldUsageWarehouseReviewReadPort {
-    fun pending(organizationId: UUID, warehouseId: UUID): List<FieldUsagePendingForWarehouse>
+    fun pending(organizationId: UUID, warehouseId: UUID, offset: Int = 0): List<FieldUsagePendingForWarehouse>
 }
 
 @Repository
 class JdbcFieldUsageWarehouseReviewRead(private val jdbc: JdbcTemplate) : FieldUsageWarehouseReviewReadPort {
-    override fun pending(organizationId: UUID, warehouseId: UUID) = jdbc.query(
+    override fun pending(organizationId: UUID, warehouseId: UUID, offset: Int) = jdbc.query(
         """
         SELECT r.operation_id, r.organization_id, r.work_order_id, r.requirement_id,
                r.stock_item_id, r.employee_id, r.quantity, r.unit_code,
@@ -70,7 +70,7 @@ class JdbcFieldUsageWarehouseReviewRead(private val jdbc: JdbcTemplate) : FieldU
                 AND m.movement_type = 'ISSUE'
                 AND l.warehouse_id IS DISTINCT FROM ?
           )
-        ORDER BY r.created_at, r.operation_id LIMIT 101
+        ORDER BY r.created_at, r.operation_id LIMIT 101 OFFSET ?
         """.trimIndent(),
         { row, _ ->
             FieldUsagePendingForWarehouse(
@@ -85,7 +85,7 @@ class JdbcFieldUsageWarehouseReviewRead(private val jdbc: JdbcTemplate) : FieldU
                 row.getObject("created_at", OffsetDateTime::class.java).toInstant(),
             )
         },
-        organizationId, warehouseId, warehouseId,
+        organizationId, warehouseId, warehouseId, offset,
     )
 }
 
@@ -108,19 +108,29 @@ class FieldUsageWarehouseReviewService(
         val facility = warehouse.warehouse(warehouseId)?.takeIf {
             it.active && authorization.canReserveResources(actor, it)
         } ?: hidden()
-        val candidates = read.pending(facility.organizationId, warehouseId)
-        val visible = candidates.filter { r ->
-            if (r.organizationId != facility.organizationId) return@filter false
-            val origins = stock.origins(r.stockItemId, r.requirementId, r.employeeId)
-            origins.isNotEmpty() && origins.all { id ->
-                val origin = warehouse.storageLocation(id)
-                origin != null && origin.organizationId == facility.organizationId &&
-                    origin.warehouseId == warehouseId && authorization.canTransferStock(actor, origin)
+        // Source visibility is checked *after* the database candidates are loaded.
+        // A single LIMIT 101 silently loses authorized claims if earlier rows are hidden.
+        // Scan ordered batches until the first 101 authorized claims are known.
+        val visible = ArrayList<FieldUsagePendingForWarehouse>(101)
+        var offset = 0
+        do {
+            val candidates = read.pending(facility.organizationId, warehouseId, offset)
+            for (r in candidates) {
+                if (r.organizationId != facility.organizationId) continue
+                val origins = stock.origins(r.stockItemId, r.requirementId, r.employeeId)
+                val authorized = origins.isNotEmpty() && origins.all { id ->
+                    val origin = warehouse.storageLocation(id)
+                    origin != null && origin.organizationId == facility.organizationId &&
+                        origin.warehouseId == warehouseId && authorization.canTransferStock(actor, origin)
+                }
+                if (authorized) visible += r
+                if (visible.size == 101) break
             }
-        }.take(100)
+            offset += candidates.size
+        } while (candidates.size == 101 && visible.size < 101)
         return FieldUsageWarehouseReviewPage(
-            warehouseId, rows = visible,
-            limited = visible.size == 100 && candidates.size > 100,
+            warehouseId, rows = visible.take(100),
+            limited = visible.size > 100,
         )
     }
 
