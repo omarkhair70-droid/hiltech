@@ -91,6 +91,68 @@ class FieldEvidenceUploadCoordinatorTest {
         assertTrue(db.evidenceQueueDao().get(id)?.localFileRef == "$id.bin")
     }
 
+    @Test fun aProvenSameActorStartTransitionMayAdvanceOneVersionWithoutRebasingCapture() = withDb { db ->
+        db.evidenceQueueDao().insert(row())
+        db.pendingCommandDao().insert(
+            PendingCommandEntity(
+                operationId = "99999999-9999-4999-8999-999999999999",
+                actorUserIdentityId = actor, deviceId = device,
+                commandType = "StartWork", targetType = "WorkOrder", targetId = work,
+                baseVersion = 7, payloadVersion = 1, payloadJson = "{}",
+                clientOccurredAtEpochMs = 1_700_000_000_000L,
+                enqueuedAtEpochMs = 1_700_000_000_000L,
+                localSequence = 1, state = PendingCommandStates.APPLIED,
+                retryCount = 0, nextRetryAtEpochMs = null,
+                lastAttemptAtEpochMs = 1_700_000_000_000L,
+                lastResultCode = "APPLIED", lastServerVersion = 8,
+                lastCorrelationId = "corr-start", contractVersion = 1,
+                policyBindingRef = "binding:3", updatedAtEpochMs = 1_700_000_000_000L,
+            ),
+        )
+        val remote = FakeRemote().apply {
+            bundleState = bundle().copy(workOrderVersion = 8)
+        }
+        val result = engine(db, remote).replayOnce(actor, device)
+        assertEquals(1, result.ready)
+        assertEquals(1, remote.uploads)
+        // The captured source is retained as V7, never overwritten with V8.
+        assertEquals(7L, db.evidenceQueueDao().get(id)?.workOrderVersion)
+    }
+
+    @Test fun anUnprovenVersionChangeNeverSilentlyRebindsEvidence() = withDb { db ->
+        db.evidenceQueueDao().insert(row())
+        val remote = FakeRemote().apply {
+            bundleState = bundle().copy(workOrderVersion = 8)
+        }
+        val outcome = engine(db, remote).replayOnce(actor, device)
+        assertEquals(1, outcome.reviewRequired)
+        assertEquals(0, remote.reserves)
+        assertEquals("CAPTURE_SOURCE_CHANGED", db.evidenceQueueDao().get(id)?.lastUploadErrorCode)
+    }
+
+    @Test fun finalizedQuarantineMetadataMayReachReadyAfterWorkVersionMoves() = withDb { db ->
+        db.evidenceQueueDao().insert(row().copy(
+            localState = LocalEvidenceStates.UPLOADED_UNVERIFIED,
+            serverEvidenceId = remoteId, finalizedServerEvidenceId = remoteId,
+            uploadSessionId = session,
+        ))
+        val remote = FakeRemote().apply {
+            bundleState = bundle().copy(workOrderVersion = 100,
+                assignment = bundle().assignment.copy(version = 99))
+            metadataState = "READY"
+        }
+        val outcome = FieldEvidenceUploadCoordinator(
+            db, remote,
+            bytes = FieldEvidenceBytes { error("Metadata-only verification cannot read local bytes") },
+            nowEpochMs = { 1_700_000_000_001L },
+            formatEpochUtc = { "2026-11-21T06:00:00Z" },
+        ).replayOnce(actor, device)
+        assertEquals(1, outcome.ready)
+        assertEquals(0, remote.reserves)
+        assertEquals(0, remote.uploads)
+        assertEquals(LocalEvidenceStates.READY, db.evidenceQueueDao().get(id)?.localState)
+    }
+
     private fun engine(db: HiltechLocalDatabase, remote: FakeRemote) =
         FieldEvidenceUploadCoordinator(
             db, remote,
