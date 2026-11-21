@@ -98,7 +98,16 @@ class AssignedWorkEvidenceActivity :
                 val row = evidence.singleOrNull { it.evidenceId == evidenceId }
                     ?: error("Missing synthetic Evidence row")
                 val corrupted = File(noBackupFilesDir, "field-evidence/" + row.localFileRef)
-                corrupted.appendBytes(byteArrayOf(0x01))
+                // Flip an in-place byte without changing file length: this specifically
+                // proves SHA-256 revalidation, not merely an expected-size guard.
+                java.io.RandomAccessFile(corrupted, "rw").use { random ->
+                    require(random.length() > 3)
+                    random.seek(2)
+                    val original = random.readUnsignedByte()
+                    random.seek(2)
+                    random.writeByte(original xor 0x01)
+                    random.fd.sync()
+                }
                 val rejected = runBlocking {
                     runCatching { app.fieldEvidenceFiles.readAndVerify(row) }.isFailure
                 }
