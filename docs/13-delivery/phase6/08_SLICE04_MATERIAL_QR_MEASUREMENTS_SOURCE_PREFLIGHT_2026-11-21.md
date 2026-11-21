@@ -73,7 +73,7 @@ A field measurement can be **captured as a source-bound intent** only after this
 | Offline | Room replay/process death, no cross-user data exposure, revoked identity pause, stale version conflicts, network failure retry without extra consumption. |
 | Asset tag | Unknown/replaced/foreign tag, manual fallback, safe redaction and no unauthorized custody writes. |
 | Drawings | Revision change, expired document/read permission, no implicit overwrite and no stale-cache authorization. |
-| Engineering | Real WorkType measurement fixture and engineer-approved thresholds/units/instrument requirements before any numeric PASS/FAlL. |
+| Engineering | Real WorkType measurement fixture and engineer-approved thresholds/units/instrument requirements before any numeric PASS/FAIL. |
 | Delivery | Exact-head checks, dedicated native Android/Windows proof, independent diff and explicit technician/supervisor acceptance. |
 
 ## Explicit no-go / next approval
