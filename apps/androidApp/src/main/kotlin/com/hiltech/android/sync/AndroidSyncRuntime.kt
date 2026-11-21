@@ -95,14 +95,14 @@ class AndroidSyncRuntime(
 
         if (
             database.pendingCommandDao()
-                .pausedForReauthCount() > 0
+                .pausedForReauthCount(verifiedActor, installationId) > 0
         ) {
             return AndroidSyncRunResult.ReauthenticationRequired
         }
 
         if (
             summary.retryable > 0 ||
-            database.pendingCommandDao().earliestRetryAtEpochMs() != null
+            database.pendingCommandDao().earliestRetryAtForActor(verifiedActor, installationId) != null
         ) {
             return AndroidSyncRunResult.Retry
         }

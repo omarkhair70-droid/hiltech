@@ -135,6 +135,21 @@ interface PendingCommandDao {
 
     @Query(
         """
+        SELECT MIN(next_retry_at_epoch_ms)
+        FROM pending_command
+        WHERE actor_user_identity_id = :identityId
+          AND device_id = :installationId
+          AND state = 'RETRYABLE'
+          AND next_retry_at_epoch_ms IS NOT NULL
+        """,
+    )
+    suspend fun earliestRetryAtForActor(
+        identityId: String,
+        installationId: String,
+    ): Long?
+
+    @Query(
+        """
         SELECT COUNT(*)
         FROM pending_command
         WHERE state = 'FAILED_TERMINAL'
@@ -146,11 +161,16 @@ interface PendingCommandDao {
     @Query(
         """
         SELECT COUNT(*) FROM pending_command
-        WHERE state = 'RETRYABLE'
+        WHERE actor_user_identity_id = :identityId
+          AND device_id = :installationId
+          AND state = 'RETRYABLE'
           AND last_result_code = 'REAUTH_REQUIRED'
         """,
     )
-    suspend fun pausedForReauthCount(): Int
+    suspend fun pausedForReauthCount(
+        identityId: String,
+        installationId: String,
+    ): Int
 
     @Query(
         """
