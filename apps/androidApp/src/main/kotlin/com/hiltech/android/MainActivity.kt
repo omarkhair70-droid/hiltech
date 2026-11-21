@@ -119,7 +119,7 @@ class MainActivity : ComponentActivity() {
                     ::selectFieldWork,
                 onRefreshPersonalIssuedStock =
                     ::refreshPersonalIssuedStockSelected,
-                showPersonalIssuedStock = true,
+                showPersonalIssuedStock = BuildConfig.HILTECH_PERSONAL_ISSUED_STOCK_ENABLED,
                 captureFieldIntent = true,
                 onQueueFieldIntent = ::queueFieldExecution,
                 captureEvidence = true,
@@ -573,6 +573,7 @@ class MainActivity : ComponentActivity() {
 
     /** S04A: read-only, never cached, never shared across actor or WorkOrder. */
     private fun refreshPersonalIssuedStock(workOrderId: String, actorId: String) {
+        if (!BuildConfig.HILTECH_PERSONAL_ISSUED_STOCK_ENABLED) return
         val signed = shellState as? HiltechShellState.SignedIn ?: return
         val field = signed.field ?: return
         if (signed.identity.identityId != actorId ||
@@ -601,7 +602,8 @@ class MainActivity : ComponentActivity() {
                 selected.selectedBundle?.workOrderId != workOrderId) return@launch
 
             val denied = result.exceptionOrNull() as? HiltechApiException
-            if (denied?.httpStatus in setOf(401, 403, 404)) {
+            if (denied?.httpStatus in setOf(401, 403) ||
+                denied?.code in setOf("REAUTH_REQUIRED", "OBJECT_NOT_VISIBLE")) {
                 identityRuntime.invalidateOfflineReadIdentity()
                 runCatching { hiltechApplication.fieldOfflineReadCache.clearIdentity(actorId) }
                 shellState = current.copy(field = HiltechFieldState(

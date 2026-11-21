@@ -3,6 +3,7 @@ package com.hiltech.server.work
 import com.hiltech.server.people.EmployeeState
 import com.hiltech.server.people.PeoplePersistencePort
 import com.hiltech.server.platform.ProductApiException
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -42,9 +43,20 @@ class FieldPersonalIssuedStockService(
     private val people: PeoplePersistencePort,
     private val stock: FieldPersonalIssuedStockReadPort,
     private val clock: Clock,
+    @Value("${hiltech.field.personal-issued-stock.enabled:false}")
+    private val rolloutEnabled: Boolean = false,
 ) {
     @Transactional(readOnly = true)
     fun ownIssued(actorUserId: UUID, workOrderId: UUID): FieldPersonalIssuedStockSnapshot {
+        // Explicit release gate: read authority is not yet approved for production.
+        // A successful WorkOrder can_view alone must not enable personal custody data.
+        if (!rolloutEnabled) {
+            throw ProductApiException(
+                "FIELD_ISSUED_STOCK_UNAVAILABLE",
+                "Personal issued-stock read is not enabled for this environment.",
+                HttpStatus.NOT_FOUND,
+            )
+        }
         val at = clock.instant()
         if (!assignments.isCurrentAssignedUser(actorUserId, workOrderId, at) ||
             !workAuthorization.canUseAssignedWork(actorUserId, workOrderId, "can_view")) {

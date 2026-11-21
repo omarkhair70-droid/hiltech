@@ -2979,6 +2979,7 @@ class ProjectsPostgresOpenFgaContractTest {
                     people = JdbcPeoplePersistence(jdbc),
                     stock = com.hiltech.server.work.JdbcFieldPersonalIssuedStockRead(jdbc),
                     clock = clock,
+                    rolloutEnabled = true, // test activation only; production default remains OFF
                 )
             assertEquals(
                 "NO_ISSUED_CONTEXT",

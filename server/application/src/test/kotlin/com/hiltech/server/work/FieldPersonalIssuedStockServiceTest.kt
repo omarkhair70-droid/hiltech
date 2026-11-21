@@ -29,6 +29,7 @@ class FieldPersonalIssuedStockServiceTest {
     private val stock = Mockito.mock(FieldPersonalIssuedStockReadPort::class.java)
     private val service = FieldPersonalIssuedStockService(
         assignments, authorization, work, people, stock, Clock.fixed(at, ZoneOffset.UTC),
+        rolloutEnabled = true,
     )
 
     private fun authorize() {
@@ -69,6 +70,19 @@ class FieldPersonalIssuedStockServiceTest {
         sourceVersion = 4,
         updatedAt = at,
     )
+
+    @Test
+    fun `release gate off hides endpoint even for an assigned actor and never touches stock`() {
+        val disabled = FieldPersonalIssuedStockService(
+            assignments, authorization, work, people, stock,
+            Clock.fixed(at, ZoneOffset.UTC),
+        )
+        assertEquals(
+            "FIELD_ISSUED_STOCK_UNAVAILABLE",
+            assertThrows<ProductApiException> { disabled.ownIssued(actor, workId) }.code,
+        )
+        Mockito.verifyNoInteractions(assignments, authorization, work, people, stock)
+    }
 
     @Test
     fun `denied current assignment hides work and never queries stock`() {

@@ -18,6 +18,12 @@ server:
   port: ${HILTECH_SERVER_PORT:8080}
 
 hiltech:
+  # Human authorization gate: disabled by default even when Android code is merged.
+  # Enable only after S04A ownership/custody visibility review and rollout signoff.
+  field:
+    personal-issued-stock:
+      enabled: ${HILTECH_FIELD_PERSONAL_ISSUED_STOCK_ENABLED:false}
+
   activity:
     cursor-signing-key: ${HILTECH_ACTIVITY_CURSOR_SIGNING_KEY:}
 

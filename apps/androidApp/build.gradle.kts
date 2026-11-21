@@ -7,6 +7,9 @@ val hiltechOidcIssuerUri = providers.gradleProperty("hiltech.oidcIssuerUri")
     .getOrElse("")
 val hiltechOidcClientId = providers.gradleProperty("hiltech.oidcClientId")
     .getOrElse("hiltech-native")
+val personalIssuedStockUiEnabled = providers
+    .gradleProperty("hiltech.personalIssuedStockEnabled")
+    .getOrElse("false") == "true"
 
 plugins {
     id("com.hiltech.base")
@@ -38,6 +41,11 @@ android {
             "String",
             "HILTECH_OIDC_CLIENT_ID",
             hiltechOidcClientId.asBuildConfigString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_PERSONAL_ISSUED_STOCK_ENABLED",
+            personalIssuedStockUiEnabled.toString(),
         )
     }
 
