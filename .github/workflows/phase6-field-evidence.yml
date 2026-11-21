@@ -109,7 +109,7 @@ jobs:
               f.write(f'HILTECH_FGA_STORE_ID={data["store"]["id"]}\n')
               f.write(f'HILTECH_FGA_MODEL_ID={data["model"]["authorization_model_id"]}\n')
           PY
-      - name: Prove server enforces maxCount under two simultaneous reservations
+      - name: Prove full Evidence lifecycle and concurrent maxCount enforcement
         env:
           HILTECH_EVIDENCE_LIFECYCLE_CONTRACT_TEST: "1"
           HILTECH_DB_URL: jdbc:postgresql://127.0.0.1:5432/hiltech
@@ -124,7 +124,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: test
         run: |
           ./gradlew :server:application:test \
-            --tests 'com.hiltech.server.documents.EvidenceLifecyclePostgresOpenFgaS3ContractTest.concurrentReservationsRespectServerSideMaxCount' \
+            --tests 'com.hiltech.server.documents.EvidenceLifecyclePostgresOpenFgaS3ContractTest' \
             --rerun-tasks --no-configuration-cache --console=plain
       - name: Print test report on failure
         if: failure()
