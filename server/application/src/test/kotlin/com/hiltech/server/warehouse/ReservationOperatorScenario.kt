@@ -58,12 +58,33 @@ internal class ReservationOperatorScenario(
             .provision(first.organizationId, facility, operator, operator, "SYNTH-RESERVE", "Synthetic reserve warehouse")
         project()
         seed()
+        val sourceProjection = JdbcWarehouseCommandCenterReadPort(jdbc).snapshot(
+            requireNotNull(warehouse.warehouse(facility)), now, includeImportExceptions = false,
+        )
+        assertEquals(1, sourceProjection.inventory.stockItemCount)
+        assertEquals(1, sourceProjection.inventory.balanceLineCount)
+        assertFalse(sourceProjection.inventory.lowStockPolicyConfigured)
+        assertTrue(sourceProjection.recentMovements.items.any { it.sourceType == "STOCK_MOVEMENT" })
+
         val svc = service(Clock.fixed(now, ZoneOffset.UTC))
         assertTrue(svc.candidates(pm, first.workOrderId).canRequest)
         val firstStock = request(svc, first, "MATERIAL")
         val secondStock = request(svc, second, "MATERIAL")
         val firstAsset = request(svc, first, "ASSET")
         val secondAsset = request(svc, second, "ASSET")
+        val readinessSource = WarehouseProjectResourceReadinessSource(records, source, work, warehouse, authority)
+        val facilitySnapshot = requireNotNull(warehouse.warehouse(facility))
+        val initialReadiness = readinessSource.queue(operator, facilitySnapshot, now)
+        assertTrue(initialReadiness.visible)
+        assertTrue(initialReadiness.items.any {
+            it.workOrderId == first.workOrderId &&
+                it.requirementId == firstStock.requirementId &&
+                it.reasonCode == "STOCK_AVAILABLE" &&
+                it.state == "READY_TO_RESERVE" &&
+                it.factSourceId == item
+        })
+        assertFalse(initialReadiness.items.any { it.reasonCode == "SOURCE_PENDING_PHASE5" })
+        assertFalse(readinessSource.queue(pm, facilitySnapshot, now).visible)
         assertTrue(svc.queue(operator, facility).requests.any { it.workOrderId == first.workOrderId })
         assertEquals("STOCK_AVAILABLE", svc.candidates(pm, first.workOrderId).requirements.single { it.demand == firstStock }.reason)
 
@@ -111,6 +132,14 @@ internal class ReservationOperatorScenario(
             }.map { it.get(30, TimeUnit.SECONDS) }
         }
         val winner = reservations.single { it.isSuccess }.getOrThrow()
+        val loserWork = if (winner.workOrderId == first.workOrderId) second.workOrderId else first.workOrderId
+        val blockedReadiness = readinessSource.queue(operator, facilitySnapshot, now).items.single {
+            it.workOrderId == loserWork && it.requirementFamily == "MATERIAL"
+        }
+        assertEquals("BLOCKED", blockedReadiness.state)
+        assertEquals("STOCK_SHORTAGE", blockedReadiness.reasonCode)
+        assertEquals(item, blockedReadiness.factSourceId)
+        assertFalse(blockedReadiness.reasonCode == "SOURCE_PENDING_PHASE5")
         assertEquals("RESERVATION_VERSION_CONFLICT", (reservations.single { it.isFailure }.exceptionOrNull() as ProductApiException).code)
         assertEquals("8.000000", records.balances(item, now, location).single().reserved.toPlainString())
         assertEquals("8.000000", jdbc.queryForObject(

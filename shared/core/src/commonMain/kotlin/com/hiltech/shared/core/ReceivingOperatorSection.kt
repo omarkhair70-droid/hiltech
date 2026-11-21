@@ -10,6 +10,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -61,6 +62,8 @@ internal fun ReceivingOperatorSection(
     busy: Boolean,
     runTask: (suspend () -> Unit) -> Unit,
     onReceipt: (String) -> Unit,
+    requestedRecordId: String? = null,
+    requestedOpenGeneration: Long = 0L,
 ) {
     var directory by remember(warehouse) { mutableStateOf<ReceivingDirectoryDto?>(null) }
     var detail by remember(warehouse) { mutableStateOf<ReceivingDetailDto?>(null) }
@@ -97,10 +100,20 @@ internal fun ReceivingOperatorSection(
     fun op(vararg fields: Any?): String =
         operationId(listOf("receiving-ui", warehouse) + fields)
 
+    LaunchedEffect(warehouse, requestedRecordId, requestedOpenGeneration) {
+        requestedRecordId?.let { requested ->
+            runTask {
+                loadDirectory()
+                loadSupport()
+                loadDetail(requested)
+            }
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HorizontalDivider()
-        Text("Receiving / discrepancies", style = MaterialTheme.typography.titleMedium)
-        Text("Online physical receiving · server versions, authorization and classification remain authoritative.")
+        Text("الاستلام / Receiving / discrepancies", style = MaterialTheme.typography.titleMedium)
+        Text("استلام فعلي أونلاين · الخادم يظل صاحب النسخ والصلاحيات والتصنيف / Online physical receiving.")
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton({
@@ -110,9 +123,9 @@ internal fun ReceivingOperatorSection(
                     loadDirectory()
                     loadSupport()
                 }
-            }, enabled = !busy) { Text("Load Receiving") }
+            }, enabled = !busy) { Text("تحميل الاستلام / Load Receiving") }
             OutlinedButton({ createOpen = !createOpen }, enabled = !busy && locations.isNotEmpty()) {
-                Text(if (createOpen) "Close new Receiving" else "New Receiving")
+                Text(if (createOpen) "إغلاق نموذج الاستلام / Close new Receiving" else "استلام جديد / New Receiving")
             }
         }
 
@@ -295,7 +308,7 @@ private fun ReceivingCreateForm(
     var sourceRef by remember { mutableStateOf("") }
     var documentRef by remember { mutableStateOf("") }
 
-    Text("New Receiving", style = MaterialTheme.typography.titleSmall)
+    Text("استلام جديد / New Receiving", style = MaterialTheme.typography.titleSmall)
     assetPicker(
         "Destination storage",
         destination,
@@ -315,7 +328,7 @@ private fun ReceivingCreateForm(
             )
         },
         enabled = !busy && destination != null,
-    ) { Text("Create Receiving record") }
+    ) { Text("إنشاء سجل استلام / Create Receiving record") }
 }
 
 private val receivingRecordId = Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
@@ -330,7 +343,7 @@ fun ReceivingDirectorySection(
     open: (String) -> Unit,
     more: (() -> Unit)? = null,
 ) {
-    if (directory.items.isEmpty()) Text("No Receiving records are visible in this Warehouse.")
+    if (directory.items.isEmpty()) Text("لا توجد سجلات استلام مرئية / No Receiving records are visible in this Warehouse.")
     assetField("Receiving search / scan", search, changeSearch)
     val needle = search.trim()
     val visible = if (needle.isEmpty()) directory.items else directory.items.filter { item ->
@@ -345,9 +358,9 @@ fun ReceivingDirectorySection(
         !busy,
     ) { open(it) }
     if (receivingRecordId.matches(needle)) {
-        OutlinedButton({ open(needle) }, enabled = !busy) { Text("Open scanned Receiving receipt") }
+        OutlinedButton({ open(needle) }, enabled = !busy) { Text("فتح إيصال الاستلام الممسوح / Open scanned Receiving receipt") }
     }
-    more?.let { OutlinedButton(it, enabled = !busy) { Text("Load older Receiving records") } }
+    more?.let { OutlinedButton(it, enabled = !busy) { Text("تحميل سجلات استلام أقدم / Load older Receiving records") } }
 }
 
 @Composable
@@ -437,7 +450,7 @@ private fun ReceivingDetail(
     }
 
     if (detail.discrepancies.isNotEmpty()) {
-        Text("Recorded discrepancies", style = MaterialTheme.typography.titleSmall)
+        Text("فروقات مسجلة / Recorded discrepancies", style = MaterialTheme.typography.titleSmall)
         detail.discrepancies.forEach {
             Text("${it.type.replace('_', ' ')} · ${it.description}")
             it.receivingLineId?.let { line -> Text("Line · $line") }
@@ -652,7 +665,7 @@ private fun ReceivingDiscrepancyForm(
     var type by remember(detail.record.id, detail.record.version) { mutableStateOf("SHORT_QTY") }
     var description by remember(detail.record.id, detail.record.version) { mutableStateOf("") }
 
-    Text("Record discrepancy", style = MaterialTheme.typography.titleSmall)
+    Text("تسجيل فرق / Record discrepancy", style = MaterialTheme.typography.titleSmall)
     assetPicker(
         "Scope",
         lineId ?: "",

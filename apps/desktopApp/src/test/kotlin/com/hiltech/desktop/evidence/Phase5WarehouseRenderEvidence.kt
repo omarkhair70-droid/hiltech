@@ -63,6 +63,13 @@ import com.hiltech.shared.core.warehouse.IssuedStockDirectoryDto
 import com.hiltech.shared.core.warehouse.IssuedStockDirectoryEntryDto
 import com.hiltech.shared.core.StockInventoryState
 import com.hiltech.shared.core.WarehouseSetupSection
+import com.hiltech.shared.core.WarehouseCommandCenterSection
+import com.hiltech.shared.core.WarehouseQuickScanControls
+import com.hiltech.shared.core.WarehouseQuickScanState
+import com.hiltech.shared.core.warehouse.WarehouseCommandCenterDto
+import com.hiltech.shared.core.warehouse.WarehouseCommandCenterItemDto
+import com.hiltech.shared.core.warehouse.WarehouseCommandCenterQueueDto
+import com.hiltech.shared.core.warehouse.WarehouseInventoryOverviewDto
 import com.hiltech.shared.core.warehouse.InventoryImportBatchDto
 import com.hiltech.shared.core.warehouse.InventoryImportRowDto
 import com.hiltech.shared.core.warehouse.StockBalanceDto
@@ -104,6 +111,147 @@ fun main() = runBlocking<Unit> {
     } finally {
         scene.close()
     }
+    val commandCenter = WarehouseCommandCenterDto(
+        warehouseId = requireNotNull(state.selectedWarehouseId),
+        organizationId = requireNotNull(state.directory).items.single().organizationId,
+        warehouseCode = "TEST-WH",
+        warehouseName = "Synthetic warehouse",
+        asOf = "2026-11-20T00:00:00Z",
+        inventory = WarehouseInventoryOverviewDto(4, 3, 1, 2, false, "LOW_STOCK_THRESHOLD_NOT_CONFIGURED"),
+        dueReturns = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("ASSET_MOVEMENT", "return-source", "SYNTH-TOOL", "OVERDUE",
+                listOf("RETURN_OVERDUE"), dueAt = "2026-11-19T16:00:00Z", workOrderId = "synthetic-work",
+                drillType = "ASSET", drillId = "synthetic-asset"),
+        ), false),
+        activeReservations = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("STOCK_RESERVATION", "reservation-source", "FIBER-01", "ACTIVE",
+                listOf("ACTIVE_RESERVATION"), workOrderId = "synthetic-work",
+                drillType = "STOCK_ITEM", drillId = "synthetic-stock-item"),
+        ), false),
+        assetExceptions = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("ASSET_CALIBRATION", "calibration-source", "SYNTH-METER",
+                "BLOCKED_CALIBRATION", listOf("CALIBRATION_EXPIRED"), dueAt = "2026-11-18T12:00:00Z"),
+        ), false),
+        receivingQueue = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("RECEIVING", "receiving-source", "OTHER · delivery-17",
+                "RECEIVED_WITH_DISCREPANCY", listOf("RECEIVING_RECEIVED_WITH_DISCREPANCY"),
+                drillType = "RECEIVING", drillId = "receiving-source"),
+        ), false),
+        stocktakeQueue = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("INVENTORY_ADJUSTMENT_REQUEST", "adjustment-source",
+                "FIBER-01 · adjustment", "PENDING", listOf("ADJUSTMENT_PENDING"),
+                drillType = "STOCKTAKE", drillId = "synthetic-stocktake"),
+        ), false),
+        importExceptions = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("INVENTORY_IMPORT_ROW", "import-row-source", "LEGACY-PART",
+                "NEEDS_REVIEW", listOf("UNKNOWN_UOM","LEGACY_COLUMN_SEMANTICS_AMBIGUOUS")),
+        ), false),
+        recentMovements = WarehouseCommandCenterQueueDto(listOf(
+            WarehouseCommandCenterItemDto("STOCK_MOVEMENT", "movement-source", "FIBER-01",
+                "ISSUE", listOf("ISSUE"), occurredAt = "2026-11-19T23:00:00Z", workOrderId = "synthetic-work",
+                drillType = "STOCK_ITEM", drillId = "synthetic-stock-item"),
+        ), false),
+        projectResourceReadiness = com.hiltech.shared.core.warehouse.WarehouseProjectResourceReadinessQueueDto(
+            visible = true,
+            items = listOf(
+                com.hiltech.shared.core.warehouse.WarehouseProjectResourceReadinessItemDto(
+                    workOrderId = "synthetic-work",
+                    workOrderCode = "SYNTH-WORK",
+                    title = "Synthetic installation",
+                    projectId = "synthetic-project",
+                    siteId = "synthetic-site",
+                    requirementId = "synthetic-material-requirement",
+                    requirementKey = "FIBER-MATERIAL",
+                    requirementFamily = "MATERIAL",
+                    resourceKind = "STOCK",
+                    state = "BLOCKED",
+                    reasonCode = "STOCK_RESERVED_FOR_OTHER_WORK",
+                    factSourceId = "synthetic-stock-item",
+                    factSourceVersion = 3,
+                    sourceAsOf = "2026-11-20T00:00:00Z",
+                    candidateCount = 1,
+                ),
+                com.hiltech.shared.core.warehouse.WarehouseProjectResourceReadinessItemDto(
+                    workOrderId = "synthetic-work-2",
+                    workOrderCode = "SYNTH-WORK-2",
+                    title = "Synthetic cabinet installation",
+                    projectId = "synthetic-project",
+                    siteId = "synthetic-site",
+                    requirementId = "synthetic-asset-requirement",
+                    requirementKey = "FIBER-TESTER",
+                    requirementFamily = "ASSET",
+                    resourceKind = "ASSET",
+                    state = "READY_TO_RESERVE",
+                    reasonCode = "ASSET_AVAILABLE",
+                    factSourceId = "synthetic-asset",
+                    factSourceVersion = 4,
+                    sourceAsOf = "2026-11-20T00:00:00Z",
+                    candidateCount = 1,
+                ),
+            ),
+            limited = false,
+        ),
+    )
+    val commandCenterScene = ImageComposeScene(width = 980, height = 1320, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            WarehouseCommandCenterSection(commandCenter)
+        }
+    }
+    captureAndClose(commandCenterScene, directory.resolve("warehouse-command-center.png"))
+
+    val quickAssetId = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
+    val quickState = WarehouseQuickScanState(
+        assetTagResult = AssetTagLookupDto(
+            assetCode = "SYNTH-PASSPORT",
+            name = "Synthetic instrument",
+            typeName = "Synthetic Asset type",
+            serialNumber = "SYNTH-SERIAL",
+            condition = AssetCondition.GOOD,
+            locationCode = "TEST-WH-1",
+            assetId = quickAssetId,
+        ),
+        assetSearchResults = listOf(
+            AssetIdentityDto(
+                id = quickAssetId,
+                organizationId = requireNotNull(state.directory).items.single().organizationId,
+                warehouseId = requireNotNull(state.selectedWarehouseId),
+                assetCode = "SYNTH-PASSPORT",
+                name = "Synthetic instrument",
+                serialNumber = "SYNTH-SERIAL",
+                typeId = "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
+                typeName = "Synthetic Asset type",
+                typeRevision = 1,
+                condition = AssetCondition.GOOD,
+                lifecycle = "ACTIVE",
+                duplicateSerial = false,
+                version = 4,
+            ),
+        ),
+        stockSearchResults = listOf(
+            StockItemDto(
+                id = "cccccccc-1111-4111-8111-cccccccccccc",
+                organizationId = requireNotNull(state.directory).items.single().organizationId,
+                itemCode = "SYNTH-STOCK-01",
+                name = "Synthetic cable",
+                partNumber = "SYNTH-PART-01",
+                categoryDefinitionId = "dddddddd-1111-4111-8111-dddddddddddd",
+                categoryRevision = 1,
+                baseUnitCode = "EA",
+                classification = "STOCK_QUANTITY",
+                serialized = false,
+                lotTracked = false,
+                active = true,
+                version = 2,
+            ),
+        ),
+    )
+    val quickScene = ImageComposeScene(width = 720, height = 980, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            WarehouseQuickScanControls(quickState, false, {}, {}, {})
+        }
+    }
+    captureAndClose(quickScene, directory.resolve("warehouse-quick-scan.png"))
+
     val stock = syntheticStock(state)
     val inventory = ImageComposeScene(width = 940, height = 940, coroutineContext = coroutineContext) {
         Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {

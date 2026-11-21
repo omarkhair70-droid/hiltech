@@ -77,7 +77,10 @@ internal class AssetPassportOperatorScenario(
         assertNotEquals(tag.code, replacement.code)
         assertEquals(tag.id, replacement.replacesTagId)
         denied("ASSET_UNAVAILABLE") { service.lookup(manager, tag.code) }
-        assertEquals(id, service.directory(manager, warehouse, replacement.code, null).single().id)
+        val tagLookup = service.lookup(manager, replacement.code)
+        assertEquals(id, tagLookup.assetId)
+        assertEquals(tagLookup.assetId, service.directory(manager, warehouse, replacement.code, null).single().id)
+        assertEquals(tagLookup.assetId, service.directory(manager, warehouse, "SYNTH-PASSPORT", null).single().id)
         assertEquals(replacement.id, service.passport(manager, id).tags.single { it.active && it.primary }.id)
 
         val version = service.passport(manager, id).identity.version

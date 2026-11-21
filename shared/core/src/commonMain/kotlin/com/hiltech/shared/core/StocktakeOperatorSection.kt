@@ -9,6 +9,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +44,8 @@ fun StocktakeOperatorSection(
     busy: Boolean,
     runTask: (suspend () -> Unit) -> Unit,
     onReceipt: (String) -> Unit,
+    requestedStocktakeId: String? = null,
+    requestedOpenGeneration: Long = 0L,
 ) {
     var locations by remember(warehouse) { mutableStateOf<List<StorageLocationDto>?>(null) }
     var rootId by remember(warehouse) { mutableStateOf<String?>(null) }
@@ -63,9 +66,18 @@ fun StocktakeOperatorSection(
         }
     }
 
+    LaunchedEffect(warehouse, requestedStocktakeId, requestedOpenGeneration) {
+        requestedStocktakeId?.let { requested ->
+            runTask {
+                openId = requested
+                refresh(requested)
+            }
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Stocktake / physical count", style = MaterialTheme.typography.titleMedium)
-        Text("Online source-of-truth count · recount history is preserved · count never edits balance.")
+        Text("الجرد / Stocktake / physical count", style = MaterialTheme.typography.titleMedium)
+        Text("جرد فعلي أونلاين · تاريخ إعادة العد محفوظ · العد لا يعدّل الرصيد مباشرة / Online source-of-truth count.")
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
@@ -77,17 +89,17 @@ fun StocktakeOperatorSection(
                     }
                 },
                 enabled = !busy,
-            ) { Text("Load count locations") }
+            ) { Text("تحميل مواقع الجرد / Load count locations") }
             detail?.let {
                 OutlinedButton(onClick = { runTask { refresh(it.session.id) } }, enabled = !busy) {
-                    Text("Refresh stocktake")
+                    Text("تحديث الجرد / Refresh stocktake")
                 }
             }
         }
 
         locations?.let { available ->
-            Text("Count scope root")
-            if (available.isEmpty()) Text("No active count location is available.")
+            Text("نطاق الجرد / Count scope root")
+            if (available.isEmpty()) Text("لا يوجد موقع جرد فعّال / No active count location is available.")
             available.forEach { location ->
                 OutlinedButton(
                     onClick = { rootId = location.storageLocationId },
@@ -119,20 +131,20 @@ fun StocktakeOperatorSection(
                     }
                 },
                 enabled = !busy && rootId != null,
-            ) { Text("Create count scope") }
+            ) { Text("إنشاء نطاق الجرد / Create count scope") }
         }
 
         OutlinedTextField(
             value = openId,
             onValueChange = { openId = it },
-            label = { Text("Existing Stocktake UUID") },
+            label = { Text("رقم الجرد الحالي / Existing Stocktake UUID") },
             singleLine = true,
             enabled = !busy,
         )
         OutlinedButton(
             onClick = { runTask { refresh(openId.trim()) } },
             enabled = !busy && openId.isNotBlank(),
-        ) { Text("Open stocktake") }
+        ) { Text("فتح الجرد / Open stocktake") }
 
         detail?.let { current ->
             key(current.session.id, current.session.version, current.countRecords.size, current.adjustmentRequests.size) {
@@ -326,7 +338,7 @@ fun StocktakeHumanProofSection(
 
         val discrepancies = variances?.discrepancies ?: detail.discrepancies
         if (discrepancies.isNotEmpty()) {
-            Text("Variance / discrepancy", style = MaterialTheme.typography.titleMedium)
+            Text("فرق الجرد / Variance / discrepancy", style = MaterialTheme.typography.titleMedium)
         }
         discrepancies.forEach { discrepancy ->
             val request = requests.firstOrNull { it.discrepancyId == discrepancy.id }
@@ -366,7 +378,7 @@ fun StocktakeHumanProofSection(
                         Button(
                             onClick = { onApplyAdjustment(request) },
                             enabled = !busy,
-                        ) { Text("Apply approved adjustment") }
+                        ) { Text("تطبيق التسوية المعتمدة / Apply approved adjustment") }
                     } else if (request.approvalStatus == "PENDING") {
                         Text("Awaiting inventory adjustment approval.")
                     } else if (request.approvalStatus != null) {
@@ -385,7 +397,7 @@ fun StocktakeHumanProofSection(
                     Button(
                         onClick = { onRequestAdjustment(discrepancy, reason.trim()) },
                         enabled = !busy && reason.isNotBlank(),
-                    ) { Text("Request adjustment") }
+                    ) { Text("طلب تسوية / Request adjustment") }
                     Text("Canonical approval is required before Stock ledger apply.")
                 }
             }

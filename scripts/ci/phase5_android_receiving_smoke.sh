@@ -106,7 +106,7 @@ focus_text 'Receiving search / scan'
 adb shell input text 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 adb shell input keyevent KEYCODE_BACK
 sleep 1
-tap_text 'Open scanned Receiving receipt'
+tap_clickable_text 'فتح إيصال الاستلام الممسوح / Open scanned Receiving receipt'
 wait_for_text 'SYNTH-RECEIVING-SEARCH-PASS' >/dev/null
 adb exec-out screencap -p > "$report_dir/android-receiving-search.png"
 

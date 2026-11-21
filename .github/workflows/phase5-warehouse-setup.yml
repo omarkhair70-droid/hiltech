@@ -24,9 +24,13 @@ on:
       - "scripts/ci/phase5_android_physical_handoff_smoke.sh"
       - "scripts/ci/phase5_android_receiving_smoke.sh"
       - "scripts/ci/phase5_android_stocktake_smoke.sh"
+      - "scripts/ci/phase5_android_quick_scan_smoke.sh"
+      - "scripts/ci/phase5_android_slice09_closure_smoke.sh"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/ReservedFulfillmentSection.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/PhysicalFulfillmentOperations.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehousePhysicalOperatorSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehouseCommandCenterSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehouseQuickScanSection.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/StocktakeOperatorSection.kt"
       - "scripts/*stage_legacy_inventory.py"
       - ".github/workflows/phase5-warehouse-setup.yml"
@@ -63,6 +67,8 @@ jobs:
           set -euo pipefail
           ./gradlew :apps:desktopApp:renderPhase5WarehouseEvidence
           test -s build/reports/phase5-warehouse/warehouse-setup.png
+          test -s build/reports/phase5-warehouse/warehouse-command-center.png
+          test -s build/reports/phase5-warehouse/warehouse-quick-scan.png
           test -s build/reports/phase5-warehouse/import-review.png
           test -s build/reports/phase5-warehouse/stock-inventory.png
           test -s build/reports/phase5-warehouse/asset-passport.png
@@ -119,7 +125,7 @@ jobs:
           emulator-boot-timeout: 300
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
-          script: bash scripts/ci/phase5_android_asset_lookup_smoke.sh && bash scripts/ci/phase5_android_physical_handoff_smoke.sh && bash scripts/ci/phase5_android_receiving_smoke.sh && bash scripts/ci/phase5_android_stocktake_smoke.sh
+          script: bash scripts/ci/phase5_android_asset_lookup_smoke.sh && bash scripts/ci/phase5_android_physical_handoff_smoke.sh && bash scripts/ci/phase5_android_receiving_smoke.sh && bash scripts/ci/phase5_android_stocktake_smoke.sh && bash scripts/ci/phase5_android_quick_scan_smoke.sh && bash scripts/ci/phase5_android_slice09_closure_smoke.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: hiltech-phase5-asset-android-synthetic

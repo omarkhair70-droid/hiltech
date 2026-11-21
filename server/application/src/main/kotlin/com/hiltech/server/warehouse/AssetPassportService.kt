@@ -36,7 +36,7 @@ data class AssetPassportView(
 data class AssetTagLookupView(
     val assetCode: String, val name: String?, val typeName: String, val manufacturer: String?, val model: String?,
     val serialNumber: String?, val condition: AssetCondition, val locationCode: String?, val employeeCode: String?,
-    val custodySince: String?, val availability: SafeAssetAvailabilityView? = null,
+    val custodySince: String?, val availability: SafeAssetAvailabilityView? = null, val assetId: UUID,
 )
 data class AssetCustodyMovementPosted(
     val movementId: UUID, val assetId: UUID, val organizationId: UUID,
@@ -100,7 +100,7 @@ class AssetPassportService(
             availability.calibrationStatus, availability.calibrationDueAt, availability.certificateOnFile,
             reasons.filter { it.startsWith("INCIDENT_") && (facilityAccess || custodianAccess) }.map { it.removePrefix("INCIDENT_") })
         return AssetTagLookupView(asset.assetCode, asset.name, asset.typeName, asset.manufacturer, asset.model,
-            asset.serialNumber, asset.condition, custody?.locationCode, custody?.employeeCode, custody?.since, safe)
+            asset.serialNumber, asset.condition, custody?.locationCode, custody?.employeeCode, custody?.since, safe, asset.id)
     }
 
     fun register(context: AssetCommandContext, request: AssetRegistrationRequest): AssetPassportView {

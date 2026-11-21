@@ -50,7 +50,7 @@ data class AssetTagLookupDto(
     val assetCode: String, val name: String? = null, val typeName: String, val manufacturer: String? = null,
     val model: String? = null, val serialNumber: String? = null, val condition: AssetCondition,
     val locationCode: String? = null, val employeeCode: String? = null, val custodySince: String? = null,
-    val availability: SafeAssetAvailabilityDto? = null,
+    val availability: SafeAssetAvailabilityDto? = null, val assetId: String? = null,
 )
 
 @Serializable

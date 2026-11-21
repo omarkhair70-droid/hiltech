@@ -43,6 +43,53 @@ class WarehouseApiClientTest {
     }
 
     @Test
+    fun warehouseCommandCenterUsesAuthenticatedReadAndPreservesSourceReasons() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/warehouses/$warehouseId/command-center", request.url.encodedPath)
+            assertEquals("GET", request.method.value)
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            respond(
+                """{"warehouseId":"$warehouseId","organizationId":"$org","warehouseCode":"WH-1",
+                    "warehouseName":"Main","asOf":"2026-11-20T00:00:00Z",
+                    "inventory":{"balanceLineCount":3,"stockItemCount":2,"zeroOnHandLineCount":1,
+                    "zeroAvailableLineCount":1,"lowStockPolicyConfigured":false,
+                    "lowStockPolicyReason":"LOW_STOCK_THRESHOLD_NOT_CONFIGURED"},
+                    "dueReturns":{"items":[],"limited":false},
+                    "activeReservations":{"items":[{"sourceType":"STOCK_RESERVATION","sourceId":"$batchId",
+                    "label":"FIBER-01","state":"ACTIVE","reasonCodes":["ACTIVE_RESERVATION"],
+                    "workOrderId":"$operation"}],"limited":false},
+                    "assetExceptions":{"items":[],"limited":false},
+                    "receivingQueue":{"items":[],"limited":false},
+                    "stocktakeQueue":{"items":[],"limited":false},
+                    "importExceptions":{"items":[],"limited":false},
+                    "recentMovements":{"items":[],"limited":false},
+                    "projectResourceReadiness":{"visible":true,"items":[{
+                    "workOrderId":"$operation","workOrderCode":"WO-1","title":"Synthetic work",
+                    "projectId":"$org","siteId":"$batchId","requirementId":"$warehouseId",
+                    "requirementKey":"FIBER-MATERIAL","requirementFamily":"MATERIAL","resourceKind":"STOCK",
+                    "state":"BLOCKED","reasonCode":"STOCK_SHORTAGE","factSourceId":"$batchId",
+                    "factSourceVersion":4,"sourceAsOf":"2026-11-20T00:00:00Z","candidateCount":1}],
+                    "limited":false}}""",
+                HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val result = client(http).warehouseCommandCenter(warehouseId, installation)
+        assertEquals(2, result.inventory.stockItemCount)
+        assertFalse(result.inventory.lowStockPolicyConfigured)
+        val reservation = result.activeReservations.items.single()
+        assertEquals("STOCK_RESERVATION", reservation.sourceType)
+        assertEquals(listOf("ACTIVE_RESERVATION"), reservation.reasonCodes)
+        assertEquals(operation, reservation.workOrderId)
+        val readiness = result.projectResourceReadiness
+        assertTrue(readiness.visible)
+        assertEquals("STOCK_SHORTAGE", readiness.items.single().reasonCode)
+        assertEquals("BLOCKED", readiness.items.single().state)
+        assertFalse(readiness.items.any { it.reasonCode == "SOURCE_PENDING_PHASE5" })
+    }
+
+    @Test
     fun dueReturnSnapshotUsesWarehouseAndServerTime() = runBlocking {
         val http = HttpClient(MockEngine { request ->
             assertEquals("/v1/warehouses/$warehouseId/due-asset-returns", request.url.encodedPath)
@@ -199,7 +246,7 @@ class WarehouseApiClientTest {
             assertEquals(installation, request.headers["X-Device-Installation-Id"])
             respond(
                 """{"assetCode":"SYNTH-PASSPORT","typeName":"Synthetic test instrument","condition":"GOOD",
-                    "employeeCode":"SYNTH-CUSTODIAN","acquisitionCost":98765.43,
+                    "employeeCode":"SYNTH-CUSTODIAN","assetId":"$batchId","acquisitionCost":98765.43,
                     "availability":{"state":"BLOCKED_CALIBRATION","reasonCodes":["CALIBRATION_EXPIRED","MAINTENANCE_IN_PROGRESS"],
                     "calibrationStatus":"EXPIRED","certificateOnFile":true,"sourceId":"synthetic-private-ref"}}""",
                 HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"),
@@ -208,6 +255,7 @@ class WarehouseApiClientTest {
         val client = client(http)
         val result = client.lookupAssetTag("  synthetic-opaque-tag  ", installation)
         assertEquals("SYNTH-PASSPORT", result.assetCode)
+        assertEquals(batchId, result.assetId)
         assertEquals("SYNTH-CUSTODIAN", result.employeeCode)
         assertEquals(listOf("CALIBRATION_EXPIRED", "MAINTENANCE_IN_PROGRESS"), result.availability?.reasonCodes)
         assertTrue(result.availability?.certificateOnFile == true)
@@ -233,6 +281,29 @@ class WarehouseApiClientTest {
         })
         val result = client(http).tagAsset(batchId, AssetTagCommandDto(operation, 8, "QR", warehouseId), installation)
         assertEquals(warehouseId, result.replacesTagId)
+    }
+
+    @Test
+    fun quickStockSearchUsesOnlyCanonicalCodeOrPartNumberSearch() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("/v1/stock-items", request.url.encodedPath)
+            assertEquals(org, request.url.parameters["organizationId"])
+            assertEquals("SYNTH PART/01", request.url.parameters["search"])
+            assertEquals("Bearer warehouse-token", request.headers[HttpHeaders.Authorization])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            respond(
+                """[{"id":"$batchId","organizationId":"$org","itemCode":"SYNTH-STOCK-01",
+                    "name":"Synthetic cable","partNumber":"SYNTH PART/01",
+                    "categoryDefinitionId":"$warehouseId","categoryRevision":1,"baseUnitCode":"EA",
+                    "classification":"STOCK_QUANTITY","serialized":false,"lotTracked":false,
+                    "active":true,"version":2}]""",
+                HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val result = client(http).searchStockItems(org, " SYNTH PART/01 ", installation)
+        assertEquals(batchId, result.single().id)
+        assertEquals("SYNTH PART/01", result.single().partNumber)
     }
 
     @Test
