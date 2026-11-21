@@ -1,0 +1,68 @@
+name: Phase 6 — Offline Assigned Work Read Cache
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "shared/core/src/**/local/**"
+      - "shared/core/src/**/work/Field**"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/AssignedWorkSection.kt"
+      - "shared/core/schemas/**"
+      - "apps/androidApp/**"
+      - "scripts/ci/phase4_android_assigned_work_smoke.sh"
+      - "docs/13-delivery/phase6/**"
+      - ".github/workflows/phase6-field-offline-read.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  local-read-and-migration-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Verify actual Room migration, durable cache and revoked-authority fallback
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests com.hiltech.shared.core.local.FieldRoomMigrationTest \
+            --tests com.hiltech.shared.core.local.HiltechLocalDatabaseTest \
+            --tests com.hiltech.shared.core.work.FieldOfflineReadCacheTest \
+            --tests com.hiltech.shared.core.work.FieldOfflineFallbackAuthorizationTest \
+            --console=plain
+
+      - name: Verify committed forward Room schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          schema=shared/core/schemas/com.hiltech.shared.core.local.HiltechLocalDatabase
+          test -s "$schema/1.json"
+          test -s "$schema/2.json"
+          git diff --exit-code -- shared/core/schemas
+          test -z "$(git status --porcelain --untracked-files=all -- shared/core/schemas)"
+
+      - name: Assemble Android with production cache integration
+        run: |
+          ./gradlew :apps:androidApp:assembleDebug \
+            -Philtech.apiBaseUrl=https://api.hiltech.invalid \
+            -Philtech.oidcIssuerUri=https://identity.hiltech.invalid/realms/hiltech \
+            --console=plain
+
+      - name: Test reports on failure
+        if: failure()
+        shell: bash
+        run: |
+          find shared/core/build/test-results -type f -name '*.xml' -print -exec cat {} \; || true

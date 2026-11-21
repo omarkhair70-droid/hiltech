@@ -1,7 +1,7 @@
 package com.hiltech.shared.core.local
 
 object OfflineSchemaContract {
-    const val ROOM_SCHEMA_VERSION = 1
+    const val ROOM_SCHEMA_VERSION = 2
     const val MIN_DIRECT_MIGRATABLE_ROOM_SCHEMA_VERSION = 1
     const val CURRENT_COMMAND_CONTRACT_VERSION = 1
     const val CURRENT_PENDING_PAYLOAD_VERSION = 1

@@ -66,7 +66,19 @@ class AndroidIdentityRuntime(
         val activeSession = session
             ?: return null
         if (activeSession.currentAccessToken() == null) return null
-        return bootstrapCurrentIdentity()
+        val identity = bootstrapCurrentIdentity()
+        store.saveVerifiedFieldIdentity(identity, installationId)
+        return identity
+    }
+
+    /** Only a previously server-verified, same-token/same-installation identity may see stale field reads. */
+    suspend fun restoreOfflineReadIdentity(): String? {
+        ensureConfigured()
+        return store.loadVerifiedOfflineFieldIdentity(installationId)
+    }
+
+    fun invalidateOfflineReadIdentity() {
+        store.invalidateVerifiedOfflineFieldIdentity()
     }
 
     suspend fun beginSignIn(
@@ -117,6 +129,7 @@ class AndroidIdentityRuntime(
             )
         }
 
+        store.saveVerifiedFieldIdentity(identity, installationId)
         return identity
     }
 

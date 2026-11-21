@@ -89,7 +89,38 @@ scroll_until_text "التقاط/رفع Evidence من الموبايل مش مت�
 scroll_until_text "SOURCE_PENDING_PHASE5" 30
 adb exec-out screencap -p > "$REPORT_DIR/android-job-bundle-blocked.png"
 test -s "$REPORT_DIR/android-job-bundle-blocked.png"
-scroll_until_text "القراءة والسياق متاحين دلوقتي" 30
+scroll_until_text "القراءة فقط. أوامر التنفيذ" 30
+
+render_mode "cached" "نسخة محفوظة بدون اتصال" "android-offline-today-cached.png"
+scroll_until_text "نسخة محفوظة للقراءة فقط" 30
+adb exec-out screencap -p > "$REPORT_DIR/android-offline-bundle-cached.png"
+test -s "$REPORT_DIR/android-offline-bundle-cached.png"
+scroll_until_text "القراءة فقط. أوامر التنفيذ" 30
+
+render_mode "cold-offline" "وضع القراءة بدون إنترنت" "android-cold-start-readonly.png"
+wait_for_text "لا يوجد بدء/إنهاء عمل" 10
+OFFLINE_XML="$(dump_ui)"
+if echo "$OFFLINE_XML" | grep -F -q "Me / Sessions"; then
+  echo "Offline-only shell must not expose signed-in admin/session modules."
+  exit 1
+fi
+
+# A native cold-start round trip: same secure OIDC store, persisted Room, real MainActivity,
+# configured to unreachable .invalid endpoints; no debug fixture UI on the restored screen.
+render_mode "cold-seed" "PHASE6_COLD_OFFLINE_SEEDED" "android-cold-seed-confirm.png"
+sleep 1
+adb shell am force-stop "$PKG"
+adb shell am start -W -n "$PKG/.MainActivity" >/tmp/hiltech-phase6-cold-start.out
+cat /tmp/hiltech-phase6-cold-start.out
+wait_for_text "وضع القراءة بدون إنترنت" 60
+wait_for_text "نسخة محفوظة بدون اتصال" 10
+OFFLINE_REAL_XML="$(dump_ui)"
+if echo "$OFFLINE_REAL_XML" | grep -F -q "Me / Sessions"; then
+  echo "Production cold-start offline screen must not render admin/session tools."
+  exit 1
+fi
+adb exec-out screencap -p > "$REPORT_DIR/android-production-offline-cold-start.png"
+test -s "$REPORT_DIR/android-production-offline-cold-start.png"
 
 render_mode "revoked" "مفيش WorkOrder حالي متعيّن ليك" "android-assignment-revoked.png"
 

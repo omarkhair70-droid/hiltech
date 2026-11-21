@@ -3,6 +3,10 @@ package com.hiltech.android
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import android.widget.TextView
+import com.hiltech.android.identity.AndroidEncryptedOidcStore
+import com.hiltech.shared.core.identity.auth.NativeOidcTokenSet
+import kotlinx.coroutines.runBlocking
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.HiltechFieldState
@@ -32,15 +36,45 @@ class AssignedWorkEvidenceActivity :
             intent.getStringExtra("mode")
                 ?: "today"
 
+        if (mode == "cold-seed") {
+            // Debug-only evidence: persist a token-bound verified identity and Room bundle,
+            // then force-stop the process and launch the real production MainActivity offline.
+            val app = application as HiltechApplication
+            val identity = fixtureIdentity()
+            runBlocking {
+                val now = System.currentTimeMillis()
+                val store = AndroidEncryptedOidcStore(this@AssignedWorkEvidenceActivity)
+                store.save(
+                    NativeOidcTokenSet(
+                        accessToken = "phase6-debug-offline-token",
+                        refreshToken = null,
+                        tokenType = "Bearer",
+                        scope = "openid",
+                        obtainedAtEpochMs = now - 1_000,
+                        expiresAtEpochMs = now + 600_000,
+                    ),
+                )
+                store.saveVerifiedFieldIdentity(identity, app.installationId)
+                app.fieldOfflineReadCache.saveToday(identity.identityId, listOf(todayItem(actionable = true)))
+                app.fieldOfflineReadCache.saveBundle(identity.identityId, jobBundle())
+            }
+            setContentView(TextView(this).apply { text = "PHASE6_COLD_OFFLINE_SEEDED" })
+            return
+        }
+
         setContent {
             HiltechShell(
-                state =
+                state = if (mode == "cold-offline") {
+                    HiltechShellState.OfflineFieldReadOnly(
+                        identityId = fixtureIdentity().identityId,
+                        field = fixtureState("cached"),
+                    )
+                } else {
                     HiltechShellState.SignedIn(
-                        identity =
-                            fixtureIdentity(),
-                        field =
-                            fixtureState(mode),
-                    ),
+                        identity = fixtureIdentity(),
+                        field = fixtureState(mode),
+                    )
+                },
             )
         }
     }
@@ -88,6 +122,16 @@ private fun fixtureState(
                 today = emptyList(),
                 selectedWorkOrderId = null,
                 selectedBundle = null,
+            )
+
+        "cached" ->
+            HiltechFieldState(
+                loading = false,
+                today = listOf(todayItem(actionable = false)),
+                selectedWorkOrderId = WORK_ORDER_ID,
+                selectedBundle = jobBundle(),
+                cachedTodayAt = 1_700_000_000_000L,
+                cachedBundleAt = 1_700_000_000_100L,
             )
 
         "detail" ->

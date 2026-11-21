@@ -1,5 +1,6 @@
 package com.hiltech.shared.core.local
 
+import androidx.room3.AutoMigration
 import androidx.room3.ConstructedBy
 import androidx.room3.Database
 import androidx.room3.RoomDatabase
@@ -9,6 +10,8 @@ import kotlinx.coroutines.Dispatchers
 
 @Database(
     entities = [
+        FieldTodayCacheEntity::class,
+        FieldJobBundleCacheEntity::class,
         LocalProjectContextEntity::class,
         LocalSiteContextEntity::class,
         LocalWorkOrderEntity::class,
@@ -25,9 +28,11 @@ import kotlinx.coroutines.Dispatchers
     ],
     version = OfflineSchemaContract.ROOM_SCHEMA_VERSION,
     exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
 )
 @ConstructedBy(HiltechLocalDatabaseConstructor::class)
 abstract class HiltechLocalDatabase : RoomDatabase() {
+    abstract fun fieldOfflineCacheDao(): FieldOfflineCacheDao
     abstract fun workBundleDao(): WorkBundleDao
     abstract fun pendingCommandDao(): PendingCommandDao
     abstract fun pendingCommandDependencyDao(): PendingCommandDependencyDao
