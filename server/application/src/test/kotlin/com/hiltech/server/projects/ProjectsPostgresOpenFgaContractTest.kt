@@ -3026,9 +3026,14 @@ class ProjectsPostgresOpenFgaContractTest {
                     .resumeOffline,
                 "Resuming is unavailable without a verified FIELD_EXECUTION blocker.",
             )
-            assertFalse(
-                userBundle.executionCapabilities
-                    .evidenceCaptureOffline,
+            assertEquals(
+                userBundle.evidenceRequirements.any {
+                    it.offlineCaptureAllowedByPolicy && it.allowedContentTypes.isNotEmpty()
+                } && assignedAuthorization.canUseAssignedWork(
+                    ids.oldPm, firstSlice04Order.workOrderId, "can_submit_completion",
+                ),
+                userBundle.executionCapabilities.evidenceCaptureOffline,
+                "Only source-authorized, policy-permitted local Evidence capture may be offered.",
             )
             assertFalse(
                 userBundle.executionCapabilities
