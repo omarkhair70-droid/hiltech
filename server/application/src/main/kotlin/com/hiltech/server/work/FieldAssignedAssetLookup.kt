@@ -48,9 +48,10 @@ class FieldAssignedAssetLookupService(
         val result = assetService.lookup(actor, code)
         val identity = assets.asset(result.assetId) ?: hidden()
         val custody = assets.custody(result.assetId) ?: hidden()
+        // WorkOrder is the canonical scope key; its project/site are immutable
+        // context of that WorkOrder and must not be re-inferred from optional
+        // custody projection columns.
         if (identity.organizationId != order.organizationId ||
-            custody.projectId != order.projectId ||
-            custody.siteId != order.siteId ||
             custody.workOrderId != order.workOrderId) {
             hidden()
         }
