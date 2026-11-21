@@ -3,7 +3,7 @@ package com.hiltech.android
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.Text
+import android.widget.TextView
 import com.hiltech.android.identity.AndroidEncryptedOidcStore
 import com.hiltech.shared.core.identity.auth.NativeOidcTokenSet
 import kotlinx.coroutines.runBlocking
@@ -58,7 +58,7 @@ class AssignedWorkEvidenceActivity :
                 app.fieldOfflineReadCache.saveToday(identity.identityId, listOf(todayItem(actionable = true)))
                 app.fieldOfflineReadCache.saveBundle(identity.identityId, jobBundle())
             }
-            setContent { Text("PHASE6_COLD_OFFLINE_SEEDED") }
+            setContentView(TextView(this).apply { text = "PHASE6_COLD_OFFLINE_SEEDED" })
             return
         }
 
