@@ -1,6 +1,6 @@
-# Phase 6 / Slice 04B — Native Material Usage Capture & Offline Replay
+# Phase 6 / Slice 04B â€” Native Material Usage Capture & Offline Replay
 
-Date: 2026-11-22  
+Date: 2026-11-22
 Status: **ENGINEERING IMPLEMENTED / DEFAULT OFF / CANONICAL STOCK MUTATION REMAINS WAREHOUSE-OWNED**
 
 ## Purpose
@@ -114,11 +114,11 @@ The original local intent is preserved for supervised recovery/audit rather than
 
 ## Android surface
 
-The existing “my issued materials” card now optionally renders:
+The existing â€œmy issued materialsâ€ card now optionally renders:
 
 - outstanding quantity/source version;
 - exact usage quantity input;
-- “record material usage” action;
+- â€œrecord material usageâ€ action;
 - durable local intent states.
 
 Feature flag:
@@ -162,6 +162,6 @@ Dedicated CI must prove:
 - Production feature flag is not enabled.
 - Real technician/storekeeper acceptance remains separate from engineering CI.
 
-`P6_S04B_NATIVE_MATERIAL_CAPTURE = IMPLEMENTED_DEFAULT_OFF`  
-`P6_S04B_OFFLINE_REPLAY = EXISTING_PENDING_COMMAND_RUNTIME`  
+`P6_S04B_NATIVE_MATERIAL_CAPTURE = IMPLEMENTED_DEFAULT_OFF`
+`P6_S04B_OFFLINE_REPLAY = EXISTING_PENDING_COMMAND_RUNTIME`
 `P6_S04B_LOCAL_STOCK_MUTATION = FORBIDDEN`
