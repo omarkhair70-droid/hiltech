@@ -22,6 +22,8 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.dao.DataIntegrityViolationException
 import java.math.BigDecimal
 import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Clock
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -314,8 +316,8 @@ internal class ReservationOperatorScenario(
         // S04B PostgreSQL source proof is deliberately rolled back after
         // verifying DB invariants: no synthetic WorkAssignment may alter the
         // Phase4 test's real assignment history or its authorization projection.
-        org.springframework.transaction.support.TransactionTemplate(manager).apply {
-            propagationBehavior = org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW
+        TransactionTemplate(manager).apply {
+            propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW
         }.executeWithoutResult { local ->
             // S04B PostgreSQL source proof: the reported usage claim must be
             // persisted exactly once, immutable and leave stock movement unchanged.
