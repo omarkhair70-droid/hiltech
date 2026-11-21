@@ -38,6 +38,11 @@ import com.hiltech.shared.core.people.WorkforceStructureDto
 sealed interface HiltechShellState {
     data object SignedOut : HiltechShellState
     data class Working(val message: String) : HiltechShellState
+    data class OfflineFieldReadOnly(
+        val identityId: String,
+        val field: HiltechFieldState,
+    ) : HiltechShellState
+
     data class SignedIn(
         val identity: IdentityBootstrapDto,
         val security: IdentitySecuritySnapshot? = null,
@@ -268,6 +273,24 @@ fun HiltechShell(
                     ) {
                         CircularProgressIndicator()
                         Text(state.message)
+                    }
+                }
+
+                is HiltechShellState.OfflineFieldReadOnly -> {
+                    Text(
+                        "وضع القراءة بدون إنترنت",
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text("نسخة محفوظة للجهاز فقط. لا نقدر نؤكد صلاحية التكليف الحالية أو أي تغيير حصل على السيرفر.")
+                    Text("لا يوجد بدء/إنهاء عمل، تسجيل خامات، رفع صور، أو صلاحيات إدارة في الوضع ده.")
+                    AssignedWorkSection(
+                        state = state.field,
+                        onRefresh = onRetry,
+                        onSelectWork = onSelectFieldWork,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = onRetry) { Text("إعادة الاتصال والتحقق") }
+                        OutlinedButton(onClick = onSignOut) { Text("تسجيل الخروج") }
                     }
                 }
 

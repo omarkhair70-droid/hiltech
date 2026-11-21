@@ -24,7 +24,9 @@ The existing `AndroidIdentityRuntime.restoreIdentity()` requires `bootstrapCurre
 
 Before S01 can claim usable offline Today after cold start, the existing identity boundary must be explicitly designed, implemented and security-tested to permit only appropriately scoped local read access under a valid device-held session, without confusing that with current server authorization. Scope must cover expiry, logout, offboarding/revocation, other-user device handoff, and a cached identity's access only to previously authorized safe read data. Never persist access/refresh tokens in Room or silently turn cached identity into permission to execute.
 
-Until then: `COLD_START_OFFLINE_READ = NOT_VERIFIED`. Network errors while the same authenticated app session remains active may use the cached read snapshot; production offline usability remains a gap.
+Implementation now introduces a distinct `OfflineFieldReadOnly` shell, reached only if online bootstrap fails specifically with `NETWORK_UNAVAILABLE`, a previously server-verified identity is sealed by Android Keystore and bound to the same current unexpired OIDC access token + installation, and an identity-scoped cached Today is present. This shell exposes no admin modules or field mutation commands. Explicit access denial does not fall back. A new token/login invalidates the sealed snapshot. Expired tokens and clock rollback fail closed.
+
+`COLD_START_OFFLINE_READ = IMPLEMENTED_CONSTRAINED / NATIVE_DEVICE_PROOF_REQUIRED`. This does **not** mean online revocation can be detected while the network is absent. Offline local read expires with the prior verified token; field actions remain prohibited; enterprise MDM/retention policy and actual airplane-mode process-death acceptance must be reviewed before rollout.
 
 ## Verification and exit
 1. Room v1→v2 non-destructive migration, with pending command retention.

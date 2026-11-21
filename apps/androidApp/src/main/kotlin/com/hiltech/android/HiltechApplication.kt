@@ -88,10 +88,14 @@ class HiltechApplication : Application() {
         )
     }
 
+    val fieldOfflineReadCache by lazy {
+        FieldOfflineReadCache(localDatabase)
+    }
+
     val fieldAssignedWorkOfflineRepository by lazy {
         FieldAssignedWorkOfflineRepository(
             fieldAssignedWorkApi,
-            FieldOfflineReadCache(localDatabase),
+            fieldOfflineReadCache,
         )
     }
 

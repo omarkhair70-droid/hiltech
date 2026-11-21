@@ -4,15 +4,27 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import com.hiltech.shared.core.identity.IdentityBootstrapDto
+import com.hiltech.shared.core.identity.auth.OfflineFieldReadLeasePolicy
+import com.hiltech.shared.core.identity.auth.OfflineFieldReadLeaseProof
 import com.hiltech.shared.core.identity.auth.NativeAuthorizationAttempt
 import com.hiltech.shared.core.identity.auth.NativeOidcTokenSet
 import com.hiltech.shared.core.identity.auth.OidcTokenStore
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.security.MessageDigest
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+
+@Serializable
+private data class VerifiedOfflineFieldIdentity(
+    val identity: IdentityBootstrapDto,
+    val installationId: String,
+    val accessTokenDigest: String,
+)
 
 class AndroidEncryptedOidcStore(
     context: Context,
@@ -41,6 +53,8 @@ class AndroidEncryptedOidcStore(
         }
 
     override suspend fun save(tokens: NativeOidcTokenSet) {
+        // A newly issued/rotated token requires a fresh successful identity bootstrap.
+        clearValue(VERIFIED_FIELD_IDENTITY_KEY)
         writeEncrypted(
             TOKEN_SET_KEY,
             json.encodeToString(
@@ -54,10 +68,13 @@ class AndroidEncryptedOidcStore(
         preferences.edit()
             .remove(TOKEN_SET_KEY)
             .remove(PENDING_ATTEMPT_KEY)
+            .remove(VERIFIED_FIELD_IDENTITY_KEY)
             .apply()
     }
 
     fun savePendingAttempt(attempt: NativeAuthorizationAttempt) {
+        // A new login flow may select another employee; no old local identity survives it.
+        clearValue(VERIFIED_FIELD_IDENTITY_KEY)
         writeEncrypted(
             PENDING_ATTEMPT_KEY,
             json.encodeToString(
@@ -83,6 +100,71 @@ class AndroidEncryptedOidcStore(
     fun clearPendingAttempt() {
         clearValue(PENDING_ATTEMPT_KEY)
     }
+
+    suspend fun saveVerifiedFieldIdentity(identity: IdentityBootstrapDto, installationId: String) {
+        val tokens = load() ?: run {
+            clearValue(VERIFIED_FIELD_IDENTITY_KEY)
+            return
+        }
+        if (!validLease(tokens, identity, installationId, installationId, true)) {
+            clearValue(VERIFIED_FIELD_IDENTITY_KEY)
+            return
+        }
+        writeEncrypted(
+            VERIFIED_FIELD_IDENTITY_KEY,
+            json.encodeToString(
+                VerifiedOfflineFieldIdentity.serializer(),
+                VerifiedOfflineFieldIdentity(
+                    identity = identity,
+                    installationId = installationId,
+                    accessTokenDigest = fingerprint(tokens.accessToken),
+                ),
+            ),
+        )
+    }
+
+    suspend fun loadVerifiedOfflineFieldIdentity(installationId: String): IdentityBootstrapDto? {
+        val tokens = load() ?: return null
+        val sealed = readEncrypted(VERIFIED_FIELD_IDENTITY_KEY) ?: return null
+        val verified = runCatching {
+            json.decodeFromString(VerifiedOfflineFieldIdentity.serializer(), sealed)
+        }.getOrElse {
+            clearValue(VERIFIED_FIELD_IDENTITY_KEY)
+            return null
+        }
+        val expectedDigest = fingerprint(tokens.accessToken)
+        val matches = MessageDigest.isEqual(
+            verified.accessTokenDigest.toByteArray(Charsets.UTF_8),
+            expectedDigest.toByteArray(Charsets.UTF_8),
+        )
+        return verified.identity.takeIf {
+            validLease(tokens, it, verified.installationId, installationId, matches)
+        }
+    }
+
+    private fun validLease(
+        tokens: NativeOidcTokenSet,
+        identity: IdentityBootstrapDto,
+        savedInstallation: String,
+        currentInstallation: String,
+        tokenMatches: Boolean,
+    ): Boolean = OfflineFieldReadLeasePolicy.canRead(
+        OfflineFieldReadLeaseProof(
+            obtainedAtEpochMs = tokens.obtainedAtEpochMs,
+            expiresAtEpochMs = tokens.expiresAtEpochMs,
+            nowEpochMs = System.currentTimeMillis(),
+            tokenMatchesLastVerifiedBootstrap = tokenMatches && tokens.accessToken.isNotBlank(),
+            installationMatches = savedInstallation == currentInstallation,
+            identityStatus = identity.identityStatus,
+            hasOrganizationMembership = identity.organizations.isNotEmpty(),
+        ),
+    )
+
+    private fun fingerprint(token: String): String =
+        Base64.encodeToString(
+            MessageDigest.getInstance("SHA-256").digest(token.toByteArray(Charsets.UTF_8)),
+            Base64.NO_WRAP,
+        )
 
     private fun writeEncrypted(key: String, plaintext: String) {
         val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -154,6 +236,7 @@ class AndroidEncryptedOidcStore(
 
     private companion object {
         const val TOKEN_SET_KEY = "token_set"
+        const val VERIFIED_FIELD_IDENTITY_KEY = "verified_field_identity"
         const val PENDING_ATTEMPT_KEY = "pending_authorization"
         const val KEYSTORE_PROVIDER = "AndroidKeyStore"
         const val KEY_ALIAS = "hiltech_oidc_session_aes_v1"

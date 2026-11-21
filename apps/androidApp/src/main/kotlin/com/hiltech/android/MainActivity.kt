@@ -98,10 +98,8 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        if (
-            !handleCallbackIntent(intent) &&
-            savedInstanceState == null
-        ) {
+        // Activity recreation must restore identity too; mutable in-memory state does not survive process death.
+        if (!handleCallbackIntent(intent)) {
             restoreOrSignIn()
         }
     }
@@ -121,29 +119,49 @@ class MainActivity : ComponentActivity() {
 
     private fun restoreOrSignIn() {
         if (!identityRuntime.configured) {
-            shellState =
-                HiltechShellState.ConfigurationRequired(
-                    "Set HILTECH API and OIDC issuer configuration before sign-in.",
-                )
+            shellState = HiltechShellState.ConfigurationRequired(
+                "Set HILTECH API and OIDC issuer configuration before sign-in.",
+            )
             return
         }
 
-        shellState =
-            HiltechShellState.Working(
-                "Checking your HILTECH session…",
-            )
-
+        shellState = HiltechShellState.Working("Checking your HILTECH session…")
         scope.launch {
             runCatching {
                 identityRuntime.restoreIdentity()
             }.onSuccess { identity ->
                 if (identity == null) {
-                    shellState =
-                        HiltechShellState.SignedOut
+                    shellState = HiltechShellState.SignedOut
                 } else {
                     showSignedIn(identity)
                 }
-            }.onFailure(::showFailure)
+            }.onFailure { failure ->
+                if (failure is kotlinx.coroutines.CancellationException) return@onFailure
+                // Never turn an explicit 401/403/404 or a revoked identity into an offline session.
+                if (failure is HiltechApiException && failure.code == "NETWORK_UNAVAILABLE") {
+                    val local = runCatching {
+                        identityRuntime.restoreOfflineReadIdentity()?.let { identity ->
+                            hiltechApplication.fieldOfflineReadCache
+                                .cachedToday(identity.identityId)?.let { snapshot ->
+                                    HiltechShellState.OfflineFieldReadOnly(
+                                        identityId = identity.identityId,
+                                        field = HiltechFieldState(
+                                            today = snapshot.value,
+                                            cachedTodayAt = snapshot.fetchedAtEpochMs,
+                                        ),
+                                    )
+                                }
+                        }
+                    }.getOrNull()
+                    if (local != null) {
+                        shellState = local
+                    } else {
+                        showFailure(failure)
+                    }
+                } else {
+                    showFailure(failure)
+                }
+            }
         }
     }
 
@@ -313,7 +331,44 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun selectCachedFieldWork(workOrderId: String, offline: HiltechShellState.OfflineFieldReadOnly) {
+        if (offline.field.today.none { it.workOrderId == workOrderId }) return
+        shellState = offline.copy(
+            field = offline.field.copy(
+                loading = true,
+                selectedWorkOrderId = workOrderId,
+                selectedBundle = null,
+                cachedBundleAt = null,
+                errorMessage = null,
+            ),
+        )
+        scope.launch {
+            val snapshot = runCatching {
+                hiltechApplication.fieldOfflineReadCache
+                    .cachedBundle(offline.identityId, workOrderId)
+            }.getOrNull()
+            val current = shellState as? HiltechShellState.OfflineFieldReadOnly ?: return@launch
+            if (current.identityId != offline.identityId ||
+                current.field.selectedWorkOrderId != workOrderId) return@launch
+            shellState = current.copy(
+                field = current.field.copy(
+                    loading = false,
+                    selectedBundle = snapshot?.value,
+                    cachedBundleAt = snapshot?.fetchedAtEpochMs,
+                    errorMessage = if (snapshot == null) {
+                        "تفاصيل العمل دي مش متخزنة على الجهاز. يلزم اتصال بالإنترنت."
+                    } else null,
+                ),
+            )
+        }
+    }
+
     private fun selectFieldWork(workOrderId: String) {
+        val offline = shellState as? HiltechShellState.OfflineFieldReadOnly
+        if (offline != null) {
+            selectCachedFieldWork(workOrderId, offline)
+            return
+        }
         val signed = shellState as? HiltechShellState.SignedIn ?: return
         val identityId = signed.identity.identityId
         val field = signed.field ?: HiltechFieldState()
