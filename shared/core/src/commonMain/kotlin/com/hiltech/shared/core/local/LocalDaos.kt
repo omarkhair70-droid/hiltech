@@ -151,6 +151,24 @@ interface PendingCommandDao {
         """,
     )
     suspend fun pausedForReauthCount(): Int
+
+    @Query(
+        """
+        UPDATE pending_command
+        SET state = 'PENDING',
+            next_retry_at_epoch_ms = NULL,
+            updated_at_epoch_ms = :nowEpochMs
+        WHERE actor_user_identity_id = :identityId
+          AND device_id = :installationId
+          AND state = 'RETRYABLE'
+          AND last_result_code = 'REAUTH_REQUIRED'
+        """,
+    )
+    suspend fun releaseReauthenticatedCommands(
+        identityId: String,
+        installationId: String,
+        nowEpochMs: Long,
+    ): Int
 }
 
 @Dao

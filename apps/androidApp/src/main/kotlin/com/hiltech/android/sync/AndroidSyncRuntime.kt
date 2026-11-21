@@ -63,6 +63,15 @@ class AndroidSyncRuntime(
             ?.takeIf { it.isNotBlank() }
             ?: return AndroidSyncRunResult.ReauthenticationRequired
 
+        // After a successful ONLINE bootstrap, a previously paused 401 intent
+        // can be retried without altering its operationId or recorded payload.
+        // Server still revalidates current assignment/authorization per command.
+        database.pendingCommandDao().releaseReauthenticatedCommands(
+            verifiedActor,
+            installationId,
+            System.currentTimeMillis(),
+        )
+
         val transport = KtorPendingCommandTransport(
             client = httpClient,
             baseUrl = apiBaseUrl,
