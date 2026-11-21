@@ -1,6 +1,11 @@
 package com.hiltech.android
 
 import android.os.Bundle
+import android.graphics.Bitmap
+import android.graphics.Color
+import java.io.File
+import java.io.FileOutputStream
+import com.hiltech.shared.core.local.LocalEvidenceStates
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +47,82 @@ class AssignedWorkEvidenceActivity :
         val mode =
             intent.getStringExtra("mode")
                 ?: "today"
+
+        if (mode in setOf("evidence-seed", "evidence-persisted", "evidence-corrupt")) {
+            // Synthetic debug Evidence proof only, isolated from production APIs and credentials.
+            val app = application as HiltechApplication
+            val identity = fixtureIdentity()
+            val evidenceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa12"
+            val syntheticBundle = jobBundle().copy(
+                lifecycleState = "IN_PROGRESS",
+                readinessState = "READY",
+                executionCapabilities = FieldExecutionCapabilitiesDto(
+                    startOffline = false, blockOffline = true, resumeOffline = false,
+                    evidenceCaptureOffline = true, submitOffline = false,
+                    authoritativeOfflineQueue = false,
+                ),
+            )
+            if (mode == "evidence-seed") {
+                val photo = File(filesDir, "field-evidence-native-fixture.jpg")
+                FileOutputStream(photo).use { output ->
+                    val bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
+                    bitmap.eraseColor(Color.BLUE)
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 95, output)
+                    bitmap.recycle()
+                }
+                runBlocking {
+                    val local = app.fieldEvidenceFiles.saveFromFile(evidenceId, "image/jpeg", photo)
+                    app.fieldEvidenceQueue.capture(
+                        actorId = identity.identityId,
+                        installationId = app.installationId,
+                        bundle = syntheticBundle,
+                        requirementKey = "INSTALLATION-PHOTO",
+                        contentType = local.contentType,
+                        sizeBytes = local.sizeBytes,
+                        sha256 = local.sha256,
+                        localFileRef = local.fileRef,
+                        evidenceId = local.evidenceId,
+                        capturedAtEpochMs = System.currentTimeMillis(),
+                        verifiedOnlineThisSession = true,
+                    )
+                }
+                photo.delete()
+                setContentView(TextView(this).apply { text = "PHASE6_S03_EVIDENCE_SAVED_LOCAL_READY" })
+                return
+            }
+
+            val evidence = runBlocking {
+                app.fieldEvidenceQueue.list(identity.identityId, app.installationId, WORK_ORDER_ID)
+            }
+            if (mode == "evidence-corrupt") {
+                val row = evidence.singleOrNull { it.evidenceId == evidenceId }
+                    ?: error("Missing synthetic Evidence row")
+                val corrupted = File(noBackupFilesDir, "field-evidence/" + row.localFileRef)
+                corrupted.appendBytes(byteArrayOf(0x01))
+                val rejected = runBlocking {
+                    runCatching { app.fieldEvidenceFiles.readAndVerify(row) }.isFailure
+                }
+                setContentView(TextView(this).apply {
+                    text = if (rejected && row.localState == LocalEvidenceStates.LOCAL_READY) {
+                        "PHASE6_S03_CORRUPTION_REJECTED_BYTES_PRESERVED"
+                    } else "PHASE6_S03_CORRUPTION_PROOF_FAILED"
+                })
+                return
+            }
+            setContent {
+                HiltechShell(
+                    state = HiltechShellState.SignedIn(
+                        identity = identity,
+                        field = fixtureState("cached").copy(
+                            selectedBundle = syntheticBundle,
+                            localEvidence = evidence,
+                        ),
+                    ),
+                    captureEvidence = true,
+                )
+            }
+            return
+        }
 
         if (mode == "cold-seed") {
             // Debug-only evidence: persist a token-bound verified identity and Room bundle,
