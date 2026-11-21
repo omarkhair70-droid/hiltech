@@ -21,7 +21,7 @@ PR: [#115](https://github.com/omarkhair70-droid/hiltech/pull/115)
 4. Confirm picked file/camera UX on representative real Android device (permissions, orientation, process death, no SD card, phone space constraints). Current emulator is synthetic only.
 5. Confirm practical photo/file/typed-form policy, offline classification and required/optional capture with HILTECH technician + supervisor. No arbitrary file auto-READY: server may return QUARANTINED with no production scanner/release.
 6. Test expired upload-session manual recovery; server currently has no general refresh contract. Must not auto-create replacement Evidence rows.
-7. Detect/reconcile same-actor WorkOrder version shifts that follow Start/Block/Resume before captured photo sync; current version mismatch deliberately blocks auto-rebase and preserves the file.
+7. CR-S03-001 implemented: only an **APPLIED** S02 command from the same actor/device/WorkOrder with exact captured base version and server-confirmed next version may explain a one-version advance. Unknown version changes or assignment/policy changes still preserve the file and require review. Verify with native/server tests before acceptance.
 8. Privacy/security review on retention and device-loss handling; app-private no-backup storage is not a claim of full encrypted-at-rest policy on unmanaged/lost devices.
 9. Real in-app Evidence status refresh currently occurs on opening WorkOrder; a visible action to sync/recheck pending records and operator diagnostics may improve usability.
 10. Typed form Evidence is not modelled by Phase2 binary contract; needs canonical typed form source before production claim.
