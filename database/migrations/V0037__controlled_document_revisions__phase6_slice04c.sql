@@ -1,4 +1,4 @@
--- Phase 6 Slice 04C — authoritative controlled document revisions for Work requirements.
+-- Phase 6 Slice 04C â€” authoritative controlled document revisions for Work requirements.
 -- The field app reads only safe metadata. Publication/binding authority remains an
 -- external/control-plane concern; this migration does not invent a role or approval endpoint.
 
@@ -110,7 +110,7 @@ CREATE INDEX idx_work_document_revision_binding_work
 CREATE FUNCTION enforce_work_document_binding_context()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $
+AS $$
 DECLARE
     wo_org uuid;
     wo_project uuid;
@@ -162,7 +162,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$;
+$$;
 
 CREATE TRIGGER trg_work_document_binding_context
 BEFORE INSERT ON work_document_revision_binding
