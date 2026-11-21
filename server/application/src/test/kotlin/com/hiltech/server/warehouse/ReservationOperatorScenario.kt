@@ -365,7 +365,7 @@ internal class ReservationOperatorScenario(
                 jdbc.update("UPDATE field_material_usage_report SET state = 'RECONCILED' WHERE operation_id = ?",
                     proposedOperation)
             }
-                local.setRollbackOnly()
+            local.setRollbackOnly()
         }
         assertTrue(personalStock.ownForWorkOrder(
             org, order.projectId, order.siteId, order.workOrderId, UUID.randomUUID(),
