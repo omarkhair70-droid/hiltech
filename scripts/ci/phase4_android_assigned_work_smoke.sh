@@ -97,6 +97,14 @@ adb exec-out screencap -p > "$REPORT_DIR/android-offline-bundle-cached.png"
 test -s "$REPORT_DIR/android-offline-bundle-cached.png"
 scroll_until_text "القراءة فقط. أوامر التنفيذ" 30
 
+render_mode "cold-offline" "وضع القراءة بدون إنترنت" "android-cold-start-readonly.png"
+wait_for_text "لا يوجد بدء/إنهاء عمل" 10
+OFFLINE_XML="$(dump_ui)"
+if echo "$OFFLINE_XML" | grep -F -q "Me / Sessions"; then
+  echo "Offline-only shell must not expose signed-in admin/session modules."
+  exit 1
+fi
+
 render_mode "revoked" "مفيش WorkOrder حالي متعيّن ليك" "android-assignment-revoked.png"
 
 echo "HILTECH_PHASE4_SLICE06_ANDROID_RENDER_PASS rtl=PASS today=PASS detail=PASS waiting=PASS phase5_pending=PASS execution_controls_absent=PASS fake_sync_absent=PASS revoke_empty=PASS"

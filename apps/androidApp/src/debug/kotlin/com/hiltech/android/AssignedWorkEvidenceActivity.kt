@@ -34,13 +34,17 @@ class AssignedWorkEvidenceActivity :
 
         setContent {
             HiltechShell(
-                state =
+                state = if (mode == "cold-offline") {
+                    HiltechShellState.OfflineFieldReadOnly(
+                        identityId = fixtureIdentity().identityId,
+                        field = fixtureState("cached"),
+                    )
+                } else {
                     HiltechShellState.SignedIn(
-                        identity =
-                            fixtureIdentity(),
-                        field =
-                            fixtureState(mode),
-                    ),
+                        identity = fixtureIdentity(),
+                        field = fixtureState(mode),
+                    )
+                },
             )
         }
     }
