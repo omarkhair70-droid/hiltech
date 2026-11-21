@@ -33,6 +33,9 @@ hiltech:
     # Terminal review -> canonical consume/reject, OFF until reviewer authority is owner-approved.
     material-usage-reconciliation:
       enabled: ${HILTECH_FIELD_MATERIAL_USAGE_RECONCILIATION_ENABLED:false}
+    # Assigned-work AssetTag lookup. Reuses canonical Asset authorization and narrows to exact WorkOrder custody.
+    assigned-asset-lookup:
+      enabled: ${HILTECH_FIELD_ASSIGNED_ASSET_LOOKUP_ENABLED:false}
 
 
   activity:
