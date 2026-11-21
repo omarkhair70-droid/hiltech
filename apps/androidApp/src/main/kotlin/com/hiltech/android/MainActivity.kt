@@ -323,6 +323,9 @@ class MainActivity : ComponentActivity() {
                     return@onSuccess
                 }
                 val notVisible = bundleError?.code == "OBJECT_NOT_VISIBLE"
+                val pending = selectedId?.let { id ->
+                    runCatching { hiltechApplication.fieldExecutionQueue.outstanding(identityId, id) }.getOrNull()
+                }
                 shellState = current.copy(
                     field = HiltechFieldState(
                         loading = false,
@@ -331,6 +334,7 @@ class MainActivity : ComponentActivity() {
                         selectedBundle = selectedResult?.getOrNull()?.value,
                         cachedTodayAt = snapshot.fetchedAtEpochMs,
                         cachedBundleAt = selectedResult?.getOrNull()?.fetchedAtEpochMs,
+                        pendingFieldIntent = pending,
                         errorMessage = selectedResult?.exceptionOrNull()
                             ?.takeUnless { notVisible }?.message,
                     ),
