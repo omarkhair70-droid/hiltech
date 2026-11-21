@@ -7,6 +7,8 @@ import android.view.Gravity
 import java.io.File
 import java.io.FileOutputStream
 import com.hiltech.shared.core.local.LocalEvidenceStates
+import com.hiltech.android.field.PendingEvidenceCapture
+import com.hiltech.android.field.PendingEvidenceCaptureState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +62,40 @@ class AssignedWorkEvidenceActivity :
         val mode =
             intent.getStringExtra("mode")
                 ?: "today"
+
+        if (mode == "evidence-callback-state") {
+            // Exercise the same Bundle codec that MainActivity uses for
+            // Activity recreation while an external camera/picker is open.
+            val cameraDirectory = File(filesDir, "field-camera")
+            val cameraName = java.util.UUID.randomUUID().toString() + ".jpg"
+            val cameraRequest = PendingEvidenceCapture(
+                actorId = fixtureIdentity().identityId,
+                workOrderId = WORK_ORDER_ID,
+                requirementKey = "INSTALLATION-PHOTO",
+                cameraFile = File(cameraDirectory, cameraName),
+            )
+            val cameraBundle = Bundle()
+            PendingEvidenceCaptureState.save(cameraBundle, cameraRequest)
+            val restoredCamera = PendingEvidenceCaptureState.restore(
+                cameraBundle, cameraDirectory,
+            )
+            val pickerBundle = Bundle()
+            PendingEvidenceCaptureState.save(
+                pickerBundle, cameraRequest.copy(cameraFile = null),
+            )
+            val restoredPicker = PendingEvidenceCaptureState.restore(
+                pickerBundle, cameraDirectory,
+            )
+            val valid = restoredCamera == cameraRequest &&
+                restoredPicker == cameraRequest.copy(cameraFile = null) &&
+                PendingEvidenceCaptureState.restore(Bundle(), cameraDirectory) == null
+            setContentView(proofMarkerView(
+                if (valid) "PHASE6_S03_EXTERNAL_CAPTURE_CONTEXT_RESTORED"
+                else "PHASE6_S03_EXTERNAL_CAPTURE_CONTEXT_FAILED",
+                "Camera filename and picker scope survive Bundle state restoration.",
+            ))
+            return
+        }
 
         if (mode in setOf("evidence-seed", "evidence-persisted", "evidence-corrupt")) {
             // Synthetic debug Evidence proof only, isolated from production APIs and credentials.
