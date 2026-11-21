@@ -69,6 +69,26 @@ interface PendingCommandDao {
         """,
     )
     suspend fun outstandingFieldCommand(identityId: String, workOrderId: String): List<PendingCommandEntity>
+    @Query(
+        """
+        SELECT EXISTS (
+          SELECT 1 FROM pending_command
+          WHERE actor_user_identity_id = :actorId AND device_id = :installationId
+            AND target_type = 'WorkOrder' AND target_id = :workOrderId
+            AND command_type IN ('StartWork', 'BlockWork', 'ResumeWork')
+            AND state = 'APPLIED'
+            AND base_version = :capturedVersion
+            AND last_server_version = :currentVersion
+        )
+        """,
+    )
+    suspend fun provenFieldVersionAdvancement(
+        actorId: String,
+        installationId: String,
+        workOrderId: String,
+        capturedVersion: Long,
+        currentVersion: Long,
+    ): Boolean
 
     @Query(
         """
@@ -244,6 +264,55 @@ interface EvidenceQueueDao {
 
     @Query("SELECT * FROM local_evidence WHERE evidence_id = :evidenceId LIMIT 1")
     suspend fun get(evidenceId: String): LocalEvidenceEntity?
+    @Query(
+        """
+        SELECT * FROM local_evidence
+        WHERE captured_by_user_id = :actorId
+          AND source_device_id = :installationId
+          AND work_order_id = :workOrderId
+        ORDER BY captured_at_epoch_ms ASC, evidence_id ASC
+        """,
+    )
+    suspend fun forWorkOrder(actorId: String, installationId: String, workOrderId: String): List<LocalEvidenceEntity>
+
+    @Query(
+        """
+        SELECT * FROM local_evidence
+        WHERE captured_by_user_id = :actorId AND source_device_id = :installationId
+          AND local_state IN ('LOCAL_READY','RESERVATION_REQUIRED','RESERVED','UPLOADING','UPLOADED_UNVERIFIED','RETRYABLE')
+        ORDER BY captured_at_epoch_ms ASC, evidence_id ASC
+        """,
+    )
+    suspend fun pendingForActor(actorId: String, installationId: String): List<LocalEvidenceEntity>
+
+    @Query(
+        """
+        UPDATE local_evidence
+        SET local_state = :newState,
+            server_evidence_id = :serverEvidenceId,
+            upload_session_id = :uploadSessionId,
+            finalized_server_evidence_id = :finalizedServerId,
+            last_upload_error_code = :errorCode,
+            upload_attempt_count = upload_attempt_count + 1,
+            updated_at_epoch_ms = :atEpochMs
+        WHERE evidence_id = :evidenceId
+          AND captured_by_user_id = :actorId
+          AND source_device_id = :installationId
+          AND local_state = :expectedState
+        """,
+    )
+    suspend fun casUploadState(
+        evidenceId: String,
+        actorId: String,
+        installationId: String,
+        expectedState: String,
+        newState: String,
+        serverEvidenceId: String?,
+        uploadSessionId: String?,
+        finalizedServerId: String?,
+        errorCode: String?,
+        atEpochMs: Long,
+    ): Int
 
     @Query(
         """

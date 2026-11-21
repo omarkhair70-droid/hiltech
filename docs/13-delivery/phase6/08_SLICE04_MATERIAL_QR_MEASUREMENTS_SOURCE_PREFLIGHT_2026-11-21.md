@@ -2,8 +2,8 @@
 
 Date: 2026-11-21
 Status: **CONTRACT-ONLY / NOT FROZEN / NO S04 PRODUCTION CODE**
-Source main: `13c49c8b07060bd5495f6dcb8f219efe18ffb5c5`
-Dependency: Phase 6 S03 PR [#115](https://github.com/omarkhair70-droid/hiltech/pull/115) must pass its merge gate before S04 code is authored against the merged base.
+Source main: `113e6e49af60d4aa88e4b90ee864373047cf5f4f` (S03 code merged; post-merge Bootstrap and field-device acceptance independent)
+Dependency: Phase 6 S03 PR [#115](https://github.com/omarkhair70-droid/hiltech/pull/115) **merged** as `113e6e49af60d4aa88e4b90ee864373047cf5f4f`; S04 code requires the merged source, post-merge CI verification and its own reviewed authority/contract. Real-device release gate remains [#116](https://github.com/omarkhair70-droid/hiltech/issues/116).
 Owner/operator evidence: [#116](https://github.com/omarkhair70-droid/hiltech/issues/116)
 S04 open decisions: [#117](https://github.com/omarkhair70-droid/hiltech/issues/117)
 
@@ -123,7 +123,7 @@ A field measurement can be **captured as a source-bound intent** only after this
 
 **No S04 production code, migration, stock mutation endpoint, invented FGA permission, issuance reversal, or automatic material consumption in this contract PR.**
 
-Before implementation, close [#115](https://github.com/omarkhair70-droid/hiltech/pull/115) per its stated merge gates; then rebase a bounded S04A implementation PR on the merged `main`. Real site WorkType data, stock usage authority and drawing permissions remain open in [#117](https://github.com/omarkhair70-droid/hiltech/issues/117).
+S03 [#115](https://github.com/omarkhair70-droid/hiltech/pull/115) is merged. Before implementation, verify post-merge Bootstrap on `main`, approve the S04A read-authority contract, and open a bounded implementation PR on merged `main`. Real site WorkType data, stock usage authority and drawing permissions remain open in [#117](https://github.com/omarkhair70-droid/hiltech/issues/117).
 
 `P6_S04_SOURCE_PREFLIGHT = DOCUMENTED`
 `P6_S04_CONTRACT_FREEZE = PENDING_OWNER_REVIEW`

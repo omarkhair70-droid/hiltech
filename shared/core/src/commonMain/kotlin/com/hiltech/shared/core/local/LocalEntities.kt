@@ -380,6 +380,16 @@ data class LocalEvidenceEntity(
     val lastUploadErrorCode: String?,
     @ColumnInfo(name = "updated_at_epoch_ms")
     val updatedAtEpochMs: Long,
+    @ColumnInfo(name = "assignment_id", defaultValue = "''")
+    val assignmentId: String = "",
+    @ColumnInfo(name = "assignment_version", defaultValue = "0")
+    val assignmentVersion: Long = 0,
+    @ColumnInfo(name = "work_order_version", defaultValue = "0")
+    val workOrderVersion: Long = 0,
+    @ColumnInfo(name = "binding_revision", defaultValue = "0")
+    val bindingRevision: Int = 0,
+    @ColumnInfo(name = "server_evidence_id")
+    val serverEvidenceId: String? = null,
 )
 
 @Entity(

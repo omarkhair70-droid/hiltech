@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.field.FieldExecutionIntent
 import com.hiltech.shared.core.field.FieldQueuedIntent
+import com.hiltech.shared.core.local.LocalEvidenceEntity
 import com.hiltech.shared.core.work.FieldTodayItemDto
 import com.hiltech.shared.core.work.TechnicianJobBundleDto
 
@@ -31,6 +32,8 @@ data class HiltechFieldState(
     val cachedBundleAt: Long? = null,
     val pendingFieldIntent: FieldQueuedIntent? = null,
     val fieldIntentMessage: String? = null,
+    val localEvidence: List<LocalEvidenceEntity> = emptyList(),
+    val evidenceMessage: String? = null,
 )
 
 @Composable
@@ -40,6 +43,9 @@ fun AssignedWorkSection(
     onSelectWork: (String) -> Unit,
     captureFieldIntent: Boolean = false,
     onQueueFieldIntent: (FieldExecutionIntent, String?) -> Unit = { _, _ -> },
+    captureEvidence: Boolean = false,
+    onSelectEvidenceFile: (String) -> Unit = {},
+    onTakeEvidencePhoto: (String) -> Unit = {},
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -76,6 +82,11 @@ fun AssignedWorkSection(
                                 pending = state.pendingFieldIntent,
                                 feedback = state.fieldIntentMessage,
                                 onQueue = onQueueFieldIntent,
+                                captureEvidence = captureEvidence,
+                                localEvidence = state.localEvidence,
+                                evidenceFeedback = state.evidenceMessage,
+                                onSelectEvidenceFile = onSelectEvidenceFile,
+                                onTakeEvidencePhoto = onTakeEvidencePhoto,
                                 modifier =
                                     Modifier.weight(1f),
                             )
@@ -104,6 +115,11 @@ fun AssignedWorkSection(
                                 pending = state.pendingFieldIntent,
                                 feedback = state.fieldIntentMessage,
                                 onQueue = onQueueFieldIntent,
+                                captureEvidence = captureEvidence,
+                                localEvidence = state.localEvidence,
+                                evidenceFeedback = state.evidenceMessage,
+                                onSelectEvidenceFile = onSelectEvidenceFile,
+                                onTakeEvidencePhoto = onTakeEvidencePhoto,
                                 modifier =
                                     Modifier.fillMaxWidth(),
                             )
@@ -267,6 +283,11 @@ private fun JobBundleDetail(
     pending: FieldQueuedIntent?,
     feedback: String?,
     onQueue: (FieldExecutionIntent, String?) -> Unit,
+    captureEvidence: Boolean,
+    localEvidence: List<LocalEvidenceEntity>,
+    evidenceFeedback: String?,
+    onSelectEvidenceFile: (String) -> Unit,
+    onTakeEvidencePhoto: (String) -> Unit,
     modifier: Modifier,
 ) {
     Column(
@@ -454,9 +475,19 @@ private fun JobBundleDetail(
                             it.stage,
                     )
                 }
-            Text(
-                "التقاط/رفع Evidence من الموبايل مش متاح في Slice 06.",
-            )
+            if (captureEvidence) {
+                FieldEvidenceCaptureControls(
+                    bundle = bundle,
+                    enabled = !cached,
+                    evidence = localEvidence,
+                    feedback = evidenceFeedback,
+                    onFile = onSelectEvidenceFile,
+                    onPhoto = onTakeEvidencePhoto,
+                )
+            } else {
+                // Keep Phase4 read-only synthetic evidence and its original gate.
+                Text("التقاط/رفع Evidence من الموبايل مش متاح في Slice 06.")
+            }
         }
 
         if (

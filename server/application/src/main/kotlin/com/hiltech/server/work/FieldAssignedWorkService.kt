@@ -181,6 +181,19 @@ class FieldAssignedWorkService(
                         context.project.lifecycleState == "ACTIVE" &&
                         blockers.count { it.blockerTypeCode == "FIELD_EXECUTION" } == 1 &&
                         authorization.canUseAssignedWork(actorUserId, workOrderId, "can_resume"),
+                    // Only source-authorized, offline-policy-allowed requirements may be
+                    // captured locally; reserve/finalize recheck authority on the server.
+                    evidenceCaptureOffline =
+                        context.project.lifecycleState == "ACTIVE" &&
+                            order.lifecycleState !in setOf(
+                                WorkOrderLifecycle.CANCELLED,
+                                WorkOrderLifecycle.ACCEPTED,
+                            ) &&
+                            evidenceRequirements.any {
+                                it.offlineCaptureAllowedByPolicy &&
+                                    it.allowedContentTypes.isNotEmpty()
+                            } &&
+                            authorization.canUseAssignedWork(actorUserId, workOrderId, "can_submit_completion"),
                     // Permission to stage a local intent is never permission to apply it offline.
                     authoritativeOfflineQueue = false,
                 ),
