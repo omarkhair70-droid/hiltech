@@ -28,7 +28,7 @@ class FieldUsageWarehouseReviewServiceTest {
         FieldUsageWarehouseReviewService(warehouses, auth, stock, read, enabled)
     private fun report(organization: UUID = org) = FieldUsagePendingForWarehouse(
         UUID.randomUUID(), organization, workId, requirement, item, employee,
-        "2.000000", "M", 4, Instant.parse("2026-11-21T19:00:00Z"),
+        "2.000000", "M", 7, 4, Instant.parse("2026-11-21T19:00:00Z"),
     )
     private fun allowedWarehouse() {
         Mockito.`when`(warehouses.warehouse(id)).thenReturn(facility)
