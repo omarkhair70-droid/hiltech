@@ -313,10 +313,25 @@ internal class ReservationOperatorScenario(
         assertTrue(ownRows.single().sourceVersion >= 1)
         // S04B PostgreSQL source proof: the reported usage claim must be
         // persisted exactly once, immutable and leave stock movement unchanged.
-        val assignmentForReport = requireNotNull(jdbc.queryForObject(
-            "SELECT id FROM work_assignment WHERE work_order_id = ? ORDER BY id LIMIT 1",
-            UUID::class.java, order.workOrderId,
-        ))
+        // This physical-fulfilment fixture predates the field assignment
+        // process. A synthetic ENDED assignment supplies historical FK identity
+        // without granting active authorization or altering Work readiness.
+        val assignmentForReport = UUID.randomUUID()
+        jdbc.update("""
+            INSERT INTO work_assignment (
+              id, work_order_id, organization_id, project_id,
+              target_type, target_id, lead,
+              assigned_at, assigned_by, valid_from, valid_until,
+              state, source_operation_id, version
+            ) VALUES (
+              ?, ?, ?, ?, 'USER', ?, false,
+              ?, ?, ?, ?, 'ENDED', ?, 1
+            )
+        """.trimIndent(),
+            assignmentForReport, order.workOrderId, org, order.projectId,
+            operator, timestamp, operator, instant.minusSeconds(60).atOffset(ZoneOffset.UTC),
+            timestamp, UUID.randomUUID(),
+        )
         val usageReports = JdbcFieldMaterialUsageReportPersistence(jdbc)
         val proposedOperation = UUID.randomUUID()
         val beforeMovementCount = requireNotNull(jdbc.queryForObject(
