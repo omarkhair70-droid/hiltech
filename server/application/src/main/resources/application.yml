@@ -30,6 +30,9 @@ hiltech:
     # Read-only reviewer queue, OFF until authorized origin visibility is approved.
     material-usage-review-read:
       enabled: ${HILTECH_FIELD_MATERIAL_USAGE_REVIEW_READ_ENABLED:false}
+    # Terminal review -> canonical consume/reject, OFF until reviewer authority is owner-approved.
+    material-usage-reconciliation:
+      enabled: ${HILTECH_FIELD_MATERIAL_USAGE_RECONCILIATION_ENABLED:false}
 
 
   activity:
