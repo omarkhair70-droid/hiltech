@@ -140,11 +140,11 @@ class MainActivity : ComponentActivity() {
                 // Never turn an explicit 401/403/404 or a revoked identity into an offline session.
                 if (failure is HiltechApiException && failure.code == "NETWORK_UNAVAILABLE") {
                     val local = runCatching {
-                        identityRuntime.restoreOfflineReadIdentity()?.let { identity ->
+                        identityRuntime.restoreOfflineReadIdentity()?.let { identityId ->
                             hiltechApplication.fieldOfflineReadCache
-                                .cachedToday(identity.identityId)?.let { snapshot ->
+                                .cachedToday(identityId)?.let { snapshot ->
                                     HiltechShellState.OfflineFieldReadOnly(
-                                        identityId = identity.identityId,
+                                        identityId = identityId,
                                         field = HiltechFieldState(
                                             today = snapshot.value,
                                             cachedTodayAt = snapshot.fetchedAtEpochMs,

@@ -72,7 +72,7 @@ class AndroidIdentityRuntime(
     }
 
     /** Only a previously server-verified, same-token/same-installation identity may see stale field reads. */
-    suspend fun restoreOfflineReadIdentity(): IdentityBootstrapDto? {
+    suspend fun restoreOfflineReadIdentity(): String? {
         ensureConfigured()
         return store.loadVerifiedOfflineFieldIdentity(installationId)
     }

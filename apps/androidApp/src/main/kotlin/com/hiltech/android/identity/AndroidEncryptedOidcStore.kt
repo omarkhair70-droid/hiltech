@@ -99,7 +99,10 @@ class AndroidEncryptedOidcStore(
             clearValue(VERIFIED_FIELD_IDENTITY_KEY)
             return
         }
-        if (!validLease(tokens, identity, installationId, installationId, true)) {
+        if (!validLease(
+                tokens, identity.identityStatus, identity.organizations.isNotEmpty(),
+                installationId, installationId, true,
+            )) {
             clearValue(VERIFIED_FIELD_IDENTITY_KEY)
             return
         }
@@ -108,7 +111,9 @@ class AndroidEncryptedOidcStore(
             json.encodeToString(
                 VerifiedOfflineFieldIdentity.serializer(),
                 VerifiedOfflineFieldIdentity(
-                    identity = identity,
+                    identityId = identity.identityId,
+                    identityStatus = identity.identityStatus,
+                    hasOrganizationMembership = identity.organizations.isNotEmpty(),
                     installationId = installationId,
                     accessTokenDigest = fingerprint(tokens.accessToken),
                 ),
@@ -116,7 +121,7 @@ class AndroidEncryptedOidcStore(
         )
     }
 
-    suspend fun loadVerifiedOfflineFieldIdentity(installationId: String): IdentityBootstrapDto? {
+    suspend fun loadVerifiedOfflineFieldIdentity(installationId: String): String? {
         val tokens = load() ?: return null
         val sealed = readEncrypted(VERIFIED_FIELD_IDENTITY_KEY) ?: return null
         val verified = runCatching {
@@ -130,14 +135,22 @@ class AndroidEncryptedOidcStore(
             verified.accessTokenDigest.toByteArray(Charsets.UTF_8),
             expectedDigest.toByteArray(Charsets.UTF_8),
         )
-        return verified.identity.takeIf {
-            validLease(tokens, it, verified.installationId, installationId, matches)
+        return verified.identityId.takeIf {
+            it.isNotBlank() && validLease(
+                tokens,
+                verified.identityStatus,
+                verified.hasOrganizationMembership,
+                verified.installationId,
+                installationId,
+                matches,
+            )
         }
     }
 
     private fun validLease(
         tokens: NativeOidcTokenSet,
-        identity: IdentityBootstrapDto,
+        identityStatus: String,
+        hasOrganizationMembership: Boolean,
         savedInstallation: String,
         currentInstallation: String,
         tokenMatches: Boolean,
@@ -148,8 +161,8 @@ class AndroidEncryptedOidcStore(
             nowEpochMs = System.currentTimeMillis(),
             tokenMatchesLastVerifiedBootstrap = tokenMatches && tokens.accessToken.isNotBlank(),
             installationMatches = savedInstallation == currentInstallation,
-            identityStatus = identity.identityStatus,
-            hasOrganizationMembership = identity.organizations.isNotEmpty(),
+            identityStatus = identityStatus,
+            hasOrganizationMembership = hasOrganizationMembership,
         ),
     )
 
