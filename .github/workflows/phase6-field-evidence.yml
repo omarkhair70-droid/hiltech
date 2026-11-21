@@ -1,0 +1,61 @@
+name: Phase 6 — Durable Field Evidence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "shared/core/src/**"
+      - "shared/core/schemas/**"
+      - "apps/androidApp/**"
+      - "server/application/src/main/kotlin/com/hiltech/server/work/FieldAssignedWorkService.kt"
+      - "server/application/src/test/kotlin/com/hiltech/server/projects/**"
+      - "docs/13-delivery/phase6/06_*"
+      - ".github/workflows/phase6-field-evidence.yml"
+      - "scripts/ci/phase6_android_field_evidence_smoke.sh"
+  workflow_dispatch:
+
+concurrency:
+  group: \${{ github.workflow }}-\${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  field-evidence-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+      - name: Prove Room v3 evidence durability and preserve earlier v1 migration
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests com.hiltech.shared.core.field.FieldEvidenceQueueTest \
+            --tests com.hiltech.shared.core.local.FieldRoomMigrationTest \
+            --tests com.hiltech.shared.core.local.HiltechLocalDatabaseTest \
+            --no-configuration-cache --console=plain
+      - name: Compile Android evidence capture and shell
+        run: |
+          ./gradlew :apps:androidApp:assembleDebug \
+            -Philtech.apiBaseUrl=https://api.hiltech.invalid \
+            -Philtech.oidcIssuerUri=https://identity.hiltech.invalid/realms/hiltech \
+            --no-configuration-cache --console=plain
+      - name: Verify state machine regression
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.work.FieldExecutionTransitionPolicyTest \
+            --no-configuration-cache --console=plain
+      - name: Upload v3 schema output
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hiltech-phase6-s03-room-schema
+          path: shared/core/schemas/com.hiltech.shared.core.local.HiltechLocalDatabase/3.json
+          if-no-files-found: warn
+          retention-days: 30
