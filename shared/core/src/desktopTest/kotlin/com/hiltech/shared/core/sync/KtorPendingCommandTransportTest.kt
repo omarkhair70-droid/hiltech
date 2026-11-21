@@ -221,7 +221,7 @@ class KtorPendingCommandTransportTest {
         )) {
             val engine = MockEngine {
                 respond(
-                    content = """{"code":"VERSION_CONFLICT","message":"Work was changed","retryable":false}""",
+                    content = """{"code":"VERSION_CONFLICT","message":"Work was changed","correlationId":"source-conflict","retryable":false}""",
                     status = status,
                     headers = headersOf(HttpHeaders.ContentType, "application/json"),
                 )
