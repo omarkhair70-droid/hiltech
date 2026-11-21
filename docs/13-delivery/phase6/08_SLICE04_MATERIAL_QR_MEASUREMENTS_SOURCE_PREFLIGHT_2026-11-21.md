@@ -35,6 +35,12 @@ No new field endpoint, FGA relation, DB migration, or operation was implemented 
 
 ## Slice boundary and safe delivery sequence
 
+### Reuse check — do not rebuild screens that already exist
+
+`shared/core/src/commonMain/kotlin/com/hiltech/shared/core/AssignedWorkSection.kt` **already renders** the assigned JobBundle `resourceRequirements` with integration reason codes and `safeDocumentRefs` with document revision. These are existing safe Work projection surfaces, not S04 functionality to implement again. `FieldEvidenceCaptureControls` already distinguishes local files from server READY separately.
+
+Therefore the first *genuinely new* S04A engineering unit is not another generic "Materials" card. It is the independently authorized **field-issued-stock read projection** (or an explicit source-unavailable state if identity-to-employee custody binding remains unresolved), plus a safe asset-tag lookup in the assigned Work context only after checking the field actor's tag visibility. Avoid copying the warehouse query/authorization blindly.
+
 ### S04A — Source-bound read-only field view (first implementation candidate after S03 merge)
 
 1. On opening an **online-current** assigned JobBundle, show the existing Work resource requirements and their current state/reason/version, with honest `SOURCE_PENDING`/unavailable/unknown labels where issued material details have not been authorized.
