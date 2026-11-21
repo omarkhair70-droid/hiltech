@@ -129,6 +129,10 @@ fun AssignedWorkSection(
                                 evidenceFeedback = state.evidenceMessage,
                                 onSelectEvidenceFile = onSelectEvidenceFile,
                                 onTakeEvidencePhoto = onTakeEvidencePhoto,
+                                personalIssuedStock = state.personalIssuedStock,
+                                personalIssuedStockLoading = state.personalIssuedStockLoading,
+                                personalIssuedStockError = state.personalIssuedStockError,
+                                onRefreshPersonalIssuedStock = onRefreshPersonalIssuedStock,
                                 modifier =
                                     Modifier.fillMaxWidth(),
                             )

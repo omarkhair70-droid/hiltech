@@ -397,7 +397,7 @@ class MainActivity : ComponentActivity() {
                 )
                 if (!notVisible && selectedId != null &&
                     selectedResult?.getOrNull()?.value != null &&
-                    selectedResult.getOrNull()?.fetchedAtEpochMs == null) {
+                    selectedResult?.getOrNull()?.fetchedAtEpochMs == null) {
                     refreshPersonalIssuedStock(selectedId, identityId)
                 }
             }.onFailure { failure ->
@@ -609,7 +609,7 @@ class MainActivity : ComponentActivity() {
             }
             result.onSuccess { projection ->
                 if (projection.workOrderId != workOrderId ||
-                    projection.workOrderVersion != selected.selectedBundle.workOrderVersion) {
+                    projection.workOrderVersion != selected.selectedBundle?.workOrderVersion) {
                     shellState = current.copy(field = selected.copy(
                         personalIssuedStock = null,
                         personalIssuedStockLoading = false,
