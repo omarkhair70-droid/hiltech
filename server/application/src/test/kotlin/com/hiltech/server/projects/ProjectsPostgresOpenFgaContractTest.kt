@@ -3008,17 +3008,23 @@ class ProjectsPostgresOpenFgaContractTest {
                     },
                 "Phase-5 resource truth must not be fabricated in the mobile bundle.",
             )
-            assertFalse(
+            // Phase 6 Slice 02: verified ASSIGNED + READY + ACTIVE with
+            // current OpenFGA permission can stage Start intent, NOT apply
+            // authoritative execution while disconnected.
+            assertTrue(
                 userBundle.executionCapabilities
                     .startOffline,
+                "Current authorized assignment permits local Start intent, not offline application.",
             )
             assertFalse(
                 userBundle.executionCapabilities
                     .blockOffline,
+                "Blocking is unavailable until server state is IN_PROGRESS.",
             )
             assertFalse(
                 userBundle.executionCapabilities
                     .resumeOffline,
+                "Resuming is unavailable without a verified FIELD_EXECUTION blocker.",
             )
             assertFalse(
                 userBundle.executionCapabilities
