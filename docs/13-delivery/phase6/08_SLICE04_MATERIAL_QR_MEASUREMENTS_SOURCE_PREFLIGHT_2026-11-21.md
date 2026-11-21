@@ -23,6 +23,16 @@ Technicians need to record which **already-issued** materials they used, consult
 | Documents | `FieldAssignedWorkService` safe document refs and source revision | Read-only document identity/revision is known; no authorized local drawing edit/overwrite contract is established. |
 | Technical measurement | **Not found as a canonical S04 WorkType-specific source in inspected contracts** | No invented universal OTDR/Fluke form, thresholds, calibrated instrument identity or pass/fail math. Requires approved WorkType and field engineer source. |
 
+## Concrete S04A read-source findings from main (review checkpoint)
+
+The existing `StockFulfillmentPersistence.issued(item, work)` reads `stock_issued_balance` and returns `outstandingQuantity` and `version`, per `stockItemId`, `employeeId`, `workOrderId` and `requirementId`. That outstanding quantity is **not** interchangeable with total ever issued, available stock, or inferred field consumption. A proposed `issuedQuantity` field cannot be populated by this projection without a separately justified movement aggregation and source-time rule.
+
+The existing `StockFulfillmentService.issued(actor, item, work)` is **warehouse-authorized**: it checks warehouse-resource privileges and that every originating storage location can be accessed. The field JobBundle uses a different gate: `WorkAssignmentSourceAuthorityPort.isCurrentAssignedUser(actor, work, now)` plus `WorkAssignmentAuthorizationPort.canUseAssignedWork(actor, work, "can_view")`. Neither proves an arbitrary `stock_issued_balance.employee_id` is the currently assigned technician's own employee record. **Do not join employee and identity by guesswork.**
+
+The first field-safe material read therefore needs a reviewed identity-to-employee/custody binding and explicit per-row authorization. A query must constrain the current organization/WorkOrder/requirement and allowed employee, then select stock balance rows; forbid widening to other employees' `issued-context` or directory, or exposing all warehouse origin details. Version and unit must come from canonical source, not a stale client WorkOrder DTO. Without that mapping, S04A may show only existing safe `resourceRequirements` and `safeDocumentRefs`, with an honest `ISSUED_CONTEXT_NOT_AUTHORIZED` placeholder; not simulated quantities.
+
+No new field endpoint, FGA relation, DB migration, or operation was implemented by this preflight.
+
 ## Slice boundary and safe delivery sequence
 
 ### S04A — Source-bound read-only field view (first implementation candidate after S03 merge)
