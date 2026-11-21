@@ -131,6 +131,36 @@ data class FieldReadinessRequirementResponse(
     val version: Long,
 )
 
+data class FieldEngineeringMetricDefinitionResponse(
+    val key: String,
+    val label: String,
+    val valueType: String,
+    val required: Boolean,
+    val dimension: String?,
+    val unitCode: String?,
+    val precision: Int?,
+    val minValue: String?,
+    val maxValue: String?,
+    val options: List<String>,
+    val acceptedValues: List<String>,
+)
+
+data class FieldEngineeringTestDefinitionResponse(
+    val templateId: String,
+    val templateCode: String,
+    val templateName: String,
+    val templateRevision: Int,
+    val schemaVersion: Int,
+    val label: String,
+    val subjectLabel: String,
+    val rawEvidenceRequired: Boolean,
+    val instrumentAssetRequired: Boolean,
+    val calibrationRequired: Boolean,
+    val deviceReportedStatusAllowed: Boolean,
+    val reviewerRelationshipCode: String?,
+    val metrics: List<FieldEngineeringMetricDefinitionResponse>,
+)
+
 data class FieldEvidenceRequirementResponse(
     val requirementKey: String,
     val evidenceTypeCode: String,
@@ -139,6 +169,7 @@ data class FieldEvidenceRequirementResponse(
     val maxCount: Int?,
     val offlineCaptureAllowedByPolicy: Boolean,
     val allowedContentTypes: List<String>,
+    val structuredTest: FieldEngineeringTestDefinitionResponse?,
 )
 
 data class FieldEvidenceMetadataResponse(
@@ -429,6 +460,38 @@ private fun TechnicianJobBundle.response() =
                         it.offlineCaptureAllowedByPolicy,
                     allowedContentTypes =
                         it.allowedContentTypes,
+                    structuredTest =
+                        it.structuredTest?.let { test ->
+                            FieldEngineeringTestDefinitionResponse(
+                                templateId = test.templateId.toString(),
+                                templateCode = test.templateCode,
+                                templateName = test.templateName,
+                                templateRevision = test.templateRevision,
+                                schemaVersion = test.schemaVersion,
+                                label = test.label,
+                                subjectLabel = test.subjectLabel,
+                                rawEvidenceRequired = test.rawEvidenceRequired,
+                                instrumentAssetRequired = test.instrumentAssetRequired,
+                                calibrationRequired = test.calibrationRequired,
+                                deviceReportedStatusAllowed = test.deviceReportedStatusAllowed,
+                                reviewerRelationshipCode = test.reviewerRelationshipCode,
+                                metrics = test.metrics.map { metric ->
+                                    FieldEngineeringMetricDefinitionResponse(
+                                        key = metric.key,
+                                        label = metric.label,
+                                        valueType = metric.valueType.name,
+                                        required = metric.required,
+                                        dimension = metric.dimension,
+                                        unitCode = metric.unitCode,
+                                        precision = metric.precision,
+                                        minValue = metric.minValue,
+                                        maxValue = metric.maxValue,
+                                        options = metric.options,
+                                        acceptedValues = metric.acceptedValues,
+                                    )
+                                },
+                            )
+                        },
                 )
             },
         existingEvidence =

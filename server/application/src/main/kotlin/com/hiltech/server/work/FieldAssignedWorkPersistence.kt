@@ -215,20 +215,37 @@ class JdbcFieldAssignedWorkPersistence(
         jdbc.query(
             """
             SELECT
-                requirement_key,
-                evidence_type_code,
-                stage,
-                min_count,
-                max_count,
-                offline_capture_allowed,
-                allowed_content_types
-            FROM evidence_policy_requirement
-            WHERE config_revision_id = ?
-            ORDER BY stage,
-                     requirement_key,
-                     id
+                epr.requirement_key,
+                epr.evidence_type_code,
+                epr.stage,
+                epr.min_count,
+                epr.max_count,
+                epr.offline_capture_allowed,
+                epr.allowed_content_types,
+                epr.reviewer_relationship_code,
+                tr.id AS test_template_id,
+                tr.code AS test_template_code,
+                tr.name AS test_template_name,
+                tr.revision_number AS test_template_revision,
+                td.schema_version AS test_schema_version,
+                td.structured_definition::text AS test_schema_json
+            FROM evidence_policy_requirement epr
+            LEFT JOIN config_revision tr
+              ON tr.id = epr.structured_test_template_id
+            LEFT JOIN template_definition td
+              ON td.config_revision_id = tr.id
+             AND td.template_type = 'ENGINEERING_TEST_SCHEMA'
+            WHERE epr.config_revision_id = ?
+            ORDER BY epr.stage,
+                     epr.requirement_key,
+                     epr.id
             """.trimIndent(),
             { rs, _ ->
+                val templateId =
+                    rs.getObject(
+                        "test_template_id",
+                        UUID::class.java,
+                    )
                 FieldEvidenceRequirement(
                     requirementKey =
                         rs.getString(
@@ -262,6 +279,36 @@ class JdbcFieldAssignedWorkPersistence(
                                 it.toString()
                             }
                             ?: emptyList(),
+                    structuredTest =
+                        templateId?.let {
+                            FieldEngineeringTestSchema.parseTemplate(
+                                templateId = it,
+                                templateCode =
+                                    rs.getString(
+                                        "test_template_code",
+                                    ),
+                                templateName =
+                                    rs.getString(
+                                        "test_template_name",
+                                    ),
+                                templateRevision =
+                                    rs.getInt(
+                                        "test_template_revision",
+                                    ),
+                                schemaVersion =
+                                    rs.getInt(
+                                        "test_schema_version",
+                                    ),
+                                schemaJson =
+                                    rs.getString(
+                                        "test_schema_json",
+                                    ),
+                                reviewerRelationshipCode =
+                                    rs.getString(
+                                        "reviewer_relationship_code",
+                                    ),
+                            )
+                        },
                 )
             },
             evidencePolicyId,

@@ -55,6 +55,7 @@ data class FieldEvidenceRequirement(
     val maxCount: Int?,
     val offlineCaptureAllowedByPolicy: Boolean,
     val allowedContentTypes: List<String>,
+    val structuredTest: FieldEngineeringTestDefinition? = null,
 )
 
 data class FieldEvidenceMetadata(

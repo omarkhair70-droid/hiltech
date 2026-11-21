@@ -5,6 +5,7 @@ import com.hiltech.shared.core.warehouse.AssetTagLookupDto
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 class FieldAssignedWorkApiClient(
@@ -84,6 +85,35 @@ class FieldAssignedWorkApiClient(
             decode = {
                 json.decodeFromString(
                     AssetTagLookupDto.serializer(),
+                    it,
+                )
+            },
+        )
+    }
+
+    /** Live apply only: every write rechecks assignment, policy and schema revisions server-side. */
+    suspend fun captureEngineeringTest(
+        workOrderId: String,
+        request: FieldEngineeringTestCaptureDto,
+        installationId: String,
+    ): FieldEngineeringTestReceiptDto {
+        require(UUID.matches(workOrderId.trim())) {
+            "WorkOrder id must use canonical UUID format."
+        }
+        require(UUID.matches(request.operationId.trim())) {
+            "Engineering test operationId must use canonical UUID format."
+        }
+        return api.request(
+            HttpMethod.Post,
+            "/v1/work-orders/" + workOrderId.trim() + "/engineering-tests",
+            HiltechRequestOptions(
+                installationId = installationId,
+                idempotencyKey = request.operationId,
+            ),
+            requestBody = json.encodeToString(request),
+            decode = {
+                json.decodeFromString(
+                    FieldEngineeringTestReceiptDto.serializer(),
                     it,
                 )
             },

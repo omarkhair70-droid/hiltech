@@ -13,6 +13,9 @@ val personalIssuedStockUiEnabled = providers
 val assignedAssetLookupUiEnabled = providers
     .gradleProperty("hiltech.assignedAssetLookupEnabled")
     .getOrElse("false") == "true"
+val engineeringTestsUiEnabled = providers
+    .gradleProperty("hiltech.engineeringTestsEnabled")
+    .getOrElse("false") == "true"
 
 plugins {
     id("com.hiltech.base")
@@ -54,6 +57,11 @@ android {
             "boolean",
             "HILTECH_ASSIGNED_ASSET_LOOKUP_ENABLED",
             assignedAssetLookupUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_ENGINEERING_TESTS_ENABLED",
+            engineeringTestsUiEnabled.toString(),
         )
     }
 
