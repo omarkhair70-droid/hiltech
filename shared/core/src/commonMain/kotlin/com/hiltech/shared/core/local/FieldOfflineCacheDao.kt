@@ -18,4 +18,10 @@ interface FieldOfflineCacheDao {
 
     @Query("SELECT * FROM field_job_bundle_cache WHERE identity_id = :identityId AND work_order_id = :workOrderId LIMIT 1")
     suspend fun bundle(identityId: String, workOrderId: String): FieldJobBundleCacheEntity?
+
+    @Query("DELETE FROM field_today_cache WHERE identity_id = :identityId")
+    suspend fun clearToday(identityId: String)
+
+    @Query("DELETE FROM field_job_bundle_cache WHERE identity_id = :identityId")
+    suspend fun clearBundles(identityId: String)
 }

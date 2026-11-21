@@ -63,6 +63,11 @@ class FieldOfflineReadCacheTest {
                 assertFalse(savedBundle.value.executionCapabilities.startOffline)
                 assertFalse(savedBundle.value.executionCapabilities.authoritativeOfflineQueue)
                 assertNull(cache.cachedBundle(actorB, workId))
+                cache.saveToday(actorB, emptyList())
+                cache.clearIdentity(actorA)
+                assertNull(cache.cachedToday(actorA))
+                assertNull(cache.cachedBundle(actorA, workId))
+                assertNotNull(cache.cachedToday(actorB))
             } finally {
                 reopened.close()
             }

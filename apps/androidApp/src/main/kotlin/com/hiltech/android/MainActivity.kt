@@ -140,7 +140,13 @@ class MainActivity : ComponentActivity() {
                 // An explicit denial makes all cached read leases unusable until next verified bootstrap.
                 if (AndroidIdentityRuntime.isAccessDenied(failure) ||
                     (failure is HiltechApiException && failure.httpStatus in setOf(401, 403, 404))) {
+                    val priorActor = runCatching {
+                        identityRuntime.restoreOfflineReadIdentity()
+                    }.getOrNull()
                     identityRuntime.invalidateOfflineReadIdentity()
+                    if (priorActor != null) runCatching {
+                        hiltechApplication.fieldOfflineReadCache.clearIdentity(priorActor)
+                    }
                 }
                 if (failure is HiltechApiException && failure.code == "NETWORK_UNAVAILABLE") {
                     val local = runCatching {
@@ -300,6 +306,7 @@ class MainActivity : ComponentActivity() {
                 val bundleError = selectedResult?.exceptionOrNull() as? HiltechApiException
                 if (bundleError?.httpStatus in setOf(401, 403, 404)) {
                     identityRuntime.invalidateOfflineReadIdentity()
+                    runCatching { hiltechApplication.fieldOfflineReadCache.clearIdentity(identityId) }
                     shellState = current.copy(field = HiltechFieldState(
                         errorMessage = "تعذر تأكيد صلاحيتك الحالية. لا يمكن عرض تكليف محفوظ.",
                     ))
@@ -325,7 +332,10 @@ class MainActivity : ComponentActivity() {
                 val denied = failure is HiltechApiException &&
                     (failure.httpStatus == 401 || failure.httpStatus == 403 ||
                         failure.httpStatus == 404 || failure.code == "REAUTH_REQUIRED")
-                if (denied) identityRuntime.invalidateOfflineReadIdentity()
+                if (denied) {
+                    identityRuntime.invalidateOfflineReadIdentity()
+                    runCatching { hiltechApplication.fieldOfflineReadCache.clearIdentity(identityId) }
+                }
                 shellState = current.copy(
                     field = if (denied) {
                         HiltechFieldState(
@@ -419,7 +429,10 @@ class MainActivity : ComponentActivity() {
                 val denied = failure is HiltechApiException &&
                     (failure.httpStatus == 401 || failure.httpStatus == 403 ||
                         failure.httpStatus == 404 || failure.code == "REAUTH_REQUIRED")
-                if (denied) identityRuntime.invalidateOfflineReadIdentity()
+                if (denied) {
+                    identityRuntime.invalidateOfflineReadIdentity()
+                    runCatching { hiltechApplication.fieldOfflineReadCache.clearIdentity(identityId) }
+                }
                 if (denied) {
                     shellState = current.copy(
                         field = HiltechFieldState(
@@ -790,17 +803,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun signOut() {
-        shellState =
-            HiltechShellState.Working(
-                "Signing out…",
-            )
-
+        val actor = when (val state = shellState) {
+            is HiltechShellState.SignedIn -> state.identity.identityId
+            is HiltechShellState.OfflineFieldReadOnly -> state.identityId
+            else -> null
+        }
+        shellState = HiltechShellState.Working("Signing out…")
         scope.launch {
-            runCatching {
-                identityRuntime.logout()
+            runCatching { identityRuntime.logout() }
+            if (actor != null) {
+                runCatching { hiltechApplication.fieldOfflineReadCache.clearIdentity(actor) }
             }
-            shellState =
-                HiltechShellState.SignedOut
+            shellState = HiltechShellState.SignedOut
         }
     }
 

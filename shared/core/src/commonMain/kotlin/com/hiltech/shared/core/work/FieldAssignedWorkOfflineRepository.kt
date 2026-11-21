@@ -1,5 +1,6 @@
 package com.hiltech.shared.core.work
 
+import androidx.room3.withWriteTransaction
 import com.hiltech.shared.core.local.FieldJobBundleCacheEntity
 import com.hiltech.shared.core.local.FieldTodayCacheEntity
 import com.hiltech.shared.core.local.HiltechLocalDatabase
@@ -21,6 +22,14 @@ class FieldOfflineReadCache(
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
     private val nowEpochMs: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) {
+    /** On logout/explicit denial remove only this actor's read cache; never erase pending intent. */
+    suspend fun clearIdentity(identityId: String) {
+        database.withWriteTransaction {
+            database.fieldOfflineCacheDao().clearToday(identityId)
+            database.fieldOfflineCacheDao().clearBundles(identityId)
+        }
+    }
+
     suspend fun saveToday(identityId: String, items: List<FieldTodayItemDto>) {
         database.fieldOfflineCacheDao().upsertToday(
             FieldTodayCacheEntity(

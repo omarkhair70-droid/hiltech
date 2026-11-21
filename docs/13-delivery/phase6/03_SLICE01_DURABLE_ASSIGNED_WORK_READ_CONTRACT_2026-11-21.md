@@ -10,7 +10,7 @@ Existing Phase-4 authenticated `/v1/field/today` and `/v1/work-orders/{id}/job-b
 - Reuse the existing app-private `HiltechLocalDatabase` Room3 store; add two keyed read caches (Today keyed by authenticated identity; JobBundle keyed by identity + WorkOrder).
 - Room schema forward migration **1→2** must be generated/verified; do not reset or destroy pending commands/evidence. Use Room's automatic migration for adding only new tables. The schema export and upgrade test are required before merge.
 - Persist only the existing server-authorized, field-safe DTO; no raw binary, secrets, Finance data, or arbitrary new Project/Employee query. WorkOrder/assignment/policy/instruction versions and server asOf are preserved.
-- A cache is never read outside the signed-in identity; cache records from another account never become visible.
+- A cache is never read outside the signed-in identity; cache records from another account never become visible. Logout and explicit server authority denial purge the affected identity's read caches without erasing pending business commands or unsynced Evidence.
 - Server 401/403/404/revocation must not fall back. Fallback is **only** for an actual network-unavailable error and an already authenticated session; a fresh online Today result controls which WorkOrders can be selected.
 - Cached Today items forcibly clear `currentlyActionable`; cached bundles forcibly clear every execution capability, regardless of the previous online result.
 - On stale/unknown assignment while disconnected, only read a **clearly stale** snapshot, not execution authority. Old local notes do not prove a current assignment.
