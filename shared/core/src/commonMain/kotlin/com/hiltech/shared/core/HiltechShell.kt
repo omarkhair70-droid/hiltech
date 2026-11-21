@@ -241,6 +241,8 @@ fun HiltechShell(
     onSelectFieldWork: (String) -> Unit = {},
     onRefreshPersonalIssuedStock: (String) -> Unit = {},
     showPersonalIssuedStock: Boolean = false,
+    onLookupAssignedAssetTag: (String, String) -> Unit = { _, _ -> },
+    showAssignedAssetLookup: Boolean = false,
     captureFieldIntent: Boolean = false,
     onQueueFieldIntent:
         (com.hiltech.shared.core.field.FieldExecutionIntent, String?) -> Unit = { _, _ -> },
@@ -481,6 +483,8 @@ fun HiltechShell(
                             onTakeEvidencePhoto = onTakeEvidencePhoto,
                             onRefreshPersonalIssuedStock = onRefreshPersonalIssuedStock,
                             showPersonalIssuedStock = showPersonalIssuedStock,
+                            onLookupAssignedAssetTag = onLookupAssignedAssetTag,
+                            showAssignedAssetLookup = showAssignedAssetLookup,
                         )
                     }
 
