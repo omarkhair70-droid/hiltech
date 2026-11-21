@@ -16,6 +16,16 @@ Existing Phase-4 authenticated `/v1/field/today` and `/v1/work-orders/{id}/job-b
 - On stale/unknown assignment while disconnected, only read a **clearly stale** snapshot, not execution authority. Old local notes do not prove a current assignment.
 - Document links are metadata only; do not describe them as downloaded offline drawings. Local storage security/retention must receive device policy and human review before company rollout.
 
+## Explicit cold-start identity gate — discovered during integration review
+
+The existing `AndroidIdentityRuntime.restoreIdentity()` requires `bootstrapCurrentIdentity()` (network device registration + identity bootstrap) even when a secure OIDC token is already stored. The new Room cache currently operates only after `HiltechShellState.SignedIn`, which in the existing production `MainActivity` is reached after that online bootstrap.
+
+**Therefore this slice does NOT yet prove that a technician can cold-start the signed-out/process-killed app while entirely offline and access a cached JobBundle.** A Room close/reopen test proves *storage durability*, not offline session restoration. Do not conflate these.
+
+Before S01 can claim usable offline Today after cold start, the existing identity boundary must be explicitly designed, implemented and security-tested to permit only appropriately scoped local read access under a valid device-held session, without confusing that with current server authorization. Scope must cover expiry, logout, offboarding/revocation, other-user device handoff, and a cached identity's access only to previously authorized safe read data. Never persist access/refresh tokens in Room or silently turn cached identity into permission to execute.
+
+Until then: `COLD_START_OFFLINE_READ = NOT_VERIFIED`. Network errors while the same authenticated app session remains active may use the cached read snapshot; production offline usability remains a gap.
+
 ## Verification and exit
 1. Room v1→v2 non-destructive migration, with pending command retention.
 2. True process close/reopen durable cache, strict identity isolation.
