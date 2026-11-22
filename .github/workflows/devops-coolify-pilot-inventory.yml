@@ -1,0 +1,27 @@
+name: DevOps - Coolify pilot private inventory safety
+
+on:
+  pull_request:
+    paths:
+      - "scripts/devops/coolify_pilot_inventory.py"
+      - "scripts/devops/tests/test_coolify_pilot_inventory.py"
+      - ".github/workflows/devops-coolify-pilot-inventory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-read-only-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Python syntax validation
+        run: python3 -m py_compile scripts/devops/coolify_pilot_inventory.py scripts/devops/tests/test_coolify_pilot_inventory.py
+      - name: Read-only inventory security/unit tests
+        run: python3 -m unittest discover -s scripts/devops/tests -p 'test_coolify_pilot_inventory.py' -v
+      - name: Assert no Docker or remote host used
+        run: |
+          echo "This workflow tests synthetic fixtures only; no Docker daemon or owner VM access."
