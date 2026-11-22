@@ -49,6 +49,14 @@ fun validCommercialDecimal(raw: String, requirePositive: Boolean = false): Boole
 }
 
 sealed interface CommercialDealAction {
+    data class TenderRevision(val opportunityId: String, val tenderType: String,
+                              val receivedAt: String, val referenceNumber: String,
+                              val submissionDeadline: String, val clarificationDeadline: String,
+                              val sourceChannel: String) : CommercialDealAction
+    data class ScheduleVisit(val opportunityId: String, val purpose: String,
+                             val scheduledAt: String) : CommercialDealAction
+    data class CompleteVisit(val visitId: String, val baseVersion: Long,
+                             val notes: String) : CommercialDealAction
     data class Qualify(val opportunityId: String, val baseVersion: Long,
                        val summary: String, val questions: String) : CommercialDealAction
     data class SaveScope(val opportunityId: String, val description: String,
@@ -152,11 +160,59 @@ private fun CommercialDiscoveryPanel(
     } else {
         Text("No qualified discovery recorded.")
     }
+    if (canWrite && op.state in setOf("OPEN","QUALIFIED")) {
+        var tenderType by remember(op.id) { mutableStateOf("RFQ") }
+        var tenderRef by remember(op.id) { mutableStateOf("") }
+        var tenderReceived by remember(op.id) { mutableStateOf("") }
+        var tenderDeadline by remember(op.id) { mutableStateOf("") }
+        var clarification by remember(op.id) { mutableStateOf("") }
+        var sourceChannel by remember(op.id) { mutableStateOf("") }
+        Text("Tender / RFQ intake and deadline revision")
+        Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+            listOf("RFQ","RFP","TENDER","OTHER").forEach { type ->
+                OutlinedButton(onClick={tenderType=type},enabled=type!=tenderType){Text(type)}
+            }
+        }
+        OutlinedTextField(value=tenderRef,onValueChange={tenderRef=it},label={Text("Tender reference")})
+        OutlinedTextField(value=tenderReceived,onValueChange={tenderReceived=it},
+            label={Text("Received at (ISO-8601 UTC)")})
+        OutlinedTextField(value=tenderDeadline,onValueChange={tenderDeadline=it},
+            label={Text("Submission deadline (ISO-8601 UTC, optional)")})
+        OutlinedTextField(value=clarification,onValueChange={clarification=it},
+            label={Text("Clarification deadline (optional)")})
+        OutlinedTextField(value=sourceChannel,onValueChange={sourceChannel=it},
+            label={Text("Official source channel")})
+        Button(enabled=tenderReceived.isNotBlank(),
+            onClick={onAction(CommercialDealAction.TenderRevision(
+                op.id,tenderType,tenderReceived,tenderRef,tenderDeadline,clarification,sourceChannel))}) {
+            Text("Record immutable tender deadline revision")
+        }
+        var visitPurpose by remember(op.id) { mutableStateOf("") }
+        var visitDate by remember(op.id) { mutableStateOf("") }
+        OutlinedTextField(value=visitPurpose,onValueChange={visitPurpose=it},
+            label={Text("Site visit / discovery purpose")})
+        OutlinedTextField(value=visitDate,onValueChange={visitDate=it},
+            label={Text("Visit scheduled at (ISO-8601 UTC)")})
+        Button(enabled=visitPurpose.isNotBlank() && visitDate.isNotBlank(),
+            onClick={onAction(CommercialDealAction.ScheduleVisit(op.id,visitPurpose,visitDate))}) {
+            Text("Schedule site visit")
+        }
+    }
     deal.tenders.forEach {
         Text("Tender " + it.revisionNumber + " · " + it.tenderType + " · " + it.submissionState)
         it.referenceNumber?.let { ref -> Text("Reference " + ref) }
     }
-    deal.visits.forEach { Text("Visit: " + it.purpose + " · " + it.state) }
+    deal.visits.forEach { visit ->
+        Text("Visit: " + visit.purpose + " · " + visit.state)
+        if (canWrite && visit.state == "SCHEDULED") {
+            var notes by remember(visit.id) { mutableStateOf("") }
+            OutlinedTextField(value=notes,onValueChange={notes=it},
+                label={Text("Actual technical findings (required)")})
+            Button(enabled=notes.isNotBlank(),
+                onClick={onAction(CommercialDealAction.CompleteVisit(
+                    visit.id,visit.version,notes))}) { Text("Complete and retain visit findings") }
+        }
+    }
     if (canWrite && op.state == "OPEN") {
         var summary by remember(op.id) { mutableStateOf("") }
         var questions by remember(op.id) { mutableStateOf("") }

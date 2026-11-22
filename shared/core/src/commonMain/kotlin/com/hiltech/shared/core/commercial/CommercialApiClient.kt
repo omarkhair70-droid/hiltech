@@ -217,6 +217,24 @@ data class CommercialConversionDto(
 )
 
 @Serializable
+data class CommercialTenderRevisionDto(
+    val operationId: String,
+    val tenderType: String,
+    val receivedAt: String,
+    val referenceNumber: String? = null,
+    val submissionDeadline: String? = null,
+    val clarificationDeadline: String? = null,
+    val sourceChannel: String? = null,
+)
+
+@Serializable
+data class CompleteCommercialVisitDto(
+    val operationId: String,
+    val baseVersion: Long,
+    val notes: String,
+)
+
+@Serializable
 data class PlanCommercialVisitDto(
     val operationId: String,
     val scheduledAt: String,
@@ -298,6 +316,16 @@ class CommercialApiClient(
             request.operationId, installationId,
             json.encodeToString(PlanCommercialVisitDto.serializer(), request),
         )
+
+    suspend fun tenderRevision(opportunityId: String, request: CommercialTenderRevisionDto, installationId: String) =
+        command("/v1/commercial/opportunities/" + opportunityId + "/tenders",
+            request.operationId, installationId,
+            json.encodeToString(CommercialTenderRevisionDto.serializer(), request))
+
+    suspend fun completeVisit(visitId: String, request: CompleteCommercialVisitDto, installationId: String) =
+        command("/v1/commercial/visits/" + visitId + "/complete",
+            request.operationId, installationId,
+            json.encodeToString(CompleteCommercialVisitDto.serializer(), request))
 
     suspend fun qualify(opportunityId: String, request: QualifyCommercialOpportunityDto, installationId: String) =
         command("/v1/commercial/opportunities/" + opportunityId + "/qualify",

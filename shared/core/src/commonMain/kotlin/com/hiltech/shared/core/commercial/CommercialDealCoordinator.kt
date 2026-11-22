@@ -30,6 +30,29 @@ class CommercialDealCoordinator(
     suspend fun dispatch(action: CommercialDealAction, operationId: String): CommercialCommandResultDto {
         require(Regex("^[0-9a-fA-F-]{36}$").matches(operationId)) { "operationId must be a UUID." }
         return when (action) {
+            is CommercialDealAction.TenderRevision -> api.tenderRevision(
+                action.opportunityId,
+                CommercialTenderRevisionDto(
+                    operationId=operationId,tenderType=action.tenderType,
+                    receivedAt=action.receivedAt,
+                    referenceNumber=action.referenceNumber.takeIf { it.isNotBlank() },
+                    submissionDeadline=action.submissionDeadline.takeIf { it.isNotBlank() },
+                    clarificationDeadline=action.clarificationDeadline.takeIf { it.isNotBlank() },
+                    sourceChannel=action.sourceChannel.takeIf { it.isNotBlank() },
+                ),
+                installationId,
+            )
+            is CommercialDealAction.ScheduleVisit -> api.visit(
+                action.opportunityId,PlanCommercialVisitDto(
+                    operationId=operationId,scheduledAt=action.scheduledAt,
+                    purpose=action.purpose,
+                ),installationId,
+            )
+            is CommercialDealAction.CompleteVisit -> api.completeVisit(
+                action.visitId,CompleteCommercialVisitDto(
+                    operationId,action.baseVersion,action.notes,
+                ),installationId,
+            )
             is CommercialDealAction.Qualify -> api.qualify(
                 action.opportunityId,
                 QualifyCommercialOpportunityDto(
