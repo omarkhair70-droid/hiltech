@@ -166,6 +166,18 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
         { rs, _ -> rs.getObject("id", UUID::class.java) }, orderId, organizationId,
     ).isNotEmpty()
 
+    /** S04 physical truth: a posted canonical Warehouse receipt forbids PO cancellation. */
+    fun hasPhysicalPoReceiving(orderId: UUID): Boolean = jdbc.queryForObject(
+        """
+        SELECT EXISTS (
+          SELECT 1 FROM procurement_po_receiving_link b
+          JOIN receiving_line l ON l.receiving_record_id = b.receiving_record_id
+          WHERE b.purchase_order_id = ? AND l.received_at IS NOT NULL
+        )
+        """.trimIndent(),
+        Boolean::class.java, orderId,
+    ) == true
+
     fun lifecycleEvents(orderId: UUID): List<PurchaseOrderLifecycleEvent> = jdbc.query(
         """
         SELECT id, operation_id, organization_id, purchase_order_id, event_version,

@@ -6,6 +6,7 @@ import com.hiltech.server.platform.IdempotentCommandExecutor
 import com.hiltech.server.platform.IdempotentCommandOutcome
 import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
+import com.hiltech.server.procurement.ProcurementPoReceivingGuard
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
@@ -68,6 +69,7 @@ class ReceivingService(
     private val audit: AuditEventWriter,
     private val events: ApplicationEventPublisher,
     private val clock: Clock,
+    private val poReceiving: ProcurementPoReceivingGuard,
 ) {
     fun directory(actor: UUID, warehouseId: UUID, afterUpdatedAt: String? = null,
         afterId: UUID? = null): ReceivingDirectoryView {
@@ -95,8 +97,11 @@ class ReceivingService(
         val replayed = execute(context, "RECEIVING_CREATED", "RECEIVING", id,
             request.organizationId, destination.storageLocationId, request.sourceType, source, document) {
             requireDestination(context.actor, request.organizationId, request.destinationStorageLocationId)
+            val now = clock.instant()
             receiving.insertRecord(id, request.organizationId, destination.storageLocationId, request.sourceType,
-                source, document, context.actor, clock.instant(), context.correlationId)
+                source, document, context.actor, now, context.correlationId)
+            poReceiving.linkNewRecord(id, request.organizationId, destination.storageLocationId,
+                request.sourceType, source, context.actor, now, context.correlationId)
         }
         return ReceivingRecordResult(receiving.record(id) ?: unavailable(), replayed)
     }
@@ -123,6 +128,7 @@ class ReceivingService(
                 StockClassification.STOCK_SERIALIZED -> ReceivingCandidateClass.STOCK_SERIALIZED
             }
             if (request.candidateClass != requiredClass || request.unitCode != item.baseUnitCode) invalid()
+            poReceiving.requireStockLine(record, item.id, item.baseUnitCode, expected)
             receiving.insertLine(lineId, record, requiredClass, item.id, expected, item.baseUnitCode, sourceLine,
                 context.actor, clock.instant())
             if (!receiving.touchInProgress(record.id, record.version, clock.instant())) stale()
@@ -142,6 +148,7 @@ class ReceivingService(
             if (record.version != request.recordVersion ||
                 record.state !in listOf(ReceivingState.DRAFT, ReceivingState.IN_PROGRESS)) stale()
             requireDestination(context.actor, record.organizationId, record.destinationStorageLocationId)
+            poReceiving.requireStockOnly(record)
             assetWriter.requireActiveType(record.organizationId, request.assetTypeId)
             receiving.insertAssetLine(lineId, record, request.assetTypeId, sourceLine, context.actor, clock.instant())
             if (!receiving.touchInProgress(record.id, record.version, clock.instant())) stale()
@@ -180,6 +187,7 @@ class ReceivingService(
                         BigDecimal(serials.size).compareTo(amount) != 0) invalid()
                 }
             }
+            poReceiving.requireStockReceipt(record, item.id, item.baseUnitCode, amount)
             val now = clock.instant().truncatedTo(ChronoUnit.MICROS)
             if (!receiving.markLineReceived(line.id, line.version, amount, request.condition, serials, context.actor, now)) stale()
             if (!receiving.touchInProgress(record.id, record.version, now)) stale()
@@ -211,6 +219,7 @@ class ReceivingService(
                 it.receivingRecordId == record.id && it.candidateClass == ReceivingCandidateClass.COMPANY_ASSET
             } ?: unavailable()
             if (line.version != request.lineVersion || line.receivedAt != null) stale()
+            poReceiving.requireStockOnly(record)
             val typeId = line.expectedAssetTypeDefinitionId ?: invalid()
             val now = clock.instant().truncatedTo(ChronoUnit.MICROS)
             val receipt = assetWriter.receive(context, record, line, destination, typeId, request, now) { asset ->
@@ -241,6 +250,7 @@ class ReceivingService(
             if (record.version != request.recordVersion ||
                 record.state !in listOf(ReceivingState.DRAFT, ReceivingState.IN_PROGRESS)) stale()
             requireDestination(context.actor, record.organizationId, record.destinationStorageLocationId)
+            poReceiving.requireBoundCurrent(record)
             request.lineId?.let { lineId ->
                 receiving.line(lineId, lock = true)?.takeIf { it.receivingRecordId == record.id } ?: unavailable()
             }
@@ -260,6 +270,7 @@ class ReceivingService(
             val record = receiving.record(id, lock = true) ?: unavailable()
             if (record.version != request.recordVersion) stale()
             requireDestination(context.actor, record.organizationId, record.destinationStorageLocationId)
+            poReceiving.requireBoundCurrent(record)
             val lines = receiving.lines(record.id)
             if (lines.isEmpty() || lines.any { it.receivedAt == null }) incomplete()
             if (record.state != ReceivingState.IN_PROGRESS) stale()

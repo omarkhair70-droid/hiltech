@@ -85,7 +85,8 @@ class PurchaseOrderLifecycleService @Autowired constructor(
         )) {
             if (!purchases.lockOrder(purchaseOrderId, order.organizationId)) unavailable()
             val current = purchases.byId(purchaseOrderId) ?: unavailable()
-            if (current != order || current.supplierDispatchState != "NOT_SENT") stale()
+            if (current != order || current.supplierDispatchState != "NOT_SENT" ||
+                purchases.hasPhysicalPoReceiving(purchaseOrderId)) stale()
             issuer.requireIssuerForLifecycle(context.actor, current.organizationId)
             val history = purchases.lifecycleEvents(purchaseOrderId)
             if (history.any { it.organizationId != current.organizationId ||
