@@ -55,7 +55,7 @@ The critical new reality: Field already implements an adaptive **Today + JobBund
 
 ## Native acceptance experiment to execute on this clean main
 
-1. **Capture current project UI** with existing `:apps:desktopApp:renderPhase4Slice05Evidence` and Project/Site fixtures on exact checked source. Record JPG/PNG as local synthetic evidence with SHA, screen size, viewport and whether an actual app or headless Compose. This proves visual source baseline, not role acceptance.
+1. **Capture current project UI** from current checked source. The legacy `:apps:desktopApp:renderPhase4Slice05Evidence` produced a `HILTECH_PHASE4_SLICE05_RENDER_PASS` marker, but visual inspection showed its `java.awt.Robot` screenshots captured the **wrong foreground application**, not HILTECH; **reject these PNGs as invalid visual evidence**, regardless of Gradle success. The QA-only `UX128Phase6ProjectHeadlessEvidence.kt` and opt-in `ux128-phase6-pm-headless.init.gradle` now render the actual `ProjectCommandCenterSection` directly via `ImageComposeScene`, reusing the legacy test synthetic source DTO without Robot/window focus. Final results recorded after direct-head execution and image inspection.
 2. **Field source audit from exact main**, preferably native Android instrumentation or official current-head CI artifacts if available. Never treat Phase4 mobile fixture or plain code inspection as actual Phase6 Android operator test.
 3. Use same source fixtures to compare **(A) contextual project inspector vs (B) action-focused review**, **(A) compact Today → detail below list vs (B) selected JobBundle first** as *candidate* navigation designs before coding UI changes. First estimate task-step and scroll cost, then build a safe opt-in Compose experiment only after role/source fixture integration is clear.
 4. Validate: role revocation, cached vs current, current approved revision, queued vs confirmed, feature flag OFF/ON, no false “accepted”, physical-device UX/RTL/large text/Back and Windows keyboard.
@@ -70,3 +70,12 @@ The critical new reality: Field already implements an adaptive **Today + JobBund
 - UX-05 Operational review: **FIELD/PM P1 GAPS IDENTIFIED**.
 - UX-07 QA: native main Project evidence **pending command result**, Android live UI acceptance not verified.
 - UX-08 post-Phase13 product-wide polish remains dependent on functional source and human approval.
+
+## QA evidence integrity correction: foreground Robot screenshots invalidated
+
+**Legacy attempt (current main `cfad5413...`)**:
+- Command `./gradlew.bat :apps:desktopApp:renderPhase4Slice05Evidence --no-daemon` opened the older native `Window` test harness on an authorized Windows computer. The test printed `HILTECH_PHASE4_SLICE05_RENDER_PASS`.
+- **Visual inspection of its PNGs proved the capture was NOT the HILTECH window**. Another foreground application covered the requested rectangle; `Robot.createScreenCapture(bounds)` is not window-owned. Do **not** circulate, commit or use these PNGs as product evidence. They may contain unrelated desktop contents and are excluded from the UX artifact register.
+- A console PASS can therefore assert state-fixture test flow without proving that actual product pixels were captured. This is a **QA P1 false-positive risk** for native visual regression claims, not a HILTECH product UI defect.
+- Review-only replacement: test-only `UX128Phase6ProjectHeadlessEvidence.kt` renders actual source `ProjectCommandCenterSection` offscreen through `ImageComposeScene.render()`, using the original private Phase4 test fixture **only via JVM test-runtime reflection**. No new production service or invented PM data, no desktop foreground capture, no external image retrieval.
+- Reproduce using the opt-in Gradle init script: `./gradlew -I docs/10-design/ux128-phase6-pm-headless.init.gradle :apps:desktopApp:renderUx128Phase6Pm --no-daemon`. Verify returned exit status and manually inspect HILTECH-only images. This test code is deliberately non-shipping.
