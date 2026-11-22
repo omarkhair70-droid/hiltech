@@ -304,6 +304,23 @@ JOIN commercial_contract c ON c.id=h.contract_id
   AND c.organization_id=h.organization_id
 WHERE c.state='SIGNED';
 
+-- Internal-only costing coverage projection. Missing cost is UNKNOWN, not zero.
+-- This is arithmetic support for review, not a company-approved margin/tax policy.
+CREATE VIEW commercial_private_boq_cost_summary AS
+SELECT b.id AS boq_version_id,b.organization_id,b.opportunity_id,b.version_number,
+       b.currency,
+       COUNT(*)::integer AS total_lines,
+       COUNT(*) FILTER (WHERE l.internal_unit_cost IS NULL)::integer AS missing_cost_lines,
+       SUM(l.quantity*l.sell_unit_price) AS proposed_sell_total,
+       SUM(CASE WHEN l.internal_unit_cost IS NULL THEN 0
+                ELSE l.quantity*l.internal_unit_cost END) AS known_cost_subtotal,
+       CASE WHEN COUNT(*) FILTER (WHERE l.internal_unit_cost IS NULL)=0
+            THEN SUM(l.quantity*l.internal_unit_cost)
+            ELSE NULL END AS complete_internal_cost_total
+FROM commercial_boq_version b
+JOIN commercial_boq_cost_line l ON l.boq_version_id=b.id
+GROUP BY b.id,b.organization_id,b.opportunity_id,b.version_number,b.currency;
+
 -- An explicit client-safe projection is a financial boundary; never UNION cost source.
 CREATE VIEW commercial_released_client_quote AS
 SELECT q.id AS quote_id,q.organization_id,q.opportunity_id,q.client_organization_id,
