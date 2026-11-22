@@ -174,3 +174,24 @@ A specimen must show: actionable unread, read but still actionable, resolved sou
 The purpose is to compare legibility, touch safety and information density against the same real screens before selecting global tokens. Values and icon set must not be applied to the production UI based only on this file.
 
 The two companion KMP common tests verify bilingual accessible copy, status-axis isolation, optimistic-vs-server-confirmed messaging, source-unavailable-vs-failure, engineering object text labels, RTL mirroring and provisional touch-target constraints. Desktop Gradle test results must be recorded by exact SHA, separate from any physical Android test.
+
+## 8. Comparative operational-product research — Pass 02 (official flows)
+
+This pass reviewed actual product-help flows and screenshots, not decorative design-showcase mockups. Treat them as pattern evidence, not assets to copy.
+
+| Product / official source | Strongest behavior observed | Rejected copying | HILTECH experiment |
+|---|---|---|---|
+| Hilti ON!Track — [asset transfers](https://help.ontrack3.hilti.com/hc/en-us/articles/34399854140817-How-to-transfer-assets-on-the-mobile-app), [asset detail/map](https://help.ontrack3.hilti.com/hc/en-us/articles/34399800470545-What-is-the-smart-map) | Tool identity, location/owner and explicit transfer actions; scanner and manual asset entry have distinct flows | Tool management home tiles and Hilti's visual brand; pretend that HILTECH's manual code lookup is a camera scanner | Start warehouse task -> enter actual tag -> show asset passport -> source-authorized custody action, preserving location and person context |
+| Procore — [Drawings](https://support.procore.com/procore-mobile-ios/user-guide/drawings-ios), [multi-column tablet layout](https://www.procore.com/whats-new/modern-multi-column-experience-for-ipad) | Revision visible while navigating drawing; related source items opened from real drawing; tablet pane structure preserves context | Floating tool palettes everywhere or showing drawing acceptance before source validates revision | Project -> Site -> Drawing revision -> WorkOrder/test evidence -> Back; test current vs superseded revision explicitly |
+| PlanRadar — [defect management on digital plans](https://www.planradar.com/product/defect-management/) | Site issues anchored to plans/BIM, making spatial context meaningful | A plan canvas when HILTECH has no authoritative drawing/map coordinate | Use source-approved anchor only; otherwise ordinary WorkOrder relation, no fake map pin |
+| IBM Plex — [font family](https://www.ibm.com/design/language/typography/typeface/), [open-source license](https://github.com/IBM/plex) | Arabic variant and technical Latin ecosystem worth testing as a pairing | Concluding it is the HILTECH identity merely from industrial associations | Render the same 12 HILTECH bilingual specimen scenarios against platform default and another licensed Arabic candidate |
+
+**New rejection gate:** A reference pattern is adopted only when HILTECH has the corresponding *source evidence, permission contract, offline behavior and operator comprehension*. The difference between "manual code lookup" and "camera scan" is not cosmetic; confusing them changes the user's expectation of an available capability.
+
+### Concrete cross-reference tests from this pass
+
+1. Warehouse: compare Action-first vs Object-first with a late-return asset, but require a reliable asset ID, ownership/source timestamp and a visible manual lookup entry.
+2. Engineer: document revision must be source-approved; stale/replaced drawing cannot look like an approved current drawing.
+3. PM: from blocked project through site/work package into action, with Back preserving the same project and without raw backend enum as the primary label.
+4. Field: list/detail switching must survive reorder, deletion, regrant, offline and 200% text before a visual treatment wins.
+5. Fonts: Arabic diacritics, Latin serials, decimal cost values and text scaling must be compared on two platforms; no font redistribution is done in this research branch.
