@@ -427,6 +427,38 @@ class JdbcEvidencePersistence(
         createdAt = value.createdAt,
     )
 
+    override fun insertServicePurchaseDocumentReservation(
+        value: SupplierQuoteDocumentEvidenceReservationInsert,
+        documentKind: String,
+    ) {
+        val expected = when (documentKind) {
+            "DELIVERY" -> "SERVICE_DELIVERY"
+            "INVOICE" -> "SERVICE_INVOICE"
+            else -> throw IllegalArgumentException("Unsupported service purchase document kind")
+        }
+        insertRestrictedEvidenceReservation(
+            evidenceId = value.evidenceId,
+            uploadSessionId = value.uploadSessionId,
+            operationId = value.operationId,
+            objectKey = value.objectKey,
+            organizationId = value.organizationId,
+            targetType = "SERVICE_PURCHASE_DOCUMENT",
+            targetId = value.documentSlotId,
+            requirementKey = expected + "_BINARY",
+            evidenceTypeCode = expected,
+            contentType = value.contentType,
+            originalFileName = value.originalFileName,
+            sizeBytes = value.sizeBytes,
+            sha256 = value.sha256,
+            capturedAt = value.capturedAt,
+            clientOccurredAt = value.clientOccurredAt,
+            capturedByUserId = value.capturedByUserId,
+            securityScanClass = value.securityScanClass,
+            uploadExpiresAt = value.uploadExpiresAt,
+            createdAt = value.createdAt,
+        )
+    }
+
     override fun insertSupplierInvoiceDocumentReservation(
         value: SupplierInvoiceDocumentEvidenceReservationInsert,
     ) = insertRestrictedEvidenceReservation(
