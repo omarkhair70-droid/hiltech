@@ -53,6 +53,7 @@ jobs:
           ./gradlew :server:application:test \
             --tests com.hiltech.server.DatabaseMigrationContractTest \
             --tests com.hiltech.server.procurement.SupplierPoCommunicationServiceTest \
+            --tests com.hiltech.server.procurement.SupplierInvoiceMatchingServiceTest \
             --tests com.hiltech.server.procurement.ProcurementPoReceivingGuardTest \
             --tests com.hiltech.server.procurement.PurchaseOrderLifecycleServiceTest \
             --no-daemon --console=plain
