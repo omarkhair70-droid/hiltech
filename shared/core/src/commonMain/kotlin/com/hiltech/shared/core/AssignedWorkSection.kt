@@ -1,6 +1,8 @@
 package com.hiltech.shared.core
 
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -171,6 +173,12 @@ fun AssignedWorkSection(
                     mutableStateOf<String?>(null)
                 }
                 var savedTodayOffset by remember(focusScopeKey) { mutableStateOf(0) }
+                // ID is the semantic anchor. A pixel offset alone points to
+                // another WorkOrder if tasks reorder while a bundle is open.
+                var returnWorkOrderId by remember(focusScopeKey) {
+                    mutableStateOf<String?>(null)
+                }
+                val returnWorkRequester = remember(focusScopeKey) { BringIntoViewRequester() }
                 var restoreOffset by remember(focusScopeKey) { mutableStateOf<Int?>(null) }
                 val focusedId = focusedWorkOrderId
                     ?.takeIf { id -> state.today.any { it.workOrderId == id } }
@@ -195,7 +203,14 @@ fun AssignedWorkSection(
                                 // detail; clamped restoration is deliberate.
                                 withFrameNanos { }
                                 scroll.scrollTo(target)
+                                // Compose must lay out Today's re-ordered cards
+                                // before resolving the currently assigned ID.
+                                withFrameNanos { }
+                                if (state.today.any { it.workOrderId == returnWorkOrderId }) {
+                                    returnWorkRequester.bringIntoView()
+                                }
                                 restoreOffset = null
+                                returnWorkOrderId = null
                             }
                         }
                     }
@@ -204,10 +219,13 @@ fun AssignedWorkSection(
                     TodayColumn(
                         state = state,
                         onRefresh = onRefresh,
+                        restoreItemId = returnWorkOrderId,
+                        restoreRequester = returnWorkRequester,
                         onSelectWork = { id ->
                             if (state.today.any { it.workOrderId == id }) {
                                 savedTodayOffset = focusHostScroll?.value ?: 0
                                 restoreOffset = null
+                                returnWorkOrderId = null
                                 focusedWorkOrderId = id
                                 onSelectWork(id)
                             }
@@ -220,6 +238,7 @@ fun AssignedWorkSection(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         OutlinedButton(onClick = {
+                            returnWorkOrderId = focusedWorkOrderId
                             focusedWorkOrderId = null
                             restoreOffset = savedTodayOffset
                         }) {
@@ -344,6 +363,8 @@ private fun TodayColumn(
     onRefresh: () -> Unit,
     onSelectWork: (String) -> Unit,
     modifier: Modifier,
+    restoreItemId: String? = null,
+    restoreRequester: BringIntoViewRequester? = null,
 ) {
     Column(
         modifier = modifier,
@@ -400,6 +421,12 @@ private fun TodayColumn(
         state.today.forEach { item ->
             TodayCard(
                 item = item,
+                modifier =
+                    if (item.workOrderId == restoreItemId && restoreRequester != null) {
+                        Modifier.bringIntoViewRequester(restoreRequester)
+                    } else {
+                        Modifier
+                    },
                 selected =
                     state.selectedWorkOrderId ==
                         item.workOrderId,
@@ -418,10 +445,11 @@ private fun TodayCard(
     item: FieldTodayItemDto,
     selected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     OutlinedButton(
         modifier =
-            Modifier.fillMaxWidth(),
+            modifier.fillMaxWidth(),
         onClick = onClick,
     ) {
         Column(
