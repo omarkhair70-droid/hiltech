@@ -1,0 +1,74 @@
+﻿{
+    "study":  "UX128 Native Compose System Specimens Pass 02",
+    "rendered_on":  "Windows Desktop Compose ImageComposeScene",
+    "source_head_at_render":  "fd2c0c58b6b22f77cba5139148930555bb008841",
+    "synthetic":  true,
+    "production_app":  false,
+    "physical_android":  false,
+    "image_count":  9,
+    "images":  [
+                   {
+                       "name":  "01-phone-ar-light-status.png",
+                       "width":  430,
+                       "height":  960,
+                       "bytes":  38201,
+                       "sha256":  "d910954464d5e236d3a6c740cb20439e2838e865942d5b653e1060a1657a7762"
+                   },
+                   {
+                       "name":  "02-phone-ar-dark-status.png",
+                       "width":  430,
+                       "height":  960,
+                       "bytes":  39002,
+                       "sha256":  "3e2eec1298798325c4192385d58255f936b98761f1da3b9a7a78a543acd8738e"
+                   },
+                   {
+                       "name":  "03-phone-ar-light-type.png",
+                       "width":  430,
+                       "height":  960,
+                       "bytes":  25701,
+                       "sha256":  "69b8855733d829b56c2e021b74d5b5ae1253c2a38c57240c3e9961f1f646345e"
+                   },
+                   {
+                       "name":  "04-phone-ar-light-icons.png",
+                       "width":  430,
+                       "height":  960,
+                       "bytes":  34659,
+                       "sha256":  "710e4261d6a9ce78edab5d4e64ff0a382425f6b9340258a45debea98f1c116c1"
+                   },
+                   {
+                       "name":  "05-windows-en-light-status.png",
+                       "width":  1180,
+                       "height":  880,
+                       "bytes":  48902,
+                       "sha256":  "a0d8d602ed1e5afa3d40f97b63d28f558942540939ea8d24cd6fc45da12dff07"
+                   },
+                   {
+                       "name":  "06-windows-en-dark-status.png",
+                       "width":  1180,
+                       "height":  880,
+                       "bytes":  49319,
+                       "sha256":  "495ced1bc51f4b15eaf4c7eaeab5fa7491cc941c68d9baa15ba39c3fde0ff2cf"
+                   },
+                   {
+                       "name":  "07-windows-ar-high-contrast.png",
+                       "width":  1180,
+                       "height":  880,
+                       "bytes":  43943,
+                       "sha256":  "65728ddfd94b53b39785d691d7cbbfe4c467af970a980cd2493a2e185c65141e"
+                   },
+                   {
+                       "name":  "08-windows-ar-light-type.png",
+                       "width":  1180,
+                       "height":  880,
+                       "bytes":  35818,
+                       "sha256":  "d878755d140df773d023e4bb1cb955bdb722aa5125f5bc2a6fa370a76b59c45d"
+                   },
+                   {
+                       "name":  "09-windows-en-light-icons.png",
+                       "width":  1180,
+                       "height":  880,
+                       "bytes":  48134,
+                       "sha256":  "1a65da8c7f460a402d91549d98d896f4bfb3f119d005bff27e527dd49b54445a"
+                   }
+               ]
+}

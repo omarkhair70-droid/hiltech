@@ -1,0 +1,16 @@
+// QA-only task: renders actual shared KMP status/icon contracts in Compose Desktop.
+// Neither this init script nor the renderer is referenced by production builds.
+// Run from an isolated QA clone:
+// ./gradlew -I docs/10-design/ux128-system-specimens.init.gradle :apps:desktopApp:renderUx128SystemSpecimens --no-daemon
+
+gradle.projectsEvaluated {
+    def desktop = gradle.rootProject.findProject(':apps:desktopApp')
+    if (desktop == null) return
+    desktop.tasks.register('renderUx128SystemSpecimens', org.gradle.api.tasks.JavaExec) {
+        group = 'verification'
+        description = 'Native Compose light/dark/high-contrast status, bilingual type and icon-density studies'
+        dependsOn(desktop.tasks.named('testClasses'))
+        classpath = desktop.sourceSets.test.runtimeClasspath
+        mainClass.set('com.hiltech.desktop.evidence.UX128SystemSpecimenEvidenceKt')
+    }
+}
