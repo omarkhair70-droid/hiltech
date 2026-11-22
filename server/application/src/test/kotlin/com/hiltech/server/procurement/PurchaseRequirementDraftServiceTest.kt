@@ -93,6 +93,7 @@ class PurchaseRequirementDraftServiceTest {
         Mockito.`when`(project.organizationId).thenReturn(org)
         Mockito.`when`(projectAuth.canRequestResources(actor, project)).thenReturn(true)
         Mockito.`when`(stock.item(itemId)).thenReturn(item)
+        Mockito.`when`(reservations.stockUnitActive(org, "PCS")).thenReturn(true)
         Mockito.`when`(reservations.balances(itemId, at)).thenReturn(
             listOf(StockCapacity(itemId, binId, BigDecimal("2"), 7, BigDecimal("4"))),
         )
@@ -100,11 +101,19 @@ class PurchaseRequirementDraftServiceTest {
         Mockito.`when`(bin.organizationId).thenReturn(org)
         Mockito.`when`(bin.lifecycleState).thenReturn(StorageLocationLifecycle.ACTIVE)
         Mockito.`when`(warehouseAuth.canViewStorage(actor, bin)).thenReturn(true)
+        // Mockito's Java matcher returns null during stubbing; Kotlin non-null parameters
+        // require a concrete fallback value while the matcher remains registered.
+        val placeholder = PurchaseRequirementDraftRecord(
+            UUID.randomUUID(), operation, org, workId, 5, itemId, 3,
+            BigDecimal("3"), "PCS", "Test", "WAREHOUSE_REVIEW_REQUIRED",
+            null, at, actor, at, "test-correlation",
+        )
         Mockito.doAnswer { invocation ->
             written = invocation.getArgument<PurchaseRequirementDraftRecord>(0)
             Unit
-        }.`when`(drafts).insert(any(PurchaseRequirementDraftRecord::class.java))
-        Mockito.`when`(drafts.byId(any(UUID::class.java))).thenAnswer { written }
+        }.`when`(drafts).insert(any(PurchaseRequirementDraftRecord::class.java) ?: placeholder)
+        Mockito.`when`(drafts.byId(any(UUID::class.java) ?: UUID.randomUUID()))
+            .thenAnswer { written }
     }
 
     @Test fun `feature is off by default without reading source`() {
@@ -132,6 +141,14 @@ class PurchaseRequirementDraftServiceTest {
         assertEquals("PROCUREMENT_UNAVAILABLE",
             assertThrows<ProductApiException> { service().create(context, workId, request) }.code)
         assertEquals(0, applied)
+    }
+
+    @Test fun `inactive canonical stock unit is rejected`() {
+        allow()
+        Mockito.`when`(reservations.stockUnitActive(org, "PCS")).thenReturn(false)
+        assertEquals("PROCUREMENT_UNAVAILABLE",
+            assertThrows<ProductApiException> { service().create(context, workId, request) }.code)
+        assertNull(written)
     }
 
     @Test fun `stale WorkOrder is rejected before any draft is inserted`() {

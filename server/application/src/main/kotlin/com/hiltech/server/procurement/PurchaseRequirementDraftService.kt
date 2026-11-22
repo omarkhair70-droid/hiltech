@@ -216,8 +216,11 @@ class PurchaseRequirementDraftService @Autowired constructor(
         return order
     }
 
-    private fun matchingItem(order: WorkOrderSnapshot, id: UUID): StockItemView =
-        stock.item(id)?.takeIf { it.active && it.organizationId == order.organizationId } ?: hidden()
+    private fun matchingItem(order: WorkOrderSnapshot, id: UUID): StockItemView {
+        val item = stock.item(id)?.takeIf { it.active && it.organizationId == order.organizationId } ?: hidden()
+        if (!reservations.stockUnitActive(order.organizationId, item.baseUnitCode)) hidden()
+        return item
+    }
 
     private fun parseQuantity(raw: String): BigDecimal {
         if (!Regex("[0-9]{1,12}(\\.[0-9]{1,6})?").matches(raw)) invalid()
