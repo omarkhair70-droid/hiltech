@@ -235,6 +235,81 @@ class Payroll9bDraftPostgresContractTest {
                 UUID.fromString(first.first.runVersionId))
         }
 
+        // Routine payroll release is signed by a policy-authorized reviewer,
+        // does not create a payment, and cannot bypass the latest source guard.
+        var policyAvailable = false
+        var decisionVersion = 1
+        val policyDecision = object : PayrollRunReleaseDecisionPort {
+            override fun resolve(
+                actorId: UUID, subject: ApprovalSubjectRef, policyKey: String,
+            ): PayrollRunPolicyDecision? =
+                if (policyAvailable && actorId == actor &&
+                    subject == currentSubject && policyKey == "PAYROLL_REVIEW_TEST"
+                ) PayrollRunPolicyDecision(
+                    "ROUTINE_AUTHORIZED", policyKey, decisionVersion, null,
+                ) else null
+        }
+        val releases = Payroll9bRunReleaseService(
+            jdbc, service, permission, guard, policyDecision,
+            AuditEventWriter.NOOP, clock, "PAYROLL_REVIEW_TEST",
+        )
+        assertThrows<ProductApiException> {
+            tx.execute {
+                releases.release(actor, currentSubject.subjectId, UUID.randomUUID(), "p9b-release")
+            }
+        }
+        policyAvailable = true
+        assertThrows<ProductApiException> {
+            tx.execute {
+                releases.release(actor, previousSubject.subjectId, UUID.randomUUID(), "p9b-release")
+            }
+        }
+        val releaseOperation = UUID.randomUUID()
+        val released = tx.execute {
+            releases.release(actor, currentSubject.subjectId, releaseOperation, "p9b-release")
+        }!!
+        assertEquals("RELEASED_FOR_FINANCE_REVIEW", released.status)
+        assertEquals("ROUTINE_AUTHORIZED", released.decisionPath)
+        assertFalse(released.replayed)
+        assertTrue(tx.execute {
+            releases.release(actor, currentSubject.subjectId, releaseOperation, "p9b-release")
+        }!!.replayed)
+        assertThrows<ProductApiException> {
+            tx.execute {
+                releases.release(UUID.randomUUID(), currentSubject.subjectId,
+                    UUID.randomUUID(), "p9b-release")
+            }
+        }
+        assertThrows<ProductApiException> {
+            tx.execute {
+                releases.release(actor, currentSubject.subjectId,
+                    UUID.randomUUID(), "p9b-release")
+            }
+        }
+        assertThrows<Exception> {
+            jdbc.update(
+                "UPDATE payroll_run_release SET policy_version = 99 WHERE id = ?",
+                UUID.fromString(released.releaseId),
+            )
+        }
+        val realPublication = ApprovalBackedPayrollPublication(
+            guard, policyDecision, jdbc, "PAYROLL_REVIEW_TEST",
+        )
+        assertTrue(realPublication.canPublish(
+            org, currentSubject.subjectId, newer.first.sourceFingerprint,
+        ))
+        assertFalse(realPublication.canPublish(
+            org, currentSubject.subjectId, "invalid-snapshot",
+        ))
+        assertFalse(realPublication.canPublish(
+            UUID.randomUUID(), currentSubject.subjectId, newer.first.sourceFingerprint,
+        ))
+        decisionVersion = 2
+        assertFalse(realPublication.canPublish(
+            org, currentSubject.subjectId, newer.first.sourceFingerprint,
+        ))
+        decisionVersion = 1
+
         // 9C: even with a draft ledger, no payslip is visible unless a
         // separately approved publication source and Finance-result source exist.
         val notPublished = Payroll9cPayslipService(
@@ -246,13 +321,7 @@ class Payroll9bDraftPostgresContractTest {
         assertTrue(notPublished.own(actor, org, "p9c-private").items.isEmpty())
         val publishedRunId = UUID.fromString(newer.first.runVersionId)
         val instructionId = UUID.randomUUID()
-        val approval = object : PayrollRunPublicationPort {
-            override fun canPublish(
-                organizationId: UUID, runVersionId: UUID, exactSourceFingerprint: String,
-            ): Boolean = organizationId == org &&
-                runVersionId == publishedRunId &&
-                exactSourceFingerprint == newer.first.sourceFingerprint
-        }
+        val approval: PayrollRunPublicationPort = realPublication
         val financeInstruction = PayrollExpectedPayment(
             organizationId = org, runVersionId = publishedRunId,
             employeeId = employee, financeInstructionId = instructionId,
