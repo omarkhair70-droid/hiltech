@@ -21,6 +21,33 @@ CREATE TABLE procurement_service_need (
     FOREIGN KEY (team_id, organization_id) REFERENCES team(id, organization_id)
       ON DELETE RESTRICT
 );
+-- A direct database insert cannot invent a source or a requester membership.
+-- Named requester/reviewer authority is additionally checked by the server.
+CREATE FUNCTION guard_procurement_service_need_root() RETURNS trigger
+LANGUAGE plpgsql AS $
+BEGIN
+  IF NOT EXISTS (
+      SELECT 1 FROM team t JOIN organization o ON o.id=t.organization_id
+      WHERE t.id=NEW.team_id AND t.organization_id=NEW.organization_id
+        AND t.active=true AND t.version=NEW.team_version
+        AND o.status='ACTIVE' AND o.organization_type='HILTECH'
+  ) OR NOT EXISTS (
+      SELECT 1 FROM team_membership m
+      WHERE m.team_id=NEW.team_id
+        AND m.user_identity_id=NEW.requested_by_user_id
+        AND m.valid_from<=NEW.created_at
+        AND (m.valid_until IS NULL OR m.valid_until>NEW.created_at)
+  ) THEN
+    RAISE EXCEPTION 'Service need requires current internal team and requester'
+      USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END;
+$;
+CREATE TRIGGER procurement_service_need_root_guard
+BEFORE INSERT ON procurement_service_need
+FOR EACH ROW EXECUTE FUNCTION guard_procurement_service_need_root();
+
 CREATE INDEX idx_procurement_service_need_team
   ON procurement_service_need (organization_id, team_id, created_at DESC, id DESC);
 CREATE TRIGGER procurement_service_need_immutable
