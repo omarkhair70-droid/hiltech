@@ -391,13 +391,9 @@ class ServiceDeliveryInvoiceService @org.springframework.beans.factory.annotatio
                 rs.getString("evidence_sha256"))},
             inv.org,inv.order,
         ).singleOrNull()
-        val result=when {
-            last==null -> "NO_ACCEPTANCE"
-            last.outcome!="ACCEPTED" -> "DELIVERY_REVIEW_REQUIRED"
-            order.currency!=inv.currency -> "CURRENCY_MISMATCH"
-            order.total.compareTo(inv.total)!=0 -> "AMOUNT_MISMATCH"
-            else -> "MATCHED"
-        }
+        val result=ServiceInvoiceMatchRules.classify(ServiceInvoiceMatchFacts(
+            last?.outcome,order.currency,inv.currency,order.total,inv.total,
+        ))
         val sha=sha256(fingerprint(
             order.id,order.quote,order.approval,order.currency,
             order.total.toPlainString(),inv.id,inv.evidenceId,
