@@ -195,6 +195,31 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
             { row, _ -> row.draft() }, id,
         ).singleOrNull()
 
+    /** Called while holding the actual Asset row lock: no 100-row UI limit
+     * can hide an open duplicate stock need for the same equipment issue. */
+    fun hasOpenAssetNeed(
+        organizationId: UUID, assetId: UUID, incidentId: UUID?,
+        maintenanceId: UUID?, stockItemId: UUID,
+    ): Boolean = jdbc.queryForObject(
+        """
+        SELECT EXISTS (
+            SELECT 1 FROM procurement_purchase_requirement p
+            LEFT JOIN LATERAL (
+                SELECT t.to_state FROM procurement_requirement_transition t
+                WHERE t.requirement_id=p.id
+                ORDER BY t.result_version DESC LIMIT 1
+            ) latest ON TRUE
+            WHERE p.organization_id=? AND p.asset_id=?
+              AND p.source_type='ASSET_MAINTENANCE_OR_REPLACEMENT'
+              AND p.asset_incident_id IS NOT DISTINCT FROM ?::uuid
+              AND p.asset_maintenance_id IS NOT DISTINCT FROM ?::uuid
+              AND p.stock_item_id=?
+              AND COALESCE(latest.to_state,'DRAFT') NOT IN ('WITHDRAWN','REJECTED')
+        )
+        """.trimIndent(), Boolean::class.java,
+        organizationId, assetId, incidentId, maintenanceId, stockItemId,
+    ) == true
+
     fun forAsset(assetId: UUID): List<PurchaseRequirementDraftRecord> = jdbc.query(
         """
         SELECT * FROM procurement_purchase_requirement

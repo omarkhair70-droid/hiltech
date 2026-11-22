@@ -111,13 +111,10 @@ class AssetPurchaseNeedService @Autowired constructor(
                 currentItem.baseUnitCode != input.unitCode) stale()
             // The same still-open equipment issue and StockItem must not
             // generate two live purchase needs in concurrent sessions.
-            val duplicate = drafts.forAsset(assetId).any { previous ->
-                previous.stockItemId == item.id &&
-                    previous.assetIncidentId == input.incidentId &&
-                    previous.assetMaintenanceId == input.maintenanceId &&
-                    (drafts.latestTransition(previous.id)?.toState ?: "DRAFT") !in
-                    setOf("WITHDRAWN", "REJECTED")
-            }
+            val duplicate = drafts.hasOpenAssetNeed(
+                current.asset.organizationId, assetId,
+                input.incidentId, input.maintenanceId, item.id,
+            )
             if (duplicate) throw ProductApiException(
                 "ASSET_PURCHASE_NEED_ALREADY_OPEN",
                 "An active purchase need already exists for this equipment issue and stock item.",
