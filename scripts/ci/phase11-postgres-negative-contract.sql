@@ -112,13 +112,82 @@ VALUES('a11a11a1-0000-4000-8000-000000000019',
        now()+interval '1 day',1,'a11a11a1-0000-4000-8000-000000000020',
        'a11a11a1-0000-4000-8000-000000000003',now());
 
-DO $$
+-- Synthetic READY Work Evidence and a finding on the same project/site.
+INSERT INTO evidence(
+  id,organization_id,target_type,target_id,work_order_id,
+  evidence_type_code,content_type,size_bytes,sha256,captured_at,
+  captured_by_user_id,storage_state,classification_code,client_visibility_mode,created_at)
+VALUES('a11a11a1-0000-4000-8000-000000000030',
+       'a11a11a1-0000-4000-8000-000000000001',
+       'WORK_ORDER','a11a11a1-0000-4000-8000-000000000007',
+       'a11a11a1-0000-4000-8000-000000000007',
+       'SITE_PHOTO','image/jpeg',128,repeat('b',64),now(),
+       'a11a11a1-0000-4000-8000-000000000003',
+       'READY','INTERNAL','INTERNAL_ONLY',now());
+INSERT INTO service_maintenance_finding(
+  id,visit_id,organization_id,project_id,work_order_id,
+  finding_type_code,severity_code,description,evidence_id,
+  source_operation_id,created_by_user_id,created_at)
+VALUES('a11a11a1-0000-4000-8000-000000000031',
+       'a11a11a1-0000-4000-8000-000000000019',
+       'a11a11a1-0000-4000-8000-000000000001',
+       'a11a11a1-0000-4000-8000-000000000004',
+       'a11a11a1-0000-4000-8000-000000000007',
+       'DEFECT','HIGH','Source finding with actual READY Evidence',
+       'a11a11a1-0000-4000-8000-000000000030',
+       'a11a11a1-0000-4000-8000-000000000032',
+       'a11a11a1-0000-4000-8000-000000000003',now());
+INSERT INTO service_maintenance_ticket_followup(
+  id,finding_id,visit_id,organization_id,project_id,ticket_id,
+  reason,source_operation_id,recorded_by_user_id,recorded_at)
+VALUES('a11a11a1-0000-4000-8000-000000000033',
+       'a11a11a1-0000-4000-8000-000000000031',
+       'a11a11a1-0000-4000-8000-000000000019',
+       'a11a11a1-0000-4000-8000-000000000001',
+       'a11a11a1-0000-4000-8000-000000000004',
+       'a11a11a1-0000-4000-8000-000000000008',
+       'Original finding linked to the internal support case',
+       'a11a11a1-0000-4000-8000-000000000034',
+       'a11a11a1-0000-4000-8000-000000000003',now());
+
+DO $
 DECLARE
  ticket_count integer;
 BEGIN
  SELECT count(*) INTO ticket_count FROM service_support_case_event
   WHERE ticket_id='a11a11a1-0000-4000-8000-000000000008';
  IF ticket_count<>2 THEN RAISE EXCEPTION 'Expected two genuine valid support events'; END IF;
+
+ IF (SELECT count(*) FROM service_maintenance_ticket_followup
+       WHERE finding_id='a11a11a1-0000-4000-8000-000000000031')<>1 THEN
+   RAISE EXCEPTION 'Valid same-project finding follow-up is not durable';
+ END IF;
+
+ BEGIN
+  INSERT INTO service_maintenance_ticket_followup(
+    id,finding_id,visit_id,organization_id,project_id,ticket_id,
+    reason,source_operation_id,recorded_by_user_id,recorded_at)
+  VALUES('a11a11a1-0000-4000-8000-000000000035',
+         'a11a11a1-0000-4000-8000-000000000031',
+         'a11a11a1-0000-4000-8000-000000000019',
+         'a11a11a1-0000-4000-8000-000000000001',
+         'a11a11a1-0000-4000-8000-000000000004',
+         'a11a11a1-0000-4000-8000-000000000008',
+         'Forged duplicate for same finding',
+         'a11a11a1-0000-4000-8000-000000000036',
+         'a11a11a1-0000-4000-8000-000000000003',now());
+  RAISE EXCEPTION 'INVALID: same finding linked to support twice';
+ EXCEPTION WHEN unique_violation THEN
+  RAISE NOTICE 'PASS duplicate finding follow-up rejected';
+ END;
+
+ BEGIN
+  UPDATE service_maintenance_ticket_followup SET reason='Forged change'
+   WHERE finding_id='a11a11a1-0000-4000-8000-000000000031';
+  RAISE EXCEPTION 'INVALID: immutable maintenance follow-up edited';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS follow-up history immutability';
+ END;
 
  -- Cannot falsely close a still-investigating ticket.
  BEGIN

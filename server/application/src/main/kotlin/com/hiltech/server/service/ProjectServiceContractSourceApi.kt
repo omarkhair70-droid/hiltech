@@ -61,8 +61,11 @@ object ServiceContractSourcePolicy {
             source == null -> "NO_SIGNED_COMMERCIAL_SOURCE"
             !source.signedEvidenceReady || !source.verifiedPoEvidenceReady ->
                 "SIGNED_SOURCE_DOCUMENT_VERIFICATION_PENDING"
-            else -> "SIGNED_SOURCE_DOCUMENTS_READY"
+            else -> "SIGNED_RECORD_STORAGE_READY_AWARD_NOT_REVALIDATED"
         }
+        // READY storage metadata is NOT canonical P10 SALES_AWARD revalidation.
+        // P10's award gate also checks target/id/type, upload session, scans,
+        // classification and approval authority; do not claim legal verification.
         // Even READY signed Evidence and VERIFIED client PO do not interpret
         // warranty-text, renewals, ticket entitlements or SLA targets.
         return ProjectServiceContractSourceDto(

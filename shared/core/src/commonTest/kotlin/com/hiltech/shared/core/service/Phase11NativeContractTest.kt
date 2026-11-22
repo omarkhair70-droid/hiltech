@@ -161,7 +161,7 @@ class Phase11NativeContractTest {
                 content = """
                 {
                     "projectId":"$project",
-                    "sourceState":"SIGNED_SOURCE_DOCUMENTS_READY",
+                    "sourceState":"SIGNED_RECORD_STORAGE_READY_AWARD_NOT_REVALIDATED",
                     "contractId":"$handover",
                     "clientPoId":"$ticket",
                     "sourceEffectiveDate":"2026-11-23",
@@ -186,11 +186,62 @@ class Phase11NativeContractTest {
             correlationIdProvider = { "phase11-corr" },
         ))
         val source = client.read(project, installation)
-        assertEquals("SIGNED_SOURCE_DOCUMENTS_READY", source.sourceState)
+        assertEquals("SIGNED_RECORD_STORAGE_READY_AWARD_NOT_REVALIDATED", source.sourceState)
         assertTrue(source.hasWrittenWarrantyTerms)
         assertEquals("NOT_EVALUATED", source.warrantyEntitlementState)
         assertEquals("NOT_APPROVED", source.maintenanceScheduleState)
         assertEquals("INTERNAL_ONLY", source.clientVisibility)
+    }
+
+    @Test
+    fun maintenanceFindingLinksToExistingCaseWithoutCreatingAnotherTicket() = runBlocking {
+        val finding = "99999999-9999-4999-8999-999999999999"
+        val followup = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val paths = mutableListOf<Pair<String, String?>>()
+        val http = HttpClient(MockEngine { request ->
+            paths += request.url.encodedPath to request.headers["Idempotency-Key"]
+            val response = """
+            {
+                "followupId":"$followup",
+                "findingId":"$finding",
+                "visitId":"$visit",
+                "ticketId":"$ticket",
+                "reason":"Observed failed connection during field inspection",
+                "visibility":"INTERNAL_ONLY",
+                "recordedAt":"2026-11-23T01:00:00Z",
+                "duplicateReplay":false
+            }
+            """.trimIndent()
+            respond(
+                if (request.method == HttpMethod.Get) "[" + response + "]" else response,
+                HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val client = MaintenanceTicketFollowupApiClient(HiltechApiClient(
+            client = http,
+            baseUrl = "https://api.hiltech.test",
+            accessTokenProvider = { "phase11-token" },
+            correlationIdProvider = { "phase11-corr" },
+        ))
+        val linked = client.link(project, visit, finding,
+            LinkMaintenanceFindingTicketDto(
+                operationId = operation,
+                ticketId = ticket,
+                reason = "Observed failed connection during field inspection",
+            ), installation)
+        assertEquals(ticket, linked.ticketId)
+        assertEquals("INTERNAL_ONLY", linked.visibility)
+        val history = client.forVisit(project, visit, installation)
+        assertEquals(finding, history.single().findingId)
+        assertEquals(
+            "/v1/projects/$project/maintenance-visits/$visit/ticket-followups/$finding" to operation,
+            paths[0],
+        )
+        assertEquals(
+            "/v1/projects/$project/maintenance-visits/$visit/ticket-followups" to null,
+            paths[1],
+        )
     }
 
     @Test

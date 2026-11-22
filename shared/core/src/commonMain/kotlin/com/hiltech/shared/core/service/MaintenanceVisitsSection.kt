@@ -33,6 +33,8 @@ data class MaintenanceUiState(
     val visits: List<MaintenanceVisitDto> = emptyList(),
     val selectedVisit: MaintenanceVisitDto? = null,
     val findings: List<MaintenanceFindingDto> = emptyList(),
+    val supportTicketChoices: List<InternalSupportTicketDto> = emptyList(),
+    val findingTicketLinks: List<MaintenanceTicketFollowupDto> = emptyList(),
     val sourceStatus: MaintenanceSourceStatusDto? = null,
     val readyEvidence: List<MaintenanceReadyEvidenceDto> = emptyList(),
     val errorMessage: String? = null,
@@ -53,6 +55,9 @@ fun MaintenanceVisitsSection(
         visitId: String, evidenceId: String, typeCode: String,
         severityCode: String, description: String,
     ) -> Unit,
+    onLinkFindingTicket: (
+        findingId: String, ticketId: String, reason: String,
+    ) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var selectedWorkId by remember { mutableStateOf<String?>(null) }
@@ -61,6 +66,9 @@ fun MaintenanceVisitsSection(
     var findingType by remember(state.selectedVisit?.visitId) { mutableStateOf("") }
     var findingSeverity by remember(state.selectedVisit?.visitId) { mutableStateOf("") }
     var findingDescription by remember(state.selectedVisit?.visitId) { mutableStateOf("") }
+    var selectedFindingId by remember(state.selectedVisit?.visitId) { mutableStateOf<String?>(null) }
+    var selectedSupportTicketId by remember(state.selectedVisit?.visitId) { mutableStateOf<String?>(null) }
+    var followupReason by remember(state.selectedVisit?.visitId) { mutableStateOf("") }
     val selectedWork = state.workChoices.firstOrNull { it.workOrderId == selectedWorkId }
 
     Column(
@@ -146,6 +154,61 @@ fun MaintenanceVisitsSection(
                 Text(finding.description)
                 Text("Evidence " + finding.evidenceId.take(8),
                     style = MaterialTheme.typography.bodySmall)
+                val linked = state.findingTicketLinks.firstOrNull {
+                    it.findingId == finding.findingId && it.visitId == visit.visitId
+                }
+                if (linked != null) {
+                    Text("Follow-up: existing support ticket " + linked.ticketId.take(8),
+                        style = MaterialTheme.typography.bodySmall)
+                } else {
+                    OutlinedButton(
+                        enabled = !state.loading,
+                        onClick = {
+                            selectedFindingId = finding.findingId
+                            selectedSupportTicketId = null
+                        },
+                    ) { Text("Link existing support ticket") }
+                }
+            }
+            val toLink = state.findings.firstOrNull { it.findingId == selectedFindingId }
+            if (toLink != null && state.findingTicketLinks.none {
+                    it.findingId == toLink.findingId
+                }) {
+                Text("Follow-up for " + toLink.findingTypeCode,
+                    style = MaterialTheme.typography.titleMedium)
+                Text("Choose a real open support ticket in this same project. " +
+                    "The link does not create a new ticket, work order, PO or invoice.",
+                    style = MaterialTheme.typography.bodySmall)
+                val available = state.supportTicketChoices.filter {
+                    it.internalCaseState in setOf("OPEN", "INVESTIGATING")
+                }
+                if (available.isEmpty()) {
+                    Text("No open support ticket supplied. Open one in the Service Desk first.")
+                }
+                available.forEach { ticket ->
+                    OutlinedButton(
+                        enabled = !state.loading,
+                        onClick = { selectedSupportTicketId = ticket.ticketId },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(ticket.title +
+                            (if (selectedSupportTicketId == ticket.ticketId) " · selected" else ""))
+                    }
+                }
+                OutlinedTextField(
+                    value = followupReason, onValueChange = { followupReason = it },
+                    label = { Text("Why this finding needs follow-up") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Button(
+                    enabled = !state.loading && followupReason.isNotBlank() &&
+                        selectedSupportTicketId != null,
+                    onClick = {
+                        selectedSupportTicketId?.let {
+                            onLinkFindingTicket(toLink.findingId, it, followupReason)
+                        }
+                    },
+                ) { Text("Record internal support follow-up") }
             }
             state.sourceStatus?.takeIf { it.visitId == visit.visitId }?.let { status ->
                 Text("Canonical WorkOrder: " + status.workOrderLifecycleState +

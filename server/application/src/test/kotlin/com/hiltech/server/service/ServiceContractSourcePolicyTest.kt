@@ -49,7 +49,7 @@ class ServiceContractSourcePolicyTest {
     @Test
     fun evenReadySignedRecordsDoNotActivateWarrantyScheduleOrRenewal() {
         val dto = ServiceContractSourcePolicy.evaluate(project, true, signed)
-        assertEquals("SIGNED_SOURCE_DOCUMENTS_READY", dto.sourceState)
+        assertEquals("SIGNED_RECORD_STORAGE_READY_AWARD_NOT_REVALIDATED", dto.sourceState)
         assertEquals(signed.contractId.toString(), dto.contractId)
         assertEquals(signed.effectiveDate, dto.sourceEffectiveDate)
         assertEquals(signed.endDate, dto.sourceEndDate)
