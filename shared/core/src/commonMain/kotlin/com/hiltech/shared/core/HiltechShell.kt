@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -14,6 +15,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -256,15 +258,16 @@ fun HiltechShell(
     onTakeEvidencePhoto: (String) -> Unit = {},
     warehouseOperator: @Composable () -> Unit = {},
     procurementOperator: @Composable () -> Unit = {},
+    /** Host-visible feature flag only; the backend still authorizes every action. */
+    procurementWorkspaceAvailable: Boolean = false,
 ) {
+    val shellScroll = rememberScrollState()
     MaterialTheme {
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(
-                        rememberScrollState(),
-                    )
+                    .verticalScroll(shellScroll)
                     .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -334,6 +337,86 @@ fun HiltechShell(
                             "for this identity and context.",
                     )
 
+                    val availableWorkspaces = visibleHiltechWorkspaces(
+                        signedIn = true,
+                        procurementFeatureEnabled = procurementWorkspaceAvailable,
+                        activeOrganizationAvailable = primary != null,
+                    )
+                    var requestedWorkspace by remember(
+                        state.identity.identityId,
+                        primary?.organizationId,
+                        procurementWorkspaceAvailable,
+                    ) { mutableStateOf(HiltechWorkspace.OVERVIEW) }
+                    val activeWorkspace = allowedHiltechWorkspace(
+                        requestedWorkspace,
+                        availableWorkspaces,
+                    )
+                    // A workspace is a route, not a jump inside the old giant scroll.
+                    // Keep the user at the route heading when the page changes.
+                    LaunchedEffect(
+                        state.identity.identityId,
+                        primary?.organizationId,
+                        activeWorkspace,
+                    ) { shellScroll.scrollTo(0) }
+                    var pendingExit by remember(
+                        state.identity.identityId,
+                        primary?.organizationId,
+                        procurementWorkspaceAvailable,
+                    ) { mutableStateOf<HiltechWorkspace?>(null) }
+
+                    if (availableWorkspaces.size > 1) {
+                        HiltechWorkspaceNavigation(
+                            workspaces = availableWorkspaces,
+                            selected = activeWorkspace,
+                            onSelect = { destination ->
+                                if (destination != activeWorkspace) {
+                                    if (activeWorkspace == HiltechWorkspace.PROCUREMENT) {
+                                        pendingExit = destination
+                                    } else {
+                                        requestedWorkspace = destination
+                                    }
+                                }
+                            },
+                        )
+                    }
+                    pendingExit?.let { destination ->
+                        AlertDialog(
+                            onDismissRequest = { pendingExit = null },
+                            title = { Text("Leave Procurement workspace?") },
+                            text = {
+                                Text(
+                                    "Unsubmitted quotation fields will reset when you leave. " +
+                                        "An in-flight server request may still finish. " +
+                                        "On return, refresh the authorized source before retrying."
+                                )
+                            },
+                            confirmButton = {
+                                Button(onClick = {
+                                    requestedWorkspace = destination
+                                    pendingExit = null
+                                }) { Text("Leave and reload later") }
+                            },
+                            dismissButton = {
+                                OutlinedButton(onClick = { pendingExit = null }) {
+                                    Text("Stay in Procurement")
+                                }
+                            },
+                        )
+                    }
+
+                    if (activeWorkspace == HiltechWorkspace.PROCUREMENT) {
+                        Text(
+                            "Procurement workspace",
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                        Text(
+                            "Company access and source versions are always checked by the server.",
+                        )
+                        OutlinedButton(onClick = onSignOut) {
+                            Text("Sign out")
+                        }
+                        procurementOperator()
+                    } else {
                     state.onboarding
                         ?.takeIf {
                             it.ownCase?.employeeState ==
@@ -500,9 +583,11 @@ fun HiltechShell(
                     }
 
                     warehouseOperator()
-                    // Host applications mount procurement only with an explicit,
-                    // default-OFF feature flag. Never show it during offline mode.
-                    procurementOperator()
+                    // Legacy/disabled route remains unchanged for hosts that do
+                    // not opt into the dedicated workspace. Do not mount twice.
+                    if (availableWorkspaces.size == 1) {
+                        procurementOperator()
+                    }
 
                     state.warehouse?.let { warehouse ->
                         WarehouseSetupSection(
@@ -583,6 +668,7 @@ fun HiltechShell(
                     OutlinedButton(onClick = onSignOut) {
                         Text("Sign out")
                     }
+                    } // Overview workspace
                 }
 
                 is HiltechShellState.AccessDenied -> {

@@ -2763,6 +2763,11 @@ fun main() {
                     ::grantWarehouseAuthority,
                 onEndWarehouseAuthority =
                     ::endWarehouseAuthority,
+                procurementWorkspaceAvailable =
+                    System.getenv("HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED")
+                        ?.equals("true", ignoreCase = true) == true ||
+                    System.getenv("HILTECH_SUPPLIER_SOURCING_UI_ENABLED")
+                        ?.equals("true", ignoreCase = true) == true,
                 warehouseOperator = {
                     val signed = shellState.value as? HiltechShellState.SignedIn
                     val identity = signed?.identity
