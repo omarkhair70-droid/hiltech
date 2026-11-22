@@ -54,6 +54,7 @@ import com.hiltech.shared.core.procurement.SupplierSourcingApiClient
 import com.hiltech.shared.core.procurement.PurchaseOrderCandidateApiClient
 import com.hiltech.shared.core.procurement.PurchaseOrderIssueApiClient
 import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceApiClient
+import com.hiltech.shared.core.procurement.SupplierInvoiceDocumentUploader
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeApiClient
 import com.hiltech.shared.core.procurement.PurchaseOrderDeliveryAmendmentApiClient
 import com.hiltech.shared.core.procurement.SupplierQuoteDocumentUploader
@@ -238,6 +239,9 @@ class DesktopIdentityRuntime(
     internal val purchaseOrderCandidateApi = PurchaseOrderCandidateApiClient(productApi)
     internal val purchaseOrderIssueApi = PurchaseOrderIssueApiClient(productApi)
     internal val supplierInvoiceFinanceApi = SupplierInvoiceFinanceApiClient(productApi)
+    internal val supplierInvoiceDocumentUploader = SupplierInvoiceDocumentUploader(
+        supplierInvoiceFinanceApi, EvidenceApiClient(productApi, httpClient),
+    )
     internal val poWarehouseIntakeApi = PoWarehouseIntakeApiClient(productApi)
     internal val purchaseOrderDeliveryAmendmentApi =
         PurchaseOrderDeliveryAmendmentApiClient(productApi)
