@@ -111,6 +111,7 @@ jobs:
             --tests com.hiltech.server.procurement.PurchaseOrderIssueServiceTest \
             --tests com.hiltech.server.procurement.PurchaseOrderLifecycleServiceTest \
             --tests com.hiltech.server.procurement.PurchaseOrderDeliveryAmendmentServiceTest \
+            --tests com.hiltech.server.procurement.PurchaseOrderDeliveryAmendmentSubjectTest \
             --tests com.hiltech.server.procurement.SupplierSourcingServiceTest \
             --no-daemon --console=plain
       - name: Verify KMP buyer candidate transport
