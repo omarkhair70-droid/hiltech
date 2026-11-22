@@ -58,7 +58,8 @@ class ProcurementDemandSourceVerifier(
                     (location.activeFrom == null || location.activeFrom <= at) &&
                     (location.activeUntil == null || location.activeUntil > at) &&
                     facility.organizationId == root.organizationId && facility.active &&
-                    location.projectId == null && location.siteId == null
+                    location.projectId == null && location.siteId == null &&
+                    location.kind.name in setOf("MAIN_WAREHOUSE", "WAREHOUSE")
             }
             else -> false
         }
