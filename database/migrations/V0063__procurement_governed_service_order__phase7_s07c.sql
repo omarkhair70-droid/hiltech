@@ -145,6 +145,13 @@ DECLARE candidate procurement_service_order_candidate%ROWTYPE;
   policy approval_policy_version%ROWTYPE;
 BEGIN
   SELECT * INTO candidate FROM procurement_service_order_candidate WHERE id=NEW.candidate_id FOR UPDATE;
+  -- Quote revisions are serialized by this same canonical sourcing RFQ lock.
+  -- Direct SQL writers cannot bypass the concurrent-source check.
+  PERFORM 1 FROM procurement_service_rfq
+    WHERE id=NEW.rfq_id AND organization_id=NEW.organization_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Service order RFQ source missing' USING ERRCODE='23514';
+  END IF;
   SELECT * INTO approval FROM approval_request WHERE id=NEW.approval_request_id FOR UPDATE;
   SELECT * INTO policy FROM approval_policy_version
     WHERE organization_id=NEW.organization_id AND policy_key=NEW.approval_policy_key
