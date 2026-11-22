@@ -88,6 +88,22 @@ class Payroll9bDraftPostgresContractTest {
             employment, employee, LocalDate.parse("2026-10-01"), time, time,
         )
 
+        // A historical assignment ending mid-period remains valid for that
+        // period; do not compare against today's ACTIVE assignment instead.
+        val historicalAssignment = UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO workforce_assignment (
+                id, organization_id, employee_id, role_code, state,
+                effective_from, effective_to, created_at, updated_at
+            ) VALUES (?, ?, ?, 'TECHNICIAN', 'ENDED', ?, ?, ?, ?)
+            """.trimIndent(),
+            historicalAssignment, org, employee,
+            Instant.parse("2026-11-01T00:00:00Z").atOffset(ZoneOffset.UTC),
+            Instant.parse("2026-11-12T20:00:00Z").atOffset(ZoneOffset.UTC),
+            time, time,
+        )
+
         jdbc.update("UPDATE user_identity SET person_id = ? WHERE id = ?", person, actor)
         val membership = UUID.randomUUID()
         jdbc.update(
@@ -189,6 +205,21 @@ class Payroll9bDraftPostgresContractTest {
         )
         assertFalse(guard.isCurrent(previousSubject))
         assertTrue(guard.isCurrent(currentSubject))
+        // A future assignment after the cutoff must not rewrite history.
+        val futureAssignment = UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO workforce_assignment (
+                id, organization_id, employee_id, role_code, state,
+                effective_from, created_at, updated_at
+            ) VALUES (?, ?, ?, 'TECHNICIAN', 'ACTIVE', ?, ?, ?)
+            """.trimIndent(),
+            futureAssignment, org, employee,
+            Instant.parse("2026-11-24T09:00:00Z").atOffset(ZoneOffset.UTC),
+            time, time,
+        )
+        assertTrue(guard.isCurrent(currentSubject))
+        assertFalse(a.detail(actor, periodId).employees.single().sourceChanged)
         assertFalse(guard.isCurrent(currentSubject.copy(organizationId = UUID.randomUUID())))
         assertFalse(guard.isCurrent(currentSubject.copy(subjectVersion = 2)))
         assertThrows<Exception> {
@@ -271,6 +302,11 @@ class Payroll9bDraftPostgresContractTest {
             self.own(actor, org, "p9c-private")
         }
 
+        jdbc.update(
+            "UPDATE workforce_assignment SET version = version + 1, updated_at = ? WHERE id = ?",
+            time.plusSeconds(1), historicalAssignment,
+        )
+        assertFalse(guard.isCurrent(currentSubject))
         jdbc.update("UPDATE employee SET version = version + 1 WHERE id = ?", employee)
         assertFalse(guard.isCurrent(currentSubject))
         assertThrows<ProductApiException> {
