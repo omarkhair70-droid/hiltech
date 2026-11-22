@@ -42,9 +42,9 @@ class FinanceExpenseReceiptUploader(
         require(input.bytes.size in 1..(16 * 1024 * 1024)) {
             "Receipt PDF/image must be 1 byte to 16 MiB."
         }
-        require(input.contentType in setOf(
-            "application/pdf", "image/png", "image/jpeg",
-        )) { "Only PDF, PNG or JPEG expense receipt bytes are permitted." }
+        require(FinanceReceiptBytes.validSelectedReceipt(input.bytes, input.contentType)) {
+            "Receipt bytes do not match a valid supported PDF, PNG or JPEG signature."
+        }
         require(Regex("^[0-9a-f]{64}$").matches(input.sha256)) {
             "SHA-256 of selected receipt bytes required."
         }
