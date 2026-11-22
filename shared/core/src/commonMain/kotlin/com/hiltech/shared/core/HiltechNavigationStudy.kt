@@ -60,10 +60,15 @@ data class HiltechNavigationScope(
     val identityId: String,
     val organizationId: String,
     val contextName: String,
+    // Exact project/site/warehouse context ID, not the human label.
+    // A new object context must reset the previous selection/history.
+    val contextId: String,
     val entries: List<HiltechNavigationEntry>,
     val preferredArea: HiltechNavigationArea,
 ) {
-    val key: String get() = "${identityId.length}:${identityId}${organizationId.length}:${organizationId}"
+    val key: String
+        get() = listOf(identityId, organizationId, contextId)
+            .joinToString(separator = "") { "${it.length}:$it" }
 }
 
 data class HiltechNavigationTrace(
