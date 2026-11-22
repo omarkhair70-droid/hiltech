@@ -163,6 +163,12 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
         ).isNotEmpty()
     }
 
+    /** Supplier register writes lock this organization FOR UPDATE; hold it while issuing. */
+    fun lockCurrentPurchasingOrganization(organizationId: UUID): Boolean = jdbc.query(
+        "SELECT id FROM organization WHERE id = ? AND status = 'ACTIVE' FOR SHARE",
+        { rs, _ -> rs.getObject("id", UUID::class.java) }, organizationId,
+    ).isNotEmpty()
+
     /** Existing Phase-2 request is the ONLY approval evidence; no client attestation. */
     fun lockApprovedCandidate(
         organizationId: UUID,
