@@ -81,9 +81,14 @@ lifecycle, not a silent mutation or second competing active selection.
   candidate, RFQ/source revision, current WorkOrder and StockItem, supplier
   link, latest quote revision, technical COMPLIANT decision, quote validity,
   and READY restricted Evidence. A changed fact invalidates the subject.
-  **Still to implement:** initiating the correct ApprovalEngine request,
-  selecting the company's active policy/authority version, and consuming
-  the final decision for PO issue. No hard-coded Mohamed/Ahmed or thresholds.
+  The existing `ApprovalEngineService.requestException` is now exposed
+  by a separate authenticated S03 action for the exact candidate subject.
+  It derives the *company-configured*, active policy and authority version
+  through the canonical ApprovalEngine. There is no client-selected policy,
+  no hard-coded Mohamed/Ahmed or threshold and no automatic approver bypass.
+  **Still to implement:** consuming the completed approval (or company's
+  explicit no-approval policy) before actual PO issue and the full PO
+  amendment/cancellation lifecycle.
 - Human approval or explicitly configured no-approval path, authorized PO
   issue/numbering/delivery destination and supplier-facing PO version.
 - Amendment/supersession/cancellation/reapproval rules and native buyer /
@@ -113,3 +118,30 @@ trusted **current-source check**, not a new permissions mechanism. An owner,
 engineer, procurement user or warehouse keeper does not gain any extra
 financial authority by appearing in the domain documentation. The
 company's actual approval bindings remain in the canonical ApprovalEngine.
+
+## Real canonical ApprovalEngine request — no PO shortcut
+
+`POST /v1/sourcing/po-candidates/{candidateId}/request-approval`
+with `operationId` rechecks a restricted buyer, exact immutable candidate
+version and current WorkOrder/item/quote/supplier/reviewer/Evidence source,
+then calls the **existing** `ApprovalEngineService.requestException` with
+subject type `PROCUREMENT_PO_CANDIDATE`, version 1, and
+`allowAuthorityBypass=false`. The policy key comes exclusively from
+server setting `hiltech.procurement.approval-policy-key`, not the buyer
+request. If the policy is missing, it fails closed; it never auto-seeds a
+policy or turns an owner persona into a system-wide approver.
+
+Server gates (all default OFF/unconfigured):
+- `hiltech.procurement.sourcing.enabled=false`
+- `hiltech.procurement.po-candidates.enabled=false`
+- `hiltech.procurement.approval-request.enabled=false`
+- `hiltech.procurement.approval-policy-key` empty until owner/company config
+- Native Windows: `HILTECH_PO_CANDIDATES_UI_ENABLED` and the separate
+  `HILTECH_PO_APPROVAL_REQUEST_UI_ENABLED`, both opt-in.
+
+The ApprovalEngine resolves active, versioned policy and current scoped
+authority; its existing decision endpoint owns the final human action.
+Even a policy result of NO_APPROVAL_REQUIRED does **not** issue a PO;
+PO issuance is a separate, still-unimplemented authorized command.
+The client exposes an approval request state with policy version and never
+suggests that an approval request is itself purchase authorization.
