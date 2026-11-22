@@ -25,7 +25,7 @@ data class FinanceExpenseReceiptUploadResult(
     val evidenceId: String,
     val storageState: String,
     val uploadedReceiptReady: Boolean,
-    val pendingSecurityScan: Boolean,
+    val quarantined: Boolean,
 )
 
 /**
@@ -111,7 +111,7 @@ class FinanceExpenseReceiptUploader(
             evidenceId = metadata.evidenceId,
             storageState = metadata.storageState,
             uploadedReceiptReady = metadata.storageState == "READY",
-            pendingSecurityScan = metadata.storageState == "QUARANTINED",
+            quarantined = metadata.storageState == "QUARANTINED",
         )
 
     private fun checkScope(
