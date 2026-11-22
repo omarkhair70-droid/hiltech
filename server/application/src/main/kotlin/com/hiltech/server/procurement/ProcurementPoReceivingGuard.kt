@@ -3,6 +3,7 @@ package com.hiltech.server.procurement
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.warehouse.ReceivingRecordView
 import com.hiltech.server.warehouse.ReceivingSourceType
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
@@ -21,7 +22,7 @@ import java.util.UUID
  * transaction and serialized on the immutable PO parent row.
  */
 @Service
-class ProcurementPoReceivingGuard(
+class ProcurementPoReceivingGuard @Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val orders: PurchaseOrderIssuePersistence,
     @Value("\${hiltech.procurement.po-receiving.enabled:false}")
