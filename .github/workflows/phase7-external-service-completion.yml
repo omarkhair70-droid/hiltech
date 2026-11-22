@@ -56,6 +56,7 @@ jobs:
             --tests com.hiltech.server.procurement.ServiceOrderApprovalTest \
             --tests com.hiltech.server.procurement.ServiceDeliveryInvoiceSafetyTest \
             --tests com.hiltech.server.procurement.ServiceInvoiceMatchRulesTest \
+            --tests com.hiltech.server.procurement.ServicePurchaseProtectedDocumentTest \
             --no-daemon --console=plain
       - name: Compile Windows and Android actual clients
         run: |
