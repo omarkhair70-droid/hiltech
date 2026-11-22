@@ -180,14 +180,14 @@ class ExecutiveHomeServiceTest {
 
         // One correctly configured actor + org with a present FGA tuple.
         assertEquals(organization.toString(), service.home(actor, organization, "allowed").organizationId)
-        assertEquals(1, openFgaCalls)
+        assertEquals(2, openFgaCalls)
 
         // Neither an invented organization nor a second account can use the
         // authorized actor's source readings.
         assertEquals("EXECUTIVE_HOME_NOT_FOUND", assertThrows<ProductApiException> {
             service.home(actor, UUID.randomUUID(), "foreign-org")
         }.code)
-        assertEquals(1, openFgaCalls)
+        assertEquals(2, openFgaCalls)
 
         // Live source revocation must deny BEFORE even asking OpenFGA.
         currentlyActive = false
@@ -212,6 +212,57 @@ class ExecutiveHomeServiceTest {
         assertEquals(null, sources.projectsActor)
         assertEquals(null, sources.assetsActor)
         assertEquals(actor, previousInboxActor)
+    }
+
+    @Test
+    fun membershipRevokedWhileReadingNeverReleasesComposedData() {
+        var checks = 0
+        val access = object : ExecutiveOrganizationAccess {
+            override fun isCurrentMember(actor: UUID, organizationId: UUID): Boolean {
+                checks += 1
+                return checks == 1
+            }
+        }
+        val sources = CapturingSources()
+        val service = ExecutiveHomeService(sources, access, clock)
+        val denial = assertThrows<ProductApiException> {
+            service.home(actor, organization, "revoked-mid-read")
+        }
+        assertEquals("EXECUTIVE_HOME_NOT_FOUND", denial.code)
+        assertEquals(2, checks)
+        // Producers may have run with their own ACL, but the aggregate
+        // response must not be returned after company membership disappears.
+        assertEquals(actor, sources.needsActor)
+        assertEquals(actor, sources.projectsActor)
+        assertEquals(actor, sources.assetsActor)
+    }
+
+    @Test
+    fun executiveCompositionTimestampFollowsProducerReadNotRequestStart() {
+        val before = Instant.parse("2026-11-22T20:00:00Z")
+        val after = before.plusSeconds(8)
+        var read = false
+        val sources = object : ExecutiveSources {
+            override fun needsYou(actor: UUID, correlationId: String): ExecutiveSection<ExecutiveDecision> {
+                read = true
+                return ExecutiveSection("CURRENT", emptyList(), "INBOX_WORK_QUEUE", before.toString(), false)
+            }
+
+            override fun projects(actor: UUID, organizationId: UUID) =
+                ExecutiveSection<ExecutiveProject>("CURRENT", emptyList(), "PROJECTS_AND_PROJECT_HEALTH", null, false)
+
+            override fun assetExceptions(actor: UUID, organizationId: UUID) =
+                ExecutiveSection<ExecutiveAssetException>("CURRENT", emptyList(), "ASSET_SERVICE_QUEUE", null, false)
+        }
+        val observationClock = object : Clock() {
+            override fun getZone() = ZoneOffset.UTC
+            override fun withZone(zone: java.time.ZoneId): Clock = this
+            override fun instant(): Instant = if (read) after else before
+        }
+        val response = ExecutiveHomeService(sources, AllowedMembership, observationClock)
+            .home(actor, organization, "after-producers")
+        assertEquals(after.toString(), response.asOf)
+        assertEquals(before.toString(), response.needsYou.sourceAsOf)
     }
 
     private object AllowedMembership : ExecutiveOrganizationAccess {
