@@ -2929,6 +2929,7 @@ fun main() {
                             ) {
                                 PoWarehouseIntakeSection(
                                     api = runtime.poWarehouseIntakeApi,
+                                    warehouseApi = runtime.physicalWarehouseApi,
                                     organizationId = organization.organizationId,
                                     installationId = runtime.physicalWarehouseInstallationId,
                                     newOperationId = { java.util.UUID.randomUUID().toString() },
