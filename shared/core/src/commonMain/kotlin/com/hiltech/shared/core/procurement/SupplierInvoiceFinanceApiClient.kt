@@ -35,7 +35,7 @@ data class SupplierInvoiceMatchDto(
     val invoicedQuantity: String, val quantityVariance: String,
     val priceVariance: String, val taxVariance: String,
     val documentVerified: Boolean = true, val payableCreated: Boolean = false,
-    val paymentCreated: Boolean = false, val revision: Long? = null,
+    val paymentCreated: Boolean = false, val matchEventId: String? = null, val revision: Long? = null,
     val replayed: Boolean = false,
 )
 @Serializable
