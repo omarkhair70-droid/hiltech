@@ -91,8 +91,13 @@ class FinanceExpenseReceiptReadinessService(
               AND e.size_bytes=s.expected_size_bytes
               AND e.classification_code='HIGHLY_RESTRICTED'
               AND e.client_visibility_mode='INTERNAL_ONLY'
-              AND e.security_scan_class='ARBITRARY_FILE'
-              AND e.content_type IN ('application/pdf','image/png','image/jpeg')
+              AND (
+                (e.content_type='application/pdf'
+                  AND e.security_scan_class='SIGNED_DOCUMENT')
+                OR
+                (e.content_type IN ('image/png','image/jpeg')
+                  AND e.security_scan_class='NATIVE_MEDIA')
+              )
             ORDER BY e.id
             LIMIT 100
             """.trimIndent(),
