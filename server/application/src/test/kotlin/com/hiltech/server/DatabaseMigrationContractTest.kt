@@ -149,6 +149,46 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(tables.next())
                 assertEquals(68, tables.getInt(1))
+
+                // V0041 is an append-only event extension, never a second
+                // mutable root state. Verify real PostgreSQL metadata, not
+                // merely Flyway migration count.
+                val intakeChecks = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_requirement_transition'::regclass
+                      AND conname IN ('ck_procurement_intake_transition',
+                          'ck_procurement_review_reason', 'ck_procurement_revision_snapshot')
+                      AND contype = 'c'
+                    """.trimIndent(),
+                )
+                assertTrue(intakeChecks.next())
+                assertEquals(3, intakeChecks.getInt(1))
+
+                val revisionColumns = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'procurement_requirement_transition'
+                      AND column_name IN (
+                          'spec_quantity','spec_justification','spec_work_version','spec_item_version',
+                          'spec_unit_code','spec_assessment_code','spec_visible_free_quantity','spec_assessed_at'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(revisionColumns.next())
+                assertEquals(8, revisionColumns.getInt(1))
+
+                val immutableHistory = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_requirement_transition'::regclass
+                      AND tgname = 'procurement_requirement_transition_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(immutableHistory.next())
+                assertEquals(1, immutableHistory.getInt(1))
             }
 
             val orgId = UUID.randomUUID()

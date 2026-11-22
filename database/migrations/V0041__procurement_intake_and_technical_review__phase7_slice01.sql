@@ -57,6 +57,7 @@ ALTER TABLE procurement_requirement_transition
                 (spec_assessment_code = 'WAREHOUSE_REVIEW_REQUIRED'
                     AND spec_visible_free_quantity IS NULL)
                 OR (spec_assessment_code <> 'WAREHOUSE_REVIEW_REQUIRED'
+                    AND spec_visible_free_quantity IS NOT NULL
                     AND spec_visible_free_quantity >= 0)
             )
         )
