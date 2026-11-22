@@ -80,11 +80,11 @@ class FinanceExpenseReceiptUploaderTest {
         val client = FinanceExpenseReceiptUploader(EvidenceApiClient(appApi, binary))
         val uploaded = client.upload(selected(), device)
         assertEquals(1, puts)
-        assertFalse(uploaded.pendingSecurityScan)
+        assertFalse(uploaded.quarantined)
         assertTrue(uploaded.uploadedReceiptReady)
         val verified = client.refresh(evidenceId, draft, device)
         assertTrue(verified.uploadedReceiptReady)
-        assertFalse(verified.pendingSecurityScan)
+        assertFalse(verified.quarantined)
     }
 
     @Test fun forgedExpenseTargetPreventsSignedBinaryUpload() = runBlocking {
