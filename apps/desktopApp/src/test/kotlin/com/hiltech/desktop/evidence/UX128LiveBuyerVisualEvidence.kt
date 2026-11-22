@@ -2,11 +2,16 @@ package com.hiltech.desktop.evidence
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.hiltech.shared.core.design.HiltechOperationalTheme
+import com.hiltech.shared.core.design.LocalHiltechOperationalColors
 import com.hiltech.shared.core.procurement.BuyerSourcingLiveScreen
 import com.hiltech.shared.core.procurement.BuyerSourcingUi
 import com.hiltech.shared.core.procurement.SourcingEligibleNeedDto
@@ -17,6 +22,7 @@ import com.hiltech.shared.core.procurement.SupplierRfqComparisonDto
 import com.hiltech.shared.core.procurement.SupplierRfqDto
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.EncodedImageFormat
+import java.security.MessageDigest
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -67,6 +73,9 @@ fun main() = runBlocking<Unit> {
                 HiltechOperationalTheme(dark = false) { Ui(normal) }
             }
         },
+        Capture("07-windows-full-comparison-and-inspector", 1440, 2000) {
+            HiltechOperationalTheme(dark = false) { Ui(normal) }
+        },
     )
     cases.forEach { case ->
         val scene = ImageComposeScene(
@@ -98,7 +107,9 @@ fun main() = runBlocking<Unit> {
 
 @Composable
 private fun Ui(ui: BuyerSourcingUi) {
-    BuyerSourcingLiveScreen(
+    val palette = LocalHiltechOperationalColors.current
+    Box(modifier = Modifier.fillMaxSize().background(palette.canvas)) {
+      BuyerSourcingLiveScreen(
         ui = ui,
         onRefresh = {},
         onSelectRequirement = {},
@@ -109,7 +120,8 @@ private fun Ui(ui: BuyerSourcingUi) {
         quoteCaptureContent = {},
         purchaseCandidateContent = {},
         canCapture = false,
-    )
+      )
+    }
 }
 
 private fun fixture(): BuyerSourcingUi {
@@ -139,15 +151,17 @@ private fun fixture(): BuyerSourcingUi {
     fun quote(
         id: String, supplier: String, ref: String, total: String,
         currency: String, decision: String, issues: List<String>,
-        days: Int?,
+        days: Int?, unitPrice: String, tax: String,
     ) = SupplierQuoteComparisonRowDto(
         quoteId = id, supplierOrganizationId = supplier,
         revisionNumber = 2, quoteReference = ref,
         currency = currency, quantity = "18", unitCode = "PCS",
-        unitPrice = "950.00", taxAmount = "100.00",
+        unitPrice = unitPrice, taxAmount = tax,
         total = total, deliveryDays = days,
         evidenceRef = "evidence-$id",
-        evidenceSha256 = "df12f0b1-$id",
+        evidenceSha256 = MessageDigest.getInstance("SHA-256")
+            .digest(id.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) },
         technicalCompliance = decision, issues = issues,
     )
     val a = "11111111-aaaa-2222-bbbb-333333333333"
@@ -155,11 +169,11 @@ private fun fixture(): BuyerSourcingUi {
     val c = "33333333-aaaa-4444-bbbb-555555555555"
     val rows = listOf(
         quote("f0000001-2222-3333-4444-555555555555", a, "QA-ALPHA-2",
-            "17100.00", "EGP", "COMPLIANT", emptyList(), 8),
+            "17100.00", "EGP", "COMPLIANT", emptyList(), 8, "950.00", "0.00"),
         quote("f0000002-2222-3333-4444-555555555555", b, "QA-BETA-2",
-            "16550.00", "EGP", "COMPLIANT", listOf("Delivery terms need clarification"), 5),
+            "16550.00", "EGP", "COMPLIANT", listOf("Delivery terms need clarification"), 5, "900.00", "350.00"),
         quote("f0000003-2222-3333-4444-555555555555", c, "QA-GAMMA-2",
-            "380.00", "USD", "REVIEW_REQUIRED", listOf("Mixed currency"), null),
+            "380.00", "USD", "REVIEW_REQUIRED", listOf("Mixed currency"), null, "20.00", "20.00"),
     )
     val compared = SupplierRfqComparisonDto(
         rfq = rfq,

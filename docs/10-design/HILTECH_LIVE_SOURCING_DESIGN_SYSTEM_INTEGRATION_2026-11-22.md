@@ -48,3 +48,19 @@ No real company data, real login, Android-device screenshot, physical warehouse 
 Unclosed: exact-head quality gate, actual authorized-supplier/approval role journey, Android screenshot/200% text/RTL/TalkBack, Windows keyboard focus and PDF evidence access, large lists, source-revocation acceptance, full visual typography/iconography system, branch review and safe integration.
 Phase7 S04/S05/receipt/three-way-match remain Engineering-owned and must not be mistaken for this buyer UI integration.
 Only after owner/Engineering review, exact-head CI and real operator acceptance could the live feature flags be considered for activation.
+
+## Verified native checkpoint — UX integration QA pass
+
+**Live Compose source mount**: The existing signed-in Windows `SupplierSourcingBuyerSection` was replaced, not duplicated. It consumes `SupplierSourcingApiClient`, `SupplierQuoteCaptureForm`, and `PurchaseOrderCandidateAction` exactly as the Phase7 host provides, while the new `HiltechOperationalDesign` components are imported directly into the live UI. No new independent API, form backend, supplier award, PO mutation or operational enablement.
+
+**Exact source code tested**: `16d4ca32f203cf1dfaf0066d638b18ca8d852d89`, plus QA-only changes to the screenshot fixture (realistic arithmetic, SHA-256 evidence fixture, non-Material3 Compose Foundation render background).
+
+**Source code regression**: Gradle task `:shared:core:desktopTest --tests 'com.hiltech.shared.core.procurement.*'` reported **42 Kotlin tests / 9 suites, 0 failures, 0 errors, 0 skipped**, from XML files. This includes the seven targeted sourcing-presentation tests plus the existing procurement client/contract tests.
+
+**Visual regression**: `:apps:desktopApp:renderUx128LiveSourcing` used `ImageComposeScene` with the SAME operational Compose `BuyerSourcingLiveScreen`, rendering **7/7 PNGs**: normal Windows 1440px, compact 830px, Dark, High Contrast, revoked quote-source, 180% scaled typography, and a 2000px full-flow comparison/inspector. Full final code+render command: **BUILD SUCCESSFUL**, exit 0. See `evidence/ux128-live-sourcing/manifest.json` for per-image size/dimensions/SHA-256 and provenance.
+
+**Visual review**: The initial source panel consumed excessive vertical space before evidence. The real UI now shows compact current requirement + human-readable technical state, with a genuinely interactive source identifier expansion. The buyer ledger and selected quote inspector were visually reviewed in full-height capture. High-contrast, dark and compact images are QA evidence only; keyboard, 200% text and accessibility behavior on real Windows remain open.
+
+**Contrast sample calculations for proposed semantic token pairings only**: Light primary text/surface 15.57:1; Light secondary 7.10:1; light good/caution/blocked text on their status surfaces 7.13:1, 7.18:1, 7.62:1. Dark primary 13.93:1, secondary 10.94:1, good/caution/blocked 8.99:1, 7.98:1, 8.09:1; high-contrast white/black 21:1. These measurements are not a measured whole-screen WCAG or operator acceptance.
+
+**Not closed**: Windows authorized buyer/approver real account walkthrough, role revocation across actual server calls, actual supplier PDF evidence and keyboard/screen reader tests; Android physical device/RTL/200% scaling; product-wide final icon family, motion, type and all-role screens; final Phase7 S04/S05 acceptance, owner-reviewed integration merge and release. Keep this PR Draft, no live purchasing enablement.

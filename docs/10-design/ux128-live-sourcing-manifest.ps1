@@ -8,7 +8,8 @@ $names = @(
  '03-windows-dark.png',
  '04-windows-high-contrast.png',
  '05-current-source-revoked.png',
- '06-scaled-text-180pct.png'
+ '06-scaled-text-180pct.png',
+ '07-windows-full-comparison-and-inspector.png'
 )
 if(!(Test-Path $src)) { throw 'Source screens unavailable: renderer must complete first' }
 $found = @(Get-ChildItem $src -Filter '*.png' -File)
