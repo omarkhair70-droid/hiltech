@@ -77,6 +77,7 @@ class PurchaseOrderDeliveryAmendmentServiceTest {
     private val approvals = Mockito.mock(ApprovalEngineService::class.java)
     private val approvalRecords = Mockito.mock(ApprovalPersistencePort::class.java)
     private val audit = Mockito.mock(AuditEventWriter::class.java)
+    private val poReceiving = Mockito.mock(ProcurementPoReceivingSourcePort::class.java)
     private var applied: PurchaseOrderLifecycleEvent? = null
     private var recorded: PurchaseOrderDeliveryAmendmentRecord? = null
     private val commands = object : IdempotentCommandExecutor {
@@ -99,12 +100,13 @@ class PurchaseOrderDeliveryAmendmentServiceTest {
     ) = PurchaseOrderDeliveryAmendmentService(
         proposals, purchases, candidates, requirements, work, issuer, guard,
         approvals, approvalRecords, commands, audit,
-        Clock.fixed(at, ZoneOffset.UTC), enabled, policyKey,
+        Clock.fixed(at, ZoneOffset.UTC), enabled, policyKey, poReceiving,
     )
 
     private fun allowed() {
         Mockito.`when`(purchases.byId(poId)).thenReturn(po)
         Mockito.`when`(purchases.lockOrder(poId, org)).thenReturn(true)
+        Mockito.`when`(poReceiving.hasAnyLinkedReceipt(poId)).thenReturn(false)
         Mockito.`when`(purchases.lockDeliveryLocation(org, newLocation)).thenReturn(true)
         Mockito.`when`(purchases.effectiveState(poId)).thenReturn(
             PurchaseOrderEffectiveState(po, 1, "ISSUED", oldLocation),
