@@ -76,9 +76,14 @@ lifecycle, not a silent mutation or second competing active selection.
 
 ## Remaining S03 engineering (NOT DONE)
 
-- Canonical ApprovalEngine binding to this exact candidate subject and
-  immutable version, subject-version guard and policy revision;
-  no hard-coded Mohamed/Ahmed or invented financial thresholds.
+- The canonical ApprovalEngine subject-version guard is now implemented
+  for `PROCUREMENT_PO_CANDIDATE` version 1. It checks the immutable
+  candidate, RFQ/source revision, current WorkOrder and StockItem, supplier
+  link, latest quote revision, technical COMPLIANT decision, quote validity,
+  and READY restricted Evidence. A changed fact invalidates the subject.
+  **Still to implement:** initiating the correct ApprovalEngine request,
+  selecting the company's active policy/authority version, and consuming
+  the final decision for PO issue. No hard-coded Mohamed/Ahmed or thresholds.
 - Human approval or explicitly configured no-approval path, authorized PO
   issue/numbering/delivery destination and supplier-facing PO version.
 - Amendment/supersession/cancellation/reapproval rules and native buyer /
@@ -91,3 +96,20 @@ This is a safe engineering checkpoint, not an invented business policy or
 a statement that Slice 03 is complete. Source-version, unit, price, Evidence
 and supplier relationship remain authoritative and rechecked at every
 future financial side effect.
+
+## Native Windows buyer preflight
+
+The existing restricted buyer sourcing section exposes the typed S03 API only
+when `HILTECH_PO_CANDIDATES_UI_ENABLED=true`. A buyer explicitly opens
+preflight for a comparison row, sees blockers, and supplies a rationale before
+recording an internal DRAFT_FOR_APPROVAL candidate. The client rechecks the
+preflight just before submission; the server independently rechecks the
+entire source under RFQ row lock. Read/write requires both server feature
+flags plus the existing scoped buyer authorization. No offline queue, owner
+approval claim, supplier email, accounting operation or issued PO.
+
+The ApprovalEngine's `ApprovalSubjectVersionSource` implementation is the
+trusted **current-source check**, not a new permissions mechanism. An owner,
+engineer, procurement user or warehouse keeper does not gain any extra
+financial authority by appearing in the domain documentation. The
+company's actual approval bindings remain in the canonical ApprovalEngine.
