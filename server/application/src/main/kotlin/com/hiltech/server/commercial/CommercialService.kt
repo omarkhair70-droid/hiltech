@@ -190,7 +190,7 @@ class CommercialService(
         val clarification = r.clarificationDeadline?.let(::timestamp)?.atOffset(ZoneOffset.UTC)
         if (clarification != null && deadline != null && clarification > deadline)
             throw commercialError("COMMERCIAL_DEADLINE","Clarification after submission.",HttpStatus.BAD_REQUEST)
-        val target = id("tender",key)
+        val target = this.id("tender",key)
         val replay = execute(key,actor,"COMMERCIAL_TENDER_REVISION",target,"$id|$r",correlation) {
             val parent = op(id,actor,"SALES_WRITE");open(parent);lockOpportunity(id)
             jdbc.update(
@@ -212,7 +212,7 @@ class CommercialService(
         val siteId = r.siteId?.commercialUuid()
         val scheduled = timestamp(r.scheduledAt).atOffset(ZoneOffset.UTC)
         val purpose = required(r.purpose,240)
-        val target = id("visit",key)
+        val target = this.id("visit",key)
         val replay = execute(key,actor,"COMMERCIAL_VISIT_CREATE",target,"$id|$r",correlation) {
             val parent = op(id,actor,"SALES_WRITE");open(parent)
             if (siteId != null && jdbc.queryForObject(
@@ -271,7 +271,7 @@ class CommercialService(
                  actor: UUID,correlation: String): CommercialCommandResult {
         open(op(id,actor,"SALES_WRITE"))
         val description = required(r.description,10000)
-        val target = id("scope",key)
+        val target = this.id("scope",key)
         val replay = execute(key,actor,"COMMERCIAL_SCOPE_CREATE",target,"$id|$r",correlation) {
             val parent = op(id,actor,"SALES_WRITE");open(parent);lockOpportunity(id)
             jdbc.update(
@@ -305,7 +305,7 @@ class CommercialService(
             amount(it.quantity,positive=true);amount(it.sellUnitPrice)
             it.internalUnitCost?.let { c -> amount(c) }
         }
-        val target = id("boq",key)
+        val target = this.id("boq",key)
         val replay = execute(key,actor,"COMMERCIAL_BOQ_CREATE",target,"$id|$r",correlation) {
             open(op(id,actor,"SALES_WRITE"));access.require(actor,company,"SALES_COST_VIEW");lockOpportunity(id)
             row("""SELECT id FROM commercial_scope_version
@@ -339,7 +339,7 @@ class CommercialService(
         val validity = date(r.validityDate)
         val payment = required(r.paymentTerms,10000)
         val delivery = required(r.deliveryTerms,10000)
-        val target = id("quote",key)
+        val target = this.id("quote",key)
         val replay = execute(key,actor,"COMMERCIAL_QUOTE_DRAFT",target,"$id|$r",correlation) {
             val parent = op(id,actor,"SALES_WRITE");open(parent);lockOpportunity(id)
             val boq = row(
