@@ -21,6 +21,40 @@ import kotlin.test.assertTrue
 
 class CommercialNativeContractTest {
     @Test
+    fun commercialSignedDocsReserveCanonicalRestrictedEvidenceTargets() {
+        val seed = CommercialAwardDocumentUpload(
+            document = CommercialAwardDocumentType.SIGNED_CONTRACT,
+            targetId = "33333333-3333-4333-8333-333333333333",
+            originalFileName = "signed.pdf",
+            contentType = "application/pdf",
+            bytes = byteArrayOf(1,2,3),
+            sha256 = "a".repeat(64),
+            capturedAtUtc = "2026-11-23T00:00:00Z",
+            reserveOperationId = "11111111-1111-4111-8111-111111111111",
+            finalizeOperationId = "22222222-2222-4222-8222-222222222222",
+            confirmOperationId = "44444444-4444-4444-8444-444444444444",
+        )
+        val contract = commercialEvidenceRequest(seed)
+        assertEquals("COMMERCIAL_CONTRACT", contract.targetType)
+        assertEquals("COMMERCIAL_SIGNED_CONTRACT", contract.evidenceRequirementKey)
+        assertEquals(contract.evidenceRequirementKey, contract.evidenceTypeCode)
+        assertEquals(null,contract.workOrderId)
+        assertEquals(3L,contract.sizeBytes)
+        val clientPo = commercialEvidenceRequest(seed.copy(document=CommercialAwardDocumentType.CLIENT_PO))
+        assertEquals("COMMERCIAL_CLIENT_PO",clientPo.targetType)
+        assertEquals("COMMERCIAL_CLIENT_PO",clientPo.evidenceTypeCode)
+        assertFailsWith<IllegalArgumentException> {
+            commercialEvidenceRequest(seed.copy(contentType="text/plain"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            commercialEvidenceRequest(seed.copy(sha256="fake-unsigned-file"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            commercialEvidenceRequest(seed.copy(bytes=byteArrayOf()))
+        }
+    }
+
+    @Test
     fun exactDecimalInputIsNotDoubleOrString() {
         assertTrue(validCommercialDecimal("0.2500", requirePositive = true))
         assertTrue(validCommercialDecimal("1234567890123456.9999"))
