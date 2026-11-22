@@ -29,7 +29,7 @@ CREATE UNIQUE INDEX uq_service_purchase_document_evidence_slot
 
 CREATE FUNCTION guard_service_purchase_document_evidence() RETURNS trigger
 LANGUAGE plpgsql AS $$
-DECLARE slot procurement_service_document_slot%ROWTYPE;
+  slot procurement_service_document_slot%ROWTYPE;
 BEGIN
   SELECT * INTO slot FROM procurement_service_document_slot WHERE id=NEW.target_id;
   IF slot.id IS NULL OR slot.organization_id<>NEW.organization_id
@@ -127,9 +127,9 @@ FOR EACH ROW EXECUTE FUNCTION reject_procurement_draft_mutation();
 -- sufficient without canonical READY, restricted, slot-scoped Evidence.
 CREATE FUNCTION guard_service_purchase_verified_document() RETURNS trigger
 LANGUAGE plpgsql AS $$
-DECLARE slot_kind varchar(24);
-DECLARE expected_type varchar(40);
-DECLARE expected_req varchar(40);
+  slot_kind varchar(24);
+  expected_type varchar(40);
+  expected_req varchar(40);
 BEGIN
   IF TG_TABLE_NAME='procurement_service_acceptance' THEN
     slot_kind:='DELIVERY'; expected_type:='SERVICE_DELIVERY';
