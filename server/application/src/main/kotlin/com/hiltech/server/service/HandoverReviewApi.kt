@@ -59,6 +59,7 @@ data class HandoverReviewSummaryDto(
     val frozenSourceDigest: String,
     val currentSourceDigest: String,
     val sourceStillMatches: Boolean,
+    val isLatestPackageVersion: Boolean,
     val reviewState: String,
     val latestEventNumber: Int,
     val canIssueToClient: Boolean = false,
@@ -200,6 +201,7 @@ class HandoverReviewService(
         return HandoverReviewSummaryDto(
             versionId.toString(), source.versionNumber, source.frozenDigest, current,
             source.frozenDigest == current,
+            reviews.latestVersion(source.packageId) == source.versionNumber,
             latest?.reviewState ?: "NOT_STARTED", latest?.eventNumber ?: 0,
         )
     }

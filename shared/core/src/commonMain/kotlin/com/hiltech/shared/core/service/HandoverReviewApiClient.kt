@@ -36,6 +36,7 @@ data class HandoverReviewSummaryDto(
     val frozenSourceDigest: String,
     val currentSourceDigest: String,
     val sourceStillMatches: Boolean,
+    val isLatestPackageVersion: Boolean,
     val reviewState: String,
     val latestEventNumber: Int,
     val canIssueToClient: Boolean,

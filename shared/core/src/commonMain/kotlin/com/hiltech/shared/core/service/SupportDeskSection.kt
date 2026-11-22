@@ -40,6 +40,8 @@ fun InternalSupportDeskSection(
     onRefresh: () -> Unit,
     onCreateTicket: (title: String, description: String, severity: String, priority: String) -> Unit,
     onSelectTicket: (String) -> Unit,
+    onOpenCase: (ticketId: String) -> Unit,
+    onOpenTriage: (ticketId: String) -> Unit,
     onAddInternalNote: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -109,8 +111,16 @@ fun InternalSupportDeskSection(
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Text("Severity " + ticket.severityCode + " / Priority " + ticket.priorityCode)
-                OutlinedButton(onClick = { onSelectTicket(ticket.ticketId) }) {
-                    Text("Internal history")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { onSelectTicket(ticket.ticketId) }) {
+                        Text("Private notes")
+                    }
+                    OutlinedButton(onClick = { onOpenCase(ticket.ticketId) }) {
+                        Text("Case lifecycle")
+                    }
+                }
+                OutlinedButton(onClick = { onOpenTriage(ticket.ticketId) }) {
+                    Text("Assignment and classification history")
                 }
             }
         }

@@ -33,6 +33,7 @@ fun HandoverSection(
     state: HandoverUiState,
     onRefresh: () -> Unit,
     onCreateInternalDraft: () -> Unit,
+    onOpenInternalReview: (packageVersionId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -78,6 +79,10 @@ fun HandoverSection(
         }
 
         state.latestDraft?.let { draft ->
+            OutlinedButton(
+                enabled = !state.loading,
+                onClick = { onOpenInternalReview(draft.packageVersionId) },
+            ) { Text("Open source-linked internal review") }
             Text("Internal package v" + draft.versionNumber + " · " + draft.state,
                 style = MaterialTheme.typography.titleMedium)
             Text("Captured: " + draft.createdAt)

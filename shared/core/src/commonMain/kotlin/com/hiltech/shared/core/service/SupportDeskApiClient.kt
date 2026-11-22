@@ -16,6 +16,7 @@ data class InternalSupportTicketDto(
     val severityCode: String,
     val priorityCode: String,
     val lifecycleState: String,
+    val internalCaseState: String = "OPEN",
     val coverageState: String,
     val slaState: String,
     val clientVisibility: String,

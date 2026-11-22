@@ -55,6 +55,7 @@ data class InternalSupportTicketDto(
     val severityCode: String,
     val priorityCode: String,
     val lifecycleState: String,
+    val internalCaseState: String = "OPEN",
     val coverageState: String,
     val slaState: String,
     val clientVisibility: String,
@@ -209,6 +210,7 @@ class SupportDeskService(
     private val projects: ProjectsPersistencePort,
     private val authorization: ProjectAuthorizationPort,
     private val store: JdbcSupportDeskStore,
+    private val cases: JdbcSupportCaseStore,
     private val commands: IdempotentCommandExecutor,
     private val audit: AuditEventWriter,
     private val clock: Clock,
@@ -216,7 +218,9 @@ class SupportDeskService(
     @Transactional(readOnly = true)
     fun tickets(projectId: UUID, actor: UUID): List<InternalSupportTicketDto> {
         managedProject(projectId, actor)
-        return store.tickets(projectId)
+        return store.tickets(projectId).map { ticket ->
+            ticket.copy(internalCaseState = cases.current(UUID.fromString(ticket.ticketId)).internalState)
+        }
     }
 
     @Transactional(readOnly = true)

@@ -189,6 +189,7 @@ class SupportTriageService(
     private val projects: ProjectsPersistencePort,
     private val authorization: ProjectAuthorizationPort,
     private val tickets: JdbcSupportDeskStore,
+    private val cases: JdbcSupportCaseStore,
     private val triage: JdbcSupportTriageStore,
     private val commands: IdempotentCommandExecutor,
     private val audit: AuditEventWriter,
@@ -234,6 +235,8 @@ class SupportTriageService(
                 ?: triageProblem("TRIAGE_TICKET_NOT_FOUND", HttpStatus.NOT_FOUND)
             if (currentTicket.lifecycleState != "OPEN")
                 triageProblem("TRIAGE_TICKET_NOT_OPEN", HttpStatus.CONFLICT)
+            if (cases.current(ticketId).internalState in setOf("RESOLVED_INTERNAL", "CLOSED_INTERNAL"))
+                triageProblem("TRIAGE_CASE_ALREADY_RESOLVED", HttpStatus.CONFLICT)
             val latest = triage.latestEventNumber(ticketId)
             if (latest != expectedLatest)
                 triageProblem("TRIAGE_EVENT_VERSION_STALE", HttpStatus.CONFLICT)

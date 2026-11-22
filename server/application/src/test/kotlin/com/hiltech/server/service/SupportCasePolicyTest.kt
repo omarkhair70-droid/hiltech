@@ -4,6 +4,9 @@ import com.hiltech.server.platform.ProductApiException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertFalse
+import com.hiltech.server.work.WorkOrderLifecycle
 import org.junit.jupiter.api.Test
 import java.util.UUID
 
@@ -28,6 +31,13 @@ class SupportCasePolicyTest {
         assertNull(SupportCasePolicy.next("CLOSED_INTERNAL", "RESOLUTION_RECORDED"))
         assertNull(SupportCasePolicy.next("OPEN", "CLIENT_ACCEPTED"))
         assertNull(SupportCasePolicy.next("RESOLVED_INTERNAL", "WARRANTY_ACTIVATED"))
+    }
+
+    @Test
+    fun cancelledSourceWorkCannotBeAttachedAsNewServiceInvestigation() {
+        assertFalse(SupportCasePolicy.canLinkWork(WorkOrderLifecycle.CANCELLED))
+        assertTrue(SupportCasePolicy.canLinkWork(WorkOrderLifecycle.DRAFT))
+        assertTrue(SupportCasePolicy.canLinkWork(WorkOrderLifecycle.IN_PROGRESS))
     }
 
     @Test

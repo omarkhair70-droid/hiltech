@@ -79,6 +79,9 @@ data class SupportCaseCommand(
 )
 
 object SupportCasePolicy {
+    fun canLinkWork(state: WorkOrderLifecycle): Boolean =
+        state != WorkOrderLifecycle.CANCELLED
+
     fun next(current: String, eventType: String): String? = when (eventType) {
         "INVESTIGATION_STARTED" -> if (current == "OPEN") "INVESTIGATING" else null
         "WORK_ORDER_LINKED" -> if (current == "OPEN" || current == "INVESTIGATING") current else null
@@ -289,6 +292,9 @@ class SupportCaseService(
                     ?: caseProblem("CASE_WORK_NOT_FOUND", HttpStatus.NOT_FOUND)
                 if (source.organizationId != project.organizationId || source.projectId != projectId)
                     caseProblem("CASE_WORK_NOT_FOUND", HttpStatus.NOT_FOUND)
+                if (payload.eventType == "WORK_ORDER_LINKED" &&
+                    !SupportCasePolicy.canLinkWork(source.lifecycleState))
+                    caseProblem("CASE_CANCELLED_WORK_NOT_LINKABLE", HttpStatus.CONFLICT)
                 if (payload.eventType == "RESOLUTION_RECORDED") {
                     if (store.latestWorkOrder(ticketId) != workId)
                         caseProblem("CASE_UNLINKED_RESOLUTION_WORK", HttpStatus.CONFLICT)

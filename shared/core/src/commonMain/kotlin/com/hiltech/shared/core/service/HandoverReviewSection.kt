@@ -60,11 +60,16 @@ fun HandoverInternalReviewSection(
                 Text("Source changed: create a new handover snapshot before making another review decision.",
                     color = MaterialTheme.colorScheme.error)
             }
+            if (!current.isLatestPackageVersion) {
+                Text("This package is superseded. Open the latest internal draft.",
+                    color = MaterialTheme.colorScheme.error)
+            }
             OutlinedTextField(
                 value = reason, onValueChange = { reason = it },
                 label = { Text("Review reason or finding") }, modifier = Modifier.fillMaxWidth(),
             )
-            val allowed = !state.loading && current.sourceStillMatches && reason.isNotBlank()
+            val allowed = !state.loading && current.sourceStillMatches &&
+                current.isLatestPackageVersion && reason.isNotBlank()
             if (current.reviewState == "NOT_STARTED") {
                 Button(
                     onClick = { onRecord("CHECK_STARTED", reason, current.latestEventNumber) },
