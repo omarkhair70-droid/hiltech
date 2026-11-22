@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.mock.web.MockHttpServletRequest
 import com.hiltech.server.platform.ProductApiException
+import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.security.AuthorizationCheckPort
 import com.hiltech.server.security.RoleTeamAuthorizationService
 import com.hiltech.server.security.RoleTeamSourceAuthorityPort
@@ -31,6 +32,20 @@ class ExecutiveHomeServiceTest {
             controller.home(MockHttpServletRequest(), organization.toString())
         }
         assertEquals("EXECUTIVE_HOME_DISABLED", failure.code)
+    }
+
+    @Test
+    fun authorizedHttpResponseMustNotBeCachedByBrowserOrProxy() {
+        val request = MockHttpServletRequest()
+        HiltechRequestContext.bindAuthenticatedIdentity(request, actor, UUID.randomUUID())
+        val controller = ExecutiveHomeController(
+            service = ExecutiveHomeService(CapturingSources(), AllowedMembership, clock),
+            enabled = true,
+        )
+        val response = controller.home(request, organization.toString())
+        assertTrue(response.headers.cacheControl.orEmpty().contains("no-store"))
+        assertEquals(actor.toString(), response.body?.viewerIdentityId)
+        assertEquals(organization.toString(), response.body?.organizationId)
     }
 
     @Test
