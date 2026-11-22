@@ -35,6 +35,7 @@ fun WarehousePhysicalOperatorSection(
     organizationId: String,
     installationId: String,
     operationId: (List<Any?>) -> String,
+    presentation: WarehouseCommandCenterPresentation = WarehouseCommandCenterPresentation.BASELINE,
 ) {
     val scope = rememberCoroutineScope()
     var warehouses by remember(organizationId) { mutableStateOf<List<WarehouseDto>?>(null) }
@@ -80,7 +81,7 @@ fun WarehousePhysicalOperatorSection(
         }
         val facility = warehouseId ?: return@Column
         key(facility) {
-            PhysicalOperatorWorkspace(api, facility, organizationId, installationId, operationId, busy, ::runTask)
+            PhysicalOperatorWorkspace(api, facility, organizationId, installationId, operationId, busy, ::runTask, presentation)
         }
         }
     }
@@ -102,6 +103,7 @@ private fun PhysicalOperatorWorkspace(
     operationId: (List<Any?>) -> String,
     busy: Boolean,
     runTask: (suspend () -> Unit) -> Unit,
+    presentation: WarehouseCommandCenterPresentation,
 ) {
     var commandCenter by remember { mutableStateOf<WarehouseCommandCenterDto?>(null) }
     var queue by remember { mutableStateOf<WarehouseReservationQueueDto?>(null) }
@@ -290,15 +292,19 @@ private fun PhysicalOperatorWorkspace(
         }
     }
 
-    WarehouseQuickScanSection(
-        api = api,
-        warehouseId = warehouse,
-        organizationId = organizationId,
-        installationId = installationId,
-        busy = busy,
-        runTask = runTask,
-    )
-
+    // Use the existing canonical API-backed code lookup and source-driven command center.
+    // Only the focus presentation changes; default flow below remains unchanged.
+    val lookupContent: @Composable () -> Unit = {
+        WarehouseQuickScanSection(
+            api = api,
+            warehouseId = warehouse,
+            organizationId = organizationId,
+            installationId = installationId,
+            busy = busy,
+            runTask = runTask,
+        )
+    }
+    val todayContent: @Composable () -> Unit = {
     Text("الرئيسية / Warehouse Home", style = MaterialTheme.typography.titleMedium)
     Text("البحث السريع · إصدار / Checkout اليوم · المرتجعات المستحقة · الاستلام · الجرد · الاستثناءات")
     OutlinedButton(
@@ -313,6 +319,7 @@ private fun PhysicalOperatorWorkspace(
     commandCenter?.let { snapshot ->
         WarehouseCommandCenterSection(
             snapshot = snapshot,
+            presentation = presentation,
             onOpenStorageLocations = {
                 runTask {
                     storageLocationDrill = api.warehouseStorageLocations(warehouse, installationId).items
@@ -348,6 +355,18 @@ private fun PhysicalOperatorWorkspace(
                     queue = api.reservationQueue(warehouse, installationId)
                 }
             },
+        )
+    }
+    }
+    if (presentation == WarehouseCommandCenterPresentation.BASELINE) {
+        lookupContent()
+        todayContent()
+    } else {
+        WarehouseOperatorFocusFlow(
+            warehouseId = warehouse,
+            busy = busy,
+            today = todayContent,
+            codeLookup = lookupContent,
         )
     }
     storageLocationDrill?.let { locations ->
