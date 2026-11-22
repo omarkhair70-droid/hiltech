@@ -5,6 +5,7 @@ import com.hiltech.server.documents.EvidencePersistencePort
 import com.hiltech.server.documents.EvidenceReservationInsert
 import com.hiltech.server.documents.EvidenceReservationRecord
 import com.hiltech.server.documents.EmployeeDocumentEvidenceReservationInsert
+import com.hiltech.server.documents.SupplierQuoteDocumentEvidenceReservationInsert
 import com.hiltech.server.documents.WorkOrderEvidencePolicySnapshot
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
