@@ -101,6 +101,7 @@ jobs:
           ./gradlew :shared:core:desktopTest \
             --tests '*SupplierSourcingApiClientTest' \
             --tests '*SupplierQuoteDocumentUploaderTest' \
+            --tests '*SupplierMasterDataApiClientTest' \
             --no-daemon --console=plain
 
       - name: Compile gated native sourcing buyer surface
