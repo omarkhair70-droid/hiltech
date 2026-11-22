@@ -191,6 +191,39 @@ class SupplierSourcingServiceTest {
         }.code)
     }
 
+    @Test fun buyerCanCreateImmutableSupplierScopedDocumentSlotButNoPurchaseOrder() {
+        allow()
+        service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
+        val slotOperation = UUID.randomUUID()
+        val request = CreateSupplierQuoteDocumentSlotRequest(slotOperation, supplierId)
+        val receipt = service().createQuoteDocumentSlot(
+            ProcurementDraftContext(slotOperation, actor, "slot-test"), rfqId, request,
+        )
+        assertEquals(rfqId, receipt.rfqId)
+        assertEquals(supplierId, receipt.supplierOrganizationId)
+        assertFalse(receipt.replayed)
+        Mockito.verify(sourcing).insertQuoteDocumentSlot(
+            any(SupplierQuoteDocumentSlot::class.java) ?: SupplierQuoteDocumentSlot(
+                receipt.documentSlotId, slotOperation, org, rfqId, supplierId,
+                actor, at, "slot-test",
+            ),
+        )
+    }
+
+    @Test fun unlinkedSupplierCannotReceiveQuotationDocumentSlot() {
+        allow()
+        service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
+        Mockito.`when`(sourcing.isEligibleSupplier(org, supplierId)).thenReturn(false)
+        val op2 = UUID.randomUUID()
+        val error = assertThrows<ProductApiException> {
+            service().createQuoteDocumentSlot(
+                ProcurementDraftContext(op2, actor, "slot-denied"), rfqId,
+                CreateSupplierQuoteDocumentSlotRequest(op2, supplierId),
+            )
+        }
+        assertEquals("INVALID_SOURCING_REQUEST", error.code)
+    }
+
     @Test fun eachSupplierRevisionIsAnAppendOnlyRestrictedEvidenceRecord() {
         allow()
         service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
