@@ -1,0 +1,5 @@
+# One-shot OpenFGA PostgreSQL schema migrator (same version as runtime).
+# Must be started only after separate HILTECH OpenFGA Postgres is healthy.
+FROM openfga/openfga:v1.20.0
+ENTRYPOINT ["/openfga"]
+CMD ["migrate"]
