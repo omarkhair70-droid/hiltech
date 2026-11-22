@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.springframework.mock.web.MockHttpServletRequest
+import com.hiltech.server.platform.ProductApiException
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -14,6 +17,18 @@ class ExecutiveHomeServiceTest {
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
     private val actor = UUID.randomUUID()
     private val organization = UUID.randomUUID()
+
+    @Test
+    fun executiveEndpointFailsClosedWhileFeatureApprovalIsMissing() {
+        val controller = ExecutiveHomeController(
+            service = ExecutiveHomeService(CapturingSources(), clock),
+            enabled = false,
+        )
+        val failure = assertThrows<ProductApiException> {
+            controller.home(MockHttpServletRequest(), organization.toString())
+        }
+        assertEquals("EXECUTIVE_HOME_DISABLED", failure.code)
+    }
 
     @Test
     fun delegatesCurrentIdentityAndOrganizationWithoutExecutivePrivilege() {
