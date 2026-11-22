@@ -33,6 +33,34 @@ class DenyAllSupplierSourcingAuthorization : SupplierSourcingAuthorizationPort {
     override fun canManageSourcing(actor: UUID, organizationId: UUID): Boolean = false
 }
 
+/**
+ * Must prove finalized, restricted, authorized bytes for this supplier/RFQ.
+ * Never trust caller-submitted evidence reference or hash alone.
+ */
+interface SupplierQuoteDocumentVerificationPort {
+    fun isVerified(
+        actor: UUID,
+        purchasingOrganizationId: UUID,
+        rfqId: UUID,
+        supplierOrganizationId: UUID,
+        sourceEvidenceRef: String,
+        expectedSha256: String,
+    ): Boolean
+}
+
+/** No unverified source reference may create financial quote evidence. */
+@Component
+class DenyAllSupplierQuoteDocumentVerification : SupplierQuoteDocumentVerificationPort {
+    override fun isVerified(
+        actor: UUID,
+        purchasingOrganizationId: UUID,
+        rfqId: UUID,
+        supplierOrganizationId: UUID,
+        sourceEvidenceRef: String,
+        expectedSha256: String,
+    ): Boolean = false
+}
+
 data class OpenSupplierRfqRequest(val operationId: UUID, val expectedRequirementVersion: Long)
 
 data class RecordSupplierQuoteRequest(
@@ -94,6 +122,7 @@ class SupplierSourcingService @Autowired constructor(
     private val stock: StockLedgerPersistence,
     private val authority: SupplierSourcingAuthorizationPort,
     private val technicalReviewer: SupplierQuoteTechnicalReviewerAuthorizationPort,
+    private val quoteDocumentVerification: SupplierQuoteDocumentVerificationPort,
     private val commands: IdempotentCommandExecutor,
     private val audit: AuditEventWriter,
     private val clock: Clock,
@@ -188,6 +217,11 @@ class SupplierSourcingService @Autowired constructor(
             if (!sourcing.isEligibleSupplier(current.organizationId, request.supplierOrganizationId)) {
                 invalid()
             }
+            if (!quoteDocumentVerification.isVerified(
+                    ctx.actor, current.organizationId, rfqId, request.supplierOrganizationId,
+                    request.sourceEvidenceRef.trim(), request.sourceSha256,
+                )
+            ) unavailable()
             val revision = sourcing.latestRevision(rfqId, request.supplierOrganizationId)
             if (request.expectedRevisionNumber != revision + 1) stale()
             val now = clock.instant()
