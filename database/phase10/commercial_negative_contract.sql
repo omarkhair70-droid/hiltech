@@ -12,6 +12,9 @@ DECLARE
  boq_id uuid := '90000000-0000-4000-8000-000000000007';
  line_id uuid := '90000000-0000-4000-8000-000000000008';
  quote_id uuid := '90000000-0000-4000-8000-000000000009';
+ contract_id uuid := '90000000-0000-4000-8000-00000000000a';
+ po_id uuid := '90000000-0000-4000-8000-00000000000b';
+ second_opportunity uuid := '90000000-0000-4000-8000-00000000000c';
  error_message text;
 BEGIN
  INSERT INTO organization(id,organization_code,legal_name,display_name,organization_type,status,created_at)
@@ -85,6 +88,90 @@ BEGIN
    RAISE EXCEPTION 'Client quote line immutability failed: %',error_message;
   END IF;
  END;
+
+ -- A quote may be queued for Approval Engine, but SQL cannot release it without
+ -- an APPROVED request for that same immutable subject version.
+ UPDATE commercial_quote_version SET state='APPROVAL_PENDING',version=version+1
+ WHERE id=quote_id;
+ BEGIN
+  UPDATE commercial_quote_version
+   SET state='RELEASED',released_at=now(),version=version+1
+   WHERE id=quote_id;
+  RAISE EXCEPTION 'EXPECTED_APPROVAL_GATE_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%Exact latest quote approval is required%' THEN
+   RAISE EXCEPTION 'SQL quote release authority gate failed: %',error_message;
+  END IF;
+ END;
+
+ -- Even a valid released quote cannot be reversed into a draft.
+ BEGIN
+  UPDATE commercial_quote_version SET state='DRAFT',version=version+1 WHERE id=quote_id;
+  RAISE EXCEPTION 'EXPECTED_QUOTE_STATE_MACHINE_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%Quote state transition is not permitted%' THEN
+   RAISE EXCEPTION 'SQL quote state guard failed: %',error_message;
+  END IF;
+ END;
+
+ INSERT INTO commercial_opportunity
+  (id,organization_id,client_organization_id,owner_user_id,source,opportunity_code,
+   title,state,created_by,created_at,updated_at)
+ VALUES(second_opportunity,company_a,client_a,actor,'DIRECT','PHASE10_SECOND_OPP',
+        'Synthetic second opportunity','OPEN',actor,now(),now());
+ INSERT INTO commercial_contract
+  (id,organization_id,opportunity_id,quote_version_id,contract_code,state,created_by,created_at)
+ VALUES(contract_id,company_a,opportunity,quote_id,'PHASE10_TEST_CONTRACT','DRAFT',actor,now());
+
+ -- PO must belong to the *same opportunity* as its contract, not just company.
+ BEGIN
+  INSERT INTO commercial_client_po
+   (id,organization_id,opportunity_id,contract_id,client_po_number,issued_on,
+    amount,currency,created_by,created_at)
+  VALUES(po_id,company_a,second_opportunity,contract_id,'PHASE10_BAD_PO',
+         date '2026-11-23',40.0000,'EGP',actor,now());
+  RAISE EXCEPTION 'EXPECTED_CROSS_OPPORTUNITY_PO_DENIAL_MISSING';
+ EXCEPTION WHEN foreign_key_violation THEN
+  RAISE NOTICE 'PHASE10_CROSS_OPPORTUNITY_CONTRACT_PO_DENIED';
+ END;
+
+ INSERT INTO commercial_client_po
+  (id,organization_id,opportunity_id,contract_id,client_po_number,issued_on,
+   amount,currency,created_by,created_at)
+ VALUES(po_id,company_a,opportunity,contract_id,'PHASE10_VALID_PO_DRAFT',
+        date '2026-11-23',40.0000,'EGP',actor,now());
+ BEGIN
+  UPDATE commercial_client_po SET verified=true WHERE id=po_id;
+  RAISE EXCEPTION 'EXPECTED_PO_EVIDENCE_BLOCK_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%Only verified evidence attachment is allowed%' THEN
+   RAISE EXCEPTION 'Unverified client PO gate failed: %',error_message;
+  END IF;
+ END;
+
+ BEGIN
+  UPDATE commercial_contract SET state='SIGNED' WHERE id=contract_id;
+  RAISE EXCEPTION 'EXPECTED_CONTRACT_EVIDENCE_BLOCK_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%Only verified signing of draft contract is allowed%' THEN
+   RAISE EXCEPTION 'Unsigned contract gate failed: %',error_message;
+  END IF;
+ END;
+
+ BEGIN
+  DELETE FROM commercial_contract WHERE id=contract_id;
+  RAISE EXCEPTION 'EXPECTED_SIGNED_DOCUMENT_DELETION_BLOCK_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%Commercial award documents cannot be deleted%' THEN
+   RAISE EXCEPTION 'Award contract deletion guard failed: %',error_message;
+  END IF;
+ END;
+
  RAISE NOTICE 'PHASE10_NEGATIVE_SCHEMA_CONTRACT_PASS';
 END $$;
 ROLLBACK;
