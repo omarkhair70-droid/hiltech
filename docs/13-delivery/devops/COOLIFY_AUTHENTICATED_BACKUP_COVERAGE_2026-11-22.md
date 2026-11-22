@@ -47,3 +47,13 @@ Nova's daily backup configuration has **7 execution records**, all with `status=
 - Original private allowlisted JSON lives only on the authorized Windows workstation under `%LOCALAPPDATA%\HILTECH\coolify-private-inventory.json`.
 
 **Status:** `COOLIFY_API_CONNECTED=YES`; `FLEET_INVENTORY_COMPLETE=YES`; `TESWA_CAPACITY_VERIFIED=NO`; `OFFSITE_BACKUP_AND_RESTORE_VERIFIED=NO`; `PREVIEW_STOP_AUTHORIZED=NO`; `HILTECH_DEPLOYED=NO`.
+
+## Repeatable fail-closed check — implemented and run
+
+- Script: `scripts/devops/coolify_backup_coverage.ps1`, also installed locally for the owner at `%LOCALAPPDATA%\\Programs\\CoolifyCLI\\hiltech-backup-coverage.ps1`.
+- It uses **only** official read-only Coolify API/CLI calls for backup configuration and S3 destination count; it does not expose credentials, backup paths/filenames, secrets or full API response.
+- Real connected run, same day: **8** standalone databases, **1** with an active local scheduled backup, **0** registered Coolify S3 targets, **8** databases without both a schedule and configured S3 upload, **0** unknown responses.
+- Result **BACKUP_COVERAGE_NO_GO**, **exit code 1** (expected and correct). No backup triggered, deleted, modified, created or restored.
+- This script cannot detect unrelated external backup tools and cannot confirm recovery. Independent complete restore drill remains a separate mandatory gate.
+
+A future owner-authorized off-host backup and restore may change the real readiness outcome. Do **not** change exit code, hide failed gates or declare storage safe based only on the presence of a local scheduled backup.
