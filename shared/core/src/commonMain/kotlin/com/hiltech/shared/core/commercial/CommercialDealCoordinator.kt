@@ -57,7 +57,7 @@ class CommercialDealCoordinator(
                             category=line.category,
                             quantity=exactCommercialNumber(line.quantity,positive=true),
                             unit=line.unit,
-                            internalUnitCost=line.internalUnitCost?.let(::exactCommercialNumber),
+                            internalUnitCost=line.internalUnitCost?.let { exactCommercialNumber(it) },
                             sellUnitPrice=exactCommercialNumber(line.sellUnitPrice),
                         )
                     },
