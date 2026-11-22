@@ -1,6 +1,8 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.3 / PHASE 0–4 VERIFIED / COMPLETE / PHASE 5 PLAN FROZEN / SLICE 01 NEXT**
+Status: **FROZEN v1.3 IMPLEMENTATION PLAN — HISTORICAL EXECUTION LABELS, NOT LIVE STATUS**
+
+> Phase boundaries and per-slice engineering rules below remain a planning reference. The `Phase 5 Slice 01 NEXT` lines are **not current**; use `docs/00-program/ACTIVE_EXECUTION_BRIEF.md` and actual GitHub PR/CI evidence to determine the next permitted action.
 
 ## Core Rule
 

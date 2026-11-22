@@ -1,6 +1,8 @@
 # HILTECH Program Status
 
-Updated: 2026-09-21
+Updated historical snapshot: 2026-09-21
+
+> **HISTORICAL EXECUTION SNAPSHOT; NOT CURRENT.** This document records the 2026-09-21 program state. For live Phase 6 execution, current main/PR checks, remaining Phase 7–13, and real-world acceptance, start with `docs/00-program/ACTIVE_EXECUTION_BRIEF.md`, run `scripts/devops/start-session.ps1`, and inspect GitHub master #103 / control tower #130. Do not treat the `SLICE 01 NEXT` wording below as present-tense instructions.
 
 ## Overall Stage
 **PHASE 4 VERIFIED / COMPLETE — PHASE 5 PLAN FROZEN — SLICE 01 PRODUCTION NEXT AFTER PLANNING MERGE**
