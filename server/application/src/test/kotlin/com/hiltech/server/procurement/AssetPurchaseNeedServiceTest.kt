@@ -77,13 +77,13 @@ class AssetPurchaseNeedServiceTest {
     }
 
     @Test fun unknownIssueOrForeignAssetDoesNotBecomePurchasingSource() {
+        val input = request()
         assertEquals("ASSET_PURCHASE_NEED_UNAVAILABLE",
             assertThrows<ProductApiException> {
-                service(true, true).create(ctx, asset, request())
+                service(true, true).create(ctx, asset, input)
             }.code)
         Mockito.verify(sources).resolve(
-            Mockito.eq(asset), Mockito.eq(incident),
-            Mockito.isNull(), Mockito.any(UUID::class.java),
+            asset, input.incidentId, input.maintenanceId, input.deliveryStorageLocationId,
         )
         Mockito.verifyNoInteractions(roots, assets, stock, reservations,
             authority, verifier, commands, audit)
