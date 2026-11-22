@@ -155,12 +155,20 @@ fun main() = runBlocking<Unit> {
     }
     try {
         save(multipleScene, dir.resolve("ux128-field-06-multiple-top.png"), 430, 720)
+        // Flush the initial LaunchedEffect(scope) which resets host scroll.
+        // Otherwise that startup effect can undo a synthetic test scroll
+        // performed in the same event-loop turn before any user interaction.
+        kotlinx.coroutines.yield()
         check(manyScroll.maxValue > 500) {
             "The 12-item fixture must actually overflow the viewport for a scroll restoration test."
         }
         val beforeFocusOffset = minOf(550, manyScroll.maxValue)
         manyScroll.scrollTo(beforeFocusOffset)
+        kotlinx.coroutines.yield()
         save(multipleScene, dir.resolve("ux128-field-07-multiple-scrolled.png"), 430, 720)
+        check(manyScroll.value == beforeFocusOffset) {
+            "The harness MUST prove scroll changed before tapping; expected=$beforeFocusOffset actual=${manyScroll.value}"
+        }
         // Layout coordinate is checked with a captured pre-click image.
         multipleScene.sendPointerEvent(PointerEventType.Press, Offset(180f, 210f))
         multipleScene.sendPointerEvent(PointerEventType.Release, Offset(180f, 210f))
