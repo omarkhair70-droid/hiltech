@@ -62,6 +62,18 @@ class SupplierMasterDataService @Autowired constructor(
     @Value("\${hiltech.procurement.supplier-master-data.enabled:false}")
     private val masterDataEnabled: Boolean = false,
 ) {
+    /** Only an explicitly authorized supplier-registry custodian can search. */
+    fun supplierRegistry(
+        actor: UUID,
+        purchasingOrganizationId: UUID,
+        nameContains: String,
+    ): List<SupplierRegistryCandidate> {
+        requireAuthority(actor, purchasingOrganizationId)
+        val search = nameContains.trim()
+        if (search.length > 80 || search.any { it.code < 32 }) invalid()
+        return sourcing.supplierRegistryCandidates(purchasingOrganizationId, search)
+    }
+
     fun changeSupplierLink(
         ctx: ProcurementDraftContext,
         purchasingOrganizationId: UUID,
