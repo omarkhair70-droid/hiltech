@@ -7,6 +7,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
 data class CommercialOpportunityDto(
@@ -48,9 +49,9 @@ data class CommercialCommandResultDto(
 data class ClientQuoteLineDto(
     val lineCode: String,
     val description: String,
-    val quantity: String,
+    val quantity: JsonPrimitive,
     val unit: String,
-    val unitPrice: String,
+    val unitPrice: JsonPrimitive,
 )
 @Serializable
 data class ClientQuoteDto(
@@ -59,7 +60,7 @@ data class ClientQuoteDto(
     val versionNumber: Int,
     val clientOrganizationId: String,
     val currency: String,
-    val totalPrice: String,
+    val totalPrice: JsonPrimitive,
     val paymentTerms: String,
     val deliveryTerms: String,
     val exclusions: String,
