@@ -296,13 +296,15 @@ class DatabaseMigrationContractTest {
                         'fk_po_location_org',
                         'fk_po_stock_item_org',
                         'fk_po_approval_policy',
+                        'fk_po_approval_request_org',
+                        'fk_po_issuer_binding_org',
                         'uq_po_organization_code',
                         'uq_po_organization_serial'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(purchaseOrderConstraints.next())
-                assertEquals(6, purchaseOrderConstraints.getInt(1))
+                assertEquals(8, purchaseOrderConstraints.getInt(1))
                 val candidateScopedFk = statement.executeQuery(
                     """
                     SELECT COUNT(*) FROM pg_constraint
