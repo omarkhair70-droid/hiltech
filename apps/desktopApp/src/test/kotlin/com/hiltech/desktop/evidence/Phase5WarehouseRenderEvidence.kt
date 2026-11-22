@@ -359,6 +359,51 @@ fun main() = runBlocking<Unit> {
         }
     }
 
+    // Actual pointer event through the cross-domain candidate: entry selection and
+    // return must invoke the same source composables. Distinct from pure route checks.
+    var navPointerObserved = HiltechNavigationArea.WORK
+    val navPointerScene = ImageComposeScene(width = 430, height = 960, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(18.dp)) {
+            HiltechNavigationStudy(
+                scope = navigationScope,
+                candidate = HiltechNavigationCandidate.CONTEXT_FIRST,
+                onAreaChanged = { navPointerObserved = it },
+            ) { area ->
+                when (area) {
+                    HiltechNavigationArea.WORK ->
+                        WarehouseCommandCenterSection(
+                            snapshot = commandCenter,
+                            presentation = WarehouseCommandCenterPresentation.ACTION_FIRST,
+                        )
+                    HiltechNavigationArea.OBJECTS ->
+                        WarehouseQuickScanControls(quickState, false, {}, {}, {})
+                    else -> error("Unexpected source destination rendered")
+                }
+            }
+        }
+    }
+    try {
+        captureScene(navPointerScene, directory.resolve("ux128-global-click-00-work.png"))
+        navPointerScene.sendPointerEvent(PointerEventType.Press, Offset(203f, 104f))
+        navPointerScene.sendPointerEvent(PointerEventType.Release, Offset(203f, 104f))
+        captureScene(navPointerScene, directory.resolve("ux128-global-click-01-objects.png"))
+        check(navPointerObserved == HiltechNavigationArea.OBJECTS) {
+            "Global context-first Objects destination must respond to a native pointer click."
+        }
+        navPointerScene.sendPointerEvent(PointerEventType.Press, Offset(70f, 104f))
+        navPointerScene.sendPointerEvent(PointerEventType.Release, Offset(70f, 104f))
+        captureScene(navPointerScene, directory.resolve("ux128-global-click-02-return.png"))
+        check(navPointerObserved == HiltechNavigationArea.WORK) {
+            "Global navigation must return to source work via a native pointer click."
+        }
+    } finally {
+        navPointerScene.close()
+    }
+    check(navigationScope.key != navigationScope.copy(contextId = "other-warehouse").key) {
+        "Changing object context must invalidate the remembered navigation scope."
+    }
+    println("UX128_NAV_POINTER_PASS objects=PASS return=PASS context_scope_reset=PASS")
+
     // Native common Compose focus flow; source read-only controls and same synthetic warehouse.
     // The two initial states are rendered independently. Pointer/touch interaction remains a separate gate.
     for (candidate in listOf(
