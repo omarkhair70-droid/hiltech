@@ -154,6 +154,31 @@ class ReceivingPersistence(private val jdbc: JdbcTemplate) {
         state.name, actor, at.atOffset(ZoneOffset.UTC), at.atOffset(ZoneOffset.UTC), id, version,
     ) == 1
 
+    /** A PO-line rejection is physical inspection truth, not inventory intake. */
+    fun hasPoRejection(lineId: UUID): Boolean = jdbc.queryForObject(
+        "SELECT EXISTS(SELECT 1 FROM procurement_po_receiving_rejection_event WHERE receiving_line_id=?)",
+        Boolean::class.java, lineId,
+    ) == true
+
+    fun insertPoRejection(
+        eventId: UUID, context: ReceivingCommandContext,
+        record: ReceivingRecordView, lineId: UUID, rejected: BigDecimal,
+        type: ReceivingDiscrepancyType, reason: String, at: Instant,
+    ) {
+        check(jdbc.update(
+            """
+            INSERT INTO procurement_po_receiving_rejection_event (
+              id, operation_id, organization_id, receiving_record_id,
+              receiving_line_id, rejected_quantity, rejection_type, reason,
+              rejected_by_user_id, rejected_at, correlation_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+            eventId, context.operationId, record.organizationId, record.id,
+            lineId, rejected, type.name, reason, context.actor,
+            at.atOffset(ZoneOffset.UTC), context.correlationId,
+        ) == 1)
+    }
+
     fun hasDiscrepancy(recordId: UUID): Boolean = jdbc.queryForObject(
         "SELECT EXISTS (SELECT 1 FROM receiving_discrepancy WHERE receiving_record_id = ?)",
         Boolean::class.java, recordId,
