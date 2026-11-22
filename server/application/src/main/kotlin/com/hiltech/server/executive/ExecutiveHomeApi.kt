@@ -11,7 +11,9 @@ import com.hiltech.server.work.ReviewProgressHealthService
 import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import org.springframework.web.bind.annotation.GetMapping
@@ -337,7 +339,7 @@ class ExecutiveHomeController(
     @Value("\${hiltech.executive.home-enabled:false}") private val enabled: Boolean,
 ) {
     @GetMapping("/v1/executive/home")
-    fun home(request: HttpServletRequest, @RequestParam organizationId: String): ExecutiveHomeResponse {
+    fun home(request: HttpServletRequest, @RequestParam organizationId: String): ResponseEntity<ExecutiveHomeResponse> {
         if (!enabled) {
             throw ProductApiException(
                 code = "EXECUTIVE_HOME_DISABLED",
@@ -361,6 +363,8 @@ class ExecutiveHomeController(
                 status = HttpStatus.BAD_REQUEST,
             )
         }
-        return service.home(actor, org, context.correlationId)
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .body(service.home(actor, org, context.correlationId))
     }
 }
