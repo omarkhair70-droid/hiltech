@@ -120,6 +120,14 @@ jobs:
             >> build/reports/devops-server-package/source.txt
           echo "CI-only image packaged; NOT pushed or deployed."
 
+      - name: Run isolated Spring Boot container against disposable PostgreSQL
+        shell: bash
+        env:
+          HILTECH_CI_IMAGE_SMOKE: "1"
+        run: |
+          set -euo pipefail
+          bash scripts/devops/image-runtime-smoke.sh "hiltech-server:ci-${GITHUB_SHA}"
+
       - name: Save restricted-lifetime build proof
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
