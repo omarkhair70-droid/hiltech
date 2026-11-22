@@ -133,6 +133,8 @@ class PurchaseOrderIssueService @Autowired constructor(
         if (request.operationId != ctx.operationId || request.expectedCandidateVersion != 1L)
             invalid()
         val candidate = candidates.byId(candidateId) ?: unavailable()
+        // Replays also require CURRENT authority; idempotency must not become a read bypass.
+        requireIssuerRead(ctx.actor, candidate.organizationId)
         val orderId = UUID.nameUUIDFromBytes(
             "hiltech:procurement:purchase-order:${ctx.operationId}".toByteArray(Charsets.UTF_8),
         )
@@ -159,6 +161,8 @@ class PurchaseOrderIssueService @Autowired constructor(
                     current.organizationId, frozenRequirement.workOrderId, current.stockItemId,
                 )
             ) unavailable()
+            if (!purchases.lockCurrentPurchasingOrganization(current.organizationId))
+                unavailable()
             val now = clock.instant()
             val subject = ApprovalSubjectRef(
                 current.organizationId, "PROCUREMENT_PO_CANDIDATE", current.id, 1L,
