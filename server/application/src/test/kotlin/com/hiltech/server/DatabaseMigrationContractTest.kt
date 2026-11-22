@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(28, result.migrationsExecuted)
+        assertEquals(29, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -164,12 +164,15 @@ class DatabaseMigrationContractTest {
                         'procurement_po_supersession_link',
                         'procurement_po_receiving_rejection_event',
                         'procurement_service_need',
-                        'procurement_service_need_event'
+                        'procurement_service_need_event',
+                        'procurement_service_rfq',
+                        'procurement_service_quote_document_slot',
+                        'procurement_service_supplier_quote'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(88, tables.getInt(1))
+                assertEquals(91, tables.getInt(1))
 
                 // V0050 links canonical Warehouse Receiving to a company-scoped
                 // approved PO without creating another physical stock ledger.
