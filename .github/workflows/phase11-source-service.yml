@@ -8,7 +8,7 @@ on:
       - "server/application/src/main/kotlin/com/hiltech/server/service/**"
       - "server/application/src/test/kotlin/com/hiltech/server/service/**"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/service/**"
-      - "scripts/ci/phase11-schema-source-check.sql"
+      - "scripts/ci/phase11-*.sql"
   workflow_dispatch:
 
 permissions:
@@ -89,7 +89,9 @@ jobs:
           done
           psql -h localhost -U hiltech -d hiltech -v ON_ERROR_STOP=1 \
             -f scripts/ci/phase11-schema-source-check.sql
-          echo "PHASE11_PENDING_SCHEMA_PROOF_PASS"
+          psql -h localhost -U hiltech -d hiltech -v ON_ERROR_STOP=1 \
+            -f scripts/ci/phase11-postgres-negative-contract.sql
+          echo "PHASE11_PENDING_SCHEMA_AND_NEGATIVE_PROOFS_PASS"
           echo "Only an isolated CI database was modified; no Flyway number allocated."
 
   native-source-compile:
