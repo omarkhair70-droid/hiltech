@@ -16,7 +16,7 @@ CREATE TABLE procurement_service_order_candidate (
   correlation_id varchar(128) NOT NULL CHECK(length(btrim(correlation_id))>0),
   version bigint NOT NULL DEFAULT 1 CHECK(version=1),
   UNIQUE(id,organization_id),
-  UNIQUE(rfq_id),
+  UNIQUE(rfq_id,quote_id),
   FOREIGN KEY(rfq_id,organization_id)
     REFERENCES procurement_service_rfq(id,organization_id) ON DELETE RESTRICT,
   FOREIGN KEY(quote_id,organization_id)
@@ -31,10 +31,10 @@ FOR EACH ROW EXECUTE FUNCTION reject_procurement_draft_mutation();
 CREATE FUNCTION guard_procurement_service_order_candidate() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE q procurement_service_supplier_quote%ROWTYPE;
-DECLARE src procurement_service_rfq%ROWTYPE;
-DECLARE need procurement_service_need%ROWTYPE;
-DECLARE last procurement_service_need_event%ROWTYPE;
-DECLARE team_current bigint;
+  src procurement_service_rfq%ROWTYPE;
+  need procurement_service_need%ROWTYPE;
+  last procurement_service_need_event%ROWTYPE;
+  team_current bigint;
 BEGIN
   SELECT * INTO q FROM procurement_service_supplier_quote WHERE id=NEW.quote_id;
   SELECT * INTO src FROM procurement_service_rfq WHERE id=NEW.rfq_id FOR UPDATE;
@@ -105,6 +105,7 @@ CREATE TABLE procurement_service_order (
   operation_id uuid NOT NULL UNIQUE,
   organization_id uuid NOT NULL REFERENCES organization(id) ON DELETE RESTRICT,
   candidate_id uuid NOT NULL UNIQUE,
+  rfq_id uuid NOT NULL UNIQUE,
   quote_id uuid NOT NULL,
   supplier_organization_id uuid NOT NULL REFERENCES organization(id) ON DELETE RESTRICT,
   approval_request_id uuid NOT NULL REFERENCES approval_request(id) ON DELETE RESTRICT,
@@ -117,6 +118,8 @@ CREATE TABLE procurement_service_order (
   issued_at timestamptz NOT NULL,
   correlation_id varchar(128) NOT NULL CHECK(length(btrim(correlation_id))>0),
   UNIQUE(id,organization_id),
+  FOREIGN KEY(rfq_id,organization_id)
+    REFERENCES procurement_service_rfq(id,organization_id) ON DELETE RESTRICT,
   FOREIGN KEY(candidate_id,organization_id)
     REFERENCES procurement_service_order_candidate(id,organization_id) ON DELETE RESTRICT,
   FOREIGN KEY(quote_id,organization_id)
@@ -135,9 +138,9 @@ FOR EACH ROW EXECUTE FUNCTION reject_procurement_draft_mutation();
 
 CREATE FUNCTION guard_procurement_service_order() RETURNS trigger
 LANGUAGE plpgsql AS $$
-DECLARE candidate procurement_service_order_candidate%ROWTYPE;
-DECLARE approval approval_request%ROWTYPE;
-DECLARE policy approval_policy_version%ROWTYPE;
+  candidate procurement_service_order_candidate%ROWTYPE;
+  approval approval_request%ROWTYPE;
+  policy approval_policy_version%ROWTYPE;
 BEGIN
   SELECT * INTO candidate FROM procurement_service_order_candidate WHERE id=NEW.candidate_id FOR UPDATE;
   SELECT * INTO approval FROM approval_request WHERE id=NEW.approval_request_id FOR UPDATE;
@@ -145,7 +148,7 @@ BEGIN
     WHERE organization_id=NEW.organization_id AND policy_key=NEW.approval_policy_key
       AND version_number=NEW.approval_policy_version;
   IF candidate.id IS NULL OR candidate.organization_id<>NEW.organization_id
-    OR candidate.quote_id<>NEW.quote_id
+    OR candidate.quote_id<>NEW.quote_id OR candidate.rfq_id<>NEW.rfq_id
     OR candidate.supplier_organization_id<>NEW.supplier_organization_id
     OR candidate.currency<>NEW.currency
     OR candidate.total_amount<>NEW.total_amount
