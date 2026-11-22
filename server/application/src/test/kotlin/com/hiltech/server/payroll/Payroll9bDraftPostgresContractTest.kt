@@ -258,6 +258,19 @@ class Payroll9bDraftPostgresContractTest {
 
         // Routine payroll release is signed by a policy-authorized reviewer,
         // does not create a payment, and cannot bypass the latest source guard.
+        // Real database-backed company policy fixture; no implicit global
+        // owner escalation and no production policy seeded anywhere.
+        jdbc.update(
+            """
+            INSERT INTO approval_policy_version (
+                id, organization_id, policy_key, version_number,
+                lifecycle_state, approval_required, step_mode,
+                effective_from, created_by_user_id, created_at
+            ) VALUES (?, ?, 'PAYROLL_REVIEW_TEST', 1, 'ACTIVE',
+                     false, 'NO_APPROVAL_REQUIRED', ?, ?, ?)
+            """.trimIndent(),
+            UUID.randomUUID(), org, time.minusDays(2), actor, time,
+        )
         var policyAvailable = false
         var decisionVersion = 1
         val policyDecision = object : PayrollRunReleaseDecisionPort {
@@ -311,6 +324,23 @@ class Payroll9bDraftPostgresContractTest {
             jdbc.update(
                 "UPDATE payroll_run_release SET policy_version = 99 WHERE id = ?",
                 UUID.fromString(released.releaseId),
+            )
+        }
+        // A direct SQL attempt cannot release an obsolete generation even
+        // with a current routine policy and a legitimate organization user.
+        assertThrows<Exception> {
+            jdbc.update(
+                """
+                INSERT INTO payroll_run_release (
+                    id, operation_id, organization_id, run_version_id,
+                    run_source_fingerprint, policy_key, policy_version,
+                    decision_path, released_by_user_id, released_at
+                ) VALUES (?, ?, ?, ?, ?, 'PAYROLL_REVIEW_TEST', 1,
+                          'ROUTINE_AUTHORIZED', ?, ?)
+                """.trimIndent(),
+                UUID.randomUUID(), UUID.randomUUID(), org,
+                UUID.fromString(first.first.runVersionId),
+                first.first.sourceFingerprint, actor, time,
             )
         }
         val realPublication = ApprovalBackedPayrollPublication(
