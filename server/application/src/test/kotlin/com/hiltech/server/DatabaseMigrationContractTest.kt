@@ -86,7 +86,11 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(27, result.migrationsExecuted)
+        // P7 V0034–V0060 contributes 27 post-baseline migrations.
+        // This isolated Finance integration candidate additionally contains
+        // the PROVISIONAL V0061 payable candidate: 28 migrations after V0033.
+        // Do not merge this test before P7 and P8 source order is approved.
+        assertEquals(28, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
