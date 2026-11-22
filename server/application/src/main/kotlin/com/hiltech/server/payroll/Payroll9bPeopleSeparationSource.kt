@@ -1,6 +1,7 @@
 package com.hiltech.server.payroll
 
 import com.hiltech.server.people.OffboardingCaseState
+import com.hiltech.server.people.EmployeeState
 import com.hiltech.server.people.OffboardingPersistencePort
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -56,6 +57,12 @@ class PayrollPeopleSeparationSource(
         payrollPeriodId: UUID,
         employeeId: UUID,
     ): PayrollVerifiedSeparationEligibility? {
+        val currentEmployee = cases.employee(employeeId) ?: return null
+        // A rehired ACTIVE employee may retain a historical offboarding case.
+        // That old case must not poison a normal active payroll run.
+        if (currentEmployee.organizationId != organizationId ||
+            currentEmployee.state !in setOf(EmployeeState.OFFBOARDING, EmployeeState.FORMER)
+        ) return null
         val case = cases.latestForEmployee(employeeId) ?: return null
         if (case.organizationId != organizationId ||
             case.employeeId != employeeId ||
