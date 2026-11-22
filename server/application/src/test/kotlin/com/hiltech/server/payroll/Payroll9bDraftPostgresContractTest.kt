@@ -273,12 +273,20 @@ class Payroll9bDraftPostgresContractTest {
         )
         var policyAvailable = false
         var decisionVersion = 1
+        var permittedSubject = currentSubject
+        var verifiedCorrection: PayrollVerifiedCorrectionAuthorization? = null
+        val correctionProvider = object : PayrollVerifiedCorrectionSourcePort {
+            override fun verifiedFor(
+                organizationId: UUID, originalRunVersionId: UUID,
+                replacementRunVersionId: UUID,
+            ): PayrollVerifiedCorrectionAuthorization? = verifiedCorrection
+        }
         val policyDecision = object : PayrollRunReleaseDecisionPort {
             override fun resolve(
                 actorId: UUID, subject: ApprovalSubjectRef, policyKey: String,
             ): PayrollRunPolicyDecision? =
                 if (policyAvailable && actorId == actor &&
-                    subject == currentSubject && policyKey == "PAYROLL_REVIEW_TEST"
+                    subject == permittedSubject && policyKey == "PAYROLL_REVIEW_TEST"
                 ) PayrollRunPolicyDecision(
                     "ROUTINE_AUTHORIZED", policyKey, decisionVersion, null,
                 ) else null
@@ -287,9 +295,8 @@ class Payroll9bDraftPostgresContractTest {
             jdbc, service, permission, guard, policyDecision,
             Payroll9cCorrectionService(
                 jdbc,
-                StaticListableBeanFactory().getBeanProvider(
-                    PayrollVerifiedCorrectionSourcePort::class.java,
-                ),
+                StaticListableBeanFactory(mapOf("verifiedCorrection" to correctionProvider))
+                    .getBeanProvider(PayrollVerifiedCorrectionSourcePort::class.java),
                 AuditEventWriter.NOOP, clock,
             ),
             AuditEventWriter.NOOP, clock, "PAYROLL_REVIEW_TEST",
@@ -461,6 +468,92 @@ class Payroll9bDraftPostgresContractTest {
             self.own(actor, org, "p9c-private").items.single().runVersionId,
         )
         assertEquals("RETURNED", self.own(actor, org, "p9c-private").items.single().paymentStatus)
+
+        // First correction draft is not itself an authorization.
+        assertThrows<ProductApiException> {
+            tx.execute {
+                releases.release(
+                    actor, UUID.fromString(unapprovedCorrection.first.runVersionId),
+                    UUID.randomUUID(), "p9c-correction",
+                )
+            }
+        }
+        // Changing an authoritative FINANCE coverage version makes the
+        // correction materially different without fabricating salary figures.
+        attestationVersion = 2L
+        val corrected = tx.execute {
+            service.create(periodId, UUID.randomUUID(), actor, "p9c-correction")
+        }!!
+        assertEquals(4, corrected.first.generation)
+        assertFalse(newer.first.sourceFingerprint == corrected.first.sourceFingerprint)
+        val correctedRun = UUID.fromString(corrected.first.runVersionId)
+        permittedSubject = ApprovalSubjectRef(org, "PAYROLL_RUN_VERSION", correctedRun, 1)
+        assertTrue(guard.isCurrent(permittedSubject))
+        assertThrows<ProductApiException> {
+            tx.execute { releases.release(actor, correctedRun, UUID.randomUUID(), "p9c-correction") }
+        }
+        // Finance's signed reversal/adjustment authority is an independent
+        // source. Only after it exists can the new version be released.
+        verifiedCorrection = PayrollVerifiedCorrectionAuthorization(
+            organizationId = org,
+            originalRunVersionId = publishedRunId,
+            replacementRunVersionId = correctedRun,
+            originalSourceFingerprint = newer.first.sourceFingerprint,
+            replacementSourceFingerprint = corrected.first.sourceFingerprint,
+            approval = PayrollInputApproval.APPROVED,
+            reasonCode = "APPROVED_INPUT_CORRECTION",
+            reasonEvidenceReference = "synthetic-approved-hr-correction",
+            reasonEvidenceVersion = 1,
+            financeDisposition = PayrollFinanceCorrectionDisposition.REVERSAL_VERIFIED,
+            financeClearanceReference = "synthetic-finance-reversal-confirmed",
+            financeClearanceVersion = 2,
+        )
+        val correctionOperation = UUID.randomUUID()
+        val correctedRelease = tx.execute {
+            releases.release(actor, correctedRun, correctionOperation, "p9c-correction")
+        }!!
+        assertEquals("RELEASED_FOR_FINANCE_REVIEW", correctedRelease.status)
+        assertEquals(1, jdbc.queryForObject(
+            "SELECT count(*) FROM payroll_run_correction WHERE replacement_run_version_id = ?",
+            Int::class.java, correctedRun,
+        ))
+        assertTrue(tx.execute {
+            releases.release(actor, correctedRun, correctionOperation, "p9c-correction")
+        }!!.replayed)
+        // An historical retry of the ORIGINAL release must remain replayable.
+        assertTrue(tx.execute {
+            releases.release(actor, publishedRunId, releaseOperation, "p9b-release")
+        }!!.replayed)
+        assertFalse(realPublication.canPublish(
+            org, publishedRunId, newer.first.sourceFingerprint,
+        ))
+        assertThrows<Exception> {
+            jdbc.update(
+                "DELETE FROM payroll_run_correction WHERE replacement_run_version_id = ?",
+                correctedRun,
+            )
+        }
+        assertThrows<Exception> {
+            jdbc.update(
+                """
+                INSERT INTO payroll_run_correction (
+                    id, operation_id, organization_id, original_run_version_id,
+                    original_release_id, replacement_run_version_id,
+                    original_source_fingerprint, replacement_source_fingerprint,
+                    reason_code, reason_evidence_ref, reason_evidence_version,
+                    finance_disposition, finance_clearance_ref, finance_clearance_version,
+                    recorded_by_user_id, recorded_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'APPROVED_INPUT_CORRECTION',
+                          'synthetic-source', 1, 'REVERSAL_VERIFIED',
+                          'synthetic-finance', 1, ?, ?)
+                """.trimIndent(),
+                UUID.randomUUID(), UUID.randomUUID(), org,
+                UUID.fromString(first.first.runVersionId),
+                UUID.fromString(released.releaseId),
+                correctedRun, first.first.sourceFingerprint,
+                corrected.first.sourceFingerprint, actor, time,
+            )
+        }
 
         // Unknown and former identities have no other employee's payslip.
         assertThrows<ProductApiException> {
