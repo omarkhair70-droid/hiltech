@@ -1,0 +1,13 @@
+// UX #128: opt-in, QA-only task registration. No production Gradle or app changes.
+// Re-run from the repository root using:
+// ./gradlew -I docs/10-design/ux128-phase6-pm-headless.init.gradle :apps:desktopApp:renderUx128Phase6Pm --no-daemon
+gradle.projectsEvaluated {
+    def desktop = gradle.rootProject.project(':apps:desktopApp')
+    desktop.tasks.register('renderUx128Phase6Pm', org.gradle.api.tasks.JavaExec) {
+        group = 'verification'
+        description = 'Renders Phase4 PM canonical Compose fixture headlessly without desktop Robot capture.'
+        dependsOn(desktop.tasks.named('testClasses'))
+        classpath = desktop.sourceSets.test.runtimeClasspath
+        mainClass.set('com.hiltech.desktop.evidence.UX128Phase6ProjectHeadlessEvidenceKt')
+    }
+}
