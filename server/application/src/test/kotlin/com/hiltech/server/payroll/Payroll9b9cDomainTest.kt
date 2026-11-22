@@ -103,6 +103,40 @@ class Payroll9b9cDomainTest {
     }
 
     @Test
+    fun preventScientificOverflowRoundedToZeroAndUnapprovedPrecision() {
+        val normal = component(PayrollComponentKind.EARNING, "100")
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(org, employee, policy,
+                listOf(normal.copy(amount = "1E+100")))
+        }
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(org, employee, policy,
+                listOf(normal.copy(amount = "0.004")))
+        }
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(org, employee,
+                policy.copy(roundingMode = RoundingMode.UNNECESSARY),
+                listOf(normal.copy(amount = "100.001")))
+        }
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(org, employee, policy,
+                listOf(normal.copy(sourceDomain = "untrusted@invalid")))
+        }
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(org, employee, policy,
+                listOf(normal.copy(sourceApprovalReference = "x".repeat(241))))
+        }
+        // Each component may fit, but the combined total must also fit the
+        // database's numeric(20,6) range.
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(org, employee, policy,
+                listOf(normal.copy(amount = "99999999999999.00"),
+                    normal.copy(sourceId = UUID.randomUUID(),
+                        amount = "99999999999999.00")))
+        }
+    }
+
+    @Test
     fun duplicateComponentIsRejectedAndZeroIsNotInvented() {
         val earning = component(PayrollComponentKind.EARNING, "100")
         assertThrows<ProductApiException> {
