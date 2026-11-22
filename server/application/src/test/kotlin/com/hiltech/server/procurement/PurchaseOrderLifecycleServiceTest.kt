@@ -83,8 +83,11 @@ class PurchaseOrderLifecycleServiceTest {
 
     @Test fun repeatedOrVersionStaleCancellationCannotModifyIssuedHistory() {
         allowed()
-        assertEquals("PROCUREMENT_PO_CANCELLATION_INVALID", assertThrows<ProductApiException> {
+        assertEquals("PROCUREMENT_PO_LIFECYCLE_CHANGED", assertThrows<ProductApiException> {
             service().cancel(ctx, poId, request(revision = 2))
+        }.code)
+        assertEquals("PROCUREMENT_PO_CANCELLATION_INVALID", assertThrows<ProductApiException> {
+            service().cancel(ctx, poId, request(reason = "short"))
         }.code)
         stored = PurchaseOrderLifecycleEvent(
             UUID.randomUUID(), UUID.randomUUID(), org, poId, 2L,
