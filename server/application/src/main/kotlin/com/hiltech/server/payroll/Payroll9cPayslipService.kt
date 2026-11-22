@@ -91,10 +91,15 @@ class Payroll9cPayslipService(
             FROM payroll_run_employee_line l
             JOIN payroll_run_version rv ON rv.id = l.run_version_id
             JOIN payroll_period p ON p.id = rv.payroll_period_id
+            JOIN payroll_run_release published
+              ON published.run_version_id = rv.id
+             AND published.organization_id = rv.organization_id
             WHERE l.employee_id = ? AND rv.organization_id = ?
               AND rv.generation = (
                   SELECT MAX(latest.generation)
                   FROM payroll_run_version latest
+                  JOIN payroll_run_release completed
+                    ON completed.run_version_id = latest.id
                   WHERE latest.payroll_period_id = rv.payroll_period_id
               )
             ORDER BY p.end_date DESC, rv.generation DESC
