@@ -29,6 +29,70 @@ data class CreateCommercialOpportunityDto(
     val expectedDecisionDate: String? = null,
 )
 @Serializable
+data class CommercialDealDetailDto(
+    val opportunity: CommercialOpportunityDetailDto,
+    val qualification: List<CommercialQualificationDto> = emptyList(),
+    val tenders: List<CommercialTenderSummaryDto> = emptyList(),
+    val visits: List<CommercialVisitSummaryDto> = emptyList(),
+    val scopeVersions: List<CommercialScopeVersionDto> = emptyList(),
+    val quotes: List<CommercialQuoteSummaryDto> = emptyList(),
+)
+
+@Serializable
+data class CommercialOpportunityDetailDto(
+    val id: String,
+    val title: String,
+    val state: String,
+    val version: Long,
+    val source: String,
+    @SerialName("client_organization_id") val clientOrganizationId: String,
+)
+
+@Serializable
+data class CommercialQualificationDto(
+    val id: String,
+    @SerialName("discovery_summary") val discoverySummary: String,
+    @SerialName("open_questions") val openQuestions: String,
+)
+
+@Serializable
+data class CommercialTenderSummaryDto(
+    val id: String,
+    @SerialName("tender_type") val tenderType: String,
+    @SerialName("revision_number") val revisionNumber: Int,
+    @SerialName("submission_state") val submissionState: String,
+    @SerialName("reference_number") val referenceNumber: String? = null,
+)
+
+@Serializable
+data class CommercialVisitSummaryDto(
+    val id: String,
+    val state: String,
+    val purpose: String,
+    val version: Long,
+)
+
+@Serializable
+data class CommercialScopeVersionDto(
+    val id: String,
+    @SerialName("version_number") val versionNumber: Int,
+    val description: String,
+    val inclusions: String,
+    val exclusions: String,
+    val assumptions: String,
+)
+
+@Serializable
+data class CommercialQuoteSummaryDto(
+    val id: String,
+    @SerialName("quote_code") val quoteCode: String,
+    @SerialName("version_number") val versionNumber: Int,
+    val state: String,
+    @SerialName("total_price") val totalPrice: JsonPrimitive,
+    val currency: String,
+)
+
+@Serializable
 data class QualifyCommercialOpportunityDto(
     val operationId: String,
     val baseVersion: Long,
@@ -161,6 +225,14 @@ class CommercialApiClient(
             path = "/v1/commercial/opportunities?organizationId=" + organizationId,
             options = HiltechRequestOptions(installationId = installationId),
             decode = { json.decodeFromString(ListSerializer(CommercialOpportunityDto.serializer()), it) },
+        )
+
+    suspend fun detail(opportunityId: String, installationId: String): CommercialDealDetailDto =
+        api.request(
+            method = HttpMethod.Get,
+            path = "/v1/commercial/opportunities/" + opportunityId,
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(CommercialDealDetailDto.serializer(), it) },
         )
 
     suspend fun createOpportunity(request: CreateCommercialOpportunityDto, installationId: String) =
