@@ -30,6 +30,7 @@ fun PurchaseOrderIssuerSection(
     installationId: String,
     newOperationId: () -> String,
     cancellationEnabled: Boolean = false,
+    amendmentApi: PurchaseOrderDeliveryAmendmentApiClient? = null,
 ) {
     val scope = rememberCoroutineScope()
     var busy by remember(organizationId) { mutableStateOf(false) }
@@ -62,6 +63,15 @@ fun PurchaseOrderIssuerSection(
         if (cancellationEnabled) {
             PurchaseOrderCancellationSection(
                 api = api,
+                organizationId = organizationId,
+                installationId = installationId,
+                newOperationId = newOperationId,
+            )
+        }
+        if (amendmentApi != null) {
+            PurchaseOrderDeliveryAmendmentSection(
+                issueApi = api,
+                api = amendmentApi,
                 organizationId = organizationId,
                 installationId = installationId,
                 newOperationId = newOperationId,
