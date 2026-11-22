@@ -222,7 +222,7 @@ fun main() = runBlocking<Unit> {
 
         // Reassign/remove another job with same local focus state, ensuring it
         // cannot display an already-removed source object after a new selection.
-        manyState = manyState.copy(today = manyTasks.filterNot { it.workOrderId == clickedIds.single() })
+        manyState = manyState.copy(today = reordered.filterNot { it.workOrderId == selectedWorkId })
         save(multipleScene, dir.resolve("ux128-field-10-multiple-revoked.png"), 430, 720)
     } finally {
         multipleScene.close()
