@@ -188,7 +188,7 @@ class ApprovalBackedPayrollPublication(
         runVersionId: UUID,
         exactSourceFingerprint: String,
     ): Boolean = runCatching {
-        if (!Regex("^[A-Z][A-Z0-9_]{2,95}$").matches(policyKey)) return false
+        if (!Regex("^[A-Z][A-Z0-9_]{2,95}$").matches(policyKey)) return@runCatching false
         val record = jdbc.query(
             """
             SELECT r.run_source_fingerprint, r.policy_version,
@@ -209,16 +209,16 @@ class ApprovalBackedPayrollPublication(
                 )
             },
             organizationId, runVersionId, policyKey, exactSourceFingerprint,
-        ).singleOrNull() ?: return false
-        if (record.fingerprint != exactSourceFingerprint) return false
+        ).singleOrNull() ?: return@runCatching false
+        if (record.fingerprint != exactSourceFingerprint) return@runCatching false
         val subject = ApprovalSubjectRef(
             organizationId = organizationId,
             subjectType = "PAYROLL_RUN_VERSION",
             subjectId = runVersionId,
             subjectVersion = 1,
         )
-        if (!guard.isCurrent(subject)) return false
-        val current = decisions.resolve(record.actorId, subject, policyKey) ?: return false
+        if (!guard.isCurrent(subject)) return@runCatching false
+        val current = decisions.resolve(record.actorId, subject, policyKey) ?: return@runCatching false
         current.policyVersion == record.policyVersion &&
             current.path == record.path &&
             current.approvalRequestId == record.approvalId
