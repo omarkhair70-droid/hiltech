@@ -90,7 +90,25 @@ fun main() = runBlocking<Unit> {
         selectedScene.sendPointerEvent(PointerEventType.Release, Offset(187f, 148f))
         check(selected.size == 2) { "Back must restore Today and permit same WorkOrder selection." }
         fieldState = fixtureState("revoked")
+        settleNativeLayout(selectedScene)
         save(selectedScene, dir.resolve("ux128-field-04-revoked-phone.png"), 430, 960)
+        check(selected.size == 2) { "Removing the source assignment must not reselect it." }
+
+        // A backend read may later reintroduce the same WorkOrder ID.
+        // Local focus is NOT authorization and cannot silently reopen old
+        // selected content after that temporary assignment revocation.
+        fieldState = fixtureState("detail")
+        settleNativeLayout(selectedScene)
+        save(selectedScene, dir.resolve("ux128-field-13-regranted-not-autofocused.png"), 430, 960)
+        check(selected.size == 2)
+        selectedScene.sendPointerEvent(PointerEventType.Press, Offset(187f, 148f))
+        selectedScene.sendPointerEvent(PointerEventType.Release, Offset(187f, 148f))
+        settleNativeLayout(selectedScene)
+        check(selected.size == 3 && selected.last() == WORK_ORDER_ID) {
+            "Same-ID regrant must show Today until explicitly selected again: $selected"
+        }
+        save(selectedScene, dir.resolve("ux128-field-14-regranted-explicit-focus.png"), 430, 960)
+        println("UX128_FIELD_REVOKE_REGRANT_PASS removed=PASS no_auto_focus=PASS explicit_reselect=PASS")
     } finally {
         selectedScene.close()
     }
