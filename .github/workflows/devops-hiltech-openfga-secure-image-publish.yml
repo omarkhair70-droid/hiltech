@@ -1,6 +1,10 @@
 name: Publish HILTECH OpenFGA-authenticated staging API (no deploy)
 
 on:
+  push:
+    branches: [security/hiltech-openfga-preshared-20261122]
+    paths:
+      - ".github/workflows/devops-hiltech-openfga-secure-image-publish.yml"
   workflow_dispatch:
     inputs:
       confirmation:
@@ -21,11 +25,11 @@ concurrency:
 
 jobs:
   prove:
-    if: github.ref == 'refs/heads/security/hiltech-openfga-preshared-20261122' && inputs.confirmation == 'publish-openfga-auth-staging'
+    if: github.ref == 'refs/heads/security/hiltech-openfga-preshared-20261122' && ((github.event_name == 'push' && contains(github.event.head_commit.message, '[approve-hiltech-staging-image]')) || (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'publish-openfga-auth-staging'))
     uses: ./.github/workflows/devops-hiltech-server-package.yml
 
   security:
-    if: github.ref == 'refs/heads/security/hiltech-openfga-preshared-20261122' && inputs.confirmation == 'publish-openfga-auth-staging'
+    if: github.ref == 'refs/heads/security/hiltech-openfga-preshared-20261122' && ((github.event_name == 'push' && contains(github.event.head_commit.message, '[approve-hiltech-staging-image]')) || (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'publish-openfga-auth-staging'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
