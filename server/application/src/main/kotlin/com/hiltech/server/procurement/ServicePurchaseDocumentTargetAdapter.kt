@@ -11,7 +11,7 @@ import java.util.UUID
 
 /** Reuse the current ApprovalEngine binding, not a second team/role hierarchy. */
 @Component
-class ServicePurchaseDocumentTargetAdapter(
+class ServicePurchaseDocumentTargetAdapter @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val approvals:ApprovalPersistencePort,
     private val clock:Clock,
