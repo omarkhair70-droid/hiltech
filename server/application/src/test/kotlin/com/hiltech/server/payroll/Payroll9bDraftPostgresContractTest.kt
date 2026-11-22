@@ -516,7 +516,12 @@ class Payroll9bDraftPostgresContractTest {
         )
         assertEquals("RETURNED", self.own(actor, org, "p9c-private").items.single().paymentStatus)
 
-        // First correction draft is not itself an authorization.
+        // A same-source draft cannot masquerade as a correction even
+        // when its reviewer has valid Payroll REVIEW and company policy.
+        permittedSubject = ApprovalSubjectRef(
+            org, "PAYROLL_RUN_VERSION",
+            UUID.fromString(unapprovedCorrection.first.runVersionId), 1,
+        )
         assertThrows<ProductApiException> {
             tx.execute {
                 releases.release(
