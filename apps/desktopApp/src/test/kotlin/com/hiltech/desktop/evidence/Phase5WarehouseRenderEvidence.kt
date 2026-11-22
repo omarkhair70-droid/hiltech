@@ -315,6 +315,13 @@ fun main() = runBlocking<Unit> {
         allowedNavigation, HiltechNavigationArea.WORK,
     )
     check(routedNavigation.current == HiltechNavigationArea.OBJECTS)
+    val returnedByTab = hiltechNavigationSelect(
+        routedNavigation, HiltechNavigationArea.WORK,
+        allowedNavigation, HiltechNavigationArea.WORK,
+    )
+    check(returnedByTab.current == HiltechNavigationArea.WORK && returnedByTab.history.isEmpty()) {
+        "Selecting a previous area must consume navigation history, not create a back loop."
+    }
     check(hiltechNavigationBack(
         routedNavigation, allowedNavigation, HiltechNavigationArea.WORK,
     ).current == HiltechNavigationArea.WORK)
@@ -390,11 +397,12 @@ fun main() = runBlocking<Unit> {
         check(navPointerObserved == HiltechNavigationArea.OBJECTS) {
             "Global context-first Objects destination must respond to a native pointer click."
         }
-        navPointerScene.sendPointerEvent(PointerEventType.Press, Offset(70f, 104f))
-        navPointerScene.sendPointerEvent(PointerEventType.Release, Offset(70f, 104f))
+        // Back is a real UI control, not an artificial test state flip.
+        navPointerScene.sendPointerEvent(PointerEventType.Press, Offset(90f, 167f))
+        navPointerScene.sendPointerEvent(PointerEventType.Release, Offset(90f, 167f))
         captureScene(navPointerScene, directory.resolve("ux128-global-click-02-return.png"))
         check(navPointerObserved == HiltechNavigationArea.WORK) {
-            "Global navigation must return to source work via a native pointer click."
+            "The visible back control must return to the previous source work context."
         }
     } finally {
         navPointerScene.close()
