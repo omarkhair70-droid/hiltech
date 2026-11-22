@@ -79,7 +79,7 @@ private data class OrderedFacts(
     val quantity: BigDecimal, val currency: String,
     val unitPrice: BigDecimal, val tax: BigDecimal,
 )
-private data class ReceiptFacts(val accepted: BigDecimal, val discrepancy: Boolean)
+private data class ReceiptFacts(val accepted: BigDecimal, val discrepancy: Boolean, val receiptRefs: String)
 
 /**
  * S05 receives restricted, READY invoice Evidence; compares immutable
@@ -322,15 +322,18 @@ class SupplierInvoiceMatchingService @Autowired constructor(
                 JOIN procurement_po_receiving_link b2 ON b2.receiving_record_id=d.receiving_record_id
                 WHERE b2.purchase_order_id=?
               ) OR COALESCE(BOOL_OR(l.condition_received IN ('DAMAGED','UNFIT')),false)
-                AS has_discrepancy
+                AS has_discrepancy,
+              COALESCE(STRING_AGG(l.id::text || ':' || l.version::text, ',' ORDER BY l.id), '')
+                AS receipt_refs
             FROM procurement_po_receiving_link b
             JOIN receiving_line l ON l.receiving_record_id=b.receiving_record_id
             WHERE b.purchase_order_id=? AND l.received_at IS NOT NULL
             """.trimIndent(),
             { rs, _ -> ReceiptFacts(
                 rs.getBigDecimal("accepted"), rs.getBoolean("has_discrepancy"),
+                rs.getString("receipt_refs"),
             ) }, inv.po, inv.po,
-        ).singleOrNull() ?: ReceiptFacts(BigDecimal.ZERO, false)
+        ).singleOrNull() ?: ReceiptFacts(BigDecimal.ZERO, false, "")
         val invoicedTotal = jdbc.queryForObject(
             "SELECT COALESCE(SUM(quantity),0) FROM procurement_supplier_invoice_intake WHERE purchase_order_id=?",
             BigDecimal::class.java, inv.po,
@@ -346,13 +349,14 @@ class SupplierInvoiceMatchingService @Autowired constructor(
             pDelta.compareTo(BigDecimal.ZERO) != 0 -> "PRICE_MISMATCH"
             tDelta.compareTo(BigDecimal.ZERO) != 0 -> "TAX_MISMATCH"
             received.accepted.signum() == 0 -> "MISSING_RECEIPT"
-            qDelta.signum() < 0 -> "QUANTITY_MISMATCH"
+            qDelta.signum() != 0 -> "QUANTITY_MISMATCH"
             received.accepted.compareTo(po.quantity) < 0 -> "PARTIAL_RECEIPT"
             else -> "MATCHED"
         }
         val source = hash(inv.id, po.id, po.quantity, po.currency, po.unitPrice,
             po.tax, inv.quantity, inv.currency, inv.unitPrice, inv.tax, inv.evidenceId,
-            received.accepted, received.discrepancy, invoicedTotal, result)
+            received.accepted, received.discrepancy, received.receiptRefs,
+            invoicedTotal, result)
         return SupplierInvoiceMatchView(inv.id, inv.po, source, result,
             po.quantity.toPlainString(), received.accepted.toPlainString(),
             invoicedTotal.toPlainString(), qDelta.toPlainString(),
