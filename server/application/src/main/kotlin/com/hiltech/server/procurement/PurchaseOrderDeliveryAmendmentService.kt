@@ -120,7 +120,7 @@ class PurchaseOrderDeliveryAmendmentService @Autowired constructor(
         if (source.organizationId != state.order.organizationId ||
             demand.organizationId != state.order.organizationId
         ) unavailable()
-        val workOrder = work.workOrder(demand.workOrderId) ?: unavailable()
+        val workOrder = demand.workOrderId?.let { work.workOrder(it) } ?: unavailable()
         if (workOrder.organizationId != state.order.organizationId) unavailable()
         return purchases.deliveryDestinations(
             state.order.organizationId, workOrder.projectId, workOrder.siteId,
@@ -191,7 +191,7 @@ class PurchaseOrderDeliveryAmendmentService @Autowired constructor(
                 demand.organizationId != order.organizationId ||
                 source.stockItemId != order.stockItemId
             ) unavailable()
-            val workOrder = work.workOrder(demand.workOrderId) ?: unavailable()
+            val workOrder = demand.workOrderId?.let { work.workOrder(it) } ?: unavailable()
             if (workOrder.organizationId != order.organizationId ||
                 !purchases.validDeliveryLocation(
                     order.organizationId, request.proposedStorageLocationId,
