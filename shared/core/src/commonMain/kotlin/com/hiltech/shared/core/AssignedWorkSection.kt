@@ -21,6 +21,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.HiltechOperationalTheme
+import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.HiltechSectionHeading
+import com.hiltech.shared.core.design.HiltechSpace
+import com.hiltech.shared.core.design.HiltechStateTag
+import com.hiltech.shared.core.design.HiltechStateTone
 import com.hiltech.shared.core.field.FieldExecutionIntent
 import com.hiltech.shared.core.field.FieldMaterialUsageIntent
 import com.hiltech.shared.core.field.FieldQueuedIntent
@@ -205,70 +211,53 @@ private fun TodayColumn(
     onSelectWork: (String) -> Unit,
     modifier: Modifier,
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement =
-            Arrangement.spacedBy(8.dp),
-    ) {
-        Row(
-            horizontalArrangement =
-                Arrangement.spacedBy(8.dp),
+    HiltechOperationalTheme {
+        Column(
+            modifier = modifier,
+            verticalArrangement = Arrangement.spacedBy(HiltechSpace.small),
         ) {
-            Text(
-                "شغلي اليوم",
-                style =
-                    MaterialTheme.typography
-                        .titleLarge,
-            )
-            OutlinedButton(
-                onClick = onRefresh,
-            ) {
-                Text("تحديث")
-            }
-        }
-
-        if (state.loading) {
-            Row(
-                horizontalArrangement =
-                    Arrangement.spacedBy(8.dp),
-            ) {
-                CircularProgressIndicator()
-                Text("بنجيب آخر تكليفاتك…")
-            }
-        }
-
-        if (state.cachedTodayAt != null) {
-            Text("نسخة محفوظة بدون اتصال — قد يكون التكليف أو الجاهزية اتغيروا.")
-            Text("آخر وقت من السيرفر: " + (state.today.firstOrNull()?.bundleAsOf ?: "غير متاح"))
-        }
-
-        state.errorMessage?.let {
-            Text(
-                "تعذر تحديث الشغل: " + it,
-            )
-        }
-
-        if (
-            !state.loading &&
-            state.today.isEmpty()
-        ) {
-            Text(
-                "مفيش WorkOrder حالي متعيّن ليك. لو التكليف اتشال أو اتبدل، هيختفي هنا فورًا.",
-            )
-        }
-
-        state.today.forEach { item ->
-            TodayCard(
-                item = item,
-                selected =
-                    state.selectedWorkOrderId ==
-                        item.workOrderId,
-                onClick = {
-                    onSelectWork(
-                        item.workOrderId,
+            HiltechPanel(Modifier.fillMaxWidth()) {
+                HiltechSectionHeading(
+                    index = "FIELD / TODAY",
+                    title = "شغلي اليوم",
+                    subtitle = "تكليفاتك الحالية من مصدر العمل المسموح لك بالاطلاع عليه.",
+                )
+                OutlinedButton(onClick = onRefresh) {
+                    Text("تحديث التكليفات")
+                }
+                if (state.loading) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(HiltechSpace.xs)) {
+                        CircularProgressIndicator()
+                        Text("بنجيب آخر تكليفاتك…")
+                    }
+                }
+                if (state.cachedTodayAt != null) {
+                    HiltechStateTag(
+                        "نسخة محفوظة بدون اتصال — قد يكون التكليف أو الجاهزية اتغيروا.",
+                        HiltechStateTone.ATTENTION,
                     )
-                },
-            )
+                    Text("آخر وقت من السيرفر: " +
+                        (state.today.firstOrNull()?.bundleAsOf ?: "غير متاح"))
+                }
+                state.errorMessage?.let { issue ->
+                    HiltechStateTag(
+                        "تعذر تحديث الشغل: " + issue,
+                        HiltechStateTone.BLOCKED,
+                    )
+                }
+                if (!state.loading && state.today.isEmpty()) {
+                    Text(
+                        "مفيش WorkOrder حالي متعيّن ليك. لو التكليف اتشال أو اتبدل، هيختفي هنا فورًا.",
+                    )
+                }
+            }
+            state.today.forEach { item ->
+                TodayCard(
+                    item = item,
+                    selected = state.selectedWorkOrderId == item.workOrderId,
+                    onClick = { onSelectWork(item.workOrderId) },
+                )
+            }
         }
     }
 }
@@ -280,64 +269,43 @@ private fun TodayCard(
     onClick: () -> Unit,
 ) {
     OutlinedButton(
-        modifier =
-            Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         onClick = onClick,
     ) {
         Column(
-            modifier =
-                Modifier.fillMaxWidth(),
-            verticalArrangement =
-                Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(HiltechSpace.xs),
         ) {
             Text(
-                item.workOrderCode +
-                    " · " +
-                    item.title,
-                style =
-                    MaterialTheme.typography
-                        .titleMedium,
+                item.workOrderCode + " · " + item.title,
+                style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                item.project.projectCode +
-                    " · " +
-                    item.site.siteCode +
-                    " — " +
-                    item.site.name,
+                item.project.projectCode + " · " + item.site.siteCode +
+                    " — " + item.site.name,
             )
-            item.area?.let {
-                Text(
-                    "المنطقة: " +
-                        it.label,
+            item.area?.let { Text("المنطقة: " + it.label) }
+            Text("الحالة: " + item.lifecycleState +
+                " · readiness: " + item.readinessState)
+            Text("التكليف: " + item.assignment.targetType +
+                " · " + item.assignment.targetLabel)
+            item.importantBlocker?.let {
+                HiltechStateTag(
+                    "في انتظار: " + it,
+                    HiltechStateTone.ATTENTION,
                 )
             }
-            Text(
-                "الحالة: " +
-                    item.lifecycleState +
-                    " · readiness: " +
-                    item.readinessState,
-            )
-            Text(
-                "التكليف: " +
-                    item.assignment.targetType +
-                    " · " +
-                    item.assignment.targetLabel,
-            )
-            item.importantBlocker
-                ?.let {
-                    Text(
-                        "Waiting On: " + it,
-                    )
-                }
-            Text(
+            HiltechStateTag(
                 if (item.currentlyActionable) {
-                    "السياق جاهز للعرض — التنفيذ يبدأ في Phase 6."
+                    "السياق جاهز للمراجعة — التنفيذ بصلاحياتك الحالية فقط"
                 } else {
-                    "في انتظار شرط/دور آخر قبل التنفيذ."
+                    "في انتظار شرط أو دور آخر قبل التنفيذ"
                 },
+                if (item.currentlyActionable) HiltechStateTone.CURRENT
+                else HiltechStateTone.ATTENTION,
             )
             if (selected) {
-                Text("مفتوح دلوقتي")
+                HiltechStateTag("أمر العمل المفتوح", HiltechStateTone.NEUTRAL)
             }
         }
     }
