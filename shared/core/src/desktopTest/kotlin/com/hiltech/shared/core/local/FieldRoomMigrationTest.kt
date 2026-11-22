@@ -175,4 +175,118 @@ class FieldRoomMigrationTest {
         }
     }
 
+    @Test
+    fun roomThreeToFourPreservesCompletionAndEvidenceAndAddsEngineeringIntentTable() = runBlocking {
+        val temp = Files.createTempDirectory("hiltech-room3-room4").toFile()
+        val path = temp.resolve("hiltech-local.db")
+        val source = listOf(
+            File("schemas/com.hiltech.shared.core.local.HiltechLocalDatabase/3.json"),
+            File("shared/core/schemas/com.hiltech.shared.core.local.HiltechLocalDatabase/3.json"),
+        ).firstOrNull { it.isFile }
+            ?: error("Committed Room v3 schema is required for forward migration proof.")
+        val operationId = "11111111-1111-4111-8111-111111111111"
+        val evidenceId = "22222222-2222-4222-8222-222222222222"
+        try {
+            val legacy = Json.parseToJsonElement(source.readText()).jsonObject
+                .getValue("database").jsonObject
+            val connection = BundledSQLiteDriver().open(path.absolutePath)
+            try {
+                legacy.getValue("entities").jsonArray.forEach { entity ->
+                    val table = entity.jsonObject
+                    val name = table.getValue("tableName").jsonPrimitive.content
+                    val placeholder = "$" + "{TABLE_NAME}"
+                    connection.execSQL(
+                        table.getValue("createSql").jsonPrimitive.content
+                            .replace(placeholder, name),
+                    )
+                    table["indices"]?.jsonArray?.forEach { index ->
+                        connection.execSQL(
+                            index.jsonObject.getValue("createSql").jsonPrimitive.content
+                                .replace(placeholder, name),
+                        )
+                    }
+                }
+                legacy.getValue("setupQueries").jsonArray.forEach { query ->
+                    connection.execSQL(query.jsonPrimitive.content)
+                }
+                connection.execSQL(
+                    """INSERT INTO pending_command (
+                      operation_id,actor_user_identity_id,device_id,command_type,
+                      target_type,target_id,base_version,payload_version,payload_json,
+                      client_occurred_at_epoch_ms,enqueued_at_epoch_ms,local_sequence,
+                      state,retry_count,contract_version,updated_at_epoch_ms
+                    ) VALUES (
+                      '$operationId','33333333-3333-4333-8333-333333333333',
+                      'android-old','SubmitWorkCompletion','WorkOrder',
+                      '44444444-4444-4444-8444-444444444444',7,1,
+                      '{"source":"v3","policy":"freeze"}',
+                      1700000000000,1700000000100,1,'PENDING',0,1,1700000000100
+                    )""".trimIndent(),
+                )
+                connection.execSQL(
+                    """INSERT INTO local_evidence (
+                      evidence_id,work_order_id,target_type,target_id,requirement_key,
+                      evidence_policy_id,evidence_policy_revision,evidence_type_code,
+                      local_file_ref,sha256,content_type,size_bytes,captured_at_epoch_ms,
+                      captured_by_user_id,source_device_id,local_state,
+                      upload_attempt_count,updated_at_epoch_ms,assignment_id,
+                      assignment_version,work_order_version,binding_revision
+                    ) VALUES (
+                      '$evidenceId','44444444-4444-4444-8444-444444444444',
+                      'WORK_ORDER','44444444-4444-4444-8444-444444444444',
+                      'TECH_REPORT','55555555-5555-4555-8555-555555555555',
+                      4,'ENGINEERING_TEST','internal/report.enc',
+                      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                      'application/pdf',1024,1700000000000,
+                      '33333333-3333-4333-8333-333333333333',
+                      'android-old','LOCAL_READY',0,1700000000100,
+                      '66666666-6666-4666-8666-666666666666',3,7,2
+                    )""".trimIndent(),
+                )
+                connection.execSQL("PRAGMA user_version = 3")
+            } finally {
+                connection.close()
+            }
+
+            val migrated = buildHiltechLocalDatabase(
+                getDesktopDatabaseBuilder(path.absolutePath),
+            )
+            try {
+                val command = assertNotNull(migrated.pendingCommandDao().get(operationId))
+                assertEquals(PendingCommandStates.PENDING, command.state)
+                assertEquals("SubmitWorkCompletion", command.commandType)
+                assertEquals(7, command.baseVersion)
+                assertEquals("""{"source":"v3","policy":"freeze"}""", command.payloadJson)
+                val evidence = assertNotNull(migrated.evidenceQueueDao().get(evidenceId))
+                assertEquals(LocalEvidenceStates.LOCAL_READY, evidence.localState)
+                assertEquals(3L, evidence.assignmentVersion)
+                assertEquals(7L, evidence.workOrderVersion)
+                assertEquals(2, evidence.bindingRevision)
+                assertEquals(4, OfflineSchemaContract.ROOM_SCHEMA_VERSION)
+                // The new Room v4 table exists, without fabricating any engineering attempt.
+                assertEquals(null, migrated.engineeringTestIntentDao().get(operationId))
+            } finally {
+                migrated.close()
+            }
+
+            // Process death after auto-migration must not lose original pending intent.
+            val reopened = buildHiltechLocalDatabase(
+                getDesktopDatabaseBuilder(path.absolutePath),
+            )
+            try {
+                assertEquals(
+                    operationId,
+                    reopened.pendingCommandDao().get(operationId)?.operationId,
+                )
+                assertEquals(
+                    evidenceId,
+                    reopened.evidenceQueueDao().get(evidenceId)?.evidenceId,
+                )
+            } finally {
+                reopened.close()
+            }
+        } finally {
+            temp.deleteRecursively()
+        }
+    }
 }
