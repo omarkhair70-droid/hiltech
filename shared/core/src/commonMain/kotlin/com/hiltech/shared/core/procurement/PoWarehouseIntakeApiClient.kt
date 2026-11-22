@@ -19,6 +19,7 @@ data class PoWarehouseIntakeDto(
     val physicallyReceivedQuantity: String,
     val remainingQuantity: String,
     val effectiveOrderVersion: Long,
+    val openReceivingRecordIds: List<String> = emptyList(),
 )
 @Serializable
 data class StartPoWarehouseIntakeDto(val operationId: String)
