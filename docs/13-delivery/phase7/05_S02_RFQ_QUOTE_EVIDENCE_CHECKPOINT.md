@@ -94,3 +94,15 @@ There is no offline procurement write queue.
 - [ ] Review/CI/acceptance before merge; S01 remains dependency
 
 Do not call S02 complete until these independent gates pass.
+
+## Follow-on technical review checkpoint (branch: phase7/s02-technical-review-events-20261122)
+
+Immutable technical assessments (V0043) attach to exact quotation evidence revisions, with
+an explicitly separate default-deny technical reviewer, idempotent command, source-version
+recheck, audit entry, justified sequential review revisions, and restricted buyer comparison
+projection. They do not rewrite a quote, award suppliers or approve spending.
+
+POST `/v1/sourcing/quotes/{quoteId}/technical-assessments` accepts a typed decision
+(COMPLIANT / NON_COMPLIANT / NEEDS_CLARIFICATION), justification and expected review revision.
+Neither the technical reviewer mapping nor governed quote documents is configured yet.
+Do not call S02 closed or enable production. Exact-head CI/PostgreSQL proof is required.

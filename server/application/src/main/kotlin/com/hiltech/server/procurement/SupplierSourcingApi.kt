@@ -40,6 +40,14 @@ class SupplierSourcingController(private val service: SupplierSourcingService) {
         @RequestBody body: RecordSupplierQuoteRequest,
     ): SupplierQuoteReceipt = service.recordQuote(request.sourcingContext(body.operationId), rfqId, body)
 
+    @PostMapping("/v1/sourcing/quotes/{quoteId}/technical-assessments")
+    fun assessQuote(
+        request: HttpServletRequest,
+        @PathVariable quoteId: UUID,
+        @RequestBody body: RecordSupplierQuoteTechnicalAssessmentRequest,
+    ): SupplierQuoteTechnicalAssessmentReceipt =
+        service.recordTechnicalAssessment(request.sourcingContext(body.operationId), quoteId, body)
+
     @GetMapping("/v1/sourcing/rfqs/{rfqId}/comparison")
     fun comparison(request: HttpServletRequest, @PathVariable rfqId: UUID): SupplierRfqComparisonView =
         service.comparison(request.sourcingActor(), rfqId)

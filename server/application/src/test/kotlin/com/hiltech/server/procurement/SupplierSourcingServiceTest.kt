@@ -35,6 +35,7 @@ class SupplierSourcingServiceTest {
     private val workId = UUID.randomUUID()
     private val itemId = UUID.randomUUID()
     private val supplierId = UUID.randomUUID()
+    private val supplierQuoteId = UUID.randomUUID()
     private val op = UUID.randomUUID()
     private val rfqId = UUID.nameUUIDFromBytes(
         "hiltech:procurement:supplier-rfq:$op".toByteArray(Charsets.UTF_8),
@@ -44,6 +45,8 @@ class SupplierSourcingServiceTest {
     private val work = Mockito.mock(WorkPersistencePort::class.java)
     private val stock = Mockito.mock(StockLedgerPersistence::class.java)
     private val auth = Mockito.mock(SupplierSourcingAuthorizationPort::class.java)
+    private val reviewerAuth = Mockito.mock(SupplierQuoteTechnicalReviewerAuthorizationPort::class.java)
+    private var capturedReview: SupplierQuoteTechnicalAssessmentRecord? = null
     private val audit = Mockito.mock(AuditEventWriter::class.java)
     private val order = Mockito.mock(WorkOrderSnapshot::class.java)
     private var createdRfq: SupplierRfqRecord? = null
@@ -71,12 +74,22 @@ class SupplierSourcingServiceTest {
     }
     private val context = ProcurementDraftContext(op, actor, "test")
     private fun service(enabled: Boolean = true) = SupplierSourcingService(
-        sourcing, requirements, work, stock, auth, commands, audit,
+        sourcing, requirements, work, stock, auth, reviewerAuth, commands, audit,
         Clock.fixed(at, ZoneOffset.UTC), enabled,
     )
 
     private fun allow() {
         Mockito.`when`(auth.canManageSourcing(actor, org)).thenReturn(true)
+        Mockito.`when`(reviewerAuth.canReviewQuote(actor, org, rfqId)).thenReturn(true)
+        Mockito.`when`(sourcing.quoteTechnicalTarget(supplierQuoteId))
+            .thenReturn(SupplierQuoteTechnicalTarget(supplierQuoteId, rfqId, org))
+        Mockito.doAnswer { invocation ->
+            capturedReview = invocation.getArgument<SupplierQuoteTechnicalAssessmentRecord>(0)
+            Unit
+        }.`when`(sourcing).insertTechnicalAssessment(any(SupplierQuoteTechnicalAssessmentRecord::class.java)
+            ?: SupplierQuoteTechnicalAssessmentRecord(UUID.randomUUID(), UUID.randomUUID(),
+                supplierQuoteId, rfqId, org, 1, "COMPLIANT", "Source checked",
+                actor, at, "test"))
         Mockito.`when`(requirements.byId(requirementId)).thenReturn(root)
         Mockito.`when`(requirements.latestTransition(requirementId)).thenReturn(ready)
         Mockito.`when`(requirements.lock(requirementId)).thenReturn(true)
@@ -265,6 +278,78 @@ class SupplierSourcingServiceTest {
         assertEquals("SOURCING_UNAVAILABLE", assertThrows<ProductApiException> {
             service().roundsForRequirement(actor, requirementId)
         }.code)
+    }
+
+    @Test fun technicalReviewIsImmutableIndependentAndRoleRestricted() {
+        allow()
+        service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
+        val cmd = RecordSupplierQuoteTechnicalAssessmentRequest(
+            UUID.randomUUID(), 1, "COMPLIANT", "Matches the specified cable",
+        )
+        val receipt = service().recordTechnicalAssessment(
+            ProcurementDraftContext(cmd.operationId, actor, "review-test"),
+            supplierQuoteId, cmd,
+        )
+        assertEquals(supplierQuoteId, receipt.quoteEvidenceId)
+        assertEquals(1, receipt.reviewRevision)
+        assertEquals("COMPLIANT", capturedReview?.decision)
+        assertEquals(org, capturedReview?.organizationId)
+
+        Mockito.`when`(reviewerAuth.canReviewQuote(actor, org, rfqId)).thenReturn(false)
+        assertEquals("SOURCING_UNAVAILABLE", assertThrows<ProductApiException> {
+            service().recordTechnicalAssessment(
+                ProcurementDraftContext(UUID.randomUUID(), actor, "denied"),
+                supplierQuoteId, cmd.copy(operationId = UUID.randomUUID()),
+            )
+        }.code)
+    }
+
+    @Test fun technicalReviewRequiresUnchangedSourceSequentialRevisionAndJustification() {
+        allow()
+        service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
+        val bad = RecordSupplierQuoteTechnicalAssessmentRequest(
+            UUID.randomUUID(), 3, "COMPLIANT", "Checked against technical requirements",
+        )
+        assertEquals("SOURCING_SOURCE_CHANGED", assertThrows<ProductApiException> {
+            service().recordTechnicalAssessment(
+                ProcurementDraftContext(bad.operationId, actor, "bad"), supplierQuoteId, bad,
+            )
+        }.code)
+        val invalid = bad.copy(operationId = UUID.randomUUID(), expectedReviewRevision = 1,
+            justification = "ok")
+        assertEquals("INVALID_SUPPLIER_QUOTE", assertThrows<ProductApiException> {
+            service().recordTechnicalAssessment(
+                ProcurementDraftContext(invalid.operationId, actor, "invalid"), supplierQuoteId, invalid,
+            )
+        }.code)
+        Mockito.`when`(order.version).thenReturn(6)
+        val valid = bad.copy(operationId = UUID.randomUUID(), expectedReviewRevision = 1)
+        assertEquals("SOURCING_SOURCE_CHANGED", assertThrows<ProductApiException> {
+            service().recordTechnicalAssessment(
+                ProcurementDraftContext(valid.operationId, actor, "stale"), supplierQuoteId, valid,
+            )
+        }.code)
+        assertEquals(null, capturedReview)
+    }
+
+    @Test fun buyerComparisonProjectsTechnicalAssessmentWithoutChangingSupplierQuote() {
+        allow()
+        service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
+        val immutableQuote = SupplierQuoteEvidence(
+            supplierQuoteId, rfqId, supplierId, "Q1", 1, "EGP",
+            BigDecimal("100"), "M", BigDecimal("10"), BigDecimal.ZERO,
+            null, LocalDate.parse("2026-12-15"), null, null, null,
+            "internal:doc:quote", "a".repeat(64),
+        )
+        Mockito.`when`(sourcing.quotes(rfqId)).thenReturn(listOf(immutableQuote))
+        Mockito.`when`(sourcing.latestTechnicalAssessments(rfqId))
+            .thenReturn(mapOf(supplierQuoteId to "COMPLIANT"))
+        val compared = service().comparison(actor, rfqId).comparison
+        assertEquals("NOT_ASSESSED", immutableQuote.technicalCompliance)
+        assertEquals("COMPLIANT", compared.latestBySupplier.single().technicalCompliance)
+        assertTrue(compared.allQuotesDirectlyComparable)
+        assertFalse(compared.purchaseAuthorized)
+        assertFalse(compared.supplierSelected)
     }
 
     @Test fun restrictedComparisonCannotApproveCheapestVendor() {

@@ -93,6 +93,7 @@ class SupplierSourcingService @Autowired constructor(
     private val work: WorkPersistencePort,
     private val stock: StockLedgerPersistence,
     private val authority: SupplierSourcingAuthorizationPort,
+    private val technicalReviewer: SupplierQuoteTechnicalReviewerAuthorizationPort,
     private val commands: IdempotentCommandExecutor,
     private val audit: AuditEventWriter,
     private val clock: Clock,
@@ -211,6 +212,60 @@ class SupplierSourcingService @Autowired constructor(
         return SupplierQuoteReceipt(id, rfqId, request.expectedRevisionNumber, execution.replayed)
     }
 
+    /** A technical judgment is append-only and cannot approve spending. */
+    fun recordTechnicalAssessment(
+        ctx: ProcurementDraftContext,
+        quoteEvidenceId: UUID,
+        request: RecordSupplierQuoteTechnicalAssessmentRequest,
+    ): SupplierQuoteTechnicalAssessmentReceipt {
+        requireEnabled()
+        val decision = request.decision.trim()
+        val justification = request.justification.trim()
+        if (request.operationId != ctx.operationId ||
+            request.expectedReviewRevision < 1 ||
+            decision !in setOf("COMPLIANT", "NON_COMPLIANT", "NEEDS_CLARIFICATION") ||
+            justification.length !in 8..1000
+        ) invalid()
+        val target = sourcing.quoteTechnicalTarget(quoteEvidenceId) ?: unavailable()
+        requireTechnicalReviewer(ctx.actor, target)
+        val id = deterministicId("supplier-quote-technical-assessment", ctx.operationId)
+        val fp = fingerprint(quoteEvidenceId, request.expectedReviewRevision, decision, justification)
+        val execution = commands.execute(IdempotentCommandSpec(
+            ctx.operationId, ctx.actor, "PROCUREMENT_QUOTE_TECHNICAL_ASSESSED",
+            "SUPPLIER_QUOTE_TECHNICAL_ASSESSMENT", id, fp, ctx.correlationId,
+        )) {
+            if (!sourcing.lockRfq(target.rfqId)) unavailable()
+            val locked = sourcing.quoteTechnicalTarget(quoteEvidenceId) ?: unavailable()
+            if (locked != target) unavailable()
+            requireTechnicalReviewer(ctx.actor, locked)
+            val rfq = sourcing.rfq(locked.rfqId) ?: unavailable()
+            if (rfq.organizationId != locked.organizationId) unavailable()
+            val source = currentSource(rfq.requirementId)
+            if (source.root.organizationId != rfq.organizationId ||
+                source.version != rfq.requirementVersion ||
+                source.state != "READY_FOR_SOURCING" || !source.sourceCurrent
+            ) stale()
+            if (sourcing.latestTechnicalReviewRevision(quoteEvidenceId) + 1 !=
+                request.expectedReviewRevision
+            ) stale()
+            val now = clock.instant()
+            sourcing.insertTechnicalAssessment(SupplierQuoteTechnicalAssessmentRecord(
+                id, ctx.operationId, quoteEvidenceId, rfq.id, rfq.organizationId,
+                request.expectedReviewRevision, decision, justification,
+                ctx.actor, now, ctx.correlationId,
+            ))
+            audit.append(AuditEventRecord(
+                actorUserId = ctx.actor, action = "PROCUREMENT_QUOTE_TECHNICAL_ASSESSED",
+                targetType = "SUPPLIER_QUOTE_TECHNICAL_ASSESSMENT", targetId = id,
+                occurredAt = now, correlationId = ctx.correlationId,
+            ))
+            IdempotentCommandOutcome("PROCUREMENT_QUOTE_TECHNICAL_ASSESSED", """{"id":"$id"}""")
+        }
+        return SupplierQuoteTechnicalAssessmentReceipt(
+            id, quoteEvidenceId, request.expectedReviewRevision, decision, execution.replayed,
+        )
+    }
+
     /**
      * Organization-scoped buyer inbox. Source state comes from canonical
      * S01 event history and source versions are re-read before presentation.
@@ -254,8 +309,14 @@ class SupplierSourcingService @Autowired constructor(
         val root = sourcing.rfq(rfqId) ?: unavailable()
         requireAuthority(actor, root.organizationId)
         val all = sourcing.quotes(rfqId)
+        // Project the latest separately authorized technical judgment; never
+        // overwrite a supplier quotation's immutable evidence.
+        val latestReviews = sourcing.latestTechnicalAssessments(rfqId)
+        val assessed = all.map { quote ->
+            quote.copy(technicalCompliance = latestReviews[quote.id] ?: "NOT_ASSESSED")
+        }
         val compared = SupplierQuoteComparator.compare(
-            root.sourceQuantity, root.sourceUnitCode, all,
+            root.sourceQuantity, root.sourceUnitCode, assessed,
             LocalDate.now(clock.withZone(ZoneOffset.UTC)),
         )
         return SupplierRfqComparisonView(
@@ -333,6 +394,9 @@ class SupplierSourcingService @Autowired constructor(
     private fun requireEnabled() { if (!enabled) unavailable() }
     private fun requireAuthority(actor: UUID, org: UUID) {
         if (!authority.canManageSourcing(actor, org)) unavailable()
+    }
+    private fun requireTechnicalReviewer(actor: UUID, target: SupplierQuoteTechnicalTarget) {
+        if (!technicalReviewer.canReviewQuote(actor, target.organizationId, target.rfqId)) unavailable()
     }
 
     private fun unavailable(): Nothing = throw ProductApiException(

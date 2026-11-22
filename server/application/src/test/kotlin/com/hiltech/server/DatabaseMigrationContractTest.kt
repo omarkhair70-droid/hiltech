@@ -85,7 +85,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(9, result.migrationsExecuted)
+        assertEquals(10, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -145,12 +145,13 @@ class DatabaseMigrationContractTest {
                         'procurement_purchase_requirement',
                         'procurement_requirement_transition',
                         'procurement_supplier_rfq',
-                        'procurement_supplier_quote_evidence'
+                        'procurement_supplier_quote_evidence',
+                        'procurement_supplier_quote_technical_assessment'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(70, tables.getInt(1))
+                assertEquals(71, tables.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
@@ -207,6 +208,27 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(sourcingTriggers.next())
                 assertEquals(2, sourcingTriggers.getInt(1))
+                val technicalReviewConstraints = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE (conrelid = 'procurement_supplier_quote_technical_assessment'::regclass
+                           AND conname = 'fk_procurement_technical_assessment_quote_source')
+                       OR (conrelid = 'procurement_supplier_quote_technical_assessment'::regclass
+                           AND conname = 'uq_procurement_quote_technical_review_revision')
+                    """.trimIndent(),
+                )
+                assertTrue(technicalReviewConstraints.next())
+                assertEquals(2, technicalReviewConstraints.getInt(1))
+                val technicalReviewTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_supplier_quote_technical_assessment'::regclass
+                      AND tgname = 'procurement_supplier_quote_technical_assessment_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(technicalReviewTrigger.next())
+                assertEquals(1, technicalReviewTrigger.getInt(1))
                 val sourcingUniques = statement.executeQuery(
                     """
                     SELECT COUNT(*) FROM pg_constraint

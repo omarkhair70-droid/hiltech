@@ -111,6 +111,56 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
         { row, _ -> row.getString("organization_type") to row.getString("status") }, id,
     ).singleOrNull()
 
+    fun quoteTechnicalTarget(quoteEvidenceId: UUID): SupplierQuoteTechnicalTarget? = jdbc.query(
+        """
+        SELECT id, rfq_id, organization_id
+        FROM procurement_supplier_quote_evidence WHERE id = ?
+        """.trimIndent(),
+        { row, _ -> SupplierQuoteTechnicalTarget(
+            row.getObject("id", UUID::class.java),
+            row.getObject("rfq_id", UUID::class.java),
+            row.getObject("organization_id", UUID::class.java),
+        ) }, quoteEvidenceId,
+    ).singleOrNull()
+
+    fun latestTechnicalReviewRevision(quoteEvidenceId: UUID): Int = jdbc.query(
+        """
+        SELECT review_revision FROM procurement_supplier_quote_technical_assessment
+        WHERE quote_evidence_id = ?
+        ORDER BY review_revision DESC LIMIT 1
+        """.trimIndent(),
+        { row, _ -> row.getInt("review_revision") }, quoteEvidenceId,
+    ).firstOrNull() ?: 0
+
+    fun insertTechnicalAssessment(record: SupplierQuoteTechnicalAssessmentRecord) {
+        check(jdbc.update(
+            """
+            INSERT INTO procurement_supplier_quote_technical_assessment (
+                id, operation_id, quote_evidence_id, rfq_id, organization_id,
+                review_revision, decision, justification, reviewed_by_user_id,
+                reviewed_at, correlation_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+            record.id, record.operationId, record.quoteEvidenceId, record.rfqId,
+            record.organizationId, record.reviewRevision, record.decision,
+            record.justification, record.reviewedBy,
+            record.reviewedAt.atOffset(ZoneOffset.UTC), record.correlationId,
+        ) == 1)
+    }
+
+    /** Restricted buyer projection, latest event per exact quote evidence revision. */
+    fun latestTechnicalAssessments(rfqId: UUID): Map<UUID, String> = jdbc.query(
+        """
+        SELECT DISTINCT ON (quote_evidence_id) quote_evidence_id, decision
+        FROM procurement_supplier_quote_technical_assessment
+        WHERE rfq_id = ?
+        ORDER BY quote_evidence_id, review_revision DESC
+        """.trimIndent(),
+        { row, _ ->
+            row.getObject("quote_evidence_id", UUID::class.java) to row.getString("decision")
+        }, rfqId,
+    ).toMap()
+
     fun latestRevision(rfqId: UUID, supplierId: UUID): Int = jdbc.query(
         """
         SELECT revision_number FROM procurement_supplier_quote_evidence
