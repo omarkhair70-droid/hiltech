@@ -64,9 +64,26 @@ jobs:
         run: |
           ./gradlew             :server:application:test               --tests com.hiltech.server.work.WorkDocumentRevisionSourceTest             --no-configuration-cache --console=plain
 
-      - name: Verify V0037 on PostgreSQL
+      - name: Create isolated contract databases
+        env:
+          PGPASSWORD: hiltech
         run: |
-          ./gradlew             :server:application:test               --tests com.hiltech.server.work.WorkDocumentRevisionPostgresContractTest               --tests com.hiltech.server.DatabaseMigrationContractTest             --rerun-tasks --no-configuration-cache --console=plain
+          psql -h localhost -U hiltech -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE DATABASE hiltech_migration;
+          CREATE DATABASE hiltech_work_documents;
+          SQL
+
+      - name: Verify empty-database migration contract through V0037
+        env:
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech_migration
+        run: |
+          ./gradlew             :server:application:test               --tests com.hiltech.server.DatabaseMigrationContractTest             --rerun-tasks --no-configuration-cache --console=plain
+
+      - name: Verify Work document revision semantics on PostgreSQL
+        env:
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech_work_documents
+        run: |
+          ./gradlew             :server:application:test               --tests com.hiltech.server.work.WorkDocumentRevisionPostgresContractTest             --rerun-tasks --no-configuration-cache --console=plain
 
       - name: Verify rollout default remains OFF
         run: |
