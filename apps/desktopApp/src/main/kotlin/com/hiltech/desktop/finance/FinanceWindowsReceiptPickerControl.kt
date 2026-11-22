@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import com.hiltech.shared.core.finance.FinanceChosenExpenseReceipt
 import com.hiltech.shared.core.finance.FinanceExpenseReceiptUploadControl
 import com.hiltech.shared.core.finance.FinanceExpenseReceiptUploader
+import com.hiltech.shared.core.finance.FinanceReceiptBytes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -58,7 +59,7 @@ private suspend fun chooseWindowsFinanceReceipt(): FinanceChosenExpenseReceipt? 
         require(bytes.size in 1..MAX_EXPENSE_RECEIPT_BYTES) {
             "Expense receipt cannot exceed 16 MiB."
         }
-        val mime = exactReceiptMime(bytes)
+        val mime = FinanceReceiptBytes.detectedContentType(bytes)
             ?: error("Selected file is not a valid PDF, PNG or JPEG signature.")
         val sha = MessageDigest.getInstance("SHA-256")
             .digest(bytes).joinToString("") { "%02x".format(it) }
@@ -70,21 +71,5 @@ private suspend fun chooseWindowsFinanceReceipt(): FinanceChosenExpenseReceipt? 
             capturedAt = Instant.now().toString(),
         )
     }
-
-/** Explicit byte signature validation, never trust the extension alone. */
-internal fun exactReceiptMime(bytes: ByteArray): String? {
-    if (bytes.size >= 5 &&
-        bytes.copyOfRange(0, 5).decodeToString() == "%PDF-") return "application/pdf"
-    if (bytes.size >= 3 &&
-        bytes[0] == 0xff.toByte() &&
-        bytes[1] == 0xd8.toByte() &&
-        bytes[2] == 0xff.toByte()) return "image/jpeg"
-    val png = byteArrayOf(
-        0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-    )
-    if (bytes.size >= png.size &&
-        png.indices.all { bytes[it] == png[it] }) return "image/png"
-    return null
-}
 
 private const val MAX_EXPENSE_RECEIPT_BYTES = 16 * 1024 * 1024
