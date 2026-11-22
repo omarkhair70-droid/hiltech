@@ -362,6 +362,7 @@ CREATE TRIGGER trg_commercial_boq_immutable BEFORE UPDATE OR DELETE
 
 CREATE FUNCTION commercial_guard_boq_line_insert() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+ PERFORM 1 FROM commercial_boq_version WHERE id=NEW.boq_version_id FOR UPDATE;
  IF EXISTS(SELECT 1 FROM commercial_boq_version
            WHERE id=NEW.boq_version_id AND sealed_at IS NOT NULL) THEN
    RAISE EXCEPTION 'Cannot append lines to sealed BOQ';
@@ -373,6 +374,7 @@ CREATE TRIGGER trg_commercial_boq_line_insert BEFORE INSERT
 
 CREATE FUNCTION commercial_guard_quote_line_insert() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+ PERFORM 1 FROM commercial_quote_version WHERE id=NEW.quote_version_id FOR UPDATE;
  IF NOT EXISTS(SELECT 1 FROM commercial_quote_version
                WHERE id=NEW.quote_version_id AND state='DRAFT') THEN
    RAISE EXCEPTION 'Cannot append to submitted quote version';
@@ -387,6 +389,12 @@ CREATE TRIGGER trg_commercial_quote_line_immutable BEFORE UPDATE OR DELETE
   ON commercial_quote_line FOR EACH ROW EXECUTE FUNCTION commercial_reject_snapshot_mutation();
 CREATE FUNCTION commercial_guard_quote_update() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+ IF TG_OP='INSERT' THEN
+   IF NEW.state<>'DRAFT' OR NEW.released_at IS NOT NULL OR NEW.version<>1 THEN
+     RAISE EXCEPTION 'Quote must begin as an unreleased draft';
+   END IF;
+   RETURN NEW;
+ END IF;
  IF (NEW.organization_id,NEW.opportunity_id,NEW.client_organization_id,
      NEW.scope_version_id,NEW.boq_version_id,NEW.version_number,NEW.quote_code,
      NEW.currency,NEW.total_price,NEW.payment_terms,NEW.delivery_terms,
@@ -420,6 +428,15 @@ BEGIN
         SELECT 1 FROM commercial_quote_version later
         WHERE later.opportunity_id=OLD.opportunity_id AND later.version_number>OLD.version_number
       )
+      OR OLD.validity_date < (now() AT TIME ZONE 'UTC')::date
+      OR EXISTS (SELECT 1 FROM commercial_scope_version newer
+                 WHERE newer.opportunity_id=OLD.opportunity_id
+                   AND newer.version_number > (
+                     SELECT src.version_number FROM commercial_scope_version src WHERE src.id=OLD.scope_version_id))
+      OR EXISTS (SELECT 1 FROM commercial_boq_version newer
+                 WHERE newer.opportunity_id=OLD.opportunity_id
+                   AND newer.version_number > (
+                     SELECT src.version_number FROM commercial_boq_version src WHERE src.id=OLD.boq_version_id))
       OR NOT EXISTS (
         SELECT 1 FROM approval_request ar
         WHERE ar.subject_type='COMMERCIAL_QUOTE' AND ar.subject_id=OLD.id
@@ -432,7 +449,7 @@ BEGIN
  END IF;
  RETURN NEW;
 END $$;
-CREATE TRIGGER trg_commercial_quote_guard BEFORE UPDATE
+CREATE TRIGGER trg_commercial_quote_guard BEFORE INSERT OR UPDATE
   ON commercial_quote_version FOR EACH ROW EXECUTE FUNCTION commercial_guard_quote_update();
 CREATE TRIGGER trg_commercial_quote_no_delete BEFORE DELETE
   ON commercial_quote_version FOR EACH ROW EXECUTE FUNCTION commercial_reject_snapshot_mutation();
