@@ -76,11 +76,11 @@ RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
     owner_employee uuid;
 BEGIN
-    owner_employee := CASE
-        WHEN TG_TABLE_NAME = 'finance_financial_imprest_draft'
-        THEN NEW.custodian_employee_id
-        ELSE NEW.employee_id
-    END;
+    IF TG_TABLE_NAME = 'finance_financial_imprest_draft' THEN
+        owner_employee := NEW.custodian_employee_id;
+    ELSE
+        owner_employee := NEW.employee_id;
+    END IF;
     IF NOT EXISTS (
         SELECT 1 FROM employee e
         JOIN user_identity u ON u.person_id=e.person_id
