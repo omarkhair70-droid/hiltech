@@ -164,8 +164,13 @@ fun main() = runBlocking<Unit> {
         }
         val beforeFocusOffset = minOf(550, manyScroll.maxValue)
         manyScroll.scrollTo(beforeFocusOffset)
-        kotlinx.coroutines.yield()
+        settleNativeLayout(multipleScene)
         save(multipleScene, dir.resolve("ux128-field-07-multiple-scrolled.png"), 430, 720)
+        check(
+            !Files.readAllBytes(dir.resolve("ux128-field-06-multiple-top.png")).contentEquals(
+                Files.readAllBytes(dir.resolve("ux128-field-07-multiple-scrolled.png"))
+            )
+        ) { "Pixel evidence must differ after the source list is scrolled; a pass marker is not enough." }
         check(manyScroll.value == beforeFocusOffset) {
             "The harness MUST prove scroll changed before tapping; expected=$beforeFocusOffset actual=${manyScroll.value}"
         }
