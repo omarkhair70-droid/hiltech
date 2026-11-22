@@ -193,13 +193,14 @@ class CurrentExecutiveSources(
                 ),
             )
         }
-        val capped = window.size > 30
+        // The source bounds its persistence query BEFORE visibility filtering;
+        // fewer than 30 visible projects cannot prove portfolio completeness.
         return ExecutiveSection(
-            status = if (capped || someHealthUnavailable) "PARTIAL" else "CURRENT",
+            status = "PARTIAL",
             items = items,
             source = "PROJECTS_AND_PROJECT_HEALTH",
             sourceAsOf = null, // Each record has its own real updatedAt/healthAsOf.
-            partial = capped,
+            partial = true,
             unavailableReason = if (someHealthUnavailable) "SOME_PROJECT_HEALTH_UNAVAILABLE" else null,
         )
     }
@@ -300,7 +301,12 @@ class ExecutiveHomeController(private val service: ExecutiveHomeService) {
     @GetMapping("/v1/executive/home")
     fun home(request: HttpServletRequest, @RequestParam organizationId: String): ExecutiveHomeResponse {
         val context = HiltechRequestContext.current(request)
-        val actor = context.requireIdentityId()
+        val actor = context.identityId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+            ?: throw ProductApiException(
+                code = "UNAUTHENTICATED",
+                message = "Authentication is required.",
+                status = HttpStatus.UNAUTHORIZED,
+            )
         val org = try {
             UUID.fromString(organizationId)
         } catch (_: IllegalArgumentException) {
