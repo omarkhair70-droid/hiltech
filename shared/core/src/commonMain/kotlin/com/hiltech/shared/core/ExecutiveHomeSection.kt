@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -30,13 +32,14 @@ import com.hiltech.shared.core.executive.resolveExecutiveDestination
 @Composable
 fun ExecutiveHomeSection(
     home: ExecutiveHomeDto?,
+    expectedOrganizationId: String,
     loading: Boolean,
     loadError: String?,
     onRefresh: () -> Unit,
     onOpenSource: (ExecutiveDestination) -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(
@@ -66,6 +69,12 @@ fun ExecutiveHomeSection(
                 color = MaterialTheme.colorScheme.error,
             )
             Text(loadError, style = MaterialTheme.typography.bodySmall)
+        }
+        // Prevent a delayed response for organization A being rendered in B's
+        // executive view. The shell must also clear on sign-out/revocation.
+        if (home != null && home.organizationId != expectedOrganizationId) {
+            Text("بيانات المؤسسة السابقة لا تُعرض هنا؛ يلزم تحديث صلاحيات المؤسسة الحالية.")
+            return@Column
         }
         if (home == null) {
             Text(if (loading) "جارٍ قراءة المصادر المصرح بها..." else "لا توجد قراءة حديثة معتمدة.")
