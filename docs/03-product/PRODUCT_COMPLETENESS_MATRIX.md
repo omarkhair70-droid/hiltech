@@ -1,6 +1,8 @@
 # HILTECH Product Completeness Matrix
 
-Status: ACTIVE TRACKER
+Status: HISTORICAL BASELINE / NOT CURRENT IMPLEMENTATION STATUS
+
+> The conservative capability levels below predate Phase-5/6 implementation and must not be interpreted as present verified/operable/released state. Consult `docs/00-program/ACTIVE_EXECUTION_BRIEF.md` and live PR/CI evidence. Future reconciliation must use `DEFINITION_OF_COMPLETE.md`, without inferring human/device acceptance from green engineering tests.
 
 This file tracks capability families against the strict Definition of COMPLETE.
 

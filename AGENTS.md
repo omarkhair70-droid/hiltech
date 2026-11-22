@@ -6,6 +6,10 @@ This repository is the single source of truth for HILTECH OS.
 
 Any coding agent, Codex session, new chat, automation, or human contributor must treat repository state and canonical documents as authoritative. Conversation memory is never the project source of truth.
 
+## Live execution position — read first
+
+**The detailed `Current program position` section below is a preserved 2026-09 historical snapshot, NOT the current phase.** For fresh execution, read `docs/00-program/ACTIVE_EXECUTION_BRIEF.md`, run `scripts/devops/start-session.ps1`, and verify live GitHub `main`, stacked PR bases and exact-head Actions before any work. Master #103 and delivery control tower #130 own the Phase-6-to-13 scope; product-quality #128 tracks UI/UX. No live operator acceptance is implied by engineering CI.
+
 ## Current program position
 
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
