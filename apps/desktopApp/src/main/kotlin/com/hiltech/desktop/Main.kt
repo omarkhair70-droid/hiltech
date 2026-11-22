@@ -2950,6 +2950,56 @@ fun main() {
                                     organizationId = organization.organizationId,
                                     installationId = runtime.physicalWarehouseInstallationId,
                                     newOperationId = { java.util.UUID.randomUUID().toString() },
+                                    deliveryNoteUploader = runtime.poReceivingDeliveryNoteUploader,
+                                    pickDeliveryNote = {
+                                        kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                            val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                            javax.swing.SwingUtilities.invokeAndWait {
+                                                val picker = javax.swing.JFileChooser()
+                                                picker.dialogTitle = "Private supplier delivery note document"
+                                                picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter(
+                                                    "Delivery note PDF/image (max 16 MiB)", "pdf", "jpg", "jpeg", "png", "webp",
+                                                )
+                                                picker.isAcceptAllFileFilterUsed = false
+                                                if (picker.showOpenDialog(null) ==
+                                                    javax.swing.JFileChooser.APPROVE_OPTION
+                                                ) chosen.set(picker.selectedFile)
+                                            }
+                                            val file = chosen.get()
+                                            if (file == null) null else {
+                                                val path = file.toPath()
+                                                require(java.nio.file.Files.isRegularFile(
+                                                    path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
+                                                )) { "Delivery note source must be a regular file." }
+                                                val size = java.nio.file.Files.size(path)
+                                                require(size in 1..(16L * 1024L * 1024L)) {
+                                                    "Delivery note must be between 1 byte and 16 MiB."
+                                                }
+                                                val mime = when (file.extension.lowercase()) {
+                                                    "pdf" -> "application/pdf"
+                                                    "jpg", "jpeg" -> "image/jpeg"
+                                                    "png" -> "image/png"
+                                                    "webp" -> "image/webp"
+                                                    else -> error("Unsupported delivery note file type.")
+                                                }
+                                                val bytes = java.nio.file.Files.readAllBytes(path)
+                                                require(bytes.size.toLong() == size) {
+                                                    "Delivery note document changed during file selection."
+                                                }
+                                                val digest = java.security.MessageDigest
+                                                    .getInstance("SHA-256").digest(bytes)
+                                                    .joinToString("") { byte ->
+                                                        "%02x".format(byte.toInt() and 0xff)
+                                                    }
+                                                com.hiltech.shared.core.procurement.PoDeliveryNoteFile(
+                                                    contentType = mime, originalFileName = file.name,
+                                                    bytes = bytes, sha256 = digest,
+                                                    capturedAt = java.time.Instant.now().toString(),
+                                                )
+                                            }
+                                        }
+                                    },
+  
                                 )
                             }
                         }
