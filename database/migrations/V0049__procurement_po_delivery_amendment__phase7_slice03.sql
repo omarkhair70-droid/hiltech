@@ -31,6 +31,10 @@ CREATE TABLE procurement_po_delivery_amendment_proposal (
 
 CREATE UNIQUE INDEX uq_po_delivery_proposal_id_org
   ON procurement_po_delivery_amendment_proposal(id, organization_id);
+CREATE UNIQUE INDEX uq_po_delivery_proposal_scope
+  ON procurement_po_delivery_amendment_proposal (
+    id, organization_id, purchase_order_id, proposed_storage_location_id
+  );
 
 CREATE TRIGGER procurement_po_delivery_proposal_immutable
 BEFORE UPDATE OR DELETE ON procurement_po_delivery_amendment_proposal
@@ -53,9 +57,14 @@ ALTER TABLE procurement_po_lifecycle_event
   ADD COLUMN approved_amendment_proposal_id uuid NULL,
   ADD COLUMN approval_request_id uuid NULL,
   ADD COLUMN delivery_storage_location_id uuid NULL,
-  ADD CONSTRAINT fk_po_lifecycle_approved_proposal_org
-    FOREIGN KEY (approved_amendment_proposal_id, organization_id)
-    REFERENCES procurement_po_delivery_amendment_proposal(id, organization_id) ON DELETE RESTRICT,
+  ADD CONSTRAINT fk_po_lifecycle_approved_proposal_scope
+    FOREIGN KEY (
+      approved_amendment_proposal_id, organization_id,
+      purchase_order_id, delivery_storage_location_id
+    )
+    REFERENCES procurement_po_delivery_amendment_proposal (
+      id, organization_id, purchase_order_id, proposed_storage_location_id
+    ) ON DELETE RESTRICT,
   ADD CONSTRAINT fk_po_lifecycle_approval_request_org
     FOREIGN KEY (approval_request_id, organization_id)
     REFERENCES approval_request(id, organization_id) ON DELETE RESTRICT,
