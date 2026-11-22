@@ -39,6 +39,15 @@ data class FieldEngineeringTestDraft(
     val deviceReportedStatus: String? = null,
 )
 
+/**
+ * UX #128 experiment only. Default preserves current production field behavior.
+ * FOCUSED_COMPACT is opt-in for a caller with an explicit identity/org scope key.
+ */
+enum class FieldWorkPresentation {
+    BASELINE,
+    FOCUSED_COMPACT,
+}
+
 data class HiltechFieldState(
     val loading: Boolean = false,
     val today: List<FieldTodayItemDto> = emptyList(),
@@ -80,6 +89,8 @@ fun AssignedWorkSection(
     showAssignedAssetLookup: Boolean = false,
     onSubmitEngineeringTest: (String, FieldEngineeringTestDraft) -> Unit = { _, _ -> },
     showEngineeringTests: Boolean = false,
+    presentation: FieldWorkPresentation = FieldWorkPresentation.BASELINE,
+    focusScopeKey: String = "",
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -142,6 +153,97 @@ fun AssignedWorkSection(
                                     Modifier.weight(1f),
                             )
                         }
+                }
+
+            } else if (
+                presentation == FieldWorkPresentation.FOCUSED_COMPACT &&
+                focusScopeKey.isNotBlank()
+            ) {
+                // UX-only local navigation state. Never an authority or offline cache.
+                // MainActivity/Windows still use BASELINE and do not pass this key.
+                var focusedWorkOrderId by remember(focusScopeKey) {
+                    mutableStateOf<String?>(null)
+                }
+                val focusedId = focusedWorkOrderId
+                    ?.takeIf { id -> state.today.any { it.workOrderId == id } }
+                if (focusedId == null) {
+                    TodayColumn(
+                        state = state,
+                        onRefresh = onRefresh,
+                        onSelectWork = { id ->
+                            if (state.today.any { it.workOrderId == id }) {
+                                focusedWorkOrderId = id
+                                onSelectWork(id)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        OutlinedButton(onClick = { focusedWorkOrderId = null }) {
+                            Text("الرجوع لشغلي اليوم")
+                        }
+                        // The selected bundle MUST belong to the requested and
+                        // currently assigned WorkOrder. Never render prior content
+                        // while a new item is loading, reassigned or revoked.
+                        val matchingBundle = state.selectedBundle
+                            ?.takeIf {
+                                it.workOrderId == focusedId &&
+                                    state.selectedWorkOrderId == focusedId
+                            }
+                        if (matchingBundle == null) {
+                            if (state.loading) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    CircularProgressIndicator()
+                                    Text("بنجيب تفاصيل التكليف الحالي…")
+                                }
+                            } else {
+                                Text(
+                                    state.errorMessage
+                                        ?: "تفاصيل التكليف غير متاحة حاليًا. ارجع للقائمة أو حدّثها."
+                                )
+                            }
+                        } else {
+                        matchingBundle
+                            ?.let {
+                                JobBundleDetail(
+                                    bundle = it,
+                                    cached = state.cachedBundleAt != null,
+                                    captureFieldIntent = captureFieldIntent,
+                                    pending = state.pendingFieldIntent,
+                                    feedback = state.fieldIntentMessage,
+                                    onQueue = onQueueFieldIntent,
+                                    onQueueCompletion = onQueueCompletion,
+                                    captureEvidence = captureEvidence,
+                                    localEvidence = state.localEvidence,
+                                    evidenceFeedback = state.evidenceMessage,
+                                    onSelectEvidenceFile = onSelectEvidenceFile,
+                                    onTakeEvidencePhoto = onTakeEvidencePhoto,
+                                    personalIssuedStock = state.personalIssuedStock,
+                                    personalIssuedStockLoading = state.personalIssuedStockLoading,
+                                    personalIssuedStockError = state.personalIssuedStockError,
+                                    onRefreshPersonalIssuedStock = onRefreshPersonalIssuedStock,
+                                    showPersonalIssuedStock = showPersonalIssuedStock,
+                                    materialUsageIntents = state.materialUsageIntents,
+                                    materialUsageMessage = state.materialUsageMessage,
+                                    onQueueMaterialUsage = onQueueMaterialUsage,
+                                    showMaterialUsageReporting = showMaterialUsageReporting,
+                                    assignedAssetLookup = state.assignedAssetLookup,
+                                    onLookupAssignedAssetTag = onLookupAssignedAssetTag,
+                                    showAssignedAssetLookup = showAssignedAssetLookup,
+                                    onSubmitEngineeringTest = onSubmitEngineeringTest,
+                                    showEngineeringTests = showEngineeringTests,
+                                    engineeringTestSubmitting = state.engineeringTestSubmitting,
+                                    engineeringTestMessage = state.engineeringTestMessage,
+                                    modifier =
+                                        Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    }
                 }
             } else {
                 Column(
