@@ -17,6 +17,7 @@ import java.time.Clock
 class PurchaseOrderDeliveryAmendmentSubject @Autowired constructor(
     private val proposals: PurchaseOrderDeliveryAmendmentPersistence,
     private val purchases: PurchaseOrderIssuePersistence,
+    private val candidates: PurchaseOrderCandidatePersistence,
     private val requirements: PurchaseRequirementDraftPersistence,
     private val work: WorkPersistencePort,
     private val clock: Clock,
@@ -40,15 +41,15 @@ class PurchaseOrderDeliveryAmendmentSubject @Autowired constructor(
             proposal.newDestinationId == proposal.previousDestinationId
         ) return false
 
-        val candidate = requirements.byId(
-            // WorkOrder source is resolved through the immutable issued candidate.
-            // Procurement root cannot be selected by a caller-controlled ID.
-            purchasesCandidateRequirementId(state.order.candidateId) ?: return false,
-        ) ?: return false
-        if (candidate.organizationId != subject.organizationId ||
-            candidate.stockItemId != state.order.stockItemId
+        val source = candidates.byId(state.order.candidateId) ?: return false
+        if (source.organizationId != subject.organizationId ||
+            source.stockItemId != state.order.stockItemId
         ) return false
-        val order = work.workOrder(candidate.workOrderId) ?: return false
+        val demand = requirements.byId(source.requirementId) ?: return false
+        if (demand.organizationId != subject.organizationId ||
+            demand.stockItemId != state.order.stockItemId
+        ) return false
+        val order = work.workOrder(demand.workOrderId) ?: return false
         if (order.organizationId != subject.organizationId) return false
 
         return purchases.validDeliveryLocation(
@@ -60,13 +61,4 @@ class PurchaseOrderDeliveryAmendmentSubject @Autowired constructor(
         )
     }
 
-    /**
-     * Dedicated lookup ensures all proposal source references come from the
-     * persisted immutable PO candidate; no new price or quantity enters here.
-     */
-    private fun purchasesCandidateRequirementId(candidateId: java.util.UUID): java.util.UUID? =
-        candidates.byId(candidateId)?.requirementId
-
-    @org.springframework.beans.factory.annotation.Autowired
-    private lateinit var candidates: PurchaseOrderCandidatePersistence
 }
