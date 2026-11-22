@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(24, result.migrationsExecuted)
+        assertEquals(25, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -314,6 +314,30 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(readyNoteIndex.next())
                 assertEquals(1, readyNoteIndex.getInt(1))
+
+                // V0058 uses a discriminated and FK-scoped real Warehouse
+                // source, not a fabricated WorkOrder reference.
+                val typedSourceGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid='procurement_purchase_requirement'::regclass
+                      AND conname IN (
+                        'fk_procurement_requirement_warehouse_source',
+                        'ck_procurement_requirement_typed_source'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(typedSourceGuards.next())
+                assertEquals(2, typedSourceGuards.getInt(1))
+                val typedSourceIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename='procurement_purchase_requirement'
+                      AND indexname='idx_procurement_warehouse_demand'
+                    """.trimIndent(),
+                )
+                assertTrue(typedSourceIndex.next())
+                assertEquals(1, typedSourceIndex.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
