@@ -65,6 +65,16 @@ class CompletionSubmissionPostgresContractTest {
         )
         jdbc.update(
             """
+            INSERT INTO organization_membership
+              (id, organization_id, user_identity_id, membership_type,
+               role_label, state, valid_from, version)
+            VALUES (?, ?, ?, 'EMPLOYEE', 'Assigned field technician',
+                    'ACTIVE', ?, 1)
+            """.trimIndent(),
+            UUID.randomUUID(), org, actor, now.minusDays(1),
+        )
+        jdbc.update(
+            """
             INSERT INTO project
               (id, organization_id, project_code, name, client_organization_id,
                lifecycle_state, baseline_version, created_at, created_by, updated_at,
