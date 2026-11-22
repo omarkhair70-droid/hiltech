@@ -51,6 +51,20 @@ CREATE TABLE commercial_opportunity (
 );
 CREATE INDEX idx_commercial_opportunities ON commercial_opportunity (organization_id,state,created_at DESC);
 
+-- Qualification is evidence of a real discovery decision; never a guessed score.
+CREATE TABLE commercial_qualification_record (
+  id uuid PRIMARY KEY,
+  organization_id uuid NOT NULL,
+  opportunity_id uuid NOT NULL,
+  discovery_summary text NOT NULL CHECK (length(trim(discovery_summary)) > 0),
+  open_questions text NOT NULL,
+  qualified_by uuid NOT NULL REFERENCES user_identity(id) ON DELETE RESTRICT,
+  qualified_at timestamptz NOT NULL,
+  CONSTRAINT fk_commercial_qualification_op FOREIGN KEY (opportunity_id,organization_id)
+    REFERENCES commercial_opportunity(id,organization_id) ON DELETE RESTRICT,
+  CONSTRAINT uq_commercial_qualification_op UNIQUE (opportunity_id)
+);
+
 CREATE TABLE commercial_tender_revision (
   id uuid PRIMARY KEY,
   organization_id uuid NOT NULL,
@@ -162,8 +176,7 @@ CREATE TABLE commercial_quote_version (
   exclusions text NOT NULL,
   validity_date date NOT NULL,
   state varchar(20) NOT NULL DEFAULT 'DRAFT' CHECK (state IN
-    ('DRAFT','APPROVAL_PENDING','APPROVED','RELEASED','WITHDRAWN')),
-  approval_request_id uuid,
+    ('DRAFT','APPROVAL_PENDING','RELEASED','WITHDRAWN')),
   created_by uuid NOT NULL REFERENCES user_identity(id) ON DELETE RESTRICT,
   created_at timestamptz NOT NULL,
   released_at timestamptz,
@@ -196,7 +209,7 @@ CREATE TABLE commercial_contract (
   contract_code varchar(96) NOT NULL,
   state varchar(16) NOT NULL DEFAULT 'DRAFT'
     CHECK (state IN ('DRAFT','SIGNED','TERMINATED')),
-  signed_evidence_id uuid,
+  signed_evidence_id uuid UNIQUE REFERENCES evidence(id) ON DELETE RESTRICT,
   effective_date date,
   end_date date,
   warranty_terms text,
@@ -207,7 +220,8 @@ CREATE TABLE commercial_contract (
     REFERENCES commercial_quote_version(id,organization_id,opportunity_id) ON DELETE RESTRICT,
   CONSTRAINT ck_commercial_signed_evidence CHECK (state <> 'SIGNED' OR signed_evidence_id IS NOT NULL),
   CONSTRAINT ck_commercial_contract_dates CHECK (end_date IS NULL OR effective_date IS NULL OR end_date >= effective_date),
-  CONSTRAINT uq_commercial_contract_code UNIQUE (organization_id,contract_code)
+  CONSTRAINT uq_commercial_contract_code UNIQUE (organization_id,contract_code),
+  CONSTRAINT uq_commercial_contract_identity UNIQUE (id,organization_id,opportunity_id)
 );
 CREATE TABLE commercial_client_po (
   id uuid PRIMARY KEY,
@@ -218,14 +232,17 @@ CREATE TABLE commercial_client_po (
   issued_on date NOT NULL,
   amount numeric(20,4) NOT NULL CHECK (amount >= 0),
   currency char(3) NOT NULL CHECK (currency ~ '^[A-Z]{3}$'),
-  evidence_id uuid,
+  evidence_id uuid UNIQUE REFERENCES evidence(id) ON DELETE RESTRICT,
   verified boolean NOT NULL DEFAULT false,
   created_by uuid NOT NULL REFERENCES user_identity(id) ON DELETE RESTRICT,
   created_at timestamptz NOT NULL,
   CONSTRAINT fk_commercial_po_op FOREIGN KEY (opportunity_id,organization_id)
     REFERENCES commercial_opportunity(id,organization_id) ON DELETE RESTRICT,
   CONSTRAINT ck_commercial_po_verified CHECK (NOT verified OR evidence_id IS NOT NULL),
-  CONSTRAINT uq_commercial_client_po UNIQUE (organization_id,client_po_number)
+  CONSTRAINT uq_commercial_client_po UNIQUE (organization_id,client_po_number),
+  CONSTRAINT uq_commercial_po_identity UNIQUE (id,organization_id,opportunity_id,contract_id),
+  CONSTRAINT fk_commercial_po_contract_context FOREIGN KEY (contract_id,organization_id,opportunity_id)
+    REFERENCES commercial_contract(id,organization_id,opportunity_id) ON DELETE RESTRICT
 );
 CREATE TABLE commercial_project_handoff (
   opportunity_id uuid PRIMARY KEY,
@@ -237,7 +254,15 @@ CREATE TABLE commercial_project_handoff (
   created_by uuid NOT NULL REFERENCES user_identity(id) ON DELETE RESTRICT,
   created_at timestamptz NOT NULL,
   CONSTRAINT fk_commercial_handoff_op FOREIGN KEY (opportunity_id,organization_id)
-    REFERENCES commercial_opportunity(id,organization_id) ON DELETE RESTRICT
+    REFERENCES commercial_opportunity(id,organization_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_commercial_handoff_contract FOREIGN KEY (contract_id,organization_id,opportunity_id)
+    REFERENCES commercial_contract(id,organization_id,opportunity_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_commercial_handoff_po FOREIGN KEY (client_po_id,organization_id,opportunity_id,contract_id)
+    REFERENCES commercial_client_po(id,organization_id,opportunity_id,contract_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_commercial_handoff_quote FOREIGN KEY (quote_version_id,organization_id,opportunity_id)
+    REFERENCES commercial_quote_version(id,organization_id,opportunity_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_commercial_handoff_project FOREIGN KEY (project_id,organization_id)
+    REFERENCES project(id,organization_id) ON DELETE RESTRICT
 );
 
 -- Source-versioned outbound contract only: Finance independently owns its invoices.
@@ -247,6 +272,14 @@ SELECT h.organization_id,h.opportunity_id,h.project_id,h.quote_version_id,
        q.total_price,q.payment_terms,q.version AS quote_revision
 FROM commercial_project_handoff h
 JOIN commercial_quote_version q ON q.id=h.quote_version_id
+WHERE q.state='RELEASED';
+
+-- An explicit client-safe projection is a financial boundary; never UNION cost source.
+CREATE VIEW commercial_released_client_quote AS
+SELECT q.id AS quote_id,q.organization_id,q.opportunity_id,q.client_organization_id,
+       q.quote_code,q.version_number,q.currency,q.total_price,q.payment_terms,
+       q.delivery_terms,q.exclusions,q.validity_date,q.released_at
+FROM commercial_quote_version q
 WHERE q.state='RELEASED';
 
 -- Immutable economic/content snapshots, even to SQL callers.
@@ -276,9 +309,64 @@ BEGIN
  END IF;
  IF NEW.version <> OLD.version + 1
  THEN RAISE EXCEPTION 'Quote version must advance exactly once'; END IF;
+ IF NOT (
+   (OLD.state='DRAFT' AND NEW.state IN ('APPROVAL_PENDING','WITHDRAWN'))
+   OR (OLD.state='APPROVAL_PENDING' AND NEW.state IN ('RELEASED','WITHDRAWN'))
+ ) THEN
+   RAISE EXCEPTION 'Quote state transition is not permitted';
+ END IF;
+ IF NEW.state = 'RELEASED' THEN
+   IF NEW.released_at IS NULL
+      OR EXISTS (
+        SELECT 1 FROM commercial_quote_version later
+        WHERE later.opportunity_id=OLD.opportunity_id AND later.version_number>OLD.version_number
+      )
+      OR NOT EXISTS (
+        SELECT 1 FROM approval_request ar
+        WHERE ar.subject_type='COMMERCIAL_QUOTE' AND ar.subject_id=OLD.id
+          AND ar.organization_id=OLD.organization_id AND ar.subject_version=OLD.version
+          AND ar.policy_key='COMMERCIAL_QUOTE_RELEASE' AND ar.state='APPROVED'
+      ) THEN RAISE EXCEPTION 'Exact latest quote approval is required for release';
+   END IF;
+ ELSIF NEW.released_at IS NOT NULL THEN
+   RAISE EXCEPTION 'Quote cannot have release timestamp before release';
+ END IF;
  RETURN NEW;
 END $$;
 CREATE TRIGGER trg_commercial_quote_guard BEFORE UPDATE
   ON commercial_quote_version FOR EACH ROW EXECUTE FUNCTION commercial_guard_quote_update();
 CREATE TRIGGER trg_commercial_quote_no_delete BEFORE DELETE
   ON commercial_quote_version FOR EACH ROW EXECUTE FUNCTION commercial_reject_snapshot_mutation();
+
+
+-- Prevent editing finalized signed commercial evidence or verified customer PO.
+-- Any amendment requires a new version/document and review.
+CREATE FUNCTION commercial_guard_award_document_update() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_TABLE_NAME='commercial_contract' THEN
+   IF OLD.state='SIGNED' THEN
+     RAISE EXCEPTION 'Signed commercial contract is immutable';
+   END IF;
+   IF OLD.state <> 'DRAFT' OR NEW.state <> 'SIGNED'
+      OR NEW.signed_evidence_id IS NULL THEN
+     RAISE EXCEPTION 'Only verified signing of draft contract is allowed';
+   END IF;
+ ELSIF TG_TABLE_NAME='commercial_client_po' THEN
+   IF OLD.verified=true THEN RAISE EXCEPTION 'Verified client PO is immutable'; END IF;
+   IF NEW.verified<>true OR NEW.evidence_id IS NULL
+      OR ROW(NEW.id,NEW.organization_id,NEW.opportunity_id,NEW.contract_id,
+             NEW.client_po_number,NEW.issued_on,NEW.amount,NEW.currency)
+         IS DISTINCT FROM
+         ROW(OLD.id,OLD.organization_id,OLD.opportunity_id,OLD.contract_id,
+             OLD.client_po_number,OLD.issued_on,OLD.amount,OLD.currency) THEN
+     RAISE EXCEPTION 'Only verified evidence attachment is allowed';
+   END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_commercial_contract_guard BEFORE UPDATE OR DELETE
+  ON commercial_contract FOR EACH ROW
+  EXECUTE FUNCTION commercial_guard_award_document_update();
+CREATE TRIGGER trg_commercial_client_po_guard BEFORE UPDATE OR DELETE
+  ON commercial_client_po FOR EACH ROW
+  EXECUTE FUNCTION commercial_guard_award_document_update();
