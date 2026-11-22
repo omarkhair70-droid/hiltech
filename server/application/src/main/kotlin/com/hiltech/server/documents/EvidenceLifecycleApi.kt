@@ -99,6 +99,15 @@ data class EvidenceDownloadTargetResponse(
 
 fun interface EvidenceStorageAccessPort {
     fun current(): EvidenceObjectStoragePort?
+
+    /**
+     * Narrow server-only retrieval facade for a caller that already verified
+     * actor visibility, exact Evidence metadata, SHA-256 and media policy.
+     * No raw storage implementation or presigned URL crosses module boundaries.
+     * A missing storage provider remains unavailable (null), not an allow.
+     */
+    fun readRestrictedObject(objectKey: String, maxBytes: Long): ByteArray? =
+        current()?.readRestrictedObject(objectKey, maxBytes)
 }
 
 @Component
