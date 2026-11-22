@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(20, result.migrationsExecuted)
+        assertEquals(21, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -161,12 +161,13 @@ class DatabaseMigrationContractTest {
                         'procurement_supplier_invoice_intake',
                         'procurement_supplier_invoice_match_event',
                         'procurement_supplier_invoice_finance_handoff',
-                        'procurement_po_supersession_link'
+                        'procurement_po_supersession_link',
+                        'procurement_po_receiving_rejection_event'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(85, tables.getInt(1))
+                assertEquals(86, tables.getInt(1))
 
                 // V0050 links canonical Warehouse Receiving to a company-scoped
                 // approved PO without creating another physical stock ledger.
@@ -239,6 +240,21 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(poReplacementGuards.next())
                 assertEquals(2, poReplacementGuards.getInt(1))
+
+                // V0054 records rejected PO arrivals without inflating the
+                // StockLedger. The canonical Receiving completion function
+                // is upgraded rather than rewriting the old V0032 migration.
+                val rejectionGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='procurement_po_receiving_rejection_event'::regclass
+                      AND tgname IN ('procurement_po_receiving_rejection_insert_guard',
+                        'procurement_po_receiving_rejection_immutable')
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(rejectionGuards.next())
+                assertEquals(2, rejectionGuards.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
