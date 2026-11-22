@@ -70,6 +70,15 @@ import com.hiltech.shared.core.WarehouseCommandCenterPresentation
 import com.hiltech.shared.core.WarehouseOperatorFocus
 import com.hiltech.shared.core.WarehouseOperatorFocusFlow
 import com.hiltech.shared.core.WarehouseQuickScanSession
+import com.hiltech.shared.core.HiltechNavigationStudy
+import com.hiltech.shared.core.HiltechNavigationCandidate
+import com.hiltech.shared.core.HiltechNavigationArea
+import com.hiltech.shared.core.HiltechNavigationEntry
+import com.hiltech.shared.core.HiltechNavigationScope
+import com.hiltech.shared.core.HiltechNavigationTrace
+import com.hiltech.shared.core.hiltechNavigationSelect
+import com.hiltech.shared.core.hiltechNavigationBack
+import com.hiltech.shared.core.hiltechNavigationRevalidated
 import com.hiltech.shared.core.WarehouseQuickScanControls
 import com.hiltech.shared.core.WarehouseQuickScanState
 import com.hiltech.shared.core.warehouse.WarehouseCommandCenterDto
@@ -279,6 +288,77 @@ fun main() = runBlocking<Unit> {
         }
     }
     captureAndClose(quickScene, directory.resolve("warehouse-quick-scan.png"))
+    // UX02/03 candidate study: actual source-backed Phase5 Compose content in both
+    // navigation grammars, not a separate fake product app or invented provider.
+    val navigationEntries = listOf(
+        HiltechNavigationEntry(HiltechNavigationArea.WORK, "مهام المخزن"),
+        HiltechNavigationEntry(HiltechNavigationArea.OBJECTS, "بحث عن أصل"),
+    )
+    val navigationScope = HiltechNavigationScope(
+        identityId = "synthetic-phase5-operator",
+        organizationId = requireNotNull(state.directory).items.single().organizationId,
+        contextId = commandCenter.warehouseId,
+        contextName = commandCenter.warehouseName,
+        entries = navigationEntries,
+        preferredArea = HiltechNavigationArea.WORK,
+    )
+    val allowedNavigation = navigationEntries.map { it.area }.toSet()
+    val initialNavigation = HiltechNavigationTrace(HiltechNavigationArea.WORK)
+    check(
+        hiltechNavigationSelect(
+            initialNavigation, HiltechNavigationArea.PEOPLE,
+            allowedNavigation, HiltechNavigationArea.WORK,
+        ).current == HiltechNavigationArea.WORK
+    ) { "Unadmitted People destination must not be selectable." }
+    val routedNavigation = hiltechNavigationSelect(
+        initialNavigation, HiltechNavigationArea.OBJECTS,
+        allowedNavigation, HiltechNavigationArea.WORK,
+    )
+    check(routedNavigation.current == HiltechNavigationArea.OBJECTS)
+    check(hiltechNavigationBack(
+        routedNavigation, allowedNavigation, HiltechNavigationArea.WORK,
+    ).current == HiltechNavigationArea.WORK)
+    check(
+        hiltechNavigationRevalidated(
+            routedNavigation,
+            setOf(HiltechNavigationArea.WORK),
+            HiltechNavigationArea.WORK,
+        ).current == HiltechNavigationArea.WORK
+    ) { "Revoked object destination cannot remain selected, even transiently." }
+    println("UX128_NAV_MODEL_PASS forbidden_destination=PASS back_context=PASS revoked_destination=PASS")
+
+    for (candidate in listOf(
+        HiltechNavigationCandidate.CONTEXT_FIRST,
+        HiltechNavigationCandidate.WORKBENCH_FIRST,
+    )) {
+        val name = if (candidate == HiltechNavigationCandidate.CONTEXT_FIRST) "context" else "workbench"
+        for ((widthLabel, width, height) in listOf(
+            Triple("windows", 1150, 1000),
+            Triple("phone", 430, 960),
+        )) {
+            val globalScene = ImageComposeScene(width = width, height = height, coroutineContext = coroutineContext) {
+                Column(Modifier.fillMaxSize().background(Color.White).verticalScroll(ScrollState(0)).padding(18.dp)) {
+                    HiltechNavigationStudy(
+                        scope = navigationScope,
+                        candidate = candidate,
+                    ) { area ->
+                        when (area) {
+                            HiltechNavigationArea.WORK ->
+                                WarehouseCommandCenterSection(
+                                    snapshot = commandCenter,
+                                    presentation = WarehouseCommandCenterPresentation.ACTION_FIRST,
+                                )
+                            HiltechNavigationArea.OBJECTS ->
+                                WarehouseQuickScanControls(quickState, false, {}, {}, {})
+                            else -> error("Unexpected source destination rendered: $area")
+                        }
+                    }
+                }
+            }
+            captureAndClose(globalScene, directory.resolve("ux128-global-$name-$widthLabel.png"))
+        }
+    }
+
     // Native common Compose focus flow; source read-only controls and same synthetic warehouse.
     // The two initial states are rendered independently. Pointer/touch interaction remains a separate gate.
     for (candidate in listOf(
