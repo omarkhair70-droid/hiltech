@@ -52,6 +52,43 @@ class PurchaseRequirementApiClient(
             PurchaseRequirementDraftDto.serializer(),
         )
 
+    suspend fun submit(
+        requirementId: String, request: SubmitPurchaseRequirementDraftDto,
+        installationId: String,
+    ): PurchaseRequirementDraftReceiptDto = post(
+        "/v1/purchase-requirements/" + uuid(requirementId) + "/submit",
+        request.operationId,
+        json.encodeToString(SubmitPurchaseRequirementDraftDto.serializer(), request),
+        installationId, PurchaseRequirementDraftReceiptDto.serializer(),
+    )
+
+    suspend fun revise(
+        requirementId: String, request: RevisePurchaseRequirementDraftDto,
+        installationId: String,
+    ): PurchaseRequirementDraftReceiptDto = post(
+        "/v1/purchase-requirements/" + uuid(requirementId) + "/revise",
+        request.operationId,
+        json.encodeToString(RevisePurchaseRequirementDraftDto.serializer(), request),
+        installationId, PurchaseRequirementDraftReceiptDto.serializer(),
+    )
+
+    suspend fun technicalReview(
+        requirementId: String, request: ReviewPurchaseRequirementDto,
+        installationId: String,
+    ): PurchaseRequirementDraftReceiptDto = post(
+        "/v1/purchase-requirements/" + uuid(requirementId) + "/technical-review",
+        request.operationId,
+        json.encodeToString(ReviewPurchaseRequirementDto.serializer(), request),
+        installationId, PurchaseRequirementDraftReceiptDto.serializer(),
+    )
+
+    suspend fun projectIntake(
+        projectId: String, installationId: String,
+    ): List<PurchaseRequirementDraftDto> = get(
+        "/v1/projects/" + uuid(projectId) + "/purchase-requirements/intake",
+        installationId, ListSerializer(PurchaseRequirementDraftDto.serializer()),
+    )
+
     /** Recheck source, visibility and open same-work drafts before human review. */
     suspend fun reviewPreview(
         requirementId: String,

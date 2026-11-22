@@ -292,6 +292,178 @@ class PurchaseRequirementDraftServiceTest {
         assertNull(transitioned)
     }
 
+    @Test fun `requester submits a draft with an immutable technical-intake event`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val submitId = UUID.randomUUID()
+        val submitted = svc.submit(
+            ProcurementDraftContext(submitId, actor, "submit-test"),
+            draftId, SubmitPurchaseRequirementRequest(submitId, 1),
+        )
+        assertEquals("SUBMITTED", submitted.draft.state)
+        assertEquals(2, submitted.draft.version)
+        assertFalse(submitted.draft.canSubmit)
+        assertTrue(submitted.draft.canWithdraw)
+        assertEquals("SUBMIT", transitioned?.type)
+        assertEquals("DRAFT", transitioned?.fromState)
+        assertEquals("SUBMITTED", transitioned?.toState)
+        assertEquals(1, written?.version)
+        assertEquals(2, applied)
+    }
+
+    @Test fun `submission requires the original requester and current source versions`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val other = UUID.randomUUID()
+        Mockito.`when`(projectAuth.canRequestResources(other, project)).thenReturn(true)
+        val op = UUID.randomUUID()
+        assertEquals("PROCUREMENT_UNAVAILABLE", assertThrows<ProductApiException> {
+            svc.submit(ProcurementDraftContext(op, other, "other"), draftId,
+                SubmitPurchaseRequirementRequest(op, 1))
+        }.code)
+        Mockito.`when`(order.version).thenReturn(6L)
+        assertEquals("PROCUREMENT_SOURCE_CHANGED", assertThrows<ProductApiException> {
+            svc.submit(ProcurementDraftContext(op, actor, "stale"), draftId,
+                SubmitPurchaseRequirementRequest(op, 1))
+        }.code)
+        assertNull(transitioned)
+    }
+
+    @Test fun `manager technical review is scoped and cannot silently issue purchase orders`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val sub = UUID.randomUUID()
+        svc.submit(ProcurementDraftContext(sub, actor, "submit"), draftId,
+            SubmitPurchaseRequirementRequest(sub, 1))
+        val manager = UUID.randomUUID()
+        Mockito.`when`(projectAuth.canManageProject(manager, project)).thenReturn(true)
+        val rev = UUID.randomUUID()
+        val ready = svc.technicalReview(ProcurementDraftContext(rev, manager, "review"), draftId,
+            ReviewPurchaseRequirementRequest(rev, 2, "READY_FOR_SOURCING", "Technical requirements checked"))
+        assertEquals("READY_FOR_SOURCING", ready.draft.state)
+        assertEquals(3, ready.draft.version)
+        assertFalse(ready.draft.canTechnicalReview)
+        assertEquals("TECHNICAL_READY", transitioned?.type)
+        assertEquals("READY_FOR_SOURCING", transitioned?.toState)
+        assertEquals(3, applied)
+    }
+
+    @Test fun `ordinary resource requester does not inherit managerial review authority`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val sub = UUID.randomUUID()
+        svc.submit(ProcurementDraftContext(sub, actor, "submit"), draftId,
+            SubmitPurchaseRequirementRequest(sub, 1))
+        val rev = UUID.randomUUID()
+        assertEquals("PROCUREMENT_UNAVAILABLE", assertThrows<ProductApiException> {
+            svc.technicalReview(ProcurementDraftContext(rev, actor, "review"), draftId,
+                ReviewPurchaseRequirementRequest(rev, 2, "READY_FOR_SOURCING"))
+        }.code)
+        assertEquals("SUBMIT", transitioned?.type)
+    }
+
+    @Test fun `manager can request information and requester can revise full immutable spec`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val manager = UUID.randomUUID()
+        Mockito.`when`(projectAuth.canManageProject(manager, project)).thenReturn(true)
+        val sub = UUID.randomUUID()
+        svc.submit(ProcurementDraftContext(sub, actor, "submit"), draftId,
+            SubmitPurchaseRequirementRequest(sub, 1))
+        val info = UUID.randomUUID()
+        val returned = svc.technicalReview(ProcurementDraftContext(info, manager, "info"), draftId,
+            ReviewPurchaseRequirementRequest(info, 2, "NEEDS_INFO", "Clarify total amount"))
+        assertEquals("NEEDS_INFO", returned.draft.state)
+        assertEquals("Clarify total amount", returned.draft.lastReviewReason)
+        assertTrue(returned.draft.canRevise.not())
+        val amended = UUID.randomUUID()
+        val revision = svc.revise(ProcurementDraftContext(amended, actor, "revision"), draftId,
+            RevisePurchaseRequirementRequest(amended, 3, 5, 3, "2", "PCS", "Updated cable quantity"))
+        assertEquals("DRAFT", revision.draft.state)
+        assertEquals("2", revision.draft.requestedQuantity)
+        assertEquals("Updated cable quantity", revision.draft.justification)
+        assertEquals(4, revision.draft.version)
+        assertTrue(revision.draft.canSubmit)
+        assertEquals("2", transitioned?.revised?.quantity?.toPlainString())
+        assertEquals("3", written?.requestedQuantity?.toPlainString())
+        val subAgain = UUID.randomUUID()
+        val second = svc.submit(ProcurementDraftContext(subAgain, actor, "submit-again"), draftId,
+            SubmitPurchaseRequirementRequest(subAgain, 4))
+        assertEquals("SUBMITTED", second.draft.state)
+        assertEquals("2", second.draft.requestedQuantity)
+        assertEquals("2", transitioned?.revised?.quantity?.toPlainString())
+    }
+
+    @Test fun `manager inbox rejects unscoped callers and returns only current project intake`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val manager = UUID.randomUUID()
+        assertEquals("PROCUREMENT_UNAVAILABLE", assertThrows<ProductApiException> {
+            svc.projectIntake(manager, projectId)
+        }.code)
+        Mockito.`when`(projectAuth.canManageProject(manager, project)).thenReturn(true)
+        Mockito.`when`(drafts.projectIntake(org, projectId)).thenReturn(listOf(written!!))
+        val inbox = svc.projectIntake(manager, projectId)
+        assertEquals(1, inbox.size)
+        assertEquals(draftId, inbox.single().id)
+        assertFalse(inbox.single().canWithdraw)
+    }
+
+    @Test fun `unexplained managerial rejection and invalid state transitions are denied`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val manager = UUID.randomUUID()
+        Mockito.`when`(projectAuth.canManageProject(manager, project)).thenReturn(true)
+        val op = UUID.randomUUID()
+        assertEquals("INVALID_PURCHASE_REQUIREMENT", assertThrows<ProductApiException> {
+            svc.technicalReview(ProcurementDraftContext(op, manager, "bad-review"), draftId,
+                ReviewPurchaseRequirementRequest(op, 1, "REJECTED"))
+        }.code)
+        assertEquals("PROCUREMENT_WORK_ENDED", assertThrows<ProductApiException> {
+            svc.technicalReview(ProcurementDraftContext(op, manager, "not-submitted"), draftId,
+                ReviewPurchaseRequirementRequest(op, 1, "READY_FOR_SOURCING"))
+        }.code)
+    }
+
+    @Test fun `manager technical ready fails on changed stock item version`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val op = UUID.randomUUID()
+        svc.submit(ProcurementDraftContext(op, actor, "submitted"), draftId,
+            SubmitPurchaseRequirementRequest(op, 1))
+        val manager = UUID.randomUUID()
+        Mockito.`when`(projectAuth.canManageProject(manager, project)).thenReturn(true)
+        Mockito.`when`(stock.item(itemId)).thenReturn(item.copy(version = 4))
+        val reviewOp = UUID.randomUUID()
+        assertEquals("PROCUREMENT_SOURCE_CHANGED", assertThrows<ProductApiException> {
+            svc.technicalReview(ProcurementDraftContext(reviewOp, manager, "review"), draftId,
+                ReviewPurchaseRequirementRequest(reviewOp, 2, "READY_FOR_SOURCING"))
+        }.code)
+        assertEquals("SUBMIT", transitioned?.type)
+    }
+
+    @Test fun `revise blocks a coworker even when they can request project resources`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val coworker = UUID.randomUUID()
+        Mockito.`when`(projectAuth.canRequestResources(coworker, project)).thenReturn(true)
+        val op = UUID.randomUUID()
+        assertEquals("PROCUREMENT_UNAVAILABLE", assertThrows<ProductApiException> {
+            svc.revise(ProcurementDraftContext(op, coworker, "not-owner"), draftId,
+                RevisePurchaseRequirementRequest(op, 1, 5, 3, "4", "PCS", "Changed"))
+        }.code)
+        assertNull(transitioned)
+    }
+
     @Test fun `review preview recalculates available stock and warns about open same-work drafts`() {
         allow()
         val svc = service()

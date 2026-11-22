@@ -2802,6 +2802,7 @@ fun main() {
                                     workApi = runtime.procurementWorkApi,
                                     installationId = runtime.physicalWarehouseInstallationId,
                                     workChoices = works,
+                                    projectIntakeId = signed.projects?.selectedProject?.projectId,
                                     newOperationId = { java.util.UUID.randomUUID().toString() },
                                 )
                             }

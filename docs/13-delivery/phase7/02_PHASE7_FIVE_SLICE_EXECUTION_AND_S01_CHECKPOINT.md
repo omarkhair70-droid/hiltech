@@ -41,10 +41,13 @@ There is no separate late "UX completion" slice. Every slice owns its full requi
 
 ## S01 initial engineering checkpoint — intentionally bounded
 
-The source checkpoint supports an **internal DRAFT** material StockItem
-request sourced from an authorized WorkOrder, plus an append-only requester
-withdrawal (V0040) which preserves the draft evidence. It does not submit for sourcing,
-approve, purchase, reserve, move goods, email suppliers or post Finance data.
+This checkpoint supports an internal WorkOrder-backed StockItem need with
+immutable original evidence (V0039), requester withdrawal (V0040), and
+append-only DRAFT -> SUBMITTED -> project technical review / requested
+revision / rejection / technical readiness (V0041). The requester can revise
+a full quantity/justification/source snapshot without rewriting history.
+It does not authorize a financial purchase, supplier award, PO, stock
+reservation, stock movement or Finance posting.
 
 Canonical ReservationPersistence reads current reserved stock and available balance.
 The server checks work and stock versions, organization and per-location permissions.
@@ -58,11 +61,15 @@ Endpoints:
 - GET /v1/purchase-requirements/{id}
 - GET /v1/purchase-requirements/{id}/review-preview
 - POST /v1/purchase-requirements/{id}/withdraw
+- POST /v1/purchase-requirements/{id}/submit
+- POST /v1/purchase-requirements/{id}/revise
+- POST /v1/purchase-requirements/{id}/technical-review
+- GET /v1/projects/{projectId}/purchase-requirements/intake
 
 The review-preview endpoint is a side-effect-free, permission-scoped snapshot:
 it rechecks current WorkOrder/StockItem versions and stock-unit activation,
 refreshes canonical Warehouse free capacity subject to location visibility,
-and warns of up to 20 other non-withdrawn DRAFTs of the **same exact work
+and warns of up to 20 other non-terminal requests of the **same exact work
 order and stock item** (with a truncation flag when there are more).
 Stale/withdrawn sources do NOT return any current quantitative stock claim.
 This is advisory only: no purchase approval, duplicate hard-block, supplier
@@ -73,10 +80,11 @@ The single shared Compose operator surface
 routed through both signed-in Android (selected field WorkOrder) and Windows
 (project WorkOrder picker). Its stock picker reads canonical Work resource
 catalog and current StockItem versions; the WorkOrder version comes from the
-canonical Work API. It supports save/list/review/withdraw without arbitrary
-UUID entry, offline writes, stock movements or PO issue.
+canonical Work API. It supports save/list/submit/revise/technical review/withdraw
+without arbitrary UUID entry, offline writes, stock movements or PO issue.
+Windows project-manager view also exposes the scoped technical intake list.
 
-There are TWO independent OFF-by-default gates:
+There are three independent OFF-by-default gates:
 - Server: `hiltech.procurement.requirements.enabled=false`.
 - Android build UI: `hiltech.procurementRequirementsEnabled=false` unless
   explicitly set at build time.
@@ -99,13 +107,13 @@ routes are handled through the canonical shared engine only when warranted.
 See 03_PROCUREMENT_FLEXIBILITY_AND_LIFECYCLE_DELTA.md for a grounded
 confirmed/correction/missing review of the owner-requested flexibility.
 
-This checkpoint DOES NOT complete S01. The current shared KMP
-`shared/core/.../procurement/PurchaseRequirementApiClient.kt` implements the
-authenticated, online-only Android/Windows transport for current WorkOrder
-DRAFT create/list/detail/withdraw; it is NOT yet a routed operator UI.
-The server canWithdraw boolean is derived from the original requester/current
-state and remains advisory; server authority is always rechecked.
+This checkpoint DOES NOT complete S01. Current cross-platform UI and backend
+cover the WorkOrder+StockItem vertical journey through PROJECT TECHNICAL
+validation only. Server-projected action booleans are UI hints, not authority;
+every action rechecks actor, scope, original requester and/or current
+project manager binding.
 
-Later S01 work: additional demand sources (asset/service/office), purchasing
-review decisions and transitions, duplicate detection, role-specific action inbox,
-wired native Windows/Android journeys, real request and approval/stock examples.
+Remaining S01 exit gates: other typed demand sources (warehouse, asset,
+office/service), real purchasing receiver/authority mapping, live role E2E
+operator acceptance, and exact-head database+Android+Windows CI proof.
+See 04_S01_INTAKE_TECHNICAL_REVIEW_GATES.md for scope and evidence.

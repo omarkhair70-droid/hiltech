@@ -22,6 +22,37 @@ class PurchaseRequirementDraftController(private val service: PurchaseRequiremen
     ): PurchaseRequirementDraftReceipt =
         service.create(request.purchaseDraftContext(body.operationId), workOrderId, body)
 
+    @PostMapping("/v1/purchase-requirements/{id}/submit")
+    fun submit(
+        request: HttpServletRequest,
+        @PathVariable id: UUID,
+        @RequestBody body: SubmitPurchaseRequirementRequest,
+    ): PurchaseRequirementDraftReceipt =
+        service.submit(request.purchaseDraftContext(body.operationId), id, body)
+
+    @PostMapping("/v1/purchase-requirements/{id}/revise")
+    fun revise(
+        request: HttpServletRequest,
+        @PathVariable id: UUID,
+        @RequestBody body: RevisePurchaseRequirementRequest,
+    ): PurchaseRequirementDraftReceipt =
+        service.revise(request.purchaseDraftContext(body.operationId), id, body)
+
+    @PostMapping("/v1/purchase-requirements/{id}/technical-review")
+    fun technicalReview(
+        request: HttpServletRequest,
+        @PathVariable id: UUID,
+        @RequestBody body: ReviewPurchaseRequirementRequest,
+    ): PurchaseRequirementDraftReceipt =
+        service.technicalReview(request.purchaseDraftContext(body.operationId), id, body)
+
+    @GetMapping("/v1/projects/{projectId}/purchase-requirements/intake")
+    fun projectIntake(
+        request: HttpServletRequest,
+        @PathVariable projectId: UUID,
+    ): List<PurchaseRequirementDraftView> =
+        service.projectIntake(request.purchaseDraftActor(), projectId)
+
     @PostMapping("/v1/purchase-requirements/{id}/withdraw")
     fun withdraw(
         request: HttpServletRequest,

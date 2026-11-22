@@ -23,6 +23,10 @@ data class PurchaseRequirementDraftDto(
     val assessmentRequiresRefresh: Boolean = true,
     val version: Long = 1,
     val canWithdraw: Boolean = false,
+    val canSubmit: Boolean = false,
+    val canRevise: Boolean = false,
+    val canTechnicalReview: Boolean = false,
+    val lastReviewReason: String? = null,
 )
 
 @Serializable
@@ -36,6 +40,31 @@ data class CreatePurchaseRequirementDraftDto(
     val operationId: String,
     val baseWorkOrderVersion: Long,
     val stockItemId: String,
+    val stockItemVersion: Long,
+    val quantity: String,
+    val unitCode: String,
+    val justification: String,
+)
+
+@Serializable
+data class SubmitPurchaseRequirementDraftDto(
+    val operationId: String,
+    val expectedVersion: Long,
+)
+
+@Serializable
+data class ReviewPurchaseRequirementDto(
+    val operationId: String,
+    val expectedVersion: Long,
+    val decision: String,
+    val reason: String? = null,
+)
+
+@Serializable
+data class RevisePurchaseRequirementDraftDto(
+    val operationId: String,
+    val expectedVersion: Long,
+    val baseWorkOrderVersion: Long,
     val stockItemVersion: Long,
     val quantity: String,
     val unitCode: String,

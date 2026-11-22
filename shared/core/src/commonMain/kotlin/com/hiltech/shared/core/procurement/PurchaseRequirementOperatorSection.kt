@@ -44,6 +44,7 @@ fun PurchaseRequirementOperatorSection(
     newOperationId: () -> String,
     workChoices: List<WorkOrderDto> = emptyList(),
     selectedWorkOrderId: String? = null,
+    projectIntakeId: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     var selectedWork by remember(installationId) {
@@ -69,6 +70,21 @@ fun PurchaseRequirementOperatorSection(
     var reviewingId by remember { mutableStateOf<String?>(null) }
     var preview by remember { mutableStateOf<PurchaseRequirementReviewPreviewDto?>(null) }
     var confirmWithdrawId by remember { mutableStateOf<String?>(null) }
+    var pendingCreateOperation by remember { mutableStateOf<String?>(null) }
+    var editId by remember { mutableStateOf<String?>(null) }
+    var editQuantity by remember { mutableStateOf("") }
+    var editJustification by remember { mutableStateOf("") }
+    var editItem by remember { mutableStateOf<StockItemDto?>(null) }
+    var reviewId by remember { mutableStateOf<String?>(null) }
+    var reviewReason by remember { mutableStateOf("") }
+    var intake by remember { mutableStateOf<List<PurchaseRequirementDraftDto>>(emptyList()) }
+    var intakeLoading by remember { mutableStateOf(false) }
+    LaunchedEffect(projectIntakeId) {
+        intake = emptyList()
+        if (!projectIntakeId.isNullOrBlank() &&
+            workChoices.isNotEmpty() && workChoices.none { it.workOrderId == selectedWork }
+        ) selectedWork = workChoices.first().workOrderId
+    }
 
     LaunchedEffect(selectedWork, refreshed) {
         // Clear all work-specific or commercially relevant data before a new load.
@@ -79,6 +95,8 @@ fun PurchaseRequirementOperatorSection(
         selectedItem = null
         preview = null
         confirmWithdrawId = null
+        editId = null
+        reviewId = null
         error = null
         if (selectedWork.isBlank()) return@LaunchedEffect
         loading = true
@@ -110,6 +128,18 @@ fun PurchaseRequirementOperatorSection(
         }
     }
 
+    LaunchedEffect(editId, selectedWork) {
+        editItem = null
+        val selectedDraft = drafts.firstOrNull { it.id == editId } ?: return@LaunchedEffect
+        try {
+            val item = warehouseApi.stockItem(selectedDraft.stockItemId, installationId)
+            if (item.active && item.organizationId == work?.organizationId) editItem = item
+            else error = "The stock item needs refreshing before this revision."
+        } catch (failure: Exception) {
+            error = failure.message ?: "Cannot refresh the item for revision."
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         Text("Purchase needs", style = MaterialTheme.typography.titleLarge)
         Text(
@@ -130,9 +160,49 @@ fun PurchaseRequirementOperatorSection(
                             expandedWorks = false
                             quantity = ""
                             justification = ""
+                            pendingCreateOperation = null
                             message = null
                         },
                     )
+                }
+            }
+        }
+        if (!projectIntakeId.isNullOrBlank()) {
+            OutlinedButton(
+                enabled = !intakeLoading && !submitting,
+                onClick = {
+                    intakeLoading = true
+                    error = null
+                    scope.launch {
+                        try {
+                            intake = api.projectIntake(projectIntakeId, installationId)
+                            if (intake.isEmpty()) message = "No submitted technical requests in the current project."
+                        } catch (failure: Exception) {
+                            intake = emptyList()
+                            error = "Technical intake unavailable for this identity or project: " +
+                                (failure.message ?: "access denied")
+                        } finally {
+                            intakeLoading = false
+                        }
+                    }
+                },
+            ) { Text(if (intakeLoading) "Loading intake…" else "Project technical intake") }
+            intake.take(100).forEach { item ->
+                val workLabel = workChoices.firstOrNull { it.workOrderId == item.workOrderId }?.let {
+                    "${it.workOrderCode} · ${it.title}"
+                } ?: "Work order"
+                Card {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text("$workLabel · ${item.requestedQuantity} ${item.unitCode} · ${item.state}")
+                        Text(item.justification, style = MaterialTheme.typography.bodySmall)
+                        OutlinedButton(onClick = {
+                            if (workChoices.any { it.workOrderId == item.workOrderId }) {
+                                selectedWork = item.workOrderId
+                            } else {
+                                error = "Refresh the project work orders to open this request."
+                            }
+                        }) { Text("Open in work order") }
+                    }
                 }
             }
         }
@@ -161,6 +231,7 @@ fun PurchaseRequirementOperatorSection(
                         choices.take(100).forEach { choice ->
                             DropdownMenuItem(text = { Text(choice.label) }, onClick = {
                                 selectedItemId = choice.id
+                                pendingCreateOperation = null
                                 expandedStock = false
                             })
                         }
@@ -170,13 +241,13 @@ fun PurchaseRequirementOperatorSection(
                         Text("${item.itemCode} · ${item.name} · Unit: ${item.baseUnitCode}")
                         OutlinedTextField(
                             value = quantity,
-                            onValueChange = { quantity = it },
+                            onValueChange = { quantity = it; pendingCreateOperation = null },
                             label = { Text("Required quantity (${item.baseUnitCode})") },
                             singleLine = true,
                         )
                         OutlinedTextField(
                             value = justification,
-                            onValueChange = { justification = it },
+                            onValueChange = { justification = it; pendingCreateOperation = null },
                             label = { Text("Reason for this need") },
                             minLines = 2,
                         )
@@ -191,7 +262,8 @@ fun PurchaseRequirementOperatorSection(
                                 scope.launch {
                                     try {
                                         val request = CreatePurchaseRequirementDraftDto(
-                                            operationId = newOperationId(),
+                                            operationId = pendingCreateOperation
+                                                ?: newOperationId().also { pendingCreateOperation = it },
                                             baseWorkOrderVersion = currentOrder.version,
                                             stockItemId = currentItem.id,
                                             stockItemVersion = currentItem.version,
@@ -203,6 +275,7 @@ fun PurchaseRequirementOperatorSection(
                                         message = "Draft saved (${result.draft.assessmentCode}). No purchase has been authorized."
                                         quantity = ""
                                         justification = ""
+                                        pendingCreateOperation = null
                                         refreshed++
                                     } catch (failure: Exception) {
                                         error = failure.message ?: "Failed to create purchase requirement."
@@ -248,6 +321,118 @@ fun PurchaseRequirementOperatorSection(
                                     onClick = { confirmWithdrawId = if (confirmWithdrawId == draft.id) null else draft.id },
                                     enabled = !submitting,
                                 ) { Text(if (confirmWithdrawId == draft.id) "Cancel withdrawal" else "Withdraw draft") }
+                            }
+                        }
+                        draft.lastReviewReason?.let { note ->
+                            Text("Technical review note: $note", style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (draft.canSubmit) {
+                            OutlinedButton(enabled = !submitting, onClick = {
+                                submitting = true
+                                error = null
+                                scope.launch {
+                                    try {
+                                        val result = api.submit(
+                                            draft.id, SubmitPurchaseRequirementDraftDto(newOperationId(), draft.version),
+                                            installationId,
+                                        )
+                                        message = "Requirement submitted for project technical validation (${result.draft.state})."
+                                        refreshed++
+                                    } catch (failure: Exception) {
+                                        error = failure.message ?: "Submission failed. Refresh source before retry."
+                                    } finally { submitting = false }
+                                }
+                            }) { Text("Submit need for technical review") }
+                        }
+                        if (draft.canRevise) {
+                            OutlinedButton(enabled = !submitting, onClick = {
+                                editId = if (editId == draft.id) null else draft.id
+                                editQuantity = draft.requestedQuantity
+                                editJustification = draft.justification
+                                error = null
+                            }) { Text(if (editId == draft.id) "Cancel revision" else "Revise draft") }
+                        }
+                        if (editId == draft.id && draft.canRevise) {
+                            val currentItem = editItem
+                            if (currentItem == null) Text("Loading current item/version for revision…")
+                            else {
+                                Text("Revising ${currentItem.itemCode} — original history remains immutable.")
+                                OutlinedTextField(
+                                    value = editQuantity, onValueChange = { editQuantity = it },
+                                    label = { Text("Revised quantity (${currentItem.baseUnitCode})") },
+                                )
+                                OutlinedTextField(
+                                    value = editJustification, onValueChange = { editJustification = it },
+                                    label = { Text("Revised need / technical explanation") },
+                                    minLines = 2,
+                                )
+                                OutlinedButton(
+                                    enabled = !submitting && canCreatePurchaseDraft(
+                                        editQuantity, editJustification, currentItem.serialized,
+                                    ),
+                                    onClick = {
+                                        submitting = true
+                                        error = null
+                                        scope.launch {
+                                            try {
+                                                api.revise(draft.id, RevisePurchaseRequirementDraftDto(
+                                                    operationId = newOperationId(),
+                                                    expectedVersion = draft.version,
+                                                    baseWorkOrderVersion = currentWork.version,
+                                                    stockItemVersion = currentItem.version,
+                                                    quantity = editQuantity.trim(),
+                                                    unitCode = currentItem.baseUnitCode,
+                                                    justification = editJustification.trim(),
+                                                ), installationId)
+                                                editId = null
+                                                message = "New draft revision recorded. Submit it again when ready."
+                                                refreshed++
+                                            } catch (failure: Exception) {
+                                                error = failure.message ?: "Revision failed. Reload current versions."
+                                            } finally { submitting = false }
+                                        }
+                                    },
+                                ) { Text("Save revised version") }
+                            }
+                        }
+                        if (draft.canTechnicalReview) {
+                            OutlinedButton(enabled = !submitting, onClick = {
+                                reviewId = if (reviewId == draft.id) null else draft.id
+                                reviewReason = ""
+                            }) { Text(if (reviewId == draft.id) "Close technical review" else "Technical review") }
+                        }
+                        if (reviewId == draft.id && draft.canTechnicalReview) {
+                            Text("Project technical validation only — NOT approval of purchasing, supplier or PO.")
+                            OutlinedTextField(
+                                value = reviewReason, onValueChange = { reviewReason = it },
+                                label = { Text("Technical review reason / questions") }, minLines = 2,
+                            )
+                            listOf(
+                                "READY_FOR_SOURCING" to "Technically ready for sourcing",
+                                "NEEDS_INFO" to "Request more information",
+                                "REJECTED" to "Reject this technical need",
+                            ).forEach { choice ->
+                                OutlinedButton(
+                                    enabled = !submitting && (choice.first == "READY_FOR_SOURCING" ||
+                                        reviewReason.trim().isNotEmpty()),
+                                    onClick = {
+                                        submitting = true
+                                        error = null
+                                        scope.launch {
+                                            try {
+                                                api.technicalReview(draft.id, ReviewPurchaseRequirementDto(
+                                                    newOperationId(), draft.version, choice.first,
+                                                    reviewReason.trim().ifEmpty { null },
+                                                ), installationId)
+                                                reviewId = null
+                                                message = "Technical intake decision saved: ${choice.first}. Not a purchase authorization."
+                                                refreshed++
+                                            } catch (failure: Exception) {
+                                                error = failure.message ?: "Technical review failed."
+                                            } finally { submitting = false }
+                                        }
+                                    },
+                                ) { Text(choice.second) }
                             }
                         }
                         if (confirmWithdrawId == draft.id && draft.canWithdraw) {

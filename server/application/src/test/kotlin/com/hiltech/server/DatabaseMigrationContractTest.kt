@@ -55,7 +55,7 @@ class DatabaseMigrationContractTest {
     private val migrationPath = System.getenv("HILTECH_MIGRATIONS_PATH") ?: "database/migrations"
 
     @Test
-    fun emptyPostgresMigratesThroughV0033ThenV0040AndRejectsInvalidStates() {
+    fun emptyPostgresMigratesThroughV0033ThenV0041AndRejectsInvalidStates() {
         assumeTrue(enabled)
 
         val priorSliceResult =
@@ -85,7 +85,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(7, result.migrationsExecuted)
+        assertEquals(8, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->

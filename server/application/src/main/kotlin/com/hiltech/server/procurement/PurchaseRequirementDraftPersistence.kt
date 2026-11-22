@@ -29,6 +29,17 @@ data class PurchaseRequirementDraftRecord(
     val version: Long = 1,
 )
 
+data class PurchaseRequirementRevision(
+    val quantity: BigDecimal,
+    val justification: String,
+    val workVersion: Long,
+    val itemVersion: Long,
+    val unitCode: String,
+    val assessmentCode: String,
+    val freeQuantity: BigDecimal?,
+    val assessedAt: Instant,
+)
+
 data class PurchaseRequirementTransitionRecord(
     val id: UUID,
     val operationId: UUID,
@@ -43,6 +54,7 @@ data class PurchaseRequirementTransitionRecord(
     val actor: UUID,
     val at: Instant,
     val correlationId: String,
+    val revised: PurchaseRequirementRevision? = null,
 )
 
 @Repository
@@ -91,6 +103,16 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
                     rs.getObject("actor_user_id", UUID::class.java),
                     rs.getObject("occurred_at", OffsetDateTime::class.java).toInstant(),
                     rs.getString("correlation_id"),
+                    if (rs.getBigDecimal("spec_quantity") == null) null else PurchaseRequirementRevision(
+                        rs.getBigDecimal("spec_quantity"),
+                        rs.getString("spec_justification"),
+                        rs.getLong("spec_work_version"),
+                        rs.getLong("spec_item_version"),
+                        rs.getString("spec_unit_code"),
+                        rs.getString("spec_assessment_code"),
+                        rs.getBigDecimal("spec_visible_free_quantity"),
+                        rs.getObject("spec_assessed_at", OffsetDateTime::class.java).toInstant(),
+                    ),
                 )
             }, requirementId,
         ).singleOrNull()
@@ -100,12 +122,18 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
             """INSERT INTO procurement_requirement_transition (
                 id, operation_id, requirement_id, organization_id, source_version,
                 result_version, transition_type, from_state, to_state, reason,
-                actor_user_id, occurred_at, correlation_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                actor_user_id, occurred_at, correlation_id,
+                spec_quantity, spec_justification, spec_work_version, spec_item_version,
+                spec_unit_code, spec_assessment_code, spec_visible_free_quantity, spec_assessed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             record.id, record.operationId, record.requirementId, record.organizationId,
             record.sourceVersion, record.resultVersion, record.type,
             record.fromState, record.toState, record.reason, record.actor,
             record.at.atOffset(ZoneOffset.UTC), record.correlationId,
+            record.revised?.quantity, record.revised?.justification,
+            record.revised?.workVersion, record.revised?.itemVersion,
+            record.revised?.unitCode, record.revised?.assessmentCode,
+            record.revised?.freeQuantity, record.revised?.assessedAt?.atOffset(ZoneOffset.UTC),
         ) == 1)
     }
 
@@ -123,15 +151,18 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
     ): List<UUID> = jdbc.query(
         """
         SELECT p.id FROM procurement_purchase_requirement p
+        LEFT JOIN LATERAL (
+            SELECT t.to_state FROM procurement_requirement_transition t
+            WHERE t.requirement_id = p.id
+            ORDER BY t.result_version DESC LIMIT 1
+        ) latest ON true
         WHERE p.organization_id = ?
           AND p.work_order_id = ?
           AND p.stock_item_id = ?
           AND p.id <> ?
-          AND p.lifecycle_state = 'DRAFT'
-          AND NOT EXISTS (
-              SELECT 1 FROM procurement_requirement_transition t
-              WHERE t.requirement_id = p.id AND t.transition_type = 'WITHDRAW'
-          )
+          AND (latest.to_state IS NULL OR latest.to_state IN (
+              'DRAFT', 'SUBMITTED', 'NEEDS_INFO', 'READY_FOR_SOURCING'
+          ))
         ORDER BY p.created_at DESC, p.id DESC
         LIMIT 21
         """.trimIndent(),
@@ -153,6 +184,25 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
             ORDER BY created_at DESC, id DESC LIMIT 100
             """.trimIndent(),
             { row, _ -> row.draft() }, workOrderId,
+        )
+
+    /** Project-scoped technical intake; buyer/finance authority is NOT derived. */
+    fun projectIntake(organizationId: UUID, projectId: UUID): List<PurchaseRequirementDraftRecord> =
+        jdbc.query(
+            """
+            SELECT p.* FROM procurement_purchase_requirement p
+            JOIN work_order w ON w.id = p.work_order_id AND w.organization_id = p.organization_id
+            LEFT JOIN LATERAL (
+                SELECT t.to_state FROM procurement_requirement_transition t
+                WHERE t.requirement_id = p.id
+                ORDER BY t.result_version DESC LIMIT 1
+            ) latest ON true
+            WHERE p.organization_id = ? AND w.project_id = ?
+              AND latest.to_state IN ('SUBMITTED', 'NEEDS_INFO', 'READY_FOR_SOURCING')
+            ORDER BY p.created_at DESC, p.id DESC LIMIT 100
+            """.trimIndent(),
+            { row, _ -> row.draft() },
+            organizationId, projectId,
         )
 
     private fun ResultSet.draft() = PurchaseRequirementDraftRecord(

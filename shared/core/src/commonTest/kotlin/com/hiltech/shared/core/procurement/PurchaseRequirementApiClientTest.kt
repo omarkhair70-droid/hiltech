@@ -171,6 +171,55 @@ class PurchaseRequirementApiClientTest {
     }
 
     @Test
+    fun intakeActionsUseTypedVersionedIdempotentAndAuthenticatedCommands() = runBlocking {
+        val project = "77777777-7777-7777-7777-777777777777"
+        val http = HttpClient(MockEngine { call ->
+            assertEquals("Bearer procurement-token", call.headers[HttpHeaders.Authorization])
+            assertEquals(installation, call.headers["X-Device-Installation-Id"])
+            when (call.url.encodedPath) {
+                "/v1/projects/$project/purchase-requirements/intake" -> {
+                    assertEquals("GET", call.method.value)
+                    respond("[${demand("SUBMITTED", 2, false)}]", HttpStatusCode.OK,
+                        headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                "/v1/purchase-requirements/$draft/submit" -> {
+                    assertEquals(operation, call.headers["Idempotency-Key"])
+                    val data = (call.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    assertEquals(SubmitPurchaseRequirementDraftDto(operation, 1),
+                        Json.decodeFromString<SubmitPurchaseRequirementDraftDto>(data))
+                    respond("""{"draft":${demand("SUBMITTED", 2, true)},"replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                "/v1/purchase-requirements/$draft/revise" -> {
+                    assertEquals(operation, call.headers["Idempotency-Key"])
+                    val data = (call.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    assertEquals("4", Json.decodeFromString<RevisePurchaseRequirementDraftDto>(data).quantity)
+                    respond("""{"draft":${demand("DRAFT", 4, true)},"replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                "/v1/purchase-requirements/$draft/technical-review" -> {
+                    assertEquals(operation, call.headers["Idempotency-Key"])
+                    val data = (call.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                    assertEquals("NEEDS_INFO", Json.decodeFromString<ReviewPurchaseRequirementDto>(data).decision)
+                    respond("""{"draft":${demand("NEEDS_INFO", 3, false)},"replayed":false}""",
+                        HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+                else -> error("Unexpected path ${call.url.encodedPath}")
+            }
+        })
+        val api = client(http)
+        assertEquals("SUBMITTED", api.submit(draft, SubmitPurchaseRequirementDraftDto(operation, 1),
+            installation).draft.state)
+        assertEquals(4L, api.revise(draft,
+            RevisePurchaseRequirementDraftDto(operation, 3, 5, 3, "4", "PCS", "Updated requirement"),
+            installation).draft.version)
+        assertEquals("NEEDS_INFO", api.technicalReview(draft,
+            ReviewPurchaseRequirementDto(operation, 2, "NEEDS_INFO", "Missing installation details"),
+            installation).draft.state)
+        assertEquals(1, api.projectIntake(project, installation).size)
+    }
+
+    @Test
     fun invalidIdsFailBeforeNetworkOrCommandSubmission() = runBlocking {
         var called = false
         val http = HttpClient(MockEngine {
