@@ -44,6 +44,20 @@ data class SupplierRfqDto(
 data class SupplierRfqReceiptDto(val rfq: SupplierRfqDto, val replayed: Boolean)
 
 @Serializable
+data class CreateSupplierQuoteDocumentSlotDto(
+    val operationId: String,
+    val supplierOrganizationId: String,
+)
+
+@Serializable
+data class SupplierQuoteDocumentSlotReceiptDto(
+    val documentSlotId: String,
+    val rfqId: String,
+    val supplierOrganizationId: String,
+    val replayed: Boolean,
+)
+
+@Serializable
 data class RecordSupplierQuoteDto(
     val operationId: String,
     val supplierOrganizationId: String,
