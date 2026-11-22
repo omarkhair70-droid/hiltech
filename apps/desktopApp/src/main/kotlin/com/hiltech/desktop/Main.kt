@@ -18,6 +18,7 @@ import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
 import com.hiltech.shared.core.procurement.SupplierSourcingBuyerSection
 import com.hiltech.shared.core.procurement.PurchaseOrderIssuerSection
 import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceSection
+import com.hiltech.shared.core.procurement.SupplierPoCommunicationSection
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeSection
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
@@ -2913,6 +2914,22 @@ fun main() {
                                     installationId = runtime.physicalWarehouseInstallationId,
                                     newOperationId = { java.util.UUID.randomUUID().toString() },
                                 )
+                            }
+                            if (System.getenv("HILTECH_PO_SUPPLIER_COMMUNICATION_UI_ENABLED")
+                                    ?.equals("true", ignoreCase = true) == true
+                            ) {
+                                androidx.compose.runtime.key(
+                                    identity.identityId, organization.organizationId, "po-dispatch-evidence",
+                                ) {
+                                    SupplierPoCommunicationSection(
+                                        issued = runtime.purchaseOrderIssueApi,
+                                        communications = runtime.supplierPoCommunicationApi,
+                                        organizationId = organization.organizationId,
+                                        installationId = runtime.physicalWarehouseInstallationId,
+                                        newOperationId = { java.util.UUID.randomUUID().toString() },
+                                        currentInstant = { java.time.Instant.now().toString() },
+                                    )
+                                }
                             }
                         }
                     }
