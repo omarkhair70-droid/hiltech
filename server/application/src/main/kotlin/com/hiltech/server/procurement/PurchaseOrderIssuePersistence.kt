@@ -38,8 +38,83 @@ data class PurchaseOrderIssuedRecord(
     val correlationId: String,
 )
 
+data class PurchaseOrderIssuerQueueItem(
+    val candidateId: UUID,
+    val supplierOrganizationId: UUID,
+    val supplierName: String,
+    val stockItemId: UUID,
+    val quantity: String,
+    val unitCode: String,
+    val currency: String,
+    val total: String,
+    val approvalRequestId: UUID,
+    val approvalPolicyVersion: Int,
+)
+
+data class PurchaseOrderDeliveryDestination(
+    val storageLocationId: UUID,
+    val code: String,
+    val name: String,
+    val kind: String,
+)
+
 @Repository
 class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
+    fun issuerQueue(
+        organizationId: UUID,
+        policyKey: String,
+        policyVersion: Int,
+    ): List<PurchaseOrderIssuerQueueItem> = jdbc.query(
+        """
+        SELECT c.id, c.supplier_organization_id, o.display_name AS supplier_name,
+               c.stock_item_id, c.quantity, c.unit_code, c.currency, c.total_amount,
+               a.id AS approval_request_id, a.policy_version
+        FROM procurement_po_candidate c
+        JOIN approval_request a ON a.organization_id = c.organization_id
+          AND a.subject_type = 'PROCUREMENT_PO_CANDIDATE'
+          AND a.subject_id = c.id AND a.subject_version = 1
+          AND a.policy_key = ? AND a.policy_version = ? AND a.state = 'APPROVED'
+        JOIN organization o ON o.id = c.supplier_organization_id
+        LEFT JOIN procurement_purchase_order po ON po.candidate_id = c.id
+        WHERE c.organization_id = ? AND po.id IS NULL
+        ORDER BY c.created_at DESC, c.id DESC LIMIT 100
+        """.trimIndent(),
+        { rs, _ -> PurchaseOrderIssuerQueueItem(
+            rs.getObject("id", UUID::class.java),
+            rs.getObject("supplier_organization_id", UUID::class.java),
+            rs.getString("supplier_name"), rs.getObject("stock_item_id", UUID::class.java),
+            rs.getBigDecimal("quantity").toPlainString(), rs.getString("unit_code"),
+            rs.getString("currency"), rs.getBigDecimal("total_amount").toPlainString(),
+            rs.getObject("approval_request_id", UUID::class.java),
+            rs.getInt("policy_version"),
+        ) },
+        policyKey, policyVersion, organizationId,
+    )
+
+    fun deliveryDestinations(
+        organizationId: UUID,
+        projectId: UUID,
+        siteId: UUID,
+        at: Instant,
+    ): List<PurchaseOrderDeliveryDestination> = jdbc.query(
+        """
+        SELECT id, code, name, kind FROM storage_location l
+        WHERE organization_id = ?
+          AND (active_from IS NULL OR active_from <= ?)
+          AND (active_until IS NULL OR active_until > ?)
+          AND (project_id IS NULL OR project_id = ?)
+          AND kind IN ('MAIN_WAREHOUSE','WAREHOUSE','PROJECT_STORAGE','SITE_STORAGE')
+          AND (kind <> 'SITE_STORAGE' OR site_id = ?)
+        ORDER BY kind, name, id LIMIT 100
+        """.trimIndent(),
+        { rs, _ -> PurchaseOrderDeliveryDestination(
+            rs.getObject("id", UUID::class.java),
+            rs.getString("code"), rs.getString("name"), rs.getString("kind"),
+        ) },
+        organizationId, at.atOffset(ZoneOffset.UTC), at.atOffset(ZoneOffset.UTC),
+        projectId, siteId,
+    )
+
     fun byCandidate(candidateId: UUID): PurchaseOrderIssuedRecord? = jdbc.query(
         "SELECT * FROM procurement_purchase_order WHERE candidate_id = ?",
         { rs, _ ->
