@@ -140,3 +140,39 @@ or exposing supplier quotes. A genuine adapter must validate finalized object
 bytes, source ownership, classification, virus/security status, and current
 document access before the record-quote API may become usable. Do not enable
 the sourcing feature until that adapter and role policy have been proven.
+
+## Canonical supplier quote document pipeline — V0045
+
+A buyer-only idempotent `POST /v1/sourcing/rfqs/{rfqId}/document-slots`
+now creates an immutable, supplier-specific Evidence target. Each slot is
+bound to one owning organization, one existing RFQ, one currently linked
+supplier, an actor and an audited source operation. The slot is neither a
+quote price nor a supplier award.
+
+After this step, the **existing private Evidence infrastructure** accepts
+`targetType=SUPPLIER_QUOTE_DOCUMENT`, `targetId=documentSlotId`,
+`evidenceRequirementKey=SUPPLIER_QUOTE_BINARY`,
+`evidenceTypeCode=SUPPLIER_QUOTE`. Only PDF / JPEG / PNG / WebP files
+within the existing 16 MiB limit can be reserved. Reservation, private
+object storage PUT, SHA/size/media type verification and finalization
+reuse `/v1/evidence`; quotation Evidence is always
+HIGHLY_RESTRICTED / INTERNAL_ONLY. The existing generic signed-download
+endpoint deliberately refuses this classification.
+
+`JdbcSupplierQuoteDocumentVerification` is the production binding for
+`SupplierQuoteDocumentVerificationPort`. It checks an exact canonical
+`evidence:<UUID>` reference, immutable slot, supplier + RFQ + organization,
+READY Evidence and READY upload session, finalized SHA-256 and restricted
+classification. An arbitrary URL, a supplier's other RFQ document, HR
+Evidence or a quarantined/unfinished object can never become quote evidence.
+Buyer authorization and an active supplier relationship are rechecked.
+
+`SupplierQuoteDocumentUploader` reuses the authenticated KMP sourcing and
+Evidence clients for a strict, online-only slot → reservation → private
+binary PUT → finalize sequence. It exposes a canonical reference to quote
+capture **only** on READY. It has no offline write queue.
+
+**Remaining integration:** Wire native Windows file selection and buyer quote
+capture to the upload coordinator, prove buyer/reviewer roles and supplier
+master-data authoring in a real company source, and test direct restricted
+document delivery/review. All sourcing features remain OFF by default.
