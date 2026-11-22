@@ -38,6 +38,7 @@ class PurchaseOrderIssueServiceTest {
     private val destinationId = UUID.randomUUID()
     private val workId = UUID.randomUUID()
     private val projectId = UUID.randomUUID()
+    private val workSiteId = UUID.randomUUID()
     private val candidate = PurchaseOrderCandidateRecord(
         candidateId, UUID.randomUUID(), org, UUID.randomUUID(), UUID.randomUUID(),
         3L, UUID.randomUUID(), 1, UUID.randomUUID(), UUID.randomUUID(),
@@ -112,8 +113,9 @@ class PurchaseOrderIssueServiceTest {
         Mockito.`when`(work.workOrder(workId)).thenReturn(workSnapshot)
         Mockito.`when`(workSnapshot.organizationId).thenReturn(org)
         Mockito.`when`(workSnapshot.projectId).thenReturn(projectId)
+        Mockito.`when`(workSnapshot.siteId).thenReturn(workSiteId)
         Mockito.`when`(issued.validDeliveryLocation(
-            org, destinationId, projectId, at,
+            org, destinationId, projectId, workSiteId, at,
         )).thenReturn(true)
         Mockito.`when`(issued.allocateSerial(org)).thenReturn(26L)
         Mockito.doAnswer { invocation ->
@@ -192,7 +194,7 @@ class PurchaseOrderIssueServiceTest {
     @Test fun locationScopePolicyAndFeatureDefaultsAreDenyByDefault() {
         allow()
         Mockito.`when`(issued.validDeliveryLocation(
-            org, destinationId, projectId, at,
+            org, destinationId, projectId, workSiteId, at,
         )).thenReturn(false)
         assertEquals("PROCUREMENT_PO_ISSUE_UNAVAILABLE", assertThrows<ProductApiException> {
             service().issue(ctx(), candidateId, request())
