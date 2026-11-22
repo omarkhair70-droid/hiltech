@@ -9,6 +9,7 @@ import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.warehouse.StockLedgerPersistence
 import com.hiltech.server.work.WorkPersistencePort
+import com.hiltech.server.work.WorkOrderLifecycle
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
@@ -282,7 +283,13 @@ class SupplierSourcingService @Autowired constructor(
         val order = work.workOrder(root.workOrderId)
         val item = stock.item(root.stockItemId)
         val current = order != null && order.organizationId == root.organizationId &&
-            order.version == expectedWorkVersion && item != null &&
+            order.version == expectedWorkVersion &&
+            order.lifecycleState in setOf(
+                WorkOrderLifecycle.PLANNED,
+                WorkOrderLifecycle.ASSIGNED,
+                WorkOrderLifecycle.IN_PROGRESS,
+                WorkOrderLifecycle.BLOCKED,
+            ) && item != null &&
             item.organizationId == root.organizationId && item.active &&
             item.version == expectedItemVersion && item.baseUnitCode == unit
         return Source(

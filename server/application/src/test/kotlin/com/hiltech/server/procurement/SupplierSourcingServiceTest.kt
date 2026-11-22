@@ -10,6 +10,7 @@ import com.hiltech.server.warehouse.StockClassification
 import com.hiltech.server.warehouse.StockItemView
 import com.hiltech.server.warehouse.StockLedgerPersistence
 import com.hiltech.server.work.WorkOrderSnapshot
+import com.hiltech.server.work.WorkOrderLifecycle
 import com.hiltech.server.work.WorkPersistencePort
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -81,6 +82,7 @@ class SupplierSourcingServiceTest {
         Mockito.`when`(requirements.lock(requirementId)).thenReturn(true)
         Mockito.`when`(order.organizationId).thenReturn(org)
         Mockito.`when`(order.version).thenReturn(5)
+        Mockito.`when`(order.lifecycleState).thenReturn(WorkOrderLifecycle.IN_PROGRESS)
         Mockito.`when`(work.workOrder(workId)).thenReturn(order)
         Mockito.`when`(stock.item(itemId)).thenReturn(item)
         val placeholder = SupplierRfqRecord(
@@ -158,6 +160,14 @@ class SupplierSourcingServiceTest {
         Mockito.`when`(order.version).thenReturn(5)
         Mockito.`when`(requirements.latestTransition(requirementId))
             .thenReturn(ready.copy(toState = "WITHDRAWN", resultVersion = 4))
+        assertEquals("SOURCING_SOURCE_CHANGED", assertThrows<ProductApiException> {
+            service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
+        }.code)
+    }
+
+    @Test fun completedWorkOrderCannotBeSourcedEvenWithTechnicallyReadyEvent() {
+        allow()
+        Mockito.`when`(order.lifecycleState).thenReturn(WorkOrderLifecycle.CLOSED)
         assertEquals("SOURCING_SOURCE_CHANGED", assertThrows<ProductApiException> {
             service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
         }.code)
