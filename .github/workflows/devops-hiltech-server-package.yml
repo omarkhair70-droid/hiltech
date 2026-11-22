@@ -7,6 +7,7 @@ on:
       - "server/**"
       - "database/migrations/**"
       - "scripts/devops/**"
+      - "infrastructure/coolify/**"
   workflow_dispatch:
 
 permissions:
@@ -87,6 +88,37 @@ jobs:
           printf 'artifact=%s\n' "${jars[0]}" \
             >> build/reports/devops-server-package/source.txt
           echo "Boot JAR packaged from ${GITHUB_SHA} with digest proof."
+
+      - name: Prepare image context with verified JAR and Flyway sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t jars < <(find server/application/build/libs \
+            -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | sort)
+          test "${#jars[@]}" -eq 1
+          context=build/tmp/hiltech-image-context
+          mkdir -p "$context/migrations"
+          cp "${jars[0]}" "$context/app.jar"
+          cp -a database/migrations/. "$context/migrations/"
+          test -s "$context/app.jar"
+          test "$(find "$context/migrations" -maxdepth 1 -name 'V*.sql' -type f | wc -l)" -gt 0
+
+      - name: Build and inspect nonroot pinned Java 21 container
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="hiltech-server:ci-${GITHUB_SHA}"
+          docker build --platform linux/amd64 \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            -f infrastructure/coolify/Dockerfile.server \
+            -t "$tag" build/tmp/hiltech-image-context
+          test "$(docker image inspect -f '{{.Config.User}}' "$tag")" = "10001:10001"
+          docker run --rm --network none --entrypoint java "$tag" -version
+          docker image inspect --format='{{.Id}}' "$tag" \
+            > build/reports/devops-server-package/container-image-id.txt
+          printf 'image_tag=%s\n' "$tag" \
+            >> build/reports/devops-server-package/source.txt
+          echo "CI-only image packaged; NOT pushed or deployed."
 
       - name: Save restricted-lifetime build proof
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
