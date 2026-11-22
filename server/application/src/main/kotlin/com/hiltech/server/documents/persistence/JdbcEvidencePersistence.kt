@@ -5,6 +5,7 @@ import com.hiltech.server.documents.EvidencePersistencePort
 import com.hiltech.server.documents.EvidenceReservationInsert
 import com.hiltech.server.documents.EvidenceReservationRecord
 import com.hiltech.server.documents.EmployeeDocumentEvidenceReservationInsert
+import com.hiltech.server.documents.CommercialEvidenceReservationInsert
 import com.hiltech.server.documents.WorkOrderEvidencePolicySnapshot
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -430,6 +431,42 @@ class JdbcEvidencePersistence(
             ),
         )
 
+        insertUploadSession(
+            evidenceId = value.evidenceId,
+            uploadSessionId = value.uploadSessionId,
+            operationId = value.operationId,
+            sha256 = value.sha256,
+            sizeBytes = value.sizeBytes,
+            uploadExpiresAt = value.uploadExpiresAt,
+            createdAt = value.createdAt,
+        )
+    }
+
+    override fun insertCommercialReservation(
+        value: CommercialEvidenceReservationInsert,
+    ) {
+        require(value.targetType in setOf("COMMERCIAL_CONTRACT", "COMMERCIAL_CLIENT_PO"))
+        require(
+            (value.contentType == "application/pdf" && value.securityScanClass == "SIGNED_DOCUMENT") ||
+            (value.contentType in setOf("image/png", "image/jpeg") && value.securityScanClass == "NATIVE_MEDIA")
+        )
+        jdbc.update(
+            """INSERT INTO evidence(
+                 id,organization_id,target_type,target_id,work_order_id,
+                 evidence_requirement_key,evidence_type_code,content_type,
+                 original_file_name,size_bytes,sha256,captured_at,client_occurred_at,
+                 captured_by_user_id,storage_state,object_key_ref,classification_code,
+                 client_visibility_mode,security_scan_class,created_at)
+               VALUES(?,?,?,?,NULL,?,?,?,?,?,?,?,?,?,
+                      'RESERVED',?,'HIGHLY_RESTRICTED','INTERNAL_ONLY',?,?)""",
+            value.evidenceId, value.organizationId, value.targetType, value.targetId,
+            value.evidenceTypeCode, value.evidenceTypeCode, value.contentType,
+            value.originalFileName, value.sizeBytes, value.sha256,
+            value.capturedAt.atOffset(ZoneOffset.UTC),
+            value.clientOccurredAt?.atOffset(ZoneOffset.UTC),
+            value.capturedByUserId, value.objectKey, value.securityScanClass,
+            value.createdAt.atOffset(ZoneOffset.UTC),
+        )
         insertUploadSession(
             evidenceId = value.evidenceId,
             uploadSessionId = value.uploadSessionId,
