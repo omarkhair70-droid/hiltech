@@ -13,6 +13,7 @@ import com.hiltech.server.projects.ProjectsPersistencePort
 import com.hiltech.server.security.AuthorizationDesiredState
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
@@ -24,7 +25,7 @@ import java.time.Instant
 import java.util.UUID
 
 @Component
-class ReadinessAssignmentService(
+class ReadinessAssignmentService @Autowired constructor(
     private val projects: ProjectsPersistencePort,
     private val work: WorkPersistencePort,
     private val persistence: ReadinessAssignmentPersistencePort,
