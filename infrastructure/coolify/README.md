@@ -28,3 +28,21 @@ Do **not** make the server public or reuse `infrastructure/local/docker-compose.
 7. **Clients**: independent Android/Windows install/update rollback gates; the server container does not replace native client distribution.
 
 This directory intentionally has **no ready-to-run production compose file or Docker auto-deploy action**. Deployment is a separate change requiring review. See `docs/13-delivery/RELEASE_STRATEGY.md` and `docs/13-delivery/devops/COOLIFY_HOST_AUDIT_AND_STAGING_GATE_2026-11-22.md`.
+
+## Production-shaped environment and whole-journey acceptance (2026-11-22)
+
+The owner requires **one coherent production-shaped HILTECH experience**, not a backend-only demo. Before any Coolify deployment read:
+
+- [Production-shaped topology, role-to-role E2E rehearsal and Phase7–13 progression](../../docs/13-delivery/devops/PRODUCTION_SHAPED_STAGING_AND_FULL_JOURNEY_GATE_2026-11-22.md).
+- `staging-release-evidence.example.json`: **intentionally all PENDING** evidence ledger; copy it outside the repository for actual evidence (no credentials, secrets, customer data or PII).
+- `../../scripts/devops/staging_release_gate.py`: read-only, fail-closed gate to prevent a human reviewer from conflating a successful container build with a ready environment. Example:
+
+```bash
+python3 scripts/devops/staging_release_gate.py \
+  --manifest infrastructure/coolify/staging-release-evidence.example.json \
+  --environment preprod
+```
+
+This example **must exit 1 (NO-GO)** until genuine evidence is recorded. The checker only validates the *form* of declarations and evidence references; it cannot establish that attached evidence is true or that an operator has approved deployment. An authorized reviewer must inspect every proof. It performs no deployment or network access.
+
+A successfully booted Spring image **does not** imply production-shaped identity, persistent OpenFGA, real evidence storage, capacity, backups, health endpoints, native signed installers, or cross-role acceptance. Work on these independently and update the ledger with specific source SHA and immutable image digest. Production uses a **separate** ledger, isolated databases/credentials/object bucket and mandatory `preprod_acceptance_reference`.
