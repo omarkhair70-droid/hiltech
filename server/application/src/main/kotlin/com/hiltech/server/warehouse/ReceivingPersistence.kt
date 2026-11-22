@@ -38,6 +38,7 @@ data class ReceivingDiscrepancyView(
 )
 data class ReceivingDetailView(
     val record: ReceivingRecordView, val lines: List<ReceivingLineView>, val discrepancies: List<ReceivingDiscrepancyView>,
+    val rejectedLineIds: List<UUID> = emptyList(),
 )
 data class ReceivingDirectoryView(
     val items: List<ReceivingRecordView>, val limited: Boolean,
@@ -155,6 +156,14 @@ class ReceivingPersistence(private val jdbc: JdbcTemplate) {
     ) == 1
 
     /** A PO-line rejection is physical inspection truth, not inventory intake. */
+    fun poRejectedLineIds(recordId: UUID): List<UUID> = jdbc.query(
+        """
+        SELECT receiving_line_id FROM procurement_po_receiving_rejection_event
+        WHERE receiving_record_id=? ORDER BY rejected_at, id
+        """.trimIndent(),
+        { rs, _ -> rs.getObject("receiving_line_id", UUID::class.java) }, recordId,
+    )
+
     fun hasPoRejection(lineId: UUID): Boolean = jdbc.queryForObject(
         "SELECT EXISTS(SELECT 1 FROM procurement_po_receiving_rejection_event WHERE receiving_line_id=?)",
         Boolean::class.java, lineId,
