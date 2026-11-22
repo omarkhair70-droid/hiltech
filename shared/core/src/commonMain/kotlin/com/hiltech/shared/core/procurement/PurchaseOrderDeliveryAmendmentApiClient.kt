@@ -5,7 +5,6 @@ import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.json.Json
 
 @Serializable
@@ -17,6 +16,11 @@ data class PurchaseOrderDeliveryAmendmentStatusDto(
     val reason: String,
     val approvalState: String,
     val approvalRequestId: String? = null,
+)
+
+@Serializable
+data class PurchaseOrderDeliveryAmendmentStatusEnvelopeDto(
+    val proposal: PurchaseOrderDeliveryAmendmentStatusDto? = null,
 )
 
 @Serializable
@@ -97,9 +101,10 @@ class PurchaseOrderDeliveryAmendmentApiClient(
         method = HttpMethod.Get,
         path = "/v1/procurement/purchase-orders/" + uuid(orderId) + "/current-delivery-amendment",
         options = HiltechRequestOptions(installationId = installationId),
-        decode = { json.decodeFromString(
-            PurchaseOrderDeliveryAmendmentStatusDto.serializer().nullable, it,
-        ) },
+        decode = {
+            json.decodeFromString(PurchaseOrderDeliveryAmendmentStatusEnvelopeDto.serializer(), it)
+                .proposal
+        },
     )
 
     suspend fun propose(
