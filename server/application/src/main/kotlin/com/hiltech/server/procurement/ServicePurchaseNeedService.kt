@@ -65,7 +65,7 @@ data class ServicePurchaseNeedReceipt(val need: ServicePurchaseNeedView, val rep
  * The order/acceptance/2-way invoice contract must be a separate governed slice.
  */
 @Service
-class ServicePurchaseNeedService(
+class ServicePurchaseNeedService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val approval: ApprovalPersistencePort,
     private val commands: IdempotentCommandExecutor,
