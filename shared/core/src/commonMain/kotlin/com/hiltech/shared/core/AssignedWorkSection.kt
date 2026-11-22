@@ -183,6 +183,11 @@ fun AssignedWorkSection(
                     val scroll = focusHostScroll
                     if (scroll != null) {
                         if (focusedId != null) {
+                            // Wait until the focused detail replaces the long
+                            // Today list. Scrolling immediately during the same
+                            // composition is overwritten by the parent's
+                            // max-scroll clamping from the new layout.
+                            withFrameNanos { }
                             scroll.scrollTo(0)
                         } else {
                             restoreOffset?.let { target ->
