@@ -54,6 +54,38 @@ data class PurchaseOrderIssueReceiptDto(
     val paymentAuthorized: Boolean = false,
 )
 
+@Serializable
+data class PurchaseOrderLifecycleSummaryDto(
+    val id: String,
+    val code: String,
+    val candidateId: String,
+    val effectiveState: String,
+    val version: Long,
+    val supplierDispatchState: String,
+    val total: String,
+    val currency: String,
+)
+
+@Serializable
+data class CancelPurchaseOrderDto(
+    val operationId: String,
+    val expectedVersion: Long,
+    val reason: String,
+)
+
+@Serializable
+data class CancelPurchaseOrderReceiptDto(
+    val purchaseOrderId: String,
+    val code: String,
+    val state: String,
+    val eventId: String,
+    val eventVersion: Long,
+    val replayed: Boolean,
+    val supplierNotified: Boolean = false,
+    val inventoryChanged: Boolean = false,
+    val paymentChanged: Boolean = false,
+)
+
 /** Online-only; never buffers commercial issuance in Room or an offline queue. */
 class PurchaseOrderIssueApiClient(
     private val api: HiltechApiClient,
@@ -91,6 +123,35 @@ class PurchaseOrderIssueApiClient(
         ),
         requestBody = json.encodeToString(IssuePurchaseOrderDto.serializer(), command),
         decode = { json.decodeFromString(PurchaseOrderIssueReceiptDto.serializer(), it) },
+    )
+
+    suspend fun issuedOrders(
+        organizationId: String,
+        installationId: String,
+    ): List<PurchaseOrderLifecycleSummaryDto> = api.request(
+        method = HttpMethod.Get,
+        path = "/v1/procurement/organizations/" + uuid(organizationId) + "/issued-pos",
+        options = HiltechRequestOptions(installationId = installationId),
+        decode = {
+            json.decodeFromString(
+                ListSerializer(PurchaseOrderLifecycleSummaryDto.serializer()), it,
+            )
+        },
+    )
+
+    suspend fun cancel(
+        purchaseOrderId: String,
+        request: CancelPurchaseOrderDto,
+        installationId: String,
+    ): CancelPurchaseOrderReceiptDto = api.request(
+        method = HttpMethod.Post,
+        path = "/v1/procurement/purchase-orders/" + uuid(purchaseOrderId) + "/cancel",
+        options = HiltechRequestOptions(
+            installationId = installationId,
+            idempotencyKey = uuid(request.operationId),
+        ),
+        requestBody = json.encodeToString(CancelPurchaseOrderDto.serializer(), request),
+        decode = { json.decodeFromString(CancelPurchaseOrderReceiptDto.serializer(), it) },
     )
 
     private fun uuid(value: String): String {
