@@ -1,5 +1,6 @@
 package com.hiltech.server.payroll
 
+import com.hiltech.server.approval.ApprovalSubjectRef
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.people.JdbcPeoplePersistence
@@ -177,6 +178,19 @@ class Payroll9bDraftPostgresContractTest {
         }!!
         assertEquals(2, newer.first.generation)
         assertNotNull(newer.first.sourceFingerprint)
+        val guard = PayrollRunApprovalVersionSource(
+            jdbc, factory.getBeanProvider(PayrollApprovedInputSourcePort::class.java),
+        )
+        val previousSubject = ApprovalSubjectRef(
+            org, "PAYROLL_RUN_VERSION", UUID.fromString(first.first.runVersionId), 1,
+        )
+        val currentSubject = ApprovalSubjectRef(
+            org, "PAYROLL_RUN_VERSION", UUID.fromString(newer.first.runVersionId), 1,
+        )
+        assertFalse(guard.isCurrent(previousSubject))
+        assertTrue(guard.isCurrent(currentSubject))
+        assertFalse(guard.isCurrent(currentSubject.copy(organizationId = UUID.randomUUID())))
+        assertFalse(guard.isCurrent(currentSubject.copy(subjectVersion = 2)))
         assertThrows<Exception> {
             jdbc.update("UPDATE payroll_run_version SET gross = 999 WHERE id = ?",
                 UUID.fromString(first.first.runVersionId))
@@ -258,6 +272,7 @@ class Payroll9bDraftPostgresContractTest {
         }
 
         jdbc.update("UPDATE employee SET version = version + 1 WHERE id = ?", employee)
+        assertFalse(guard.isCurrent(currentSubject))
         assertThrows<ProductApiException> {
             tx.execute {
                 service.create(periodId, UUID.randomUUID(), actor, "p9b-test")
