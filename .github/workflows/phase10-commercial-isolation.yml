@@ -5,6 +5,10 @@ on:
     paths:
       - "database/phase10/**"
       - "server/application/src/main/kotlin/com/hiltech/server/commercial/**"
+      - "server/application/src/main/kotlin/com/hiltech/server/documents/CommercialEvidenceTargetPort.kt"
+      - "server/application/src/main/kotlin/com/hiltech/server/documents/EvidenceLifecycleApi.kt"
+      - "server/application/src/main/kotlin/com/hiltech/server/documents/EvidencePersistence.kt"
+      - "server/application/src/main/kotlin/com/hiltech/server/documents/persistence/JdbcEvidencePersistence.kt"
       - "server/application/src/test/kotlin/com/hiltech/server/commercial/**"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/commercial/**"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/CommercialWorkbenchSection.kt"
