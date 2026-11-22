@@ -121,9 +121,9 @@ class Payroll9bDraftService(
             val components = provider.approvedFor(orgId, periodId, id)
             employee to (Payroll9bCalculator.calculate(orgId, id, policy, components) to components)
         }
-        val fingerprint = sha256(
-            listOf(orgId.toString(), periodId.toString(), policy.policyVersionId.toString()) +
-                calculations.map { it.second.first.sourceFingerprint }.sorted(),
+        val fingerprint = PayrollRunSourceFingerprint.of(
+            orgId, periodId, policy.policyVersionId,
+            calculations.map { it.second.first.sourceFingerprint },
         )
         val currency = policy.currency
         val gross = calculations.fold(BigDecimal.ZERO) { acc, item -> acc + item.second.first.gross }

@@ -87,6 +87,17 @@ object Payroll9cReconciler {
                 Payroll9aPolicy.fail("PAYROLL_PAYMENT_EVENT_REPLAY_CONFLICT", HttpStatus.CONFLICT)
             }
         }
+        // Different external events must never disagree about the same
+        // authoritative Finance source version for one instruction.
+        val byVersion = observedByEvent.values.groupBy {
+            it.financeInstructionId to it.financeSourceVersion
+        }
+        if (byVersion.values.any { versions ->
+            versions.map { it.outcome }.distinct().size > 1 ||
+                versions.map { it.financeEvidenceReference }.distinct().size > 1
+        }) {
+            Payroll9aPolicy.fail("PAYROLL_PAYMENT_VERSION_CONFLICT", HttpStatus.CONFLICT)
+        }
         val employees = expected.sortedBy { it.employeeId.toString() }.map { instruction ->
             val latest = observedByEvent.values
                 .filter { it.financeInstructionId == instruction.financeInstructionId }

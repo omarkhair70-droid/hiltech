@@ -37,7 +37,6 @@ data class PrivatePayrollPayslipDto(
     val reimbursements: String,
     val net: String,
     val paymentStatus: String,
-    val financeEvidenceReference: String?,
 )
 
 data class OwnPayrollPayslipsDto(
@@ -149,7 +148,6 @@ class Payroll9cPayslipService(
                 reimbursements = row.reimbursements.toPlainString(),
                 net = row.net.toPlainString(),
                 paymentStatus = own.result.name,
-                financeEvidenceReference = own.evidenceRef,
             )
         }
         return OwnPayrollPayslipsDto(approved, correlationId)

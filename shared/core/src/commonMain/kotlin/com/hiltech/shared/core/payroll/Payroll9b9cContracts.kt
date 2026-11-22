@@ -55,7 +55,6 @@ data class PrivatePayslipDto(
     val reimbursements: String,
     val net: String,
     val paymentStatus: String,
-    val financeEvidenceReference: String? = null,
 )
 
 @Serializable
