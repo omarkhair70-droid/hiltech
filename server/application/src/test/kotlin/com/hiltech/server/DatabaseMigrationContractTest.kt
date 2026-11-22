@@ -306,7 +306,7 @@ class DatabaseMigrationContractTest {
                       AND conname IN (
                         'fk_po_lifecycle_org',
                         'uq_po_lifecycle_version',
-                        'fk_po_lifecycle_approved_proposal_org',
+                        'fk_po_lifecycle_approved_proposal_scope',
                         'fk_po_lifecycle_approval_request_org',
                         'fk_po_lifecycle_new_destination_org',
                         'ck_po_lifecycle_specific_payload',
