@@ -17,7 +17,9 @@ on:
       - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/DesktopIdentityRuntime.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/SupplierSourcingBuyerSection.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCandidate*"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderIssue*"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCandidate*"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderIssue*"
       - "docs/13-delivery/phase7/06_S03_PO_CANDIDATE_APPROVAL_CHECKPOINT.md"
   pull_request:
     branches:
@@ -35,7 +37,9 @@ on:
       - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/DesktopIdentityRuntime.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/SupplierSourcingBuyerSection.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCandidate*"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderIssue*"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCandidate*"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderIssue*"
       - "docs/13-delivery/phase7/06_S03_PO_CANDIDATE_APPROVAL_CHECKPOINT.md"
 
 concurrency:
@@ -93,6 +97,7 @@ jobs:
         run: |
           ./gradlew :shared:core:desktopTest \
             --tests '*PurchaseOrderCandidateApiClientTest' \
+            --tests '*PurchaseOrderIssueApiClientTest' \
             --no-daemon --console=plain
       - name: Compile Android and Windows candidate surfaces
         run: |
