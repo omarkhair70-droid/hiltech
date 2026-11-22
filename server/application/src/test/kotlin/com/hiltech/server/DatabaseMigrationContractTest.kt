@@ -2,6 +2,7 @@ package com.hiltech.server
 
 import com.hiltech.server.audit.JdbcAuditEventWriter
 import com.hiltech.server.platform.ProductApiException
+import com.hiltech.server.procurement.SupplierSourcingPersistence
 import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
 import com.hiltech.server.security.AuthorizationDesiredState
 import com.hiltech.server.security.AuthorizationProjectionIntent
@@ -298,6 +299,7 @@ class DatabaseMigrationContractTest {
                 ps.executeUpdate()
             }
 
+            verifySupplierLinkLookup(orgId, userId, now.toInstant())
             verifyWarehouseStaging(orgId, userId, now.toInstant())
 
             assertConstraintRejects(connection) {
@@ -890,6 +892,54 @@ class DatabaseMigrationContractTest {
             inventoryBefore,
             inventoryTables.map { jdbc.queryForObject("SELECT count(*) FROM $it", Long::class.java) },
         )
+    }
+
+    /**
+     * Disposable PostgreSQL integration proof: active organization-scoped
+     * supplier links are visible, then a later INACTIVE event revokes them.
+     */
+    private fun verifySupplierLinkLookup(orgId: UUID, userId: UUID, at: Instant) {
+        val jdbc = JdbcTemplate(DriverManagerDataSource(url, user, password))
+        val supplierId = UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO organization (
+                id, organization_code, legal_name, display_name,
+                organization_type, status, created_at, version
+            ) VALUES (?, ?, 'Supplier contract fixture', 'Supplier contract fixture',
+                      'SUPPLIER', 'ACTIVE', ?, 1)
+            """.trimIndent(),
+            supplierId, "SUP-TEST-${supplierId.toString().take(12)}",
+            at.atOffset(ZoneOffset.UTC),
+        )
+        val sourcing = SupplierSourcingPersistence(jdbc)
+        assertEquals(false, sourcing.isEligibleSupplier(orgId, supplierId))
+        assertTrue(sourcing.eligibleSuppliers(orgId).isEmpty())
+
+        fun addLink(revision: Int, state: String) {
+            jdbc.update(
+                """
+                INSERT INTO procurement_supplier_link_event (
+                    id, organization_id, supplier_organization_id, revision_number,
+                    state, source_reference, recorded_by_user_id,
+                    recorded_at, correlation_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """.trimIndent(),
+                UUID.randomUUID(), orgId, supplierId, revision,
+                state, "contract-fixture-supplier-link-$revision", userId,
+                at.atOffset(ZoneOffset.UTC), "contract-fixture",
+            )
+        }
+        addLink(1, "ACTIVE")
+        assertEquals(true, sourcing.isEligibleSupplier(orgId, supplierId))
+        val listed = sourcing.eligibleSuppliers(orgId)
+        assertEquals(1, listed.size)
+        assertEquals(supplierId, listed.single().supplierOrganizationId)
+        assertEquals(1, listed.single().relationshipRevision)
+
+        addLink(2, "INACTIVE")
+        assertEquals(false, sourcing.isEligibleSupplier(orgId, supplierId))
+        assertTrue(sourcing.eligibleSuppliers(orgId).isEmpty())
     }
 
     private fun assertConstraintRejects(
