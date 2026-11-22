@@ -36,6 +36,9 @@ data class CommercialDealDetailDto(
     val visits: List<CommercialVisitSummaryDto> = emptyList(),
     val scopeVersions: List<CommercialScopeVersionDto> = emptyList(),
     val quotes: List<CommercialQuoteSummaryDto> = emptyList(),
+    val contracts: List<CommercialContractSummaryDto> = emptyList(),
+    val clientPurchaseOrders: List<CommercialClientPoSummaryDto> = emptyList(),
+    val handoff: List<CommercialHandoffSummaryDto> = emptyList(),
 )
 
 @Serializable
@@ -90,6 +93,30 @@ data class CommercialQuoteSummaryDto(
     val state: String,
     @SerialName("total_price") val totalPrice: JsonPrimitive,
     val currency: String,
+)
+
+@Serializable
+data class CommercialContractSummaryDto(
+    val id: String,
+    @SerialName("quote_version_id") val quoteVersionId: String,
+    @SerialName("contract_code") val contractCode: String,
+    val state: String,
+)
+
+@Serializable
+data class CommercialClientPoSummaryDto(
+    val id: String,
+    @SerialName("contract_id") val contractId: String,
+    @SerialName("client_po_number") val clientPoNumber: String,
+    val verified: Boolean,
+)
+
+@Serializable
+data class CommercialHandoffSummaryDto(
+    @SerialName("project_id") val projectId: String,
+    @SerialName("quote_version_id") val quoteVersionId: String,
+    @SerialName("contract_id") val contractId: String,
+    @SerialName("client_po_id") val clientPoId: String,
 )
 
 @Serializable
