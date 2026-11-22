@@ -8,7 +8,7 @@ Date: 2026-11-22. Owner explicitly requested a direct, repeatable terminal workf
 - Coolify URL: `https://coolify.158.101.254.30.sslip.io` (owner's self-hosted root team; v4.7.6 observed in its dashboard).
 - From the Windows workstation, unauthenticated `GET /api/health` and `GET /api/v1/health` returned **HTTP 200 OK**.
 - `GET /api/v1/projects` returned **HTTP 401** without credentials, as it should. **This is not authenticated API access**.
-- Coolify CLI was not installed at the start of this audit; Go user-scoped official CLI installation was initiated, with no modifications to Oracle/Coolify.
+- Coolify CLI **v1.11.0 installed and verified** on the authorized Windows workstation at `%LOCALAPPDATA%\\Programs\\CoolifyCLI\\coolify.exe`; downloaded official GitHub release ZIP and checksums; independent SHA-256 match verified with .NET before extraction. Its folder was appended to Windows **user** PATH for new PowerShell sessions. The optional Go-source build failed on that workstation; the verified release binary is working.
 - An already authorized owner Windows SSH route to Oracle VM had previously worked for read-only host/Docker observations, but a subsequent attempted Docker SSH inventory was **blocked by the remote-execution safety gate**. Do not bypass that block.
 - GUI owner session identified `localhost` plus `teswa-core01` (Tailscale-attached) and real project inventory. Terminal tokens are **not** browser cookies or SSH keys.
 
@@ -20,7 +20,7 @@ Date: 2026-11-22. Owner explicitly requested a direct, repeatable terminal workf
 
 This avoids privileged DB inspection, stealing browser cookies, reusing another app's database credentials, and confusing the Coolify control plane with the underlying OCI tenancy.
 
-## Coolify official CLI bootstrap — on owner's Windows PC
+## Coolify official CLI bootstrap — completed on owner's Windows PC
 
 Prefer the documented first-party `github.com/coollabsio/coolify-cli/coolify` CLI. Install on the workstation, **not** the already-constrained Oracle VM:
 
@@ -65,7 +65,9 @@ Read-only command success does not establish database durability, backups/restor
 
 `COOLIFY_GUI_AUTHENTICATED=YES` (owner Chrome session)  
 `COOLIFY_HTTP_HEALTH=PASS`  
+`COOLIFY_CLI_INSTALLED=YES (v1.11.0, upstream release SHA256 verified)`  
+`COOLIFY_CLI_CONTEXT=hiltech-oci (default, correct self-hosted HTTPS URL)`  
 `COOLIFY_API_READ_TOKEN=NOT_CONFIGURED`  
-`COOLIFY_API_AUTH_VERIFIED=NO`  
+`COOLIFY_API_AUTH_VERIFIED=NO (coolify context verify returned 401 Unauthenticated, expected with no token)`  
 `COOLIFY_SERVICES_MODIFIED=NO`  
 `HILTECH_PILOT_DEPLOYED=NO`
