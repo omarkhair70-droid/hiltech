@@ -22,6 +22,7 @@ import com.hiltech.shared.core.executive.ExecutiveSectionDto
 import com.hiltech.shared.core.executive.ExecutiveSourceReferenceDto
 import com.hiltech.shared.core.executive.resolveExecutiveDestination
 import com.hiltech.shared.core.executive.executiveSnapshotMatchesSession
+import com.hiltech.shared.core.executive.orderExecutiveProjectsByHealth
 
 /**
  * Native Windows + Android executive surface. Stateless by design:
@@ -125,13 +126,13 @@ fun ExecutiveHomeSection(
         ExecutiveSectionHeader(
             "المشاريع والصحة التشغيلية",
             home.projects,
-            "مراجعة محدودة للمشاريع التي يسمح النظام برؤيتها — لا نفترض أن UNKNOWN تعني سليم.",
+            "المشاريع المتاحة لك، مرتبة وفق حالة الصحة المسجلة في المصدر: الحرجة أولًا. UNKNOWN لا تعني سليمًا، والنافذة ليست إجمالي الشركة.",
         )
         if (home.projects.status != "UNAVAILABLE") {
             if (home.projects.items.isEmpty()) {
                 EmptyExecutiveSection()
             }
-            home.projects.items.forEach { project ->
+            orderExecutiveProjectsByHealth(home.projects.items).forEach { project ->
                 OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(14.dp),
