@@ -2,6 +2,9 @@ package com.hiltech.server.payroll
 
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.ProductApiException
+import com.hiltech.server.people.JdbcPeoplePersistence
+import com.hiltech.server.security.JdbcRoleTeamSourceAuthority
+import java.math.BigDecimal
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -82,6 +85,18 @@ class Payroll9bDraftPostgresContractTest {
             ) VALUES (?, ?, 'FULL_TIME', ?, 'ACTIVE', ?, ?)
             """.trimIndent(),
             employment, employee, LocalDate.parse("2026-10-01"), time, time,
+        )
+
+        jdbc.update("UPDATE user_identity SET person_id = ? WHERE id = ?", person, actor)
+        val membership = UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO organization_membership (
+                id, organization_id, user_identity_id, membership_type,
+                state, valid_from
+            ) VALUES (?, ?, ?, 'EMPLOYEE', 'ACTIVE', ?)
+            """.trimIndent(),
+            membership, org, actor, at.minusSeconds(30).atOffset(ZoneOffset.UTC),
         )
         val permission = object : Payroll9aAuthorityPort {
             override fun canRead(actorId: UUID, organizationId: UUID) =
@@ -170,6 +185,78 @@ class Payroll9bDraftPostgresContractTest {
             jdbc.update("DELETE FROM payroll_run_employee_line WHERE run_version_id = ?",
                 UUID.fromString(first.first.runVersionId))
         }
+
+        // 9C: even with a draft ledger, no payslip is visible unless a
+        // separately approved publication source and Finance-result source exist.
+        val notPublished = Payroll9cPayslipService(
+            jdbc, JdbcPeoplePersistence(jdbc), JdbcRoleTeamSourceAuthority(jdbc),
+            StaticListableBeanFactory().getBeanProvider(PayrollRunPublicationPort::class.java),
+            StaticListableBeanFactory().getBeanProvider(PayrollFinancePaymentResultsPort::class.java),
+            clock,
+        )
+        assertTrue(notPublished.own(actor, org, "p9c-private").items.isEmpty())
+        val publishedRunId = UUID.fromString(newer.first.runVersionId)
+        val instructionId = UUID.randomUUID()
+        val approval = object : PayrollRunPublicationPort {
+            override fun canPublish(
+                organizationId: UUID, runVersionId: UUID, exactSourceFingerprint: String,
+            ): Boolean = organizationId == org &&
+                runVersionId == publishedRunId &&
+                exactSourceFingerprint == newer.first.sourceFingerprint
+        }
+        val financeInstruction = PayrollExpectedPayment(
+            organizationId = org, runVersionId = publishedRunId,
+            employeeId = employee, financeInstructionId = instructionId,
+            financeInstructionVersion = 1,
+            amount = BigDecimal("100.00"), currency = "EGP",
+        )
+        var paymentEvents = emptyList<PayrollFinanceResult>()
+        val finance = object : PayrollFinancePaymentResultsPort {
+            override fun expectedPayments(organizationId: UUID, runVersionId: UUID) =
+                listOf(financeInstruction)
+            override fun paymentEvents(organizationId: UUID, runVersionId: UUID) =
+                paymentEvents
+        }
+        val self = Payroll9cPayslipService(
+            jdbc, JdbcPeoplePersistence(jdbc), JdbcRoleTeamSourceAuthority(jdbc),
+            StaticListableBeanFactory(mapOf("approvedPublication" to approval))
+                .getBeanProvider(PayrollRunPublicationPort::class.java),
+            StaticListableBeanFactory(mapOf("financeReference" to finance))
+                .getBeanProvider(PayrollFinancePaymentResultsPort::class.java),
+            clock,
+        )
+        val pending = self.own(actor, org, "p9c-private")
+        assertEquals(1, pending.items.size)
+        assertEquals(employee.toString(), pending.items.single().employeeId)
+        assertEquals(newer.first.runVersionId, pending.items.single().runVersionId)
+        assertEquals("UNKNOWN", pending.items.single().paymentStatus)
+        paymentEvents = listOf(
+            PayrollFinanceResult(
+                organizationId = org, runVersionId = publishedRunId,
+                employeeId = employee, financeInstructionId = instructionId,
+                financeInstructionVersion = 1, outcomeEventId = UUID.randomUUID(),
+                outcome = PayrollFinanceOutcome.SUCCESS, financeSourceVersion = 1,
+                financeEvidenceReference = "synthetic-confirmed-finance-proof",
+                observedAt = at,
+            ),
+        )
+        assertEquals("SUCCESS", self.own(actor, org, "p9c-private").items.single().paymentStatus)
+        paymentEvents = paymentEvents + paymentEvents.first().copy(
+            outcomeEventId = UUID.randomUUID(),
+            outcome = PayrollFinanceOutcome.RETURNED, financeSourceVersion = 2,
+            observedAt = at.plusSeconds(30),
+        )
+        assertEquals("RETURNED", self.own(actor, org, "p9c-private").items.single().paymentStatus)
+
+        // Unknown and former identities have no other employee's payslip.
+        assertThrows<ProductApiException> {
+            self.own(UUID.randomUUID(), org, "p9c-private")
+        }
+        jdbc.update("UPDATE organization_membership SET state = 'ENDED' WHERE id = ?", membership)
+        assertThrows<ProductApiException> {
+            self.own(actor, org, "p9c-private")
+        }
+
         jdbc.update("UPDATE employee SET version = version + 1 WHERE id = ?", employee)
         assertThrows<ProductApiException> {
             tx.execute {
