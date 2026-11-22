@@ -403,6 +403,30 @@ class JdbcEvidencePersistence(
         createdAt = value.createdAt,
     )
 
+    override fun insertServiceQuoteDocumentReservation(
+        value: SupplierQuoteDocumentEvidenceReservationInsert,
+    ) = insertRestrictedEvidenceReservation(
+        evidenceId = value.evidenceId,
+        uploadSessionId = value.uploadSessionId,
+        operationId = value.operationId,
+        objectKey = value.objectKey,
+        organizationId = value.organizationId,
+        targetType = "SERVICE_QUOTE_DOCUMENT",
+        targetId = value.documentSlotId,
+        requirementKey = "SERVICE_QUOTE_BINARY",
+        evidenceTypeCode = "SERVICE_QUOTE",
+        contentType = value.contentType,
+        originalFileName = value.originalFileName,
+        sizeBytes = value.sizeBytes,
+        sha256 = value.sha256,
+        capturedAt = value.capturedAt,
+        clientOccurredAt = value.clientOccurredAt,
+        capturedByUserId = value.capturedByUserId,
+        securityScanClass = value.securityScanClass,
+        uploadExpiresAt = value.uploadExpiresAt,
+        createdAt = value.createdAt,
+    )
+
     override fun insertSupplierInvoiceDocumentReservation(
         value: SupplierInvoiceDocumentEvidenceReservationInsert,
     ) = insertRestrictedEvidenceReservation(
