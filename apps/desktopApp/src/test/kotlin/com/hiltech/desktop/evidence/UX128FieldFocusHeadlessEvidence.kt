@@ -195,6 +195,31 @@ fun main() = runBlocking<Unit> {
         check(manyScroll.value == beforeFocusOffset) {
             "Back should restore previous list position. expected=$beforeFocusOffset actual=${manyScroll.value}"
         }
+
+        // Re-select the same semantic WorkOrder, then reorder the server list
+        // while the detail is open. A raw offset=550 would now point to a
+        // DIFFERENT job. The ID-based requester must reveal WO-QA-05.
+        multipleScene.sendPointerEvent(PointerEventType.Press, Offset(180f, 168f))
+        multipleScene.sendPointerEvent(PointerEventType.Release, Offset(180f, 168f))
+        settleNativeLayout(multipleScene)
+        check(clickedIds.size == 2 && clickedIds[1] == clickedIds[0]) {
+            "Same source work order must be re-selectable before reorder: $clickedIds"
+        }
+        val selectedWorkId = clickedIds.first()
+        val reordered = manyTasks.filterNot { it.workOrderId == selectedWorkId } +
+            manyTasks.single { it.workOrderId == selectedWorkId }
+        manyState = manyState.copy(today = reordered)
+        settleNativeLayout(multipleScene)
+        save(multipleScene, dir.resolve("ux128-field-11-reordered-still-focused.png"), 430, 720)
+        multipleScene.sendPointerEvent(PointerEventType.Press, Offset(320f, 40f))
+        multipleScene.sendPointerEvent(PointerEventType.Release, Offset(320f, 40f))
+        settleNativeLayout(multipleScene)
+        save(multipleScene, dir.resolve("ux128-field-12-reordered-return-anchor.png"), 430, 720)
+        check(manyScroll.value > beforeFocusOffset + 300) {
+            "Returning after reorder must follow selected WorkOrder ID, not stale pixel offset: ${manyScroll.value}"
+        }
+        println("UX128_FIELD_ANCHOR_PASS selected=WO-QA-05 reorder=LAST return_to_id=PASS")
+
         // Reassign/remove another job with same local focus state, ensuring it
         // cannot display an already-removed source object after a new selection.
         manyState = manyState.copy(today = manyTasks.filterNot { it.workOrderId == clickedIds.single() })
