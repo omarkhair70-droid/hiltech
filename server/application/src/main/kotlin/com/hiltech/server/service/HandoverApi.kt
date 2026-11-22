@@ -52,12 +52,14 @@ data class HandoverDraftRequest(
 data class HandoverWorkFact(
     val workOrderId: UUID,
     val lifecycleState: String,
+    val version: Long = 1,
 )
 
 data class HandoverRequirementFact(
     val workOrderId: UUID,
     val requirementKey: String,
     val satisfactionState: String,
+    val version: Long = 1,
 )
 
 data class HandoverDocumentFact(
@@ -148,19 +150,21 @@ object HandoverReadinessPolicy {
         documents: List<HandoverDocumentFact>,
         works: List<HandoverWorkFact> = emptyList(),
         requirements: List<HandoverRequirementFact> = emptyList(),
+        projectVersion: Long = 0,
     ): String {
         // A source stamp must change if a WorkOrder acceptance or its required
         // document satisfaction changes, not only when the Evidence binary changes.
         val canonical = buildList {
-            add("HANDOVER-SOURCE-V2")
+            add("HANDOVER-SOURCE-V3")
+            add("PROJECT_VERSION|" + projectVersion)
             works.sortedBy { it.workOrderId.toString() }.forEach {
-                add(listOf("WORK", it.workOrderId, it.lifecycleState).joinToString("|"))
+                add(listOf("WORK", it.workOrderId, it.lifecycleState, it.version).joinToString("|"))
             }
             requirements.sortedWith(
                 compareBy({ it.workOrderId.toString() }, { it.requirementKey })
             ).forEach {
-                add(listOf("REQUIREMENT", it.workOrderId, it.requirementKey, it.satisfactionState)
-                    .joinToString("|"))
+                add(listOf("REQUIREMENT", it.workOrderId, it.requirementKey,
+                        it.satisfactionState, it.version).joinToString("|"))
             }
             documents.sortedWith(compareBy({ it.documentId.toString() }, { it.revisionId.toString() }))
                 .forEach {
@@ -180,15 +184,15 @@ class JdbcHandoverSource(
 ) {
     fun work(projectId: UUID): List<HandoverWorkFact> =
         jdbc.query(
-            "SELECT id, lifecycle_state FROM work_order WHERE project_id = ? AND lifecycle_state <> 'CANCELLED' ORDER BY id",
-            { rs, _ -> HandoverWorkFact(rs.getObject("id", UUID::class.java), rs.getString("lifecycle_state")) },
+            "SELECT id, lifecycle_state, version FROM work_order WHERE project_id = ? AND lifecycle_state <> 'CANCELLED' ORDER BY id",
+            { rs, _ -> HandoverWorkFact(rs.getObject("id", UUID::class.java), rs.getString("lifecycle_state"), rs.getLong("version")) },
             projectId,
         )
 
     fun requirements(projectId: UUID): List<HandoverRequirementFact> =
         jdbc.query(
             """
-            SELECT wri.work_order_id, wri.requirement_key, wri.satisfaction_state
+            SELECT wri.work_order_id, wri.requirement_key, wri.satisfaction_state, wri.version
               FROM work_requirement_instance wri
               JOIN work_order wo ON wo.id = wri.work_order_id
              WHERE wo.project_id = ?
@@ -202,6 +206,7 @@ class JdbcHandoverSource(
                     rs.getObject("work_order_id", UUID::class.java),
                     rs.getString("requirement_key"),
                     rs.getString("satisfaction_state"),
+                    rs.getLong("version"),
                 )
             },
             projectId,
@@ -399,7 +404,7 @@ class HandoverService(
             projectId.toString(), project.organizationId.toString(), docs.size, works.size,
             missing, canSubmitForInternalReview = false,
             canShareWithClient = false, canAcceptForClient = false,
-            sourceDigest = HandoverReadinessPolicy.digest(docs, works, requirements),
+            sourceDigest = HandoverReadinessPolicy.digest(docs, works, requirements, project.version),
         )
     }
 
@@ -450,7 +455,7 @@ class HandoverService(
             val works = sources.work(projectId)
             val requirements = sources.requirements(projectId)
             val reasons = HandoverReadinessPolicy.missing(works, requirements, docs)
-            val digest = HandoverReadinessPolicy.digest(docs, works, requirements)
+            val digest = HandoverReadinessPolicy.digest(docs, works, requirements, fresh.version)
             val at = clock.instant()
             sources.insertDraft(
                 fresh, packageId, versionId, latest + 1, operationId,

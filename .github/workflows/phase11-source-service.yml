@@ -1,0 +1,128 @@
+name: Phase 11 — source-bound service contracts
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/phase11-source-service.yml"
+      - "database/pending/phase11/**"
+      - "server/application/src/main/kotlin/com/hiltech/server/service/**"
+      - "server/application/src/test/kotlin/com/hiltech/server/service/**"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/service/**"
+      - "scripts/ci/phase11-schema-source-check.sql"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase11-source-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-policy-and-pending-schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_DB: hiltech
+          POSTGRES_USER: hiltech
+          POSTGRES_PASSWORD: hiltech
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hiltech -d hiltech"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      HILTECH_DB_CONTRACT_TEST: "1"
+      HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
+      HILTECH_DB_USER: hiltech
+      HILTECH_DB_PASSWORD: hiltech
+      HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+      PGPASSWORD: hiltech
+    steps:
+      - name: Checkout the exact PR source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Frozen Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Compile and test Phase11 exact-head policy classes
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.service.HandoverReadinessPolicyTest \
+            --tests com.hiltech.server.service.HandoverInternalReviewPolicyTest \
+            --tests com.hiltech.server.service.SupportDeskFieldRulesTest \
+            --tests com.hiltech.server.service.SupportTriagePolicyTest \
+            --tests com.hiltech.server.service.SupportCasePolicyTest \
+            --tests com.hiltech.server.service.MaintenanceDraftPolicyTest \
+            --no-configuration-cache --console=plain
+
+      - name: Verify canonical migrations against disposable PostgreSQL
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --rerun-tasks --no-configuration-cache --console=plain
+
+      - name: Verify ordered unnumbered Phase11 DDL on same disposable PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sql in \
+            database/pending/phase11/11A_handover.sql \
+            database/pending/phase11/11A2_handover_internal_review.sql \
+            database/pending/phase11/11B_support_internal.sql \
+            database/pending/phase11/11B2_support_triage.sql \
+            database/pending/phase11/11B3_support_case_workflow.sql \
+            database/pending/phase11/11C_maintenance_visits.sql; do
+            psql -h localhost -U hiltech -d hiltech -v ON_ERROR_STOP=1 -f "$sql"
+          done
+          psql -h localhost -U hiltech -d hiltech -v ON_ERROR_STOP=1 \
+            -f scripts/ci/phase11-schema-source-check.sql
+          echo "PHASE11_PENDING_SCHEMA_PROOF_PASS"
+          echo "Only an isolated CI database was modified; no Flyway number allocated."
+
+  native-source-compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout exact PR source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Frozen Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Build shared Compose and desktop
+        run: |
+          ./gradlew :shared:core:desktopTest :apps:desktopApp:compileKotlin \
+            --no-configuration-cache --console=plain
+
+      - name: Build Android debug APK from current shared source
+        run: |
+          ./gradlew :apps:androidApp:assembleDebug \
+            -Philtech.apiBaseUrl=https://api.hiltech.invalid \
+            -Philtech.oidcIssuerUri=https://identity.hiltech.invalid/realms/hiltech \
+            --no-configuration-cache --console=plain
+
+      - name: Confirm compiled APK exists
+        run: |
+          find apps/androidApp/build/outputs/apk -type f -name '*.apk' -size +0c -print -quit |
+            grep -q '.apk'

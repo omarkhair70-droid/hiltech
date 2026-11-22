@@ -195,7 +195,7 @@ class HandoverReviewService(
             ?: reviewProblem("HANDOVER_REVIEW_DRAFT_NOT_FOUND", HttpStatus.NOT_FOUND)
         if (source.organizationId != project.organizationId)
             reviewProblem("HANDOVER_REVIEW_DRAFT_NOT_FOUND", HttpStatus.NOT_FOUND)
-        val current = currentSourceDigest(projectId, project.organizationId)
+        val current = currentSourceDigest(projectId, project.organizationId, project.version)
         val latest = reviews.latest(versionId)
         return HandoverReviewSummaryDto(
             versionId.toString(), source.versionNumber, source.frozenDigest, current,
@@ -249,7 +249,7 @@ class HandoverReviewService(
                 reviewProblem("HANDOVER_REVIEW_DRAFT_NOT_FOUND", HttpStatus.NOT_FOUND)
             if (reviews.latestVersion(fresh.packageId) != fresh.versionNumber)
                 reviewProblem("HANDOVER_REVIEW_SUPERSEDED", HttpStatus.CONFLICT)
-            if (currentSourceDigest(projectId, fresh.organizationId) != fresh.frozenDigest)
+            if (currentSourceDigest(projectId, fresh.organizationId, freshProject.version) != fresh.frozenDigest)
                 reviewProblem("HANDOVER_REVIEW_SOURCE_CHANGED", HttpStatus.CONFLICT)
             val current = reviews.latest(versionId)
             if ((current?.eventNumber ?: 0) != expectedNumber)
@@ -274,11 +274,12 @@ class HandoverReviewService(
             .copy(duplicateReplay = result.replayed)
     }
 
-    private fun currentSourceDigest(projectId: UUID, org: UUID) =
+    private fun currentSourceDigest(projectId: UUID, org: UUID, projectVersion: Long) =
         HandoverReadinessPolicy.digest(
             sources.approvedDocuments(projectId, org),
             sources.work(projectId),
             sources.requirements(projectId),
+            projectVersion,
         )
 
     private fun manageProject(projectId: UUID, actor: UUID): ProjectSnapshot =

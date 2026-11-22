@@ -73,6 +73,20 @@ class HandoverReadinessPolicyTest {
     }
 
     @Test
+    fun digestDetectsProjectWorkAndRequirementVersionChanges() {
+        val documents = listOf(approved())
+        val work = listOf(HandoverWorkFact(this.work, "ACCEPTED", 17))
+        val requirements = listOf(HandoverRequirementFact(this.work, "AS_BUILT", "SATISFIED", 4))
+        val base = HandoverReadinessPolicy.digest(documents, work, requirements, 8)
+        assertFalse(base == HandoverReadinessPolicy.digest(documents,
+            work.map { it.copy(version = it.version + 1) }, requirements, 8))
+        assertFalse(base == HandoverReadinessPolicy.digest(documents,
+            work, requirements.map { it.copy(version = it.version + 1) }, 8))
+        assertFalse(base == HandoverReadinessPolicy.digest(documents,
+            work, requirements, 9))
+    }
+
+    @Test
     fun digestIsDeterministicAndSensitiveToEvidence() {
         val another = approved().copy(
             documentId = UUID.fromString("00000000-0000-0000-0000-000000000015"),
