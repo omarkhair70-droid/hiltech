@@ -140,6 +140,7 @@ class SupplierSourcingService @Autowired constructor(
     private val clock: Clock,
     @Value("\${hiltech.procurement.sourcing.enabled:false}")
     private val enabled: Boolean = false,
+    private val sourceVerifier: ProcurementDemandSourceVerifier? = null,
 ) {
     fun openRfq(
         ctx: ProcurementDraftContext,
@@ -437,22 +438,26 @@ class SupplierSourcingService @Autowired constructor(
     private fun currentSource(id: UUID): Source {
         val root = requirements.byId(id) ?: unavailable()
         val last = requirements.latestTransition(id)
-        val expectedWorkVersion = last?.revised?.workVersion ?: root.sourceWorkVersion
         val expectedItemVersion = last?.revised?.itemVersion ?: root.stockItemVersion
         val quantity = last?.revised?.quantity ?: root.requestedQuantity
         val unit = last?.revised?.unitCode ?: root.unitCode
-        val order = work.workOrder(root.workOrderId)
-        val item = stock.item(root.stockItemId)
-        val current = order != null && order.organizationId == root.organizationId &&
-            order.version == expectedWorkVersion &&
-            order.lifecycleState in setOf(
-                WorkOrderLifecycle.PLANNED,
-                WorkOrderLifecycle.ASSIGNED,
-                WorkOrderLifecycle.IN_PROGRESS,
-                WorkOrderLifecycle.BLOCKED,
-            ) && item != null &&
-            item.organizationId == root.organizationId && item.active &&
-            item.version == expectedItemVersion && item.baseUnitCode == unit
+        // The same current-source contract serves WORK_ORDER and real Warehouse
+        // replenishment. Without a verifier, unknown typed sources fail closed.
+        val current = sourceVerifier?.isCurrent(root, last) ?: run {
+            if (root.sourceType != "WORK_ORDER") false else {
+                val order = root.workOrderId?.let { work.workOrder(it) }
+                val item = stock.item(root.stockItemId)
+                order != null && order.organizationId == root.organizationId &&
+                    order.version == (last?.revised?.workVersion ?: root.sourceWorkVersion) &&
+                    order.lifecycleState in setOf(
+                        WorkOrderLifecycle.PLANNED, WorkOrderLifecycle.ASSIGNED,
+                        WorkOrderLifecycle.IN_PROGRESS, WorkOrderLifecycle.BLOCKED,
+                    ) &&
+                    item != null && item.organizationId == root.organizationId &&
+                    item.active && item.version == expectedItemVersion &&
+                    item.baseUnitCode == unit
+            }
+        }
         return Source(
             root, last?.resultVersion ?: root.version,
             last?.toState ?: "DRAFT", quantity, unit, current,
