@@ -339,6 +339,37 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
         ) }, organizationId, candidateId, policyKey,
     ).singleOrNull()
 
+    /** Canonical APPROVED decision on the exact proposed delivery amendment. */
+    fun lockApprovedDeliveryAmendment(
+        organizationId: UUID,
+        proposalId: UUID,
+        policyKey: String,
+    ): PurchaseOrderApprovalSnapshot? = jdbc.query(
+        """
+        SELECT a.id, a.policy_version, a.state,
+          (SELECT count(*) FROM approval_decision d
+           WHERE d.approval_request_id = a.id AND d.decision = 'APPROVE') AS approved_decision_count
+        FROM approval_request a
+        WHERE a.organization_id = ? AND a.subject_type = 'PROCUREMENT_PO_DELIVERY_AMENDMENT'
+          AND a.subject_id = ? AND a.subject_version = 1 AND a.policy_key = ?
+        FOR UPDATE OF a
+        """.trimIndent(),
+        { rs, _ -> PurchaseOrderApprovalSnapshot(
+            rs.getObject("id", UUID::class.java),
+            rs.getInt("policy_version"),
+            ApprovalRequestState.valueOf(rs.getString("state")),
+            rs.getInt("approved_decision_count"),
+        ) }, organizationId, proposalId, policyKey,
+    ).singleOrNull()
+
+    fun lockDeliveryLocation(organizationId: UUID, destinationId: UUID): Boolean = jdbc.query(
+        """
+        SELECT id FROM storage_location
+        WHERE organization_id = ? AND id = ? FOR SHARE
+        """.trimIndent(),
+        { rs, _ -> rs.getObject("id", UUID::class.java) }, organizationId, destinationId,
+    ).isNotEmpty()
+
     fun validDeliveryLocation(
         organizationId: UUID,
         destinationId: UUID,
