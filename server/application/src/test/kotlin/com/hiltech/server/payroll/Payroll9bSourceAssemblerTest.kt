@@ -78,6 +78,8 @@ class Payroll9bSourceAssemblerTest {
                 .getBeanProvider(PayrollApprovedAttendanceSourcePort::class.java),
             StaticListableBeanFactory(mapOf("finance" to financePort))
                 .getBeanProvider(PayrollApprovedFinanceInputSourcePort::class.java),
+            StaticListableBeanFactory()
+                .getBeanProvider(PayrollVerifiedSeparationEligibilitySourcePort::class.java),
         )
     }
 
@@ -141,6 +143,7 @@ class Payroll9bSourceAssemblerTest {
             noProviders.getBeanProvider(PayrollApprovedCompensationSourcePort::class.java),
             noProviders.getBeanProvider(PayrollApprovedAttendanceSourcePort::class.java),
             noProviders.getBeanProvider(PayrollApprovedFinanceInputSourcePort::class.java),
+            noProviders.getBeanProvider(PayrollVerifiedSeparationEligibilitySourcePort::class.java),
         )
         assertNull(assembler.policyFor(org, period))
         assertThrows<ProductApiException> {

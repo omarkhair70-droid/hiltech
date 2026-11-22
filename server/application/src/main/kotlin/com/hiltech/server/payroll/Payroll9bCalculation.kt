@@ -43,6 +43,21 @@ data class PayrollInputCoverageReceipt(
     val complete: Boolean,
 )
 
+/**
+ * Required for former/offboarding employees: source-controlled and reviewed
+ * People case, not an assumed continuation of normal monthly salary.
+ */
+data class PayrollVerifiedSeparationEligibility(
+    val organizationId: UUID,
+    val payrollPeriodId: UUID,
+    val employeeId: UUID,
+    val offboardingCaseId: UUID,
+    val offboardingCaseVersion: Long,
+    val lastWorkingDate: java.time.LocalDate,
+    val approvedFinalPayScopeRef: String,
+    val approval: PayrollInputApproval,
+)
+
 data class PayrollValidatedPolicy(
     val organizationId: UUID,
     val policyVersionId: UUID,
@@ -105,7 +120,27 @@ object Payroll9bCalculator {
         policy: PayrollValidatedPolicy,
         components: List<PayrollApprovedComponent>,
         coverageReceipts: List<PayrollInputCoverageReceipt>,
+        employeeState: String = "ACTIVE",
+        separation: PayrollVerifiedSeparationEligibility? = null,
     ): PayrollEmployeeCalculation {
+        if (employeeState !in setOf("ACTIVE", "OFFBOARDING", "FORMER")) {
+            Payroll9aPolicy.fail("PAYROLL_EMPLOYEE_NOT_ELIGIBLE", HttpStatus.CONFLICT)
+        }
+        if (employeeState != "ACTIVE") {
+            if (separation == null ||
+                separation.organizationId != organizationId ||
+                separation.payrollPeriodId != payrollPeriodId ||
+                separation.employeeId != employeeId ||
+                separation.offboardingCaseVersion < 1 ||
+                separation.approval != PayrollInputApproval.APPROVED ||
+                separation.approvedFinalPayScopeRef.isBlank() ||
+                separation.approvedFinalPayScopeRef.length > 240
+            ) {
+                Payroll9aPolicy.fail("PAYROLL_FINAL_ELIGIBILITY_NOT_VERIFIED", HttpStatus.CONFLICT)
+            }
+        } else if (separation != null) {
+            Payroll9aPolicy.fail("PAYROLL_SEPARATION_SCOPE_MISMATCH", HttpStatus.CONFLICT)
+        }
         if (coverageReceipts.size != PayrollInputCoverageDomain.entries.size ||
             coverageReceipts.map { it.domain }.toSet() !=
                 PayrollInputCoverageDomain.entries.toSet()
@@ -213,7 +248,14 @@ object Payroll9bCalculator {
         )
         val canonical = buildString {
             append(organizationId).append('|').append(payrollPeriodId)
-            append('|').append(employeeId)
+            append('|').append(employeeId).append('|').append(employeeState)
+            separation?.let {
+                append("\nSEPARATION|").append(it.offboardingCaseId)
+                append('|').append(it.offboardingCaseVersion)
+                append('|').append(it.lastWorkingDate)
+                append('|').append(it.approvedFinalPayScopeRef)
+                append('|').append(it.approval)
+            }
             coverageReceipts.sortedBy { it.domain.name }.forEach {
                 append("\nCOVERAGE|").append(it.domain)
                 append('|').append(it.sourceId).append('|').append(it.sourceVersion)
@@ -261,6 +303,7 @@ object Payroll9bCalculator {
 data class PayrollVerifiedEmployeeInputs(
     val coverageReceipts: List<PayrollInputCoverageReceipt>,
     val components: List<PayrollApprovedComponent>,
+    val separation: PayrollVerifiedSeparationEligibility? = null,
 )
 
 interface PayrollApprovedInputSourcePort {

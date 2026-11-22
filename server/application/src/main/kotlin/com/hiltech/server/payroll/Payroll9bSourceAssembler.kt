@@ -36,6 +36,14 @@ interface PayrollApprovedAttendanceSourcePort {
     ): PayrollAttestedSourceBundle?
 }
 
+interface PayrollVerifiedSeparationEligibilitySourcePort {
+    fun verifiedFor(
+        organizationId: UUID,
+        payrollPeriodId: UUID,
+        employeeId: UUID,
+    ): PayrollVerifiedSeparationEligibility?
+}
+
 interface PayrollApprovedFinanceInputSourcePort {
     fun approvedAdvancesDeductionsAndReimbursements(
         organizationId: UUID,
@@ -61,6 +69,7 @@ class PayrollVerifiedInputAssembler(
     private val compensation: ObjectProvider<PayrollApprovedCompensationSourcePort>,
     private val attendance: ObjectProvider<PayrollApprovedAttendanceSourcePort>,
     private val finance: ObjectProvider<PayrollApprovedFinanceInputSourcePort>,
+    private val separation: ObjectProvider<PayrollVerifiedSeparationEligibilitySourcePort>,
 ) : PayrollApprovedInputSourcePort {
     override fun policyFor(
         organizationId: UUID,
@@ -129,6 +138,9 @@ class PayrollVerifiedInputAssembler(
         return PayrollVerifiedEmployeeInputs(
             coverageReceipts = expected.map { it.second.receipt },
             components = expected.flatMap { it.second.components },
+            separation = separation.ifAvailable?.verifiedFor(
+                organizationId, payrollPeriodId, employeeId,
+            ),
         )
     }
 }

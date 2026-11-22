@@ -139,6 +139,7 @@ class Payroll9bDraftService(
             employee to (
                 Payroll9bCalculator.calculate(
                     orgId, periodId, id, policy, inputs.components, inputs.coverageReceipts,
+                    employee.employeeState, inputs.separation,
                 ) to inputs.components
             )
         }

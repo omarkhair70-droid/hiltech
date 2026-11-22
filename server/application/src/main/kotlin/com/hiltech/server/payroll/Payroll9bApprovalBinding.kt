@@ -75,7 +75,7 @@ class PayrollRunApprovalVersionSource(
 
         val lines = jdbc.query(
             """
-            SELECT l.employee_id, l.source_fingerprint,
+            SELECT l.employee_id, l.source_fingerprint, s.employee_state,
                    s.employee_version, e.version AS current_employee_version,
                    s.employment_version, em.version AS current_employment_version,
                    s.workforce_assignment_id, s.workforce_assignment_version,
@@ -104,6 +104,7 @@ class PayrollRunApprovalVersionSource(
                 RunLineSourceRow(
                     employeeId = rs.getObject("employee_id", UUID::class.java),
                     fingerprint = rs.getString("source_fingerprint"),
+                    employeeState = rs.getString("employee_state"),
                     employeeVersion = rs.getLong("employee_version"),
                     currentEmployeeVersion = rs.getLong("current_employee_version"),
                     employmentVersion = rs.getLong("employment_version"),
@@ -134,6 +135,7 @@ class PayrollRunApprovalVersionSource(
             val current = Payroll9bCalculator.calculate(
                 run.organizationId, run.periodId, line.employeeId, policy,
                 sourceBundle.components, sourceBundle.coverageReceipts,
+                line.employeeState, sourceBundle.separation,
             )
             if (current.sourceFingerprint != line.fingerprint) return false
             current.sourceFingerprint
@@ -158,6 +160,7 @@ class PayrollRunApprovalVersionSource(
     private data class RunLineSourceRow(
         val employeeId: UUID,
         val fingerprint: String,
+        val employeeState: String,
         val employeeVersion: Long,
         val currentEmployeeVersion: Long,
         val employmentVersion: Long,
