@@ -183,7 +183,7 @@ class ServiceSupplierSourcingService(
             lockRfq(rfqId)
             val current=rfq(rfqId)?:hidden()
             requireBuyer(ctx.actor,current.org)
-            if(!current(current)) stale()
+            if(!this.current(current)) stale()
             if(!suppliers.isEligibleSupplier(current.org,input.supplierOrganizationId)) hidden()
             val at=clock.instant()
             check(jdbc.update(
