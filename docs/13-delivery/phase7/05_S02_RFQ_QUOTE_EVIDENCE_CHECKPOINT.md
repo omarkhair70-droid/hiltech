@@ -126,3 +126,17 @@ transport serves Android/Windows with the same restricted result.
 **Still open:** evidence/document upload, buyer/reviewer role binding,
 company-authorized supplier link creation, actual quote capture forms,
 supplier outreach and final buyer acceptance. No production activation.
+
+## Quotation document security gate (after supplier link)
+
+The old source reference and caller-supplied SHA-256 are **not** by themselves
+proof of a finalized, retrievable, restricted document. S02 now requires a
+`SupplierQuoteDocumentVerificationPort` check in the same idempotent quote
+command, bound to actor, purchasing organization, RFQ, supplier, source reference
+and expected file hash. The default adapter denies ALL references.
+
+This closes the arbitrary-reference write path without inventing cloud storage
+or exposing supplier quotes. A genuine adapter must validate finalized object
+bytes, source ownership, classification, virus/security status, and current
+document access before the record-quote API may become usable. Do not enable
+the sourcing feature until that adapter and role policy have been proven.
