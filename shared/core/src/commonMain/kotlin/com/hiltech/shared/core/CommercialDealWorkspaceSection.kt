@@ -1,5 +1,8 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +18,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.commercial.CommercialDealDetailDto
 import com.hiltech.shared.core.commercial.CommercialPrivateCostLineDto
@@ -103,7 +107,10 @@ fun CommercialDealWorkspaceSection(
         return
     }
     val detail = state.deal
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        modifier = Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Commercial / Deal workspace", style = MaterialTheme.typography.titleMedium)
             OutlinedButton(onClick = onRefresh) { Text("Refresh") }
@@ -117,7 +124,10 @@ fun CommercialDealWorkspaceSection(
             Text(op.title, style = MaterialTheme.typography.titleLarge)
             Text(op.state + "  ·  " + op.source + "  ·  revision " + op.version)
             var stage by remember(op.id) { mutableStateOf(CommercialStage.DISCOVERY) }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 CommercialStage.entries.forEach { candidate ->
                     OutlinedButton(
                         enabled = candidate != stage,
