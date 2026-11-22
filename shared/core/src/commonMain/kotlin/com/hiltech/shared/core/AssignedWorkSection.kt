@@ -1,8 +1,6 @@
 package com.hiltech.shared.core
 
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -22,6 +20,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import kotlin.math.roundToInt
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -178,7 +179,10 @@ fun AssignedWorkSection(
                 var returnWorkOrderId by remember(focusScopeKey) {
                     mutableStateOf<String?>(null)
                 }
-                val returnWorkRequester = remember(focusScopeKey) { BringIntoViewRequester() }
+                val cardViewportY = remember(focusScopeKey) { mutableMapOf<String, Float>() }
+                var selectedCardViewportY by remember(focusScopeKey) {
+                    mutableStateOf<Float?>(null)
+                }
                 var restoreOffset by remember(focusScopeKey) { mutableStateOf<Int?>(null) }
                 val focusedId = focusedWorkOrderId
                     ?.takeIf { id -> state.today.any { it.workOrderId == id } }
@@ -203,11 +207,23 @@ fun AssignedWorkSection(
                                 // detail; clamped restoration is deliberate.
                                 withFrameNanos { }
                                 scroll.scrollTo(target)
-                                // Compose must lay out Today's re-ordered cards
-                                // before resolving the currently assigned ID.
-                                withFrameNanos { }
-                                if (state.today.any { it.workOrderId == returnWorkOrderId }) {
-                                    returnWorkRequester.bringIntoView()
+                                // Source ordering may change during detail view.
+                                // Resolve the SAME WorkOrder card from its new
+                                // measured viewport position, not the old index.
+                                val anchorId = returnWorkOrderId
+                                val previousY = selectedCardViewportY
+                                if (anchorId != null && previousY != null &&
+                                    state.today.any { it.workOrderId == anchorId }
+                                ) {
+                                    for (attempt in 0 until 4) {
+                                        withFrameNanos { }
+                                        val currentY = cardViewportY[anchorId] ?: continue
+                                        val delta = (currentY - previousY).roundToInt()
+                                        if (kotlin.math.abs(delta) <= 2) break
+                                        scroll.scrollTo(
+                                            (scroll.value + delta).coerceIn(0, scroll.maxValue)
+                                        )
+                                    }
                                 }
                                 restoreOffset = null
                                 returnWorkOrderId = null
@@ -219,11 +235,11 @@ fun AssignedWorkSection(
                     TodayColumn(
                         state = state,
                         onRefresh = onRefresh,
-                        restoreItemId = returnWorkOrderId,
-                        restoreRequester = returnWorkRequester,
+                        onCardLocated = { id, y -> cardViewportY[id] = y },
                         onSelectWork = { id ->
                             if (state.today.any { it.workOrderId == id }) {
                                 savedTodayOffset = focusHostScroll?.value ?: 0
+                                selectedCardViewportY = cardViewportY[id]
                                 restoreOffset = null
                                 returnWorkOrderId = null
                                 focusedWorkOrderId = id
@@ -238,6 +254,7 @@ fun AssignedWorkSection(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         OutlinedButton(onClick = {
+                            cardViewportY.clear()
                             returnWorkOrderId = focusedWorkOrderId
                             focusedWorkOrderId = null
                             restoreOffset = savedTodayOffset
@@ -363,8 +380,7 @@ private fun TodayColumn(
     onRefresh: () -> Unit,
     onSelectWork: (String) -> Unit,
     modifier: Modifier,
-    restoreItemId: String? = null,
-    restoreRequester: BringIntoViewRequester? = null,
+    onCardLocated: ((String, Float) -> Unit)? = null,
 ) {
     Column(
         modifier = modifier,
@@ -422,8 +438,10 @@ private fun TodayColumn(
             TodayCard(
                 item = item,
                 modifier =
-                    if (item.workOrderId == restoreItemId && restoreRequester != null) {
-                        Modifier.bringIntoViewRequester(restoreRequester)
+                    if (onCardLocated != null) {
+                        Modifier.onGloballyPositioned { coordinates ->
+                            onCardLocated(item.workOrderId, coordinates.positionInRoot().y)
+                        }
                     } else {
                         Modifier
                     },
