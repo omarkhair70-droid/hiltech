@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(28, result.migrationsExecuted)
+        assertEquals(29, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -164,12 +164,15 @@ class DatabaseMigrationContractTest {
                         'procurement_po_supersession_link',
                         'procurement_po_receiving_rejection_event',
                         'procurement_service_need',
-                        'procurement_service_need_event'
+                        'procurement_service_need_event',
+                        'procurement_service_rfq',
+                        'procurement_service_quote_document_slot',
+                        'procurement_service_supplier_quote'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(88, tables.getInt(1))
+                assertEquals(91, tables.getInt(1))
 
                 // V0050 links canonical Warehouse Receiving to a company-scoped
                 // approved PO without creating another physical stock ledger.
@@ -425,6 +428,52 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(officeIndex.next())
                 assertEquals(1, officeIndex.getInt(1))
+
+                // V0061–V0062: non-stock services have independent sources,
+                // restricted supplier quote Evidence and immutable snapshots.
+                val serviceGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger WHERE NOT tgisinternal AND (
+                      (tgrelid='procurement_service_need'::regclass
+                        AND tgname IN ('procurement_service_need_root_guard',
+                          'procurement_service_need_immutable'))
+                      OR (tgrelid='procurement_service_need_event'::regclass
+                        AND tgname IN ('procurement_service_need_event_guard',
+                          'procurement_service_need_event_immutable'))
+                      OR (tgrelid='procurement_service_rfq'::regclass
+                        AND tgname IN ('procurement_service_rfq_guard',
+                          'procurement_service_rfq_immutable'))
+                      OR (tgrelid='procurement_service_quote_document_slot'::regclass
+                        AND tgname IN ('procurement_service_quote_slot_guard',
+                          'procurement_service_quote_slot_immutable'))
+                      OR (tgrelid='procurement_service_supplier_quote'::regclass
+                        AND tgname IN ('procurement_service_supplier_quote_guard',
+                          'procurement_service_supplier_quote_immutable'))
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(serviceGuards.next())
+                assertEquals(10, serviceGuards.getInt(1))
+
+                val serviceEvidenceGuard = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='evidence'::regclass
+                      AND tgname='service_quote_evidence_insert_guard'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(serviceEvidenceGuard.next())
+                assertEquals(1, serviceEvidenceGuard.getInt(1))
+                val serviceEvidenceIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename='evidence'
+                      AND indexname='uq_service_quote_document_evidence_slot'
+                    """.trimIndent(),
+                )
+                assertTrue(serviceEvidenceIndex.next())
+                assertEquals(1, serviceEvidenceIndex.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not

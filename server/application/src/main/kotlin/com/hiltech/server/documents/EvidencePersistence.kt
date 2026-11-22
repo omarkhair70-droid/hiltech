@@ -193,6 +193,12 @@ interface EvidencePersistencePort {
         value: SupplierQuoteDocumentEvidenceReservationInsert,
     )
 
+    fun insertServiceQuoteDocumentReservation(
+        value: SupplierQuoteDocumentEvidenceReservationInsert,
+    ) {
+        throw UnsupportedOperationException("Service quote Evidence repository is not configured.")
+    }
+
     fun insertSupplierInvoiceDocumentReservation(
         value: SupplierInvoiceDocumentEvidenceReservationInsert,
     ) {
