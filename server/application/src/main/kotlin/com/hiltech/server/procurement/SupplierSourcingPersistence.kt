@@ -29,6 +29,17 @@ data class SourcingSupplierCandidate(
     val relationshipRevision: Int,
 )
 
+data class SupplierQuoteDocumentSlot(
+    val id: UUID,
+    val operationId: UUID,
+    val organizationId: UUID,
+    val rfqId: UUID,
+    val supplierOrganizationId: UUID,
+    val createdBy: UUID,
+    val createdAt: Instant,
+    val correlationId: String,
+)
+
 data class SupplierQuoteRecord(
     val evidence: SupplierQuoteEvidence,
     val operationId: UUID,
@@ -55,6 +66,34 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
             record.createdAt.atOffset(ZoneOffset.UTC), record.correlationId,
         ) == 1)
     }
+
+    fun insertQuoteDocumentSlot(slot: SupplierQuoteDocumentSlot) {
+        check(jdbc.update(
+            """
+            INSERT INTO procurement_supplier_quote_document_slot (
+                id, operation_id, organization_id, rfq_id, supplier_organization_id,
+                created_by_user_id, created_at, correlation_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+            slot.id, slot.operationId, slot.organizationId, slot.rfqId,
+            slot.supplierOrganizationId, slot.createdBy,
+            slot.createdAt.atOffset(ZoneOffset.UTC), slot.correlationId,
+        ) == 1)
+    }
+
+    fun quoteDocumentSlot(id: UUID): SupplierQuoteDocumentSlot? = jdbc.query(
+        "SELECT * FROM procurement_supplier_quote_document_slot WHERE id = ?",
+        { row, _ -> SupplierQuoteDocumentSlot(
+            row.getObject("id", UUID::class.java),
+            row.getObject("operation_id", UUID::class.java),
+            row.getObject("organization_id", UUID::class.java),
+            row.getObject("rfq_id", UUID::class.java),
+            row.getObject("supplier_organization_id", UUID::class.java),
+            row.getObject("created_by_user_id", UUID::class.java),
+            row.getObject("created_at", OffsetDateTime::class.java).toInstant(),
+            row.getString("correlation_id"),
+        ) }, id,
+    ).singleOrNull()
 
     /** Lock the RFQ row while appending a supplier revision; root itself is immutable. */
     fun lockRfq(id: UUID): Boolean = jdbc.query(
