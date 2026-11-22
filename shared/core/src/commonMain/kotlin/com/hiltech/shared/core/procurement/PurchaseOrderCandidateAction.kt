@@ -25,6 +25,7 @@ fun PurchaseOrderCandidateAction(
     quote: SupplierQuoteComparisonRowDto,
     installationId: String,
     newOperationId: () -> String,
+    approvalRequestEnabled: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     var preview by remember(rfqId, quote.quoteId) {
@@ -36,6 +37,12 @@ fun PurchaseOrderCandidateAction(
     var error by remember(rfqId, quote.quoteId) { mutableStateOf<String?>(null) }
     var receipt by remember(rfqId, quote.quoteId) {
         mutableStateOf<PurchaseOrderCandidateReceiptDto?>(null)
+    }
+    var approvalReceipt by remember(rfqId, quote.quoteId) {
+        mutableStateOf<PurchaseCandidateApprovalReceiptDto?>(null)
+    }
+    var pendingApprovalOp by remember(rfqId, quote.quoteId) {
+        mutableStateOf<String?>(null)
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -110,10 +117,43 @@ fun PurchaseOrderCandidateAction(
                 ) { Text("Record candidate for company approval") }
             }
         }
-        receipt?.let {
-            Text("Candidate recorded · " + it.state +
+        receipt?.let { candidate ->
+            Text("Candidate recorded · " + candidate.state +
                 ". No PO issued and no payment authorized.",
                 style = MaterialTheme.typography.bodySmall)
+            if (approvalRequestEnabled && approvalReceipt == null) {
+                OutlinedButton(enabled = !busy, onClick = {
+                    busy = true
+                    error = null
+                    scope.launch {
+                        try {
+                            val operation = pendingApprovalOp ?: newOperationId().also {
+                                pendingApprovalOp = it
+                            }
+                            approvalReceipt = api.requestApproval(
+                                candidate.candidateId,
+                                RequestPurchaseCandidateApprovalDto(operation),
+                                installationId,
+                            )
+                            pendingApprovalOp = null
+                        } catch (failure: Exception) {
+                            error = failure.message ?: "Company approval policy was not available."
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }) { Text("Submit selected quote to company approval") }
+            }
+        }
+        approvalReceipt?.let { result ->
+            Text(
+                if (result.approvalRequired)
+                    "Approval request · " + (result.approvalState ?: "PENDING") +
+                        " · policy " + result.policyKey + " v" + result.policyVersion
+                else
+                    "Approval policy recorded no approval requirement. PO issue still needs its own authority.",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
