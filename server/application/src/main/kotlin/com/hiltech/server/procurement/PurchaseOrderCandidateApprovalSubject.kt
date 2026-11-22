@@ -34,6 +34,7 @@ class PurchaseOrderCandidateApprovalSubject @Autowired constructor(
     private val clock: Clock,
     @Value("\${hiltech.procurement.po-candidates.enabled:false}")
     private val enabled: Boolean = false,
+    private val sourceVerifier: ProcurementDemandSourceVerifier? = null,
 ) : ApprovalSubjectVersionSource {
     override fun supports(subjectType: String): Boolean =
         subjectType == "PROCUREMENT_PO_CANDIDATE"
@@ -67,19 +68,23 @@ class PurchaseOrderCandidateApprovalSubject @Autowired constructor(
         if (currentQuantity.compareTo(candidate.quantity) != 0 ||
             currentUnit != candidate.unitCode
         ) return false
-        val job = work.workOrder(source.workOrderId) ?: return false
         val item = stock.item(source.stockItemId) ?: return false
-        if (job.organizationId != source.organizationId ||
-            job.version != (transition.revised?.workVersion ?: source.sourceWorkVersion) ||
-            job.lifecycleState !in setOf(
-                WorkOrderLifecycle.PLANNED,
-                WorkOrderLifecycle.ASSIGNED,
-                WorkOrderLifecycle.IN_PROGRESS,
-                WorkOrderLifecycle.BLOCKED,
-            ) || item.organizationId != source.organizationId ||
+        if (item.organizationId != source.organizationId ||
             item.version != (transition.revised?.itemVersion ?: source.stockItemVersion) ||
             !item.active || item.baseUnitCode != candidate.unitCode
         ) return false
+        val sourceCurrent = sourceVerifier?.isCurrent(source, transition) ?: run {
+            if (source.sourceType != "WORK_ORDER") false else {
+                val job = source.workOrderId?.let { work.workOrder(it) }
+                job != null && job.organizationId == source.organizationId &&
+                    job.version == (transition.revised?.workVersion ?: source.sourceWorkVersion) &&
+                    job.lifecycleState in setOf(
+                        WorkOrderLifecycle.PLANNED, WorkOrderLifecycle.ASSIGNED,
+                        WorkOrderLifecycle.IN_PROGRESS, WorkOrderLifecycle.BLOCKED,
+                    )
+            }
+        }
+        if (!sourceCurrent) return false
 
         if (!sourcing.isEligibleSupplier(candidate.organizationId, candidate.supplierOrganizationId))
             return false
