@@ -106,7 +106,7 @@ fun HuxLabelValue(label: String, value: String, modifier: Modifier = Modifier) {
     }
 }
 @Composable
-private fun Panel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+private fun Panel(modifier: Modifier = Modifier.fillMaxWidth(), content: @Composable () -> Unit) {
     Surface(modifier, color = Color.White, shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, stroke)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
@@ -154,7 +154,7 @@ private fun OfferRow(
                         fontWeight = FontWeight.SemiBold)
                     Text("Quote ${q.quoteReference} · v${q.revisionNumber}", color = muted, fontSize = 11.sp)
                 }
-                HuxStatusLabel(if (clean) "Technically compliant" else "Needs technical review", clean)
+                HuxStatusLabel(if (!clean && q.technicalCompliance != "COMPLIANT") "Technical review needed" else if (q.issues.isNotEmpty()) "Compliant · source issue" else "Technically compliant", clean)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 HuxLabelValue("Submitted total", "${q.total} ${q.currency}", Modifier.weight(1f))
@@ -186,7 +186,7 @@ private fun OfferInspector(
                 HuxLabelValue("Captured quantity", "${selected.quantity} ${selected.unitCode}")
                 HuxLabelValue("Unit price", "${selected.unitPrice} ${selected.currency}")
                 HuxLabelValue("Tax", "${selected.taxAmount} ${selected.currency}")
-                HuxLabelValue("Technical decision", selected.technicalCompliance)
+                HuxLabelValue("Technical decision", huxTechnicalReviewLabel(selected.technicalCompliance))
                 if (selected.issues.isNotEmpty()) {
                     HuxStatusLabel("Exceptions: ${selected.issues.size}", false)
                     selected.issues.forEach { Text("• $it", color = warm, fontSize = 12.sp) }
@@ -252,7 +252,7 @@ fun HuxBuyerScreen(
                     TitleBlock("DECISION WORKBENCH", "What needs a decision?",
                         "Understand blockers and source currency before reading offers.")
                     SourceWarning(study, directComparison)
-                    Text("SOURCE-CAPTURED OFFERS", color = green, fontSize = 11.sp,
+                    Text(if(study.sourcing.rfq.sourceCurrent) "SOURCE-CAPTURED OFFERS" else "HISTORICAL QUOTES — SOURCE CHANGED", color = green, fontSize = 11.sp,
                         fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                     if(data.comparison.latestBySupplier.isEmpty()) {
                         Text("No authorized quote data was returned.", color = muted, fontSize = 14.sp)
@@ -275,6 +275,7 @@ fun HuxBuyerScreen(
                     TitleBlock("SOURCE LEDGER", "Compare the offers",
                         "Cost, technical judgment and evidence remain separate source facts.")
                     SourceWarning(study, directComparison)
+                    SourceRibbon(study)
                     Surface(color = ink, shape = RoundedCornerShape(8.dp)) {
                         Row(Modifier.fillMaxWidth().padding(13.dp),
                             horizontalArrangement = Arrangement.SpaceBetween) {
@@ -283,15 +284,18 @@ fun HuxBuyerScreen(
                         }
                     }
                     data.comparison.latestBySupplier.forEach { quote ->
-                        OfferRow(quote, study, selectedQuoteId == quote.quoteId,
-                            dense = true, onSelect = { onSelectQuote(quote.quoteId) })
+                        LedgerQuoteRow(quote, study, selectedQuoteId == quote.quoteId,
+                            onSelect = { onSelectQuote(quote.quoteId) })
                     }
                     Text("Captured versions: ${data.allRevisionCount} · Timestamp: ${data.comparison.evaluatedAt}",
                         color = muted, fontSize = 11.sp)
                 }
                 Column(Modifier.width(326.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    ContextPanel(study)
+                    HuxStatusLabel(
+                        if(study.sourcing.rfq.sourceCurrent) "Source checked" else "Stale source",
+                        study.sourcing.rfq.sourceCurrent,
+                    )
                     OfferInspector(study, selected, onEvidence)
                 }
             }
@@ -352,14 +356,14 @@ fun HuxFieldRequirementScreen(
                     Text(study.workLabel, color = Color.White, fontSize = 22.sp,
                         fontWeight = FontWeight.Bold)
                     Text(study.itemLabel, color = Color.White, fontSize = 16.sp)
-                    Text("الكمية: ${need.requestedQuantity} ${need.unitCode}",
+                    Text("الكمية: ${huxLtrIsolate("${need.requestedQuantity} ${need.unitCode}")}",
                         color = Color(0xFFE1E8E5), fontSize = 14.sp)
                 }
             }
             Panel {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("حالة الطلب", color = ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    HuxStatusLabel(if(need.sourceCurrent) need.state else "المصدر تغيّر",
+                    HuxStatusLabel(if(need.sourceCurrent) huxNeedStateArabic(need.state) else "المصدر تغيّر",
                         need.sourceCurrent)
                 }
                 HuxLabelValue("سبب الاحتياج", need.justification)
@@ -377,19 +381,105 @@ fun HuxFieldRequirementScreen(
                     Text("البيانات القديمة أو المحجوبة لا تعني أن الرصيد صفر.",
                         color = muted, fontSize = 13.sp)
                 }
-                Text("الحالة المصدرية: ${need.assessmentCode}", color = muted, fontSize = 11.sp)
+                Text(huxStockAssessmentArabic(need.assessmentCode), color = muted, fontSize = 12.sp)
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                OutlinedButton(onClick = { onRefresh?.invoke() },
-                    enabled = study.online && onRefresh != null,
-                    modifier = Modifier.weight(1f)) { Text("تحديث", fontSize = 13.sp) }
-                Button(onClick = { onSubmit?.invoke() },
-                    enabled = study.canOfferSubmit(onSubmit != null),
-                    modifier = Modifier.weight(1f)) { Text("إرسال للمراجعة", fontSize = 13.sp) }
+            if (onRefresh != null || (onSubmit != null && need.state == "DRAFT")) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    if (onRefresh != null) OutlinedButton(
+                        onClick = onRefresh, enabled = study.online,
+                        modifier = Modifier.weight(1f),
+                    ) { Text("تحديث المصدر", fontSize = 13.sp) }
+                    if (onSubmit != null && need.state == "DRAFT") Button(
+                        onClick = onSubmit,
+                        enabled = study.canOfferSubmit(true),
+                        modifier = Modifier.weight(1f),
+                    ) { Text("إرسال للمراجعة", fontSize = 13.sp) }
+                }
             }
             Text("الموافقة النهائية والتحقق من الصلاحيات يتمان على السيرفر، وليس من زر بالواجهة.",
                 color = muted, fontSize = 11.sp)
             Spacer(Modifier.height(14.dp))
         }
     }
+}
+
+/** Vertical-source metadata as a compact band in the comparison-first direction. */
+@Composable
+private fun SourceRibbon(study: HuxBuyerStudy) {
+    Surface(color = Color(0xFFE4E8E5), shape = RoundedCornerShape(9.dp)) {
+        Row(Modifier.fillMaxWidth().padding(13.dp),
+            horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            HuxLabelValue("WorkOrder", study.workLabel, Modifier.weight(1f))
+            HuxLabelValue("StockItem", study.itemLabel, Modifier.weight(1f))
+            HuxLabelValue("Requirement version", study.sourcing.rfq.capturedRequirementVersion.toString(),
+                Modifier.weight(.6f))
+        }
+    }
+}
+
+/** Second real visual direction: compact ledger row instead of repeating cards. */
+@Composable
+private fun LedgerQuoteRow(
+    quote: SupplierQuoteComparisonRowDto,
+    study: HuxBuyerStudy,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
+    val name = study.supplierNames[quote.supplierOrganizationId] ?: "Unknown supplier"
+    val clean = quote.technicalCompliance == "COMPLIANT" && quote.issues.isEmpty()
+    Surface(
+        Modifier.fillMaxWidth().semantics {
+            contentDescription = "Inspect source quote ${quote.quoteReference} from $name"
+        }.clickable(onClick = onSelect),
+        color = if (selected) Color(0xFFE7F0ED) else Color.White,
+        border = BorderStroke(if(selected) 2.dp else 1.dp, if(selected) green else stroke),
+        shape = RoundedCornerShape(7.dp),
+    ) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 75.dp).padding(horizontal = 14.dp, vertical = 9.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1.2f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(name, fontSize = 15.sp, color = ink, fontWeight = FontWeight.SemiBold)
+                Text("${quote.quoteReference} / rev ${quote.revisionNumber}", color = muted, fontSize = 11.sp)
+            }
+            Column(Modifier.weight(.72f)) {
+                Text("${quote.total} ${quote.currency}", color = ink, fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold)
+                Text(quote.deliveryDays?.let { "$it days" } ?: "Delivery unknown",
+                    fontSize = 11.sp, color = muted)
+            }
+            Column(Modifier.weight(.68f)) {
+                HuxStatusLabel(if(quote.technicalCompliance != "COMPLIANT") "TECH REVIEW" else if(quote.issues.isNotEmpty()) "SOURCE ISSUE" else "COMPLIANT", clean)
+                if(quote.issues.isNotEmpty()) Text("${quote.issues.size} source issue(s)",
+                    color = warm, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+/** Bounded source-state vocabulary; unknown codes never become success labels. */
+fun huxNeedStateArabic(sourceState: String): String = when(sourceState) {
+    "DRAFT" -> "مسودة"
+    "SUBMITTED" -> "مرسل للمراجعة"
+    "TECHNICALLY_READY" -> "جاهز فنيًا"
+    "REVISION_REQUESTED" -> "مطلوب تعديل"
+    "REJECTED" -> "مرفوض"
+    "WITHDRAWN" -> "مسحوب"
+    else -> "حالة تحتاج تحقق"
+}
+
+fun huxStockAssessmentArabic(assessment: String): String = when(assessment) {
+    "WAREHOUSE_REVIEW_REQUIRED" -> "يلزم فحص المخزون من المختص"
+    "INSUFFICIENT_STOCK" -> "الكمية الحرة أقل من المطلوب"
+    "STOCK_AVAILABLE" -> "توجد كمية ظاهرة — لا تعني حجزًا"
+    else -> "التقييم يحتاج مراجعة"
+}
+
+fun huxLtrIsolate(value: String): String = "\u2066$value\u2069"
+
+/** Never expose an unknown source enum as a claim of approval. */
+fun huxTechnicalReviewLabel(code: String): String = when(code) {
+    "COMPLIANT" -> "Technically compliant"
+    "NON_COMPLIANT" -> "Technically not compliant"
+    "REVIEW_REQUIRED" -> "Technical review required"
+    else -> "Technical status unavailable"
 }
