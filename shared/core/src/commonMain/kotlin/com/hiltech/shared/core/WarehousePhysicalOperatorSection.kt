@@ -106,6 +106,7 @@ private fun PhysicalOperatorWorkspace(
     presentation: WarehouseCommandCenterPresentation,
 ) {
     var commandCenter by remember { mutableStateOf<WarehouseCommandCenterDto?>(null) }
+    val lookupSession = remember(warehouse, organizationId) { WarehouseQuickScanSession() }
     var queue by remember { mutableStateOf<WarehouseReservationQueueDto?>(null) }
     var assetSearch by remember { mutableStateOf("") }
     var assetState by remember { mutableStateOf(AssetInventoryState()) }
@@ -302,6 +303,7 @@ private fun PhysicalOperatorWorkspace(
             installationId = installationId,
             busy = busy,
             runTask = runTask,
+            session = if (presentation == WarehouseCommandCenterPresentation.BASELINE) null else lookupSession,
         )
     }
     val todayContent: @Composable () -> Unit = {
