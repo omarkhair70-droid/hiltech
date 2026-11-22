@@ -78,6 +78,36 @@ data class PayrollRunFinanceStatusDto(
 )
 
 @Serializable
+data class PayrollApprovalRequestDto(
+    val operationId: String,
+    val reasonCode: String,
+)
+
+@Serializable
+data class PayrollApprovalResultDto(
+    val approvalRequired: Boolean,
+    val approvalRequestId: String?,
+    val approvalState: String?,
+    val policyVersion: Int,
+    val replayed: Boolean,
+)
+
+@Serializable
+data class PayrollReleaseRequestDto(val operationId: String)
+
+@Serializable
+data class PayrollReleaseResultDto(
+    val releaseId: String,
+    val runVersionId: String,
+    val status: String,
+    val policyKey: String,
+    val policyVersion: Int,
+    val decisionPath: String,
+    val releasedAt: String,
+    val replayed: Boolean,
+)
+
+@Serializable
 data class PrivatePayslipDto(
     val runVersionId: String,
     val employeeId: String,
