@@ -27,6 +27,9 @@ class CommercialDealCoordinator(
     suspend fun loadPrivateCosting(opportunityId: String): List<CommercialPrivateCostLineDto> =
         api.privateCosting(opportunityId, installationId)
 
+    suspend fun loadPrivateCostSummary(opportunityId: String): List<CommercialPrivateCostSummaryDto> =
+        api.privateCostSummary(opportunityId, installationId)
+
     suspend fun dispatch(action: CommercialDealAction, operationId: String): CommercialCommandResultDto {
         require(Regex("^[0-9a-fA-F-]{36}$").matches(operationId)) { "operationId must be a UUID." }
         return when (action) {

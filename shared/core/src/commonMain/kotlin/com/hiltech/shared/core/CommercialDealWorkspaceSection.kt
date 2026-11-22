@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.commercial.CommercialDealDetailDto
 import com.hiltech.shared.core.commercial.CommercialPrivateCostLineDto
+import com.hiltech.shared.core.commercial.CommercialPrivateCostSummaryDto
 
 /** Complete, source-driven native desk. Mount in Windows only after role-based shell routing. */
 data class CommercialDealWorkspaceState(
@@ -29,6 +30,7 @@ data class CommercialDealWorkspaceState(
     val canAward: Boolean = false,
     val deal: CommercialDealDetailDto? = null,
     val privateCostLines: List<CommercialPrivateCostLineDto> = emptyList(),
+    val privateCostSummaries: List<CommercialPrivateCostSummaryDto> = emptyList(),
     val errorCode: String? = null,
 )
 
@@ -131,7 +133,8 @@ fun CommercialDealWorkspaceSection(
                     detail, state.canWrite, onAction,
                 )
                 CommercialStage.COST -> CommercialBoqPanel(
-                    detail, state.canWrite && state.canCost, state.privateCostLines, onAction,
+                    detail, state.canWrite && state.canCost,
+                    state.privateCostLines,state.privateCostSummaries,onAction,
                 )
                 CommercialStage.QUOTE -> CommercialQuotePanel(
                     detail, state.canWrite, state.canRelease, onAction,
@@ -275,6 +278,7 @@ private fun CommercialBoqPanel(
     deal: CommercialDealDetailDto,
     canEditPrivateCost: Boolean,
     costLines: List<CommercialPrivateCostLineDto>,
+    summaries: List<CommercialPrivateCostSummaryDto>,
     onAction: (CommercialDealAction) -> Unit,
 ) {
     val op = deal.opportunity
@@ -282,6 +286,19 @@ private fun CommercialBoqPanel(
     if (!canEditPrivateCost) {
         Text("Private costing is restricted to explicitly authorized commercial staff.")
         return
+    }
+    summaries.forEach { summary ->
+        Text("BOQ v" + summary.versionNumber + " · " + summary.currency)
+        Text("Proposed sell: " + summary.proposedSellTotal.content +
+             " · Known cost subtotal: " + summary.knownCostSubtotal.content)
+        Text(
+            if (summary.missingCostLines > 0)
+                summary.missingCostLines.toString() + " uncosted line(s). Total cost UNKNOWN."
+            else "Complete internal cost: " +
+                (summary.completeInternalCostTotal?.content ?: "UNKNOWN"),
+            color = if (summary.missingCostLines > 0)
+                MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+        )
     }
     costLines.forEach {
         Text(it.description + " · " + it.quantity.content + " " + it.unit)

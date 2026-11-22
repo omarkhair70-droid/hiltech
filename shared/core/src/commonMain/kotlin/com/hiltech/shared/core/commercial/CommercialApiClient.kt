@@ -111,6 +111,18 @@ data class CommercialPrivateCostLineDto(
 )
 
 @Serializable
+data class CommercialPrivateCostSummaryDto(
+    @SerialName("boq_version_id") val boqVersionId: String,
+    @SerialName("version_number") val versionNumber: Int,
+    val currency: String,
+    @SerialName("total_lines") val totalLines: Int,
+    @SerialName("missing_cost_lines") val missingCostLines: Int,
+    @SerialName("proposed_sell_total") val proposedSellTotal: JsonPrimitive,
+    @SerialName("known_cost_subtotal") val knownCostSubtotal: JsonPrimitive,
+    @SerialName("complete_internal_cost_total") val completeInternalCostTotal: JsonPrimitive? = null,
+)
+
+@Serializable
 data class CommercialContractSummaryDto(
     val id: String,
     @SerialName("quote_version_id") val quoteVersionId: String,
@@ -302,6 +314,15 @@ class CommercialApiClient(
             path = "/v1/commercial/opportunities/" + opportunityId + "/costing",
             options = HiltechRequestOptions(installationId = installationId),
             decode = { json.decodeFromString(ListSerializer(CommercialPrivateCostLineDto.serializer()), it) },
+        )
+
+    /** Cost and completeness are never included in a customer-facing quote. */
+    suspend fun privateCostSummary(opportunityId: String, installationId: String): List<CommercialPrivateCostSummaryDto> =
+        api.request(
+            method = HttpMethod.Get,
+            path = "/v1/commercial/opportunities/" + opportunityId + "/cost-summary",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(ListSerializer(CommercialPrivateCostSummaryDto.serializer()), it) },
         )
 
     suspend fun createOpportunity(request: CreateCommercialOpportunityDto, installationId: String) =

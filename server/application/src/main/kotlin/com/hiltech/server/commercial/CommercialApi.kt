@@ -169,6 +169,13 @@ class CommercialController(private val service: CommercialService) {
             HiltechRequestContext.current(http).requireIdentityId(),
         )
 
+    @GetMapping("/opportunities/{opportunityId}/cost-summary")
+    fun costSummary(http: HttpServletRequest, @PathVariable opportunityId: String) =
+        service.privateCostSummary(
+            opportunityId.commercialUuid(),
+            HiltechRequestContext.current(http).requireIdentityId(),
+        )
+
     @PostMapping("/opportunities/{opportunityId}/contracts")
     fun contract(http: HttpServletRequest, @PathVariable opportunityId: String,
                  @RequestHeader("Idempotency-Key") key: String,

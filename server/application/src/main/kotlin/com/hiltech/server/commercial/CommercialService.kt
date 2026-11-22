@@ -541,6 +541,18 @@ class CommercialService(
         )
     }
 
+    fun privateCostSummary(id: UUID,actor: UUID): List<Map<String, Any?>> {
+        val parent = op(id,actor,"SALES_COST_VIEW")
+        return jdbc.queryForList(
+            """SELECT boq_version_id,version_number,currency,total_lines,missing_cost_lines,
+                      proposed_sell_total,known_cost_subtotal,complete_internal_cost_total
+               FROM commercial_private_boq_cost_summary
+               WHERE organization_id=? AND opportunity_id=?
+               ORDER BY version_number DESC""",
+            parent["organization_id"]!!,id,
+        )
+    }
+
     fun draftContract(id: UUID,r: CommercialContractDraftRequest,key: UUID,
                       actor: UUID,correlation: String): CommercialCommandResult {
         val parent=op(id,actor,"SALES_AWARD");open(parent)
