@@ -39,6 +39,9 @@ hiltech:
     # Configurable structured engineering tests. No test family is hard-coded or seeded.
     engineering-tests:
       enabled: ${HILTECH_FIELD_ENGINEERING_TESTS_ENABLED:false}
+    # Canonical Work document/drawing revisions. OFF until an organization binds an approval policy.
+    work-documents:
+      enabled: ${HILTECH_FIELD_WORK_DOCUMENTS_ENABLED:false}
 
 
   activity:
