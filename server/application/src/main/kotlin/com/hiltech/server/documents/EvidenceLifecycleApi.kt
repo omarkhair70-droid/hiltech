@@ -122,6 +122,8 @@ class EvidenceLifecycleService(
     private val storageProperties: EvidenceStorageProperties,
     private val events: ApplicationEventPublisher,
     private val clock: Clock,
+    private val commercialEvidenceTarget: CommercialEvidenceTargetPort =
+        DisabledCommercialEvidenceTargetPort,
 ) {
     fun reserve(
         actorIdentityId: UUID,
@@ -147,6 +149,10 @@ class EvidenceLifecycleService(
                     correlationId,
                 command = command,
             )
+        }
+
+        if (command.targetType in setOf("COMMERCIAL_CONTRACT", "COMMERCIAL_CLIENT_PO")) {
+            return reserveCommercialDocument(actorIdentityId, correlationId, command)
         }
 
         if (command.targetType != "WORK_ORDER") {
@@ -357,6 +363,178 @@ class EvidenceLifecycleService(
                     expiresAt = effectiveExpiry.toString(),
                     expectedSizeBytes = reservation.sizeBytes,
                 ),
+            correlationId = correlationId,
+            replayed = execution.replayed,
+        )
+    }
+
+    /** Canonical Evidence upload/finalization, with Commercial-owned authorization. */
+    private fun reserveCommercialDocument(
+        actorIdentityId: UUID,
+        correlationId: String,
+        command: ReserveCommand,
+    ): ReserveEvidenceUploadResponse {
+        val targetEvidenceType = when (command.targetType) {
+            "COMMERCIAL_CONTRACT" -> "COMMERCIAL_SIGNED_CONTRACT"
+            "COMMERCIAL_CLIENT_PO" -> "COMMERCIAL_CLIENT_PO"
+            else -> throw ProductApiException(
+                code = "EVIDENCE_TARGET_UNSUPPORTED",
+                message = "Unsupported document target.",
+                status = HttpStatus.UNPROCESSABLE_ENTITY,
+            )
+        }
+        if (
+            command.workOrderId != null || command.supersedesEvidenceId != null ||
+            command.requirementKey != targetEvidenceType ||
+            command.assertedEvidenceTypeCode != targetEvidenceType
+        ) {
+            throw ProductApiException(
+                code = "COMMERCIAL_EVIDENCE_CONTRACT_MISMATCH",
+                message = "Commercial Evidence must use its exact target and document type.",
+                status = HttpStatus.UNPROCESSABLE_ENTITY,
+            )
+        }
+        val scanClass = when (command.contentType) {
+            "application/pdf" -> "SIGNED_DOCUMENT"
+            "image/jpeg", "image/png" -> "NATIVE_MEDIA"
+            else -> throw ProductApiException(
+                code = "EVIDENCE_CONTENT_TYPE_NOT_ALLOWED",
+                message = "Signed contracts and client POs must use a PDF or supported image.",
+                status = HttpStatus.UNPROCESSABLE_ENTITY,
+            )
+        }
+        if (command.sizeBytes !in 1..EvidenceUploadSpec.MAX_EVIDENCE_OBJECT_BYTES) {
+            throw ProductApiException(
+                code = "EVIDENCE_SIZE_NOT_ALLOWED",
+                message = "Commercial document exceeds the allowed Evidence limit.",
+                status = HttpStatus.UNPROCESSABLE_ENTITY,
+            )
+        }
+        val target = commercialEvidenceTarget.loadTarget(command.targetType, command.targetId)
+            ?: throw ProductApiException(
+                code = "OBJECT_NOT_VISIBLE",
+                message = "The requested commercial document is unavailable.",
+                status = HttpStatus.NOT_FOUND,
+            )
+        if (!target.mayReserve || !commercialEvidenceTarget.canAccess(actorIdentityId, target)) {
+            throw ProductApiException(
+                code = "OBJECT_NOT_VISIBLE",
+                message = "Commercial document upload is not authorized.",
+                status = HttpStatus.NOT_FOUND,
+            )
+        }
+
+        val storage = requireStorage()
+        val now = clock.instant()
+        val evidenceId = UUID.randomUUID()
+        val uploadSessionId = UUID.randomUUID()
+        val spec = EvidenceUploadSpec(
+            evidenceId = evidenceId,
+            organizationId = target.organizationId,
+            objectVersionId = UUID.randomUUID(),
+            contentType = command.contentType,
+            expectedSizeBytes = command.sizeBytes,
+            expectedSha256Hex = command.sha256,
+        )
+        val expiry = now.plusSeconds(storageProperties.uploadExpirySeconds)
+
+        val execution = idempotency.execute(
+            spec = IdempotentCommandSpec(
+                operationId = command.operationId,
+                actorUserId = actorIdentityId,
+                commandType = "ReserveEvidenceUpload",
+                targetType = "CommercialDocument",
+                targetId = command.targetId,
+                requestFingerprint = command.fingerprint(),
+                correlationId = correlationId,
+            ),
+        ) {
+            val current = commercialEvidenceTarget.loadTarget(command.targetType, command.targetId)
+            if (
+                current == null || current.organizationId != target.organizationId ||
+                !current.mayReserve || !commercialEvidenceTarget.canAccess(actorIdentityId, current)
+            ) {
+                throw ProductApiException(
+                    code = "OBJECT_NOT_VISIBLE",
+                    message = "Commercial document upload is no longer authorized.",
+                    status = HttpStatus.NOT_FOUND,
+                )
+            }
+            persistence.insertCommercialReservation(
+                CommercialEvidenceReservationInsert(
+                    evidenceId = evidenceId,
+                    uploadSessionId = uploadSessionId,
+                    operationId = command.operationId,
+                    organizationId = current.organizationId,
+                    targetType = command.targetType,
+                    targetId = command.targetId,
+                    evidenceTypeCode = targetEvidenceType,
+                    objectKey = spec.objectKey,
+                    contentType = command.contentType,
+                    originalFileName = command.originalFileName,
+                    sizeBytes = command.sizeBytes,
+                    sha256 = command.sha256,
+                    capturedAt = command.capturedAt,
+                    clientOccurredAt = command.clientOccurredAt,
+                    capturedByUserId = actorIdentityId,
+                    securityScanClass = scanClass,
+                    uploadExpiresAt = expiry,
+                    createdAt = now,
+                ),
+            )
+            audit.append(
+                AuditEventRecord(
+                    actorUserId = actorIdentityId,
+                    action = "EVIDENCE_UPLOAD_RESERVED",
+                    targetType = "Evidence",
+                    targetId = evidenceId,
+                    newStateRef = "evidence:RESERVED",
+                    occurredAt = now,
+                    correlationId = correlationId,
+                    reason = "COMMERCIAL_AWARD_EVIDENCE_RESERVE",
+                    configRevisionRefsJson = """{"targetType":"COMMERCIAL_AWARD"}""",
+                ),
+            )
+            IdempotentCommandOutcome(resultCode = "EVIDENCE_RESERVED")
+        }
+
+        val reservation = persistence.findReservationByOperationId(command.operationId)
+            ?: throw ProductApiException(
+                code = "EVIDENCE_RESERVATION_UNAVAILABLE",
+                message = "Commercial Evidence upload reservation unavailable.",
+                status = HttpStatus.SERVICE_UNAVAILABLE,
+                retryable = true,
+            )
+        if (!clock.instant().isBefore(reservation.uploadExpiresAt)) {
+            throw ProductApiException(
+                code = "EVIDENCE_UPLOAD_SESSION_EXPIRED",
+                message = "Commercial Evidence upload session expired.",
+                status = HttpStatus.CONFLICT,
+            )
+        }
+        val signed = runCatching {
+            storage.createUploadTarget(reservation.toStorageSpec())
+        }.getOrElse {
+            throw ProductApiException(
+                code = "EVIDENCE_STORAGE_UNAVAILABLE",
+                message = "Commercial Evidence upload storage is unavailable.",
+                status = HttpStatus.SERVICE_UNAVAILABLE,
+                retryable = true,
+            )
+        }
+        val expiresAt = if (signed.expiresAt.isBefore(reservation.uploadExpiresAt)) {
+            signed.expiresAt
+        } else {
+            reservation.uploadExpiresAt
+        }
+        return ReserveEvidenceUploadResponse(
+            evidence = reservation.toMetadata(),
+            upload = EvidenceUploadTargetResponse(
+                uploadUrl = signed.uploadUrl,
+                requiredHeaders = signed.requiredHeaders,
+                expiresAt = expiresAt.toString(),
+                expectedSizeBytes = reservation.sizeBytes,
+            ),
             correlationId = correlationId,
             replayed = execution.replayed,
         )
@@ -1203,6 +1381,17 @@ class EvidenceLifecycleService(
                                 actorIdentityId,
                             target = target,
                         )
+            }
+
+            "COMMERCIAL_CONTRACT", "COMMERCIAL_CLIENT_PO" -> {
+                val target = commercialEvidenceTarget.loadTarget(record.targetType, record.targetId)
+                target != null && target.organizationId == record.organizationId &&
+                    record.classificationCode == "HIGHLY_RESTRICTED" &&
+                    record.clientVisibilityMode == "INTERNAL_ONLY" &&
+                    record.evidenceTypeCode ==
+                        if (record.targetType == "COMMERCIAL_CONTRACT")
+                            "COMMERCIAL_SIGNED_CONTRACT" else "COMMERCIAL_CLIENT_PO" &&
+                    commercialEvidenceTarget.canAccess(actorIdentityId, target)
             }
 
             else -> false
