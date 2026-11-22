@@ -296,10 +296,11 @@ class SupplierSourcingServiceTest {
         assertEquals(org, capturedReview?.organizationId)
 
         Mockito.`when`(reviewerAuth.canReviewQuote(actor, org, rfqId)).thenReturn(false)
+        val denied = cmd.copy(operationId = UUID.randomUUID())
         assertEquals("SOURCING_UNAVAILABLE", assertThrows<ProductApiException> {
             service().recordTechnicalAssessment(
-                ProcurementDraftContext(UUID.randomUUID(), actor, "denied"),
-                supplierQuoteId, cmd.copy(operationId = UUID.randomUUID()),
+                ProcurementDraftContext(denied.operationId, actor, "denied"),
+                supplierQuoteId, denied,
             )
         }.code)
     }
