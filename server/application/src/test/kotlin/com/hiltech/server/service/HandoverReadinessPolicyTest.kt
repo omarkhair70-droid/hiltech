@@ -53,7 +53,32 @@ class HandoverReadinessPolicyTest {
             emptyList(),
         )
         assertFalse(missing.any { it.startsWith("APPROVED_DOCUMENT_MISSING:") })
+        assertTrue(missing.any { it.startsWith("HANDOVER_DOCUMENT_WAIVER_NOT_APPROVED:") })
         assertTrue(HandoverReadinessPolicy.MISSING_PACKAGE_POLICY in missing)
+    }
+
+    @Test
+    fun approvedRevisionCannotHideUnmetDocumentRequirement() {
+        val workOrders = listOf(HandoverWorkFact(work, "ACCEPTED"))
+        for (state in listOf("PENDING", "BLOCKED")) {
+            val result = HandoverReadinessPolicy.missing(
+                workOrders,
+                listOf(HandoverRequirementFact(work, "AS_BUILT", state)),
+                listOf(approved()),
+            )
+            assertTrue(result.any { it.startsWith("HANDOVER_DOCUMENT_REQUIREMENT_NOT_SATISFIED:") })
+        }
+    }
+
+    @Test
+    fun exclusionRequiresActualHandoverAuthority() {
+        val result = HandoverReadinessPolicy.missing(
+            listOf(HandoverWorkFact(work, "CLOSED")),
+            listOf(HandoverRequirementFact(work, "AS_BUILT", "NOT_APPLICABLE")),
+            emptyList(),
+        )
+        assertTrue(result.any { it.startsWith("HANDOVER_DOCUMENT_EXCLUSION_NOT_APPROVED:") })
+        assertFalse(result.any { it.startsWith("APPROVED_DOCUMENT_MISSING:") })
     }
 
     @Test

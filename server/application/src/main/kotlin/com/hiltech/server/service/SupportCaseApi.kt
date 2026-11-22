@@ -39,6 +39,18 @@ import java.util.UUID
  * This separate internal event ledger is NOT an agreed customer service SLA,
  * customer acceptance, equipment service order or warranty entitlement.
  */
+data class SupportCaseWorkChoiceDto(
+    val id: String,
+    val title: String,
+    val lifecycleState: String,
+)
+
+data class SupportCaseEvidenceChoiceDto(
+    val id: String,
+    val workOrderId: String,
+    val label: String,
+)
+
 data class SupportCaseRecordRequest(
     val operationId: String,
     val expectedLatestEventNumber: Int,
@@ -179,16 +191,56 @@ class JdbcSupportCaseStore(private val jdbc: JdbcTemplate) {
             ticketId,
         )
 
-    fun readyEvidence(evidenceId: UUID, organizationId: UUID, workOrderId: UUID): Boolean =
+    fun readyEvidence(
+        ticketId: UUID, evidenceId: UUID, organizationId: UUID, workOrderId: UUID,
+    ): Boolean =
         jdbc.queryForObject(
             """
-            SELECT EXISTS(SELECT 1 FROM evidence
-              WHERE id=? AND organization_id=? AND work_order_id=?
-                AND target_type='WORK_ORDER' AND target_id=?
-                AND storage_state='READY')
+            SELECT EXISTS(
+              SELECT 1 FROM evidence e
+              JOIN service_support_ticket ticket ON ticket.id=?
+              WHERE e.id=? AND e.organization_id=? AND e.work_order_id=?
+                AND e.target_type='WORK_ORDER' AND e.target_id=?
+                AND e.storage_state='READY'
+                AND e.captured_at>=ticket.created_at
+                AND NOT EXISTS(
+                  SELECT 1 FROM evidence replacement
+                   WHERE replacement.supersedes_evidence_id=e.id
+                     AND replacement.storage_state='READY'
+                )
+            )
             """.trimIndent(),
-            Boolean::class.java, evidenceId, organizationId, workOrderId, workOrderId,
+            Boolean::class.java,
+            ticketId, evidenceId, organizationId, workOrderId, workOrderId,
         ) == true
+
+    fun readyEvidenceChoices(
+        ticketId: UUID, org: UUID, workId: UUID,
+    ): List<SupportCaseEvidenceChoiceDto> =
+        jdbc.query(
+            """
+            SELECT e.id,e.work_order_id,e.evidence_type_code,e.captured_at
+              FROM evidence e
+              JOIN service_support_ticket t ON t.id=?
+             WHERE e.organization_id=? AND e.work_order_id=?
+               AND e.target_type='WORK_ORDER' AND e.target_id=?
+               AND e.storage_state='READY' AND e.captured_at>=t.created_at
+               AND NOT EXISTS(
+                 SELECT 1 FROM evidence replacement
+                  WHERE replacement.supersedes_evidence_id=e.id
+                    AND replacement.storage_state='READY'
+               )
+             ORDER BY e.captured_at DESC,e.id LIMIT 100
+            """.trimIndent(),
+            { rs, _ ->
+                SupportCaseEvidenceChoiceDto(
+                    rs.getObject("id", UUID::class.java).toString(),
+                    rs.getObject("work_order_id", UUID::class.java).toString(),
+                    rs.getString("evidence_type_code") + " · " +
+                        rs.getObject("captured_at", OffsetDateTime::class.java).toInstant(),
+                )
+            }, ticketId, org, workId, workId,
+        )
 
     fun insert(
         eventId: UUID, ticketId: UUID, project: ProjectSnapshot,
@@ -242,6 +294,36 @@ class SupportCaseService(
         tickets.ticket(ticketId, projectId)
             ?: caseProblem("CASE_TICKET_NOT_FOUND", HttpStatus.NOT_FOUND)
         return store.current(ticketId)
+    }
+
+    @Transactional(readOnly = true)
+    fun workChoices(
+        projectId: UUID, ticketId: UUID, actor: UUID,
+    ): List<SupportCaseWorkChoiceDto> {
+        val project = managedProject(projectId, actor)
+        tickets.ticket(ticketId, projectId)
+            ?: caseProblem("CASE_TICKET_NOT_FOUND", HttpStatus.NOT_FOUND)
+        return work.workOrders(projectId).filter {
+            it.organizationId == project.organizationId &&
+                it.projectId == projectId && SupportCasePolicy.canLinkWork(it.lifecycleState)
+        }.map {
+            SupportCaseWorkChoiceDto(it.workOrderId.toString(), it.title, it.lifecycleState.name)
+        }
+    }
+
+    @Transactional(readOnly = true)
+    fun readyEvidenceChoices(
+        projectId: UUID, ticketId: UUID, actor: UUID,
+    ): List<SupportCaseEvidenceChoiceDto> {
+        val project = managedProject(projectId, actor)
+        tickets.ticket(ticketId, projectId)
+            ?: caseProblem("CASE_TICKET_NOT_FOUND", HttpStatus.NOT_FOUND)
+        val workId = store.latestWorkOrder(ticketId) ?: return emptyList()
+        val source = work.workOrder(workId) ?: return emptyList()
+        if (source.organizationId != project.organizationId || source.projectId != projectId ||
+            source.lifecycleState !in setOf(WorkOrderLifecycle.ACCEPTED, WorkOrderLifecycle.CLOSED))
+            return emptyList()
+        return store.readyEvidenceChoices(ticketId, project.organizationId, workId)
     }
 
     @Transactional(readOnly = true)
@@ -303,7 +385,7 @@ class SupportCaseService(
                     )) caseProblem("CASE_WORK_NOT_ACCEPTED", HttpStatus.CONFLICT)
                     val evidenceId = payload.evidenceId
                         ?: caseProblem("CASE_EVIDENCE_REQUIRED", HttpStatus.BAD_REQUEST)
-                    if (!store.readyEvidence(evidenceId, project.organizationId, workId))
+                    if (!store.readyEvidence(ticketId, evidenceId, project.organizationId, workId))
                         caseProblem("CASE_EVIDENCE_NOT_READY", HttpStatus.CONFLICT)
                 }
             }
@@ -344,6 +426,18 @@ class SupportCaseController(private val service: SupportCaseService) {
         request: HttpServletRequest,
         @PathVariable projectId: UUID, @PathVariable ticketId: UUID,
     ) = service.summary(projectId, ticketId, actor(request))
+
+    @GetMapping("/work-choices")
+    fun workChoices(
+        request: HttpServletRequest,
+        @PathVariable projectId: UUID, @PathVariable ticketId: UUID,
+    ) = service.workChoices(projectId, ticketId, actor(request))
+
+    @GetMapping("/ready-evidence")
+    fun readyEvidenceChoices(
+        request: HttpServletRequest,
+        @PathVariable projectId: UUID, @PathVariable ticketId: UUID,
+    ) = service.readyEvidenceChoices(projectId, ticketId, actor(request))
 
     @GetMapping("/events")
     fun events(

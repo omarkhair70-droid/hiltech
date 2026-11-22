@@ -66,6 +66,7 @@ jobs:
             --tests com.hiltech.server.service.SupportDeskFieldRulesTest \
             --tests com.hiltech.server.service.SupportTriagePolicyTest \
             --tests com.hiltech.server.service.SupportCasePolicyTest \
+            --tests com.hiltech.server.service.ServiceContractSourcePolicyTest \
             --tests com.hiltech.server.service.MaintenanceDraftPolicyTest \
             --no-configuration-cache --console=plain
 

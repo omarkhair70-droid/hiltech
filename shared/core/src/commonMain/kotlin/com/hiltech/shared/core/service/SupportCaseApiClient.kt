@@ -56,6 +56,30 @@ class SupportCaseApiClient(
         )
     }
 
+    suspend fun workChoices(
+        projectId: String, ticketId: String, installationId: String,
+    ): List<SupportCaseWorkChoice> {
+        canonical(projectId); canonical(ticketId)
+        return api.request(
+            HttpMethod.Get,
+            "/v1/projects/" + projectId + "/service-tickets/" + ticketId + "/case/work-choices",
+            HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(ListSerializer(SupportCaseWorkChoice.serializer()), it) },
+        )
+    }
+
+    suspend fun readyEvidenceChoices(
+        projectId: String, ticketId: String, installationId: String,
+    ): List<SupportCaseEvidenceChoice> {
+        canonical(projectId); canonical(ticketId)
+        return api.request(
+            HttpMethod.Get,
+            "/v1/projects/" + projectId + "/service-tickets/" + ticketId + "/case/ready-evidence",
+            HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(ListSerializer(SupportCaseEvidenceChoice.serializer()), it) },
+        )
+    }
+
     suspend fun history(
         projectId: String, ticketId: String, installationId: String,
     ): List<SupportCaseEventDto> {

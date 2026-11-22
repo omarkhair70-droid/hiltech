@@ -81,6 +81,39 @@ class Phase11NativeContractTest {
     }
 
     @Test
+    fun internalSupportWorkAndProofChoicesReadFromAuthenticatedServer() = runBlocking {
+        val paths = mutableListOf<String>()
+        val http = HttpClient(MockEngine { request ->
+            paths += request.url.encodedPath
+            assertEquals(HttpMethod.Get, request.method)
+            val body = when(request.url.encodedPath) {
+                "/v1/projects/$project/service-tickets/$ticket/case/work-choices" ->
+                    """[{"id":"$work","title":"Replace failed switch","lifecycleState":"ACCEPTED"}]"""
+                "/v1/projects/$project/service-tickets/$ticket/case/ready-evidence" ->
+                    """[{"id":"$evidence","workOrderId":"$work","label":"SITE_PHOTO · 2026-11-23T01:00:00Z"}]"""
+                else -> error("Unexpected unapproved service route")
+            }
+            respond(
+                body, HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val client = SupportCaseApiClient(HiltechApiClient(
+            client = http,
+            baseUrl = "https://api.hiltech.test",
+            accessTokenProvider = { "phase11-token" },
+            correlationIdProvider = { "phase11-corr" },
+        ))
+        val works = client.workChoices(project, ticket, installation)
+        val evidenceChoices = client.readyEvidenceChoices(project, ticket, installation)
+        assertEquals(work, works.single().id)
+        assertEquals("ACCEPTED", works.single().lifecycleState)
+        assertEquals(evidence, evidenceChoices.single().id)
+        assertEquals(work, evidenceChoices.single().workOrderId)
+        assertEquals(2, paths.size)
+    }
+
+    @Test
     fun frozenHandoverReviewResponseKeepsExternalAcceptanceOff() = runBlocking {
         val http = HttpClient(MockEngine { request ->
             assertEquals(HttpMethod.Get, request.method)
@@ -117,6 +150,47 @@ class Phase11NativeContractTest {
         assertTrue(state.sourceStillMatches && state.isLatestPackageVersion)
         assertFalse(state.canIssueToClient)
         assertFalse(state.canAcceptOnBehalfOfClient)
+    }
+
+    @Test
+    fun signedCommercialSourceReadDoesNotPretendToActivateWarranty() = runBlocking {
+        val http = HttpClient(MockEngine { request ->
+            assertEquals(HttpMethod.Get, request.method)
+            assertEquals("/v1/projects/$project/service-contract-source", request.url.encodedPath)
+            respond(
+                content = """
+                {
+                    "projectId":"$project",
+                    "sourceState":"SIGNED_SOURCE_DOCUMENTS_READY",
+                    "contractId":"$handover",
+                    "clientPoId":"$ticket",
+                    "sourceEffectiveDate":"2026-11-23",
+                    "sourceEndDate":"2028-11-23",
+                    "hasWrittenWarrantyTerms":true,
+                    "hasWrittenMaintenanceTerms":true,
+                    "warrantyEntitlementState":"NOT_EVALUATED",
+                    "slaPolicyState":"NOT_CONFIGURED",
+                    "maintenanceScheduleState":"NOT_APPROVED",
+                    "renewalEligibilityState":"NOT_EVALUATED",
+                    "clientVisibility":"INTERNAL_ONLY"
+                }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val client = ProjectServiceContractSourceApiClient(HiltechApiClient(
+            client = http,
+            baseUrl = "https://api.hiltech.test",
+            accessTokenProvider = { "phase11-token" },
+            correlationIdProvider = { "phase11-corr" },
+        ))
+        val source = client.read(project, installation)
+        assertEquals("SIGNED_SOURCE_DOCUMENTS_READY", source.sourceState)
+        assertTrue(source.hasWrittenWarrantyTerms)
+        assertEquals("NOT_EVALUATED", source.warrantyEntitlementState)
+        assertEquals("NOT_APPROVED", source.maintenanceScheduleState)
+        assertEquals("INTERNAL_ONLY", source.clientVisibility)
     }
 
     @Test

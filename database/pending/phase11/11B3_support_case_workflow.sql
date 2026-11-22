@@ -98,12 +98,21 @@ BEGIN
         USING ERRCODE='23514';
     END IF;
     IF NOT EXISTS (
-      SELECT 1 FROM evidence WHERE id=NEW.evidence_id
-        AND organization_id=NEW.organization_id
-        AND work_order_id=NEW.work_order_id AND target_type='WORK_ORDER'
-        AND target_id=NEW.work_order_id AND storage_state='READY'
+      SELECT 1 FROM evidence e
+      JOIN service_support_ticket ticket ON ticket.id=NEW.ticket_id
+      WHERE e.id=NEW.evidence_id
+        AND e.organization_id=NEW.organization_id
+        AND e.work_order_id=NEW.work_order_id AND e.target_type='WORK_ORDER'
+        AND e.target_id=NEW.work_order_id AND e.storage_state='READY'
+        -- An old installation photo is not proof of fixing a later complaint.
+        AND e.captured_at >= ticket.created_at
+        AND NOT EXISTS(
+          SELECT 1 FROM evidence replacement
+           WHERE replacement.supersedes_evidence_id=e.id
+             AND replacement.storage_state='READY'
+        )
     ) THEN
-      RAISE EXCEPTION 'Support resolution requires READY evidence from the same WorkOrder'
+      RAISE EXCEPTION 'Support resolution needs new, non-superseded READY Evidence captured after ticket opening'
         USING ERRCODE='23514';
     END IF;
   END IF;

@@ -134,11 +134,31 @@ object HandoverReadinessPolicy {
             if (works.isEmpty()) add("PROJECT_WORK_ORDERS_MISSING")
             works.filter { it.lifecycleState !in setOf("ACCEPTED", "CLOSED") }
                 .forEach { add("WORK_NOT_ACCEPTED:" + it.workOrderId) }
-            requirements.filter {
-                it.satisfactionState !in setOf("WAIVED", "NOT_APPLICABLE") &&
-                    (it.workOrderId to it.requirementKey) !in present
-            }.forEach {
-                add("APPROVED_DOCUMENT_MISSING:" + it.workOrderId + ":" + it.requirementKey)
+            requirements.forEach { req ->
+                val ref = req.workOrderId.toString() + ":" + req.requirementKey
+                when (req.satisfactionState) {
+                    "SATISFIED" -> {
+                        if ((req.workOrderId to req.requirementKey) !in present) {
+                            add("APPROVED_DOCUMENT_MISSING:" + ref)
+                        }
+                    }
+                    "WAIVED" -> {
+                        // A Work readiness waiver is NOT a blanket Handover/Client exception.
+                        // The actual Phase 11 approval authority has not been provisioned.
+                        add("HANDOVER_DOCUMENT_WAIVER_NOT_APPROVED:" + ref)
+                    }
+                    "NOT_APPLICABLE" -> {
+                        add("HANDOVER_DOCUMENT_EXCLUSION_NOT_APPROVED:" + ref)
+                    }
+                    else -> {
+                        // Even an approved Evidence revision must not conceal an unsatisfied
+                        // requirement, including PENDING or BLOCKED source states.
+                        add("HANDOVER_DOCUMENT_REQUIREMENT_NOT_SATISFIED:" + ref)
+                        if ((req.workOrderId to req.requirementKey) !in present) {
+                            add("APPROVED_DOCUMENT_MISSING:" + ref)
+                        }
+                    }
+                }
             }
             add(MISSING_PACKAGE_POLICY)
             add(MISSING_SHARING_POLICY)

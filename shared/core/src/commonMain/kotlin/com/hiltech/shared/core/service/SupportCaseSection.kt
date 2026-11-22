@@ -19,13 +19,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class SupportCaseWorkChoice(
     val id: String,
     val title: String,
     val lifecycleState: String,
 )
 
+@Serializable
 data class SupportCaseEvidenceChoice(
     val id: String,
     val workOrderId: String,

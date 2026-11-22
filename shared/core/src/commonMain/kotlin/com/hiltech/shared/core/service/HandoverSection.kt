@@ -34,6 +34,7 @@ fun HandoverSection(
     onRefresh: () -> Unit,
     onCreateInternalDraft: () -> Unit,
     onOpenInternalReview: (packageVersionId: String) -> Unit,
+    onOpenServiceContractSource: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -45,6 +46,9 @@ fun HandoverSection(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onRefresh, enabled = !state.loading) {
                 Text("Refresh source documents")
+            }
+            OutlinedButton(onClick = onOpenServiceContractSource, enabled = !state.loading) {
+                Text("View signed contract source")
             }
             Button(
                 onClick = onCreateInternalDraft,
