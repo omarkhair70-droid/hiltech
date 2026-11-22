@@ -126,8 +126,8 @@ FOR EACH ROW EXECUTE FUNCTION reject_procurement_draft_mutation();
 -- No attachment reference, hash or "accepted" checkbox from a client is
 -- sufficient without canonical READY, restricted, slot-scoped Evidence.
 CREATE FUNCTION guard_service_purchase_verified_document() RETURNS trigger
-LANGUAGE plpgsql AS $$
-  slot_kind varchar(24);
+LANGUAGE plpgsql AS $
+DECLARE slot_kind varchar(24);
   expected_type varchar(40);
   expected_req varchar(40);
 BEGIN
