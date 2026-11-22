@@ -136,4 +136,13 @@ data class TechnicianJobBundle(
     val executionCapabilities: FieldExecutionCapabilities =
         FieldExecutionCapabilities(),
     val asOf: Instant,
+    val completionGate: FieldCompletionGate =
+        FieldCompletionGate(
+            available = false,
+            satisfied = false,
+            reasonCodes =
+                listOf(
+                    "COMPLETION_UNAVAILABLE",
+                ),
+        ),
 )

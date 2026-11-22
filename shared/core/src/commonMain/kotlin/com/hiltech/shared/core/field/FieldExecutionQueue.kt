@@ -24,9 +24,13 @@ data class FieldQueuedIntent(
 
 /** Durable *intent*, never a server-acknowledged field execution result. */
 class FieldExecutionQueue(private val database: HiltechLocalDatabase) {
-    suspend fun outstanding(identityId: String, workOrderId: String): FieldQueuedIntent? =
-        database.pendingCommandDao().outstandingFieldCommand(identityId, workOrderId)
-            .firstOrNull()?.asFieldIntent()
+    suspend fun outstanding(identityId: String, workOrderId: String): FieldQueuedIntent? {
+        val dao = database.pendingCommandDao()
+        return (
+            dao.outstandingFieldCommand(identityId, workOrderId).firstOrNull()
+                ?: dao.outstandingCompletion(identityId, workOrderId).firstOrNull()
+            )?.asFieldIntent()
+    }
 
     suspend fun queue(
         identityId: String,
@@ -92,6 +96,9 @@ class FieldExecutionQueue(private val database: HiltechLocalDatabase) {
                 ) == 0,
             ) {
                 "Sync or review the pending engineering test before changing field state."
+            }
+            require(database.pendingCommandDao().outstandingCompletion(identityId, bundle.workOrderId).isEmpty()) {
+                "Resolve the pending completion submission before changing field state."
             }
             require(database.pendingCommandDao().outstandingFieldCommand(identityId, bundle.workOrderId).isEmpty()) {
                 "Resolve or sync the prior field intent before creating a new one."

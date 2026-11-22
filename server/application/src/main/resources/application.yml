@@ -42,6 +42,9 @@ hiltech:
     # Canonical Work document/drawing revisions. OFF until an organization binds an approval policy.
     work-documents:
       enabled: ${HILTECH_FIELD_WORK_DOCUMENTS_ENABLED:false}
+    # Phase 6 completion submission. OFF until dependency/replay proof is green.
+    completion:
+      enabled: ${HILTECH_FIELD_COMPLETION_ENABLED:false}
 
 
   activity:

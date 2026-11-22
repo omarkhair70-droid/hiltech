@@ -132,6 +132,13 @@ class FieldEngineeringTestOfflineQueue(
         )
 
         return db.withWriteTransaction {
+            require(
+                db.pendingCommandDao()
+                    .outstandingCompletion(actorId, bundle.workOrderId)
+                    .isEmpty(),
+            ) {
+                "Resolve the pending completion submission before another engineering test."
+            }
             require(db.pendingCommandDao()
                 .outstandingFieldCommand(actorId, bundle.workOrderId)
                 .isEmpty()) {

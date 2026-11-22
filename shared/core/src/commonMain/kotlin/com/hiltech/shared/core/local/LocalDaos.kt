@@ -69,6 +69,20 @@ interface PendingCommandDao {
         """,
     )
     suspend fun outstandingFieldCommand(identityId: String, workOrderId: String): List<PendingCommandEntity>
+
+    @Query(
+        """
+        SELECT * FROM pending_command
+        WHERE actor_user_identity_id = :identityId
+          AND target_type = 'WorkOrder'
+          AND target_id = :workOrderId
+          AND command_type = 'SubmitWorkCompletion'
+          AND state NOT IN ('APPLIED', 'CANCELLED_LOCAL')
+        ORDER BY local_sequence DESC
+        """,
+    )
+    suspend fun outstandingCompletion(identityId: String, workOrderId: String): List<PendingCommandEntity>
+
     @Query(
         """
         SELECT EXISTS (
@@ -170,6 +184,22 @@ interface PendingCommandDao {
 
     @Query(
         """
+        SELECT MIN(next_retry_at_epoch_ms)
+        FROM pending_command
+        WHERE actor_user_identity_id = :identityId
+          AND device_id = :installationId
+          AND command_type <> 'SubmitWorkCompletion'
+          AND state = 'RETRYABLE'
+          AND next_retry_at_epoch_ms IS NOT NULL
+        """,
+    )
+    suspend fun earliestRetryBeforeCompletion(
+        identityId: String,
+        installationId: String,
+    ): Long?
+
+    @Query(
+        """
         SELECT COUNT(*)
         FROM pending_command
         WHERE state = 'FAILED_TERMINAL'
@@ -188,6 +218,21 @@ interface PendingCommandDao {
         """,
     )
     suspend fun pausedForReauthCount(
+        identityId: String,
+        installationId: String,
+    ): Int
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM pending_command
+        WHERE actor_user_identity_id = :identityId
+          AND device_id = :installationId
+          AND command_type <> 'SubmitWorkCompletion'
+          AND state = 'RETRYABLE'
+          AND last_result_code = 'REAUTH_REQUIRED'
+        """,
+    )
+    suspend fun pausedForReauthBeforeCompletion(
         identityId: String,
         installationId: String,
     ): Int

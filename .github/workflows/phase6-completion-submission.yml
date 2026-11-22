@@ -1,0 +1,120 @@
+name: Phase 6 — Completion Submission and Late Replay
+
+on:
+  pull_request:
+    branches:
+      - phase6/s04d-work-document-revisions-20261122
+    paths:
+      - "database/migrations/V0038__work_completion_submission__phase6_slice05.sql"
+      - "server/application/src/main/kotlin/com/hiltech/server/work/**"
+      - "server/application/src/main/resources/application.yml"
+      - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
+      - "server/application/src/test/kotlin/com/hiltech/server/work/CompletionSubmission*.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/**"
+      - "shared/core/src/desktopTest/kotlin/com/hiltech/shared/core/field/FieldCompletionQueueTest.kt"
+      - "apps/androidApp/src/main/kotlin/com/hiltech/android/**"
+      - ".github/workflows/phase6-completion-submission.yml"
+      - "docs/13-delivery/phase6/13_SLICE05_COMPLETION_SUBMISSION_2026-11-22.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  completion-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: hiltech
+          POSTGRES_USER: hiltech
+          POSTGRES_PASSWORD: hiltech
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hiltech -d hiltech"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      HILTECH_DB_CONTRACT_TEST: "0"
+      HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
+      HILTECH_DB_USER: hiltech
+      HILTECH_DB_PASSWORD: hiltech
+      HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Verify server architecture, idempotency and existing review
+        run: |
+          ./gradlew :server:application:test \
+            --no-configuration-cache --console=plain
+
+      - name: Verify durable completion queue and ordered replay
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests com.hiltech.shared.core.field.FieldCompletionQueueTest \
+            --tests com.hiltech.shared.core.field.FieldExecutionQueueTest \
+            --tests com.hiltech.shared.core.field.FieldEngineeringTestOfflineQueueTest \
+            --no-configuration-cache --console=plain
+
+      - name: Compile Android with field and engineering features
+        run: |
+          ./gradlew :apps:androidApp:compileDebugKotlin \
+            -Philtech.engineeringTestsEnabled=true \
+            -Philtech.assignedAssetLookupEnabled=true \
+            --no-configuration-cache --console=plain
+
+      - name: Create isolated PostgreSQL contract databases
+        env:
+          PGPASSWORD: hiltech
+        run: |
+          psql -h localhost -U hiltech -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE DATABASE hiltech_completion_migration;
+          CREATE DATABASE hiltech_completion_semantics;
+          SQL
+
+      - name: Verify clean database migration through V0038
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech_completion_migration
+        run: |
+          if ! ./gradlew :server:application:test \
+            --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --rerun-tasks --no-configuration-cache --console=plain; then
+            cat server/application/build/test-results/test/TEST-com.hiltech.server.DatabaseMigrationContractTest.xml || true
+            exit 1
+          fi
+
+      - name: Verify canonical V0038 transitions and immutable history
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech_completion_semantics
+        run: |
+          if ! ./gradlew :server:application:test \
+            --tests com.hiltech.server.work.CompletionSubmissionPostgresContractTest \
+            --rerun-tasks --no-configuration-cache --console=plain; then
+            cat server/application/build/test-results/test/TEST-com.hiltech.server.work.CompletionSubmissionPostgresContractTest.xml || true
+            exit 1
+          fi
+
+      - name: Verify disabled rollout and patch consistency
+        run: |
+          grep -Fq 'enabled: ${HILTECH_FIELD_COMPLETION_ENABLED:false}' \
+            server/application/src/main/resources/application.yml
+          git diff --check HEAD^ HEAD

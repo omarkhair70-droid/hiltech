@@ -248,6 +248,7 @@ fun HiltechShell(
     captureFieldIntent: Boolean = false,
     onQueueFieldIntent:
         (com.hiltech.shared.core.field.FieldExecutionIntent, String?) -> Unit = { _, _ -> },
+    onQueueCompletion: () -> Unit = {},
     captureEvidence: Boolean = false,
     onSelectEvidenceFile: (String) -> Unit = {},
     onTakeEvidencePhoto: (String) -> Unit = {},
@@ -480,6 +481,7 @@ fun HiltechShell(
                                 onSelectFieldWork,
                             captureFieldIntent = captureFieldIntent,
                             onQueueFieldIntent = onQueueFieldIntent,
+                            onQueueCompletion = onQueueCompletion,
                             captureEvidence = captureEvidence,
                             onSelectEvidenceFile = onSelectEvidenceFile,
                             onTakeEvidencePhoto = onTakeEvidencePhoto,

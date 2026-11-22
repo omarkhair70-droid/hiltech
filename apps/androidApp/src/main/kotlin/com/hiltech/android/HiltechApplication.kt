@@ -7,6 +7,7 @@ import com.hiltech.android.sync.AndroidSessionTokenProvider
 import com.hiltech.android.sync.AndroidSyncRuntime
 import com.hiltech.android.sync.AndroidVerifiedActorProvider
 import com.hiltech.shared.core.field.FieldExecutionQueue
+import com.hiltech.shared.core.field.FieldCompletionQueue
 import com.hiltech.shared.core.field.FieldEvidenceQueue
 import com.hiltech.shared.core.field.FieldEngineeringTestOfflineQueue
 import com.hiltech.shared.core.evidence.EvidenceApiClient
@@ -100,6 +101,10 @@ class HiltechApplication : Application() {
 
     val fieldExecutionQueue by lazy {
         FieldExecutionQueue(localDatabase)
+    }
+
+    val fieldCompletionQueue by lazy {
+        FieldCompletionQueue(localDatabase)
     }
 
     val fieldEvidenceQueue by lazy {

@@ -122,8 +122,9 @@ class KtorPendingCommandTransport(
             )
         }
 
-        if (command.commandType in setOf("StartWork", "BlockWork", "ResumeWork") &&
-            status in setOf(403, 404, 409)) {
+        if (command.commandType in setOf(
+                "StartWork", "BlockWork", "ResumeWork", "SubmitWorkCompletion",
+            ) && status in setOf(403, 404, 409)) {
             return CommandTransportResult.Conflict(
                 conflictType = when (status) {
                     403 -> "PERMISSION_REVOKED"

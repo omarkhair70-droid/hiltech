@@ -13,6 +13,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.hiltech.android.sync.HiltechSyncWorker
 import com.hiltech.shared.core.field.FieldExecutionIntent
+import com.hiltech.shared.core.field.FieldQueuedIntent
 import java.util.UUID
 import android.os.Bundle
 import com.hiltech.android.field.PendingEvidenceCapture
@@ -131,6 +132,7 @@ class MainActivity : ComponentActivity() {
                 showEngineeringTests = BuildConfig.HILTECH_ENGINEERING_TESTS_ENABLED,
                 captureFieldIntent = true,
                 onQueueFieldIntent = ::queueFieldExecution,
+                onQueueCompletion = ::queueFieldCompletion,
                 captureEvidence = true,
                 onSelectEvidenceFile = ::selectEvidenceFile,
                 onTakeEvidencePhoto = ::startEvidencePhoto,
@@ -964,6 +966,74 @@ class MainActivity : ComponentActivity() {
                 )
                 .build(),
         )
+    }
+
+    private fun queueFieldCompletion() {
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        val actorId = signed.identity.identityId
+        val field = signed.field ?: return
+        val bundle = field.selectedBundle ?: return
+        if (
+            field.cachedBundleAt != null ||
+            field.selectedWorkOrderId != bundle.workOrderId ||
+            field.pendingFieldIntent != null
+        ) {
+            return
+        }
+
+        val operationId = UUID.randomUUID().toString()
+        scope.launch {
+            runCatching {
+                hiltechApplication.fieldCompletionQueue.queue(
+                    identityId = actorId,
+                    installationId = hiltechApplication.installationId,
+                    bundle = bundle,
+                    operationId = operationId,
+                    nowEpochMs = System.currentTimeMillis(),
+                    verifiedOnlineThisSession = true,
+                )
+            }.onSuccess { queued ->
+                val current = shellState as? HiltechShellState.SignedIn ?: return@onSuccess
+                val selected = current.field ?: return@onSuccess
+                if (
+                    current.identity.identityId != actorId ||
+                    selected.selectedWorkOrderId != bundle.workOrderId ||
+                    selected.selectedBundle?.workOrderVersion != bundle.workOrderVersion ||
+                    selected.cachedBundleAt != null
+                ) {
+                    return@onSuccess
+                }
+                shellState = current.copy(
+                    field = selected.copy(
+                        pendingFieldIntent = FieldQueuedIntent(
+                            operationId = queued.operationId,
+                            commandType = "SubmitWorkCompletion",
+                            state = queued.state,
+                            targetId = queued.workOrderId,
+                        ),
+                        fieldIntentMessage =
+                            "طلب التسليم محفوظ محليًا، وليس موافقة نهائية. المزامنة ستراجع الشروط على السيرفر.",
+                    ),
+                )
+                scheduleFieldCommandReplay(actorId)
+            }.onFailure { failure ->
+                if (failure is kotlinx.coroutines.CancellationException) return@onFailure
+                val current = shellState as? HiltechShellState.SignedIn ?: return@onFailure
+                val selected = current.field ?: return@onFailure
+                if (
+                    current.identity.identityId != actorId ||
+                    selected.selectedWorkOrderId != bundle.workOrderId
+                ) {
+                    return@onFailure
+                }
+                shellState = current.copy(
+                    field = selected.copy(
+                        fieldIntentMessage =
+                            failure.message ?: "تعذر حفظ طلب تسليم العمل للمراجعة.",
+                    ),
+                )
+            }
+        }
     }
 
     private fun queueFieldExecution(action: FieldExecutionIntent, reason: String?) {
