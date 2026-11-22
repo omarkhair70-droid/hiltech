@@ -61,6 +61,9 @@ There is no offline procurement write queue.
 ## Outstanding S02 code/operations before close
 
 - [ ] Passing exact-head Kotlin tests and PostgreSQL migration V0042 contract
+      (new dedicated GitHub Actions workflow in
+      .github/workflows/phase7-s02-supplier-sourcing-contract.yml;
+      isolated PostgreSQL service, no operator database changes)
 - [ ] Bind purchasing/sourcing authorization to a real versioned company source,
       never infer from project manager technical permission
 - [ ] Governed document/evidence repository integration and restricted links,

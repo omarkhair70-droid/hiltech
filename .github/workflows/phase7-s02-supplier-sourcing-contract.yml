@@ -1,0 +1,69 @@
+name: Phase 7 S02 — Supplier Sourcing Contract
+
+on:
+  push:
+    branches:
+      - "phase7/s02-supplier-rfq-quotes-20261122"
+    paths:
+      - ".github/workflows/phase7-s02-supplier-sourcing-contract.yml"
+      - "database/migrations/V0042__procurement_supplier_rfq_quote_evidence__phase7_slice02.sql"
+      - "server/application/src/main/kotlin/com/hiltech/server/procurement/**"
+      - "server/application/src/test/kotlin/com/hiltech/server/procurement/**"
+      - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
+  pull_request:
+    branches:
+      - "phase7/s01-purchase-requirement-20261122"
+    paths:
+      - ".github/workflows/phase7-s02-supplier-sourcing-contract.yml"
+      - "database/migrations/V0042__procurement_supplier_rfq_quote_evidence__phase7_slice02.sql"
+      - "server/application/src/main/kotlin/com/hiltech/server/procurement/**"
+      - "server/application/src/test/kotlin/com/hiltech/server/procurement/**"
+      - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
+
+permissions:
+  contents: read
+
+jobs:
+  sourcing-postgres:
+    name: RFQ + immutable quote contract with PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_DB: hiltech
+          POSTGRES_USER: hiltech
+          POSTGRES_PASSWORD: hiltech
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hiltech -d hiltech"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up pinned Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Test supplier sourcing and real V0042 schema
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
+          HILTECH_DB_USER: hiltech
+          HILTECH_DB_PASSWORD: hiltech
+          HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.procurement.SupplierQuoteComparisonTest \
+            --tests com.hiltech.server.procurement.SupplierSourcingServiceTest \
+            --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --no-daemon --console=plain
