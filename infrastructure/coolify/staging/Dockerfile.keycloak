@@ -3,4 +3,4 @@
 # Docker Image-only Coolify applications do not honor a configured start command.
 FROM quay.io/keycloak/keycloak:26.7.4
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
-CMD ["start", "--import-realm"]
+CMD ["start"]
