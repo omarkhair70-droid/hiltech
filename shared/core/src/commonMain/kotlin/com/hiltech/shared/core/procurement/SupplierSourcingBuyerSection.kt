@@ -33,6 +33,7 @@ fun SupplierSourcingBuyerSection(
     newOperationId: () -> String,
     quoteDocumentUploader: SupplierQuoteDocumentUploader? = null,
     pickQuoteFile: suspend () -> SupplierQuotePickedFile? = { null },
+    purchaseCandidateApi: PurchaseOrderCandidateApiClient? = null,
 ) {
     val scope = rememberCoroutineScope()
     var loading by remember(organizationId) { mutableStateOf(false) }
@@ -190,6 +191,15 @@ fun SupplierSourcingBuyerSection(
                                             quote.issues.forEach { issue ->
                                                 Text("Review: $issue", color = MaterialTheme.colorScheme.error,
                                                     style = MaterialTheme.typography.bodySmall)
+                                            }
+                                            if (purchaseCandidateApi != null && round.sourceCurrent) {
+                                                PurchaseOrderCandidateAction(
+                                                    api = purchaseCandidateApi,
+                                                    rfqId = round.id,
+                                                    quote = quote,
+                                                    installationId = installationId,
+                                                    newOperationId = newOperationId,
+                                                )
                                             }
                                         }
                                     }
