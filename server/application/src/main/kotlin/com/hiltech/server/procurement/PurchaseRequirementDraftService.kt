@@ -68,6 +68,25 @@ data class PurchaseRequirementDraftView(
 
 data class PurchaseRequirementDraftReceipt(val draft: PurchaseRequirementDraftView, val replayed: Boolean)
 
+/**
+ * A new, read-only snapshot for the authorized WorkOrder requester.
+ * There is no purchase approval or reservation attached to this answer.
+ * Never treat the available quantity as an unconditional buying decision.
+ */
+data class PurchaseRequirementReviewPreview(
+    val requirementId: UUID,
+    val state: String,
+    val currentWorkOrderVersion: Long,
+    val currentStockItemVersion: Long?,
+    val sourceCurrent: Boolean,
+    val assessmentCode: String,
+    val visibleFreeQuantity: String?,
+    val assessedAt: Instant,
+    val otherOpenDraftIds: List<UUID>,
+    val moreOpenDrafts: Boolean,
+    val approvalOrPurchaseAuthorized: Boolean = false,
+)
+
 internal data class StockPreflight(val code: String, val free: BigDecimal?, val at: Instant)
 
 @Service
@@ -206,6 +225,49 @@ class PurchaseRequirementDraftService @Autowired constructor(
         }
         return PurchaseRequirementDraftReceipt(
             view(context.actor, order, drafts.byId(id) ?: hidden()), execution.replayed,
+        )
+    }
+
+    /**
+     * Read-only, live source and stock recheck. A current positive balance is
+     * only evidence, never a reservation, approval or permission to buy.
+     * Other drafts are strictly same organization + same WorkOrder + same item.
+     */
+    fun reviewPreview(actor: UUID, id: UUID): PurchaseRequirementReviewPreview {
+        requireEnabled()
+        val record = drafts.byId(id) ?: hidden()
+        val order = authorizedOrder(actor, record.workOrderId)
+        if (record.organizationId != order.organizationId) hidden()
+        val state = drafts.latestTransition(id)?.toState ?: "DRAFT"
+        val item = stock.item(record.stockItemId)
+            ?.takeIf { it.organizationId == record.organizationId && it.active }
+        val sourceCurrent = state == "DRAFT" &&
+            item != null &&
+            order.version == record.sourceWorkVersion &&
+            item.version == record.stockItemVersion &&
+            item.baseUnitCode == record.unitCode &&
+            reservations.stockUnitActive(record.organizationId, item.baseUnitCode) &&
+            acceptsDemand(order.lifecycleState)
+        val at = clock.instant()
+        val check = when {
+            state != "DRAFT" -> StockPreflight("REQUIREMENT_WITHDRAWN", null, at)
+            !sourceCurrent -> StockPreflight("SOURCE_CHANGED", null, at)
+            else -> assess(actor, order, requireNotNull(item), record.requestedQuantity, at)
+        }
+        val other = drafts.otherOpenDraftIds(
+            order.organizationId, record.workOrderId, record.stockItemId, record.id,
+        )
+        return PurchaseRequirementReviewPreview(
+            requirementId = record.id,
+            state = state,
+            currentWorkOrderVersion = order.version,
+            currentStockItemVersion = item?.version,
+            sourceCurrent = sourceCurrent,
+            assessmentCode = check.code,
+            visibleFreeQuantity = check.free?.toPlainString(),
+            assessedAt = check.at,
+            otherOpenDraftIds = other.take(20),
+            moreOpenDrafts = other.size > 20,
         )
     }
 

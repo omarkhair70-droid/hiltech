@@ -34,6 +34,12 @@ class PurchaseRequirementDraftController(private val service: PurchaseRequiremen
     fun forWork(request: HttpServletRequest, @PathVariable workOrderId: UUID): List<PurchaseRequirementDraftView> =
         service.forWork(request.purchaseDraftActor(), workOrderId)
 
+    @GetMapping("/v1/purchase-requirements/{id}/review-preview")
+    fun reviewPreview(
+        request: HttpServletRequest,
+        @PathVariable id: UUID,
+    ): PurchaseRequirementReviewPreview = service.reviewPreview(request.purchaseDraftActor(), id)
+
     @GetMapping("/v1/purchase-requirements/{id}")
     fun detail(request: HttpServletRequest, @PathVariable id: UUID): PurchaseRequirementDraftView =
         service.detail(request.purchaseDraftActor(), id)

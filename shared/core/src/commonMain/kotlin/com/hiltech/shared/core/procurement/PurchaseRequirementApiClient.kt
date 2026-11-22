@@ -52,6 +52,17 @@ class PurchaseRequirementApiClient(
             PurchaseRequirementDraftDto.serializer(),
         )
 
+    /** Recheck source, visibility and open same-work drafts before human review. */
+    suspend fun reviewPreview(
+        requirementId: String,
+        installationId: String,
+    ): PurchaseRequirementReviewPreviewDto =
+        get(
+            "/v1/purchase-requirements/" + uuid(requirementId) + "/review-preview",
+            installationId,
+            PurchaseRequirementReviewPreviewDto.serializer(),
+        )
+
     suspend fun withdraw(
         requirementId: String,
         request: WithdrawPurchaseRequirementDraftDto,

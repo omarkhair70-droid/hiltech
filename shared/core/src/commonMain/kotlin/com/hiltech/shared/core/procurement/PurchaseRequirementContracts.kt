@@ -49,6 +49,25 @@ data class WithdrawPurchaseRequirementDraftDto(
     val reason: String? = null,
 )
 
+/**
+ * Live, read-only advisory. Duplicates are limited to the same WorkOrder and
+ * StockItem; no price, vendor, authority or purchase order is inferred.
+ */
+@Serializable
+data class PurchaseRequirementReviewPreviewDto(
+    val requirementId: String,
+    val state: String,
+    val currentWorkOrderVersion: Long,
+    val currentStockItemVersion: Long? = null,
+    val sourceCurrent: Boolean,
+    val assessmentCode: String,
+    val visibleFreeQuantity: String? = null,
+    val assessedAt: String,
+    val otherOpenDraftIds: List<String> = emptyList(),
+    val moreOpenDrafts: Boolean = false,
+    val approvalOrPurchaseAuthorized: Boolean = false,
+)
+
 /** A visible stock snapshot never promises reservation or purchasing approval. */
 fun PurchaseRequirementDraftDto.requiresWarehouseReview(): Boolean =
     assessmentCode == "WAREHOUSE_REVIEW_REQUIRED"

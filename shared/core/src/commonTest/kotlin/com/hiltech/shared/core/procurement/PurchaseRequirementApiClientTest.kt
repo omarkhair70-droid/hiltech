@@ -128,6 +128,49 @@ class PurchaseRequirementApiClientTest {
     }
 
     @Test
+    fun reviewPreviewShowsFreshStockAndOpenSameWorkDuplicateWithoutPurchaseAuthority() = runBlocking {
+        val another = "66666666-6666-6666-6666-666666666666"
+        val http = HttpClient(MockEngine { request ->
+            assertEquals("GET", request.method.value)
+            assertEquals("/v1/purchase-requirements/$draft/review-preview", request.url.encodedPath)
+            assertEquals("Bearer procurement-token", request.headers[HttpHeaders.Authorization])
+            assertEquals(installation, request.headers["X-Device-Installation-Id"])
+            respond(
+                """{"requirementId":"$draft","state":"DRAFT","currentWorkOrderVersion":5,
+                    "currentStockItemVersion":3,"sourceCurrent":true,
+                    "assessmentCode":"VISIBLE_STOCK_SHORTAGE","visibleFreeQuantity":"2",
+                    "assessedAt":"2026-11-22T08:01:00Z",
+                    "otherOpenDraftIds":["$another"],"moreOpenDrafts":false,
+                    "approvalOrPurchaseAuthorized":false}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val preview = client(http).reviewPreview(draft, installation)
+        assertEquals(listOf(another), preview.otherOpenDraftIds)
+        assertEquals("2", preview.visibleFreeQuantity)
+        assertTrue(preview.sourceCurrent)
+        assertFalse(preview.approvalOrPurchaseAuthorized)
+    }
+
+    @Test
+    fun reviewPreviewDoesNotMisrepresentStaleSourcesAsStockReady() = runBlocking {
+        val http = HttpClient(MockEngine {
+            respond(
+                """{"requirementId":"$draft","state":"DRAFT","currentWorkOrderVersion":6,
+                    "sourceCurrent":false,"assessmentCode":"SOURCE_CHANGED",
+                    "visibleFreeQuantity":null,"assessedAt":"2026-11-22T08:02:00Z",
+                    "otherOpenDraftIds":[],"moreOpenDrafts":false}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val preview = client(http).reviewPreview(draft, installation)
+        assertEquals("SOURCE_CHANGED", preview.assessmentCode)
+        assertFalse(preview.sourceCurrent)
+        assertNull(preview.visibleFreeQuantity)
+        assertFalse(preview.approvalOrPurchaseAuthorized)
+    }
+
+    @Test
     fun invalidIdsFailBeforeNetworkOrCommandSubmission() = runBlocking {
         var called = false
         val http = HttpClient(MockEngine {

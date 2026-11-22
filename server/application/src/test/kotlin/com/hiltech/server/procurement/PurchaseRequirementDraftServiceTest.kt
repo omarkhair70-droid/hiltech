@@ -130,6 +130,8 @@ class PurchaseRequirementDraftServiceTest {
             any(PurchaseRequirementTransitionRecord::class.java) ?: placeholderAction,
         )
         Mockito.`when`(drafts.latestTransition(draftId)).thenAnswer { transitioned }
+        Mockito.`when`(drafts.otherOpenDraftIds(org, workId, itemId, draftId))
+            .thenReturn(emptyList())
     }
 
     @Test fun `feature is off by default without reading source`() {
@@ -288,6 +290,104 @@ class PurchaseRequirementDraftServiceTest {
             )
         }.code)
         assertNull(transitioned)
+    }
+
+    @Test fun `review preview recalculates available stock and warns about open same-work drafts`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val another = UUID.randomUUID()
+        Mockito.`when`(drafts.otherOpenDraftIds(org, workId, itemId, draftId))
+            .thenReturn(listOf(another))
+        val preview = svc.reviewPreview(actor, draftId)
+        assertEquals(draftId, preview.requirementId)
+        assertEquals(5L, preview.currentWorkOrderVersion)
+        assertEquals(3L, preview.currentStockItemVersion)
+        assertTrue(preview.sourceCurrent)
+        assertEquals("VISIBLE_STOCK_SHORTAGE", preview.assessmentCode)
+        assertEquals("2", preview.visibleFreeQuantity)
+        assertEquals(listOf(another), preview.otherOpenDraftIds)
+        assertFalse(preview.moreOpenDrafts)
+        assertFalse(preview.approvalOrPurchaseAuthorized)
+    }
+
+    @Test fun `review preview masks current quantity after storage access is revoked`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        Mockito.`when`(warehouseAuth.canViewStorage(actor, bin)).thenReturn(false)
+        val preview = svc.reviewPreview(actor, draftId)
+        assertEquals("WAREHOUSE_REVIEW_REQUIRED", preview.assessmentCode)
+        assertNull(preview.visibleFreeQuantity)
+        assertTrue(preview.sourceCurrent)
+    }
+
+    @Test fun `review preview does not present a stale work snapshot as current stock`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        Mockito.`when`(order.version).thenReturn(6L)
+        val preview = svc.reviewPreview(actor, draftId)
+        assertFalse(preview.sourceCurrent)
+        assertEquals("SOURCE_CHANGED", preview.assessmentCode)
+        assertNull(preview.visibleFreeQuantity)
+        assertEquals(6L, preview.currentWorkOrderVersion)
+    }
+
+    @Test fun `review preview refuses cross-organization draft access`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        written = written!!.copy(organizationId = UUID.randomUUID())
+        assertEquals("PROCUREMENT_UNAVAILABLE", assertThrows<ProductApiException> {
+            svc.reviewPreview(actor, draftId)
+        }.code)
+        Mockito.verify(drafts, Mockito.never())
+            .otherOpenDraftIds(org, workId, itemId, draftId)
+    }
+
+    @Test fun `review preview hides quantities of withdrawn request`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val changeOperation = UUID.randomUUID()
+        svc.withdraw(
+            ProcurementDraftContext(changeOperation, actor, "withdraw-test"), draftId,
+            WithdrawPurchaseRequirementRequest(changeOperation, 1),
+        )
+        val preview = svc.reviewPreview(actor, draftId)
+        assertEquals("WITHDRAWN", preview.state)
+        assertEquals("REQUIREMENT_WITHDRAWN", preview.assessmentCode)
+        assertFalse(preview.sourceCurrent)
+        assertNull(preview.visibleFreeQuantity)
+    }
+
+    @Test fun `review preview limits warnings to twenty without hiding truncation`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        Mockito.`when`(drafts.otherOpenDraftIds(org, workId, itemId, draftId))
+            .thenReturn((1..21).map { UUID.randomUUID() })
+        val preview = svc.reviewPreview(actor, draftId)
+        assertEquals(20, preview.otherOpenDraftIds.size)
+        assertTrue(preview.moreOpenDrafts)
+    }
+
+    @Test fun `review preview requires current project permission`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        Mockito.`when`(projectAuth.canRequestResources(actor, project)).thenReturn(false)
+        assertEquals("PROCUREMENT_UNAVAILABLE", assertThrows<ProductApiException> {
+            svc.reviewPreview(actor, draftId)
+        }.code)
+    }
+
+    @Test fun `review preview disabled is not an information disclosure endpoint`() {
+        allow()
+        assertEquals("PROCUREMENT_UNAVAILABLE", assertThrows<ProductApiException> {
+            service(false).reviewPreview(actor, draftId)
+        }.code)
     }
 
     @Test fun `lost warehouse access redacts an earlier quantity snapshot`() {

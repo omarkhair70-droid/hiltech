@@ -56,7 +56,19 @@ Endpoints:
 - POST /v1/work-orders/{workOrderId}/purchase-requirements
 - GET /v1/work-orders/{workOrderId}/purchase-requirements
 - GET /v1/purchase-requirements/{id}
+- GET /v1/purchase-requirements/{id}/review-preview
 - POST /v1/purchase-requirements/{id}/withdraw
+
+The review-preview endpoint is a side-effect-free, permission-scoped snapshot:
+it rechecks current WorkOrder/StockItem versions and stock-unit activation,
+refreshes canonical Warehouse free capacity subject to location visibility,
+and warns of up to 20 other non-withdrawn DRAFTs of the **same exact work
+order and stock item** (with a truncation flag when there are more).
+Stale/withdrawn sources do NOT return any current quantitative stock claim.
+This is advisory only: no purchase approval, duplicate hard-block, supplier
+selection, stock reservation, stock movement or persistent state mutation.
+The shared KMP client exposes the identical GET contract to Android/Windows,
+but no native screen has been connected to it yet.
 
 All default OFF: hiltech.procurement.requirements.enabled=false.
 POST requires authentication, matching Idempotency-Key, current project demand

@@ -109,6 +109,36 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
         ) == 1)
     }
 
+    /**
+     * Advisory only: other open DRAFTs for the exact same WorkOrder and item.
+     * The caller is responsible for current WorkOrder project authorization.
+     * Intentionally return 21 rows to expose truncation at the 20-item UI cap.
+     * A withdrawn draft is never an active duplicate.
+     */
+    fun otherOpenDraftIds(
+        organizationId: UUID,
+        workOrderId: UUID,
+        stockItemId: UUID,
+        excludeId: UUID,
+    ): List<UUID> = jdbc.query(
+        """
+        SELECT p.id FROM procurement_purchase_requirement p
+        WHERE p.organization_id = ?
+          AND p.work_order_id = ?
+          AND p.stock_item_id = ?
+          AND p.id <> ?
+          AND p.lifecycle_state = 'DRAFT'
+          AND NOT EXISTS (
+              SELECT 1 FROM procurement_requirement_transition t
+              WHERE t.requirement_id = p.id AND t.transition_type = 'WITHDRAW'
+          )
+        ORDER BY p.created_at DESC, p.id DESC
+        LIMIT 21
+        """.trimIndent(),
+        { row, _ -> row.getObject("id", UUID::class.java) },
+        organizationId, workOrderId, stockItemId, excludeId,
+    )
+
     fun byId(id: UUID): PurchaseRequirementDraftRecord? =
         jdbc.query(
             "SELECT * FROM procurement_purchase_requirement WHERE id = ?",
