@@ -44,7 +44,7 @@ jobs:
       HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
       HILTECH_DB_USER: hiltech
       HILTECH_DB_PASSWORD: hiltech
-      HILTECH_MIGRATIONS_PATH: database/migrations
+      HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
