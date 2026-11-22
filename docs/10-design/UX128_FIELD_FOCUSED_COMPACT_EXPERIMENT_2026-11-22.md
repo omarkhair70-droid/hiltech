@@ -122,3 +122,48 @@ The authorized isolated QA clone also built the **actual Android Debug app** at 
 - Because the currently shipping app passes default `BASELINE`, Android compilation establishes that the shared Kotlin/Compose experimental additions do not break building the native Android target. It **does not establish the new focused UX is accessible from a real Android screen**, nor touch gestures/system Back/TalkBack/operator acceptance. No phone/emulator was installed or interacted with.
 
 The prior Desktop synthetic multi-task pointer test and this Android native compilation are separate gates, both PASS for their bounded claims. Real Android runtime, multi-role permission projection, source revocation and Phase6 production feature-flag tests remain OPEN.
+
+## Pass 04 — semantic return across re-ordered WorkOrders
+
+**Test date:** 2026-11-22  
+**Exact tested code SHA:** `3648518b58422b315fa58eb60cc7da450985c0a9`  
+**Status:** **DESKTOP HEADLESS COMPOSE PASS**, not integrated / no real Android run.
+
+### Defect discovered through a stronger scenario
+
+Pass03 restored the original **550px scroll position** when the Today collection was unchanged. But if a new assignment or source refresh re-ordered the list while a JobBundle was open, the same pixel offset could point to the WRONG WorkOrder. Keeping pixel scroll in a business-critical field workspace is not a stable source identity.
+
+A first opt-in experiment using `BringIntoViewRequester` alone **failed** the native headless scene: after moving selected `WO-QA-05` to the end of twelve assignments the Back view stayed at 550px. The test rejected it. No release decision was made from that failed version.
+
+### Current opt-in implementation
+
+- The unchanged `FieldWorkPresentation.BASELINE` stays default and neither Android nor Windows actual app entrypoint activates the experiment.
+- In the experimental compact mode, `TodayCard` reports actual measured root-viewport Y via `onGloballyPositioned` (mapping **source WorkOrder ID → view position**), only for the source-authorized list supplied to the component. These measurements are **presentation observations, not permissions**.
+- On source card selection, remembers WorkOrder ID, original card viewport Y and parent scroll position inside the caller-provided `focusScopeKey`. On Back, after the current re-ordered Today list is laid out, restores previous offset first and then adjusts the same parent `ScrollState` to bring the same WorkOrder ID toward its original viewport Y.
+- If that WorkOrder is no longer in current Today data, does **not** navigate/show the stale JobBundle based on its previous ID; fallback is a clamped prior list scroll. No new server action or offline mutation.
+- The experiment uses one existing parent scroll, no nested scroll and no change to wide >=760dp Today+JobBundle split.
+
+### Verification
+
+Isolated authorized Windows QA clone ran:
+`./gradlew.bat -I docs/10-design/ux128-field-focus-headless.init.gradle :apps:desktopApp:renderUx128FieldFocus --no-daemon`
+
+**BUILD SUCCESSFUL in 1m02s, 15 tasks (4 executed/11 up-to-date), exit 0.** Exact console markers:
+- `UX128_FIELD_ANCHOR_PASS selected=WO-QA-05 reorder=LAST return_to_id=PASS`
+- `UX128_FIELD_MULTI_PASS source_list=12 selected_current=PASS focused_top=PASS return_scroll=PASS`
+- `UX128_FIELD_FOCUS_PASS selected_source=PASS back_reselect=PASS cached_read_only_source=PASS revoked_hides_detail=INSPECT_IMAGE wide_layout=INSPECT_IMAGE no_robot=true synthetic_fixture=true`
+
+The headless test presses the real Today card to open `WO-QA-05`, reorders the **synthetic current source list** so the same ID is last, then presses the visible RTL Back button; it asserts the scroll moves beyond the old position to follow this actual WorkOrder. Manually inspected actual Compose PNG `ux128-field-12-reordered-return-anchor.png`: `WO-QA-05` is visible at the bottom of the re-ordered list. This is NOT an Android screenshot or real employee/source permission test. PNG bytes remain local in the authorized QA clone; not uploaded to GitHub.
+
+One earlier run also failed in a test-only `clickedIds.single()` assertion after intentionally selecting the job twice. Fixed this harness assumption; final exact-head full run passes all test markers and Gradle exit.
+
+### Remaining acceptance risks
+
+- Real layout changes with variable-height cards, accessibility scaling, and other content above the Field section can shift root measurement; the anchor logic must be tested in the **actual parent HiltechShell** before wiring, not assumed production-safe.
+- Same identity/org/context scope key must be supplied from authenticated session source. A local mapped WorkOrder ID by itself cannot authorize any read or action. Do not use presentation selection to bypass backend source entitlement.
+- Parent scroll and nested surface focus need Android system Back, TalkBack and Windows keyboard QA. The current native headless click is a **Desktop Compose synthetic pointer interaction**.
+- Live data reorder/revocation/denied/401/403/409, offline/reconnect, and 200% font/hardware devices are **OPEN**. Real technician acceptance and Phase6 rollout are independent release gates.
+- Headless operator-independent screenshots validate the navigation defect and fix, not the final typography, colors, copy, motion, density or product design system. Final post-Phase13 visual unification remains unapproved.
+- Android same-head compile result: **pending separate build at documentation time**, not inferred from the Desktop test.
+
+**Pass04 result:** WorkOrder identity-anchored return in synthetic native Compose is **PASS**, current product UX #128 and PR #144 **remain Draft / NOT MERGED OR DEPLOYED**.
