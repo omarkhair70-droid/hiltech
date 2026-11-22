@@ -68,6 +68,13 @@ jobs:
             -f /repo/database/phase10/pending_commercial_schema.sql \
             -f /repo/database/phase10/commercial_schema_assertions.sql \
             -f /repo/database/phase10/commercial_negative_contract.sql
+      - name: Live authority revocation and Evidence eligibility on disposable PostgreSQL
+        env:
+          HILTECH_COMMERCIAL_DB_TEST: "1"
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.commercial.CommercialPostgresAuthorizationContractTest \
+            --rerun-tasks --no-configuration-cache --console=plain
       - name: Native KMP desktop and customer quote number contract
         run: |
           ./gradlew :shared:core:desktopTest :shared:core:compileKotlinDesktop \
