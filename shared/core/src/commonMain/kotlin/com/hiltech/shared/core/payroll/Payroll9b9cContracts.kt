@@ -110,6 +110,24 @@ data class PayrollReleaseResultDto(
 )
 
 @Serializable
+data class PayrollFinalPayReadinessDto(
+    val offboardingCaseId: String,
+    val employeeId: String,
+    val employeeState: String,
+    val offboardingState: String,
+    val lastWorkingDate: String,
+    val payrollClearanceState: String?,
+    val financeClearanceState: String?,
+    val hrClearanceState: String?,
+    val status: String,
+    val blockers: List<String>,
+    val releasedRunVersionId: String?,
+    val currency: String?,
+    val frozenNet: String?,
+    val paymentStatus: String?,
+)
+
+@Serializable
 data class PrivatePayslipDto(
     val runVersionId: String,
     val employeeId: String,
