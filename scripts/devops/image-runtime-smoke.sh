@@ -118,9 +118,42 @@ if [[ -z "$observed" ]]; then
   exit 1
 fi
 
+# Real Actuator health endpoints must answer 200 once Spring Boot and its
+# disposable PostgreSQL are ready. No connection details may be exposed.
+for probe in liveness readiness; do
+  status=""
+  output="$(mktemp)"
+  for attempt in $(seq 1 25); do
+    status="$(curl --silent --output "$output" --write-out '%{http_code}' \\
+      --max-time 2 "http://127.0.0.1:${port}/actuator/health/${probe}" 2>/dev/null || true)"
+    if [[ "$status" == "200" ]]; then
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$status" != "200" ]]; then
+    echo "Actuator health/${probe} not ready; HTTP $status" >&2
+    rm -f "$output"
+    exit 1
+  fi
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1], encoding="utf8")); assert d == {"status":"UP"}, "health response must hide component details"' "$output"
+  rm -f "$output"
+  echo "PASS: /actuator/health/${probe} HTTP 200 with non-sensitive UP-only payload."
+done
+
+# Only the health endpoint is permitted to anonymous callers. Administrative
+# actuator endpoints and ordinary business routes must never be exposed.
+admin_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \\
+  --max-time 2 "http://127.0.0.1:${port}/actuator/env" 2>/dev/null || true)"
+if [[ "$admin_status" != "403" && "$admin_status" != "401" && "$admin_status" != "404" ]]; then
+  echo "Unexpected anonymous access to /actuator/env (HTTP $admin_status)." >&2
+  exit 1
+fi
+
 # OIDC is intentionally disabled in this throwaway synthetic runner, so
 # ordinary anonymous business access must be denied; OpenFGA is real in-memory.
 echo "PASS: Spring Boot process is serving HTTP; unauthenticated request denied (HTTP $observed)."
 echo "PASS: In-memory OpenFGA loaded canonical committed model and fixtures."
+echo "PASS: /actuator/env remains inaccessible to anonymous users (HTTP $admin_status)."
 echo "PASS: CI-only container started nonroot/read-only with 768 MiB RAM/256 PIDs limit."
 echo "NOTE: Synthetic auth denial is not a substitute for production Keycloak, persistent OpenFGA, backups or operator acceptance."
