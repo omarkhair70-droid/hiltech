@@ -55,6 +55,26 @@ CREATE TRIGGER procurement_po_receiving_rejection_immutable
 BEFORE UPDATE OR DELETE ON procurement_po_receiving_rejection_event
 FOR EACH ROW EXECUTE FUNCTION reject_procurement_draft_mutation();
 
+-- A rejected line cannot subsequently be posted to canonical StockLedger.
+CREATE FUNCTION guard_rejected_po_line_physical_receipt()
+RETURNS trigger LANGUAGE plpgsql AS $
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM procurement_po_receiving_rejection_event x
+        WHERE x.receiving_line_id=OLD.id
+    ) THEN
+        RAISE EXCEPTION 'An explicitly rejected PO delivery line cannot be physically received'
+          USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END;
+$;
+CREATE TRIGGER receiving_rejected_po_line_receipt_guard
+BEFORE UPDATE ON receiving_line
+FOR EACH ROW
+WHEN (NEW.received_at IS NOT NULL AND OLD.received_at IS NULL)
+EXECUTE FUNCTION guard_rejected_po_line_physical_receipt();
+
 -- Only the canonical receiving-record completion guard is extended, not
 -- historic migrations, stock-movement code or the old physical ledger.
 CREATE OR REPLACE FUNCTION guard_receiving_record_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
