@@ -2,7 +2,6 @@ package com.hiltech.desktop.evidence
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.ScrollState
@@ -316,7 +315,12 @@ fun main() = runBlocking<Unit> {
                 warehouseId = commandCenter.warehouseId,
                 busy = false,
                 onFocusChange = { observedFocus = it },
-                today = { Text("UX128_TODAY_FOCUS_PROOF") },
+                today = {
+                    WarehouseCommandCenterSection(
+                        snapshot = commandCenter,
+                        presentation = WarehouseCommandCenterPresentation.ACTION_FIRST,
+                    )
+                },
                 codeLookup = {
                     WarehouseQuickScanControls(
                         state = persistedLookup.results,
