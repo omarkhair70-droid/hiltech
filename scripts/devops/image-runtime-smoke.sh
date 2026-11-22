@@ -124,8 +124,7 @@ for probe in liveness readiness; do
   status=""
   output="$(mktemp)"
   for attempt in $(seq 1 25); do
-    status="$(curl --silent --output "$output" --write-out '%{http_code}' \\
-      --max-time 2 "http://127.0.0.1:${port}/actuator/health/${probe}" 2>/dev/null || true)"
+    status="$(curl --silent --output "$output" --write-out '%{http_code}' --max-time 2 "http://127.0.0.1:${port}/actuator/health/${probe}" 2>/dev/null || true)"
     if [[ "$status" == "200" ]]; then
       break
     fi
@@ -143,8 +142,7 @@ done
 
 # Only the health endpoint is permitted to anonymous callers. Administrative
 # actuator endpoints and ordinary business routes must never be exposed.
-admin_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \\
-  --max-time 2 "http://127.0.0.1:${port}/actuator/env" 2>/dev/null || true)"
+admin_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 2 "http://127.0.0.1:${port}/actuator/env" 2>/dev/null || true)"
 if [[ "$admin_status" != "403" && "$admin_status" != "401" && "$admin_status" != "404" ]]; then
   echo "Unexpected anonymous access to /actuator/env (HTTP $admin_status)." >&2
   exit 1
