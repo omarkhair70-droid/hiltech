@@ -1,6 +1,6 @@
 # HILTECH — isolated synthetic-data Coolify staging
 
-**Status: implementation candidate, not deployed.** This is a two-file Coolify Git-compose topology, based on the verified immutable server image. `compose.yaml` contains dependencies only; `compose.api.yaml` contains the explicitly activated Spring API. This separation allows OpenFGA store/model IDs and Keycloak issuer to be provisioned *after* the backing services start. Never use the development `infrastructure/local/docker-compose.yml` on any public host.
+**Status: this is a reference Compose *candidate*, not the deployed topology.** As of 2026-11-22, the user-authorized live Coolify staging uses **three independent PostgreSQL resources** plus separate Keycloak/OpenFGA application resources. See [live execution checkpoint](LIVE_COOLIFY_EXECUTION_CHECKPOINT_2026-11-22.md) and [runtime updates in issue #133](https://github.com/omarkhair70-droid/hiltech/issues/133). **DO NOT run this candidate Compose over the already-created resources.** This is a two-file Coolify Git-compose topology, based on the verified immutable server image. `compose.yaml` contains dependencies only; `compose.api.yaml` contains the explicitly activated Spring API. This separation allows OpenFGA store/model IDs and Keycloak issuer to be provisioned *after* the backing services start. Never use the development `infrastructure/local/docker-compose.yml` on any public host.
 
 ## What it contains
 
@@ -13,11 +13,14 @@ Evidence uses a **separately provisioned private S3-compatible endpoint/bucket**
 
 ## Hosting and protections
 
-This manifest is NOT permission to add services to the existing busy hosts. The Coolify control plane already has a `HILTECH Internal OS` project and empty `staging` environment; use that project only. `teswa-core01` currently runs a healthy Teswa service with several components and is **not** verified spare. Neither existing 1-vCPU host has established headroom for the stack. Prefer a distinct execution VM registered under the SAME existing Coolify, initially **at least about 2 vCPU / 8 GiB RAM**, subject to real load tests. Never provision a paid VM without the owner's approval.
+The owner explicitly approved trial deployment on the existing shared `teswa-core01` server, accepting staging performance risk rather than buying a VM now. Live `HILTECH Internal OS` / `staging` already contains separate, private PostgreSQL, Keycloak and OpenFGA resources; Teswa has been observed `running:healthy` and must not be touched. Keep caps on HILTECH containers, monitor resource use and move later if needed. **The Compose files remain templates only and must not be deployed on top of this live topology.** Never provision a paid VM without explicit owner approval.
 
 No existing service stop, restart, cleanup, delete, database reuse or volume reuse. Do not move real company, payroll or warehouse data into this staging. Confirm an encrypted off-host backup destination, perform a **disposable restore** and establish rollback before any actual pilot.
 
-## Deployment sequence
+## Candidate Compose deployment sequence (NOT the current live Coolify workflow)
+
+The steps below apply to a fresh isolated host *if replacing the topology in the future*. Do not run them on the current shared host with already-provisioned databases.
+
 
 1. **Capacity/access:** select an actually suitable host, check disk/CPU/RAM, Docker/proxy network, TLS routes, registry pull permissions and egress. Confirm host cost and owner authorization if new compute is needed. Do not host this on the existing servers merely because the API image exists.
 2. **Compose checkout:** create a dedicated resource in existing HILTECH `staging`. Stage A uses `infrastructure/coolify/staging/compose.yaml`; Stage B combines it with `infrastructure/coolify/staging/compose.api.yaml`. Confirm the target Coolify Git Compose implementation supports multiple files (or use an explicit approved deployment method with both files); do not assume switching a UI selector automatically enables the API. Confirm Coolify resolves the bind-mounted `./postgres-init.sh` relative to the base compose directory. Supply `HILTECH_COMPOSE_PROJECT_NAME` and real `HILTECH_COOLIFY_PROXY_NETWORK` of the selected host.
@@ -32,7 +35,7 @@ No existing service stop, restart, cleanup, delete, database reuse or volume reu
 
 Published immutable image: `ghcr.io/omarkhair70-droid/hiltech-server@sha256:6bf83b62746cf6811a610e0f59e9f35469a9fe4b7061bc01debe48c1d8e4d1e8`, source `fae1d7f36eb9adeaecfea6ccbd07baba6b2af646` (verified successful release workflow `45037178956`).
 
-The stack is a **candidate template** requiring runtime/route/secret review. It has not yet been deployed, the target execution host is unresolved, and **zero HILTECH containers currently run in Coolify**. Track runtime approval in [issue #133](https://github.com/omarkhair70-droid/hiltech/issues/133).
+The **Compose template itself has not been deployed**. Instead, the owner-approved runtime resources are currently on shared `teswa-core01`: three private PostgreSQL staging databases (`running:healthy`), a private Keycloak Dockerfile runtime (`running:unknown` with logs confirming app startup), and a private OpenFGA Dockerfile runtime (`running:unknown` after schema migrated to v6). The **one-shot OpenFGA migrator is intentionally stopped**. A capped Spring API candidate using the immutable image exists but **has NOT been started**. OpenFGA store/model, authenticated service calls, Keycloak HTTPS issuer/native clients and HTTPS evidence storage remain pending. See [issue #133 runtime checkpoint](https://github.com/omarkhair70-droid/hiltech/issues/133). No production-ready or end-to-end claim is made.
 
 To perform static safety checking with no secrets or Docker daemon:
 
