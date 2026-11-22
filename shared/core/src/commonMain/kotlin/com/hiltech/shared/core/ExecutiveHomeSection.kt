@@ -33,6 +33,7 @@ import com.hiltech.shared.core.executive.resolveExecutiveDestination
 fun ExecutiveHomeSection(
     home: ExecutiveHomeDto?,
     expectedOrganizationId: String,
+    expectedIdentityId: String,
     loading: Boolean,
     loadError: String?,
     onRefresh: () -> Unit,
@@ -72,8 +73,9 @@ fun ExecutiveHomeSection(
         }
         // Prevent a delayed response for organization A being rendered in B's
         // executive view. The shell must also clear on sign-out/revocation.
-        if (home != null && home.organizationId != expectedOrganizationId) {
-            Text("بيانات المؤسسة السابقة لا تُعرض هنا؛ يلزم تحديث صلاحيات المؤسسة الحالية.")
+        if (home != null && (home.organizationId != expectedOrganizationId ||
+            home.viewerIdentityId != expectedIdentityId)) {
+            Text("بيانات جلسة أو مؤسسة سابقة لا تُعرض هنا؛ يلزم تحديث الصلاحيات الحالية.")
             return@Column
         }
         if (home == null) {
