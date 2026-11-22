@@ -16,7 +16,7 @@ CREATE TABLE procurement_service_order_candidate (
   correlation_id varchar(128) NOT NULL CHECK(length(btrim(correlation_id))>0),
   version bigint NOT NULL DEFAULT 1 CHECK(version=1),
   UNIQUE(id,organization_id),
-  UNIQUE(rfq_id,quote_id),
+  UNIQUE(rfq_id),
   FOREIGN KEY(rfq_id,organization_id)
     REFERENCES procurement_service_rfq(id,organization_id) ON DELETE RESTRICT,
   FOREIGN KEY(quote_id,organization_id)
@@ -56,7 +56,7 @@ BEGIN
     OR team_current IS NULL OR team_current<>need.team_version
     OR last.id IS NULL OR last.to_state<>'READY_FOR_SOURCING'
     OR last.result_version<>src.service_need_version
-    OR q.valid_until IS NULL OR q.valid_until<CURRENT_DATE
+    OR (q.valid_until IS NOT NULL AND q.valid_until<CURRENT_DATE)
     OR NOT EXISTS(
       SELECT 1 FROM organization s WHERE s.id=q.supplier_organization_id
         AND s.organization_type='SUPPLIER' AND s.status='ACTIVE')
@@ -190,7 +190,7 @@ BEGIN
     WHERE rfq.id=candidate.rfq_id AND rfq.organization_id=NEW.organization_id
       AND last.to_state='READY_FOR_SOURCING'
       AND last.result_version=rfq.service_need_version
-      AND q.valid_until>=CURRENT_DATE
+      AND (q.valid_until IS NULL OR q.valid_until>=CURRENT_DATE)
       AND NOT EXISTS (
         SELECT 1 FROM procurement_service_supplier_quote newer
         WHERE newer.rfq_id=q.rfq_id
