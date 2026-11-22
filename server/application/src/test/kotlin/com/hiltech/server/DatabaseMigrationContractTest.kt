@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(16, result.migrationsExecuted)
+        assertEquals(17, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -154,12 +154,38 @@ class DatabaseMigrationContractTest {
                         'procurement_po_number_counter',
                         'procurement_purchase_order',
                         'procurement_po_lifecycle_event',
-                        'procurement_po_delivery_amendment_proposal'
+                        'procurement_po_delivery_amendment_proposal',
+                        'procurement_po_receiving_link'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(78, tables.getInt(1))
+                assertEquals(79, tables.getInt(1))
+
+                // V0050 links canonical Warehouse Receiving to a company-scoped
+                // approved PO without creating another physical stock ledger.
+                val poReceivingForeignKeys = statement.executeQuery(
+                    """
+                    SELECT count(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_po_receiving_link'::regclass
+                      AND conname IN ('fk_po_receipt_record', 'fk_po_receipt_order',
+                          'fk_po_receipt_destination', 'fk_po_receipt_stock')
+                      AND contype = 'f'
+                    """.trimIndent(),
+                )
+                assertTrue(poReceivingForeignKeys.next())
+                assertEquals(4, poReceivingForeignKeys.getInt(1))
+                val poReceivingGuards = statement.executeQuery(
+                    """
+                    SELECT count(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_po_receiving_link'::regclass
+                      AND tgname IN ('procurement_po_receiving_link_insert_guard',
+                          'procurement_po_receiving_link_immutable')
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(poReceivingGuards.next())
+                assertEquals(2, poReceivingGuards.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
