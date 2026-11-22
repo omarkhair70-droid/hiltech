@@ -68,6 +68,45 @@ class Payroll9b9cApiClient(
             decode = { json.decodeFromString(PayrollRunFinanceStatusDto.serializer(), it) },
         )
 
+    suspend fun requestApproval(
+        runVersionId: String,
+        operationId: String,
+        reasonCode: String,
+        installationId: String,
+    ): PayrollApprovalResultDto =
+        api.request(
+            method = HttpMethod.Post,
+            path = "/v1/payroll/runs/" + runVersionId + "/approval-requests",
+            options = HiltechRequestOptions(
+                installationId = installationId,
+                idempotencyKey = operationId,
+            ),
+            requestBody = json.encodeToString(
+                PayrollApprovalRequestDto.serializer(),
+                PayrollApprovalRequestDto(operationId, reasonCode),
+            ),
+            decode = { json.decodeFromString(PayrollApprovalResultDto.serializer(), it) },
+        )
+
+    suspend fun releaseForFinanceReview(
+        runVersionId: String,
+        operationId: String,
+        installationId: String,
+    ): PayrollReleaseResultDto =
+        api.request(
+            method = HttpMethod.Post,
+            path = "/v1/payroll/runs/" + runVersionId + "/release",
+            options = HiltechRequestOptions(
+                installationId = installationId,
+                idempotencyKey = operationId,
+            ),
+            requestBody = json.encodeToString(
+                PayrollReleaseRequestDto.serializer(),
+                PayrollReleaseRequestDto(operationId),
+            ),
+            decode = { json.decodeFromString(PayrollReleaseResultDto.serializer(), it) },
+        )
+
     suspend fun ownPayslips(
         organizationId: String,
         installationId: String,
