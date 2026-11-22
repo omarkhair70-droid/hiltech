@@ -12,6 +12,10 @@ on:
       - ".github/workflows/phase10-commercial-isolation.yml"
   workflow_dispatch:
 
+concurrency:
+  group: phase10-commercial-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
