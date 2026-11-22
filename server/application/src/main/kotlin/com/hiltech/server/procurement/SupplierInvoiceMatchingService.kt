@@ -45,6 +45,17 @@ data class CaptureSupplierInvoiceRequest(
     val unitPrice: String,
     val taxAmount: String,
 )
+data class InvoicablePurchaseOrderView(
+    val purchaseOrderId: UUID,
+    val poCode: String,
+    val supplierOrganizationId: UUID,
+    val stockItemId: UUID,
+    val quantity: String,
+    val currency: String,
+    val unitPrice: String,
+    val taxAmount: String,
+    val version: Long,
+)
 data class SupplierInvoiceIntakeView(
     val id: UUID, val purchaseOrderId: UUID, val supplierOrganizationId: UUID,
     val invoiceNumber: String, val quantity: String, val currency: String,
@@ -207,6 +218,42 @@ class SupplierInvoiceMatchingService @Autowired constructor(
             WHERE organization_id=? ORDER BY submitted_at DESC LIMIT 100
             """.trimIndent(), { rs, _ -> invoiceRow(rs).let(::view) }, org,
         )
+    }
+
+    fun eligibleOrders(actor: UUID, org: UUID): List<InvoicablePurchaseOrderView> {
+        requireFinance(actor, org)
+        val ids = jdbc.query(
+            """
+            SELECT id FROM procurement_purchase_order
+            WHERE organization_id=? ORDER BY issued_at DESC LIMIT 100
+            """.trimIndent(),
+            { rs, _ -> rs.getObject("id", UUID::class.java) }, org,
+        )
+        return ids.mapNotNull { id ->
+            val state = purchases.effectiveState(id) ?: return@mapNotNull null
+            if (state.order.organizationId != org || state.effectiveState != "ISSUED" ||
+                !purchases.hasSupplierCommunication(id)
+            ) return@mapNotNull null
+            jdbc.query(
+                """
+                SELECT id, po_code, supplier_organization_id, stock_item_id,
+                       quantity, currency, unit_price, tax_amount
+                FROM procurement_purchase_order
+                WHERE id=? AND organization_id=?
+                """.trimIndent(),
+                { rs, _ -> InvoicablePurchaseOrderView(
+                    rs.getObject("id", UUID::class.java),
+                    rs.getString("po_code"),
+                    rs.getObject("supplier_organization_id", UUID::class.java),
+                    rs.getObject("stock_item_id", UUID::class.java),
+                    rs.getBigDecimal("quantity").toPlainString(),
+                    rs.getString("currency"),
+                    rs.getBigDecimal("unit_price").toPlainString(),
+                    rs.getBigDecimal("tax_amount").toPlainString(),
+                    state.version,
+                ) }, id, org,
+            ).singleOrNull()
+        }
     }
 
     fun preview(actor: UUID, invoiceId: UUID): SupplierInvoiceMatchView {
@@ -467,6 +514,10 @@ class SupplierInvoiceMatchingController(private val service: SupplierInvoiceMatc
     fun capture(servlet: HttpServletRequest, @PathVariable id: UUID,
                 @RequestBody body: CaptureSupplierInvoiceRequest) =
         service.capture(context(servlet, body.operationId), id, body)
+
+    @GetMapping("/v1/procurement/organizations/{orgId}/invoicable-pos")
+    fun eligibleOrders(servlet: HttpServletRequest, @PathVariable orgId: UUID) =
+        service.eligibleOrders(actor(servlet), orgId)
 
     @GetMapping("/v1/procurement/organizations/{orgId}/supplier-invoices")
     fun list(servlet: HttpServletRequest, @PathVariable orgId: UUID) =
