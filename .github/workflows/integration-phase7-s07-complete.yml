@@ -2,7 +2,7 @@ name: Integration — Phase 7 S07 complete package/module boundary proof
 
 on:
   push:
-    branches: [integration/phase7-s07-module-boundary-20261123]
+    branches: [integration/phase7-s07-module-boundary-20261123, devops/phase7-s07-pg-migration-fix-20261123]
 
 permissions:
   contents: read
