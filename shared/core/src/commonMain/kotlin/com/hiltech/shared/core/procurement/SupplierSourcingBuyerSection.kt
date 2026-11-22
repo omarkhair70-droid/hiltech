@@ -36,6 +36,7 @@ fun SupplierSourcingBuyerSection(
     var loading by remember(organizationId) { mutableStateOf(false) }
     var needs by remember(organizationId) { mutableStateOf<List<SourcingEligibleNeedDto>>(emptyList()) }
     var rounds by remember(organizationId) { mutableStateOf<List<SupplierRfqDto>>(emptyList()) }
+    var suppliers by remember(organizationId) { mutableStateOf<List<SourcingSupplierCandidateDto>>(emptyList()) }
     var selectedRequirement by remember(organizationId) { mutableStateOf<String?>(null) }
     var comparingRfq by remember(organizationId) { mutableStateOf<String?>(null) }
     var comparison by remember(organizationId) { mutableStateOf<SupplierRfqComparisonDto?>(null) }
@@ -49,10 +50,12 @@ fun SupplierSourcingBuyerSection(
         loading = true
         error = null
         needs = emptyList()
+        suppliers = emptyList()
         rounds = emptyList()
         comparison = null
         try {
             needs = api.eligibleNeeds(organizationId, installationId)
+            suppliers = api.eligibleSuppliers(organizationId, installationId)
         } catch (failure: Exception) {
             error = failure.message ?: "Sourcing queue unavailable for this organization and buyer identity."
         } finally {
@@ -71,6 +74,16 @@ fun SupplierSourcingBuyerSection(
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         message?.let { Text(it) }
+        if (epoch > 0 && error == null && !loading) {
+            Text("Linked suppliers", style = MaterialTheme.typography.titleSmall)
+            if (suppliers.isEmpty()) {
+                Text("No active supplier relationship has been registered for this organization.")
+            } else {
+                suppliers.forEach { supplier ->
+                    Text(supplier.displayName + " · Source revision " + supplier.relationshipRevision)
+                }
+            }
+        }
         if (epoch > 0 && needs.isEmpty() && !loading && error == null) {
             Text("No technically ready needs were returned for this organization.")
         }
