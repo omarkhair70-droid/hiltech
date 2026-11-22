@@ -14,7 +14,7 @@ import java.util.UUID
  * slot. Stock-material RFQs cannot be forged to satisfy a service order.
  */
 @Component
-class ServiceQuoteDocumentTargetAdapter(
+class ServiceQuoteDocumentTargetAdapter @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val approvals: ApprovalPersistencePort,
     private val suppliers: SupplierSourcingPersistence,
