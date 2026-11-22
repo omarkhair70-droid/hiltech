@@ -135,6 +135,73 @@ data class FieldReadinessRequirementDto(
 )
 
 @Serializable
+data class FieldEngineeringMetricDefinitionDto(
+    val key: String,
+    val label: String,
+    val valueType: String,
+    val required: Boolean,
+    val dimension: String? = null,
+    val unitCode: String? = null,
+    val precision: Int? = null,
+    val minValue: String? = null,
+    val maxValue: String? = null,
+    val options: List<String> = emptyList(),
+    val acceptedValues: List<String> = emptyList(),
+)
+
+@Serializable
+data class FieldEngineeringTestDefinitionDto(
+    val templateId: String,
+    val templateCode: String,
+    val templateName: String,
+    val templateRevision: Int,
+    val schemaVersion: Int,
+    val label: String,
+    val subjectLabel: String,
+    val rawEvidenceRequired: Boolean,
+    val instrumentAssetRequired: Boolean,
+    val calibrationRequired: Boolean,
+    val deviceReportedStatusAllowed: Boolean,
+    val reviewerRelationshipCode: String? = null,
+    val metrics: List<FieldEngineeringMetricDefinitionDto> = emptyList(),
+)
+
+@Serializable
+data class FieldEngineeringTestCaptureDto(
+    val operationId: String,
+    val assignmentId: String,
+    val assignmentVersion: Long,
+    val workOrderVersion: Long,
+    val evidencePolicyId: String,
+    val evidencePolicyRevision: Int,
+    val requirementKey: String,
+    val schemaTemplateId: String,
+    val schemaTemplateRevision: Int,
+    val schemaVersion: Int,
+    val testSubjectRef: String,
+    val values: Map<String, String>,
+    val instrumentAssetId: String? = null,
+    val rawEvidenceId: String? = null,
+    val deviceReportedStatus: String? = null,
+    val capturedAt: String,
+    val clientOccurredAt: String? = null,
+    val supersedesResultId: String? = null,
+)
+
+@Serializable
+data class FieldEngineeringTestReceiptDto(
+    val resultId: String,
+    val workOrderId: String,
+    val requirementKey: String,
+    val testSubjectRef: String,
+    val evaluatedStatus: String,
+    val deviceReportedStatus: String? = null,
+    val reviewerRelationshipCode: String? = null,
+    val supersedesResultId: String? = null,
+    val replayed: Boolean,
+)
+
+@Serializable
 data class FieldEvidenceRequirementDto(
     val requirementKey: String,
     val evidenceTypeCode: String,
@@ -143,6 +210,7 @@ data class FieldEvidenceRequirementDto(
     val maxCount: Int? = null,
     val offlineCaptureAllowedByPolicy: Boolean,
     val allowedContentTypes: List<String> = emptyList(),
+    val structuredTest: FieldEngineeringTestDefinitionDto? = null,
 )
 
 @Serializable

@@ -1,0 +1,86 @@
+name: Phase 6 — Configurable Engineering Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - phase6/s04c-reality-gate-20261121
+    paths:
+      - "database/migrations/V0036__configurable_engineering_tests__phase6_slice04c.sql"
+      - "server/application/src/main/kotlin/com/hiltech/server/work/FieldEngineeringTest.kt"
+      - "server/application/src/main/kotlin/com/hiltech/server/work/FieldAssignedWorkContracts.kt"
+      - "server/application/src/main/kotlin/com/hiltech/server/work/FieldAssignedWorkPersistence.kt"
+      - "server/application/src/main/kotlin/com/hiltech/server/work/FieldAssignedWorkApi.kt"
+      - "server/application/src/main/resources/application.yml"
+      - "server/application/src/test/kotlin/com/hiltech/server/work/FieldEngineeringTestServiceTest.kt"
+      - "server/application/src/test/kotlin/com/hiltech/server/work/FieldEngineeringTestPostgresContractTest.kt"
+      - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/work/FieldAssignedWorkContracts.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/work/FieldAssignedWorkApiClient.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/AssignedWorkSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/HiltechShell.kt"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/work/FieldEngineeringTestApiClientTest.kt"
+      - "apps/androidApp/build.gradle.kts"
+      - "apps/androidApp/src/main/kotlin/com/hiltech/android/MainActivity.kt"
+      - ".github/workflows/phase6-configurable-engineering-tests.yml"
+      - "docs/13-delivery/phase6/10_SLICE04C_CONFIGURABLE_ENGINEERING_TEST_FRAMEWORK_2026-11-22.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  engineering-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+      - name: Verify configurable test engine and shared client
+        run: |
+          ./gradlew             :server:application:test               --tests com.hiltech.server.work.FieldEngineeringTestServiceTest             :shared:core:desktopTest               --tests com.hiltech.shared.core.work.FieldEngineeringTestApiClientTest             --no-configuration-cache --console=plain
+      - name: Compile Android with structured engineering tests enabled
+        run: |
+          ./gradlew :apps:androidApp:compileDebugKotlin             -Philtech.engineeringTestsEnabled=true             -Philtech.assignedAssetLookupEnabled=true             --no-configuration-cache --console=plain
+
+  engineering-tests-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+      - name: Start disposable PostgreSQL
+        run: |
+          docker compose --env-file infrastructure/local/.env.example             -f infrastructure/local/docker-compose.yml up -d postgres
+      - name: Verify V0036 on real PostgreSQL
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://127.0.0.1:5432/hiltech
+          HILTECH_DB_USER: hiltech_app
+          HILTECH_DB_PASSWORD: hiltech-app-local
+          HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --tests com.hiltech.server.work.FieldEngineeringTestPostgresContractTest \
+            --rerun-tasks --no-configuration-cache --console=plain
+      - name: Test report on failure
+        if: failure()
+        run: |
+          find server/application/build/test-results/test             -type f -name '*.xml' -print -exec cat {} \; || true
+      - name: Dispose PostgreSQL
+        if: always()
+        run: |
+          docker compose --env-file infrastructure/local/.env.example             -f infrastructure/local/docker-compose.yml down -v --remove-orphans

@@ -55,7 +55,7 @@ class DatabaseMigrationContractTest {
     private val migrationPath = System.getenv("HILTECH_MIGRATIONS_PATH") ?: "database/migrations"
 
     @Test
-    fun emptyPostgresMigratesThroughV0033ThenV0035AndRejectsInvalidStates() {
+    fun emptyPostgresMigratesThroughV0033ThenV0036AndRejectsInvalidStates() {
         assumeTrue(enabled)
 
         val priorSliceResult = Flyway.configure()
@@ -73,7 +73,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(2, result.migrationsExecuted)
+        assertEquals(3, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -124,12 +124,13 @@ class DatabaseMigrationContractTest {
                         'inventory_discrepancy',
                         'inventory_adjustment_request',
                         'field_material_usage_report',
-                        'field_material_usage_reconciliation'
+                        'field_material_usage_reconciliation',
+                        'field_engineering_test_result'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(61, tables.getInt(1))
+                assertEquals(62, tables.getInt(1))
             }
 
             val orgId = UUID.randomUUID()

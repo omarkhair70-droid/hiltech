@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import java.io.File
+import java.time.Instant
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -24,7 +25,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hiltech.android.identity.AndroidIdentityRuntime
 import com.hiltech.shared.core.AssetLookupState
+import com.hiltech.shared.core.FieldEngineeringTestDraft
 import com.hiltech.shared.core.HiltechFieldState
+import com.hiltech.shared.core.work.FieldEngineeringTestCaptureDto
 import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechShell
@@ -81,6 +84,7 @@ class MainActivity : ComponentActivity() {
     private var assetLookupSequence = 0
     private var personalIssuedStockSequence = 0
     private var assignedAssetLookupSequence = 0
+    private var engineeringTestSequence = 0
 
     private var shellState:
         HiltechShellState by mutableStateOf(
@@ -123,6 +127,8 @@ class MainActivity : ComponentActivity() {
                 showPersonalIssuedStock = BuildConfig.HILTECH_PERSONAL_ISSUED_STOCK_ENABLED,
                 onLookupAssignedAssetTag = ::lookupAssignedAssetTag,
                 showAssignedAssetLookup = BuildConfig.HILTECH_ASSIGNED_ASSET_LOOKUP_ENABLED,
+                onSubmitEngineeringTest = ::submitEngineeringTest,
+                showEngineeringTests = BuildConfig.HILTECH_ENGINEERING_TESTS_ENABLED,
                 captureFieldIntent = true,
                 onQueueFieldIntent = ::queueFieldExecution,
                 captureEvidence = true,
@@ -490,6 +496,8 @@ class MainActivity : ComponentActivity() {
                 personalIssuedStockLoading = false,
                 personalIssuedStockError = null,
                 assignedAssetLookup = AssetLookupState(),
+                engineeringTestSubmitting = false,
+                engineeringTestMessage = null,
                 errorMessage = null,
             ),
         )
@@ -522,6 +530,8 @@ class MainActivity : ComponentActivity() {
                         personalIssuedStockLoading = false,
                         personalIssuedStockError = null,
                         assignedAssetLookup = AssetLookupState(),
+                        engineeringTestSubmitting = false,
+                        engineeringTestMessage = null,
                         errorMessage = null,
                     ),
                 )
@@ -627,6 +637,149 @@ class MainActivity : ComponentActivity() {
                 },
             )
             shellState = current.copy(field = selected.copy(assignedAssetLookup = lookup))
+        }
+    }
+
+
+    private fun submitEngineeringTest(
+        workOrderId: String,
+        draft: FieldEngineeringTestDraft,
+    ) {
+        if (!BuildConfig.HILTECH_ENGINEERING_TESTS_ENABLED) return
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        val field = signed.field ?: return
+        val bundle = field.selectedBundle ?: return
+        if (field.selectedWorkOrderId != workOrderId ||
+            bundle.workOrderId != workOrderId ||
+            field.cachedBundleAt != null ||
+            field.engineeringTestSubmitting) return
+
+        val requirement = bundle.evidenceRequirements
+            .singleOrNull { it.requirementKey == draft.requirementKey }
+            ?: return
+        val test = requirement.structuredTest ?: return
+        val binding = bundle.binding ?: return
+        val rawEvidenceId =
+            bundle.existingEvidence.firstOrNull {
+                it.requirementKey == draft.requirementKey &&
+                    it.storageState == "READY"
+            }?.evidenceId
+        if (test.rawEvidenceRequired && rawEvidenceId == null) {
+            shellState = signed.copy(
+                field = field.copy(
+                    engineeringTestMessage =
+                        "لازم ترفع Evidence المطلوب ويصبح READY قبل إرسال نتيجة الاختبار.",
+                ),
+            )
+            return
+        }
+
+        val actorId = signed.identity.identityId
+        val requestSequence = ++engineeringTestSequence
+        shellState = signed.copy(
+            field = field.copy(
+                engineeringTestSubmitting = true,
+                engineeringTestMessage = null,
+            ),
+        )
+        scope.launch {
+            val result = runCatching {
+                val instrumentAssetId =
+                    if (test.instrumentAssetRequired) {
+                        val tag = draft.instrumentTag?.trim()
+                            ?.takeIf { it.isNotEmpty() }
+                            ?: error("Instrument AssetTag is required.")
+                        hiltechApplication.fieldAssignedWorkApi.assignedAssetTag(
+                            workOrderId,
+                            tag,
+                            hiltechApplication.installationId,
+                        ).assetId
+                    } else {
+                        null
+                    }
+                val operationId = UUID.randomUUID().toString()
+                val capturedAt = Instant.now().toString()
+                hiltechApplication.fieldAssignedWorkApi.captureEngineeringTest(
+                    workOrderId = workOrderId,
+                    request = FieldEngineeringTestCaptureDto(
+                        operationId = operationId,
+                        assignmentId = bundle.assignment.assignmentId,
+                        assignmentVersion = bundle.assignment.version,
+                        workOrderVersion = bundle.workOrderVersion,
+                        evidencePolicyId = binding.evidencePolicy.id,
+                        evidencePolicyRevision = binding.evidencePolicy.revision,
+                        requirementKey = draft.requirementKey,
+                        schemaTemplateId = test.templateId,
+                        schemaTemplateRevision = test.templateRevision,
+                        schemaVersion = test.schemaVersion,
+                        testSubjectRef = draft.testSubjectRef,
+                        values = draft.values,
+                        instrumentAssetId = instrumentAssetId,
+                        rawEvidenceId = rawEvidenceId,
+                        deviceReportedStatus = draft.deviceReportedStatus,
+                        capturedAt = capturedAt,
+                        clientOccurredAt = capturedAt,
+                    ),
+                    installationId = hiltechApplication.installationId,
+                )
+            }
+            if (result.exceptionOrNull() is kotlinx.coroutines.CancellationException) return@launch
+            val current = shellState as? HiltechShellState.SignedIn ?: return@launch
+            val selected = current.field ?: return@launch
+            if (requestSequence != engineeringTestSequence ||
+                current.identity.identityId != actorId ||
+                selected.selectedWorkOrderId != workOrderId ||
+                selected.selectedBundle?.workOrderId != workOrderId ||
+                selected.cachedBundleAt != null) return@launch
+
+            val failure = result.exceptionOrNull() as? HiltechApiException
+            if (failure?.httpStatus in setOf(401, 403) ||
+                failure?.code in setOf("REAUTH_REQUIRED", "OBJECT_NOT_VISIBLE", "ENGINEERING_TEST_UNAVAILABLE")) {
+                if (failure?.httpStatus in setOf(401, 403) || failure?.code == "REAUTH_REQUIRED") {
+                    identityRuntime.invalidateOfflineReadIdentity()
+                    runCatching { hiltechApplication.fieldOfflineReadCache.clearIdentity(actorId) }
+                }
+                shellState = current.copy(
+                    field = selected.copy(
+                        engineeringTestSubmitting = false,
+                        engineeringTestMessage =
+                            "الاختبار لم يعد متاحًا بالصلاحية/الـconfig الحالي. أعد تحميل التكليف.",
+                    ),
+                )
+                return@launch
+            }
+
+            result.fold(
+                onSuccess = { receipt ->
+                    shellState = current.copy(
+                        field = selected.copy(
+                            engineeringTestSubmitting = false,
+                            engineeringTestMessage =
+                                "تم حفظ النتيجة: " + receipt.evaluatedStatus +
+                                    " · " + receipt.testSubjectRef,
+                        ),
+                    )
+                },
+                onFailure = { error ->
+                    val api = error as? HiltechApiException
+                    val stale = api?.httpStatus == 409 ||
+                        api?.code?.contains("CHANGED") == true ||
+                        api?.code?.contains("CALIBRATION") == true
+                    shellState = current.copy(
+                        field = selected.copy(
+                            engineeringTestSubmitting = false,
+                            engineeringTestMessage =
+                                if (stale) {
+                                    "المصدر أو الـschema اتغير. أعد تحميل التكليف قبل المحاولة."
+                                } else {
+                                    api?.envelope?.message
+                                        ?: error.message
+                                        ?: "تعذر إرسال نتيجة الاختبار."
+                                },
+                        ),
+                    )
+                },
+            )
         }
     }
 

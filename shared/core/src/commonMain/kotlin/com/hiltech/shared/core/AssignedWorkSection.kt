@@ -9,9 +9,14 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -19,9 +24,18 @@ import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.field.FieldExecutionIntent
 import com.hiltech.shared.core.field.FieldQueuedIntent
 import com.hiltech.shared.core.local.LocalEvidenceEntity
+import com.hiltech.shared.core.work.FieldEngineeringTestDefinitionDto
 import com.hiltech.shared.core.work.FieldPersonalIssuedStockSnapshotDto
 import com.hiltech.shared.core.work.FieldTodayItemDto
 import com.hiltech.shared.core.work.TechnicianJobBundleDto
+
+data class FieldEngineeringTestDraft(
+    val requirementKey: String,
+    val testSubjectRef: String,
+    val values: Map<String, String>,
+    val instrumentTag: String? = null,
+    val deviceReportedStatus: String? = null,
+)
 
 data class HiltechFieldState(
     val loading: Boolean = false,
@@ -39,6 +53,8 @@ data class HiltechFieldState(
     val personalIssuedStockLoading: Boolean = false,
     val personalIssuedStockError: String? = null,
     val assignedAssetLookup: AssetLookupState = AssetLookupState(),
+    val engineeringTestSubmitting: Boolean = false,
+    val engineeringTestMessage: String? = null,
 )
 
 @Composable
@@ -55,6 +71,8 @@ fun AssignedWorkSection(
     showPersonalIssuedStock: Boolean = false,
     onLookupAssignedAssetTag: (String, String) -> Unit = { _, _ -> },
     showAssignedAssetLookup: Boolean = false,
+    onSubmitEngineeringTest: (String, FieldEngineeringTestDraft) -> Unit = { _, _ -> },
+    showEngineeringTests: Boolean = false,
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -104,6 +122,10 @@ fun AssignedWorkSection(
                                 assignedAssetLookup = state.assignedAssetLookup,
                                 onLookupAssignedAssetTag = onLookupAssignedAssetTag,
                                 showAssignedAssetLookup = showAssignedAssetLookup,
+                                onSubmitEngineeringTest = onSubmitEngineeringTest,
+                                showEngineeringTests = showEngineeringTests,
+                                engineeringTestSubmitting = state.engineeringTestSubmitting,
+                                engineeringTestMessage = state.engineeringTestMessage,
                                 modifier =
                                     Modifier.weight(1f),
                             )
@@ -145,6 +167,10 @@ fun AssignedWorkSection(
                                 assignedAssetLookup = state.assignedAssetLookup,
                                 onLookupAssignedAssetTag = onLookupAssignedAssetTag,
                                 showAssignedAssetLookup = showAssignedAssetLookup,
+                                onSubmitEngineeringTest = onSubmitEngineeringTest,
+                                showEngineeringTests = showEngineeringTests,
+                                engineeringTestSubmitting = state.engineeringTestSubmitting,
+                                engineeringTestMessage = state.engineeringTestMessage,
                                 modifier =
                                     Modifier.fillMaxWidth(),
                             )
@@ -321,6 +347,10 @@ private fun JobBundleDetail(
     assignedAssetLookup: AssetLookupState,
     onLookupAssignedAssetTag: (String, String) -> Unit,
     showAssignedAssetLookup: Boolean,
+    onSubmitEngineeringTest: (String, FieldEngineeringTestDraft) -> Unit,
+    showEngineeringTests: Boolean,
+    engineeringTestSubmitting: Boolean,
+    engineeringTestMessage: String?,
     modifier: Modifier,
 ) {
     Column(
@@ -523,6 +553,39 @@ private fun JobBundleDetail(
             }
         }
 
+        val structuredTests =
+            bundle.evidenceRequirements
+                .filter { it.structuredTest != null }
+        if (showEngineeringTests && structuredTests.isNotEmpty()) {
+            Text(
+                "الاختبارات الهندسية",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            if (cached) {
+                Text("الاختبارات structured للقراءة فقط بدون إنترنت؛ يلزم اتصال لإرسال نتيجة جديدة.")
+            } else {
+                structuredTests.forEach { requirement ->
+                    val test = requireNotNull(requirement.structuredTest)
+                    EngineeringTestCaptureCard(
+                        workOrderId = bundle.workOrderId,
+                        requirementKey = requirement.requirementKey,
+                        test = test,
+                        rawEvidenceReady =
+                            !test.rawEvidenceRequired ||
+                                bundle.existingEvidence.any {
+                                    it.requirementKey == requirement.requirementKey &&
+                                        it.storageState == "READY"
+                                },
+                        submitting = engineeringTestSubmitting,
+                        feedback = engineeringTestMessage,
+                        onSubmit = { draft ->
+                            onSubmitEngineeringTest(bundle.workOrderId, draft)
+                        },
+                    )
+                }
+            }
+        }
+
         if (
             bundle.resourceRequirements
                 .isNotEmpty()
@@ -673,5 +736,132 @@ private fun JobBundleDetail(
                 "القراءة فقط. أوامر التنفيذ والتقاط الأدلة والمزامنة الفعلية غير مفعّلة في Slice 01."
             },
         )
+    }
+}
+
+
+@Composable
+private fun EngineeringTestCaptureCard(
+    workOrderId: String,
+    requirementKey: String,
+    test: FieldEngineeringTestDefinitionDto,
+    rawEvidenceReady: Boolean,
+    submitting: Boolean,
+    feedback: String?,
+    onSubmit: (FieldEngineeringTestDraft) -> Unit,
+) {
+    var subject by remember(workOrderId, requirementKey, test.templateId, test.templateRevision) {
+        mutableStateOf("")
+    }
+    var instrumentTag by remember(workOrderId, requirementKey, test.templateId, test.templateRevision) {
+        mutableStateOf("")
+    }
+    var values by remember(workOrderId, requirementKey, test.templateId, test.templateRevision) {
+        mutableStateOf(test.metrics.associate { it.key to "" })
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(test.label, style = MaterialTheme.typography.titleSmall)
+        Text(
+            "Template ${test.templateCode} r${test.templateRevision} · schema v${test.schemaVersion}" +
+                (test.reviewerRelationshipCode?.let { " · review: $it" } ?: ""),
+        )
+        OutlinedTextField(
+            value = subject,
+            onValueChange = { subject = it },
+            label = { Text(test.subjectLabel) },
+            enabled = !submitting,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        test.metrics.forEach { metric ->
+            OutlinedTextField(
+                value = values[metric.key].orEmpty(),
+                onValueChange = { value ->
+                    values = values + (metric.key to value)
+                },
+                label = {
+                    Text(
+                        metric.label +
+                            (metric.unitCode?.let { " ($it)" } ?: "") +
+                            if (metric.required) " *" else "",
+                    )
+                },
+                supportingText = {
+                    val parts = buildList {
+                        metric.dimension?.let { add(it) }
+                        if (metric.options.isNotEmpty()) {
+                            add("الاختيارات: " + metric.options.joinToString(" / "))
+                        }
+                        val range = listOfNotNull(
+                            metric.minValue?.let { "min $it" },
+                            metric.maxValue?.let { "max $it" },
+                        )
+                        if (range.isNotEmpty()) add(range.joinToString(" · "))
+                        metric.precision?.let { add("precision $it") }
+                    }
+                    if (parts.isNotEmpty()) Text(parts.joinToString(" · "))
+                },
+                enabled = !submitting,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (test.instrumentAssetRequired) {
+            OutlinedTextField(
+                value = instrumentTag,
+                onValueChange = { instrumentTag = it },
+                label = { Text("AssetTag جهاز الاختبار *") },
+                supportingText = {
+                    Text(
+                        if (test.calibrationRequired) {
+                            "هيتم التحقق من الأصل والمعايرة الحالية من السيرفر وقت الإرسال."
+                        } else {
+                            "هيتم حل الـAssetTag للأصل الحقيقي وقت الإرسال."
+                        },
+                    )
+                },
+                enabled = !submitting,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (test.rawEvidenceRequired && !rawEvidenceReady) {
+            Text("الاختبار ده محتاج ملف/صورة Evidence جاهزة على السيرفر قبل إرسال القيم.")
+        }
+        if (submitting) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator()
+                Text("بنثبت نتيجة الاختبار على المصدر الحالي…")
+            }
+        }
+        feedback?.let { Text(it) }
+        val requiredValuesReady =
+            test.metrics.filter { it.required }.all {
+                values[it.key]?.trim()?.isNotEmpty() == true
+            }
+        val canSubmit =
+            !submitting &&
+                subject.trim().isNotEmpty() &&
+                requiredValuesReady &&
+                (!test.instrumentAssetRequired || instrumentTag.trim().isNotEmpty()) &&
+                rawEvidenceReady
+        OutlinedButton(
+            onClick = {
+                onSubmit(
+                    FieldEngineeringTestDraft(
+                        requirementKey = requirementKey,
+                        testSubjectRef = subject.trim(),
+                        values = values.mapValues { it.value.trim() }
+                            .filterValues { it.isNotEmpty() },
+                        instrumentTag = instrumentTag.trim().takeIf { it.isNotEmpty() },
+                    ),
+                )
+            },
+            enabled = canSubmit,
+        ) {
+            Text("إرسال نتيجة الاختبار")
+        }
+        Text("أي Retest جديد بيتسجل كسجل جديد؛ النتيجة القديمة لا تتعدل.")
     }
 }

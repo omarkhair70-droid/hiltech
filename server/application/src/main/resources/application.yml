@@ -36,6 +36,9 @@ hiltech:
     # Assigned-work AssetTag lookup. Reuses canonical Asset authorization and narrows to exact WorkOrder custody.
     assigned-asset-lookup:
       enabled: ${HILTECH_FIELD_ASSIGNED_ASSET_LOOKUP_ENABLED:false}
+    # Configurable structured engineering tests. No test family is hard-coded or seeded.
+    engineering-tests:
+      enabled: ${HILTECH_FIELD_ENGINEERING_TESTS_ENABLED:false}
 
 
   activity:
