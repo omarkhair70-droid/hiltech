@@ -7,6 +7,7 @@ import com.hiltech.server.documents.EvidenceReservationRecord
 import com.hiltech.server.documents.EmployeeDocumentEvidenceReservationInsert
 import com.hiltech.server.documents.SupplierQuoteDocumentEvidenceReservationInsert
 import com.hiltech.server.documents.SupplierInvoiceDocumentEvidenceReservationInsert
+import com.hiltech.server.documents.PoReceivingDeliveryNoteEvidenceReservationInsert
 import com.hiltech.server.documents.WorkOrderEvidencePolicySnapshot
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -426,6 +427,30 @@ class JdbcEvidencePersistence(
         createdAt = value.createdAt,
     )
 
+    override fun insertPoReceivingDeliveryNoteReservation(
+        value: PoReceivingDeliveryNoteEvidenceReservationInsert,
+    ) = insertRestrictedEvidenceReservation(
+        evidenceId = value.evidenceId,
+        uploadSessionId = value.uploadSessionId,
+        operationId = value.operationId,
+        objectKey = value.objectKey,
+        organizationId = value.organizationId,
+        targetType = "PO_RECEIVING_DELIVERY_NOTE",
+        targetId = value.receivingRecordId,
+        requirementKey = "PO_DELIVERY_NOTE_BINARY",
+        evidenceTypeCode = "PO_DELIVERY_NOTE",
+        contentType = value.contentType,
+        originalFileName = value.originalFileName,
+        sizeBytes = value.sizeBytes,
+        sha256 = value.sha256,
+        capturedAt = value.capturedAt,
+        clientOccurredAt = value.clientOccurredAt,
+        capturedByUserId = value.capturedByUserId,
+        securityScanClass = value.securityScanClass,
+        uploadExpiresAt = value.uploadExpiresAt,
+        createdAt = value.createdAt,
+    )
+
     /** Fixed internal classification for sensitive HR and supplier documents. */
     private fun insertRestrictedEvidenceReservation(
         evidenceId: UUID,
@@ -448,7 +473,7 @@ class JdbcEvidencePersistence(
         uploadExpiresAt: Instant,
         createdAt: Instant,
     ) {
-        require(targetType in setOf("EMPLOYEE_DOCUMENT", "SUPPLIER_QUOTE_DOCUMENT", "SUPPLIER_INVOICE_DOCUMENT"))
+        require(targetType in setOf("EMPLOYEE_DOCUMENT", "SUPPLIER_QUOTE_DOCUMENT", "SUPPLIER_INVOICE_DOCUMENT", "PO_RECEIVING_DELIVERY_NOTE"))
         jdbc.update(
             """
             INSERT INTO evidence (
