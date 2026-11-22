@@ -163,25 +163,30 @@ class Payroll9bDraftPostgresContractTest {
         )
         var attestationVersion = 1L
         val sources = object : PayrollApprovedInputSourcePort {
-            override fun verifiedCoverageFor(
+            override fun verifiedFor(
                 organizationId: UUID, payrollPeriodId: UUID, employeeId: UUID,
-            ) = PayrollInputCoverageDomain.entries.map { domain ->
-                PayrollInputCoverageReceipt(
-                    organizationId = org, payrollPeriodId = periodId, employeeId = employee,
-                    domain = domain, sourceId = UUID.nameUUIDFromBytes(
-                        ("synthetic-covered-domain:" + domain.name).toByteArray(),
-                    ),
-                    sourceVersion = attestationVersion,
-                    approval = PayrollInputApproval.APPROVED,
-                    sourceApprovalReference = "synthetic-reviewed-" + domain.name,
-                    complete = true,
-                )
-            }
+            ) = PayrollVerifiedEmployeeInputs(
+                coverageReceipts = PayrollInputCoverageDomain.entries.map { domain ->
+                    PayrollInputCoverageReceipt(
+                        organizationId = org,
+                        payrollPeriodId = periodId,
+                        employeeId = employee,
+                        domain = domain,
+                        sourceId = UUID.nameUUIDFromBytes(
+                            ("synthetic-covered-domain:" + domain.name).toByteArray(),
+                        ),
+                        sourceVersion = attestationVersion,
+                        approval = PayrollInputApproval.APPROVED,
+                        sourceApprovalReference = "synthetic-reviewed-" + domain.name,
+                        complete = true,
+                    )
+                },
+                components = listOf(component),
+            )
 
-            override fun policyFor(organizationId: UUID, payrollPeriodId: UUID) = policy
-            override fun approvedFor(
-                organizationId: UUID, payrollPeriodId: UUID, employeeId: UUID,
-            ) = listOf(component)
+            override fun policyFor(
+                organizationId: UUID, payrollPeriodId: UUID,
+            ) = policy
         }
         val factory = StaticListableBeanFactory(mapOf("payrollSources" to sources))
         val service = Payroll9bDraftService(

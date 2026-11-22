@@ -133,11 +133,11 @@ class Payroll9bDraftService(
 
         val calculations = fresh.employees.map { employee ->
             val id = UUID.fromString(employee.employeeId)
-            val components = provider.approvedFor(orgId, periodId, id)
-            val coverage = provider.verifiedCoverageFor(orgId, periodId, id)
+            val inputs = provider.verifiedFor(orgId, periodId, id)
             employee to (
-                Payroll9bCalculator.calculate(orgId, periodId, id, policy, components, coverage)
-                    to components
+                Payroll9bCalculator.calculate(
+                    orgId, periodId, id, policy, inputs.components, inputs.coverageReceipts,
+                ) to inputs.components
             )
         }
         val fingerprint = PayrollRunSourceFingerprint.of(

@@ -258,16 +258,16 @@ object Payroll9bCalculator {
  * Finance/attendance/HR own the source events and balances. No SQL table reads
  * another lane's provisional schema and no caller-supplied approved=true is trusted.
  */
+data class PayrollVerifiedEmployeeInputs(
+    val coverageReceipts: List<PayrollInputCoverageReceipt>,
+    val components: List<PayrollApprovedComponent>,
+)
+
 interface PayrollApprovedInputSourcePort {
     fun policyFor(organizationId: UUID, payrollPeriodId: UUID): PayrollValidatedPolicy?
-    fun verifiedCoverageFor(
+    fun verifiedFor(
         organizationId: UUID,
         payrollPeriodId: UUID,
         employeeId: UUID,
-    ): List<PayrollInputCoverageReceipt>
-    fun approvedFor(
-        organizationId: UUID,
-        payrollPeriodId: UUID,
-        employeeId: UUID,
-    ): List<PayrollApprovedComponent>
+    ): PayrollVerifiedEmployeeInputs
 }

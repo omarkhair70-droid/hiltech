@@ -128,10 +128,12 @@ class PayrollRunApprovalVersionSource(
                 line.currentEmployeeVersion, line.currentEmploymentVersion,
                 line.currentAssignmentId, line.currentAssignmentVersion,
             )) return false
+            val sourceBundle = provider.verifiedFor(
+                run.organizationId, run.periodId, line.employeeId,
+            )
             val current = Payroll9bCalculator.calculate(
                 run.organizationId, run.periodId, line.employeeId, policy,
-                provider.approvedFor(run.organizationId, run.periodId, line.employeeId),
-                provider.verifiedCoverageFor(run.organizationId, run.periodId, line.employeeId),
+                sourceBundle.components, sourceBundle.coverageReceipts,
             )
             if (current.sourceFingerprint != line.fingerprint) return false
             current.sourceFingerprint
