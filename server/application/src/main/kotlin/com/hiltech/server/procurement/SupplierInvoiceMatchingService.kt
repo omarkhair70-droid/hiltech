@@ -58,7 +58,7 @@ data class SupplierInvoiceMatchView(
     val priceVariance: String, val taxVariance: String,
     val documentVerified: Boolean = true,
     val payableCreated: Boolean = false, val paymentCreated: Boolean = false,
-    val revision: Long? = null, val replayed: Boolean = false,
+    val matchEventId: UUID? = null, val revision: Long? = null, val replayed: Boolean = false,
 )
 data class RecordSupplierInvoiceMatchRequest(val operationId: UUID, val expectedSourceSha256: String)
 data class SupplierInvoiceFinanceHandoffRequest(val operationId: UUID, val matchEventId: UUID)
@@ -263,7 +263,7 @@ class SupplierInvoiceMatchingService @Autowired constructor(
             "SELECT revision FROM procurement_supplier_invoice_match_event WHERE id=? AND invoice_id=?",
             { rs, _ -> rs.getLong("revision") }, id, invoiceId,
         ).singleOrNull() ?: unavailable()
-        return compute(inv).copy(revision = saved, replayed = outcome.replayed)
+        return compute(inv).copy(matchEventId = id, revision = saved, replayed = outcome.replayed)
     }
 
     fun handoff(
