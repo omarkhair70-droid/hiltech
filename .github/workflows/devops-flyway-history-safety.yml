@@ -1,0 +1,33 @@
+name: DevOps — HILTECH Flyway history safety
+
+on:
+  push:
+    branches: [devops/flyway-history-safety-20261122]
+  pull_request:
+    branches: [main]
+    paths:
+      - "database/migrations/**"
+      - "scripts/devops/verify_flyway_history.py"
+      - "scripts/devops/test_verify_flyway_history.py"
+      - ".github/workflows/devops-flyway-history-safety.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  history:
+    name: Reject changed history, gaps, duplicates or out-of-order candidates
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Verify standard-library tests
+        run: python3 -m unittest discover -s scripts/devops -p test_verify_flyway_history.py -v
+      - name: Compare candidate to latest remote main without DB access
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          python3 scripts/devops/verify_flyway_history.py --repo . --base-ref origin/main
