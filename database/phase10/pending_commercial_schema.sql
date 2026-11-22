@@ -535,3 +535,50 @@ CREATE TRIGGER trg_commercial_client_po_guard BEFORE INSERT OR UPDATE OR DELETE
 CREATE TRIGGER trg_commercial_handoff_immutable BEFORE UPDATE OR DELETE
   ON commercial_project_handoff FOR EACH ROW
   EXECUTE FUNCTION commercial_reject_snapshot_mutation();
+
+
+-- The canonical project must be the same client's project, derived from the
+-- exact released quote, signed contract and verified client PO. An operator
+-- cannot backfill a different Project under the same company through SQL.
+CREATE FUNCTION commercial_guard_handoff_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NOT EXISTS (
+   SELECT 1
+   FROM commercial_opportunity o
+   JOIN project p ON p.id=NEW.project_id AND p.organization_id=o.organization_id
+       AND p.client_organization_id=o.client_organization_id
+   JOIN commercial_quote_version q ON q.id=NEW.quote_version_id
+       AND q.organization_id=o.organization_id AND q.opportunity_id=o.id
+       AND q.client_organization_id=o.client_organization_id AND q.state='RELEASED'
+   JOIN commercial_contract c ON c.id=NEW.contract_id
+       AND c.organization_id=o.organization_id AND c.opportunity_id=o.id
+       AND c.quote_version_id=q.id AND c.state='SIGNED'
+   JOIN commercial_client_po cp ON cp.id=NEW.client_po_id
+       AND cp.organization_id=o.organization_id AND cp.opportunity_id=o.id
+       AND cp.contract_id=c.id AND cp.verified=true
+   JOIN evidence ce ON ce.id=c.signed_evidence_id
+       AND ce.organization_id=o.organization_id
+       AND ce.target_type='COMMERCIAL_CONTRACT' AND ce.target_id=c.id
+       AND ce.evidence_type_code='COMMERCIAL_SIGNED_CONTRACT'
+       AND ce.storage_state='READY' AND ce.finalized_at IS NOT NULL
+   JOIN evidence_upload_session ces ON ces.evidence_id=ce.id AND ces.state='READY'
+       AND ces.finalized_at IS NOT NULL AND ces.expected_sha256=ce.sha256
+       AND ces.expected_size_bytes=ce.size_bytes
+   JOIN evidence pe ON pe.id=cp.evidence_id
+       AND pe.organization_id=o.organization_id
+       AND pe.target_type='COMMERCIAL_CLIENT_PO' AND pe.target_id=cp.id
+       AND pe.evidence_type_code='COMMERCIAL_CLIENT_PO'
+       AND pe.storage_state='READY' AND pe.finalized_at IS NOT NULL
+   JOIN evidence_upload_session pes ON pes.evidence_id=pe.id AND pes.state='READY'
+       AND pes.finalized_at IS NOT NULL AND pes.expected_sha256=pe.sha256
+       AND pes.expected_size_bytes=pe.size_bytes
+   WHERE o.id=NEW.opportunity_id AND o.organization_id=NEW.organization_id
+     AND o.state IN ('OPEN','QUALIFIED')
+ )
+ THEN RAISE EXCEPTION 'Project handoff requires exact ready award and same client';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_commercial_handoff_valid BEFORE INSERT
+  ON commercial_project_handoff FOR EACH ROW
+  EXECUTE FUNCTION commercial_guard_handoff_insert();
