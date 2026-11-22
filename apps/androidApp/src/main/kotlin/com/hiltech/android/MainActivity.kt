@@ -160,12 +160,12 @@ class MainActivity : ComponentActivity() {
                                 },
                             )
                             if (BuildConfig.HILTECH_PO_WAREHOUSE_INTAKE_ENABLED) {
-                                PoWarehouseIntakeSection(
+                                AndroidPoWarehouseIntakeSection(
                                     api = hiltechApplication.poWarehouseIntakeApi,
                                     warehouseApi = hiltechApplication.warehouseApi,
+                                    deliveryNoteUploader = hiltechApplication.poDeliveryNoteUploader,
                                     organizationId = organization.organizationId,
                                     installationId = hiltechApplication.installationId,
-                                    newOperationId = { UUID.randomUUID().toString() },
                                 )
                             }
                         }
