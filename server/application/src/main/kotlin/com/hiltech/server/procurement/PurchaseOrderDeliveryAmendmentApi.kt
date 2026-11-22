@@ -12,6 +12,10 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
+data class PurchaseOrderDeliveryAmendmentStatusEnvelope(
+    val proposal: PurchaseOrderDeliveryAmendmentStatus?,
+)
+
 @RestController
 class PurchaseOrderDeliveryAmendmentController(
     private val service: PurchaseOrderDeliveryAmendmentService,
@@ -27,8 +31,10 @@ class PurchaseOrderDeliveryAmendmentController(
     fun current(
         servlet: HttpServletRequest,
         @PathVariable orderId: UUID,
-    ): PurchaseOrderDeliveryAmendmentStatus? =
-        service.pending(servlet.currentIssuerForAmendment(), orderId)
+    ): PurchaseOrderDeliveryAmendmentStatusEnvelope =
+        PurchaseOrderDeliveryAmendmentStatusEnvelope(
+            service.pending(servlet.currentIssuerForAmendment(), orderId),
+        )
 
     @PostMapping("/v1/procurement/purchase-orders/{orderId}/delivery-amendments")
     fun propose(
