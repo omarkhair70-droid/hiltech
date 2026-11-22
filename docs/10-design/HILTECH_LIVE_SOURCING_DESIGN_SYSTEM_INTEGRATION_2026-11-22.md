@@ -64,3 +64,75 @@ Only after owner/Engineering review, exact-head CI and real operator acceptance 
 **Contrast sample calculations for proposed semantic token pairings only**: Light primary text/surface 15.57:1; Light secondary 7.10:1; light good/caution/blocked text on their status surfaces 7.13:1, 7.18:1, 7.62:1. Dark primary 13.93:1, secondary 10.94:1, good/caution/blocked 8.99:1, 7.98:1, 8.09:1; high-contrast white/black 21:1. These measurements are not a measured whole-screen WCAG or operator acceptance.
 
 **Not closed**: Windows authorized buyer/approver real account walkthrough, role revocation across actual server calls, actual supplier PDF evidence and keyboard/screen reader tests; Android physical device/RTL/200% scaling; product-wide final icon family, motion, type and all-role screens; final Phase7 S04/S05 acceptance, owner-reviewed integration merge and release. Keep this PR Draft, no live purchasing enablement.
+
+## Workflow closure pass / Phase7 buyer UI (22 Nov 2026)
+
+The latest work is **not a new screen prototype**. It updates production-mounted
+`SupplierSourcingBuyerSection`, its existing `SupplierQuoteCaptureForm` and shared
+presentation rules, with no new backend route or invented purchasing power.
+
+### Confirmed quote -> live comparison, without phantom currentness
+
+- `SupplierQuoteCaptureForm` accepts optional `onQuoteRecorded(receipt)`, invoked
+  only **after** `SupplierSourcingApiClient.recordQuote` returns a confirmed source
+  receipt. Default is no-op for compatibility.
+- The buyer host closes capture, immediately invalidates the old quote comparison,
+  then reloads `roundsForRequirement` and `comparison` from the SAME restricted
+  source. The new quote is selected only if its ID and revision reappear in the
+  fresh current comparison, not merely because the callback says it saved.
+- If the current source changed, the response is explicitly historical and
+  cannot enable candidate purchase preflight. On 401/403 during refresh, the
+  restricted buyer snapshot is erased. If the refreshed view lags, the UI says
+  the server recorded the revision but the latest source still needs verification.
+- This does NOT bypass existing company approval, PO issuance, or server checks.
+
+### Confirmed RFQ -> no accidental duplicate after later read error
+
+- Keep the original idempotency operation ID on uncertain create outcomes.
+- After a confirmed `openRfq` response, set `sourcingRoundExists` in the
+  authorized UI projection BEFORE separately fetching the rounds and queue.
+  If either subsequent read fails, report **created, refresh unavailable**,
+  rather than **creation failed**. No second draft button is exposed locally.
+
+### Bounded source lists and accessible paging
+
+- Work-source queue: ten authorized requirements per page, and search runs
+  over the whole loaded (authorized) list; zero/missing results are not
+  invented. Quote ledger: fifteen current source quotes per page.
+- Both pages show explicit independent *Needs/Quotes page X/Y* controls.
+  Page positions are safely clamped when filtering or server data changes.
+- `remember` keys use scope/search or RFQ ID rather than whole mutable list
+  equality, to avoid O(N) equality checks every recomposition.
+- Selection uses button semantics; labels and source-state text remain explicit.
+- Existing `HiltechShell` owns scrolling. Pagination avoids a nested
+  independently scrolling list inside the global Windows scroll container.
+- Performance guidance considered: https://developer.android.com/develop/ui/compose/performance/bestpractices
+  and accessibility semantics: https://developer.android.com/develop/ui/compose/accessibility/semantics .
+  This is not a measured 1000-user backend load-test or a claim of fully
+  compliant accessibility.
+
+### Reproducible QA checkpoint
+
+- Native compile and shared procurement suite `BUILD SUCCESSFUL`:
+  **46/46 Kotlin desktop tests**, 9 suites, 0 failures, 0 errors, 0 skips.
+- **8/8 native Compose renders**, same source-connected Composable with
+  clearly synthetic DTOs, including a new 11-needs / 10-visible page-control
+  visual. The screenshot set includes source-revoked, compact, Dark, High
+  Contrast, typography scaled 180%, full quote inspector, and list paging.
+- Updated PNGs and SHA-256 capture manifest under
+  `docs/10-design/evidence/ux128-live-sourcing/`.
+- The code branch remains Draft and feature flags default OFF. Real authorized
+  user journeys, quote file permissions, actual 200%/RTL keyboard accessibility,
+  Android devices, isolated desktop navigation, typography/icon library and
+  Phase7 S04/S05 Engineering acceptance are still separately open.
+
+### Integration ownership and next non-optional product UX work
+
+1. Dedicated native Procurement workspace navigation from `HiltechShell`
+   (the global vertically scrolled shell is not the finished user experience).
+2. Source-connected buyer/technical reviewer/PO issuer/receiving role flows
+   through active Engineering S03/S04/S05 contracts, not synthetic UI buttons.
+3. Company-wide semantic tokens, Arabic bidirectional copy, final type,
+   icon family, focus/keyboard/reader tests and mobile role-specific layout.
+4. Review PR + exact-head source revalidation on the latest Engineering branch,
+   then authenticated staging and real operator acceptance before activation.

@@ -66,3 +66,43 @@ fun sourceTechnicalReviewCopy(value: String): String = when (value) {
 /** A changed login/role must never keep cached restricted supplier/quote data. */
 fun shouldDiscardBuyerSnapshot(httpStatus: Int?): Boolean =
     httpStatus == 401 || httpStatus == 403
+
+/** Bounded visible window: no eager rendering of hundreds of operational cards. */
+data class BuyerListWindow(
+    val start: Int,
+    val endExclusive: Int,
+    val pageIndex: Int,
+    val pageCount: Int,
+    val totalCount: Int,
+) {
+    val hasPrevious: Boolean get() = pageIndex > 0
+    val hasNext: Boolean get() = pageIndex + 1 < pageCount
+    val visibleCount: Int get() = endExclusive - start
+}
+fun buyerListWindow(total: Int, requestedPage: Int, pageSize: Int): BuyerListWindow {
+    require(total >= 0) { "total must not be negative" }
+    require(pageSize in 1..100) { "pageSize must be between 1 and 100" }
+    val count = if (total == 0) 1 else ((total - 1) / pageSize) + 1
+    val index = requestedPage.coerceIn(0, count - 1)
+    val start = index * pageSize
+    val end = minOf(total, start + pageSize)
+    return BuyerListWindow(start, end, index, count, total)
+}
+
+fun isRecordedQuoteVisibleInFreshComparison(
+    receipt: SupplierQuoteReceiptDto,
+    comparison: SupplierRfqComparisonDto,
+): Boolean =
+    receipt.rfqId == comparison.rfq.id &&
+        comparison.rfq.sourceCurrent &&
+        comparison.comparison.latestBySupplier.any { row ->
+            row.quoteId == receipt.quoteId && row.revisionNumber >= receipt.revisionNumber
+        }
+
+/** A confirmed RFQ receipt must disable a second draft even if list refresh fails. */
+fun needsAfterConfirmedRfq(
+    authorizedNeeds: List<SourcingEligibleNeedDto>,
+    requirementId: String,
+): List<SourcingEligibleNeedDto> = authorizedNeeds.map { need ->
+    if (need.requirementId == requirementId) need.copy(sourcingRoundExists = true) else need
+}

@@ -116,6 +116,56 @@ class SourcingPresentationTest {
         assertFalse(shouldDiscardBuyerSnapshot(null))
     }
 
+    @Test fun confirmedRfqReceiptDisablesDuplicateDraftBeforeRefresh() {
+        val source = listOf(need(), need().copy(requirementId = "other-need"))
+        val afterReceipt = needsAfterConfirmedRfq(source, "req-qa")
+        assertFalse(canOfferNewRfq(afterReceipt.first(), busy = false))
+        assertTrue(canOfferNewRfq(afterReceipt.last(), busy = false))
+        assertFalse(source.first().sourcingRoundExists)
+    }
+
+    @Test fun largeAuthorizedNeedListRendersOnlyRequestedPage() {
+        val first = buyerListWindow(total = 1_000, requestedPage = 0, pageSize = 20)
+        assertEquals(0, first.start)
+        assertEquals(20, first.endExclusive)
+        assertEquals(50, first.pageCount)
+        assertFalse(first.hasPrevious)
+        assertTrue(first.hasNext)
+        val last = buyerListWindow(total = 1_000, requestedPage = 999, pageSize = 20)
+        assertEquals(980, last.start)
+        assertEquals(1000, last.endExclusive)
+        assertFalse(last.hasNext)
+    }
+
+    @Test fun paginationClampsAfterSourceOrSearchReducesResults() {
+        val empty = buyerListWindow(0, 15, 20)
+        assertEquals(0, empty.visibleCount)
+        assertEquals(0, empty.pageIndex)
+        assertEquals(1, empty.pageCount)
+        val small = buyerListWindow(3, 200, 20)
+        assertEquals(0, small.start)
+        assertEquals(3, small.visibleCount)
+        val negativePage = buyerListWindow(41, -4, 20)
+        assertEquals(0, negativePage.pageIndex)
+        assertEquals(3, negativePage.pageCount)
+    }
+
+    @Test fun confirmedQuoteIsSelectedOnlyWhenNewRevisionIsInFreshSource() {
+        val recorded = SupplierQuoteReceiptDto(
+            quoteId = "quote-qa", rfqId = "rfq-qa",
+            revisionNumber = 3, replayed = false,
+        )
+        assertTrue(isRecordedQuoteVisibleInFreshComparison(recorded, comparison()))
+        assertFalse(isRecordedQuoteVisibleInFreshComparison(
+            recorded, comparison(current = false)))
+        assertFalse(isRecordedQuoteVisibleInFreshComparison(
+            recorded.copy(revisionNumber = 4), comparison()))
+        assertFalse(isRecordedQuoteVisibleInFreshComparison(
+            recorded.copy(rfqId = "some-other-rfq"), comparison()))
+        assertFalse(isRecordedQuoteVisibleInFreshComparison(
+            recorded.copy(quoteId = "not-in-source"), comparison()))
+    }
+
     @Test fun sourceMeaningAndSupplierLabelsAreFailClosed() {
         assertEquals(HiltechStateTone.BLOCKED, procurementSourceTone(false))
         assertEquals(HiltechStateTone.ATTENTION, procurementSourceTone(true, true))

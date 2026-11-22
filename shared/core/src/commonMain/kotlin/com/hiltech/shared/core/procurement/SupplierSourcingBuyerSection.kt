@@ -159,8 +159,10 @@ fun SupplierSourcingBuyerSection(
         busy = true
         error = null
         scope.launch {
+            var serverConfirmedCreation = false
             try {
-                // Preserve operationId on uncertain result to avoid a duplicate.
+                // Keep operationId on uncertain outcomes. Once the server confirms,
+                // prevent a second draft even if the subsequent read request fails.
                 val op = pendingOpen?.takeIf { it.first == need.requirementId }?.second
                     ?: newOperationId().also { pendingOpen = need.requirementId to it }
                 api.openRfq(
@@ -168,20 +170,77 @@ fun SupplierSourcingBuyerSection(
                     OpenSupplierRfqDto(op, need.technicalVersion),
                     installationId,
                 )
+                serverConfirmedCreation = true
                 pendingOpen = null
+                needs = needsAfterConfirmedRfq(needs, need.requirementId)
                 message = "Internal RFQ created; no supplier message or purchase order was issued."
                 selectedRequirementId = need.requirementId
-                rounds = api.roundsForRequirement(need.requirementId, installationId)
                 selectedRfqId = null
                 quoteComparison = null
                 selectedQuoteId = null
-                // Do not reset the whole scope while editing this requirement.
+                rounds = api.roundsForRequirement(need.requirementId, installationId)
                 needs = api.eligibleNeeds(organizationId, installationId)
             } catch (failure: Exception) {
                 if (shouldDiscardBuyerSnapshot((failure as? HiltechApiException)?.httpStatus)) {
                     clearRestrictedSnapshot()
                 }
-                error = "RFQ creation or refresh was not confirmed. Verify source before retry."
+                error = if (serverConfirmedCreation) {
+                    "RFQ was created on the server, but the refreshed list is unavailable. Reload authorized source."
+                } else {
+                    "RFQ creation outcome is uncertain. Retry with the same operation identifier."
+                }
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    fun refreshAfterRecordedQuote(receipt: SupplierQuoteReceiptDto) {
+        // The server receipt is authoritative; never keep the prior comparison
+        // visible after a source mutation, including an idempotent replay.
+        if (receipt.rfqId != selectedRfqId) {
+            quoteComparison = null
+            selectedQuoteId = null
+            showCapture = false
+            error = "Quote recorded, but the active RFQ changed. Refresh authorized source."
+            return
+        }
+        val requirementId = selectedRequirementId
+        quoteComparison = null
+        selectedQuoteId = null
+        showCapture = false
+        busy = true
+        error = null
+        message = "Quotation revision ${receipt.revisionNumber} recorded. Refreshing live evidence."
+        scope.launch {
+            try {
+                if (requirementId != null) {
+                    rounds = api.roundsForRequirement(requirementId, installationId)
+                }
+                val fresh = api.comparison(receipt.rfqId, installationId)
+                if (fresh.rfq.id != receipt.rfqId) {
+                    error = "Quote saved, but comparison source did not match. Refresh authorization."
+                    return@launch
+                }
+                quoteComparison = fresh
+                when {
+                    !fresh.rfq.sourceCurrent -> {
+                        message = "Quotation saved, but the RFQ source changed. Evidence is historical; refresh before another action."
+                    }
+                    isRecordedQuoteVisibleInFreshComparison(receipt, fresh) -> {
+                        selectedQuoteId = receipt.quoteId
+                        message = "Quotation revision ${receipt.revisionNumber} saved and verified in the live comparison. No PO issued."
+                    }
+                    else -> {
+                        message = "Quotation revision ${receipt.revisionNumber} saved; latest comparison is still catching up. Refresh to verify."
+                    }
+                }
+            } catch (failure: Exception) {
+                if (shouldDiscardBuyerSnapshot((failure as? HiltechApiException)?.httpStatus)) {
+                    clearRestrictedSnapshot()
+                }
+                quoteComparison = null
+                error = "Quote recorded, but the refreshed comparison could not be verified. Reload authorized source."
             } finally {
                 busy = false
             }
@@ -248,6 +307,7 @@ fun SupplierSourcingBuyerSection(
                         suppliers = suppliers,
                         installationId = installationId,
                         newOperationId = newOperationId,
+                        onQuoteRecorded = ::refreshAfterRecordedQuote,
                     )
                 }
             },
@@ -413,6 +473,9 @@ private fun BuyerRequirementQueue(
     onOpenRfq: (SourcingEligibleNeedDto) -> Unit,
 ) {
     val palette = LocalHiltechOperationalColors.current
+    var requestedPage by remember(ui.organizationId, search) { mutableStateOf(0) }
+    val window = buyerListWindow(filtered.size, requestedPage, 10)
+    val visibleNeeds = filtered.subList(window.start, window.endExclusive)
     HiltechPanel(Modifier.fillMaxWidth()) {
         HiltechSectionHeading(
             index = "01 / DEMAND",
@@ -426,7 +489,8 @@ private fun BuyerRequirementQueue(
             singleLine = true,
         )
         Text(
-            "Showing ${filtered.size} of ${ui.needs.size} authorized response items",
+            "Matching ${filtered.size} of ${ui.needs.size} authorized response items" +
+                if (filtered.isNotEmpty()) " · displaying ${window.start + 1}–${window.endExclusive}" else "",
             color = palette.secondaryText, fontSize = 12.sp,
         )
         if (!ui.fetching && ui.loaded && ui.needs.isEmpty()) {
@@ -436,13 +500,13 @@ private fun BuyerRequirementQueue(
             Text("No matching items in the currently loaded authorized response.",
                 color = palette.secondaryText)
         }
-        filtered.forEach { need ->
+        visibleNeeds.forEach { need ->
             val selected = need.requirementId == ui.selectedRequirementId
             val tone = procurementSourceTone(need.sourceCurrent)
             val shape = com.hiltech.shared.core.design.HiltechShape.small
             Surface(
                 modifier = Modifier.fillMaxWidth().selectable(
-                    selected = selected, role = Role.RadioButton,
+                    selected = selected, role = Role.Button,
                     enabled = !ui.busy && !ui.fetching,
                     onClick = { onSelectRequirement(need) },
                 ),
@@ -482,6 +546,9 @@ private fun BuyerRequirementQueue(
                     }
                 }
             }
+        }
+        if (window.pageCount > 1) {
+            BuyerPageNavigation(window, label = "Needs", onPage = { requestedPage = it })
         }
     }
 }
@@ -644,7 +711,10 @@ private fun BuyerQuoteLedger(
     wide: Boolean,
 ) {
     val palette = LocalHiltechOperationalColors.current
-    if (result.comparison.latestBySupplier.isEmpty()) {
+    val rows = result.comparison.latestBySupplier
+    var requestedPage by remember(result.rfq.id) { mutableStateOf(0) }
+    val window = buyerListWindow(rows.size, requestedPage, 15)
+    if (rows.isEmpty()) {
         Text("No authorized supplier quotation evidence is available for this RFQ.",
             color = palette.secondaryText)
         return
@@ -663,7 +733,7 @@ private fun BuyerQuoteLedger(
                 color = palette.primaryText, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         }
     }
-    result.comparison.latestBySupplier.forEach { quote ->
+    rows.subList(window.start, window.endExclusive).forEach { quote ->
         val selected = quote.quoteId == selectedQuoteId
         Surface(
             color = if(selected) palette.selected else palette.surface,
@@ -701,6 +771,38 @@ private fun BuyerQuoteLedger(
                 }
             }
         }
+    }
+    if (window.pageCount > 1) {
+        BuyerPageNavigation(window, label = "Quotes", onPage = { requestedPage = it })
+    }
+}
+
+/** Common native paging controls. The entire authorized response stays available for scoped search. */
+@Composable
+private fun BuyerPageNavigation(
+    window: BuyerListWindow,
+    label: String,
+    onPage: (Int) -> Unit,
+) {
+    val palette = LocalHiltechOperationalColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(HiltechSpace.small),
+    ) {
+        OutlinedButton(
+            onClick = { onPage(window.pageIndex - 1) },
+            enabled = window.hasPrevious,
+        ) { Text("Previous ${label.lowercase()}") }
+        Text(
+            "${label} page ${window.pageIndex + 1} / ${window.pageCount}",
+            color = palette.secondaryText,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 13.dp),
+        )
+        OutlinedButton(
+            onClick = { onPage(window.pageIndex + 1) },
+            enabled = window.hasNext,
+        ) { Text("Next ${label.lowercase()}") }
     }
 }
 

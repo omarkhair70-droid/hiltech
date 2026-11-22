@@ -46,6 +46,13 @@ fun main() = runBlocking<Unit> {
         val content: @Composable () -> Unit,
     )
     val normal = fixture()
+    val pagedNeeds = (1..11).map { index ->
+        normal.needs.first().copy(
+            requirementId = "11111111-2222-3333-4444-" + index.toString().padStart(12, '0'),
+            stockItemId = "88888888-7777-6666-5555-" + index.toString().padStart(12, '0'),
+            requestedQuantity = index.toString(),
+        )
+    }
     val cases = listOf(
         Capture("01-windows-real-mounted-screen", 1440, 1080) {
             HiltechOperationalTheme(dark = false) { Ui(normal) }
@@ -75,6 +82,18 @@ fun main() = runBlocking<Unit> {
         },
         Capture("07-windows-full-comparison-and-inspector", 1440, 2000) {
             HiltechOperationalTheme(dark = false) { Ui(normal) }
+        },
+        Capture("08-paged-authorized-needs", 1440, 2400) {
+            HiltechOperationalTheme(dark = false) {
+                Ui(normal.copy(
+                    needs = pagedNeeds,
+                    selectedRequirementId = pagedNeeds.first().requirementId,
+                    rounds = emptyList(),
+                    selectedRfqId = null,
+                    comparison = null,
+                    selectedQuoteId = null,
+                ))
+            }
         },
     )
     cases.forEach { case ->
