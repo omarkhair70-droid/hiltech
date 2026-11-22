@@ -38,6 +38,12 @@ data class PurchaseOrderCandidateRecord(
 
 @Repository
 class PurchaseOrderCandidatePersistence(private val jdbc: JdbcTemplate) {
+    /** Serializes approval and issue preflight against the immutable candidate. */
+    fun lockCandidate(candidateId: UUID): Boolean = jdbc.query(
+        "SELECT id FROM procurement_po_candidate WHERE id = ? FOR UPDATE",
+        { rs, _ -> rs.getObject("id", UUID::class.java) }, candidateId,
+    ).isNotEmpty()
+
     /** ApprovalEngine subject lookup; never trusts an arbitrary RFQ identifier. */
     fun byId(candidateId: UUID): PurchaseOrderCandidateRecord? =
         jdbc.query(
