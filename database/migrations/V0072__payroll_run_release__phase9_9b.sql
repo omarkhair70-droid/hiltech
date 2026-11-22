@@ -36,3 +36,70 @@ CREATE INDEX idx_payroll_release_org_date
 CREATE TRIGGER payroll_9b_release_immutable
     BEFORE UPDATE OR DELETE ON payroll_run_release FOR EACH ROW
     EXECUTE FUNCTION payroll_9a_immutable_guard();
+
+
+-- Defense in depth: even direct SQL writers cannot fake a Finance-review
+-- release for a different source, superseded generation, missing company
+-- policy, or unapproved exception. Application OpenFGA/role grants remain
+-- additional mandatory checks.
+CREATE FUNCTION payroll_9b_release_insert_guard() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM payroll_run_version rv
+        WHERE rv.id = NEW.run_version_id
+          AND rv.organization_id = NEW.organization_id
+          AND rv.source_fingerprint = NEW.run_source_fingerprint
+          AND rv.state = 'DRAFT'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM payroll_run_version newer
+              WHERE newer.payroll_period_id = rv.payroll_period_id
+                AND newer.generation > rv.generation
+          )
+    ) THEN
+        RAISE EXCEPTION 'Payroll source or release generation mismatch';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM approval_policy_version p
+        WHERE p.organization_id = NEW.organization_id
+          AND p.policy_key = NEW.policy_key
+          AND p.version_number = NEW.policy_version
+          AND p.lifecycle_state = 'ACTIVE'
+          AND p.effective_from <= NEW.released_at
+          AND (p.effective_to IS NULL OR p.effective_to > NEW.released_at)
+          AND (
+              (NEW.decision_path = 'ROUTINE_AUTHORIZED' AND
+               p.approval_required = false AND p.step_mode = 'NO_APPROVAL_REQUIRED')
+              OR
+              (NEW.decision_path = 'APPROVED_EXCEPTION' AND
+               p.approval_required = true AND p.step_mode = 'SINGLE')
+          )
+    ) THEN
+        RAISE EXCEPTION 'Payroll release policy is not active for this path';
+    END IF;
+
+    IF NEW.decision_path = 'APPROVED_EXCEPTION' AND NOT EXISTS (
+        SELECT 1 FROM approval_request a
+        WHERE a.id = NEW.approval_request_id
+          AND a.organization_id = NEW.organization_id
+          AND a.subject_type = 'PAYROLL_RUN_VERSION'
+          AND a.subject_id = NEW.run_version_id
+          AND a.subject_version = 1
+          AND a.policy_key = NEW.policy_key
+          AND a.policy_version = NEW.policy_version
+          AND a.state = 'APPROVED'
+    ) THEN
+        RAISE EXCEPTION 'Payroll exception approval is not approved for this version';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER payroll_9b_release_insert_validate
+    BEFORE INSERT ON payroll_run_release FOR EACH ROW
+    EXECUTE FUNCTION payroll_9b_release_insert_guard();
