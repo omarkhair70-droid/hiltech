@@ -459,6 +459,16 @@ CREATE TRIGGER trg_commercial_quote_no_delete BEFORE DELETE
 -- Any amendment requires a new version/document and review.
 CREATE FUNCTION commercial_guard_award_document_update() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+ IF TG_OP='INSERT' THEN
+   IF TG_TABLE_NAME='commercial_contract' AND
+      (NEW.state<>'DRAFT' OR NEW.signed_evidence_id IS NOT NULL) THEN
+     RAISE EXCEPTION 'Contract must begin unsigned';
+   ELSIF TG_TABLE_NAME='commercial_client_po' AND
+      (NEW.verified OR NEW.evidence_id IS NOT NULL) THEN
+     RAISE EXCEPTION 'Client PO must begin unverified';
+   END IF;
+   RETURN NEW;
+ END IF;
  IF TG_OP='DELETE' THEN
    RAISE EXCEPTION 'Commercial award documents cannot be deleted';
  END IF;
@@ -477,6 +487,18 @@ BEGIN
              OLD.warranty_terms,OLD.maintenance_terms,OLD.created_by,OLD.created_at) THEN
      RAISE EXCEPTION 'Only verified signing of draft contract is allowed';
    END IF;
+   IF NOT EXISTS (
+     SELECT 1 FROM evidence e JOIN evidence_upload_session u ON u.evidence_id=e.id
+     WHERE e.id=NEW.signed_evidence_id AND e.organization_id=NEW.organization_id
+       AND e.target_type='COMMERCIAL_CONTRACT' AND e.target_id=NEW.id
+       AND e.evidence_type_code='COMMERCIAL_SIGNED_CONTRACT'
+       AND e.storage_state='READY' AND u.state='READY'
+       AND e.finalized_at IS NOT NULL AND u.finalized_at IS NOT NULL
+       AND e.security_scan_class='ARBITRARY_FILE'
+       AND e.classification_code='HIGHLY_RESTRICTED'
+       AND e.client_visibility_mode='INTERNAL_ONLY'
+       AND e.sha256=u.expected_sha256 AND e.size_bytes=u.expected_size_bytes
+   ) THEN RAISE EXCEPTION 'Canonical signed contract Evidence is not READY'; END IF;
  ELSIF TG_TABLE_NAME='commercial_client_po' THEN
    IF OLD.verified=true THEN RAISE EXCEPTION 'Verified client PO is immutable'; END IF;
    IF NEW.verified<>true OR NEW.evidence_id IS NULL
@@ -487,12 +509,29 @@ BEGIN
              OLD.client_po_number,OLD.issued_on,OLD.amount,OLD.currency) THEN
      RAISE EXCEPTION 'Only verified evidence attachment is allowed';
    END IF;
+   IF NOT EXISTS (
+     SELECT 1 FROM evidence e JOIN evidence_upload_session u ON u.evidence_id=e.id
+     WHERE e.id=NEW.evidence_id AND e.organization_id=NEW.organization_id
+       AND e.target_type='COMMERCIAL_CLIENT_PO' AND e.target_id=NEW.id
+       AND e.evidence_type_code='COMMERCIAL_CLIENT_PO'
+       AND e.storage_state='READY' AND u.state='READY'
+       AND e.finalized_at IS NOT NULL AND u.finalized_at IS NOT NULL
+       AND e.security_scan_class='ARBITRARY_FILE'
+       AND e.classification_code='HIGHLY_RESTRICTED'
+       AND e.client_visibility_mode='INTERNAL_ONLY'
+       AND e.sha256=u.expected_sha256 AND e.size_bytes=u.expected_size_bytes
+   ) THEN RAISE EXCEPTION 'Canonical client PO Evidence is not READY'; END IF;
  END IF;
  RETURN NEW;
 END $$;
-CREATE TRIGGER trg_commercial_contract_guard BEFORE UPDATE OR DELETE
+CREATE TRIGGER trg_commercial_contract_guard BEFORE INSERT OR UPDATE OR DELETE
   ON commercial_contract FOR EACH ROW
   EXECUTE FUNCTION commercial_guard_award_document_update();
-CREATE TRIGGER trg_commercial_client_po_guard BEFORE UPDATE OR DELETE
+CREATE TRIGGER trg_commercial_client_po_guard BEFORE INSERT OR UPDATE OR DELETE
   ON commercial_client_po FOR EACH ROW
   EXECUTE FUNCTION commercial_guard_award_document_update();
+
+-- An award source pointer cannot be rewritten or removed to create another Project.
+CREATE TRIGGER trg_commercial_handoff_immutable BEFORE UPDATE OR DELETE
+  ON commercial_project_handoff FOR EACH ROW
+  EXECUTE FUNCTION commercial_reject_snapshot_mutation();
