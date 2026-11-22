@@ -166,3 +166,40 @@ $$;
 CREATE TRIGGER procurement_service_supplier_quote_guard
 BEFORE INSERT ON procurement_service_supplier_quote
 FOR EACH ROW EXECUTE FUNCTION guard_procurement_service_quote_record();
+
+
+-- No unrelated WorkOrder, HR or stock quote evidence can satisfy this slot.
+CREATE UNIQUE INDEX uq_service_quote_document_evidence_slot
+  ON evidence(target_id) WHERE target_type='SERVICE_QUOTE_DOCUMENT';
+
+CREATE FUNCTION guard_service_quote_evidence_insert() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+  slot procurement_service_quote_document_slot%ROWTYPE;
+  rfq procurement_service_rfq%ROWTYPE;
+BEGIN
+  IF NEW.target_type<>'SERVICE_QUOTE_DOCUMENT' THEN RETURN NEW; END IF;
+  SELECT * INTO slot FROM procurement_service_quote_document_slot
+    WHERE id=NEW.target_id;
+  SELECT * INTO rfq FROM procurement_service_rfq WHERE id=slot.rfq_id;
+  IF slot.id IS NULL OR rfq.id IS NULL
+    OR NEW.organization_id<>slot.organization_id
+    OR rfq.organization_id<>slot.organization_id
+    OR NEW.evidence_requirement_key<>'SERVICE_QUOTE_BINARY'
+    OR NEW.evidence_type_code<>'SERVICE_QUOTE'
+    OR NEW.classification_code<>'HIGHLY_RESTRICTED'
+    OR NEW.client_visibility_mode<>'INTERNAL_ONLY'
+    OR NEW.work_order_id IS NOT NULL
+    OR (NEW.content_type<>'application/pdf'
+        AND NEW.content_type NOT IN ('image/jpeg','image/png','image/webp'))
+  THEN
+    RAISE EXCEPTION 'Service supplier quote needs scoped private binary Evidence'
+      USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER service_quote_evidence_insert_guard
+BEFORE INSERT ON evidence
+FOR EACH ROW WHEN (NEW.target_type='SERVICE_QUOTE_DOCUMENT')
+EXECUTE FUNCTION guard_service_quote_evidence_insert();
