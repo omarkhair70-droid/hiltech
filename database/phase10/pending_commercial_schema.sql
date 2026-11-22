@@ -269,10 +269,40 @@ CREATE TABLE commercial_project_handoff (
 CREATE VIEW commercial_finance_award_source AS
 SELECT h.organization_id,h.opportunity_id,h.project_id,h.quote_version_id,
        h.contract_id,h.client_po_id,q.client_organization_id,q.currency,
-       q.total_price,q.payment_terms,q.version AS quote_revision
+       q.total_price,q.payment_terms,q.version_number AS quote_revision,
+       q.version AS quote_record_version
 FROM commercial_project_handoff h
 JOIN commercial_quote_version q ON q.id=h.quote_version_id
 WHERE q.state='RELEASED';
+
+-- Cross-lane projections preserve source pointers and immutable document revision;
+-- they do NOT populate Project or Finance tables or duplicate project Site rows.
+CREATE VIEW commercial_project_scope_source AS
+SELECT h.organization_id,h.project_id,h.opportunity_id,h.quote_version_id,
+       q.scope_version_id,q.boq_version_id,
+       s.version_number AS scope_revision,s.description,s.inclusions,s.exclusions,
+       s.assumptions,s.technical_constraints,s.client_responsibilities
+FROM commercial_project_handoff h
+JOIN commercial_quote_version q ON q.id=h.quote_version_id
+JOIN commercial_scope_version s ON s.id=q.scope_version_id
+WHERE q.state='RELEASED';
+
+CREATE VIEW commercial_project_site_source AS
+SELECT DISTINCT h.organization_id,h.project_id,h.opportunity_id,v.site_id,
+       v.id AS visit_id,v.completed_at
+FROM commercial_project_handoff h
+JOIN commercial_site_visit v ON v.opportunity_id=h.opportunity_id
+  AND v.organization_id=h.organization_id
+WHERE v.site_id IS NOT NULL AND v.state='COMPLETED';
+
+CREATE VIEW commercial_support_contract_source AS
+SELECT h.organization_id,h.project_id,h.opportunity_id,h.contract_id,
+       c.effective_date,c.end_date,c.warranty_terms,c.maintenance_terms,
+       c.signed_evidence_id
+FROM commercial_project_handoff h
+JOIN commercial_contract c ON c.id=h.contract_id
+  AND c.organization_id=h.organization_id
+WHERE c.state='SIGNED';
 
 -- An explicit client-safe projection is a financial boundary; never UNION cost source.
 CREATE VIEW commercial_released_client_quote AS
