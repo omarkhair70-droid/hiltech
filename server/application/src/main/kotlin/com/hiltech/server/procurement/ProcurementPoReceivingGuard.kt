@@ -100,6 +100,37 @@ class ProcurementPoReceivingGuard @Autowired constructor(
         if (received.add(quantity).compareTo(po.quantity) > 0) overDelivery()
     }
 
+    /**
+     * The old free-text deliveryDocumentRef is never proof of a real document.
+     * Only security-verified private Evidence attached to this exact canonical
+     * receiving record may release a governed PO receiving for completion.
+     */
+    fun requireReadyDeliveryNote(record: ReceivingRecordView) {
+        if (bound(record) == null) return
+        val ready = jdbc.queryForObject(
+            """
+            SELECT EXISTS (
+              SELECT 1 FROM evidence e
+              JOIN procurement_po_receiving_link b
+                ON b.receiving_record_id=e.target_id
+               AND b.organization_id=e.organization_id
+              WHERE e.target_type='PO_RECEIVING_DELIVERY_NOTE'
+                AND e.target_id=? AND e.organization_id=?
+                AND e.evidence_requirement_key='PO_DELIVERY_NOTE_BINARY'
+                AND e.evidence_type_code='PO_DELIVERY_NOTE'
+                AND e.storage_state='READY'
+                AND e.classification_code='HIGHLY_RESTRICTED'
+                AND e.client_visibility_mode='INTERNAL_ONLY'
+            )
+            """.trimIndent(), Boolean::class.java, record.id, record.organizationId,
+        ) == true
+        if (!ready) throw ProductApiException(
+            "PROCUREMENT_PO_DELIVERY_NOTE_REQUIRED",
+            "Complete delivery note Evidence must be verified before this PO receiving can close.",
+            HttpStatus.CONFLICT,
+        )
+    }
+
     fun requireStockOnly(record: ReceivingRecordView) {
         if (bound(record) != null) invalid()
     }
