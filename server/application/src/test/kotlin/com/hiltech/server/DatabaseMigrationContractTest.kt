@@ -429,6 +429,32 @@ class DatabaseMigrationContractTest {
                 assertTrue(officeIndex.next())
                 assertEquals(1, officeIndex.getInt(1))
 
+                // V0061–V0062: non-stock services have independent sources,
+                // restricted supplier quote Evidence and immutable snapshots.
+                val serviceGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger WHERE NOT tgisinternal AND (
+                      (tgrelid='procurement_service_need'::regclass
+                        AND tgname IN ('procurement_service_need_root_guard',
+                          'procurement_service_need_immutable'))
+                      OR (tgrelid='procurement_service_need_event'::regclass
+                        AND tgname IN ('procurement_service_need_event_guard',
+                          'procurement_service_need_event_immutable'))
+                      OR (tgrelid='procurement_service_rfq'::regclass
+                        AND tgname IN ('procurement_service_rfq_guard',
+                          'procurement_service_rfq_immutable'))
+                      OR (tgrelid='procurement_service_quote_document_slot'::regclass
+                        AND tgname IN ('procurement_service_quote_slot_guard',
+                          'procurement_service_quote_slot_immutable'))
+                      OR (tgrelid='procurement_service_supplier_quote'::regclass
+                        AND tgname IN ('procurement_service_supplier_quote_guard',
+                          'procurement_service_supplier_quote_immutable'))
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(serviceGuards.next())
+                assertEquals(10, serviceGuards.getInt(1))
+
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
                 // merely Flyway migration count.
