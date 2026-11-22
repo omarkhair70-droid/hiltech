@@ -316,6 +316,10 @@ WHERE q.state='RELEASED';
 CREATE FUNCTION commercial_reject_snapshot_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'Commercial snapshot is immutable; create a new version';
 END $$;
+CREATE TRIGGER trg_commercial_tender_immutable BEFORE UPDATE OR DELETE
+  ON commercial_tender_revision FOR EACH ROW EXECUTE FUNCTION commercial_reject_snapshot_mutation();
+CREATE TRIGGER trg_commercial_qualification_immutable BEFORE UPDATE OR DELETE
+  ON commercial_qualification_record FOR EACH ROW EXECUTE FUNCTION commercial_reject_snapshot_mutation();
 CREATE TRIGGER trg_commercial_scope_immutable BEFORE UPDATE OR DELETE
   ON commercial_scope_version FOR EACH ROW EXECUTE FUNCTION commercial_reject_snapshot_mutation();
 CREATE TRIGGER trg_commercial_boq_immutable BEFORE UPDATE OR DELETE

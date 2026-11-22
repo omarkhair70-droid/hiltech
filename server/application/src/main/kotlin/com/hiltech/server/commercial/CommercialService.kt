@@ -275,11 +275,12 @@ class CommercialService(
 
     fun completeVisit(id: UUID,r: CommercialVisitCompletionRequest,key: UUID,
                       actor: UUID,correlation: String): CommercialCommandResult {
-        val visit = row("SELECT organization_id FROM commercial_site_visit WHERE id=?",id)
+        val visit = row("SELECT organization_id,opportunity_id FROM commercial_site_visit WHERE id=?",id)
         access.require(actor,visit["organization_id"] as UUID,"SALES_WRITE")
         val notes = required(r.notes,10000)
         val replay = execute(key,actor,"COMMERCIAL_VISIT_COMPLETE",id,r.toString(),correlation) {
             access.require(actor,visit["organization_id"] as UUID,"SALES_WRITE")
+            open(op(visit["opportunity_id"] as UUID,actor,"SALES_WRITE"))
             if (jdbc.update(
                 """UPDATE commercial_site_visit SET state='COMPLETED',completed_at=?,
                    notes=?,version=version+1 WHERE id=? AND state='SCHEDULED' AND version=?""",
@@ -422,8 +423,9 @@ class CommercialService(
     }
 
     private fun quote(id: UUID) = row(
-        """SELECT id,organization_id,opportunity_id,client_organization_id,version_number,
-                  state,version FROM commercial_quote_version WHERE id=?""",id,
+        """SELECT id,organization_id,opportunity_id,client_organization_id,scope_version_id,
+                  boq_version_id,version_number,state,version
+           FROM commercial_quote_version WHERE id=?""",id,
     )
 
     fun requestQuoteApproval(id: UUID,key: UUID,actor: UUID,correlation: String): CommercialCommandResult {
@@ -465,6 +467,24 @@ class CommercialService(
             val latest = next("commercial_quote_version",q["opportunity_id"] as UUID)-1
             if ((q["version_number"] as Number).toInt() != latest)
                 throw commercialError("COMMERCIAL_QUOTE_SUPERSEDED","A newer quote exists.",HttpStatus.CONFLICT)
+            val currentSources=jdbc.queryForObject(
+                """SELECT NOT EXISTS(
+                     SELECT 1 FROM commercial_boq_version b
+                     WHERE b.opportunity_id=q.opportunity_id
+                       AND b.version_number>(
+                         SELECT src.version_number FROM commercial_boq_version src WHERE src.id=q.boq_version_id)
+                   ) AND NOT EXISTS(
+                     SELECT 1 FROM commercial_scope_version s
+                     WHERE s.opportunity_id=q.opportunity_id
+                       AND s.version_number>(
+                         SELECT src.version_number FROM commercial_scope_version src WHERE src.id=q.scope_version_id)
+                   )
+                   FROM commercial_quote_version q WHERE q.id=?""",
+                Boolean::class.java,id,
+            ) == true
+            if (!currentSources) throw commercialError(
+                "COMMERCIAL_QUOTE_SOURCE_STALE",
+                "The scope or BOQ has a newer version; create a new quote and approval.",HttpStatus.CONFLICT)
             val approved = jdbc.queryForObject(
                 """SELECT EXISTS(SELECT 1 FROM approval_request
                    WHERE organization_id=? AND subject_type='COMMERCIAL_QUOTE' AND subject_id=?
