@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -48,8 +49,11 @@ fun WarehouseOperatorFocusFlow(
             if (focus == WarehouseOperatorFocus.TODAY) {
                 Button(
                     enabled = !busy,
-                    onClick = {},
-                    modifier = Modifier.semantics { contentDescription = "مهام المخزن، القسم الحالي" },
+                    onClick = { focus = WarehouseOperatorFocus.TODAY },
+                    modifier = Modifier.semantics {
+                        contentDescription = "مهام المخزن"
+                        stateDescription = "القسم الحالي"
+                    },
                 ) { Text("المهام") }
                 OutlinedButton(
                     enabled = !busy,
@@ -64,8 +68,11 @@ fun WarehouseOperatorFocusFlow(
                 ) { Text("المهام") }
                 Button(
                     enabled = !busy,
-                    onClick = {},
-                    modifier = Modifier.semantics { contentDescription = "البحث بالكود، القسم الحالي" },
+                    onClick = { focus = WarehouseOperatorFocus.CODE_LOOKUP },
+                    modifier = Modifier.semantics {
+                        contentDescription = "البحث بالكود"
+                        stateDescription = "القسم الحالي"
+                    },
                 ) { Text("بحث بالكود") }
             }
         }
