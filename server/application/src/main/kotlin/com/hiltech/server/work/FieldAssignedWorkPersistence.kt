@@ -1,5 +1,6 @@
 package com.hiltech.server.work
 
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import java.time.Instant
@@ -40,6 +41,8 @@ data class FieldWorkContext(
 @Component
 class JdbcFieldAssignedWorkPersistence(
     private val jdbc: JdbcTemplate,
+    @Value("\${hiltech.field.work-documents.enabled:false}")
+    private val workDocumentsEnabled: Boolean = false,
 ) : FieldAssignedWorkPersistencePort {
     override fun activeAssignmentCandidateWorkOrderIds(
         at: Instant,
@@ -387,9 +390,76 @@ class JdbcFieldAssignedWorkPersistence(
     override fun safeDocumentRefs(
         workOrderId: UUID,
     ): List<FieldSafeDocumentRef> {
-        // Phase 0-4 has Evidence metadata and document requirement
-        // definitions, but no authoritative Project/Work document-revision
-        // source. Slice 06 must not fabricate a current drawing/document.
-        return emptyList()
+        if (!workDocumentsEnabled) {
+            return emptyList()
+        }
+        return jdbc.query(
+            """
+            WITH approved AS (
+                SELECT
+                    d.id AS document_id,
+                    d.document_code,
+                    d.title,
+                    r.revision_label,
+                    r.revision_sequence,
+                    row_number() OVER (
+                        PARTITION BY d.id
+                        ORDER BY
+                            r.revision_sequence DESC,
+                            r.id DESC
+                    ) AS approved_rank
+                FROM work_document d
+                JOIN work_document_revision r
+                  ON r.document_id = d.id
+                 AND r.work_order_id = d.work_order_id
+                 AND r.organization_id = d.organization_id
+                JOIN work_document_revision_release rel
+                  ON rel.revision_id = r.id
+                LEFT JOIN approval_request ar
+                  ON ar.id = rel.approval_request_id
+                JOIN evidence e
+                  ON e.id = r.evidence_id
+                 AND e.storage_state = 'READY'
+                WHERE d.work_order_id = ?
+                  AND (
+                      rel.release_mode =
+                          'NO_APPROVAL_REQUIRED'
+                      OR ar.state = 'APPROVED'
+                  )
+            )
+            SELECT
+                document_id,
+                document_code,
+                title,
+                revision_label
+            FROM approved
+            WHERE approved_rank = 1
+            ORDER BY document_code, document_id
+            """.trimIndent(),
+            { rs, _ ->
+                FieldSafeDocumentRef(
+                    documentId =
+                        rs.getObject(
+                            "document_id",
+                            UUID::class.java,
+                        ),
+                    code =
+                        rs.getString(
+                            "document_code",
+                        ),
+                    title =
+                        rs.getString(
+                            "title",
+                        ),
+                    revision =
+                        rs.getString(
+                            "revision_label",
+                        ),
+                    sourceType =
+                        WORK_DOCUMENT_REVISION_SUBJECT,
+                )
+            },
+            workOrderId,
+        )
     }
 }

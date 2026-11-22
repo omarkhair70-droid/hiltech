@@ -8,8 +8,6 @@ import com.hiltech.server.platform.IdempotentCommandExecutor
 import com.hiltech.server.platform.IdempotentCommandOutcome
 import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
-import com.hiltech.server.warehouse.AssetPassportPersistence
-import com.hiltech.server.warehouse.AssetServicePersistence
 import jakarta.servlet.http.HttpServletRequest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -439,21 +437,6 @@ data class FieldEngineeringInstrumentState(
 
 interface FieldEngineeringInstrumentSourcePort {
     fun state(assetId: UUID, at: Instant): FieldEngineeringInstrumentState?
-}
-
-@Service
-class CanonicalFieldEngineeringInstrumentSource(
-    private val assetPassport: AssetPassportPersistence,
-    private val assetService: AssetServicePersistence,
-) : FieldEngineeringInstrumentSourcePort {
-    override fun state(assetId: UUID, at: Instant): FieldEngineeringInstrumentState? {
-        val asset = assetPassport.asset(assetId) ?: return null
-        val availability = assetService.availability(assetId, at)
-        return FieldEngineeringInstrumentState(
-            organizationId = asset.organizationId,
-            calibrationStatus = availability?.calibrationStatus,
-        )
-    }
 }
 
 @Service

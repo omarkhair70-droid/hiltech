@@ -2,9 +2,6 @@ package com.hiltech.server.work
 
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.ProductApiException
-import com.hiltech.server.warehouse.AssetPassportPersistence
-import com.hiltech.server.warehouse.AssetPassportService
-import com.hiltech.server.warehouse.AssetTagLookupView
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
@@ -16,85 +13,138 @@ import org.springframework.web.bind.annotation.RestController
 import java.time.Clock
 import java.util.UUID
 
+data class FieldAssignedAssetAvailabilityView(
+    val state: String,
+    val reasonCodes: List<String>,
+    val calibrationStatus: String,
+    val calibrationDueAt: String?,
+    val certificateOnFile: Boolean,
+    val incidentTypes: List<String>,
+)
+
+data class FieldAssignedAssetLookupView(
+    val assetCode: String,
+    val name: String?,
+    val typeName: String,
+    val manufacturer: String?,
+    val model: String?,
+    val serialNumber: String?,
+    val condition: String,
+    val locationCode: String?,
+    val employeeCode: String?,
+    val custodySince: String?,
+    val availability: FieldAssignedAssetAvailabilityView?,
+    val assetId: UUID,
+)
+
+fun interface FieldAssignedAssetSourcePort {
+    fun lookupForWork(
+        actor: UUID,
+        opaqueCode: String,
+        organizationId: UUID,
+        workOrderId: UUID,
+    ): FieldAssignedAssetLookupView?
+}
+
 /**
- * Field-scoped QR/manual lookup deliberately narrows the existing Asset lookup.
- * It does not add a field Asset permission: the actor must already pass the
- * canonical AssetPassport lookup AND the Asset must currently belong to the
- * selected assigned WorkOrder context.
+ * Field-scoped QR/manual lookup keeps Work authorization in the Work module
+ * and delegates canonical Asset/custody verification through a port.
+ *
+ * The Work module never imports Warehouse implementation types; Warehouse is
+ * the adapter because it already depends on Work for resource fulfillment.
  */
 @Service
 class FieldAssignedAssetLookupService(
     private val source: WorkAssignmentSourceAuthorityPort,
     private val authorization: WorkAssignmentAuthorizationPort,
     private val work: WorkPersistencePort,
-    private val assetService: AssetPassportService,
-    private val assets: AssetPassportPersistence,
+    private val assets: FieldAssignedAssetSourcePort,
     private val clock: Clock,
     @Value("\${hiltech.field.assigned-asset-lookup.enabled:false}")
     private val enabled: Boolean = false,
 ) {
-    fun lookup(actor: UUID, workOrderId: UUID, opaqueCode: String): AssetTagLookupView {
+    fun lookup(
+        actor: UUID,
+        workOrderId: UUID,
+        opaqueCode: String,
+    ): FieldAssignedAssetLookupView {
         if (!enabled) hidden()
         val now = clock.instant()
-        if (!source.isCurrentAssignedUser(actor, workOrderId, now) ||
-            !authorization.canUseAssignedWork(actor, workOrderId, "can_view")) {
+        if (
+            !source.isCurrentAssignedUser(
+                actor,
+                workOrderId,
+                now,
+            ) ||
+            !authorization.canUseAssignedWork(
+                actor,
+                workOrderId,
+                "can_view",
+            )
+        ) {
             hidden()
         }
-        val order = work.workOrder(workOrderId) ?: hidden()
+        val order =
+            work.workOrder(workOrderId)
+                ?: hidden()
         val code = opaqueCode.trim()
-
-        // Reuse the existing safe Asset authorization / availability projection.
-        // This intentionally does not grant field staff warehouse or Asset rights.
-        val result = assetService.lookup(actor, code)
-        val identity = assets.asset(result.assetId) ?: hidden()
-        val custody = assets.custody(result.assetId) ?: hidden()
-        // WorkOrder is the canonical scope key; its project/site are immutable
-        // context of that WorkOrder and must not be re-inferred from optional
-        // custody projection columns.
-        if (identity.organizationId != order.organizationId ||
-            custody.workOrderId != order.workOrderId) {
+        if (
+            !Regex(
+                "[A-Za-z0-9_-]{1,128}",
+            ).matches(code)
+        ) {
             hidden()
         }
-
-        // Fail closed if the tag or custody changed between the canonical lookup
-        // and the WorkOrder-scope check.
-        if (assets.activeTagAsset(code) != identity.id ||
-            assets.custody(identity.id)?.sourceMovementId != custody.sourceMovementId) {
-            hidden()
-        }
-
-        // Field lookup needs safe identity/availability, not another employee's
-        // code or a warehouse/bin location.
-        return result.copy(
-            locationCode = null,
-            employeeCode = null,
-            custodySince = null,
-        )
+        return assets.lookupForWork(
+            actor = actor,
+            opaqueCode = code,
+            organizationId =
+                order.organizationId,
+            workOrderId =
+                order.workOrderId,
+        ) ?: hidden()
     }
 
-    private fun hidden(): Nothing = throw ProductApiException(
-        "FIELD_ASSET_LOOKUP_UNAVAILABLE",
-        "The assigned Asset context is not available.",
-        HttpStatus.NOT_FOUND,
-    )
+    private fun hidden(): Nothing =
+        throw ProductApiException(
+            "FIELD_ASSET_LOOKUP_UNAVAILABLE",
+            "The assigned Asset context is not available.",
+            HttpStatus.NOT_FOUND,
+        )
 }
 
 @RestController
 @RequestMapping("/v1/field/work-orders")
 class FieldAssignedAssetLookupController(
-    private val service: FieldAssignedAssetLookupService,
+    private val service:
+        FieldAssignedAssetLookupService,
 ) {
-    @GetMapping("/{workOrderId}/assets/by-tag/{opaqueCode}")
+    @GetMapping(
+        "/{workOrderId}/assets/by-tag/{opaqueCode}",
+    )
     fun lookup(
         request: HttpServletRequest,
-        @PathVariable workOrderId: UUID,
-        @PathVariable opaqueCode: String,
-    ): AssetTagLookupView = service.lookup(request.fieldAssetActor(), workOrderId, opaqueCode)
+        @PathVariable
+        workOrderId: UUID,
+        @PathVariable
+        opaqueCode: String,
+    ): FieldAssignedAssetLookupView =
+        service.lookup(
+            request.fieldAssetActor(),
+            workOrderId,
+            opaqueCode,
+        )
 }
 
 private fun HttpServletRequest.fieldAssetActor(): UUID {
-    val context = HiltechRequestContext.current(this)
-    return context.identityId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+    val context =
+        HiltechRequestContext.current(this)
+    return context.identityId
+        ?.let {
+            runCatching {
+                UUID.fromString(it)
+            }.getOrNull()
+        }
         ?: throw ProductApiException(
             "AUTHENTICATION_REQUIRED",
             "An authenticated identity is required.",
