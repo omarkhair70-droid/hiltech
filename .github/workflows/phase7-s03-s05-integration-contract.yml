@@ -58,6 +58,7 @@ jobs:
             --tests com.hiltech.server.procurement.PurchaseOrderCommercialReplacementServiceTest \
             --tests com.hiltech.server.procurement.ProcurementPoReceivingGuardTest \
             --tests com.hiltech.server.procurement.PoReceivingDeliveryNoteEvidenceTargetAdapterTest \
+            --tests com.hiltech.server.procurement.WarehouseReplenishmentServiceTest \
             --tests com.hiltech.server.procurement.PurchaseOrderLifecycleServiceTest \
             --no-daemon --console=plain
       - name: Compile Windows and Android native clients
