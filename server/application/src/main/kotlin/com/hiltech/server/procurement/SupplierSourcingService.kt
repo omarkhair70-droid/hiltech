@@ -63,6 +63,18 @@ class DenyAllSupplierQuoteDocumentVerification : SupplierQuoteDocumentVerificati
 
 data class OpenSupplierRfqRequest(val operationId: UUID, val expectedRequirementVersion: Long)
 
+/** A supplier-specific, immutable target for a future canonical Evidence upload. */
+data class CreateSupplierQuoteDocumentSlotRequest(
+    val operationId: UUID,
+    val supplierOrganizationId: UUID,
+)
+data class SupplierQuoteDocumentSlotReceipt(
+    val documentSlotId: UUID,
+    val rfqId: UUID,
+    val supplierOrganizationId: UUID,
+    val replayed: Boolean,
+)
+
 data class RecordSupplierQuoteRequest(
     val operationId: UUID,
     val supplierOrganizationId: UUID,
@@ -169,6 +181,52 @@ class SupplierSourcingService @Autowired constructor(
             IdempotentCommandOutcome("PROCUREMENT_SUPPLIER_RFQ_DRAFT_CREATED", """{"id":"$id"}""")
         }
         return SupplierRfqReceipt(rfqView(ctx.actor, sourcing.rfq(id) ?: unavailable()), execution.replayed)
+    }
+
+    /** Reserve an immutable supplier/RFQ-scoped document target; not a file upload. */
+    fun createQuoteDocumentSlot(
+        ctx: ProcurementDraftContext,
+        rfqId: UUID,
+        request: CreateSupplierQuoteDocumentSlotRequest,
+    ): SupplierQuoteDocumentSlotReceipt {
+        requireEnabled()
+        if (request.operationId != ctx.operationId) invalid()
+        val rfq = sourcing.rfq(rfqId) ?: unavailable()
+        requireAuthority(ctx.actor, rfq.organizationId)
+        val slotId = deterministicId("supplier-quote-document-slot", ctx.operationId)
+        val fp = fingerprint(rfqId, request.supplierOrganizationId)
+        val execution = commands.execute(IdempotentCommandSpec(
+            ctx.operationId, ctx.actor, "PROCUREMENT_QUOTE_DOCUMENT_SLOT_CREATED",
+            "SUPPLIER_QUOTE_DOCUMENT_SLOT", slotId, fp, ctx.correlationId,
+        )) {
+            if (!sourcing.lockRfq(rfqId)) unavailable()
+            val lockedRfq = sourcing.rfq(rfqId) ?: unavailable()
+            requireAuthority(ctx.actor, lockedRfq.organizationId)
+            val source = currentSource(lockedRfq.requirementId)
+            if (source.root.organizationId != lockedRfq.organizationId ||
+                source.version != lockedRfq.requirementVersion ||
+                source.state != "READY_FOR_SOURCING" || !source.sourceCurrent
+            ) stale()
+            if (!sourcing.isEligibleSupplier(
+                    lockedRfq.organizationId, request.supplierOrganizationId,
+                )
+            ) invalid()
+            val at = clock.instant()
+            sourcing.insertQuoteDocumentSlot(SupplierQuoteDocumentSlot(
+                slotId, ctx.operationId, lockedRfq.organizationId, rfqId,
+                request.supplierOrganizationId, ctx.actor, at, ctx.correlationId,
+            ))
+            audit.append(AuditEventRecord(
+                actorUserId = ctx.actor, action = "PROCUREMENT_QUOTE_DOCUMENT_SLOT_CREATED",
+                targetType = "SUPPLIER_QUOTE_DOCUMENT_SLOT", targetId = slotId,
+                occurredAt = at, correlationId = ctx.correlationId,
+            ))
+            IdempotentCommandOutcome("PROCUREMENT_QUOTE_DOCUMENT_SLOT_CREATED",
+                """{"documentSlotId":"$slotId"}""")
+        }
+        return SupplierQuoteDocumentSlotReceipt(
+            slotId, rfqId, request.supplierOrganizationId, execution.replayed,
+        )
     }
 
     fun recordQuote(
