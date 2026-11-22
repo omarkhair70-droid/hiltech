@@ -56,15 +56,16 @@ class FinancePayableCandidateServiceTest {
     }
 
     @Test fun currentCompanyMembershipIsMandatoryBeforeQuery() {
+        val actor = UUID.randomUUID()
+        val org = UUID.randomUUID()
         val error = assertThrows<ProductApiException> {
             service(enabled = true, key = "COMPANY_CONFIGURED_FINANCE_REVIEW")
-                .handoffs(UUID.randomUUID(), UUID.randomUUID())
+                .handoffs(actor, org)
         }
         assertEquals("FINANCE_PAYABLE_UNAVAILABLE", error.code)
         Mockito.verifyNoInteractions(jdbc, purchases, invoices, commands, audit)
         Mockito.verify(approval).isActiveOrganizationMember(
-            Mockito.any(UUID::class.java), Mockito.any(UUID::class.java),
-            Mockito.any(Instant::class.java),
+            org, actor, Instant.parse("2026-11-22T20:00:00Z"),
         )
     }
 
