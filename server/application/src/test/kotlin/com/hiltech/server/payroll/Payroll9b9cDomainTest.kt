@@ -14,6 +14,25 @@ import java.util.UUID
 class Payroll9b9cDomainTest {
     private val org = UUID.randomUUID()
     private val employee = UUID.randomUUID()
+    private val periodId = UUID.randomUUID()
+    private val verifiedCoverage = PayrollInputCoverageDomain.entries.map { domain ->
+        PayrollInputCoverageReceipt(
+            organizationId = org, payrollPeriodId = periodId, employeeId = employee,
+            domain = domain, sourceId = UUID.randomUUID(), sourceVersion = 1,
+            approval = PayrollInputApproval.APPROVED,
+            sourceApprovalReference = "synthetic-verified-" + domain.name,
+            complete = true,
+        )
+    }
+    private fun calculate(
+        organizationId: UUID,
+        employeeId: UUID,
+        policy: PayrollValidatedPolicy,
+        components: List<PayrollApprovedComponent>,
+    ): PayrollEmployeeCalculation = Payroll9bCalculator.calculate(
+        organizationId, periodId, employeeId, policy, components, verifiedCoverage,
+    )
+
     private val policy = PayrollValidatedPolicy(
         organizationId = org,
         policyVersionId = UUID.randomUUID(),
@@ -57,14 +76,14 @@ class Payroll9b9cDomainTest {
         val reimbursement = component(PayrollComponentKind.REIMBURSEMENT, "12.995")
         val deduction = component(PayrollComponentKind.DEDUCTION, "10.005")
         val lines = listOf(wage, reimbursement, deduction)
-        val first = Payroll9bCalculator.calculate(org, employee, policy, lines)
-        val reversed = Payroll9bCalculator.calculate(org, employee, policy, lines.reversed())
+        val first = calculate(org, employee, policy, lines)
+        val reversed = calculate(org, employee, policy, lines.reversed())
         assertEquals("100.00", first.gross.toPlainString())
         assertEquals("13.00", first.reimbursements.toPlainString())
         assertEquals("10.00", first.deductions.toPlainString())
         assertEquals("103.00", first.net.toPlainString())
         assertEquals(first, reversed)
-        val change = Payroll9bCalculator.calculate(
+        val change = calculate(
             org, employee, policy, listOf(wage.copy(sourceVersion = 2), reimbursement, deduction),
         )
         assertNotEquals(first.sourceFingerprint, change.sourceFingerprint)
@@ -74,31 +93,31 @@ class Payroll9b9cDomainTest {
     fun missingLegalPolicyUnapprovedSourcesWrongEmployeeAndUnverifiedDeductionFailClosed() {
         val earning = component(PayrollComponentKind.EARNING, "100")
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy.copy(statutoryVerified = false), listOf(earning))
+            calculate(org, employee, policy.copy(statutoryVerified = false), listOf(earning))
         }
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy, emptyList())
+            calculate(org, employee, policy, emptyList())
         }
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy, listOf(earning.copy(approval = PayrollInputApproval.PENDING)))
+            calculate(org, employee, policy, listOf(earning.copy(approval = PayrollInputApproval.PENDING)))
         }
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy, listOf(earning.copy(employeeId = UUID.randomUUID())))
+            calculate(org, employee, policy, listOf(earning.copy(employeeId = UUID.randomUUID())))
         }
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy, listOf(earning.copy(currency = "USD")))
+            calculate(org, employee, policy, listOf(earning.copy(currency = "USD")))
         }
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee,
+            calculate(org, employee,
                 policy.copy(deductionLimitsVerified = false),
                 listOf(earning, component(PayrollComponentKind.DEDUCTION, "1")))
         }
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy,
+            calculate(org, employee, policy,
                 listOf(earning, component(PayrollComponentKind.DEDUCTION, "201")))
         }
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy, listOf(earning.copy(amount = "not-money")))
+            calculate(org, employee, policy, listOf(earning.copy(amount = "not-money")))
         }
     }
 
@@ -106,30 +125,30 @@ class Payroll9b9cDomainTest {
     fun preventScientificOverflowRoundedToZeroAndUnapprovedPrecision() {
         val normal = component(PayrollComponentKind.EARNING, "100")
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy,
+            calculate(org, employee, policy,
                 listOf(normal.copy(amount = "1E+100")))
         }
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy,
+            calculate(org, employee, policy,
                 listOf(normal.copy(amount = "0.004")))
         }
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee,
+            calculate(org, employee,
                 policy.copy(roundingMode = RoundingMode.UNNECESSARY),
                 listOf(normal.copy(amount = "100.001")))
         }
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy,
+            calculate(org, employee, policy,
                 listOf(normal.copy(sourceDomain = "untrusted@invalid")))
         }
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy,
+            calculate(org, employee, policy,
                 listOf(normal.copy(sourceApprovalReference = "x".repeat(241))))
         }
         // Each component may fit, but the combined total must also fit the
         // database's numeric(20,6) range.
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy,
+            calculate(org, employee, policy,
                 listOf(normal.copy(amount = "99999999999999.00"),
                     normal.copy(sourceId = UUID.randomUUID(),
                         amount = "99999999999999.00")))
@@ -137,13 +156,50 @@ class Payroll9b9cDomainTest {
     }
 
     @Test
+    fun allThreeSourcesMustAttestEvenWhenDeductionsAndTimeAreZero() {
+        val earning = component(PayrollComponentKind.EARNING, "100")
+        val full = verifiedCoverage
+        assertEquals(3, full.size)
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(org, periodId, employee, policy,
+                listOf(earning), full.filter { it.domain != PayrollInputCoverageDomain.FINANCE })
+        }
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(org, periodId, employee, policy,
+                listOf(earning), full + full.first())
+        }
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(org, periodId, employee, policy,
+                listOf(earning), full.map { if (it.domain == PayrollInputCoverageDomain.APPROVED_TIME)
+                    it.copy(complete = false) else it })
+        }
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(org, periodId, employee, policy,
+                listOf(earning), full.map { if (it.domain == PayrollInputCoverageDomain.FINANCE)
+                    it.copy(approval = PayrollInputApproval.PENDING) else it })
+        }
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(org, periodId, employee, policy,
+                listOf(earning), full.map { if (it.domain == PayrollInputCoverageDomain.FINANCE)
+                    it.copy(employeeId = UUID.randomUUID()) else it })
+        }
+        val a = Payroll9bCalculator.calculate(org, periodId, employee, policy, listOf(earning), full)
+        val changedFinanceCheck = full.map { if (it.domain == PayrollInputCoverageDomain.FINANCE)
+            it.copy(sourceVersion = 2) else it }
+        val b = Payroll9bCalculator.calculate(
+            org, periodId, employee, policy, listOf(earning), changedFinanceCheck,
+        )
+        assertNotEquals(a.sourceFingerprint, b.sourceFingerprint)
+    }
+
+    @Test
     fun duplicateComponentIsRejectedAndZeroIsNotInvented() {
         val earning = component(PayrollComponentKind.EARNING, "100")
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy, listOf(earning, earning))
+            calculate(org, employee, policy, listOf(earning, earning))
         }
         assertThrows<ProductApiException> {
-            Payroll9bCalculator.calculate(org, employee, policy, listOf(earning.copy(amount = "0")))
+            calculate(org, employee, policy, listOf(earning.copy(amount = "0")))
         }
     }
 

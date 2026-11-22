@@ -22,6 +22,27 @@ enum class PayrollInputApproval {
     APPROVED, PENDING, REJECTED, SUPERSEDED,
 }
 
+enum class PayrollInputCoverageDomain {
+    COMPENSATION, APPROVED_TIME, FINANCE,
+}
+
+/**
+ * An approved ZERO is as important as an approved monetary component.
+ * Each owning HR/attendance/Finance source must positively attest that it
+ * checked the exact employee and period, even when it produces no rows.
+ */
+data class PayrollInputCoverageReceipt(
+    val organizationId: UUID,
+    val payrollPeriodId: UUID,
+    val employeeId: UUID,
+    val domain: PayrollInputCoverageDomain,
+    val sourceId: UUID,
+    val sourceVersion: Long,
+    val approval: PayrollInputApproval,
+    val sourceApprovalReference: String,
+    val complete: Boolean,
+)
+
 data class PayrollValidatedPolicy(
     val organizationId: UUID,
     val policyVersionId: UUID,
@@ -62,6 +83,7 @@ data class PayrollComponentCalculation(
 
 data class PayrollEmployeeCalculation(
     val organizationId: UUID,
+    val payrollPeriodId: UUID,
     val employeeId: UUID,
     val policyVersionId: UUID,
     val policyVersion: Long,
@@ -78,10 +100,30 @@ data class PayrollEmployeeCalculation(
 object Payroll9bCalculator {
     fun calculate(
         organizationId: UUID,
+        payrollPeriodId: UUID,
         employeeId: UUID,
         policy: PayrollValidatedPolicy,
         components: List<PayrollApprovedComponent>,
+        coverageReceipts: List<PayrollInputCoverageReceipt>,
     ): PayrollEmployeeCalculation {
+        if (coverageReceipts.size != PayrollInputCoverageDomain.entries.size ||
+            coverageReceipts.map { it.domain }.toSet() !=
+                PayrollInputCoverageDomain.entries.toSet()
+        ) {
+            Payroll9aPolicy.fail("PAYROLL_SOURCE_COVERAGE_INCOMPLETE", HttpStatus.CONFLICT)
+        }
+        coverageReceipts.forEach { receipt ->
+            if (receipt.organizationId != organizationId ||
+                receipt.payrollPeriodId != payrollPeriodId ||
+                receipt.employeeId != employeeId ||
+                receipt.sourceVersion < 1 || !receipt.complete ||
+                receipt.approval != PayrollInputApproval.APPROVED ||
+                receipt.sourceApprovalReference.isBlank() ||
+                receipt.sourceApprovalReference.length > 240
+            ) {
+                Payroll9aPolicy.fail("PAYROLL_SOURCE_COVERAGE_NOT_VERIFIED", HttpStatus.CONFLICT)
+            }
+        }
         if (policy.organizationId != organizationId || policy.policyVersion < 1 ||
             !Regex("^[A-Z]{3}$").matches(policy.currency) ||
             policy.fractionalDigits !in 0..6 ||
@@ -170,7 +212,14 @@ object Payroll9bCalculator {
             compareBy({ it.kind.name }, { it.sourceDomain }, { it.sourceId.toString() }, { it.componentCode }),
         )
         val canonical = buildString {
-            append(organizationId).append('|').append(employeeId)
+            append(organizationId).append('|').append(payrollPeriodId)
+            append('|').append(employeeId)
+            coverageReceipts.sortedBy { it.domain.name }.forEach {
+                append("\nCOVERAGE|").append(it.domain)
+                append('|').append(it.sourceId).append('|').append(it.sourceVersion)
+                append('|').append(it.approval).append('|').append(it.sourceApprovalReference)
+                append('|').append(it.complete)
+            }
             append('|').append(policy.policyVersionId).append('|').append(policy.policyVersion)
             append('|').append(policy.currency).append('|').append(policy.fractionalDigits)
             append('|').append(policy.roundingMode.name)
@@ -190,6 +239,7 @@ object Payroll9bCalculator {
             .joinToString("") { "%02x".format(it.toInt() and 0xff) }
         return PayrollEmployeeCalculation(
             organizationId = organizationId,
+            payrollPeriodId = payrollPeriodId,
             employeeId = employeeId,
             policyVersionId = policy.policyVersionId,
             policyVersion = policy.policyVersion,
@@ -210,6 +260,11 @@ object Payroll9bCalculator {
  */
 interface PayrollApprovedInputSourcePort {
     fun policyFor(organizationId: UUID, payrollPeriodId: UUID): PayrollValidatedPolicy?
+    fun verifiedCoverageFor(
+        organizationId: UUID,
+        payrollPeriodId: UUID,
+        employeeId: UUID,
+    ): List<PayrollInputCoverageReceipt>
     fun approvedFor(
         organizationId: UUID,
         payrollPeriodId: UUID,

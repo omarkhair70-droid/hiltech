@@ -161,7 +161,23 @@ class Payroll9bDraftPostgresContractTest {
             approval = PayrollInputApproval.APPROVED,
             currency = "EGP", amount = "100.005",
         )
+        var attestationVersion = 1L
         val sources = object : PayrollApprovedInputSourcePort {
+            override fun verifiedCoverageFor(
+                organizationId: UUID, payrollPeriodId: UUID, employeeId: UUID,
+            ) = PayrollInputCoverageDomain.entries.map { domain ->
+                PayrollInputCoverageReceipt(
+                    organizationId = org, payrollPeriodId = periodId, employeeId = employee,
+                    domain = domain, sourceId = UUID.nameUUIDFromBytes(
+                        ("synthetic-covered-domain:" + domain.name).toByteArray(),
+                    ),
+                    sourceVersion = attestationVersion,
+                    approval = PayrollInputApproval.APPROVED,
+                    sourceApprovalReference = "synthetic-reviewed-" + domain.name,
+                    complete = true,
+                )
+            }
+
             override fun policyFor(organizationId: UUID, payrollPeriodId: UUID) = policy
             override fun approvedFor(
                 organizationId: UUID, payrollPeriodId: UUID, employeeId: UUID,
@@ -418,6 +434,10 @@ class Payroll9bDraftPostgresContractTest {
             time.plusSeconds(1), historicalAssignment,
         )
         assertFalse(guard.isCurrent(currentSubject))
+        // Coverage change without any change to a monetary component
+        // must also invalidate a previously released payroll run.
+        attestationVersion = 2
+        assertFalse(guard.isCurrentForPublication(currentSubject))
         jdbc.update("UPDATE employee SET version = version + 1 WHERE id = ?", employee)
         assertFalse(guard.isCurrent(currentSubject))
         assertThrows<ProductApiException> {

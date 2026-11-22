@@ -129,8 +129,9 @@ class PayrollRunApprovalVersionSource(
                 line.currentAssignmentId, line.currentAssignmentVersion,
             )) return false
             val current = Payroll9bCalculator.calculate(
-                run.organizationId, line.employeeId, policy,
+                run.organizationId, run.periodId, line.employeeId, policy,
                 provider.approvedFor(run.organizationId, run.periodId, line.employeeId),
+                provider.verifiedCoverageFor(run.organizationId, run.periodId, line.employeeId),
             )
             if (current.sourceFingerprint != line.fingerprint) return false
             current.sourceFingerprint
