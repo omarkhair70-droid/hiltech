@@ -1,0 +1,51 @@
+name: DevOps — HILTECH approved OpenFGA model export
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/devops-fga-live-model-export.yml"
+      - "docs/13-delivery/first-slice-contract-pack/openfga/first-slice-model.fga"
+
+permissions:
+  contents: read
+
+jobs:
+  export-first-slice:
+    name: Export reviewed FGA model as JSON
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate existing FGA DSL and fixtures
+        uses: openfga/action-openfga-test@e89aa8259796cd5ee5c1b1ae7d72c401029cb947 # v0.1.2
+        with:
+          test_path: docs/13-delivery/first-slice-contract-pack/openfga/first-slice-model.fga.yaml
+          fga_cli_version: v0.7.20
+
+      - name: Generate canonical JSON via official OpenFGA CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/reports/hiltech-fga
+          docker run --rm -v "$PWD:/workspace" -w /workspace \
+            openfga/cli:v0.7.20 model transform \
+            --file docs/13-delivery/first-slice-contract-pack/openfga/first-slice-model.fga \
+            --output-format json \
+            > build/reports/hiltech-fga/first-slice-model.json
+          jq -e '.schema_version == "1.1" and (.type_definitions | length > 10)' \
+            build/reports/hiltech-fga/first-slice-model.json >/dev/null
+          sha256sum docs/13-delivery/first-slice-contract-pack/openfga/first-slice-model.fga \
+            build/reports/hiltech-fga/first-slice-model.json \
+            > build/reports/hiltech-fga/SHA256SUMS
+          echo "Model generated from reviewed DSL; no store created, no secrets used."
+
+      - name: Upload signed-source model export for staging bootstrap
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hiltech-first-slice-fga-model-json
+          path: build/reports/hiltech-fga/
+          retention-days: 7
+          if-no-files-found: error
