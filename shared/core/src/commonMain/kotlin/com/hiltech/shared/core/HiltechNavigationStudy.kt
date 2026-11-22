@@ -95,6 +95,12 @@ fun hiltechNavigationSelect(
 ): HiltechNavigationTrace {
     val valid = hiltechNavigationRevalidated(trace, available, preferred)
     if (destination !in available || destination == valid.current) return valid
+    // Selecting an area already present in the back trail consumes that trail.
+    // Without this, tapping Work after Objects adds Objects again and Back loops.
+    val previousIndex = valid.history.indexOf(destination)
+    if (previousIndex >= 0) {
+        return HiltechNavigationTrace(destination, valid.history.drop(previousIndex + 1))
+    }
     return HiltechNavigationTrace(
         current = destination,
         history = listOfNotNull(valid.current) + valid.history,
