@@ -84,6 +84,7 @@ class ServiceOrderService(
 
     fun create(ctx:ProcurementDraftContext,req:CreateServiceOrderCandidateRequest):
         ServiceOrderCandidateReceipt {
+        activeOrHidden()
         if(ctx.operationId!=req.operationId)invalid()
         val chosen=quote(req.rfqId,req.quoteId)?:hidden()
         requireBuyer(ctx.actor,chosen.org)
@@ -118,6 +119,7 @@ class ServiceOrderService(
 
     fun requestApproval(ctx:ProcurementDraftContext,candidateId:UUID,
                         input:RequestServiceOrderApprovalRequest):ApprovalRequestResult {
+        activeOrHidden()
         if(ctx.operationId!=input.operationId)invalid()
         val candidate=candidate(candidateId)?:hidden()
         requireBuyer(ctx.actor,candidate.org)
@@ -138,6 +140,7 @@ class ServiceOrderService(
 
     fun issue(ctx:ProcurementDraftContext,candidateId:UUID,
               input:IssueServiceOrderRequest):IssuedServiceOrderView {
+        activeOrHidden()
         if(ctx.operationId!=input.operationId || input.expectedCandidateVersion!=1L) invalid()
         val initial=candidate(candidateId)?:hidden()
         requireIssuer(ctx.actor,initial.org)
@@ -200,6 +203,7 @@ class ServiceOrderService(
     }
 
     fun view(actor:UUID,id:UUID):ServiceOrderCandidateView {
+        activeOrHidden()
         val candidate=candidate(id)?:hidden()
         if(!authorized(actor,candidate.org,buyerKey) &&
             !authorized(actor,candidate.org,issuerKey))hidden()
@@ -216,6 +220,7 @@ class ServiceOrderService(
     }
 
     fun issued(actor:UUID,id:UUID):IssuedServiceOrderView {
+        activeOrHidden()
         val row=jdbc.query(
             """
             SELECT id,organization_id,candidate_id,quote_id,supplier_organization_id,
@@ -300,6 +305,7 @@ class ServiceOrderService(
         return authority.organizationId==org && authority.authorityKey==key &&
             approvals.actorMatchesAuthority(actor,authority,at)
     }
+    private fun activeOrHidden() {if(!enabled || !sourcingEnabled)hidden()}
     private fun validKey(s:String)=Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(s)
     private fun fingerprint(vararg xs:Any?):String =
         IdempotencyKeyContract.fingerprint(xs.joinToString("") {
