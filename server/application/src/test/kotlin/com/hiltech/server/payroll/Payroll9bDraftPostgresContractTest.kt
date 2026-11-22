@@ -390,6 +390,19 @@ class Payroll9bDraftPostgresContractTest {
         )
         assertEquals("RETURNED", self.own(actor, org, "p9c-private").items.single().paymentStatus)
         assertEquals("REQUIRES_REVIEW", financeReviewer.status(actor, publishedRunId).status)
+        // An unapproved new draft cannot erase the already released
+        // employee payslip while all authoritative source versions agree.
+        val unapprovedCorrection = tx.execute {
+            service.create(periodId, UUID.randomUUID(), actor, "p9b-review-only")
+        }!!
+        assertEquals(3, unapprovedCorrection.first.generation)
+        assertFalse(guard.isCurrent(currentSubject))
+        assertTrue(guard.isCurrentForPublication(currentSubject))
+        assertEquals(
+            newer.first.runVersionId,
+            self.own(actor, org, "p9c-private").items.single().runVersionId,
+        )
+        assertEquals("RETURNED", self.own(actor, org, "p9c-private").items.single().paymentStatus)
 
         // Unknown and former identities have no other employee's payslip.
         assertThrows<ProductApiException> {
