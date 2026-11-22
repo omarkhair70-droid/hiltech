@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(12, result.migrationsExecuted)
+        assertEquals(13, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -149,12 +149,13 @@ class DatabaseMigrationContractTest {
                         'procurement_supplier_quote_evidence',
                         'procurement_supplier_quote_technical_assessment',
                         'procurement_supplier_link_event',
-                        'procurement_supplier_quote_document_slot'
+                        'procurement_supplier_quote_document_slot',
+                        'procurement_po_candidate'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(73, tables.getInt(1))
+                assertEquals(74, tables.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
@@ -264,6 +265,30 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(supplierSlotTrigger.next())
                 assertEquals(1, supplierSlotTrigger.getInt(1))
+                val candidateTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_po_candidate'::regclass
+                      AND tgname = 'procurement_po_candidate_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(candidateTrigger.next())
+                assertEquals(1, candidateTrigger.getInt(1))
+                val candidateScopedFk = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_po_candidate'::regclass
+                      AND conname IN (
+                        'fk_procurement_candidate_rfq_scope',
+                        'fk_procurement_candidate_quote_scope',
+                        'fk_procurement_candidate_requirement_scope',
+                        'fk_procurement_candidate_item_scope'
+                      ) AND contype = 'f'
+                    """.trimIndent(),
+                )
+                assertTrue(candidateScopedFk.next())
+                assertEquals(4, candidateScopedFk.getInt(1))
                 val sourcingUniques = statement.executeQuery(
                     """
                     SELECT COUNT(*) FROM pg_constraint
