@@ -10,6 +10,7 @@ on:
       - "database/migrations/V0070__payroll_period_snapshot__phase9_9a.sql"
       - "database/migrations/V0071__payroll_draft_run__phase9_9b.sql"
       - "database/migrations/V0072__payroll_run_release__phase9_9b.sql"
+      - "database/migrations/V0073__payroll_correction_link__phase9_9c.sql"
   workflow_dispatch:
 
 permissions:
@@ -62,6 +63,7 @@ jobs:
             --tests com.hiltech.server.payroll.Payroll9bDraftPostgresContractTest \
             --tests com.hiltech.server.payroll.Payroll9b9cDomainTest \
             --tests com.hiltech.server.payroll.Payroll9bSourceAssemblerTest \
+            --tests com.hiltech.server.payroll.Payroll9cFinalPayTest \
             --rerun-tasks
       - name: Compile exact server head
         run: ./gradlew :server:application:bootJar
