@@ -123,3 +123,58 @@ CREATE INDEX idx_payroll_exception_review_exception ON payroll_exception_review(
 
 -- The ledger intentionally has NO salary value, statutory deduction, bank instruction,
 -- paid status or editable Advance balance. Those require approved later source contracts.
+
+
+-- Guard source metadata and state transitions at the database boundary.
+CREATE FUNCTION payroll_9a_period_guard() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'Payroll periods cannot be deleted';
+    END IF;
+    IF ROW(
+        NEW.id, NEW.operation_id, NEW.request_fingerprint,
+        NEW.organization_id, NEW.period_code, NEW.start_date,
+        NEW.end_date, NEW.cutoff_date, NEW.target_payment_date,
+        NEW.created_by_user_id, NEW.created_at
+    ) IS DISTINCT FROM ROW(
+        OLD.id, OLD.operation_id, OLD.request_fingerprint,
+        OLD.organization_id, OLD.period_code, OLD.start_date,
+        OLD.end_date, OLD.cutoff_date, OLD.target_payment_date,
+        OLD.created_by_user_id, OLD.created_at
+    ) THEN
+        RAISE EXCEPTION 'Payroll period source metadata is immutable';
+    END IF;
+    IF OLD.state <> 'OPEN'
+       OR NEW.state <> 'INPUTS_SNAPSHOTTED'
+       OR NEW.version <> OLD.version + 1
+       OR NEW.snapshot_at IS NULL
+       OR NEW.snapshot_by_user_id IS NULL THEN
+        RAISE EXCEPTION 'Invalid payroll 9A period transition';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER payroll_9a_period_guard_trigger
+    BEFORE UPDATE OR DELETE ON payroll_period
+    FOR EACH ROW EXECUTE FUNCTION payroll_9a_period_guard();
+
+CREATE FUNCTION payroll_9a_immutable_guard() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'Payroll captured source and review history is immutable';
+END;
+$$;
+
+CREATE TRIGGER payroll_9a_snapshot_immutable
+    BEFORE UPDATE OR DELETE ON payroll_employee_input_snapshot
+    FOR EACH ROW EXECUTE FUNCTION payroll_9a_immutable_guard();
+
+CREATE TRIGGER payroll_9a_exception_immutable
+    BEFORE UPDATE OR DELETE ON payroll_input_exception
+    FOR EACH ROW EXECUTE FUNCTION payroll_9a_immutable_guard();
+
+CREATE TRIGGER payroll_9a_review_immutable
+    BEFORE UPDATE OR DELETE ON payroll_exception_review
+    FOR EACH ROW EXECUTE FUNCTION payroll_9a_immutable_guard();
