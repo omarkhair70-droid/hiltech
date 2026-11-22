@@ -614,7 +614,7 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
                 )
             }
             persistence.insertServiceQuoteDocumentReservation(
-                ServiceQuoteDocumentEvidenceReservationInsert(
+                SupplierQuoteDocumentEvidenceReservationInsert(
                     evidenceId = evidenceId,
                     uploadSessionId = uploadSessionId,
                     operationId = command.operationId,
