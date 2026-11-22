@@ -92,8 +92,8 @@ def load_baseline(repo: Path, ref: str) -> dict[str, bytes]:
 def load_worktree(repo: Path) -> dict[str, bytes]:
     folder = repo / PREFIX
     return {
-        PREFIX + item.name: item.read_bytes()
-        for item in folder.glob("*.sql")
+        item.relative_to(repo).as_posix(): item.read_bytes()
+        for item in folder.rglob("*.sql")
         if item.is_file()
     }
 
