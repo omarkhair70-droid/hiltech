@@ -15,7 +15,7 @@ import java.util.UUID
  * supplier link, evidence or deadline changes.
  */
 @Component
-class ServiceOrderCandidateApprovalSubject(
+class ServiceOrderCandidateApprovalSubject @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val clock: Clock,
     @Value("\${hiltech.procurement.service-orders.enabled:false}")
