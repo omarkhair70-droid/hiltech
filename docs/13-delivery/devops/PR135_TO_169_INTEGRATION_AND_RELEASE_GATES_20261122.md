@@ -56,3 +56,21 @@ This is a **source/CI/control-plane audit**, **not** a release, domain sign-off,
 **Go/no-go:** Production **NO-GO** until (1) full exact-head merged branch and security/architecture checks, (2) native OIDC and signed evidence HTTPS, (3) isolated DB/role/backup+restore, (4) real-device cross-role/negative/offline integrated journey, (5) explicit company PO/payroll/finance/supplier policy signoff, (6) pinned ARM64 OCI + Android/Windows releases and rollback. Company approval for implementation is **not** equivalent to authorizing money transfers or vendor sends.
 
 This report deliberately distinguishes build/test evidence, deployed *staging infrastructure*, and company production acceptance.
+
+## 5. Current parallel Phase 8–13 heads (newer than the initial PR inventory)
+
+The planning map in [PR #161](https://github.com/omarkhair70-droid/hiltech/pull/161) requires one branch/owner per phase, no concurrent shared-shell/ApprovalEngine/Flyway writes, and one integrator allocating canonical migrations from the **actually merged** main.
+
+| Phase branch | Exact observed provisional schema | Source/CI status at this checkpoint | DevOps gate |
+| --- | --- | --- | --- |
+| [#164 Finance 8A](https://github.com/omarkhair70-droid/hiltech/pull/164), stacked on #162 | `V0061__phase8_finance_source_bound_payable_candidate.sql` | Finance-specific CI **PASSED**; [DevOps package #45075442577](https://github.com/omarkhair70-droid/hiltech/actions/runs/45075442577) **FAILED** at `DatabaseMigrationContractTest.kt:89`: expected 27 post-V0033 migrations but #164 adds V0061, making **28**. Draft child [#172](https://github.com/omarkhair70-droid/hiltech/pull/172) corrects the **integrator-owned test**, rehearses disposable P7 + P8 DB/Finance, no domain SQL changes. | BLOCK until parent P7 chain, exact-head corrected package proof, Finance authority and review; no payable booking or payment |
+| [#166 Payroll 9A](https://github.com/omarkhair70-droid/hiltech/pull/166), base main | **Provisional V0070** period/input snapshot | CI runs still in progress/queued at first read; source explicitly declares provisional V0070 and no payslip/payment | BLOCK until lower-version P7/P8 and intervening pending domain migrations are planned, rebased, merged and verified; **do not apply V0070 first** to live PG |
+| [#170 Sales 10](https://github.com/omarkhair70-droid/hiltech/pull/170), base main | SQL staged outside Flyway numbering | Sales/KMP CI queued at first read; no authorized client quote send | Allocate version at integration; protect internal costs and contract evidence, no live Won->Project without approval |
+| [#167 Service 11A](https://github.com/omarkhair70-droid/hiltech/pull/167), base main | `database/pending/phase11/11A_handover.sql`, no global version | Draft/CI pending; no client sharing or SLA assumptions | Allocate version after approved preceding schema; do not enable without real warranty/acceptance policy |
+| [#168 Executive 13A](https://github.com/omarkhair70-droid/hiltech/pull/168), base main | No SQL migration | Draft read-only current-source executive surface; not mounted in native global shell | Integrator owns native route/drillthrough, role revocation and freshness tests; no invented metrics |
+
+### Updated architecture diagnostics
+
+The first integrator correction on [#169](https://github.com/omarkhair70-droid/hiltech/pull/169) removed the direct `Warehouse.ReceivingService -> ProcurementPoReceivingGuard` module cycle. Disposable P7 migration + canonical PO receiving CI job then **PASSED**, while full Spring Modulith still **FAILED**, revealing a second previously hidden violation: `SupplierQuoteProtectedDocumentService.read` in Procurement directly invoked the **non-exposed** internal `documents.storage.EvidenceObjectStoragePort.readRestrictedObject` method. Do not expose entire Documents storage module or remove buyer authorization. The follow-up in #169 routes protected bytes through root `EvidenceStorageAccessPort`, keeping the same actor/READY Evidence/size/SHA-256/MIME checks. New exact-head CI [#45076295248](https://github.com/omarkhair70-droid/hiltech/actions/runs/45076295248) was queued at authoring and must pass before adoption.
+
+**No PR mentioned in this report has been merged or put into production by this DevOps work.**
