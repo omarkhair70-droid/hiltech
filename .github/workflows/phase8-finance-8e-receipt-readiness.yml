@@ -56,6 +56,7 @@ jobs:
             --tests com.hiltech.server.finance.FinancePaymentPreflightServiceTest \
             --tests com.hiltech.server.finance.FinanceBankResultRulesTest \
             --tests com.hiltech.server.finance.FinanceExpenseReceiptReadinessServiceTest \
+            --tests com.hiltech.server.finance.FinanceExpenseReceiptPostgresContractTest \
             --no-daemon --console=plain
       - name: Compile Windows and Android Finance receipt review UI
         run: |
