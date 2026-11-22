@@ -180,6 +180,7 @@ object PayrollRunSourceFingerprint {
 class ApprovalBackedPayrollPublication(
     private val approvals: ApprovalEngineService,
     private val guard: PayrollRunApprovalVersionSource,
+    private val jdbc: JdbcTemplate,
     @Value("\${hiltech.payroll.run-approval-policy-key:}") private val policyKey: String,
 ) : PayrollRunPublicationPort {
     override fun canPublish(
@@ -188,6 +189,15 @@ class ApprovalBackedPayrollPublication(
         exactSourceFingerprint: String,
     ): Boolean {
         if (policyKey.isBlank() || !Regex("^[A-Z][A-Z0-9_-]{0,79}$").matches(policyKey)) return false
+        val storedFingerprint = jdbc.query(
+            """
+            SELECT source_fingerprint FROM payroll_run_version
+            WHERE id = ? AND organization_id = ?
+            """.trimIndent(),
+            { rs, _ -> rs.getString("source_fingerprint") },
+            runVersionId, organizationId,
+        ).singleOrNull() ?: return false
+        if (storedFingerprint != exactSourceFingerprint) return false
         val subject = ApprovalSubjectRef(
             organizationId = organizationId,
             subjectType = "PAYROLL_RUN_VERSION",
