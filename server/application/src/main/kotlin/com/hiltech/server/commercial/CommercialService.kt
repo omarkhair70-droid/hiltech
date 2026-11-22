@@ -369,6 +369,12 @@ class CommercialService(
                     line.unit.trim(),line.internalUnitCost,line.sellUnitPrice,now(),
                 )
             }
+            val sealed=jdbc.update(
+                "UPDATE commercial_boq_version SET sealed_at=? WHERE id=? AND sealed_at IS NULL",
+                now(),target,
+            )
+            if(sealed!=1) throw commercialError(
+                "COMMERCIAL_BOQ_NOT_SEALED","BOQ source was not sealed.",HttpStatus.CONFLICT)
             audit(actor,"COMMERCIAL_BOQ_PRIVATE_CREATED",target,"PRIVATE",correlation)
         }
         return result(target,replay,"PRIVATE",correlation)
@@ -386,7 +392,8 @@ class CommercialService(
             val parent = op(id,actor,"SALES_WRITE");open(parent);lockOpportunity(id)
             val boq = row(
                 """SELECT scope_version_id,currency FROM commercial_boq_version
-                   WHERE id=? AND opportunity_id=? AND organization_id=?""",
+                   WHERE id=? AND opportunity_id=? AND organization_id=?
+                     AND sealed_at IS NOT NULL""",
                 boqId,id,parent["organization_id"]!!,
             )
             val lines = jdbc.queryForList(
