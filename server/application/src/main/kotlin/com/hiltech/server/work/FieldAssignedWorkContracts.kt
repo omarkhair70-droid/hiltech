@@ -10,6 +10,7 @@ data class FieldExecutionCapabilities(
     val evidenceCaptureOffline: Boolean = false,
     val submitOffline: Boolean = false,
     val authoritativeOfflineQueue: Boolean = false,
+    val engineeringTestCaptureOffline: Boolean = false,
 )
 
 data class FieldAssignmentContext(

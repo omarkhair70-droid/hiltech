@@ -664,18 +664,11 @@ class MainActivity : ComponentActivity() {
                 it.requirementKey == draft.requirementKey &&
                     it.storageState == "READY"
             }?.evidenceId
-        if (test.rawEvidenceRequired && rawEvidenceId == null) {
-            shellState = signed.copy(
-                field = field.copy(
-                    engineeringTestMessage =
-                        "لازم ترفع Evidence المطلوب ويصبح READY قبل إرسال نتيجة الاختبار.",
-                ),
-            )
-            return
-        }
-
         val actorId = signed.identity.identityId
         val requestSequence = ++engineeringTestSequence
+        val operationId = UUID.randomUUID().toString()
+        val capturedAtEpochMs = System.currentTimeMillis()
+        val capturedAt = Instant.ofEpochMilli(capturedAtEpochMs).toString()
         shellState = signed.copy(
             field = field.copy(
                 engineeringTestSubmitting = true,
@@ -683,6 +676,63 @@ class MainActivity : ComponentActivity() {
             ),
         )
         scope.launch {
+            if (test.rawEvidenceRequired && rawEvidenceId == null) {
+                val queued =
+                    runCatching {
+                        hiltechApplication.fieldEngineeringTestOfflineQueue.queue(
+                            actorId = actorId,
+                            installationId = hiltechApplication.installationId,
+                            bundle = bundle,
+                            draft = draft,
+                            operationId = operationId,
+                            capturedAtEpochMs = capturedAtEpochMs,
+                            verifiedOnlineThisSession = true,
+                            serverReadyEvidenceId = null,
+                        )
+                    }
+                val current =
+                    shellState as? HiltechShellState.SignedIn
+                        ?: return@launch
+                val selected =
+                    current.field ?: return@launch
+                if (
+                    requestSequence != engineeringTestSequence ||
+                    current.identity.identityId != actorId ||
+                    selected.selectedWorkOrderId != workOrderId ||
+                    selected.selectedBundle?.workOrderId != workOrderId ||
+                    selected.cachedBundleAt != null
+                ) {
+                    return@launch
+                }
+                queued.fold(
+                    onSuccess = {
+                        shellState =
+                            current.copy(
+                                field =
+                                    selected.copy(
+                                        engineeringTestSubmitting = false,
+                                        engineeringTestMessage =
+                                            "تم حفظ نتيجة الاختبار محليًا. سيتم رفع الـEvidence ثم اعتماد النتيجة عند رجوع الاتصال.",
+                                    ),
+                            )
+                        scheduleFieldCommandReplay(actorId)
+                    },
+                    onFailure = { error ->
+                        shellState =
+                            current.copy(
+                                field =
+                                    selected.copy(
+                                        engineeringTestSubmitting = false,
+                                        engineeringTestMessage =
+                                            error.message
+                                                ?: "لازم تسجل الـEvidence المطلوب قبل حفظ الاختبار أوفلاين.",
+                                    ),
+                            )
+                    },
+                )
+                return@launch
+            }
+
             val result = runCatching {
                 val instrumentAssetId =
                     if (test.instrumentAssetRequired) {
@@ -697,8 +747,6 @@ class MainActivity : ComponentActivity() {
                     } else {
                         null
                     }
-                val operationId = UUID.randomUUID().toString()
-                val capturedAt = Instant.now().toString()
                 hiltechApplication.fieldAssignedWorkApi.captureEngineeringTest(
                     workOrderId = workOrderId,
                     request = FieldEngineeringTestCaptureDto(
@@ -746,6 +794,54 @@ class MainActivity : ComponentActivity() {
                             "الاختبار لم يعد متاحًا بالصلاحية/الـconfig الحالي. أعد تحميل التكليف.",
                     ),
                 )
+                return@launch
+            }
+
+            val retryableNetworkFailure =
+                failure != null &&
+                    (
+                        failure.retryable ||
+                            failure.code == "NETWORK_UNAVAILABLE" ||
+                            failure.httpStatus == 429 ||
+                            (failure.httpStatus ?: 0) >= 500
+                    )
+            if (retryableNetworkFailure) {
+                val queued =
+                    runCatching {
+                        hiltechApplication.fieldEngineeringTestOfflineQueue.queue(
+                            actorId = actorId,
+                            installationId = hiltechApplication.installationId,
+                            bundle = bundle,
+                            draft = draft,
+                            operationId = operationId,
+                            capturedAtEpochMs = capturedAtEpochMs,
+                            verifiedOnlineThisSession = true,
+                            serverReadyEvidenceId = rawEvidenceId,
+                        )
+                    }
+                if (queued.isSuccess) {
+                    shellState =
+                        current.copy(
+                            field =
+                                selected.copy(
+                                    engineeringTestSubmitting = false,
+                                    engineeringTestMessage =
+                                        "الاتصال انقطع؛ النتيجة محفوظة محليًا وستُراجع على السيرفر عند رجوع الشبكة.",
+                                ),
+                        )
+                    scheduleFieldCommandReplay(actorId)
+                    return@launch
+                }
+                shellState =
+                    current.copy(
+                        field =
+                            selected.copy(
+                                engineeringTestSubmitting = false,
+                                engineeringTestMessage =
+                                    queued.exceptionOrNull()?.message
+                                        ?: "تعذر حفظ نتيجة الاختبار محليًا.",
+                            ),
+                    )
                 return@launch
             }
 

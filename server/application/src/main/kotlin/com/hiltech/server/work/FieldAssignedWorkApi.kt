@@ -219,6 +219,7 @@ data class FieldExecutionCapabilitiesResponse(
     val evidenceCaptureOffline: Boolean,
     val submitOffline: Boolean,
     val authoritativeOfflineQueue: Boolean,
+    val engineeringTestCaptureOffline: Boolean,
 )
 
 data class TechnicianJobBundleResponse(
@@ -582,6 +583,9 @@ private fun TechnicianJobBundle.response() =
                 evidenceCaptureOffline =
                     executionCapabilities
                         .evidenceCaptureOffline,
+                engineeringTestCaptureOffline =
+                    executionCapabilities
+                        .engineeringTestCaptureOffline,
                 submitOffline =
                     executionCapabilities
                         .submitOffline,
