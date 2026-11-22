@@ -178,6 +178,15 @@ class Payroll9b9cDomainTest {
         assertThrows<ProductApiException> {
             Payroll9cReconciler.reconcile(org, runId, listOf(entry), listOf(initial, forged))
         }
+        val sameVersionDifferentEvent = initial.copy(
+            outcomeEventId = UUID.randomUUID(),
+            outcome = PayrollFinanceOutcome.RETURNED,
+        )
+        assertThrows<ProductApiException> {
+            Payroll9cReconciler.reconcile(
+                org, runId, listOf(entry), listOf(initial, sameVersionDifferentEvent),
+            )
+        }
     }
 
     @Test
