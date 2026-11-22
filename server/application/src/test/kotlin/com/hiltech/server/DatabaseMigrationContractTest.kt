@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(16, result.migrationsExecuted)
+        assertEquals(17, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -154,12 +154,13 @@ class DatabaseMigrationContractTest {
                         'procurement_po_number_counter',
                         'procurement_purchase_order',
                         'procurement_po_lifecycle_event',
-                        'procurement_po_delivery_amendment_proposal'
+                        'procurement_po_delivery_amendment_proposal',
+                        'procurement_po_receiving_link'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(78, tables.getInt(1))
+                assertEquals(79, tables.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
@@ -350,6 +351,30 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(cancelIndex.next())
                 assertEquals(1, cancelIndex.getInt(1))
+                val poReceivingLinkTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_po_receiving_link'::regclass
+                      AND tgname = 'procurement_po_receiving_link_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(poReceivingLinkTrigger.next())
+                assertEquals(1, poReceivingLinkTrigger.getInt(1))
+                val poReceivingScopedFks = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_po_receiving_link'::regclass
+                      AND conname IN (
+                        'fk_po_receiving_purchase_order_org',
+                        'fk_po_receiving_record_org',
+                        'fk_po_receiving_stock_item_org',
+                        'fk_po_receiving_location_org'
+                      ) AND contype = 'f'
+                    """.trimIndent(),
+                )
+                assertTrue(poReceivingScopedFks.next())
+                assertEquals(4, poReceivingScopedFks.getInt(1))
                 val purchaseOrderConstraints = statement.executeQuery(
                     """
                     SELECT COUNT(*) FROM pg_constraint
