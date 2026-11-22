@@ -1,0 +1,13 @@
+// QA-only runnable renderer of the production-mounted BuyerSourcingLiveScreen.
+// Kept outside the original Gradle project to preserve Engineering's build.
+gradle.projectsEvaluated {
+    def desktop = gradle.rootProject.findProject(':apps:desktopApp')
+    if (desktop == null) return
+    desktop.tasks.register('renderUx128LiveSourcing', org.gradle.api.tasks.JavaExec) {
+        group = 'verification'
+        description = 'Native Compose screenshots of production buyer screen using synthetic, typed source DTOs'
+        dependsOn(desktop.tasks.named('testClasses'))
+        classpath = desktop.sourceSets.test.runtimeClasspath
+        mainClass.set('com.hiltech.desktop.evidence.UX128LiveBuyerVisualEvidenceKt')
+    }
+}

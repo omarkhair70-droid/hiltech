@@ -38,6 +38,8 @@ fun SupplierQuoteCaptureForm(
     suppliers: List<SourcingSupplierCandidateDto>,
     installationId: String,
     newOperationId: () -> String,
+    /** Called only after a confirmed server quote receipt. No optimistic refresh. */
+    onQuoteRecorded: (SupplierQuoteReceiptDto) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var supplierId by remember(rfq.id) { mutableStateOf<String?>(null) }
@@ -193,6 +195,7 @@ fun SupplierQuoteCaptureForm(
                     document = null
                     status = "Recorded quote revision " + receipt.revisionNumber +
                         ". No supplier was awarded and no PO was issued."
+                    onQuoteRecorded(receipt)
                 } catch (failure: Exception) {
                     error = failure.message ?: "Quote was not recorded."
                 } finally {

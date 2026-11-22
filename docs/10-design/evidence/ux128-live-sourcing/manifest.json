@@ -1,0 +1,69 @@
+﻿{
+    "kind":  "QA images of LIVE mounted BuyerSourcingLiveScreen",
+    "source_head":  "c9c5ab5e33ac5d6a52d5c5a32b84fdf0438e38d4",
+    "synthetic_typed_fixtures":  true,
+    "company_data_used":  false,
+    "real_backend_attached":  false,
+    "real_operator_acceptance":  false,
+    "android_device_test":  false,
+    "renderer":  "Native Desktop Compose ImageComposeScene",
+    "count":  8,
+    "images":  [
+                   {
+                       "name":  "01-windows-real-mounted-screen.png",
+                       "width":  1440,
+                       "height":  1080,
+                       "bytes":  100707,
+                       "sha256":  "a7eeb7ed9f53bd4e0fe1c0c2c4a505d8af217dd3e96220f07124a351f64d116a"
+                   },
+                   {
+                       "name":  "02-windows-compact-adaptive.png",
+                       "width":  830,
+                       "height":  1100,
+                       "bytes":  60020,
+                       "sha256":  "5f97b4c1e6a023a7260f45417c9fce20c48725400ccd945e48cba62b9219dfcc"
+                   },
+                   {
+                       "name":  "03-windows-dark.png",
+                       "width":  1440,
+                       "height":  1080,
+                       "bytes":  102012,
+                       "sha256":  "1999e95149f0160f3e26ee1a54d550c633a08819737741883df6cdaf28848aea"
+                   },
+                   {
+                       "name":  "04-windows-high-contrast.png",
+                       "width":  1440,
+                       "height":  1080,
+                       "bytes":  95618,
+                       "sha256":  "90efe9690180679415132346bfee2f53d1e2fb0bf5e9cdd11f379a3450acced1"
+                   },
+                   {
+                       "name":  "05-current-source-revoked.png",
+                       "width":  1440,
+                       "height":  1080,
+                       "bytes":  99970,
+                       "sha256":  "12889b32b61c3db870ed159441c7794a4a303835008f6cc5e50e5ec6b30e4354"
+                   },
+                   {
+                       "name":  "06-scaled-text-180pct.png",
+                       "width":  1440,
+                       "height":  1400,
+                       "bytes":  200160,
+                       "sha256":  "2dbb8545f71e9fd33f49c86beb3e0475c9c7e5b76c0e38ac1a13c1cb207efe45"
+                   },
+                   {
+                       "name":  "07-windows-full-comparison-and-inspector.png",
+                       "width":  1440,
+                       "height":  2000,
+                       "bytes":  174741,
+                       "sha256":  "a0c1671bf4b925ee8d0f77015b91fecec801aea11e009e500b0627d3414befd5"
+                   },
+                   {
+                       "name":  "08-paged-authorized-needs.png",
+                       "width":  1440,
+                       "height":  2400,
+                       "bytes":  136284,
+                       "sha256":  "128b9e76fb5eada7e130449831ae609dd0c59f92c9cc31d746ec4bd54bce9fa1"
+                   }
+               ]
+}
