@@ -36,6 +36,7 @@ import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
 import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
+import com.hiltech.shared.core.procurement.WarehouseReplenishmentSection
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeSection
 import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceSection
 import com.hiltech.shared.core.identity.IdentityApiException
@@ -159,6 +160,17 @@ class MainActivity : ComponentActivity() {
                                     java.util.UUID.nameUUIDFromBytes(payload.toByteArray(Charsets.UTF_8)).toString()
                                 },
                             )
+                            if (BuildConfig.HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED) {
+                                key(identity.identityId, organization.organizationId, "warehouse-needs") {
+                                    WarehouseReplenishmentSection(
+                                        api = hiltechApplication.warehouseReplenishmentApi,
+                                        warehouseApi = hiltechApplication.warehouseApi,
+                                        organizationId = organization.organizationId,
+                                        installationId = hiltechApplication.installationId,
+                                        newOperationId = { UUID.randomUUID().toString() },
+                                    )
+                                }
+                            }
                             if (BuildConfig.HILTECH_PO_WAREHOUSE_INTAKE_ENABLED) {
                                 AndroidPoWarehouseIntakeSection(
                                     api = hiltechApplication.poWarehouseIntakeApi,
