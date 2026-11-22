@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(15, result.migrationsExecuted)
+        assertEquals(16, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -153,12 +153,13 @@ class DatabaseMigrationContractTest {
                         'procurement_po_candidate',
                         'procurement_po_number_counter',
                         'procurement_purchase_order',
-                        'procurement_po_lifecycle_event'
+                        'procurement_po_lifecycle_event',
+                        'procurement_po_delivery_amendment_proposal'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(77, tables.getInt(1))
+                assertEquals(78, tables.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
@@ -305,12 +306,50 @@ class DatabaseMigrationContractTest {
                       AND conname IN (
                         'fk_po_lifecycle_org',
                         'uq_po_lifecycle_version',
-                        'uq_po_lifecycle_terminal_cancel'
+                        'fk_po_lifecycle_approved_proposal_org',
+                        'fk_po_lifecycle_approval_request_org',
+                        'fk_po_lifecycle_new_destination_org',
+                        'ck_po_lifecycle_specific_payload',
+                        'ck_po_lifecycle_event_type'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(lifecycleOrgFk.next())
-                assertEquals(3, lifecycleOrgFk.getInt(1))
+                assertEquals(7, lifecycleOrgFk.getInt(1))
+                val proposalTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_po_delivery_amendment_proposal'::regclass
+                      AND tgname = 'procurement_po_delivery_proposal_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(proposalTrigger.next())
+                assertEquals(1, proposalTrigger.getInt(1))
+                val proposalConstraints = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_po_delivery_amendment_proposal'::regclass
+                      AND conname IN (
+                        'fk_po_delivery_proposal_order_org',
+                        'fk_po_delivery_proposal_old_location_org',
+                        'fk_po_delivery_proposal_new_location_org',
+                        'uq_po_delivery_proposal_base',
+                        'ck_po_delivery_changed_destination'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(proposalConstraints.next())
+                assertEquals(5, proposalConstraints.getInt(1))
+                val cancelIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename = 'procurement_po_lifecycle_event'
+                      AND indexname = 'uq_po_lifecycle_one_cancellation'
+                    """.trimIndent(),
+                )
+                assertTrue(cancelIndex.next())
+                assertEquals(1, cancelIndex.getInt(1))
                 val purchaseOrderConstraints = statement.executeQuery(
                     """
                     SELECT COUNT(*) FROM pg_constraint
