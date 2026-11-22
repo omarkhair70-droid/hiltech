@@ -70,6 +70,16 @@ data class PurchaseOrderLifecycleEvent(
     val actor: UUID,
     val at: Instant,
     val correlationId: String,
+    val amendmentProposalId: UUID? = null,
+    val approvalRequestId: UUID? = null,
+    val deliveryStorageLocationId: UUID? = null,
+)
+
+data class PurchaseOrderEffectiveState(
+    val order: PurchaseOrderIssuedRecord,
+    val version: Long,
+    val effectiveState: String,
+    val destinationId: UUID,
 )
 
 data class PurchaseOrderLifecycleSummary(
@@ -159,7 +169,8 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
     fun lifecycleEvents(orderId: UUID): List<PurchaseOrderLifecycleEvent> = jdbc.query(
         """
         SELECT id, operation_id, organization_id, purchase_order_id, event_version,
-               event_type, reason, recorded_by_user_id, recorded_at, correlation_id
+               event_type, reason, recorded_by_user_id, recorded_at, correlation_id,
+               approved_amendment_proposal_id, approval_request_id, delivery_storage_location_id
         FROM procurement_po_lifecycle_event
         WHERE purchase_order_id = ?
         ORDER BY event_version, id
@@ -175,20 +186,48 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
             actor = rs.getObject("recorded_by_user_id", UUID::class.java),
             at = rs.getObject("recorded_at", OffsetDateTime::class.java).toInstant(),
             correlationId = rs.getString("correlation_id"),
+            amendmentProposalId = rs.getObject("approved_amendment_proposal_id", UUID::class.java),
+            approvalRequestId = rs.getObject("approval_request_id", UUID::class.java),
+            deliveryStorageLocationId = rs.getObject("delivery_storage_location_id", UUID::class.java),
         ) }, orderId,
     )
+
+    /** V1 + append-only events are the only authoritative effective state. */
+    fun effectiveState(orderId: UUID): PurchaseOrderEffectiveState? {
+        val order = byId(orderId) ?: return null
+        val history = lifecycleEvents(orderId)
+        var version = 1L
+        var destinationId = order.deliveryStorageLocationId
+        var state = "ISSUED"
+        for (event in history) {
+            if (event.organizationId != order.organizationId ||
+                event.orderId != order.id || event.version != version + 1L ||
+                state == "CANCELLED"
+            ) return null
+            version = event.version
+            when (event.type) {
+                "CANCELLED" -> state = "CANCELLED"
+                "DELIVERY_AMENDED" ->
+                    destinationId = event.deliveryStorageLocationId ?: return null
+                else -> return null
+            }
+        }
+        return PurchaseOrderEffectiveState(order, version, state, destinationId)
+    }
 
     fun appendLifecycleEvent(event: PurchaseOrderLifecycleEvent) {
         check(jdbc.update(
             """
             INSERT INTO procurement_po_lifecycle_event (
                 id, operation_id, organization_id, purchase_order_id, event_version,
-                event_type, reason, recorded_by_user_id, recorded_at, correlation_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                event_type, reason, recorded_by_user_id, recorded_at, correlation_id,
+                approved_amendment_proposal_id, approval_request_id, delivery_storage_location_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
             event.id, event.operationId, event.organizationId, event.orderId,
             event.version, event.type, event.reason, event.actor,
             event.at.atOffset(ZoneOffset.UTC), event.correlationId,
+            event.amendmentProposalId, event.approvalRequestId, event.deliveryStorageLocationId,
         ) == 1)
     }
 
