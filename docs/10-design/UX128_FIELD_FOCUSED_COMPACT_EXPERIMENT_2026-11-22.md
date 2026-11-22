@@ -82,3 +82,30 @@ Never label this as final Industrial. Precise. Alive. visual treatment; it is ta
 3. **Focused details are much more reachable** than the current source baseline's below-list detail on compact; however this is **a structural hypothesis tested with only one WorkOrder**, not quantified operator improvement. Field details themselves still have dense technical status strings, policy codes and long vertical content.
 4. **No Android system Back** handling in the experimental presentation; visible in-component Back is proven only through headless Desktop Compose pointer. No screen reader, 200% text, landscape, 2+ WorkOrders, real assignment revocation timing, or server-authorized route proof.
 5. Source-ownership coordination: actual Android and Windows applications continue default `BASELINE`. Do not merge or enable this presentation until Engineering/owner review, role/scope key validation, native Android/Windows and real-device operator gates.
+
+
+## Pass 02 — twelve assignments, scroll-to-focus and back-position recovery (2026-11-22)
+
+**Tested exact code SHA:** `005fa08a389ea580d3f2391d12c46a1175869b6a`, in isolated authorized Windows QA clone, JDK17 scoped to task. Reproduction: `./gradlew.bat -I docs/10-design/ux128-field-focus-headless.init.gradle :apps:desktopApp:renderUx128FieldFocus --no-daemon`.
+
+**Result: BUILD SUCCESSFUL (45s; 15 tasks, 4 executed, 11 up-to-date), exit 0.** Console includes:
+- `UX128_FIELD_MULTI_PASS source_list=12 selected_current=PASS focused_top=PASS return_scroll=PASS`
+- `UX128_FIELD_FOCUS_PASS selected_source=PASS back_reselect=PASS cached_read_only_source=PASS revoked_hides_detail=INSPECT_IMAGE wide_layout=INSPECT_IMAGE no_robot=true synthetic_fixture=true`
+
+The actual Kotlin/Compose `AssignedWorkSection` (not a parallel UI) was tested with **12 distinct WorkOrder IDs** derived from the existing Android debug test fixture. The headless `430×720` scene renders the actual source Today list, scrolls the host's existing `ScrollState` **550px** to a mid-list assignment, clicks that card using native Compose pointer Press/Release, opens matching source `JobBundleDetail`, returns with the visible RTL Back button, and asserts restoration to that same 550px position. The selected screenshot identifies `WO-QA-05` as the task opened; the exact ID is verified against the currently assigned items. The test then removes that source assignment and captures the remaining list, with no old JobBundle on screen.
+
+**Real UX defect uncovered and repaired:** In an earlier run the focused details still inherited a `127px` scroll offset when the former long Today list had been replaced. The JobBundle heading and visible Back button were partly offscreen. The new *opt-in* experiment accepts `focusHostScroll: ScrollState?` from its owner, stores the original Today scroll offset per `focusScopeKey`, waits one Compose frame **after layout** before scrolling focused detail to zero, and on Back waits for list layout before restoring the saved position. It does not add a nested vertical scroll (the parent remains sole scroll owner). Shipping entrypoints do not pass this optional parameter and are still `BASELINE`.
+
+**Evidence integrity gate:** The first 12-item screenshot after programmatic scrolling displayed the stale top-list pixels even though the ScrollState had changed. The final harness now advances actual Compose frames before capturing and rejects an identical image pair for top vs scrolled list. Latest inspected screenshots show the real mid-list with `WO-QA-05`, focused detail at top, and returned mid-list. Local QA PNGs `ux128-field-06-multiple-top.png` through `ux128-field-10-multiple-revoked.png` are **not committed to GitHub**.
+
+Also inspected the `1150×980` wide-mode PNG from the same fixture, confirming the original side-by-side Today + selected JobBundle remains visible. This is a **synthetic Desktop Compose verification**, not a real Windows app account, Android runtime, or operator acceptance.
+
+### Failure and boundary record
+- A 12-item run initially missed a card because a newly composed startup scroll reset occurred after the synthetic scroll; harness was fixed to settle Compose and assert actual pre-click offset.
+- Next run *correctly* caught the real offset defect (`127px` rather than expected `0`), leading to the post-layout scroll fix.
+- The final tested source head passed both exact-position and screenshot-difference checks. No earlier failures were mislabeled as successful.
+- Preserving a *pixel* offset is appropriate only while the list order/height remains materially stable. When assignments are reordered or removed, a future robust route should anchor to a WorkOrder ID (or a stable list item key) rather than claiming identical positional meaning. This limitation is explicit.
+- Actual `HiltechShell` parent-scroll integration, Android system Back, role-scoped source read, 200% text, accessibility focus, and offline/revocation from server are **OPEN**. No claim that source authority is enforced by a simple local list-membership check.
+- PM Project/Site/WorkOrder drill and Inbox delivery remain separate UX work; no fake source routes or providers introduced.
+
+**Pass02 closure:** test of multi-WorkOrder selection + parent-scroll return on synthetic source fixtures PASSED. UX #128 as a whole remains OPEN. No visual system or production integration approved.
