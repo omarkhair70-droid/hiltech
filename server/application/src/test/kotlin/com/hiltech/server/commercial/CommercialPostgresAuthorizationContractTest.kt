@@ -97,6 +97,32 @@ class CommercialPostgresAuthorizationContractTest {
                    VALUES (?,?,?,'Synthetic Sales Team',true)""",
                 team,company,"P10_TEAM_"+team,
             )
+            jdbc.update(
+                """INSERT INTO team_membership
+                   (id,team_id,user_identity_id,valid_from)
+                   VALUES (?,?,?,now()-interval '1 day')""",
+                teamMember,team,actor,
+            )
+            jdbc.update(
+                """INSERT INTO commercial_authority_binding
+                   (id,organization_id,authority_key,principal_type,principal_team_id,
+                    active,effective_from,created_by,created_at)
+                   VALUES (?,?,'SALES_COST_VIEW','TEAM',?,true,now()-interval '1 day',?,now())""",
+                teamGrant,company,team,actor,
+            )
+            assertDoesNotThrow { access.require(actor,company,"SALES_COST_VIEW") }
+            jdbc.update("UPDATE team SET active=false WHERE id=?",team)
+            assertThrows(ProductApiException::class.java) {
+                access.require(actor,company,"SALES_COST_VIEW")
+            }
+            jdbc.update("UPDATE team SET active=true WHERE id=?",team)
+            jdbc.update(
+                "UPDATE team_membership SET valid_until=now()-interval '1 minute' WHERE id=?",
+                teamMember,
+            )
+            assertThrows(ProductApiException::class.java) {
+                access.require(actor,company,"SALES_COST_VIEW")
+            }
         }
     }
 
