@@ -65,6 +65,8 @@ import com.hiltech.shared.core.StockInventoryState
 import com.hiltech.shared.core.WarehouseSetupSection
 import com.hiltech.shared.core.WarehouseCommandCenterSection
 import com.hiltech.shared.core.WarehouseCommandCenterPresentation
+import com.hiltech.shared.core.WarehouseOperatorFocus
+import com.hiltech.shared.core.WarehouseOperatorFocusFlow
 import com.hiltech.shared.core.WarehouseQuickScanControls
 import com.hiltech.shared.core.WarehouseQuickScanState
 import com.hiltech.shared.core.warehouse.WarehouseCommandCenterDto
@@ -274,6 +276,29 @@ fun main() = runBlocking<Unit> {
         }
     }
     captureAndClose(quickScene, directory.resolve("warehouse-quick-scan.png"))
+    // Native common Compose focus flow; source read-only controls and same synthetic warehouse.
+    // The two initial states are rendered independently. Pointer/touch interaction remains a separate gate.
+    for (candidate in listOf(
+        WarehouseCommandCenterPresentation.ACTION_FIRST,
+        WarehouseCommandCenterPresentation.OBJECT_FIRST,
+    )) {
+        val candidateLabel = if (candidate == WarehouseCommandCenterPresentation.ACTION_FIRST) "action" else "object"
+        for (focus in listOf(WarehouseOperatorFocus.TODAY, WarehouseOperatorFocus.CODE_LOOKUP)) {
+            val focusLabel = if (focus == WarehouseOperatorFocus.TODAY) "today" else "lookup"
+            val journeyScene = ImageComposeScene(width = 430, height = 960, coroutineContext = coroutineContext) {
+                Column(Modifier.fillMaxSize().background(Color.White).verticalScroll(ScrollState(0)).padding(18.dp)) {
+                    WarehouseOperatorFocusFlow(
+                        warehouseId = commandCenter.warehouseId,
+                        busy = false,
+                        initialFocus = focus,
+                        today = { WarehouseCommandCenterSection(commandCenter, presentation = candidate) },
+                        codeLookup = { WarehouseQuickScanControls(quickState, false, {}, {}, {}) },
+                    )
+                }
+            }
+            captureAndClose(journeyScene, directory.resolve("ux128-$candidateLabel-flow-$focusLabel-phone.png"))
+        }
+    }
 
     val stock = syntheticStock(state)
     val inventory = ImageComposeScene(width = 940, height = 940, coroutineContext = coroutineContext) {
