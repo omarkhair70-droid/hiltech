@@ -94,6 +94,10 @@ class PurchaseOrderIssueService @Autowired constructor(
         )
     }
 
+    /** Reuse the existing real company issuer authority for lifecycle actions. */
+    fun requireIssuerForLifecycle(actor: UUID, organizationId: UUID): Int =
+        requireIssuerRead(actor, organizationId)
+
     private fun requireIssuerRead(actor: UUID, organizationId: UUID): Int {
         val policyKey = approvalPolicyKey.trim()
         val authorityKey = issuerAuthorityKey.trim()
