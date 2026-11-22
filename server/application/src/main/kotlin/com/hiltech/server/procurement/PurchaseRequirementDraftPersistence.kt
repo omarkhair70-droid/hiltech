@@ -13,8 +13,8 @@ data class PurchaseRequirementDraftRecord(
     val id: UUID,
     val operationId: UUID,
     val organizationId: UUID,
-    val workOrderId: UUID,
-    val sourceWorkVersion: Long,
+    val workOrderId: UUID?,
+    val sourceWorkVersion: Long?,
     val stockItemId: UUID,
     val stockItemVersion: Long,
     val requestedQuantity: BigDecimal,
@@ -27,6 +27,9 @@ data class PurchaseRequirementDraftRecord(
     val createdAt: Instant,
     val correlationId: String,
     val version: Long = 1,
+    val sourceType: String = "WORK_ORDER",
+    val warehouseStorageLocationId: UUID? = null,
+    val warehouseSourceVersion: Long? = null,
 )
 
 data class PurchaseRequirementRevision(
@@ -66,8 +69,9 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
                 id, operation_id, organization_id, work_order_id, source_work_version,
                 stock_item_id, stock_item_version, requested_quantity, unit_code,
                 justification, lifecycle_state, assessment_code, visible_free_quantity,
-                assessment_at, created_by_user_id, created_at, correlation_id, version
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?, 1)
+                assessment_at, created_by_user_id, created_at, correlation_id, version,
+                source_type, warehouse_storage_location_id, warehouse_source_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
             """.trimIndent(),
             draft.id, draft.operationId, draft.organizationId, draft.workOrderId,
             draft.sourceWorkVersion, draft.stockItemId, draft.stockItemVersion,
@@ -75,6 +79,7 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
             draft.assessmentCode, draft.visibleFreeQuantity,
             draft.assessedAt.atOffset(ZoneOffset.UTC), draft.requestedBy,
             draft.createdAt.atOffset(ZoneOffset.UTC), draft.correlationId,
+            draft.sourceType, draft.warehouseStorageLocationId, draft.warehouseSourceVersion,
         ) == 1)
     }
 
@@ -176,6 +181,38 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
             { row, _ -> row.draft() }, id,
         ).singleOrNull()
 
+    fun forWarehouseLocation(
+        organizationId: UUID,
+        storageLocationId: UUID,
+    ): List<PurchaseRequirementDraftRecord> = jdbc.query(
+        """
+        SELECT * FROM procurement_purchase_requirement
+        WHERE organization_id=? AND source_type='WAREHOUSE_REPLENISHMENT'
+          AND warehouse_storage_location_id=?
+        ORDER BY created_at DESC, id DESC LIMIT 100
+        """.trimIndent(),
+        { row, _ -> row.draft() }, organizationId, storageLocationId,
+    )
+
+    fun otherOpenWarehouseDraftIds(
+        organizationId: UUID, storageLocationId: UUID, stockItemId: UUID, excludeId: UUID,
+    ): List<UUID> = jdbc.query(
+        """
+        SELECT p.id FROM procurement_purchase_requirement p
+        LEFT JOIN LATERAL (
+          SELECT t.to_state FROM procurement_requirement_transition t
+          WHERE t.requirement_id=p.id ORDER BY t.result_version DESC LIMIT 1
+        ) last ON true
+        WHERE p.organization_id=? AND p.source_type='WAREHOUSE_REPLENISHMENT'
+          AND p.warehouse_storage_location_id=? AND p.stock_item_id=? AND p.id<>?
+          AND (last.to_state IS NULL OR last.to_state IN
+            ('DRAFT','SUBMITTED','NEEDS_INFO','READY_FOR_SOURCING'))
+        ORDER BY p.created_at DESC, p.id DESC LIMIT 21
+        """.trimIndent(),
+        { rs, _ -> rs.getObject("id", UUID::class.java) },
+        organizationId, storageLocationId, stockItemId, excludeId,
+    )
+
     fun forWork(workOrderId: UUID): List<PurchaseRequirementDraftRecord> =
         jdbc.query(
             """
@@ -210,7 +247,7 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
         operationId = getObject("operation_id", UUID::class.java),
         organizationId = getObject("organization_id", UUID::class.java),
         workOrderId = getObject("work_order_id", UUID::class.java),
-        sourceWorkVersion = getLong("source_work_version"),
+        sourceWorkVersion = getLong("source_work_version").takeUnless { wasNull() },
         stockItemId = getObject("stock_item_id", UUID::class.java),
         stockItemVersion = getLong("stock_item_version"),
         requestedQuantity = getBigDecimal("requested_quantity"),
@@ -223,5 +260,8 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
         createdAt = getObject("created_at", OffsetDateTime::class.java).toInstant(),
         correlationId = getString("correlation_id"),
         version = getLong("version"),
+        sourceType = getString("source_type"),
+        warehouseStorageLocationId = getObject("warehouse_storage_location_id", UUID::class.java),
+        warehouseSourceVersion = getLong("warehouse_source_version").takeUnless { wasNull() },
     )
 }
