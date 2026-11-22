@@ -7,6 +7,7 @@ import com.hiltech.server.work.WorkOrderLifecycle
 import com.hiltech.server.work.WorkPersistencePort
 import org.springframework.stereotype.Component
 import java.util.UUID
+import java.time.Clock
 
 /**
  * One typed source-truth contract for S01/S02/S03.
@@ -19,6 +20,7 @@ class ProcurementDemandSourceVerifier(
     private val work: WorkPersistencePort,
     private val warehouse: WarehousePersistencePort,
     private val stock: StockLedgerPersistence,
+    private val clock: Clock,
 ) {
     fun isCurrent(
         root: PurchaseRequirementDraftRecord,
@@ -49,7 +51,7 @@ class ProcurementDemandSourceVerifier(
                 val location = warehouse.storageLocation(locationId) ?: return false
                 val facilityId = location.warehouseId ?: return false
                 val facility = warehouse.warehouse(facilityId) ?: return false
-                val at = java.time.Instant.now()
+                val at = clock.instant()
                 location.organizationId == root.organizationId &&
                     location.version == sourceVersion &&
                     location.lifecycleState == StorageLocationLifecycle.ACTIVE &&
@@ -63,8 +65,9 @@ class ProcurementDemandSourceVerifier(
     }
 
     /** Source-bound warehouse PO cannot silently be delivered to another project or site. */
-    fun warehouseDestination(root: PurchaseRequirementDraftRecord): UUID? =
+    fun warehouseDestination(root: PurchaseRequirementDraftRecord,
+                             last: PurchaseRequirementTransitionRecord?): UUID? =
         if (root.sourceType == "WAREHOUSE_REPLENISHMENT" &&
-            isCurrent(root, null)
+            isCurrent(root, last)
         ) root.warehouseStorageLocationId else null
 }
