@@ -212,3 +212,23 @@ Neither the correction flow nor final-pay view creates a payment, reopens
 an old payment instruction or silently deducts employee advances. Real
 Finance bank authority, legal/accountant policy, employee source protection,
 consecutive Flyway numbers and staging acceptance remain mandatory.
+
+### Safety and test hardening after correction/final-pay
+
+- Both V0072 company release and V0073 payroll correction INSERT triggers
+  now require a current, explicitly approved Payroll REVIEW authority binding
+  **and** an active organization membership/identity. HTTP application
+  permission checks remain separate and mandatory; direct SQL attempts with
+  ordinary company membership but without Payroll REVIEW are rejected.
+- The corrected PostgreSQL test seeds a synthetic, restricted REVIEW grant
+  and asserts another active employee cannot forge a release through SQL.
+- Separated employees require versioned final-pay scope proof and the exact
+  canonical People case. A rehired ACTIVE employee cannot inherit an obsolete
+  offboarding case; this is covered by a negative test.
+- Payroll checks aggregate company run totals before persistence so multiple
+  individually representable employee values cannot overflow numeric(20,6).
+- New safety test: Payroll9bPeopleSeparationSourceTest. Both that test and
+  Payroll9cFinalPayTest are now in the Phase9 exact-head workflow.
+- Latest exact-head CI must complete successfully before declaring this PR
+  green; queuing/pending is not approval. No global shell, real bank source
+  or real HILTECH wage input is claimed as connected.
