@@ -44,8 +44,10 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Verify static isolation and fail-closed flags
         run: python3 scripts/devops/verify_coolify_staging_template.py
-      - name: Parse full Docker Compose with synthetic values
-        run: docker compose -f infrastructure/coolify/staging/compose.yaml --profile api config --quiet
+      - name: Bootstrap dependency config without yet-known FGA store/model
+        run: env -u HILTECH_FGA_STORE_ID -u HILTECH_FGA_MODEL_ID -u HILTECH_OIDC_ISSUER_URI docker compose -f infrastructure/coolify/staging/compose.yaml config --quiet
+      - name: Parse full API overlay with synthetic values
+        run: docker compose -f infrastructure/coolify/staging/compose.yaml -f infrastructure/coolify/staging/compose.api.yaml --profile api config --quiet
       - name: Start only fresh isolated Postgres
         run: docker compose -f infrastructure/coolify/staging/compose.yaml up -d postgres
       - name: Confirm real SQL initialization and three distinct database owners
