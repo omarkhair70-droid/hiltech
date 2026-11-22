@@ -175,12 +175,12 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
                 INSERT INTO procurement_service_order (
                   id,operation_id,organization_id,candidate_id,rfq_id,quote_id,
                   supplier_organization_id,approval_request_id,approval_policy_key,
-                  approval_policy_version,issuer_authority_binding_id,currency,
+                  approval_policy_version,issuer_authority_binding_id,issuer_authority_key,currency,
                   total_amount,issued_by_user_id,issued_at,correlation_id
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """.trimIndent(),
                 id,ctx.operationId,current.org,current.id,current.rfq,current.quote,current.supplier,
-                approval.id,policyKey.trim(),policy.versionNumber,binding,
+                approval.id,policyKey.trim(),policy.versionNumber,binding,issuerKey.trim(),
                 current.currency,current.amount,ctx.actor,at.atOffset(ZoneOffset.UTC),
                 ctx.correlationId,
             )==1)
