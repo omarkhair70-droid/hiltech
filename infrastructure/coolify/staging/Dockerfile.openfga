@@ -1,0 +1,5 @@
+# Dedicated OpenFGA runtime wrapper for Coolify Dockerfile deployment; internal-only.
+# Schema migration is performed by a separate one-shot resource first.
+FROM openfga/openfga:v1.20.0
+ENTRYPOINT ["/openfga"]
+CMD ["run"]
