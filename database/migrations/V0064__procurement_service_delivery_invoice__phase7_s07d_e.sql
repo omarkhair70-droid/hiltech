@@ -79,8 +79,7 @@ CREATE TABLE procurement_service_acceptance (
     REFERENCES procurement_service_document_slot(id,service_order_id,document_kind)
     ON DELETE RESTRICT
 );
-CREATE UNIQUE INDEX uq_service_accepted_once
-  ON procurement_service_acceptance(service_order_id) WHERE outcome='ACCEPTED';
+-- Re-review is allowed with fresh proof; the latest review is authoritative.
 CREATE INDEX idx_service_acceptance_order ON procurement_service_acceptance
   (service_order_id,reviewed_at DESC,id DESC);
 CREATE TRIGGER procurement_service_acceptance_immutable
