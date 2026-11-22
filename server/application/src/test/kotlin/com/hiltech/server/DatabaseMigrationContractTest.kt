@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(23, result.migrationsExecuted)
+        assertEquals(24, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -290,6 +290,30 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(foldedInvoiceIndex.next())
                 assertEquals(1, foldedInvoiceIndex.getInt(1))
+
+                // PO receipts need READY private binary Evidence, not a
+                // free-text deliveryDocumentRef, before final completion.
+                val deliveryNoteGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger WHERE NOT tgisinternal AND (
+                        (tgrelid='evidence'::regclass
+                          AND tgname='po_receiving_note_evidence_insert_guard')
+                        OR (tgrelid='receiving_record'::regclass
+                          AND tgname='po_receiving_close_delivery_note_guard')
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(deliveryNoteGuards.next())
+                assertEquals(2, deliveryNoteGuards.getInt(1))
+                val readyNoteIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename='evidence'
+                      AND indexname='uq_po_receiving_ready_delivery_note'
+                    """.trimIndent(),
+                )
+                assertTrue(readyNoteIndex.next())
+                assertEquals(1, readyNoteIndex.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
