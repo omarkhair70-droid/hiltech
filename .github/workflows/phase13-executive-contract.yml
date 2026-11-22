@@ -38,6 +38,7 @@ jobs:
         run: |
           ./gradlew :server:application:test \
             --tests com.hiltech.server.executive.ExecutiveHomeServiceTest \
+            --tests com.hiltech.server.executive.CurrentExecutiveSourcesTest \
             --tests com.hiltech.server.ArchitectureTest
       - name: Restricted source DTOs, navigation allowlist, native shared render
         run: |
