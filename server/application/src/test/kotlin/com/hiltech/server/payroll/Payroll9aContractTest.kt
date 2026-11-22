@@ -3,6 +3,7 @@ package com.hiltech.server.payroll
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.security.AuthorizationCheckPort
+import com.hiltech.server.security.JdbcRoleTeamSourceAuthority
 import com.hiltech.server.security.RoleTeamSourceAuthorityPort
 import org.mockito.Mockito
 import org.springframework.beans.factory.support.StaticListableBeanFactory
@@ -237,6 +238,61 @@ class Payroll9aContractTest {
                 reviewOperation,
             )
         }
+
+
+        // Payroll read/prepare/review permissions are source-scoped, explicit,
+        // and immediately revoked by current membership/grant changes.
+        val fgaAllowsOrgMembership = AuthorizationCheckPort { true }
+        val authorizedBeans = StaticListableBeanFactory(
+            mapOf("authorizationTest" to fgaAllowsOrgMembership),
+        )
+        val payrollPermission = JdbcPayroll9aAuthority(
+            jdbc = jdbc,
+            source = JdbcRoleTeamSourceAuthority(jdbc),
+            authorizationProvider = authorizedBeans.getBeanProvider(AuthorizationCheckPort::class.java),
+            clock = clock,
+        )
+        assertFalse(payrollPermission.canRead(actor, orgOne))
+        val membershipId = UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO organization_membership (
+                id, organization_id, user_identity_id, membership_type,
+                state, valid_from
+            ) VALUES (?, ?, ?, 'EMPLOYEE', 'ACTIVE', ?)
+            """.trimIndent(),
+            membershipId, orgOne, actor, at.minusSeconds(60).atOffset(ZoneOffset.UTC),
+        )
+        assertFalse(payrollPermission.canRead(actor, orgOne))
+        val grantId = UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO payroll_authority_binding (
+                id, organization_id, identity_id, capability,
+                valid_from, active, source_approval_ref, created_at
+            ) VALUES (?, ?, ?, 'PREPARE', ?, true, 'APPROVED_TEST_POLICY', ?)
+            """.trimIndent(),
+            grantId, orgOne, actor, at.minusSeconds(60).atOffset(ZoneOffset.UTC),
+            at.atOffset(ZoneOffset.UTC),
+        )
+        assertTrue(payrollPermission.canRead(actor, orgOne))
+        assertTrue(payrollPermission.canPrepare(actor, orgOne))
+        assertFalse(payrollPermission.canReview(actor, orgOne))
+        assertFalse(payrollPermission.canRead(actor, orgTwo))
+        jdbc.update(
+            "UPDATE organization_membership SET state = 'ENDED' WHERE id = ?",
+            membershipId,
+        )
+        assertFalse(payrollPermission.canRead(actor, orgOne))
+        jdbc.update(
+            "UPDATE organization_membership SET state = 'ACTIVE' WHERE id = ?",
+            membershipId,
+        )
+        jdbc.update(
+            "UPDATE payroll_authority_binding SET active = false, version = version + 1 WHERE id = ?",
+            grantId,
+        )
+        assertFalse(payrollPermission.canRead(actor, orgOne))
     }
 
     private fun seedOrganization(jdbc: JdbcTemplate, id: UUID, at: Instant) {
