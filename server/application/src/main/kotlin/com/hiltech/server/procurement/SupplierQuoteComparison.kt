@@ -87,7 +87,12 @@ object SupplierQuoteComparator {
                 if (quote.unitCode != expectedUnitCode) add("UNIT_DIFFERS")
                 if (quote.validUntil == null) add("VALIDITY_UNCONFIRMED")
                 else if (quote.validUntil.isBefore(date)) add("QUOTE_EXPIRED")
-                if (quote.technicalCompliance != "COMPLIANT") add("TECHNICAL_COMPLIANCE_UNCONFIRMED")
+                when (quote.technicalCompliance) {
+                    "COMPLIANT" -> Unit
+                    "NON_COMPLIANT" -> add("TECHNICAL_NON_COMPLIANT")
+                    "NEEDS_CLARIFICATION" -> add("TECHNICAL_CLARIFICATION_REQUIRED")
+                    else -> add("TECHNICAL_COMPLIANCE_UNCONFIRMED")
+                }
             }
             SupplierQuoteComparisonRow(
                 quoteId = quote.id,

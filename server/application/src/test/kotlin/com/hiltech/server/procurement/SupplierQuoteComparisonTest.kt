@@ -50,6 +50,21 @@ class SupplierQuoteComparisonTest {
         assertTrue(out.latestBySupplier.all { "TECHNICAL_COMPLIANCE_UNCONFIRMED" in it.issues })
     }
 
+    @Test fun technicalRejectionAndClarificationAreVisibleNotSilentlyMarkedUnreviewed() {
+        val rejected = quote().copy(technicalCompliance = "NON_COMPLIANT")
+        val clarify = quote(supplier = s2).copy(technicalCompliance = "NEEDS_CLARIFICATION")
+        val out = SupplierQuoteComparator.compare(
+            BigDecimal("100"), "M", listOf(rejected, clarify), on,
+        )
+        val rejectedRow = out.latestBySupplier.single { it.supplierOrganizationId == s1 }
+        val clarifyRow = out.latestBySupplier.single { it.supplierOrganizationId == s2 }
+        assertTrue("TECHNICAL_NON_COMPLIANT" in rejectedRow.issues)
+        assertTrue("TECHNICAL_CLARIFICATION_REQUIRED" in clarifyRow.issues)
+        assertFalse(out.allQuotesDirectlyComparable)
+        assertFalse(out.supplierSelected)
+        assertFalse(out.purchaseAuthorized)
+    }
+
     @Test fun differentCurrenciesNeverQuietlyBecomeCheapestInAnInventedFxCurrency() {
         val out = SupplierQuoteComparator.compare(
             BigDecimal("100"), "M",
