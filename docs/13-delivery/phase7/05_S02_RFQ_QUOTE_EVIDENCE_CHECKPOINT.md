@@ -106,3 +106,23 @@ POST `/v1/sourcing/quotes/{quoteId}/technical-assessments` accepts a typed decis
 (COMPLIANT / NON_COMPLIANT / NEEDS_CLARIFICATION), justification and expected review revision.
 Neither the technical reviewer mapping nor governed quote documents is configured yet.
 Do not call S02 closed or enable production. Exact-head CI/PostgreSQL proof is required.
+
+## Organization-scoped supplier directory — follow-on V0044
+
+An active `organization_type=SUPPLIER` record is **not** a globally valid
+buyer-supplier relationship. V0044 stores append-only supplier link events
+per purchasing organization. An INACTIVE event at a higher revision revokes
+an older ACTIVE event, without erasing its source history. The link source
+requires a reference, actor and timestamp; its creation has **no API** until
+HILTECH establishes a real master-data authority. No hypothetical company
+relationships or supplier approvals were seeded.
+
+The read endpoint `GET /v1/sourcing/organizations/{orgId}/suppliers` is
+buyer-only, feature-gated and organization-scoped. Recording an RFQ quote now
+also requires the supplier to have a current active link for the RFQ owning
+organization. Windows renders the returned current linked names, and the KMP
+transport serves Android/Windows with the same restricted result.
+
+**Still open:** evidence/document upload, buyer/reviewer role binding,
+company-authorized supplier link creation, actual quote capture forms,
+supplier outreach and final buyer acceptance. No production activation.
