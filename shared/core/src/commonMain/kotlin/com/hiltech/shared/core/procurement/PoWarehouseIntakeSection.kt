@@ -101,6 +101,16 @@ private fun PoWarehouseStartAction(
                 po.physicallyReceivedQuantity + " · PO version " + po.effectiveOrderVersion,
                 style = MaterialTheme.typography.bodySmall)
             if (startedId == null) {
+                po.openReceivingRecordIds.forEach { existing ->
+                    OutlinedButton(enabled = !busy, onClick = {
+                        startedId = existing
+                        pendingOp = null
+                    }) { Text("Resume unfinished Receiving #" + existing.take(8)) }
+                }
+            }
+            if (startedId == null &&
+                (po.remainingQuantity.toDoubleOrNull() ?: 0.0) > 0.0
+            ) {
                 OutlinedButton(enabled = !busy, onClick = {
                     busy = true
                     error = null
