@@ -71,6 +71,26 @@ class SupplierMasterDataServiceTest {
         Mockito.verifyNoInteractions(repo)
     }
 
+    @Test fun supplierRegistrySearchIncludesInactiveRevisionOnlyForCustodian() {
+        allow()
+        val candidate = SupplierRegistryCandidate(
+            supplier, "External supplier", "ACTIVE", 4, "INACTIVE",
+        )
+        Mockito.`when`(repo.supplierRegistryCandidates(org, "External"))
+            .thenReturn(listOf(candidate))
+        assertEquals(
+            listOf(candidate),
+            service().supplierRegistry(actor, org, "External"),
+        )
+        Mockito.`when`(authority.canMaintainSupplierLinks(actor, org)).thenReturn(false)
+        assertEquals("SUPPLIER_MASTER_DATA_UNAVAILABLE", assertThrows<ProductApiException> {
+            service().supplierRegistry(actor, org, "External")
+        }.code)
+        assertEquals(1, Mockito.mockingDetails(repo).invocations.count {
+            it.method.name == "supplierRegistryCandidates"
+        })
+    }
+
     @Test fun authorizedSupplierActivationAppendsFirstSourceReferencedEvent() {
         allow()
         val receipt = service().changeSupplierLink(context, org, request())
