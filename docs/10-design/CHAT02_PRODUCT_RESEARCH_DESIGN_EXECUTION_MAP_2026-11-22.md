@@ -85,6 +85,13 @@ Exit: reproducible exact-head pass and explicit negative cases; no screenshots a
 After core Phase13 functionalities and approved roles/workflows, complete coherent visual language, typography/color/density refinements, meaningful motion and sound only where appropriate, components throughout app, regression and field validation.
 Exit: owner/product approval, native Android+Windows acceptance, change-control and reviewed merges; no unilateral deployment.
 
+## UX-00 / UX-01 new evidence checkpoint — 2026-11-22
+
+- [UX00_ROLE_SURFACE_SOURCE_AUDIT_PASS01_2026-11-22.md](UX00_ROLE_SURFACE_SOURCE_AUDIT_PASS01_2026-11-22.md): source-based inventory of actual Android/Windows app entry wiring, shared signed-in vertical shell, Field/People/Project/Warehouse/Inbox foundations, roles, risks and honest runtime gaps. **UX-00 remains PARTIAL**, because exact-main native authenticated role-by-role tests and operator/device acceptance have not passed.
+- [UX01_EXTERNAL_REFERENCE_RESEARCH_PASS01_2026-11-22.md](UX01_EXTERNAL_REFERENCE_RESEARCH_PASS01_2026-11-22.md): researched **all six repo-prescribed tracks**, with current official sources, documented patterns, HILTECH transfer/anti-patterns and role/source task checks. This is SOURCE LITERATURE PASS 01 only. **UX-01 remains OPEN** pending selected hands-on UI evaluations, native task comparisons and role interviews.
+- Main GitHub Bootstrap success run 44948725551 at `c30fb707` is an engineering signal, not user interface or real-device acceptance.
+- Immediate design experiment after completing authority/role fixtures: compare current one-column SignedIn baseline vs context-first global shell vs role-first workbench using real shared Compose state and exact same permission-bound objects; do not build a separate fake dashboard. Navigation destinations must not create new permissions or hidden backend actions.
+
 ## Execution priority and dependency map
 - NOW: close UX-00 and UX-01 evidence in parallel; UX-02 role/authority structure; UX-03 nav hypotheses/same-source comparison, using warehouse as one evidence lane rather than monopolizing program.
 - IN PARALLEL: UX-05 functional/operational friction defects as features land through Phase 6–13, and UX-07 safety tests.
