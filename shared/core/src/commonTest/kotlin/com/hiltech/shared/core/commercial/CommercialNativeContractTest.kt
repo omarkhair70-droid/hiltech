@@ -77,10 +77,10 @@ class CommercialNativeContractTest {
         assertEquals("PRIVATE",result.state)
         assertEquals("/v1/commercial/opportunities/$opportunityId/boqs",events.single().first)
         val body = events.single().second
-        assertTrue(body.contains(""""quantity":0.2500"""))
-        assertTrue(body.contains(""""internalUnitCost":12.1250"""))
-        assertTrue(body.contains(""""sellUnitPrice":20.5000"""))
-        assertFalse(body.contains(""""quantity":"0.2500""""))
+        assertTrue(body.contains("\"quantity\":0.2500"))
+        assertTrue(body.contains("\"internalUnitCost\":12.1250"))
+        assertTrue(body.contains("\"sellUnitPrice\":20.5000"))
+        assertFalse(body.contains("\"quantity\":\"0.2500\""))
         http.close()
     }
 
