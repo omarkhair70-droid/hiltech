@@ -141,6 +141,28 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
         }, candidateId,
     ).singleOrNull()
 
+    /**
+     * Hold current WorkOrder/StockItem rows through PO issuance. Writers must
+     * wait, so the checked source version cannot change before commit.
+     */
+    fun lockWorkAndStockSource(
+        organizationId: UUID,
+        workOrderId: UUID,
+        stockItemId: UUID,
+    ): Boolean {
+        val workLocked = jdbc.query(
+            "SELECT id FROM work_order WHERE id = ? AND organization_id = ? FOR SHARE",
+            { rs, _ -> rs.getObject("id", UUID::class.java) },
+            workOrderId, organizationId,
+        ).isNotEmpty()
+        if (!workLocked) return false
+        return jdbc.query(
+            "SELECT id FROM stock_item WHERE id = ? AND organization_id = ? FOR SHARE",
+            { rs, _ -> rs.getObject("id", UUID::class.java) },
+            stockItemId, organizationId,
+        ).isNotEmpty()
+    }
+
     /** Existing Phase-2 request is the ONLY approval evidence; no client attestation. */
     fun lockApprovedCandidate(
         organizationId: UUID,
