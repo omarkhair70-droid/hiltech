@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(29, result.migrationsExecuted)
+        assertEquals(30, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -167,12 +167,14 @@ class DatabaseMigrationContractTest {
                         'procurement_service_need_event',
                         'procurement_service_rfq',
                         'procurement_service_quote_document_slot',
-                        'procurement_service_supplier_quote'
+                        'procurement_service_supplier_quote',
+                        'procurement_service_order_candidate',
+                        'procurement_service_order'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(91, tables.getInt(1))
+                assertEquals(93, tables.getInt(1))
 
                 // V0050 links canonical Warehouse Receiving to a company-scoped
                 // approved PO without creating another physical stock ledger.
@@ -474,6 +476,22 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(serviceEvidenceIndex.next())
                 assertEquals(1, serviceEvidenceIndex.getInt(1))
+
+                val serviceOrderGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE NOT tgisinternal AND (
+                        (tgrelid='procurement_service_order_candidate'::regclass
+                          AND tgname IN ('procurement_service_order_candidate_guard',
+                            'procurement_service_order_candidate_immutable'))
+                        OR (tgrelid='procurement_service_order'::regclass
+                          AND tgname IN ('procurement_service_order_guard',
+                            'procurement_service_order_immutable'))
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(serviceOrderGuards.next())
+                assertEquals(4, serviceOrderGuards.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
