@@ -320,6 +320,55 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
      * Hold current WorkOrder/StockItem rows through PO issuance. Writers must
      * wait, so the checked source version cannot change before commit.
      */
+    /**
+     * Typed internal Warehouse demand: never forge a WorkOrder in the
+     * approval-to-PO transaction. Lock actual company source and stock.
+     */
+    fun lockWarehouseAndStockSource(
+        organizationId: UUID, locationId: UUID, itemId: UUID,
+    ): Boolean {
+        val locationLocked = jdbc.query(
+            """
+            SELECT l.id FROM storage_location l
+            JOIN warehouse w ON w.id=l.warehouse_id
+              AND w.organization_id=l.organization_id
+            WHERE l.id=? AND l.organization_id=?
+              AND l.project_id IS NULL AND l.site_id IS NULL AND w.active=true
+            FOR SHARE OF l
+            """.trimIndent(),
+            { rs, _ -> rs.getObject("id", UUID::class.java) },
+            locationId, organizationId,
+        ).isNotEmpty()
+        if (!locationLocked) return false
+        return jdbc.query(
+            "SELECT id FROM stock_item WHERE id=? AND organization_id=? FOR SHARE",
+            { rs, _ -> rs.getObject("id", UUID::class.java) },
+            itemId, organizationId,
+        ).isNotEmpty()
+    }
+
+    fun warehouseDeliveryDestination(
+        organizationId: UUID, locationId: UUID, at: Instant,
+    ): PurchaseOrderDeliveryDestination? = jdbc.query(
+        """
+        SELECT l.id, l.code, l.name, l.kind
+        FROM storage_location l
+        JOIN warehouse w ON w.id=l.warehouse_id
+          AND w.organization_id=l.organization_id
+        WHERE l.id=? AND l.organization_id=?
+          AND l.lifecycle_state='ACTIVE' AND w.active=true
+          AND l.project_id IS NULL AND l.site_id IS NULL
+          AND (l.active_from IS NULL OR l.active_from<=?)
+          AND (l.active_until IS NULL OR l.active_until>?)
+          AND l.kind IN ('MAIN_WAREHOUSE','WAREHOUSE')
+        """.trimIndent(),
+        { rs, _ -> PurchaseOrderDeliveryDestination(
+            rs.getObject("id", UUID::class.java), rs.getString("code"),
+            rs.getString("name"), rs.getString("kind"),
+        ) }, locationId, organizationId,
+        at.atOffset(ZoneOffset.UTC), at.atOffset(ZoneOffset.UTC),
+    ).singleOrNull()
+
     fun lockWorkAndStockSource(
         organizationId: UUID,
         workOrderId: UUID,
