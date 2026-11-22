@@ -19,8 +19,15 @@ if (-not (Test-Path -LiteralPath $exe)) {
     exit 2
 }
 # Explicitly use the expected owner's context, never the CLI's implicit global default.
-$check = & $exe --context $Context context verify 2>&1
-if ($LASTEXITCODE -ne 0) {
+$savedPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try {
+    $null = & $exe --context $Context context verify 2>$null
+    $verifyExit = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $savedPreference
+}
+if ($verifyExit -ne 0) {
     Write-Output "NO-GO: Coolify API token has not been configured or authorized for '$Context'."
     Write-Output "No resource list was requested and no report was written."
     exit 3
@@ -40,8 +47,15 @@ $record = [ordered]@{
 $fields = @('id','uuid','name','type','status','description','server_uuid','server_name','project_uuid','project_name','environment_name','fqdn')
 $ok = $true
 foreach ($category in $categories) {
-    $raw = & $exe --context $Context --format json $category list 2>&1
-    if ($LASTEXITCODE -ne 0) {
+    $savedPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $raw = & $exe --context $Context --format json $category list 2>$null
+        $listExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $savedPreference
+    }
+    if ($listExit -ne 0) {
         # Do not print server output; it could include hostnames or private diagnostics.
         Write-Output ("NO-GO: {0} list failed; no inventory report written." -f $category)
         $ok = $false
