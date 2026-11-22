@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(18, result.migrationsExecuted)
+        assertEquals(19, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -156,12 +156,16 @@ class DatabaseMigrationContractTest {
                         'procurement_po_lifecycle_event',
                         'procurement_po_delivery_amendment_proposal',
                         'procurement_po_receiving_link',
-                        'procurement_po_supplier_communication_event'
+                        'procurement_po_supplier_communication_event',
+                        'procurement_supplier_invoice_document_slot',
+                        'procurement_supplier_invoice_intake',
+                        'procurement_supplier_invoice_match_event',
+                        'procurement_supplier_invoice_finance_handoff'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(80, tables.getInt(1))
+                assertEquals(84, tables.getInt(1))
 
                 // V0050 links canonical Warehouse Receiving to a company-scoped
                 // approved PO without creating another physical stock ledger.
@@ -203,6 +207,25 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(supplierCommunicationTriggers.next())
                 assertEquals(2, supplierCommunicationTriggers.getInt(1))
+
+                // S05 supplier Invoice/Match/Handoff have immutable histories.
+                val invoiceHistoryTriggers = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger WHERE NOT tgisinternal AND (
+                      (tgrelid='procurement_supplier_invoice_document_slot'::regclass
+                        AND tgname='procurement_supplier_invoice_slot_immutable')
+                      OR (tgrelid='procurement_supplier_invoice_intake'::regclass
+                        AND tgname IN ('procurement_supplier_invoice_intake_insert_guard',
+                          'procurement_supplier_invoice_intake_immutable'))
+                      OR (tgrelid='procurement_supplier_invoice_match_event'::regclass
+                        AND tgname='procurement_supplier_invoice_match_immutable')
+                      OR (tgrelid='procurement_supplier_invoice_finance_handoff'::regclass
+                        AND tgname='procurement_supplier_invoice_finance_handoff_immutable')
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(invoiceHistoryTriggers.next())
+                assertEquals(5, invoiceHistoryTriggers.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
