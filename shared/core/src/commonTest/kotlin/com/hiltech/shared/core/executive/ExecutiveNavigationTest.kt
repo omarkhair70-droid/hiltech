@@ -17,6 +17,10 @@ class ExecutiveNavigationTest {
                 to ExecutiveDestination(ExecutiveDestinationKind.PROJECT_DETAIL, id),
             ExecutiveSourceReferenceDto("PROJECTS", "WORK_ORDER", id, 3, "/v1/projects/$other/health")
                 to ExecutiveDestination(ExecutiveDestinationKind.PROJECT_HEALTH, other),
+            ExecutiveSourceReferenceDto("PROJECTS", "MILESTONE", id, 3, "/v1/projects/$other/health")
+                to ExecutiveDestination(ExecutiveDestinationKind.PROJECT_HEALTH, other),
+            ExecutiveSourceReferenceDto("PROJECTS", "WORK_BLOCKER", id, 3, "/v1/projects/$other/health")
+                to ExecutiveDestination(ExecutiveDestinationKind.PROJECT_HEALTH, other),
             ExecutiveSourceReferenceDto("WAREHOUSE", "ASSET", id, 4, "/v1/assets/$id/availability")
                 to ExecutiveDestination(ExecutiveDestinationKind.ASSET_AVAILABILITY, id),
         )
@@ -35,6 +39,9 @@ class ExecutiveNavigationTest {
             ExecutiveSourceReferenceDto("FINANCE", "ASSET", id, 2, "/v1/assets/$id/availability"),
             ExecutiveSourceReferenceDto("WAREHOUSE", "ASSET", id, 2, "/v1/assets/$id/availability?admin=1"),
             ExecutiveSourceReferenceDto("PROJECTS", "PROJECT", "not-uuid", 3, "/v1/projects/not-uuid"),
+            ExecutiveSourceReferenceDto("PROJECTS", "PAYROLL_RUN", id, 3, "/v1/projects/$other/health"),
+            ExecutiveSourceReferenceDto("PROJECTS", "PAYROLL_RUN", id, 3, "/v1/projects/$other/health/../../payroll"),
+            ExecutiveSourceReferenceDto("PROJECTS", "WORK_ORDER", "non-uuid", 3, "/v1/projects/$other/health"),
             ExecutiveSourceReferenceDto("PROJECTS", "WORK_ORDER", id, 3, "/v1/projects/$other/health/../../payroll"),
             ExecutiveSourceReferenceDto("PROJECTS", "WORK_ORDER", id, 3, "https://evil.example/v1/projects/$other/health"),
         ).forEach { assertNull(resolveExecutiveDestination(it)) }
