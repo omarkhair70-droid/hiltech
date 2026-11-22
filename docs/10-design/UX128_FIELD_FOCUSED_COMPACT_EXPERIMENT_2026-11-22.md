@@ -167,3 +167,28 @@ One earlier run also failed in a test-only `clickedIds.single()` assertion after
 - **Android Debug build PASS on the same tested source SHA `3648518b58422b315fa58eb60cc7da450985c0a9`:** `./gradlew.bat :apps:androidApp:assembleDebug --no-daemon` using existing Android SDK and JDK17 set only for the QA shell. **BUILD SUCCESSFUL in 6m12s, 56 tasks (9 executed / 47 up-to-date), exit 0.** Verified local `apps/androidApp/build/outputs/apk/debug/androidApp-debug.apk`, **22,358,376 bytes**. No installation, launch, signing for release, deployment or device interaction. Because app entrypoints still use `BASELINE`, APK compile is only cross-target compatibility proof for the shared component, **not an Android UX acceptance test**.
 
 **Pass04 result:** WorkOrder identity-anchored return in synthetic native Compose is **PASS**, current product UX #128 and PR #144 **remain Draft / NOT MERGED OR DEPLOYED**.
+
+## Pass 05 — assignment removal/regrant and actor-scope isolation (2026-11-22)
+
+**Exact tested source SHA:** `8d36b1df7482bc1a29e3e31ad08a59628fb55c7e` on opt-in UX branch.  
+**Observed native headless task:** `./gradlew.bat -I docs/10-design/ux128-field-focus-headless.init.gradle :apps:desktopApp:renderUx128FieldFocus --no-daemon` → **BUILD SUCCESSFUL in 1m23s, 15 tasks (4 executed, 11 up-to-date), exit 0**.
+
+### New source-reality flaw discovered and corrected
+
+The previous focus implementation derived an effective `focusedId` only if the selected ID was still present in `state.today`. That temporarily hid stale detail on removal, but **did not consume** remembered `focusedWorkOrderId`. If the same WorkOrder ID reappeared in a subsequent source refresh while the old `selectedBundle` remained in local state, the UI could silently refocus the old detail with no new operator selection. That is incorrect even if server authorization ultimately prevents writes.
+
+The opt-in `FOCUSED_COMPACT` branch now reacts to the current Today membership scope. When the selected ID disappears, its UI-focused ID, pending return anchor, saved card position and restore request are cleared, the experimental host scroll returns to start, and a **new deliberate card tap is required** if the same ID later reappears. It does not decide server authorization or alter Field execution APIs.
+
+### Verified new test scenarios and exact pass markers
+
+- `UX128_FIELD_REVOKE_REGRANT_PASS removed=PASS no_auto_focus=PASS explicit_reselect=PASS`: selected WorkOrder removed from current synthetic Today, then same ID returned with the old selected bundle still in the fixture; user sees Today instead of automatically opened details. A new native Compose pointer Press/Release on the card is required and the real source `onSelectWork` callback fires again. Inspected `ux128-field-13-regranted-not-autofocused.png` showing a Today card rather than JobBundle.
+- `UX128_FIELD_SCOPE_SWITCH_PASS old_focus_cleared=PASS new_explicit_select=PASS`: while selected detail is shown, a test-only `focusScopeKey` changes from `actor-A:org-A:work` to `actor-B:org-B:work` with the same synthetic WorkOrder ID present. Remembered focus must clear and the new actor must explicitly select the source WorkOrder, verified by callback count.
+- Previous `UX128_FIELD_ANCHOR_PASS`, `UX128_FIELD_MULTI_PASS`, and `UX128_FIELD_FOCUS_PASS` all still pass on the same exact test run. This includes 12 WorkOrders, reordered same-ID return and cached/revoked image evidence.
+
+### Still not certified
+
+These cases use a synthetic Android debug Field fixture rendered by **Desktop Compose ImageComposeScene** at phone width. A caller-provided scope string is **not** a backend entitlement. Live source revocation, 401/403/409, login/logout, actor/org changes in the actual `HiltechShell`, Android system Back, touch/TalkBack, variable-height card layouts, accessibility/performance and operator acceptance remain separate gates.
+
+Actual production app entrypoints still use `BASELINE` by default; **no merge, rollout, device installation or approval**. The experiment is a review candidate only, not the final Industrial. Precise. Alive. appearance.
+
+**Android same-head `assembleDebug`: pending a separate compile check at time of this report revision.** Never infer Android runtime testing from synthetic Desktop Compose output.
