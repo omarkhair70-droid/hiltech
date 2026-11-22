@@ -40,7 +40,10 @@ fun resolveExecutiveDestination(reference: ExecutiveSourceReferenceDto): Executi
         // Signals carry their own source ID; health belongs to the enclosing
         // project. The URL itself must be strict, local and source-owned.
         val match = Regex("^/v1/projects/([0-9a-fA-F-]{36})/health$").matchEntire(path)
-        if (match != null && canonicalExecutiveUuid(match.groupValues[1]) != null) {
+        if (reference.sourceType in setOf("WORK_ORDER", "MILESTONE", "WORK_BLOCKER") &&
+            expectedId != null &&
+            match != null && canonicalExecutiveUuid(match.groupValues[1]) != null
+        ) {
             return ExecutiveDestination(ExecutiveDestinationKind.PROJECT_HEALTH, match.groupValues[1])
         }
     }
