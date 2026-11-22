@@ -43,6 +43,23 @@ data class PurchaseOrderCandidateReceiptDto(
     val purchaseOrderIssued: Boolean = false,
 )
 
+@Serializable
+data class RequestPurchaseCandidateApprovalDto(val operationId: String)
+
+@Serializable
+data class PurchaseCandidateApprovalReceiptDto(
+    val candidateId: String,
+    val candidateVersion: Long,
+    val approvalRequestId: String? = null,
+    val approvalRequired: Boolean,
+    val approvalState: String? = null,
+    val policyKey: String,
+    val policyVersion: Int,
+    val replayed: Boolean,
+    val purchaseAuthorized: Boolean = false,
+    val purchaseOrderIssued: Boolean = false,
+)
+
 class PurchaseOrderCandidateApiClient(
     private val api: HiltechApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
@@ -72,6 +89,21 @@ class PurchaseOrderCandidateApiClient(
         ),
         requestBody = json.encodeToString(ProposePurchaseOrderCandidateDto.serializer(), request),
         decode = { json.decodeFromString(PurchaseOrderCandidateReceiptDto.serializer(), it) },
+    )
+
+    suspend fun requestApproval(
+        candidateId: String,
+        request: RequestPurchaseCandidateApprovalDto,
+        installationId: String,
+    ): PurchaseCandidateApprovalReceiptDto = api.request(
+        method = HttpMethod.Post,
+        path = "/v1/sourcing/po-candidates/" + uuid(candidateId) + "/request-approval",
+        options = HiltechRequestOptions(
+            installationId = installationId,
+            idempotencyKey = uuid(request.operationId),
+        ),
+        requestBody = json.encodeToString(RequestPurchaseCandidateApprovalDto.serializer(), request),
+        decode = { json.decodeFromString(PurchaseCandidateApprovalReceiptDto.serializer(), it) },
     )
 
     private fun uuid(id: String): String {
