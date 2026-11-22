@@ -72,3 +72,43 @@ Use A as **Warehouse Today / action queue hypothesis** and explore B as **Invent
 - **Best first operational hypothesis:** A for Warehouse Today due to top-of-screen overdue/calibration/receiving attention. B is a stronger candidate for an Inventory/Object-focused view. These are **not mutually exclusive** and neither is visually/operationally frozen.
 - **Remaining visible shortcomings:** extremely utilitarian default Material controls; short source values still mixed-language in sections; right-rail information hierarchy needs keyboard/focus testing and narrow-window constraints. No working Warehouse Today -> Quick Scan action yet.
 - **No approval/deploy:** keep Draft PR #134 and Issue #128 open; Stage 2 must prove native Android/Windows interaction and human operator tasks before merging.
+
+
+## Experiment 02 — actual Warehouse Today ↔ code lookup focus (2026-11-22)
+
+### Source integration (review-only, no activation)
+- Shared native Compose `WarehouseOperatorFocusFlow.kt` switches between two pre-existing Phase 5 read surfaces: the warehouse source-driven command center and `WarehouseQuickScanSection`.
+- `WarehousePhysicalOperatorSection` now accepts `presentation` with the default **`BASELINE`**. Neither the current Windows nor Android app passes an experimental presentation; therefore their shipping path remains the existing long-column interface. No changed backend service, role authority, stock movement, custody, access-control or offline contract.
+- For experiment opt-in, the existing API, warehouse/user context, `runTask` error path and canonical drill handlers remain in place. The tab says **`بحث بالكود`**, not a false claim of a working physical camera reader.
+- Scoped `WarehouseQuickScanSession` holds tag/asset/stock search text and last read-only query result when switching focus; it is keyed by warehouse and organization and is discarded with its owning operator composition. It is not an authorization cache, offline source of truth, or confirmation of current physical custody.
+- Observation callback and selected-tab semantics added for native pointer proof. Buttons are operational controls, not inert decoration.
+
+### Exact test evidence
+Tested source HEAD **`c4f508cfcb8c2c3ae535c7f339c4756ef1dc1c34`** in an isolated Windows QA clone. Command: `./gradlew.bat :apps:desktopApp:renderPhase5WarehouseEvidence --no-daemon`, with JDK 17 set only in this command session. **BUILD SUCCESSFUL in 1m 51s; 15 actionable tasks (4 executed, 11 up-to-date), process exit 0.**
+
+The existing Phase 5 synthetic fixture generated four extra screenshots of the A/B focus modes at 430×960 using real shared Compose code:
+- `ux128-action-flow-today-phone.png`
+- `ux128-action-flow-lookup-phone.png`
+- `ux128-object-flow-today-phone.png`
+- `ux128-object-flow-lookup-phone.png`
+
+The additional headless **actual pointer** test (not merely two preselected previews) generated:
+- `ux128-click-00-today.png`
+- `ux128-click-01-lookup.png`
+- `ux128-click-02-return.png`
+
+The test sent `PointerEventType.Press` + `Release` to the navigation controls in the real `ImageComposeScene`, asserted `TODAY → CODE_LOOKUP → TODAY`, and asserted retained entered code `synthetic-current-tag`. Both post-click screenshots were visually inspected and matched the expected modes. **PASS for headless Desktop Compose pointer transition and session-scoped input preservation; NOT proof of a physical touch device, camera, backend authorization, role-revocation behavior or full user workflow.**
+
+The resulting 11 `ux128-*.png` captures are local to the authorized QA working copy:
+`D:/02_QA-and-Builds/HILTECH/UX-128/repo-main/apps/desktopApp/build/reports/phase5-warehouse/`.
+A prior attempt to push PNG files from Remote Desktop Commander was blocked by its safety gateway; **binary screenshots are not claimed to be committed or present in GitHub**. Code and this text manifest are in Draft PR #134.
+
+### Critical design review after proof
+- **Today / action-first is more immediately useful as the operator's attention start** than the object-first ordering; still an operator-test hypothesis rather than a design freeze.
+- **Lookup is still too technical**: the existing result UI exposes raw `canonical`, UUID and `Scan/search PASS` messages and offers several fields in a long stack. This remains a top-priority human-copy / progressive-disclosure experiment.
+- **Drill-to-detail is still below the fold.** Clicking an Asset/Stock action uses the existing source handlers to populate detail state farther down the operator Column. The focus switching test does NOT establish usable drill-back navigation or detail visibility. This must be tested and solved before describing `Today → Scan → Passport` as a complete journey.
+- Native Android app **does wire the warehouse operator under `HiltechShell.warehouseOperator`**, but it is still on the default non-experimental presentation. No Android build, emulator run, physical test, TalkBack, keyboard-focus, 200% type, latency or operator timing was established by this test.
+- The current experiment retains previously fetched lookup results when input changes. A user-facing freshness/staleness indicator or result-clearing policy must be settled before shipping; avoid implying the old result proves a new code.
+
+### Next bounded UX question
+How should an authenticated warehouse operator enter a code, inspect the **source-confirmed object identity and current custody**, then return to their exact attention context with a visible, direct detail target, without losing provenance or accidentally interpreting an old search result as current? Test this against the existing authoritative Asset Passport and Stock Item read path. Do not invent barcode mapping, camera support, new permissions, or inventory write operations. Keep the default baseline while engineering continues Phase 6.
