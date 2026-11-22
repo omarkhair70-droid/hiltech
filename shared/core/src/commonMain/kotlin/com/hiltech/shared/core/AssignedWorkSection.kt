@@ -91,6 +91,15 @@ fun AssignedWorkSection(
         LocalLayoutDirection provides
             LayoutDirection.Rtl,
     ) {
+        // A selected bundle is a source snapshot, never a grant to keep
+        // showing an old WorkOrder after selection or assignment changes.
+        val visibleBundle = state.selectedBundle?.takeIf { bundle ->
+            fieldSourceAllowsSelectedBundle(
+                selectedWorkOrderId = state.selectedWorkOrderId,
+                bundleWorkOrderId = bundle.workOrderId,
+                todayWorkOrderIds = state.today.map { it.workOrderId },
+            )
+        }
         BoxWithConstraints(
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -113,7 +122,7 @@ fun AssignedWorkSection(
                                 max = 460.dp,
                             ),
                     )
-                    state.selectedBundle
+                    visibleBundle
                         ?.let {
                             JobBundleDetail(
                                 bundle = it,
@@ -163,7 +172,7 @@ fun AssignedWorkSection(
                         modifier =
                             Modifier.fillMaxWidth(),
                     )
-                    state.selectedBundle
+                    visibleBundle
                         ?.let {
                             JobBundleDetail(
                                 bundle = it,
@@ -248,6 +257,18 @@ private fun TodayColumn(
                 if (!state.loading && state.today.isEmpty()) {
                     Text(
                         "مفيش WorkOrder حالي متعيّن ليك. لو التكليف اتشال أو اتبدل، هيختفي هنا فورًا.",
+                    )
+                }
+                if (state.selectedBundle != null &&
+                    !fieldSourceAllowsSelectedBundle(
+                        selectedWorkOrderId = state.selectedWorkOrderId,
+                        bundleWorkOrderId = state.selectedBundle.workOrderId,
+                        todayWorkOrderIds = state.today.map { it.workOrderId },
+                    )
+                ) {
+                    HiltechStateTag(
+                        "تفاصيل أمر العمل السابق اتخفت لأن التكليف الحالي أو الاختيار اتغير. حدّث التكليفات وافتح الشغل من جديد.",
+                        HiltechStateTone.BLOCKED,
                     )
                 }
             }
