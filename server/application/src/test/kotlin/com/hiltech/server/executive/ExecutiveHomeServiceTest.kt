@@ -21,7 +21,7 @@ class ExecutiveHomeServiceTest {
     @Test
     fun executiveEndpointFailsClosedWhileFeatureApprovalIsMissing() {
         val controller = ExecutiveHomeController(
-            service = ExecutiveHomeService(CapturingSources(), clock),
+            service = ExecutiveHomeService(CapturingSources(), AllowedMembership, clock),
             enabled = false,
         )
         val failure = assertThrows<ProductApiException> {
@@ -34,7 +34,7 @@ class ExecutiveHomeServiceTest {
     fun enabledEndpointRejectsUnverifiedIdentityBeforeReadingAnyExecutiveData() {
         val sources = CapturingSources()
         val controller = ExecutiveHomeController(
-            service = ExecutiveHomeService(sources, clock),
+            service = ExecutiveHomeService(sources, AllowedMembership, clock),
             enabled = true,
         )
         val failure = assertThrows<ProductApiException> {
@@ -49,7 +49,7 @@ class ExecutiveHomeServiceTest {
     @Test
     fun delegatesCurrentIdentityAndOrganizationWithoutExecutivePrivilege() {
         val sources = CapturingSources()
-        val result = ExecutiveHomeService(sources, clock).home(actor, organization, "correlation-123")
+        val result = ExecutiveHomeService(sources, AllowedMembership, clock).home(actor, organization, "correlation-123")
 
         assertEquals(actor, sources.needsActor)
         assertEquals(actor, sources.projectsActor)
@@ -69,7 +69,7 @@ class ExecutiveHomeServiceTest {
     @Test
     fun failedProducerIsUnavailableNotAnInventedZeroOrSuccess() {
         val sources = CapturingSources().apply { failProjects = true }
-        val result = ExecutiveHomeService(sources, clock).home(actor, organization, "c")
+        val result = ExecutiveHomeService(sources, AllowedMembership, clock).home(actor, organization, "c")
 
         assertEquals("UNAVAILABLE", result.projects.status)
         assertTrue(result.projects.items.isEmpty())
@@ -96,12 +96,49 @@ class ExecutiveHomeServiceTest {
                 ),
             )
         }
-        val result = ExecutiveHomeService(sources, clock).home(actor, organization, "c")
+        val result = ExecutiveHomeService(sources, AllowedMembership, clock).home(actor, organization, "c")
         assertEquals(1, result.needsYou.items.size)
         assertEquals(9L, result.needsYou.items.single().reference.sourceVersion)
         assertTrue(result.needsYou.items.single().reference.readPath.startsWith("/v1/approvals/"))
         assertFalse(result.pendingDomains.isEmpty())
         assertTrue(result.projects.items.isEmpty())
+    }
+
+    @Test
+    fun foreignOrRevokedOrganizationIsDeniedBeforeActorWideInboxRead() {
+        val sources = CapturingSources()
+        val access = object : ExecutiveOrganizationAccess {
+            override fun isCurrentMember(actor: UUID, organizationId: UUID): Boolean = false
+        }
+        val service = ExecutiveHomeService(sources, access, clock)
+        val failure = assertThrows<ProductApiException> {
+            service.home(actor, organization, "refused-request")
+        }
+        assertEquals("EXECUTIVE_HOME_NOT_FOUND", failure.code)
+        assertEquals(null, sources.needsActor)
+        assertEquals(null, sources.projectsActor)
+        assertEquals(null, sources.assetsActor)
+    }
+
+    @Test
+    fun membershipCheckIsScopedToExactActorAndOrganization() {
+        var lastActor: UUID? = null
+        var lastOrganization: UUID? = null
+        val access = object : ExecutiveOrganizationAccess {
+            override fun isCurrentMember(actor: UUID, organizationId: UUID): Boolean {
+                lastActor = actor
+                lastOrganization = organizationId
+                return true
+            }
+        }
+        val sources = CapturingSources()
+        ExecutiveHomeService(sources, access, clock).home(actor, organization, "source-checked")
+        assertEquals(actor, lastActor)
+        assertEquals(organization, lastOrganization)
+    }
+
+    private object AllowedMembership : ExecutiveOrganizationAccess {
+        override fun isCurrentMember(actor: UUID, organizationId: UUID): Boolean = true
     }
 
     private class CapturingSources : ExecutiveSources {
