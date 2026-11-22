@@ -9,6 +9,7 @@ on:
       - ".github/workflows/phase7-s02-supplier-sourcing-contract.yml"
       - "database/migrations/V0042__procurement_supplier_rfq_quote_evidence__phase7_slice02.sql"
       - "database/migrations/V0043__procurement_quote_technical_assessment__phase7_slice02.sql"
+      - "database/migrations/V0044__procurement_supplier_link_history__phase7_slice02.sql"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/**"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/**"
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
@@ -24,6 +25,7 @@ on:
       - ".github/workflows/phase7-s02-supplier-sourcing-contract.yml"
       - "database/migrations/V0042__procurement_supplier_rfq_quote_evidence__phase7_slice02.sql"
       - "database/migrations/V0043__procurement_quote_technical_assessment__phase7_slice02.sql"
+      - "database/migrations/V0044__procurement_supplier_link_history__phase7_slice02.sql"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/**"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/**"
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
@@ -66,7 +68,7 @@ jobs:
       - name: Set up pinned Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
-      - name: Test supplier sourcing and real V0042/V0043 schema
+      - name: Test sourcing with real V0042/V0043/V0044 schema
         env:
           HILTECH_DB_CONTRACT_TEST: "1"
           HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
