@@ -1,5 +1,6 @@
 package com.hiltech.server.procurement
 
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Primary
 import org.springframework.jdbc.core.JdbcTemplate
@@ -13,7 +14,7 @@ import java.util.UUID
  */
 @Component
 @Primary
-class JdbcSupplierQuoteDocumentVerification(
+class JdbcSupplierQuoteDocumentVerification @Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val authority: SupplierSourcingAuthorizationPort,
     private val suppliers: SupplierSourcingPersistence,
