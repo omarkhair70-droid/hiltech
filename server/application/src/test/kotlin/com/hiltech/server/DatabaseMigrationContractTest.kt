@@ -85,7 +85,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(10, result.migrationsExecuted)
+        assertEquals(11, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -146,12 +146,13 @@ class DatabaseMigrationContractTest {
                         'procurement_requirement_transition',
                         'procurement_supplier_rfq',
                         'procurement_supplier_quote_evidence',
-                        'procurement_supplier_quote_technical_assessment'
+                        'procurement_supplier_quote_technical_assessment',
+                        'procurement_supplier_link_event'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(71, tables.getInt(1))
+                assertEquals(72, tables.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
@@ -229,6 +230,28 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(technicalReviewTrigger.next())
                 assertEquals(1, technicalReviewTrigger.getInt(1))
+                val supplierLinkTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_supplier_link_event'::regclass
+                      AND tgname = 'procurement_supplier_link_event_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(supplierLinkTrigger.next())
+                assertEquals(1, supplierLinkTrigger.getInt(1))
+                val linkConstraints = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_supplier_link_event'::regclass
+                      AND conname IN (
+                          'uq_procurement_supplier_link_revision',
+                          'ck_procurement_supplier_link_not_self'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(linkConstraints.next())
+                assertEquals(2, linkConstraints.getInt(1))
                 val sourcingUniques = statement.executeQuery(
                     """
                     SELECT COUNT(*) FROM pg_constraint
