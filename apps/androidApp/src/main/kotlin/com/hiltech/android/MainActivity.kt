@@ -36,6 +36,7 @@ import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
 import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
+import com.hiltech.shared.core.procurement.PoWarehouseIntakeSection
 import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
@@ -157,6 +158,14 @@ class MainActivity : ComponentActivity() {
                                     java.util.UUID.nameUUIDFromBytes(payload.toByteArray(Charsets.UTF_8)).toString()
                                 },
                             )
+                            if (BuildConfig.HILTECH_PO_WAREHOUSE_INTAKE_ENABLED) {
+                                PoWarehouseIntakeSection(
+                                    api = hiltechApplication.poWarehouseIntakeApi,
+                                    organizationId = organization.organizationId,
+                                    installationId = hiltechApplication.installationId,
+                                    newOperationId = { UUID.randomUUID().toString() },
+                                )
+                            }
                         }
                     }
                 },
