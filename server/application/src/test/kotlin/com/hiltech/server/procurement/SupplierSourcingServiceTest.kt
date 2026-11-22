@@ -110,6 +110,7 @@ class SupplierSourcingServiceTest {
         Mockito.`when`(sourcing.lockRfq(rfqId)).thenReturn(true)
         Mockito.`when`(sourcing.supplierTypeAndStatus(supplierId))
             .thenReturn("SUPPLIER" to "ACTIVE")
+        Mockito.`when`(sourcing.isEligibleSupplier(org, supplierId)).thenReturn(true)
         val sample = SupplierQuoteRecord(
             SupplierQuoteEvidence(
                 UUID.randomUUID(), rfqId, supplierId, "Q-01", 1, "EGP",
@@ -211,8 +212,7 @@ class SupplierSourcingServiceTest {
                 rfqId, badRevision,
             )
         }.code)
-        Mockito.`when`(sourcing.supplierTypeAndStatus(supplierId))
-            .thenReturn("CLIENT" to "ACTIVE")
+        Mockito.`when`(sourcing.isEligibleSupplier(org, supplierId)).thenReturn(false)
         val invalid = quoteRequest()
         assertEquals("INVALID_SUPPLIER_QUOTE", assertThrows<ProductApiException> {
             service().recordQuote(
@@ -220,6 +220,18 @@ class SupplierSourcingServiceTest {
                 rfqId, invalid,
             )
         }.code)
+    }
+
+    @Test fun buyerSupplierDirectoryIsOrganizationScopedAndRequiresBuyerAuthority() {
+        allow()
+        val entry = SourcingSupplierCandidate(supplierId, "Linked Supplier", 2)
+        Mockito.`when`(sourcing.eligibleSuppliers(org)).thenReturn(listOf(entry))
+        assertEquals(listOf(entry), service().eligibleSuppliers(actor, org))
+        Mockito.`when`(auth.canManageSourcing(actor, org)).thenReturn(false)
+        assertEquals("SOURCING_UNAVAILABLE", assertThrows<ProductApiException> {
+            service().eligibleSuppliers(actor, org)
+        }.code)
+        Mockito.verify(sourcing, Mockito.times(1)).eligibleSuppliers(org)
     }
 
     @Test fun buyerEligibleNeedsAreSourcedFromCurrentTechnicalReadyRequirementsOnly() {
