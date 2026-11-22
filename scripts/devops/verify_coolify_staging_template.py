@@ -6,16 +6,22 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = ROOT / "infrastructure/coolify/staging/compose.yaml"
+API = ROOT / "infrastructure/coolify/staging/compose.api.yaml"
 INIT = ROOT / "infrastructure/coolify/staging/postgres-init.sh"
 DOC = ROOT / "infrastructure/coolify/staging/README.md"
 
 
 def main() -> None:
-    yaml = COMPOSE.read_text(encoding="utf-8")
+    yaml_base = COMPOSE.read_text(encoding="utf-8")
+    yaml_api = API.read_text(encoding="utf-8")
+    yaml = yaml_base + "\n" + yaml_api
     init = INIT.read_text(encoding="utf-8")
     doc = DOC.read_text(encoding="utf-8")
     assert yaml.strip() and init.strip() and doc.strip()
     assert "start-dev" not in yaml
+    assert "hiltech-api:" not in yaml_base, "API must not require bootstrap-time config"
+    assert "hiltech-api:" in yaml_api, "missing API overlay"
+    assert "HILTECH_FGA_STORE_ID:?" not in yaml_base
     assert not re.search(r"(?m)^\s*ports\s*:", yaml), "public port mapping prohibited"
     assert 'OPENFGA_PLAYGROUND_ENABLED: "false"' in yaml
     for setting in (
