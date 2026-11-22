@@ -221,7 +221,7 @@ class SupplierSourcingServiceTest {
                 CreateSupplierQuoteDocumentSlotRequest(op2, supplierId),
             )
         }
-        assertEquals("INVALID_SOURCING_REQUEST", error.code)
+        assertEquals("INVALID_SUPPLIER_QUOTE", error.code)
     }
 
     @Test fun eachSupplierRevisionIsAnAppendOnlyRestrictedEvidenceRecord() {
