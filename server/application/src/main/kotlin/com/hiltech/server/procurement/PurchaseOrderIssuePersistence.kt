@@ -256,7 +256,13 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
     fun issuedOrderList(organizationId: UUID): List<PurchaseOrderLifecycleSummary> = jdbc.query(
         """
         SELECT p.id, p.po_code, p.candidate_id, p.issued_at,
-               p.supplier_dispatch_state, c.total_amount, c.currency,
+               CASE WHEN EXISTS (
+                   SELECT 1 FROM procurement_po_supplier_communication_event cm
+                   WHERE cm.purchase_order_id = p.id
+                     AND cm.event_type = 'EXTERNAL_DISPATCH_ATTESTED'
+               ) THEN 'ATTESTED_SENT'
+               ELSE p.supplier_dispatch_state END AS supplier_dispatch_state,
+               c.total_amount, c.currency,
                e.event_type, e.event_version
         FROM procurement_purchase_order p
         JOIN procurement_po_candidate c ON c.id = p.candidate_id
