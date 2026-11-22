@@ -34,6 +34,7 @@ fun SupplierSourcingBuyerSection(
     quoteDocumentUploader: SupplierQuoteDocumentUploader? = null,
     pickQuoteFile: suspend () -> SupplierQuotePickedFile? = { null },
     purchaseCandidateApi: PurchaseOrderCandidateApiClient? = null,
+    purchaseApprovalRequestEnabled: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     var loading by remember(organizationId) { mutableStateOf(false) }
@@ -199,6 +200,7 @@ fun SupplierSourcingBuyerSection(
                                                     quote = quote,
                                                     installationId = installationId,
                                                     newOperationId = newOperationId,
+                                                    approvalRequestEnabled = purchaseApprovalRequestEnabled,
                                                 )
                                             }
                                         }
