@@ -66,17 +66,17 @@ class CommercialService(
     private val clock: Clock,
 ) {
     private fun now() = clock.instant().atOffset(ZoneOffset.UTC)
-    private fun row(sql: String, vararg args: Any): Map<String, Any> =
+    private fun row(sql: String, vararg args: Any): Map<String, Any?> =
         jdbc.queryForList(sql, *args).firstOrNull()
             ?: throw commercialError("COMMERCIAL_NOT_FOUND", "Record unavailable.", HttpStatus.NOT_FOUND)
     private fun op(id: UUID) =
         row("SELECT id,organization_id,client_organization_id,title,state,version FROM commercial_opportunity WHERE id=?", id)
-    private fun op(id: UUID, actor: UUID, vararg authorities: String): Map<String, Any> {
+    private fun op(id: UUID, actor: UUID, vararg authorities: String): Map<String, Any?> {
         val result = op(id)
         access.require(actor, result["organization_id"] as UUID, *authorities)
         return result
     }
-    private fun open(record: Map<String, Any>) {
+    private fun open(record: Map<String, Any?>) {
         if (record["state"] !in setOf("OPEN", "QUALIFIED"))
             throw commercialError("COMMERCIAL_CLOSED", "Opportunity cannot be edited.", HttpStatus.CONFLICT)
     }
@@ -146,7 +146,7 @@ class CommercialService(
         return result(target,replay,"OPEN",correlation)
     }
 
-    fun listOpportunities(company: UUID, actor: UUID, limit: Int): List<Map<String, Any>> {
+    fun listOpportunities(company: UUID, actor: UUID, limit: Int): List<Map<String, Any?>> {
         access.require(actor,company,"SALES_VIEW","SALES_WRITE","SALES_RELEASE","SALES_AWARD")
         if (limit !in 1..200) throw commercialError("COMMERCIAL_LIMIT_INVALID","Limit 1..200.",HttpStatus.BAD_REQUEST)
         return jdbc.queryForList(
@@ -469,7 +469,7 @@ class CommercialService(
         )
     }
 
-    fun privateCosting(id: UUID,actor: UUID): List<Map<String, Any>> {
+    fun privateCosting(id: UUID,actor: UUID): List<Map<String, Any?>> {
         val parent = op(id,actor,"SALES_COST_VIEW")
         return jdbc.queryForList(
             """SELECT b.id AS boq_version_id,b.version_number,b.currency,l.line_code,l.description,
