@@ -57,7 +57,7 @@ FOR EACH ROW EXECUTE FUNCTION reject_procurement_draft_mutation();
 
 -- A rejected line cannot subsequently be posted to canonical StockLedger.
 CREATE FUNCTION guard_rejected_po_line_physical_receipt()
-RETURNS trigger LANGUAGE plpgsql AS $
+RETURNS trigger LANGUAGE plpgsql AS $po_rejection$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM procurement_po_receiving_rejection_event x
@@ -68,7 +68,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$;
+$po_rejection$;
 CREATE TRIGGER receiving_rejected_po_line_receipt_guard
 BEFORE UPDATE ON receiving_line
 FOR EACH ROW
