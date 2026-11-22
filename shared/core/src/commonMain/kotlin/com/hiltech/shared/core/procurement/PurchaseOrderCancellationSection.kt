@@ -63,7 +63,7 @@ fun PurchaseOrderCancellationSection(
                     Text(row.total + " " + row.currency + " · " + row.supplierDispatchState,
                         style = MaterialTheme.typography.bodySmall)
                     if (row.effectiveState == "ISSUED" &&
-                        row.supplierDispatchState == "NOT_SENT" && row.version == 1L
+                        row.supplierDispatchState == "NOT_SENT" && row.version >= 1L
                     ) {
                         PurchaseOrderCancellationAction(
                             api = api,
