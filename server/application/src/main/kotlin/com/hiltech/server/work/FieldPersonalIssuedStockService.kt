@@ -3,6 +3,7 @@ package com.hiltech.server.work
 import com.hiltech.server.people.EmployeeState
 import com.hiltech.server.people.PeoplePersistencePort
 import com.hiltech.server.platform.ProductApiException
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -36,7 +37,7 @@ data class FieldPersonalIssuedStockLine(
 )
 
 @Service
-class FieldPersonalIssuedStockService(
+class FieldPersonalIssuedStockService @Autowired constructor(
     private val assignments: WorkAssignmentSourceAuthorityPort,
     private val workAuthorization: WorkAssignmentAuthorizationPort,
     private val work: WorkPersistencePort,
