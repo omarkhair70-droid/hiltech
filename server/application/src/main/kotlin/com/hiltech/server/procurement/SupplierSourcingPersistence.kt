@@ -40,6 +40,15 @@ data class SupplierQuoteDocumentSlot(
     val correlationId: String,
 )
 
+data class SupplierQuoteDocumentSource(
+    val quoteId: UUID,
+    val rfqId: UUID,
+    val organizationId: UUID,
+    val supplierOrganizationId: UUID,
+    val sourceEvidenceRef: String,
+    val sourceSha256: String,
+)
+
 data class SupplierQuoteRecord(
     val evidence: SupplierQuoteEvidence,
     val operationId: UUID,
@@ -202,6 +211,24 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
     fun supplierTypeAndStatus(id: UUID): Pair<String, String>? = jdbc.query(
         "SELECT organization_type, status FROM organization WHERE id = ?",
         { row, _ -> row.getString("organization_type") to row.getString("status") }, id,
+    ).singleOrNull()
+
+    /** Server-only exact quote source; caller must check buyer authority. */
+    fun quoteDocumentSource(quoteId: UUID): SupplierQuoteDocumentSource? = jdbc.query(
+        """
+        SELECT id, rfq_id, organization_id, supplier_organization_id,
+               source_evidence_ref, source_sha256
+        FROM procurement_supplier_quote_evidence
+        WHERE id = ?
+        """.trimIndent(),
+        { row, _ -> SupplierQuoteDocumentSource(
+            row.getObject("id", UUID::class.java),
+            row.getObject("rfq_id", UUID::class.java),
+            row.getObject("organization_id", UUID::class.java),
+            row.getObject("supplier_organization_id", UUID::class.java),
+            row.getString("source_evidence_ref"),
+            row.getString("source_sha256"),
+        ) }, quoteId,
     ).singleOrNull()
 
     fun quoteTechnicalTarget(quoteEvidenceId: UUID): SupplierQuoteTechnicalTarget? = jdbc.query(
