@@ -75,5 +75,20 @@ class ExecutiveHomeContractsTest {
         assertNull(decoded.projects.sourceAsOf)
         assertFalse(decoded.assetExceptions.partial)
         assertEquals("AWAITING_AUTHORIZED_SOURCE_CONTRACT", decoded.pendingDomains.single().status)
+        assertTrue(executiveSnapshotMatchesSession(
+            decoded,
+            expectedIdentityId = decoded.viewerIdentityId,
+            expectedOrganizationId = decoded.organizationId,
+        ))
+        assertFalse(executiveSnapshotMatchesSession(
+            decoded,
+            expectedIdentityId = "99999999-1111-4111-8111-111111111111",
+            expectedOrganizationId = decoded.organizationId,
+        ))
+        assertFalse(executiveSnapshotMatchesSession(
+            decoded,
+            expectedIdentityId = decoded.viewerIdentityId,
+            expectedOrganizationId = "aaaaaaaa-2222-4222-8222-222222222222",
+        ))
     }
 }
