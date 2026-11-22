@@ -114,6 +114,7 @@ class ServiceDeliveryInvoiceService(
         ServicePurchaseDocumentSlotReceipt {
         if(ctx.operationId!=input.operationId)invalid()
         if(input.documentKind !in setOf("DELIVERY","INVOICE"))invalid()
+        configured(input.documentKind)
         val order=order(orderId)?:hidden()
         requireAuthority(ctx.actor,order.org,input.documentKind)
         val id=key("service-purchase-document-slot",ctx.operationId)
@@ -147,6 +148,7 @@ class ServiceDeliveryInvoiceService(
            req.outcome !in setOf("ACCEPTED","NEEDS_REWORK","REJECTED") ||
            !validSha(req.evidenceSha256))invalid()
         val notes=validated(req.reviewNotes,12,1000)
+        configured("DELIVERY")
         val order=order(orderId)?:hidden()
         requireAuthority(ctx.actor,order.org,"DELIVERY")
         val id=key("service-delivery-review",ctx.operationId)
@@ -186,6 +188,7 @@ class ServiceDeliveryInvoiceService(
         val number=validated(req.invoiceNumber,2,96)
         val amount=money(req.serviceAmount)
         val tax=money(req.taxAmount)
+        configured("INVOICE")
         val order=order(orderId)?:hidden()
         requireAuthority(ctx.actor,order.org,"INVOICE")
         val id=key("service-invoice",ctx.operationId)
@@ -230,12 +233,14 @@ class ServiceDeliveryInvoiceService(
     }
 
     fun invoiceDetail(actor:UUID,id:UUID):ServiceInvoiceView {
+        configured("INVOICE")
         val inv=invoice(id)?:hidden()
         requireAuthority(actor,inv.org,"INVOICE")
         return invoiceView(inv)
     }
 
     fun preview(actor:UUID,id:UUID):ServiceInvoiceMatchPreview {
+        configured("INVOICE")
         val inv=invoice(id)?:hidden()
         requireAuthority(actor,inv.org,"INVOICE")
         return compute(inv)
@@ -244,6 +249,7 @@ class ServiceDeliveryInvoiceService(
     fun recordMatch(ctx:ProcurementDraftContext,id:UUID,
                     req:RecordServiceInvoiceMatchRequest):ServiceInvoiceMatchPreview {
         if(ctx.operationId!=req.operationId || !validSha(req.expectedSourceSha256))invalid()
+        configured("INVOICE")
         val original=invoice(id)?:hidden()
         requireAuthority(ctx.actor,original.org,"INVOICE")
         val eventId=key("service-invoice-match",ctx.operationId)
@@ -288,6 +294,7 @@ class ServiceDeliveryInvoiceService(
     fun handoff(ctx:ProcurementDraftContext,id:UUID,
                 req:HandOffServiceInvoiceRequest):ServiceInvoiceHandoffReceipt {
         if(ctx.operationId!=req.operationId)invalid()
+        configured("INVOICE")
         val inv=invoice(id)?:hidden()
         requireAuthority(ctx.actor,inv.org,"INVOICE")
         val handoffId=key("service-invoice-finance-handoff",ctx.operationId)
@@ -421,6 +428,14 @@ class ServiceDeliveryInvoiceService(
         val t=documentTarget.loadTarget(slotId)?:hidden()
         if(t.serviceOrderId!=o.id || t.organizationId!=o.org ||
            t.documentKind!=kind || !documentTarget.canAccess(actor,t))hidden()
+    }
+    private fun configured(kind:String) {
+        val (flag,key)=when(kind) {
+            "DELIVERY" -> acceptanceEnabled to reviewerKey.trim()
+            "INVOICE" -> invoiceEnabled to financeKey.trim()
+            else -> invalid()
+        }
+        if(!orderEnabled || !flag || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) hidden()
     }
     private fun requireAuthority(actor:UUID,org:UUID,kind:String) {
         val (flag,key)=when(kind) {
