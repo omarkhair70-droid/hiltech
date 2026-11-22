@@ -56,6 +56,27 @@ class SupplierSourcingApiClientTest {
         assertFalse(receipt.replayed)
     }
 
+    @Test fun quoteDocumentSlotIsBoundToOneRfqAndSupplierWithIdempotency() = runBlocking {
+        val request = CreateSupplierQuoteDocumentSlotDto(
+            operationId = operation, supplierOrganizationId = supplier,
+        )
+        val http = HttpClient(MockEngine { call ->
+            assertEquals("POST", call.method.value)
+            assertEquals("/v1/sourcing/rfqs/$rfq/document-slots", call.url.encodedPath)
+            assertEquals("Bearer restricted-buyer-token", call.headers[HttpHeaders.Authorization])
+            assertEquals(operation, call.headers["Idempotency-Key"])
+            val body = (call.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            assertEquals(request, Json.decodeFromString<CreateSupplierQuoteDocumentSlotDto>(body))
+            respond("""{"documentSlotId":"$requirement","rfqId":"$rfq",
+                "supplierOrganizationId":"$supplier","replayed":false}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val receipt = client(http).createQuoteDocumentSlot(rfq, request, installation)
+        assertEquals(requirement, receipt.documentSlotId)
+        assertEquals(supplier, receipt.supplierOrganizationId)
+        assertFalse(receipt.replayed)
+    }
+
     @Test fun quoteSubmissionRetainsEvidenceAndDoesNotIssueAPurchaseOrder() = runBlocking {
         val request = RecordSupplierQuoteDto(
             operationId = operation, supplierOrganizationId = supplier,
