@@ -48,8 +48,12 @@ jobs:
           HILTECH_DB_PASSWORD: hiltech
           HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
         run: |
+          # The migration-contract test deliberately upgrades V0033 -> latest.
+          # Run it before other PostgreSQL tests to avoid class scheduling races.
           ./gradlew :server:application:test \
             --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --no-daemon --console=plain
+          ./gradlew :server:application:test \
             --tests com.hiltech.server.procurement.ServicePurchaseNeedServiceTest \
             --tests com.hiltech.server.procurement.ServiceSupplierSourcingServiceTest \
             --tests com.hiltech.server.procurement.ServiceQuoteProtectedDocumentTest \
