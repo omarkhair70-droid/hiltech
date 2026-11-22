@@ -37,6 +37,7 @@ import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
 import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeSection
+import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceSection
 import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
@@ -182,6 +183,22 @@ class MainActivity : ComponentActivity() {
                                     workApi = hiltechApplication.procurementWorkApi,
                                     installationId = hiltechApplication.installationId,
                                     selectedWorkOrderId = selectedWork,
+                                    newOperationId = { UUID.randomUUID().toString() },
+                                )
+                            }
+                        }
+                    }
+                    if (BuildConfig.HILTECH_SUPPLIER_INVOICE_FINANCE_ENABLED) {
+                        val signed = shellState as? HiltechShellState.SignedIn
+                        val identity = signed?.identity
+                        val organization = identity?.organizations?.firstOrNull { it.primary }
+                            ?: identity?.organizations?.firstOrNull()
+                        if (identity != null && organization != null) {
+                            key(identity.identityId, organization.organizationId, "finance-invoice") {
+                                SupplierInvoiceFinanceSection(
+                                    api = hiltechApplication.supplierInvoiceFinanceApi,
+                                    organizationId = organization.organizationId,
+                                    installationId = hiltechApplication.installationId,
                                     newOperationId = { UUID.randomUUID().toString() },
                                 )
                             }
