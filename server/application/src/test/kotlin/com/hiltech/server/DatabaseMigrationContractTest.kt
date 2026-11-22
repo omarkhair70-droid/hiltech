@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(17, result.migrationsExecuted)
+        assertEquals(18, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -155,12 +155,13 @@ class DatabaseMigrationContractTest {
                         'procurement_purchase_order',
                         'procurement_po_lifecycle_event',
                         'procurement_po_delivery_amendment_proposal',
-                        'procurement_po_receiving_link'
+                        'procurement_po_receiving_link',
+                        'procurement_po_supplier_communication_event'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(79, tables.getInt(1))
+                assertEquals(80, tables.getInt(1))
 
                 // V0050 links canonical Warehouse Receiving to a company-scoped
                 // approved PO without creating another physical stock ledger.
@@ -186,6 +187,22 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(poReceivingGuards.next())
                 assertEquals(2, poReceivingGuards.getInt(1))
+
+                // V0051 is an append-only, company-scoped record of external
+                // communication attestations, not an email-sending service.
+                val supplierCommunicationTriggers = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_po_supplier_communication_event'::regclass
+                      AND tgname IN (
+                          'procurement_po_supplier_communication_insert_guard',
+                          'procurement_po_supplier_communication_immutable'
+                      )
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(supplierCommunicationTriggers.next())
+                assertEquals(2, supplierCommunicationTriggers.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
