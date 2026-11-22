@@ -1,0 +1,12 @@
+// UX-128: explicit QA-only Compose screenshot task; no production Gradle changes.
+gradle.projectsEvaluated {
+    def desktop = gradle.rootProject.findProject(':apps:desktopApp')
+    if (desktop == null) return
+    desktop.tasks.register('renderUx128ProcurementFullscreen', org.gradle.api.tasks.JavaExec) {
+        group = 'verification'
+        description = 'Render source-typed full-screen Phase7 buyer and field experience studies'
+        dependsOn(desktop.tasks.named('testClasses'))
+        classpath = desktop.sourceSets.test.runtimeClasspath
+        mainClass.set('com.hiltech.desktop.evidence.UX128ProcurementFullscreenEvidenceKt')
+    }
+}
