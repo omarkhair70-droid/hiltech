@@ -181,6 +181,15 @@ class CommercialService(
             "quotes" to jdbc.queryForList(
                 """SELECT id,quote_code,version_number,currency,total_price,state,validity_date
                    FROM commercial_quote_version WHERE opportunity_id=? ORDER BY version_number DESC""",id),
+            "contracts" to jdbc.queryForList(
+                """SELECT id,quote_version_id,contract_code,state,effective_date,end_date
+                   FROM commercial_contract WHERE opportunity_id=? ORDER BY created_at DESC""",id),
+            "clientPurchaseOrders" to jdbc.queryForList(
+                """SELECT id,contract_id,client_po_number,issued_on,verified
+                   FROM commercial_client_po WHERE opportunity_id=? ORDER BY created_at DESC""",id),
+            "handoff" to jdbc.queryForList(
+                """SELECT project_id,quote_version_id,contract_id,client_po_id
+                   FROM commercial_project_handoff WHERE opportunity_id=?""",id),
         )
     }
 
