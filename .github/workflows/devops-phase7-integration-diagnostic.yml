@@ -1,0 +1,124 @@
+name: DevOps — Phase 7 exact-head architecture and migration diagnostic
+
+on:
+  push:
+    branches:
+      - devops/phase7-integration-proof-20261122
+  pull_request:
+    branches:
+      - integration/phase7-premerge-candidate-20261122
+    paths:
+      - ".github/workflows/devops-phase7-integration-diagnostic.yml"
+      - "database/migrations/**"
+      - "server/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase7-devops-architecture-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-and-migrations:
+    name: Exact source and additive Flyway numbering (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Prove no renumbering or revision of main migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          python3 - <<'PY'
+          import re
+          import subprocess
+          from pathlib import Path
+
+          prefix = 'database/migrations/'
+          def get_files(ref):
+              raw = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', ref], text=True)
+              return sorted(p for p in raw.splitlines() if re.fullmatch(
+                  r'database/migrations/V[0-9]{4}__[^/]+\.sql', p))
+
+          main_files = get_files('origin/main')
+          combined = get_files('HEAD')
+          main_set = set(main_files)
+          combined_set = set(combined)
+          missing = main_set - combined_set
+          if missing:
+              raise SystemExit(f'BLOCKED: main migrations deleted: {sorted(missing)}')
+          edited = []
+          for path in main_files:
+              original = subprocess.check_output(['git', 'show', f'origin/main:{path}'])
+              current = Path(path).read_bytes()
+              if original != current:
+                  edited.append(path)
+          if edited:
+              raise SystemExit(f'BLOCKED: old main migrations changed: {edited}')
+          versions = {}
+          for path in combined:
+              number = int(re.search(r'/V([0-9]{4})__', path).group(1))
+              versions.setdefault(number, []).append(path)
+          duplicates = {n: paths for n, paths in versions.items() if len(paths) != 1}
+          if duplicates:
+              raise SystemExit(f'BLOCKED: duplicate Flyway migration numbers: {duplicates}')
+          added = [p for p in combined if p not in main_set]
+          nums = sorted(int(re.search(r'/V([0-9]{4})__', p).group(1)) for p in added)
+          if nums != list(range(39, 61)):
+              raise SystemExit(f'BLOCKED: expected P7 appended V0039..V0060, found {nums}')
+          if max(versions) != 60:
+              raise SystemExit(f'BLOCKED: unexpected migration max {max(versions)}')
+          print(f'PASS: unchanged historical migrations {len(main_files)}, 22 added V0039..V0060, no duplicate names')
+          with open(__import__('os').environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+              out.write('Migration integrity: 22 append-only scripts V0039 through V0060; no historical edits.\n')
+          PY
+
+  architecture-boundaries:
+    name: Reproduce Spring Modulith blocker and publish complete violations
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+      - name: Reproduce exact integration architecture test on new branch
+        shell: bash
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.ArchitectureTest \
+            --rerun-tasks --no-daemon --no-configuration-cache --console=plain
+      - name: Print only failed test details, not environment variables
+        if: failure()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          for path in Path("server/application/build/test-results/test").glob("*.xml"):
+              root = ET.parse(path).getroot()
+              for case in root.iter("testcase"):
+                  for failure in case.findall("failure"):
+                      print("FAIL:", case.attrib.get("classname"), case.attrib.get("name"))
+                      print((failure.attrib.get("message") or "")[:14000])
+                      print((failure.text or "")[:20000])
+          PY
+      - name: Archive architecture test evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase7-spring-modulith-architecture-diagnostic
+          path: |
+            server/application/build/test-results/test/
+            server/application/build/reports/tests/test/
+          retention-days: 7
+          if-no-files-found: warn
