@@ -20,7 +20,7 @@ class ExecutiveApiClient(
         organizationId: String,
         installationId: String,
     ): ExecutiveHomeDto {
-        require(organizationId.matches(Regex("[0-9a-fA-F-]{36}"))) {
+        require(organizationId.matches(Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"))) {
             "A valid organization ID is required."
         }
         return api.request(
