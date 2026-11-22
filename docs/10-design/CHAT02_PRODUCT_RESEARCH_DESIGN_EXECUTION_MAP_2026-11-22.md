@@ -92,6 +92,15 @@ Exit: owner/product approval, native Android+Windows acceptance, change-control 
 - Main GitHub Bootstrap success run 44948725551 at `c30fb707` is an engineering signal, not user interface or real-device acceptance.
 - Immediate design experiment after completing authority/role fixtures: compare current one-column SignedIn baseline vs context-first global shell vs role-first workbench using real shared Compose state and exact same permission-bound objects; do not build a separate fake dashboard. Navigation destinations must not create new permissions or hidden backend actions.
 
+## UX-02 / UX-03 navigation source + native test checkpoint — 2026-11-22
+
+- [UX02_UX03_SOURCE_AUTHORITY_AND_NAVIGATION_EXPERIMENT_2026-11-22.md](UX02_UX03_SOURCE_AUTHORITY_AND_NAVIGATION_EXPERIMENT_2026-11-22.md) documents cross-role source/permission dependencies and contextual return rules. Do not derive global navigation entitlement from a display role or non-null cache.
+- [UX03_NATIVE_NAVIGATION_COMPARISON_RESULTS_2026-11-22.md](UX03_NATIVE_NAVIGATION_COMPARISON_RESULTS_2026-11-22.md) records the actual shared Compose `CONTEXT_FIRST` vs `WORKBENCH_FIRST` experiment using the existing Phase5 Warehouse source fixture, rendering at 430×960 and 1150×1000, and a discovered/repaired Back-stack loop.
+- Final tested **source code head `759219184383075537c6d48e7dcad971e0e659f8`**: Desktop Compose synthetic rendering **BUILD SUCCESSFUL**, headless pointer selection and visible Back **PASS**, unadmitted-route/revocation/return/scope tests **PASS**. These do NOT establish Android runtime/real human/actual role authorization/PM or field support.
+- UX02 remains **PARTIAL**: seven-role source-to-object map specified but actual server-admitted destinations and object-level routes are not implemented.
+- UX03 remains **PARTIAL**: in-repo, opt-in *study component* and native synthetic proof only. Both shipping Windows/Android apps still use unchanged baseline `HiltechShell`; no global navigation enabled, approved, merged or deployed.
+- Future work: exact authorized route projection coordinated with Engineering, role-specific Project/Field/Owner task fixtures, true object-level drill/back with filters/scroll, Android real runtime, Windows keyboard and accessibility, user timing and rejection/acceptance decision.
+
 ## Execution priority and dependency map
 - NOW: close UX-00 and UX-01 evidence in parallel; UX-02 role/authority structure; UX-03 nav hypotheses/same-source comparison, using warehouse as one evidence lane rather than monopolizing program.
 - IN PARALLEL: UX-05 functional/operational friction defects as features land through Phase 6–13, and UX-07 safety tests.
