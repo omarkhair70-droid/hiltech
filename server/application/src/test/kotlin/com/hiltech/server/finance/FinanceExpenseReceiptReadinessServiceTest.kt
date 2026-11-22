@@ -10,6 +10,7 @@ import org.mockito.Mockito
 import org.springframework.core.env.MapPropertySource
 import org.springframework.core.env.StandardEnvironment
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.http.HttpStatus
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -96,7 +97,7 @@ class FinanceExpenseReceiptReadinessServiceTest {
         Mockito.`when`(reviewers.list(actor, org)).thenThrow(
             ProductApiException(
                 "FINANCE_EMPLOYEE_REVIEW_UNAVAILABLE",
-                "Not authorized", org.springframework.http.HttpStatus.NOT_FOUND,
+                "Not authorized", HttpStatus.NOT_FOUND,
             ),
         )
         assertThrows<ProductApiException> {
