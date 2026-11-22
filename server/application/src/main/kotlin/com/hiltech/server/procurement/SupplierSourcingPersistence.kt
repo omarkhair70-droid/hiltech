@@ -23,6 +23,12 @@ data class SupplierRfqRecord(
     val correlationId: String,
 )
 
+data class SourcingSupplierCandidate(
+    val supplierOrganizationId: UUID,
+    val displayName: String,
+    val relationshipRevision: Int,
+)
+
 data class SupplierQuoteRecord(
     val evidence: SupplierQuoteEvidence,
     val operationId: UUID,
@@ -105,6 +111,54 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
             """.trimIndent(),
             { row, _ -> row.rfqRecord() }, requirementId, version,
         ).singleOrNull()
+
+    /**
+     * Latest link event is authoritative: a later INACTIVE event must revoke
+     * an earlier ACTIVE event. Never list global suppliers to a buyer.
+     */
+    fun eligibleSuppliers(organizationId: UUID): List<SourcingSupplierCandidate> = jdbc.query(
+        """
+        SELECT current.supplier_organization_id, current.revision_number, o.display_name
+        FROM (
+            SELECT DISTINCT ON (l.supplier_organization_id)
+                l.supplier_organization_id, l.revision_number, l.state
+            FROM procurement_supplier_link_event l
+            WHERE l.organization_id = ?
+            ORDER BY l.supplier_organization_id, l.revision_number DESC
+        ) current
+        JOIN organization o ON o.id = current.supplier_organization_id
+        WHERE current.state = 'ACTIVE'
+          AND o.organization_type = 'SUPPLIER'
+          AND o.status = 'ACTIVE'
+        ORDER BY o.display_name, current.supplier_organization_id
+        LIMIT 100
+        """.trimIndent(),
+        { row, _ -> SourcingSupplierCandidate(
+            row.getObject("supplier_organization_id", UUID::class.java),
+            row.getString("display_name"),
+            row.getInt("revision_number"),
+        ) }, organizationId,
+    )
+
+    /** Do not use a globally active supplier without a current local link. */
+    fun isEligibleSupplier(organizationId: UUID, supplierId: UUID): Boolean =
+        jdbc.queryForObject(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM organization o
+                WHERE o.id = ?
+                  AND o.organization_type = 'SUPPLIER'
+                  AND o.status = 'ACTIVE'
+                  AND (
+                      SELECT l.state FROM procurement_supplier_link_event l
+                      WHERE l.organization_id = ?
+                        AND l.supplier_organization_id = o.id
+                      ORDER BY l.revision_number DESC LIMIT 1
+                  ) = 'ACTIVE'
+            )
+            """.trimIndent(),
+            Boolean::class.java, supplierId, organizationId,
+        ) == true
 
     fun supplierTypeAndStatus(id: UUID): Pair<String, String>? = jdbc.query(
         "SELECT organization_type, status FROM organization WHERE id = ?",
