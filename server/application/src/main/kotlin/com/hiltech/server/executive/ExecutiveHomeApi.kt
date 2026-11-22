@@ -90,6 +90,7 @@ data class ExecutivePendingDomain(
 )
 
 data class ExecutiveHomeResponse(
+    val viewerIdentityId: String,
     val organizationId: String,
     val asOf: String,
     val correlationId: String,
@@ -264,6 +265,7 @@ class ExecutiveHomeService(private val sources: ExecutiveSources, private val cl
 
     fun home(actor: UUID, organizationId: UUID, correlationId: String) =
         ExecutiveHomeResponse(
+            viewerIdentityId = actor.toString(),
             organizationId = organizationId.toString(),
             asOf = clock.instant().toString(),
             correlationId = correlationId,
