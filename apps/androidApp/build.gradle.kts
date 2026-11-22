@@ -22,6 +22,9 @@ val engineeringTestsUiEnabled = providers
 val procurementRequirementsUiEnabled = providers
     .gradleProperty("hiltech.procurementRequirementsEnabled")
     .getOrElse("false") == "true"
+val warehouseReplenishmentUiEnabled = providers
+    .gradleProperty("hiltech.warehouseReplenishmentEnabled")
+    .getOrElse("false") == "true"
 val poWarehouseIntakeUiEnabled = providers
     .gradleProperty("hiltech.poWarehouseIntakeEnabled")
     .getOrElse("false") == "true"
@@ -84,6 +87,11 @@ android {
             "boolean",
             "HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED",
             procurementRequirementsUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED",
+            warehouseReplenishmentUiEnabled.toString(),
         )
         buildConfigField(
             "boolean",
