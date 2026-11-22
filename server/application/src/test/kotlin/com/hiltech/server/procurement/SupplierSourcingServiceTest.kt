@@ -199,6 +199,36 @@ class SupplierSourcingServiceTest {
         }.code)
     }
 
+    @Test fun buyerEligibleNeedsAreSourcedFromCurrentTechnicalReadyRequirementsOnly() {
+        allow()
+        Mockito.`when`(sourcing.eligibleRequirementIds(org)).thenReturn(listOf(requirementId))
+        val needs = service().eligibleNeeds(actor, org)
+        assertEquals(1, needs.size)
+        assertEquals(requirementId, needs.single().requirementId)
+        assertEquals("READY_FOR_SOURCING", needs.single().technicalState)
+        assertTrue(needs.single().sourceCurrent)
+        assertFalse(needs.single().sourcingRoundExists)
+
+        Mockito.`when`(sourcing.byRequirementAndVersion(requirementId, 3))
+            .thenReturn(SupplierRfqRecord(rfqId, op, org, requirementId, 3, itemId,
+                BigDecimal("100"), "M", actor, at, "test"))
+        assertTrue(service().eligibleNeeds(actor, org).single().sourcingRoundExists)
+
+        Mockito.`when`(auth.canManageSourcing(actor, org)).thenReturn(false)
+        assertEquals("SOURCING_UNAVAILABLE", assertThrows<ProductApiException> {
+            service().eligibleNeeds(actor, org)
+        }.code)
+    }
+
+    @Test fun staleEligibilityIsFlaggedNeverPresentedAsPurchaseAuthorization() {
+        allow()
+        Mockito.`when`(sourcing.eligibleRequirementIds(org)).thenReturn(listOf(requirementId))
+        Mockito.`when`(order.version).thenReturn(6)
+        val need = service().eligibleNeeds(actor, org).single()
+        assertFalse(need.sourceCurrent)
+        assertFalse(need.sourcingRoundExists)
+    }
+
     @Test fun buyerRoundListIsOrganizationScopedAndDoesNotExposeUnrelatedSource() {
         allow()
         service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))

@@ -12,6 +12,8 @@ on:
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/**"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/**"
+      - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/Main.kt"
+      - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/DesktopIdentityRuntime.kt"
   pull_request:
     branches:
       - "phase7/s01-purchase-requirement-20261122"
@@ -23,6 +25,8 @@ on:
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/**"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/**"
+      - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/Main.kt"
+      - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/DesktopIdentityRuntime.kt"
 
 permissions:
   contents: read
@@ -76,4 +80,9 @@ jobs:
         run: |
           ./gradlew :shared:core:desktopTest \
             --tests '*SupplierSourcingApiClientTest' \
+            --no-daemon --console=plain
+
+      - name: Compile gated native sourcing buyer surface
+        run: |
+          ./gradlew :apps:desktopApp:compileKotlin :apps:androidApp:assembleDebug \
             --no-daemon --console=plain

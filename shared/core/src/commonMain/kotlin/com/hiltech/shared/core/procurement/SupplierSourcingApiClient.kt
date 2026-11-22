@@ -27,6 +27,18 @@ class SupplierSourcingApiClient(
         installationId, SupplierRfqReceiptDto.serializer(),
     )
 
+    suspend fun eligibleNeeds(
+        organizationId: String,
+        installationId: String,
+    ): List<SourcingEligibleNeedDto> = api.request(
+        method = HttpMethod.Get,
+        path = "/v1/sourcing/organizations/" + uuid(organizationId) + "/eligible-needs",
+        options = HiltechRequestOptions(installationId = installationId),
+        decode = {
+            json.decodeFromString(ListSerializer(SourcingEligibleNeedDto.serializer()), it)
+        },
+    )
+
     suspend fun roundsForRequirement(
         requirementId: String,
         installationId: String,

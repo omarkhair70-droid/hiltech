@@ -10,6 +10,18 @@ data class OpenSupplierRfqDto(
 )
 
 @Serializable
+data class SourcingEligibleNeedDto(
+    val requirementId: String,
+    val technicalVersion: Long,
+    val stockItemId: String,
+    val requestedQuantity: String,
+    val unitCode: String,
+    val technicalState: String,
+    val sourceCurrent: Boolean,
+    val sourcingRoundExists: Boolean,
+)
+
+@Serializable
 data class SupplierRfqDto(
     val id: String,
     val requirementId: String,

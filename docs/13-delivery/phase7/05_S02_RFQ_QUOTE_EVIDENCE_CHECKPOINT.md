@@ -51,6 +51,7 @@ threshold would need a real versioned, non-bypassable source.
 
 - POST `/v1/purchase-requirements/{id}/supplier-rfqs`
 - GET `/v1/purchase-requirements/{id}/supplier-rfqs` (buyer-only scoped RFQ list)
+- GET `/v1/sourcing/organizations/{orgId}/eligible-needs` (buyer-only, technically ready needs)
 - POST `/v1/sourcing/rfqs/{rfqId}/quote-evidence`
 - GET `/v1/sourcing/rfqs/{rfqId}/comparison`
 
@@ -59,6 +60,16 @@ The shared KMP Android/Windows transport is in
 same typed routes, bearer identity, device id, idempotency header and
 restricted-source errors. It is a client contract, **not yet a native buyer
 screen**, and offers no offline write queue.
+
+A dedicated **Windows buyer view** is mounted in the signed-in HILTECH
+shell only if `HILTECH_SUPPLIER_SOURCING_UI_ENABLED=true` is explicitly
+set. It reads eligible needs and existing RFQ rounds from real server
+source history and can create a draft RFQ from a current eligible need
+without hand-entering UUIDs. It can inspect recorded quote comparisons.
+There is NO supplier quote entry form until a secure supplier lookup,
+actual supplier-document links and restricted technical compliance workflow
+are bound. The server sourcing feature and buyer authority still default
+to **deny** independently of the optional UI flag.
 
 Default feature: `hiltech.procurement.sourcing.enabled=false`.
 All writes require authenticated matching Idempotency-Key and immutable
@@ -78,7 +89,8 @@ There is no offline procurement write queue.
 - [ ] Supplier contact, RFQ dispatch and revision lifecycle policy / UX,
       while keeping routine orders minimal
 - [ ] Explicit technical compliance recording by the right role, with evidence
-- [ ] Real Windows buyer comparison and connected role E2E
+- [ ] Windows buyer view compiled + secure supplier selector / quote capture,
+      evidence repository and connected-role E2E
 - [ ] Review/CI/acceptance before merge; S01 remains dependency
 
 Do not call S02 complete until these independent gates pass.

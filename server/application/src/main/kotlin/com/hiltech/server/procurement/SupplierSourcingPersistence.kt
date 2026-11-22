@@ -61,6 +61,25 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
         { row, _ -> row.rfqRecord() }, id,
     ).singleOrNull()
 
+    /**
+     * Candidate needs only after a current technical READY_FOR_SOURCING event.
+     * Caller must be an explicitly scoped buyer. No buyer price fields here.
+     */
+    fun eligibleRequirementIds(organizationId: UUID): List<UUID> = jdbc.query(
+        """
+        SELECT p.id FROM procurement_purchase_requirement p
+        JOIN LATERAL (
+            SELECT t.to_state FROM procurement_requirement_transition t
+            WHERE t.requirement_id = p.id
+            ORDER BY t.result_version DESC LIMIT 1
+        ) current_state ON true
+        WHERE p.organization_id = ? AND current_state.to_state = 'READY_FOR_SOURCING'
+        ORDER BY p.created_at DESC, p.id DESC LIMIT 100
+        """.trimIndent(),
+        { row, _ -> row.getObject("id", UUID::class.java) },
+        organizationId,
+    )
+
     /** The buyer's own organization's internal RFQ rounds for this requirement. */
     fun roundsForRequirement(organizationId: UUID, requirementId: UUID): List<SupplierRfqRecord> =
         jdbc.query(

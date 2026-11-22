@@ -109,6 +109,23 @@ class SupplierSourcingApiClientTest {
         assertFalse(comparison.comparison.purchaseAuthorized)
     }
 
+    @Test fun restrictedBuyerCanLoadEligibleNeedsWithoutHandTypedRequirementIds() = runBlocking {
+        val http = HttpClient(MockEngine { call ->
+            assertEquals("GET", call.method.value)
+            assertEquals("/v1/sourcing/organizations/$supplier/eligible-needs", call.url.encodedPath)
+            assertEquals("Bearer restricted-buyer-token", call.headers[HttpHeaders.Authorization])
+            respond("""[{"requirementId":"$requirement","technicalVersion":3,
+                "stockItemId":"$rfq","requestedQuantity":"100","unitCode":"M",
+                "technicalState":"READY_FOR_SOURCING","sourceCurrent":true,
+                "sourcingRoundExists":false}]""", HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).eligibleNeeds(supplier, installation)
+        assertEquals(1, result.size)
+        assertEquals(requirement, result.single().requirementId)
+        assertFalse(result.single().sourcingRoundExists)
+    }
+
     @Test fun scopedRfqRoundListNeedsTheCurrentAuthenticatedBuyerIdentity() = runBlocking {
         val http = HttpClient(MockEngine { call ->
             assertEquals("GET", call.method.value)

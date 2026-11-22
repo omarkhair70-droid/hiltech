@@ -15,6 +15,7 @@ import com.hiltech.shared.core.HiltechWarehouseState
 import com.hiltech.shared.core.WarehouseImportReviewDraft
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
 import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
+import com.hiltech.shared.core.procurement.SupplierSourcingBuyerSection
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
@@ -2803,6 +2804,24 @@ fun main() {
                                     installationId = runtime.physicalWarehouseInstallationId,
                                     workChoices = works,
                                     projectIntakeId = signed.projects?.selectedProject?.projectId,
+                                    newOperationId = { java.util.UUID.randomUUID().toString() },
+                                )
+                            }
+                        }
+                    }
+                    if (System.getenv("HILTECH_SUPPLIER_SOURCING_UI_ENABLED")
+                            ?.equals("true", ignoreCase = true) == true
+                    ) {
+                        val signed = shellState.value as? HiltechShellState.SignedIn
+                        val identity = signed?.identity
+                        val organization = identity?.organizations?.firstOrNull { it.primary }
+                            ?: identity?.organizations?.firstOrNull()
+                        if (identity != null && organization != null) {
+                            androidx.compose.runtime.key(identity.identityId, organization.organizationId) {
+                                SupplierSourcingBuyerSection(
+                                    api = runtime.supplierSourcingApi,
+                                    organizationId = organization.organizationId,
+                                    installationId = runtime.physicalWarehouseInstallationId,
                                     newOperationId = { java.util.UUID.randomUUID().toString() },
                                 )
                             }

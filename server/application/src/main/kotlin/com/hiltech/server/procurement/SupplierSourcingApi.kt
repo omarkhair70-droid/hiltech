@@ -25,6 +25,10 @@ class SupplierSourcingController(private val service: SupplierSourcingService) {
         @RequestBody body: OpenSupplierRfqRequest,
     ): SupplierRfqReceipt = service.openRfq(request.sourcingContext(body.operationId), id, body)
 
+    @GetMapping("/v1/sourcing/organizations/{orgId}/eligible-needs")
+    fun eligibleNeeds(request: HttpServletRequest, @PathVariable orgId: UUID): List<SourcingEligibleNeed> =
+        service.eligibleNeeds(request.sourcingActor(), orgId)
+
     @GetMapping("/v1/purchase-requirements/{id}/supplier-rfqs")
     fun roundsForRequirement(request: HttpServletRequest, @PathVariable id: UUID): List<SupplierRfqView> =
         service.roundsForRequirement(request.sourcingActor(), id)

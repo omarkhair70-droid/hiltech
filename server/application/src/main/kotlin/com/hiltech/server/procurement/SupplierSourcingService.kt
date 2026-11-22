@@ -67,6 +67,17 @@ data class SupplierRfqView(
 data class SupplierRfqReceipt(val rfq: SupplierRfqView, val replayed: Boolean)
 data class SupplierQuoteReceipt(val quoteId: UUID, val rfqId: UUID, val revisionNumber: Int, val replayed: Boolean)
 
+data class SourcingEligibleNeed(
+    val requirementId: UUID,
+    val technicalVersion: Long,
+    val stockItemId: UUID,
+    val requestedQuantity: String,
+    val unitCode: String,
+    val technicalState: String,
+    val sourceCurrent: Boolean,
+    val sourcingRoundExists: Boolean,
+)
+
 data class SupplierRfqComparisonView(
     val rfq: SupplierRfqView,
     val comparison: SupplierQuoteComparison,
@@ -197,6 +208,30 @@ class SupplierSourcingService @Autowired constructor(
             IdempotentCommandOutcome("PROCUREMENT_SUPPLIER_QUOTE_RECORDED", """{"id":"$id"}""")
         }
         return SupplierQuoteReceipt(id, rfqId, request.expectedRevisionNumber, execution.replayed)
+    }
+
+    /**
+     * Organization-scoped buyer inbox. Source state comes from canonical
+     * S01 event history and source versions are re-read before presentation.
+     */
+    fun eligibleNeeds(actor: UUID, organizationId: UUID): List<SourcingEligibleNeed> {
+        requireEnabled()
+        requireAuthority(actor, organizationId)
+        return sourcing.eligibleRequirementIds(organizationId).mapNotNull { id ->
+            val source = currentSource(id)
+            if (source.root.organizationId != organizationId) unavailable()
+            if (source.state != "READY_FOR_SOURCING") return@mapNotNull null
+            SourcingEligibleNeed(
+                requirementId = id,
+                technicalVersion = source.version,
+                stockItemId = source.root.stockItemId,
+                requestedQuantity = source.quantity.toPlainString(),
+                unitCode = source.unitCode,
+                technicalState = source.state,
+                sourceCurrent = source.sourceCurrent,
+                sourcingRoundExists = sourcing.byRequirementAndVersion(id, source.version) != null,
+            )
+        }
     }
 
     /** All rounds are private to the source's organization and buyer authority. */
