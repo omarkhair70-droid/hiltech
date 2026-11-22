@@ -68,7 +68,7 @@ The critical new reality: Field already implements an adaptive **Today + JobBund
 - UX-02 IA: **ACTUAL ROLE SOURCE DEPENDENCIES MAPPED; UNAPPROVED**.
 - UX-03 Nav: **WAREHOUSE STUDY PRE-Phase6 EXISTS; FIELD+PM USER JOURNEYS NOT ACCEPTED**.
 - UX-05 Operational review: **FIELD/PM P1 GAPS IDENTIFIED**.
-- UX-07 QA: native main Project evidence **pending command result**, Android live UI acceptance not verified.
+- UX-07 QA: native Phase4 Project Compose **source-fixture headless capture PASS**, current Phase6 Android live UI acceptance **NOT VERIFIED**. Findings and limitations below.
 - UX-08 post-Phase13 product-wide polish remains dependent on functional source and human approval.
 
 ## QA evidence integrity correction: foreground Robot screenshots invalidated
@@ -79,3 +79,38 @@ The critical new reality: Field already implements an adaptive **Today + JobBund
 - A console PASS can therefore assert state-fixture test flow without proving that actual product pixels were captured. This is a **QA P1 false-positive risk** for native visual regression claims, not a HILTECH product UI defect.
 - Review-only replacement: test-only `UX128Phase6ProjectHeadlessEvidence.kt` renders actual source `ProjectCommandCenterSection` offscreen through `ImageComposeScene.render()`, using the original private Phase4 test fixture **only via JVM test-runtime reflection**. No new production service or invented PM data, no desktop foreground capture, no external image retrieval.
 - Reproduce using the opt-in Gradle init script: `./gradlew -I docs/10-design/ux128-phase6-pm-headless.init.gradle :apps:desktopApp:renderUx128Phase6Pm --no-daemon`. Verify returned exit status and manually inspect HILTECH-only images. This test code is deliberately non-shipping.
+
+
+## Visual evidence after correcting false-positive screenshot capture
+
+**Tested UX QA code SHA:** `21af8ad8dc1bb0d6c9d3dc561cea9deed488e7c2` (source main at branch fork `cfad5413...`).  
+Reproduction: `./gradlew -I docs/10-design/ux128-phase6-pm-headless.init.gradle :apps:desktopApp:renderUx128Phase6Pm --no-daemon` using isolated Windows QA working clone and JDK17 scoped to the command.  
+**Build: SUCCESSFUL in 2m32s, 19 tasks (4 executed, 15 up-to-date).** The runner printed `UX128_PHASE6_PM_HEADLESS_COMPOSE_RENDER_PASS exact_fixture=Phase4Slice05 synthetic=true screenshots=12 no_robot=true`. It renders actual `ProjectCommandCenterSection` directly via offscreen `ImageComposeScene`, not `Robot` and not a web mockup.
+
+**Twelve actual Compose PNGs**, generated at `D:/02_QA-and-Builds/HILTECH/UX-128/phase6-main-audit/apps/desktopApp/build/reports/ux128-phase6-project/`. Three source-legacy Phase4 test fixtures `review-blocked`, `active-health`, `on-hold`; each captured at 1220x1180 Windows and 430x960 compact width, both initial and +650px scroll states. Manually inspected at least `ux128-pm-review-blocked-windows-top.png`, `ux128-pm-review-blocked-phone-top.png`, `ux128-pm-active-health-windows-top.png`, `ux128-pm-active-health-phone-scrolled.png`. **The screenshots are local-only; PNG binaries are NOT uploaded to GitHub and should not be presented as a shareable link.** Android app/emulator and user/operator acceptance not involved.
+
+### What the actual images expose — source and role impact
+
+| Evidence / visible defect | Whose work | Why it matters | Priority and bounded experiment |
+| --- | --- | --- | --- |
+| Top-level critical project state shares a single text stream with `Accepted weight 3.000000 / 5.000000`, `Project version 11`, `source WORK_ORDER/UUID`, `REWORK_BACKLOG` and `WAITING ON` raw reasons | PM, owner | Source provenance is valid but the **decision** and responsibility do not stand out; operational meaning requires decoding internal codes | P1 — issue/action hierarchy above one-click source inspector. Keep exact provenance one action away, no loss of accuracy |
+| Windows at 1220px shows one right-aligned continuous column with much unused surrounding space; there is no true visible list-detail selection or object side inspector | PM, engineer, owner-review | Large screen gives no advantage for simultaneous project/work/site comparison or seeing review causes alongside authoritative action | P1 — compare source-centric two-pane context vs action-first review without cloning ERP dashboard |
+| Compact 430px also exposes raw `PROJECT_SITE/UUID` and `WORK_PACKAGE/UUID` strings, but no corresponding context route; repeated long mixed Arabic/English strings wrap across lines before the real decision controls | PM in field, mobile supervisor | The hierarchy hides the correct object to open; raw IDs become visual obstacles; mixed RTL/LTR legibility needs explicit treatment | P1 — project->site/work contextual drill with selected filter/back + birectional isolation; prove real accessible focus order |
+| Blocked review state disables `قبول` but keeps `طلب إعادة عمل` visible; when READY, `قبول` becomes enabled | Reviewer | **Existing domain guard is valuable.** A redesigned UI must keep unavailable actions visibly explained and never infer eligibility from visual labels | P0 preservation — same source `beforeAccept` and version guard in both candidates; exact-head click/disabled/denied tests |
+| `CRITICAL`, raw `Waiting On` codes and `source WORK_ORDER/UUID` run across wide and compact | All Arabic-first operators | Human-first phrase and actionable reason are missing; user risks mistaking generic health signal for direct permission to act | P1 — primary Arabic reason + source status, with expandable source/code for audit, never invented repair/action |
+
+### Candidate decision — NO design freeze
+
+- For PM/owner on Windows, test **context + selected project/work inspector** against **attention/review-first** using the same actual DTO, preserving exact Work version and callback. Both candidates must allow reaching real ProjectSite/WorkOrder source (requires authorized route contract; a raw UUID label is not a route).
+- For PM on Android compact, show either **one selected review WorkOrder** or **one project context level** at a time with back; never stack two full desktop panes into a long phone scroll.
+- For technicians, do **not** overwrite existing wide Today+JobBundle panes. Only a compact focus/return presentation experiment with source assignment and cached restrictions should follow coordination with Engineering.
+
+### Accessibility and performance acceptance gates
+
+- Compare first-correct-action taps and scrolling from entry to source review decision; test with 2+ active WorkOrders, blocked and READY; measure rather than invent numbers.
+- At 430/600/760/1220px and 200% fonts: no clipped actions or hidden reason, correct RTL reading of mixed IDs/UTC timestamps, source revision always inspectable.
+- On Windows: Tab / Enter / Escape and selection-to-inspector focus, and Narrator; on Android: system Back, TalkBack traversal and one-handed touch targets. Official references: https://developer.android.com/develop/adaptive-apps/guides/list-detail , https://developer.android.com/develop/ui/compose/accessibility/traversal and https://learn.microsoft.com/en-us/windows/apps/design/input/keyboard-interactions .
+- Source denied, missing data, cached vs current, 401/403/409 and in-flight pending review: no fake green “approved” or disabled-action misrepresentation.
+- No PM/technician operator evidence collected in this QA run, and no production preview has been enabled.
+
+**Pass01 closure statement:** an auditable, actual source Compose visual baseline is now established for Phase4 PM components at the current-main source pin, with a corrected screenshot pipeline and concrete UX priority findings. **This does NOT close UX-00, UX-02 or UX-03 globally, and does not assert Phase6 native Android operational acceptance.**
