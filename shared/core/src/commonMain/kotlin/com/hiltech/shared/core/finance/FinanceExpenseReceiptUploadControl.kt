@@ -83,7 +83,7 @@ fun FinanceExpenseReceiptUploadControl(
         evidenceId?.let { id ->
             Text("Evidence " + id.take(8) + " / " + (uploadState ?: "unknown"))
             if (uploadState == "QUARANTINED") {
-                Text("Security scan pending — do not submit for payment.")
+                Text("Evidence is quarantined; not ready for review or payment.")
             }
             OutlinedButton(enabled = !busy, onClick = {
                 busy = true
