@@ -124,6 +124,7 @@ fun HiltechNavigationStudy(
     var trace by remember(scope.key) {
         mutableStateOf(HiltechNavigationTrace(scope.preferredArea))
     }
+    var showOtherAreas by remember(scope.key) { mutableStateOf(false) }
     val permittedAreas = scope.entries.map { it.area }.toSet()
     // Always revalidate in the composition BEFORE displaying content.
     // A revoked destination must never remain visible for one extra frame.
@@ -138,6 +139,7 @@ fun HiltechNavigationStudy(
     val select: (HiltechNavigationArea) -> Unit = { area ->
         val next = hiltechNavigationSelect(valid, area, permittedAreas, scope.preferredArea)
         trace = next
+        showOtherAreas = false
         if (next.current != valid.current) next.current?.let(onAreaChanged)
     }
     val goBack: () -> Unit = {
@@ -157,11 +159,6 @@ fun HiltechNavigationStudy(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(scope.contextName, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                "الوجهات الظاهرة مصدرها نطاق الوصول الحالي، وليست موافقة جديدة",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
         }
         if (current == null) {
             Text(
@@ -194,14 +191,23 @@ fun HiltechNavigationStudy(
                     }
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (candidate == HiltechNavigationCandidate.WORKBENCH_FIRST) {
-                            Text(
-                                "المساحة الحالية أولًا؛ باقي السياقات متاحة دون تغيير الصلاحيات",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        if (candidate == HiltechNavigationCandidate.WORKBENCH_FIRST && !wide) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    ordered.firstOrNull { it.area == current }?.label.orEmpty(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(top = 10.dp),
+                                )
+                                OutlinedButton(onClick = { showOtherAreas = !showOtherAreas }) {
+                                    Text(if (showOtherAreas) "إخفاء المساحات" else "تغيير المساحة")
+                                }
+                            }
+                            if (showOtherAreas) {
+                                NavigationEntries(ordered, current, select, vertical = false)
+                            }
+                        } else {
+                            NavigationEntries(ordered, current, select, vertical = false)
                         }
-                        NavigationEntries(ordered, current, select, vertical = false)
                         if (valid.history.isNotEmpty()) {
                             OutlinedButton(onClick = goBack) { Text("رجوع للسياق السابق") }
                         }
