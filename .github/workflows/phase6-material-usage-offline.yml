@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - phase6/s04c-controlled-document-revisions-20261122
+      - phase6/s06-durable-recovery-20261122
     paths:
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/field/FieldMaterialUsageQueue.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/local/LocalDaos.kt"
