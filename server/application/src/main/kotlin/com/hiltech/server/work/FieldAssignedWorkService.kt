@@ -1,6 +1,7 @@
 package com.hiltech.server.work
 
 import com.hiltech.server.platform.ProductApiException
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import java.time.Clock
@@ -19,6 +20,8 @@ class FieldAssignedWorkService(
     private val authorization:
         WorkAssignmentAuthorizationPort,
     private val clock: Clock,
+    @Value("\${hiltech.field.engineering-tests.enabled:false}")
+    private val engineeringTestsEnabled: Boolean = false,
 ) {
     fun today(
         actorUserId: UUID,
@@ -192,6 +195,20 @@ class FieldAssignedWorkService(
                             evidenceRequirements.any {
                                 it.offlineCaptureAllowedByPolicy &&
                                     it.allowedContentTypes.isNotEmpty()
+                            } &&
+                            authorization.canUseAssignedWork(actorUserId, workOrderId, "can_submit_completion"),
+                    engineeringTestCaptureOffline =
+                        engineeringTestsEnabled &&
+                            context.project.lifecycleState == "ACTIVE" &&
+                            order.lifecycleState in setOf(
+                                WorkOrderLifecycle.ASSIGNED,
+                                WorkOrderLifecycle.IN_PROGRESS,
+                                WorkOrderLifecycle.BLOCKED,
+                                WorkOrderLifecycle.REWORK_REQUIRED,
+                            ) &&
+                            evidenceRequirements.any {
+                                it.offlineCaptureAllowedByPolicy &&
+                                    it.structuredTest != null
                             } &&
                             authorization.canUseAssignedWork(actorUserId, workOrderId, "can_submit_completion"),
                     // Permission to stage a local intent is never permission to apply it offline.

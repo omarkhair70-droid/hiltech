@@ -1,0 +1,67 @@
+name: Phase 6 — Offline Engineering Test Replay
+
+on:
+  pull_request:
+    branches:
+      - phase6/s04c-configurable-engineering-tests-20261122
+    paths:
+      - "server/application/src/main/kotlin/com/hiltech/server/work/FieldAssignedWorkContracts.kt"
+      - "server/application/src/main/kotlin/com/hiltech/server/work/FieldAssignedWorkService.kt"
+      - "server/application/src/main/kotlin/com/hiltech/server/work/FieldAssignedWorkApi.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/work/FieldAssignedWorkContracts.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/local/EngineeringTestIntentLocal.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/local/HiltechLocalDatabase.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/local/OfflineSchemaContract.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/field/FieldEngineeringTestOfflineQueue.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/field/FieldExecutionQueue.kt"
+      - "shared/core/src/desktopTest/kotlin/com/hiltech/shared/core/field/FieldEngineeringTestOfflineQueueTest.kt"
+      - "shared/core/src/desktopTest/kotlin/com/hiltech/shared/core/field/FieldExecutionQueueTest.kt"
+      - "shared/core/schemas/com.hiltech.shared.core.local.HiltechLocalDatabase/4.json"
+      - "apps/androidApp/src/main/kotlin/com/hiltech/android/HiltechApplication.kt"
+      - "apps/androidApp/src/main/kotlin/com/hiltech/android/MainActivity.kt"
+      - "apps/androidApp/src/main/kotlin/com/hiltech/android/field/AndroidFieldEngineeringTestSyncRuntime.kt"
+      - "apps/androidApp/src/main/kotlin/com/hiltech/android/sync/HiltechSyncWorker.kt"
+      - ".github/workflows/phase6-engineering-test-offline-replay.yml"
+      - "docs/13-delivery/phase6/11_SLICE04C_OFFLINE_ENGINEERING_TEST_REPLAY_2026-11-22.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-engineering-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Verify server and durable replay contracts
+        run: |
+          ./gradlew             :server:application:test               --tests com.hiltech.server.work.FieldEngineeringTestServiceTest             :shared:core:desktopTest               --tests com.hiltech.shared.core.field.FieldEngineeringTestOfflineQueueTest               --tests com.hiltech.shared.core.field.FieldExecutionQueueTest             --no-configuration-cache --console=plain
+
+      - name: Verify Room v4 engineering intent schema
+        run: |
+          test -f shared/core/schemas/com.hiltech.shared.core.local.HiltechLocalDatabase/4.json
+          grep -q '"local_engineering_test_intent"'             shared/core/schemas/com.hiltech.shared.core.local.HiltechLocalDatabase/4.json
+          grep -q 'ROOM_SCHEMA_VERSION = 4'             shared/core/src/commonMain/kotlin/com/hiltech/shared/core/local/OfflineSchemaContract.kt
+
+      - name: Compile Android with engineering tests enabled
+        run: |
+          ./gradlew :apps:androidApp:compileDebugKotlin             -Philtech.engineeringTestsEnabled=true             -Philtech.assignedAssetLookupEnabled=true             --no-configuration-cache --console=plain
+
+      - name: Verify rollout defaults remain OFF
+        run: |
+          grep -Fq 'enabled: ${HILTECH_FIELD_ENGINEERING_TESTS_ENABLED:false}'             server/application/src/main/resources/application.yml
+          grep -A2 'gradleProperty("hiltech.engineeringTestsEnabled")'             apps/androidApp/build.gradle.kts | grep -Fq '.getOrElse("false") == "true"'
+
+      - name: Verify clean patch formatting
+        run: git diff --check HEAD^ HEAD

@@ -23,12 +23,17 @@ import kotlinx.coroutines.Dispatchers
         PendingCommandEntity::class,
         PendingCommandDependencyEntity::class,
         LocalEvidenceEntity::class,
+        LocalEngineeringTestIntentEntity::class,
         ConflictRecordEntity::class,
         SyncCursorEntity::class,
     ],
     version = OfflineSchemaContract.ROOM_SCHEMA_VERSION,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2),
+        AutoMigration(from = 2, to = 3),
+        AutoMigration(from = 3, to = 4),
+    ],
 )
 @ConstructedBy(HiltechLocalDatabaseConstructor::class)
 abstract class HiltechLocalDatabase : RoomDatabase() {
@@ -37,6 +42,7 @@ abstract class HiltechLocalDatabase : RoomDatabase() {
     abstract fun pendingCommandDao(): PendingCommandDao
     abstract fun pendingCommandDependencyDao(): PendingCommandDependencyDao
     abstract fun evidenceQueueDao(): EvidenceQueueDao
+    abstract fun engineeringTestIntentDao(): EngineeringTestIntentDao
     abstract fun conflictDao(): ConflictDao
     abstract fun syncCursorDao(): SyncCursorDao
 }

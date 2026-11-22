@@ -84,6 +84,15 @@ class FieldExecutionQueue(private val database: HiltechLocalDatabase) {
         }.toString()
 
         return database.withWriteTransaction {
+            require(
+                database.engineeringTestIntentDao().outstandingForWorkOrder(
+                    identityId,
+                    installationId,
+                    bundle.workOrderId,
+                ) == 0,
+            ) {
+                "Sync or review the pending engineering test before changing field state."
+            }
             require(database.pendingCommandDao().outstandingFieldCommand(identityId, bundle.workOrderId).isEmpty()) {
                 "Resolve or sync the prior field intent before creating a new one."
             }

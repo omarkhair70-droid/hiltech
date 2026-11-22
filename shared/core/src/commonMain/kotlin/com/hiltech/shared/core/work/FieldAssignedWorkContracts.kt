@@ -265,6 +265,7 @@ data class FieldExecutionCapabilitiesDto(
     val evidenceCaptureOffline: Boolean,
     val submitOffline: Boolean,
     val authoritativeOfflineQueue: Boolean,
+    val engineeringTestCaptureOffline: Boolean = false,
 )
 
 @Serializable
