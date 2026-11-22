@@ -1,7 +1,7 @@
 # Phase 7 / Slice 03 — Buyer Selection → Canonical Approval → Issued PO
 
 Date: 2026-11-22
-Status: **S03 implementation checkpoint / PO approval and issuance NOT YET IMPLEMENTED**
+Status: **S03 implementation checkpoint / internally issued PO path coded, exact-head CI pending; amendment/cancellation and release NOT CLOSED**
 Base: stacked on S02 PR #148 (which itself follows #146 → #143).
 No main merge or live company purchasing enablement.
 
@@ -145,3 +145,72 @@ Even a policy result of NO_APPROVAL_REQUIRED does **not** issue a PO;
 PO issuance is a separate, still-unimplemented authorized command.
 The client exposes an approval request state with policy version and never
 suggests that an approval request is itself purchase authorization.
+
+## V0047 — Internally issued Purchase Order (engineering milestone)
+
+S03 now codes a separately enabled issuance operation, **not** a vendor
+dispatch or warehouse/finance posting. The existing ApprovalEngine is the
+ONLY financial decision source, not supplier quotes, role labels or
+client-declared approval booleans.
+
+- `POST /v1/procurement/po-candidates/{candidateId}/issue` requires an
+  exact candidate version, server-issued idempotency key and destination ID.
+- Re-authorization occurs on every operation, including replay. The acting
+  issuer must currently match `approval_authority_binding` through the
+  canonical ApprovalPersistence member/team logic. A separate configured
+  issuer authority key is distinct from the approval decision.
+- A source-current `PROCUREMENT_PO_CANDIDATE` guard rechecks RFQ, active
+  supplier link, latest quote, technical compliance, WorkOrder/StockItem and
+  original READY restricted Evidence. Buyer choice never silently awards.
+- The canonical `approval_request` is locked and must be APPROVED with an
+  actual APPROVE decision matching the **currently active policy version**.
+  A no-approval-required policy cannot bypass this issue command.
+- The idempotent transaction locks candidate, RFQ, requirement, WorkOrder,
+  StockItem and purchasing organization. This serializes issue with supplier
+  relationship changes, technical review, quote revision and source edits.
+- Destination must be an active `storage_location` of the same company,
+  within the request WorkOrder project and source site when SITE_STORAGE.
+- `procurement_po_number_counter` allocates one serial per organization
+  under PostgreSQL concurrency; the company configures the string prefix.
+  No PO number, threshold, approver or destination was invented from a
+  user’s name or role label. Duplicates are blocked by unique operation,
+  candidate and company serial/code constraints.
+- `procurement_purchase_order` stores an immutable ISSUED version 1 with
+  exact approved candidate, quote source SHA, supplier, price/tax/total,
+  delivery storage location, policy version, issuer authority binding,
+  timestamps and audit. Its supplier dispatch state is **NOT_SENT**.
+- Supplier contact, physical receiving, inventory movement, invoice, payable,
+  payment and delivery confirmation are **NOT** side effects of this command.
+
+### Independent native issuer desk
+
+The Windows procurement workspace mounts
+`PurchaseOrderIssuerSection` only when the separate
+`HILTECH_PO_ISSUER_UI_ENABLED=true`. It does not require the user to be a
+sourcing buyer: a real currently authorized issuer can see only current
+approved unissued candidate summaries via
+`GET /v1/procurement/organizations/{orgId}/po-issuer-queue`,
+and choose one compatible warehouse/site destination via
+`GET /v1/procurement/po-candidates/{candidateId}/delivery-destinations`.
+The server applies the authorization and source checks independently.
+The typed shared KMP client uses online-only bearer authentication,
+`Idempotency-Key`, no offline financial write and no unverified local PO.
+
+### Explicit default-OFF and still open
+
+- `hiltech.procurement.po-issue.enabled=false`
+- `hiltech.procurement.approval-policy-key`: empty
+- `hiltech.procurement.po.issue-authority-key`: empty
+- `hiltech.procurement.po.number-prefix`: empty
+- Windows `HILTECH_PO_ISSUER_UI_ENABLED`: false/unset
+
+DO NOT activate these in production from a draft without company-controlled
+policy provisioning and full operational testing. The exact-head CI must
+pass PostgreSQL V0047, project/source tests, canonical approval/issuer
+denial cases, Android/Windows compile and DevOps Spring runtime.
+
+Still to implement under S03: append-only PO cancellation and amendment
+versions, delivery/dispatch policy and role-based operator acceptance. Issued
+V1 is immutable, so amendments must never rewrite a commercial history row.
+S04 integrates physical receipts with canonical Warehouse; S05 matches invoices
+without creating unauthorized payables.
