@@ -63,6 +63,7 @@ jobs:
             --tests com.hiltech.server.procurement.ServicePurchaseProtectedDocumentTest \
             --tests com.hiltech.server.procurement.ServiceSupplierCommunicationTest \
             --tests com.hiltech.server.procurement.ServiceSourcingPostgresIntegrationTest \
+            --tests com.hiltech.server.documents.persistence.ServiceRestrictedEvidenceReservationTest \
             --no-daemon --console=plain
       - name: Compile Windows and Android actual clients
         run: |
