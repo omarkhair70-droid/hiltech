@@ -5,11 +5,11 @@ Reference: PR #161, \`06_PHASE13_EXECUTIVE.md\`; canonical \`docs/13-delivery/IM
 
 ## What actually exists in this branch
 
-- \`GET /v1/executive/home?organizationId=<UUID>\` requires the existing authenticated request identity.
+- \`GET /v1/executive/home?organizationId=<UUID>\` is **OFF by default** (hiltech.executive.home-enabled=false) and requires the authenticated actor, current source organization membership AND matching OpenFGA membership before any source reads.
 - **Needs You** delegates to \`InboxService.workQueue\` with its current assignment/decision authorization. This section is intentionally **ACTOR-wide across authorized memberships**, not a fabricated org-wide approval total.
 - **Projects** delegates to \`ProjectsService.myProjects\` (source authorization), then \`ReviewProgressHealthService.health\` (independent health authorization). It displays project lifecycle, exact source version and timestamp, health state, policy revision, current reason signals and their provenance. \`UNKNOWN\` and \`UNAVAILABLE\` must never be rendered as healthy.
 - **Asset exceptions** enumerates only visible warehouses through \`WarehouseReadService\`, then invokes \`AssetService.queue\` which rechecks warehouse access. It shows exact availability/calibration/maintenance producer results, reason codes, source versions and evaluation times. No fictional inventory totals.
-- A common Compose \`ExecutiveHomeSection\` is usable by Windows and Android with the shared authenticated client \`ExecutiveApiClient\`. The shell supplies refresh, current organization/identity and typed navigation into the source-owning module; this branch deliberately does not edit concurrently owned Desktop Main, Android MainActivity, shared authorization, common API or Flyway.
+- A session-scoped online \`ExecutiveHomeRoute\` mounts the shared Compose \`ExecutiveHomeSection\` in Windows and Android with the shared authenticated client \`ExecutiveApiClient\`. The shell supplies refresh, current organization/identity and typed navigation into the source-owning module; this branch deliberately does not edit concurrently owned Desktop Main, Android MainActivity, shared authorization, common API or Flyway.
 - No executive write path, ledger, migration, approval configuration or magic Mohamed user/role is created.
 
 ## Read-model and UX semantics
@@ -24,7 +24,7 @@ Reference: PR #161, \`06_PHASE13_EXECUTIVE.md\`; canonical \`docs/13-delivery/IM
 
 ## Integration contract for DevOps + Design
 
-**DevOps integration owner** must wire the feature into both native shells on an integration branch, map \`ExecutiveSourceReferenceDto\` to the existing permitted source detail routes, and revalidate the session/org before applying results. Do not open arbitrary server-supplied URLs or bypass source authorization. Allocate no database migration: 13A creates none. Rebase after PR #161/P7 merge contract reconciliation; test both roles and the combined application before merge.
+**DevOps integration owner** must wire the feature into both native shells on an integration branch, map only allowlisted \`ExecutiveDestination\` to existing source-owned authenticated detail routes, and revalidate the session/org before applying results. Do not open arbitrary server-supplied URLs or bypass source authorization. Allocate no database migration: 13A creates none. Rebase after PR #161/P7 merge contract reconciliation; test both roles and the combined application before merge.
 
 **Design owner** should refine the source-first editorial hierarchy (Needs You, source health, exceptions, pending sources), preserving provenance, unknown/partial/unavailable states and explicit no-totals. Never add synthetic charts or fake KPIs. The native Compose screen here is a working baseline rather than a final visual sign-off.
 
@@ -37,3 +37,15 @@ Reference: PR #161, \`06_PHASE13_EXECUTIVE.md\`; canonical \`docs/13-delivery/IM
 6. Profile bounded-window queries and review rate limiting, observability and rollout; keep feature off until accepted.
 
 **No slice is closed or operable until these gates pass.**
+
+## Security and native route hardening — 23 November 2026
+
+- Access first: `SourceExecutiveOrganizationAccess` reuses `RoleTeamAuthorizationService.isOrganizationMember`, which checks the current live source membership and the matching OpenFGA relationship. A foreign or revoked organization fails as not found **before** the Inbox or any other producer runs. All sources independently enforce finer ACL.
+- The current actor's Work Queue may include items from other *currently authorized memberships*: it is **explicitly actor-wide**, not a selected-organization approval count. The canonical Inbox public response has no organization ID, so this lane will not guess one. A selected-org queue later requires an Inbox-owner pagination/filter contract.
+- Native `ExecutiveHomeRoute` manages online refresh, cancellation on actor/org change, no cross-session persistence, no previous snapshot on failure, and a safe error without raw server diagnostics.
+- `ExecutiveApiClient.home(... expectedIdentityId)` validates the actor and company echoed by the API and rejects a stale response. `ExecutiveHomeSection` also validates both inputs. No stale state during active refresh.
+- `ExecutiveDestination` is an allowlisted typed navigator: approvals, projects, project health, asset availability. A route may only be opened through its source module, which repeats current authorization. Never open raw source paths from JSON or hardcode a Mohamed identity.
+- Project presentation is source-health-first (CRITICAL, ON_HOLD, ATTENTION, UNKNOWN/UNAVAILABLE, HEALTHY); this is UI ordering, **not** a computed executive risk score.
+- Executive assets with denied source queues must be PARTIAL, never CURRENT.
+- Verification: `.github/workflows/phase13-executive-contract.yml` and local Gradle source tests. These are engineering checks only, not signed-in company device UAT, real PostgreSQL/OpenFGA matrix or release approval.
+- Native shells remain **owned by DevOps integration**. Pass current identity, organization, installation, and `onOpenSource: (ExecutiveDestination) -> Unit` to `ExecutiveHomeRoute`. Revoke/organization switch must unmount or re-key the route. Keep the feature OFF until acceptance.
