@@ -36,6 +36,7 @@ fun WarehouseOperatorFocusFlow(
     warehouseId: String,
     busy: Boolean,
     initialFocus: WarehouseOperatorFocus = WarehouseOperatorFocus.TODAY,
+    onFocusChange: (WarehouseOperatorFocus) -> Unit = {},
     today: @Composable () -> Unit,
     codeLookup: @Composable () -> Unit,
 ) {
@@ -49,7 +50,10 @@ fun WarehouseOperatorFocusFlow(
             if (focus == WarehouseOperatorFocus.TODAY) {
                 Button(
                     enabled = !busy,
-                    onClick = { focus = WarehouseOperatorFocus.TODAY },
+                    onClick = {
+                        focus = WarehouseOperatorFocus.TODAY
+                        onFocusChange(focus)
+                    },
                     modifier = Modifier.semantics {
                         contentDescription = "مهام المخزن"
                         stateDescription = "القسم الحالي"
@@ -57,18 +61,27 @@ fun WarehouseOperatorFocusFlow(
                 ) { Text("المهام") }
                 OutlinedButton(
                     enabled = !busy,
-                    onClick = { focus = WarehouseOperatorFocus.CODE_LOOKUP },
+                    onClick = {
+                        focus = WarehouseOperatorFocus.CODE_LOOKUP
+                        onFocusChange(focus)
+                    },
                     modifier = Modifier.semantics { contentDescription = "الانتقال للبحث بكود الأصل أو المخزون" },
                 ) { Text("بحث بالكود") }
             } else {
                 OutlinedButton(
                     enabled = !busy,
-                    onClick = { focus = WarehouseOperatorFocus.TODAY },
+                    onClick = {
+                        focus = WarehouseOperatorFocus.TODAY
+                        onFocusChange(focus)
+                    },
                     modifier = Modifier.semantics { contentDescription = "العودة إلى مهام المخزن" },
                 ) { Text("المهام") }
                 Button(
                     enabled = !busy,
-                    onClick = { focus = WarehouseOperatorFocus.CODE_LOOKUP },
+                    onClick = {
+                        focus = WarehouseOperatorFocus.CODE_LOOKUP
+                        onFocusChange(focus)
+                    },
                     modifier = Modifier.semantics {
                         contentDescription = "البحث بالكود"
                         stateDescription = "القسم الحالي"
