@@ -47,6 +47,11 @@ data class IssuedServiceOrderDto(
     val replayed:Boolean=false,
 )
 @Serializable
+data class ServiceWorkOrderDto(
+    val orderId:String,val supplierOrganizationId:String,
+    val accepted:Boolean,val invoiceCaptured:Boolean,
+)
+@Serializable
 data class CreateServicePurchaseDocumentSlotDto(
     val operationId:String,val documentKind:String,
 )
@@ -138,6 +143,14 @@ class ServiceOrderAndInvoiceApiClient(
     suspend fun order(id:String,install:String):IssuedServiceOrderDto =
         get("/v1/service-procurement/orders/"+uuid(id),install,
             IssuedServiceOrderDto.serializer())
+
+    suspend fun deliveryOrders(org:String,install:String):List<ServiceWorkOrderDto> =
+        get("/v1/service-procurement/organizations/"+uuid(org)+"/delivery-orders",
+            install,ListSerializer(ServiceWorkOrderDto.serializer()))
+
+    suspend fun invoiceOrders(org:String,install:String):List<ServiceWorkOrderDto> =
+        get("/v1/service-procurement/organizations/"+uuid(org)+"/invoice-orders",
+            install,ListSerializer(ServiceWorkOrderDto.serializer()))
 
     suspend fun documentSlot(orderId:String,req:CreateServicePurchaseDocumentSlotDto,
                              install:String):ServicePurchaseDocumentSlotDto=post(
