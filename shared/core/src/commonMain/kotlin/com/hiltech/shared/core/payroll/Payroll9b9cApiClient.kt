@@ -107,6 +107,17 @@ class Payroll9b9cApiClient(
             decode = { json.decodeFromString(PayrollReleaseResultDto.serializer(), it) },
         )
 
+    suspend fun finalPayReadiness(
+        offboardingCaseId: String,
+        installationId: String,
+    ): PayrollFinalPayReadinessDto =
+        api.request(
+            method = HttpMethod.Get,
+            path = "/v1/payroll/offboarding/" + offboardingCaseId + "/final-pay-readiness",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(PayrollFinalPayReadinessDto.serializer(), it) },
+        )
+
     suspend fun ownPayslips(
         organizationId: String,
         installationId: String,
