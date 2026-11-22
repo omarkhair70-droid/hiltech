@@ -64,6 +64,7 @@ jobs:
             --tests com.hiltech.server.payroll.Payroll9b9cDomainTest \
             --tests com.hiltech.server.payroll.Payroll9bSourceAssemblerTest \
             --tests com.hiltech.server.payroll.Payroll9cFinalPayTest \
+            --tests com.hiltech.server.payroll.Payroll9bPeopleSeparationSourceTest \
             --rerun-tasks
       - name: Compile exact server head
         run: ./gradlew :server:application:bootJar
