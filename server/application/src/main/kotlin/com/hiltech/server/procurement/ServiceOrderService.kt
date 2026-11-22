@@ -173,13 +173,13 @@ class ServiceOrderService(
             check(jdbc.update(
                 """
                 INSERT INTO procurement_service_order (
-                  id,operation_id,organization_id,candidate_id,quote_id,
+                  id,operation_id,organization_id,candidate_id,rfq_id,quote_id,
                   supplier_organization_id,approval_request_id,approval_policy_key,
                   approval_policy_version,issuer_authority_binding_id,currency,
                   total_amount,issued_by_user_id,issued_at,correlation_id
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """.trimIndent(),
-                id,ctx.operationId,current.org,current.id,current.quote,current.supplier,
+                id,ctx.operationId,current.org,current.id,current.rfq,current.quote,current.supplier,
                 approval.id,policyKey.trim(),policy.versionNumber,binding,
                 current.currency,current.amount,ctx.actor,at.atOffset(ZoneOffset.UTC),
                 ctx.correlationId,
