@@ -64,6 +64,7 @@ import com.hiltech.shared.core.warehouse.IssuedStockDirectoryEntryDto
 import com.hiltech.shared.core.StockInventoryState
 import com.hiltech.shared.core.WarehouseSetupSection
 import com.hiltech.shared.core.WarehouseCommandCenterSection
+import com.hiltech.shared.core.WarehouseCommandCenterPresentation
 import com.hiltech.shared.core.WarehouseQuickScanControls
 import com.hiltech.shared.core.WarehouseQuickScanState
 import com.hiltech.shared.core.warehouse.WarehouseCommandCenterDto
@@ -198,6 +199,28 @@ fun main() = runBlocking<Unit> {
         }
     }
     captureAndClose(commandCenterScene, directory.resolve("warehouse-command-center.png"))
+    // Two review-only presentations of the SAME Phase 5 native Compose source projection.
+    // These are not production UI acceptance: record exact SHA, viewport and fixture in UX Issue #128.
+    for (candidate in listOf(
+        WarehouseCommandCenterPresentation.ACTION_FIRST,
+        WarehouseCommandCenterPresentation.OBJECT_FIRST,
+    )) {
+        val label = if (candidate == WarehouseCommandCenterPresentation.ACTION_FIRST) "action" else "object"
+        for ((sizeLabel, width, height) in listOf(
+            Triple("windows", 1150, 1000),
+            Triple("phone", 430, 960),
+        )) {
+            val candidateScene = ImageComposeScene(width = width, height = height, coroutineContext = coroutineContext) {
+                Column(Modifier.fillMaxSize().background(Color.White).verticalScroll(ScrollState(0)).padding(18.dp)) {
+                    WarehouseCommandCenterSection(
+                        snapshot = commandCenter,
+                        presentation = candidate,
+                    )
+                }
+            }
+            captureAndClose(candidateScene, directory.resolve("ux128-$label-$sizeLabel.png"))
+        }
+    }
 
     val quickAssetId = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
     val quickState = WarehouseQuickScanState(
