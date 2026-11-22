@@ -69,6 +69,19 @@ BEGIN
         USING ERRCODE = '23514';
 END;
 $$;
+CREATE TRIGGER service_handover_package_immutable
+BEFORE UPDATE OR DELETE ON service_handover_package
+FOR EACH ROW EXECUTE FUNCTION service_handover_no_snapshot_mutation();
+CREATE TRIGGER service_handover_package_no_truncate
+BEFORE TRUNCATE ON service_handover_package
+FOR EACH STATEMENT EXECUTE FUNCTION service_handover_no_snapshot_mutation();
+CREATE TRIGGER service_handover_version_no_truncate
+BEFORE TRUNCATE ON service_handover_package_version
+FOR EACH STATEMENT EXECUTE FUNCTION service_handover_no_snapshot_mutation();
+CREATE TRIGGER service_handover_item_no_truncate
+BEFORE TRUNCATE ON service_handover_package_item
+FOR EACH STATEMENT EXECUTE FUNCTION service_handover_no_snapshot_mutation();
+
 CREATE TRIGGER service_handover_version_immutable
 BEFORE UPDATE OR DELETE ON service_handover_package_version
 FOR EACH ROW EXECUTE FUNCTION service_handover_no_snapshot_mutation();
@@ -94,6 +107,7 @@ BEGIN
     SELECT * INTO source_evidence FROM evidence WHERE id = NEW.evidence_id;
     IF NOT FOUND OR source_evidence.organization_id <> NEW.organization_id
        OR source_evidence.work_order_id IS DISTINCT FROM NEW.work_order_id
+       OR source_evidence.target_id IS DISTINCT FROM NEW.work_order_id
        OR source_evidence.target_type <> 'WORK_ORDER'
        OR source_evidence.storage_state <> 'READY'
        OR source_evidence.sha256 <> NEW.source_sha256 THEN

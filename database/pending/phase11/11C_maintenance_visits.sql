@@ -77,6 +77,13 @@ $$;
 CREATE TRIGGER trg_service_visit_immutable
 BEFORE UPDATE OR DELETE ON service_maintenance_visit_plan
 FOR EACH ROW EXECUTE FUNCTION protect_service_maintenance_history();
+CREATE TRIGGER trg_service_visit_no_truncate
+BEFORE TRUNCATE ON service_maintenance_visit_plan
+FOR EACH STATEMENT EXECUTE FUNCTION protect_service_maintenance_history();
+CREATE TRIGGER trg_service_finding_no_truncate
+BEFORE TRUNCATE ON service_maintenance_finding
+FOR EACH STATEMENT EXECUTE FUNCTION protect_service_maintenance_history();
+
 CREATE TRIGGER trg_service_finding_immutable
 BEFORE UPDATE OR DELETE ON service_maintenance_finding
 FOR EACH ROW EXECUTE FUNCTION protect_service_maintenance_history();

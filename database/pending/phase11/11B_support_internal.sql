@@ -81,6 +81,13 @@ $$;
 CREATE TRIGGER trg_service_ticket_immutable
 BEFORE UPDATE OR DELETE ON service_support_ticket
 FOR EACH ROW EXECUTE FUNCTION service_support_immutable();
+CREATE TRIGGER trg_service_ticket_no_truncate
+BEFORE TRUNCATE ON service_support_ticket
+FOR EACH STATEMENT EXECUTE FUNCTION service_support_immutable();
+CREATE TRIGGER trg_service_note_no_truncate
+BEFORE TRUNCATE ON service_support_internal_note
+FOR EACH STATEMENT EXECUTE FUNCTION service_support_immutable();
+
 CREATE TRIGGER trg_service_note_immutable
 BEFORE UPDATE OR DELETE ON service_support_internal_note
 FOR EACH ROW EXECUTE FUNCTION service_support_immutable();

@@ -89,6 +89,14 @@ data class MaintenanceFindingDto(
     val duplicateReplay: Boolean,
 )
 
+data class MaintenanceWorkChoiceDto(
+    val workOrderId: String,
+    val siteId: String,
+    val title: String,
+    val version: Long,
+    val lifecycleState: String,
+)
+
 data class MaintenanceVisitRow(
     val id: UUID,
     val projectId: UUID,
@@ -103,7 +111,11 @@ data class MaintenanceVisitRow(
 
 object MaintenanceDraftPolicy {
     fun allowedWorkState(state: WorkOrderLifecycle) =
-        state !in setOf(WorkOrderLifecycle.CANCELLED, WorkOrderLifecycle.CLOSED)
+        state in setOf(
+            WorkOrderLifecycle.DRAFT, WorkOrderLifecycle.PLANNED,
+            WorkOrderLifecycle.ASSIGNED, WorkOrderLifecycle.IN_PROGRESS,
+            WorkOrderLifecycle.BLOCKED, WorkOrderLifecycle.REWORK_REQUIRED,
+        )
 
     fun canRecordEvidenceFinding(state: WorkOrderLifecycle) =
         state in setOf(WorkOrderLifecycle.ACCEPTED, WorkOrderLifecycle.CLOSED)
@@ -265,6 +277,23 @@ class MaintenanceVisitService(
     private val clock: Clock,
 ) {
     @Transactional(readOnly = true)
+    fun workChoices(projectId: UUID, actor: UUID): List<MaintenanceWorkChoiceDto> {
+        val project = manageProject(projectId, actor)
+        return work.workOrders(projectId)
+            .filter {
+                it.organizationId == project.organizationId &&
+                    it.projectId == project.projectId &&
+                    MaintenanceDraftPolicy.allowedWorkState(it.lifecycleState)
+            }
+            .map {
+                MaintenanceWorkChoiceDto(
+                    it.workOrderId.toString(), it.siteId.toString(),
+                    it.title, it.version, it.lifecycleState.name,
+                )
+            }
+    }
+
+    @Transactional(readOnly = true)
     fun visits(projectId: UUID, actor: UUID): List<MaintenanceVisitDto> {
         manageProject(projectId, actor)
         return store.visits(projectId).map { it.asDto(false) }
@@ -399,6 +428,10 @@ class MaintenanceVisitService(
 @RequestMapping("/v1/projects/{projectId}/maintenance-visits")
 @ConditionalOnProperty(prefix = "hiltech.phase11.maintenance", name = ["enabled"], havingValue = "true")
 class MaintenanceVisitController(private val service: MaintenanceVisitService) {
+    @GetMapping("/work-choices")
+    fun workChoices(request: HttpServletRequest, @PathVariable projectId: UUID) =
+        service.workChoices(projectId, actor(request))
+
     @GetMapping
     fun list(request: HttpServletRequest, @PathVariable projectId: UUID) =
         service.visits(projectId, actor(request))

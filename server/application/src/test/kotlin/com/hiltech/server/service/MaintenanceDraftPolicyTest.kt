@@ -17,6 +17,8 @@ class MaintenanceDraftPolicyTest {
         assertTrue(MaintenanceDraftPolicy.allowedWorkState(WorkOrderLifecycle.IN_PROGRESS))
         assertFalse(MaintenanceDraftPolicy.allowedWorkState(WorkOrderLifecycle.CANCELLED))
         assertFalse(MaintenanceDraftPolicy.allowedWorkState(WorkOrderLifecycle.CLOSED))
+        assertFalse(MaintenanceDraftPolicy.allowedWorkState(WorkOrderLifecycle.ACCEPTED))
+        assertFalse(MaintenanceDraftPolicy.allowedWorkState(WorkOrderLifecycle.SUBMITTED_FOR_REVIEW))
     }
 
     @Test

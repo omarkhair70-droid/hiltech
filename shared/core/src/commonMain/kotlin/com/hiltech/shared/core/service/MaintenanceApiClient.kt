@@ -34,6 +34,15 @@ data class MaintenanceChecklistItemDto(
 )
 
 @Serializable
+data class MaintenanceWorkChoiceDto(
+    val workOrderId: String,
+    val siteId: String,
+    val title: String,
+    val version: Long,
+    val lifecycleState: String,
+)
+
+@Serializable
 data class MaintenanceVisitDto(
     val visitId: String,
     val projectId: String,
@@ -72,6 +81,18 @@ class MaintenanceApiClient(
         explicitNulls = false
     },
 ) {
+    suspend fun workChoices(
+        projectId: String, installationId: String,
+    ): List<MaintenanceWorkChoiceDto> {
+        requireId(projectId)
+        return api.request(
+            method = HttpMethod.Get,
+            path = "/v1/projects/" + projectId + "/maintenance-visits/work-choices",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(ListSerializer(MaintenanceWorkChoiceDto.serializer()), it) },
+        )
+    }
+
     suspend fun visits(projectId: String, installationId: String): List<MaintenanceVisitDto> {
         requireId(projectId)
         return api.request(
