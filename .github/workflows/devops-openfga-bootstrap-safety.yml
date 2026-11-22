@@ -6,6 +6,7 @@ on:
       - "scripts/devops/bootstrap_hiltech_openfga.py"
       - "scripts/devops/test_bootstrap_hiltech_openfga.py"
       - "infrastructure/coolify/staging/first-slice-model.generated.json"
+      - "infrastructure/coolify/staging/Dockerfile.fga-bootstrap"
       - ".github/workflows/devops-openfga-bootstrap-safety.yml"
   workflow_dispatch:
 
@@ -32,3 +33,20 @@ jobs:
             exit 1
           fi
           echo "No literal bootstrap credentials embedded."
+
+  runner-container:
+    name: Prove private no-listener bootstrap task image
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build nonroot Python bootstrap helper without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 -f infrastructure/coolify/staging/Dockerfile.fga-bootstrap -t hiltech-fga-bootstrap:ci .
+          test "$(docker image inspect -f '{{.Config.User}}' hiltech-fga-bootstrap:ci)" = "hiltech"
+          test -z "$(docker image inspect -f '{{json .Config.ExposedPorts}}' hiltech-fga-bootstrap:ci | tr -d 'null')"
+          docker run --rm --network none hiltech-fga-bootstrap:ci python \
+            /opt/hiltech-fga/bootstrap.py --model /opt/hiltech-fga/first-slice-model.json
+          echo "PASS: nonroot reviewed model bootstrap image built and dry-run without credentials or exposed ports."
