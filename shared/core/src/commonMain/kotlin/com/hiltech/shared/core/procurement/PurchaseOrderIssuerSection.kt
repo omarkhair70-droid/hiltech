@@ -29,6 +29,7 @@ fun PurchaseOrderIssuerSection(
     organizationId: String,
     installationId: String,
     newOperationId: () -> String,
+    cancellationEnabled: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     var busy by remember(organizationId) { mutableStateOf(false) }
@@ -58,6 +59,14 @@ fun PurchaseOrderIssuerSection(
             }
         }) { Text(if (busy) "Loading…" else "Refresh authorized PO candidates") }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (cancellationEnabled) {
+            PurchaseOrderCancellationSection(
+                api = api,
+                organizationId = organizationId,
+                installationId = installationId,
+                newOperationId = newOperationId,
+            )
+        }
         if (loaded && queue.isEmpty()) Text("No current, approved and unissued candidates.")
         queue.forEach { candidate ->
             Card {
