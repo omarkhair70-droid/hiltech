@@ -167,6 +167,16 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
     ).isNotEmpty()
 
     /** S04 physical truth: a posted canonical Warehouse receipt forbids PO cancellation. */
+    /** Immutable supplier-facing operator attestations, never sent automatically. */
+    fun hasSupplierCommunication(orderId: UUID): Boolean = jdbc.queryForObject(
+        """
+        SELECT EXISTS (
+          SELECT 1 FROM procurement_po_supplier_communication_event
+          WHERE purchase_order_id = ?
+        )
+        """.trimIndent(), Boolean::class.java, orderId,
+    ) == true
+
     fun hasPhysicalPoReceiving(orderId: UUID): Boolean = jdbc.queryForObject(
         """
         SELECT EXISTS (
