@@ -35,6 +35,7 @@ class PurchaseOrderLifecycleServiceTest {
     private val purchases = Mockito.mock(PurchaseOrderIssuePersistence::class.java)
     private val issuer = Mockito.mock(PurchaseOrderIssueService::class.java)
     private val audit = Mockito.mock(AuditEventWriter::class.java)
+    private val poReceiving = Mockito.mock(ProcurementPoReceivingSourcePort::class.java)
     private var stored: PurchaseOrderLifecycleEvent? = null
     private val commands = object : IdempotentCommandExecutor {
         override fun execute(spec: IdempotentCommandSpec, action: () -> IdempotentCommandOutcome) =
@@ -42,7 +43,7 @@ class PurchaseOrderLifecycleServiceTest {
     }
     private fun service(enabled: Boolean = true) = PurchaseOrderLifecycleService(
         purchases, issuer, commands, audit,
-        Clock.fixed(at, ZoneOffset.UTC), enabled,
+        Clock.fixed(at, ZoneOffset.UTC), enabled, false, poReceiving,
     )
     private fun request(revision: Long = 1L, reason: String = "Duplicate order cancelled before sending") =
         CancelPurchaseOrderRequest(operation, revision, reason)
@@ -50,6 +51,7 @@ class PurchaseOrderLifecycleServiceTest {
     private fun allowed() {
         Mockito.`when`(purchases.byId(poId)).thenReturn(order)
         Mockito.`when`(purchases.lockOrder(poId, org)).thenReturn(true)
+        Mockito.`when`(poReceiving.hasAnyLinkedReceipt(poId)).thenReturn(false)
         Mockito.`when`(purchases.lifecycleEvents(poId)).thenAnswer {
             stored?.let(::listOf) ?: emptyList<PurchaseOrderLifecycleEvent>()
         }
