@@ -22,6 +22,7 @@ import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.procurement.PurchaseRequirementApiClient
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeApiClient
+import com.hiltech.shared.core.procurement.PoReceivingDeliveryNoteUploader
 import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceApiClient
 import com.hiltech.shared.core.work.WorkApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
@@ -135,6 +136,8 @@ class HiltechApplication : Application() {
     private val evidenceApi by lazy {
         EvidenceApiClient(productApi, httpClient)
     }
+
+    val poDeliveryNoteUploader by lazy { PoReceivingDeliveryNoteUploader(evidenceApi) }
 
     val fieldEvidenceSyncRuntime by lazy {
         AndroidFieldEvidenceSyncRuntime(
