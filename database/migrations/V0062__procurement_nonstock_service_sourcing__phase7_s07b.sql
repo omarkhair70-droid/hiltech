@@ -86,8 +86,24 @@ BEGIN
         WHERE l.organization_id=NEW.organization_id
           AND l.supplier_organization_id=NEW.supplier_organization_id
         ORDER BY l.revision_number DESC LIMIT 1)='ACTIVE'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM procurement_service_rfq rfq
+    JOIN procurement_service_need need ON need.id=rfq.service_need_id
+      AND need.organization_id=rfq.organization_id
+    JOIN team t ON t.id=need.team_id
+      AND t.organization_id=need.organization_id
+    JOIN organization o ON o.id=need.organization_id
+    JOIN LATERAL (
+      SELECT result_version,to_state FROM procurement_service_need_event e
+      WHERE e.need_id=need.id ORDER BY result_version DESC LIMIT 1
+    ) latest ON true
+    WHERE rfq.id=NEW.rfq_id AND rfq.organization_id=NEW.organization_id
+      AND o.status='ACTIVE' AND o.organization_type='HILTECH'
+      AND t.active=true AND t.version=need.team_version
+      AND latest.result_version=rfq.service_need_version
+      AND latest.to_state='READY_FOR_SOURCING'
   ) THEN
-    RAISE EXCEPTION 'Service quote supplier not currently linked and active'
+    RAISE EXCEPTION 'Service quote supplier or reviewed source is no longer current'
       USING ERRCODE='23514';
   END IF;
   RETURN NEW;
