@@ -232,7 +232,23 @@ fun PayrollFinalPayReviewSection(
                 Text("مراجعة المرتبات: " + (report.payrollClearanceState ?: "غير معروفة"))
                 if (report.blockers.isNotEmpty()) {
                     Text("في نقاط تحتاج مراجعة", style = MaterialTheme.typography.titleSmall)
-                    report.blockers.forEach { Text("• " + it) }
+                    report.blockers.forEach { blocker ->
+                        Text("• " + when (blocker) {
+                            "HR_CLEARANCE_NOT_CONFIRMED" -> "شؤون الموظفين لم تعتمد إنهاء الإجراءات"
+                            "FINANCE_CLEARANCE_NOT_CONFIRMED" -> "المالية لم تؤكد تسوية العهد والسلف"
+                            "VERIFIED_FINAL_PAY_SOURCE_MISSING_OR_STALE" ->
+                                "مستحقات نهاية الخدمة تحتاج مصدرًا ومراجعة معتمدين"
+                            "FINAL_PAY_RUN_NOT_RELEASED_OR_STALE" ->
+                                "نسخة المرتب النهائية غير معتمدة أو تغير مصدرها"
+                            "FINANCE_PAYMENT_RESULT_NOT_CONNECTED" ->
+                                "نتيجة الصرف لم تصل من المالية بعد"
+                            "FINAL_PAY_FINANCE_INSTRUCTION_NOT_MATCHED" ->
+                                "تعليمات المالية لا تطابق صافي المستحقات"
+                            "FINAL_PAY_PAYMENT_NOT_CONFIRMED" ->
+                                "التحويل لم يتأكد نجاحه من المالية"
+                            else -> "تحتاج مراجعة المصدر: " + blocker
+                        })
+                    }
                 } else {
                     Text("مصادر المستحقات ونتيجة الصرف مؤكدة للمراجعة النهائية.")
                 }
