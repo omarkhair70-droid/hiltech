@@ -307,6 +307,13 @@ class WarehouseApiClient(
             json.encodeToString(AddReceivingDiscrepancyDto.serializer(), request),
             installationId, ReceivingDiscrepancyResultDto.serializer())
 
+    suspend fun rejectPoReceivingStockLine(
+        id: String, request: RejectPoReceivingStockLineDto, installationId: String,
+    ): ReceivingDiscrepancyResultDto =
+        post("/v1/receiving/" + uuid(id) + "/reject-po-line", request.operationId,
+            json.encodeToString(RejectPoReceivingStockLineDto.serializer(), request),
+            installationId, ReceivingDiscrepancyResultDto.serializer())
+
     suspend fun completeReceiving(
         id: String, request: CompleteReceivingDto, installationId: String,
     ): ReceivingRecordResultDto =
