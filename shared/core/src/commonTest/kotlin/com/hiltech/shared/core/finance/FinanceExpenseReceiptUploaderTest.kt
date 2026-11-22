@@ -45,7 +45,7 @@ class FinanceExpenseReceiptUploaderTest {
         capturedAt = "2026-11-23T12:00:00Z",
     )
 
-    @Test fun privateReceiptUploadsThenWaitsForCanonicalMalwareScan() = runBlocking {
+    @Test fun privateReceiptUploadsAndOnlyCanonicalContentReadyIsReported() = runBlocking {
         var puts = 0
         val apiHttp = HttpClient(MockEngine { call ->
             assertEquals("Bearer employee-token", call.headers[HttpHeaders.Authorization])
@@ -57,7 +57,7 @@ class FinanceExpenseReceiptUploaderTest {
                         "expectedSizeBytes":3},"correlationId":"test","replayed":false}""",
                         HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
                 "/v1/evidence/$evidenceId/finalize" ->
-                    respond("""{"evidence":${metadata(draft, "QUARANTINED")},
+                    respond("""{"evidence":${metadata(draft, "READY")},
                         "correlationId":"test","replayed":false}""",
                         HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
                 "/v1/evidence/$evidenceId" ->
@@ -80,8 +80,8 @@ class FinanceExpenseReceiptUploaderTest {
         val client = FinanceExpenseReceiptUploader(EvidenceApiClient(appApi, binary))
         val uploaded = client.upload(selected(), device)
         assertEquals(1, puts)
-        assertTrue(uploaded.pendingSecurityScan)
-        assertFalse(uploaded.uploadedReceiptReady)
+        assertFalse(uploaded.pendingSecurityScan)
+        assertTrue(uploaded.uploadedReceiptReady)
         val verified = client.refresh(evidenceId, draft, device)
         assertTrue(verified.uploadedReceiptReady)
         assertFalse(verified.pendingSecurityScan)
