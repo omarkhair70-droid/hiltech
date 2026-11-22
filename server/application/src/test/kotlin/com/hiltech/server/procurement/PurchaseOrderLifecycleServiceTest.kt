@@ -104,6 +104,15 @@ class PurchaseOrderLifecycleServiceTest {
         })
     }
 
+    @Test fun anyLinkedWarehouseReceiptBlocksPoCancellationEvenBeforeStockPosting() {
+        allowed()
+        Mockito.`when`(poReceiving.hasAnyLinkedReceipt(poId)).thenReturn(true)
+        assertEquals("PROCUREMENT_PO_LIFECYCLE_CHANGED", assertThrows<ProductApiException> {
+            service().cancel(ctx, poId, request())
+        }.code)
+        assertEquals(null, stored)
+    }
+
     @Test fun sentOrUnavailablePurchaseOrderCannotBeCancelled() {
         allowed()
         Mockito.`when`(purchases.lockOrder(poId, org)).thenReturn(false)
