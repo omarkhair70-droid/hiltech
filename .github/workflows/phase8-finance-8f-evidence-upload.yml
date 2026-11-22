@@ -59,6 +59,12 @@ jobs:
         run: |
           ./gradlew :shared:core:desktopTest \
             --tests com.hiltech.shared.core.finance.FinanceExpenseReceiptUploaderTest \
+            --tests com.hiltech.shared.core.finance.FinanceReceiptBytesTest \
+            --no-daemon --console=plain
+      - name: Verify actual Windows file signature safety
+        run: |
+          ./gradlew :apps:desktopApp:test \
+            --tests com.hiltech.desktop.finance.FinanceWindowsReceiptPickerContractTest \
             --no-daemon --console=plain
       - name: Compile Windows/Android/Finance native integrations
         run: |
