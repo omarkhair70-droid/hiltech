@@ -1,25 +1,26 @@
 package com.hiltech.shared.core
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -74,11 +75,14 @@ internal fun WarehouseCommandCenterCandidate(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(snapshot.warehouseName, style = MaterialTheme.typography.titleMedium)
-            Text(
-                "موقع: ${snapshot.warehouseCode}  ·  آخر تحديث من المصدر: ${snapshot.asOf}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text("المخزن: ${snapshot.warehouseCode}  ·  آخر تحديث من المصدر", style = MaterialTheme.typography.bodySmall)
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Text(
+                    snapshot.asOf.replace("T", " ").replace("Z", " UTC"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         HorizontalDivider()
         BoxWithConstraints {
@@ -159,28 +163,38 @@ private fun WorkItem(
         "ISSUE" -> "صرف"
         else -> item.state.replace('_', ' ')
     }
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(item.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             Text(
                 readableStatus,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (item.state == "OVERDUE") MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            item.dueAt?.let {
-                Text("الموعد: $it", style = MaterialTheme.typography.bodySmall)
+            item.dueAt?.let { time ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("الموعد:", style = MaterialTheme.typography.bodySmall)
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        Text(time.replace("T", " ").replace("Z", " UTC"), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasDetail) {
                     OutlinedButton(
+                        modifier = Modifier.defaultMinSize(minHeight = 48.dp).semantics {
+                            contentDescription = "فتح تفاصيل ${item.label}"
+                        },
                         onClick = { onDrill(requireNotNull(item.drillType), requireNotNull(item.drillId)) },
-                    ) { Text("افتح ${item.label}") }
+                    ) { Text("التفاصيل") }
                 }
-                OutlinedButton(onClick = { provenanceOpen = !provenanceOpen }) {
-                    Text(if (provenanceOpen) "إخفاء مصدر الحالة" else "مصدر الحالة")
+                OutlinedButton(
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp).semantics {
+                        contentDescription = "عرض مصدر حالة ${item.label}"
+                    },
+                    onClick = { provenanceOpen = !provenanceOpen },
+                ) {
+                    Text(if (provenanceOpen) "إخفاء المصدر" else "المصدر")
                 }
             }
             if (provenanceOpen) {
@@ -196,7 +210,6 @@ private fun WorkItem(
                 )
                 if (context.isNotEmpty()) Text(context.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
             }
-        }
     }
 }
 
@@ -212,7 +225,9 @@ private fun WarehouseInventoryFacts(
         Text("رصيد صفري: ${inventory.zeroOnHandLineCount}  ·  متاح صفري: ${inventory.zeroAvailableLineCount}")
         if (!inventory.lowStockPolicyConfigured) {
             Text(
-                "المخزون المنخفض غير محسوب؛ سياسة الحد الأدنى غير مفعلة",
+                if (inventory.lowStockPolicyReason == "LOW_STOCK_THRESHOLD_NOT_CONFIGURED")
+                    "المخزون المنخفض غير محسوب؛ لم يتم ضبط حد المخزون"
+                else "المخزون المنخفض غير محسوب؛ السبب: ${inventory.lowStockPolicyReason ?: "غير محدد"}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
