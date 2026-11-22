@@ -72,8 +72,12 @@ jobs:
           # A bounded retry handles transient upstream Maven Central HTTP 429.
           for attempt in 1 2 3; do
             if ./gradlew :server:application:verifyJooqGeneration \
-                --no-configuration-cache --console=plain; then
+                --no-configuration-cache --console=plain 2>&1 | tee /tmp/hiltech-jooq.log; then
               exit 0
+            fi
+            if ! grep -Eqi '429|Too Many Requests' /tmp/hiltech-jooq.log; then
+              echo "jOOQ generation failed for a non-rate-limit reason." >&2
+              exit 1
             fi
             if [[ "$attempt" -eq 3 ]]; then
               echo "jOOQ generation failed after three explicit attempts." >&2

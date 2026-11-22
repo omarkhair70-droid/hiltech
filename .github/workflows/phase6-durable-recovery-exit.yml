@@ -64,9 +64,24 @@ jobs:
             --no-configuration-cache --console=plain
 
       - name: Full durable Room replay and migration tests
+        shell: bash
         run: |
-          ./gradlew :shared:core:desktopTest \
-            --no-configuration-cache --console=plain
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if ./gradlew :shared:core:desktopTest \
+                --no-configuration-cache --console=plain 2>&1 | tee /tmp/hiltech-room-test.log; then
+              exit 0
+            fi
+            if ! grep -Eqi '429|Too Many Requests' /tmp/hiltech-room-test.log; then
+              echo 'Room/desktop test failure was not a transient dependency rate limit.' >&2
+              exit 1
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              echo 'Room/desktop tests still blocked by dependency rate limits.' >&2
+              exit 1
+            fi
+            sleep "$((attempt * 20))"
+          done
 
       - name: Android feature-enabled native compile
         run: |
