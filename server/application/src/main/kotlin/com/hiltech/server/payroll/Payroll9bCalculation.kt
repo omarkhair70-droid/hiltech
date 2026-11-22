@@ -55,6 +55,7 @@ data class PayrollVerifiedSeparationEligibility(
     val offboardingCaseVersion: Long,
     val lastWorkingDate: java.time.LocalDate,
     val approvedFinalPayScopeRef: String,
+    val approvedFinalPayScopeVersion: Long,
     val approval: PayrollInputApproval,
 )
 
@@ -132,6 +133,7 @@ object Payroll9bCalculator {
                 separation.payrollPeriodId != payrollPeriodId ||
                 separation.employeeId != employeeId ||
                 separation.offboardingCaseVersion < 1 ||
+                separation.approvedFinalPayScopeVersion < 1 ||
                 separation.approval != PayrollInputApproval.APPROVED ||
                 separation.approvedFinalPayScopeRef.isBlank() ||
                 separation.approvedFinalPayScopeRef.length > 240
@@ -254,6 +256,7 @@ object Payroll9bCalculator {
                 append('|').append(it.offboardingCaseVersion)
                 append('|').append(it.lastWorkingDate)
                 append('|').append(it.approvedFinalPayScopeRef)
+                append('|').append(it.approvedFinalPayScopeVersion)
                 append('|').append(it.approval)
             }
             coverageReceipts.sortedBy { it.domain.name }.forEach {
