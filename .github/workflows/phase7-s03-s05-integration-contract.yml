@@ -1,0 +1,73 @@
+name: Phase 7 S03–S05 — Integration contracts
+
+on:
+  push:
+    branches:
+      - "phase7/s03-s05-integration-20261122"
+      - "phase7/s06-office-team-stock-20261122"
+  pull_request:
+    branches:
+      - "phase7/s04-po-canonical-receipts-20261122"
+      - "phase7/s03-s05-integration-20261122"
+
+concurrency:
+  group: phase7-integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  phase7-postgres-native:
+    name: Phase 7 migrations, secure lifecycle and native clients
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_DB: hiltech
+          POSTGRES_USER: hiltech
+          POSTGRES_PASSWORD: hiltech
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hiltech -d hiltech"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Set up pinned Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+      - name: Verify migration and S03/S04 lifecycle rules
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
+          HILTECH_DB_USER: hiltech
+          HILTECH_DB_PASSWORD: hiltech
+          HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --tests com.hiltech.server.procurement.SupplierPoCommunicationServiceTest \
+            --tests com.hiltech.server.procurement.SupplierInvoiceMatchingServiceTest \
+            --tests com.hiltech.server.procurement.SupplierInvoiceMatchRulesTest \
+            --tests com.hiltech.server.procurement.PurchaseOrderCommercialReplacementServiceTest \
+            --tests com.hiltech.server.procurement.ProcurementPoReceivingGuardTest \
+            --tests com.hiltech.server.procurement.PoReceivingDeliveryNoteEvidenceTargetAdapterTest \
+            --tests com.hiltech.server.procurement.WarehouseReplenishmentServiceTest \
+            --tests com.hiltech.server.procurement.SourcingAuthorityAdaptersTest \
+            --tests com.hiltech.server.procurement.AssetPurchaseNeedServiceTest \
+            --tests com.hiltech.server.procurement.OfficeStockNeedServiceTest \
+            --tests com.hiltech.server.procurement.OfficeStockSourceDisabledTest \
+            --tests com.hiltech.server.procurement.PurchaseOrderLifecycleServiceTest \
+            --no-daemon --console=plain
+      - name: Compile Windows and Android native clients
+        run: |
+          ./gradlew :apps:desktopApp:compileKotlin :apps:androidApp:assembleDebug \
+            --no-daemon --console=plain

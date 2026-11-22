@@ -49,6 +49,21 @@ import com.hiltech.shared.core.identity.auth.NativeOidcConfig
 import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.identity.auth.NativeOidcSessionManager
 import com.hiltech.shared.core.network.HiltechApiClient
+import com.hiltech.shared.core.procurement.PurchaseRequirementApiClient
+import com.hiltech.shared.core.procurement.WarehouseReplenishmentApiClient
+import com.hiltech.shared.core.procurement.OfficeStockNeedApiClient
+import com.hiltech.shared.core.procurement.AssetPurchaseNeedApiClient
+import com.hiltech.shared.core.procurement.SupplierSourcingApiClient
+import com.hiltech.shared.core.procurement.PurchaseOrderCandidateApiClient
+import com.hiltech.shared.core.procurement.PurchaseOrderIssueApiClient
+import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceApiClient
+import com.hiltech.shared.core.procurement.SupplierInvoiceDocumentUploader
+import com.hiltech.shared.core.procurement.SupplierPoCommunicationApiClient
+import com.hiltech.shared.core.procurement.PoWarehouseIntakeApiClient
+import com.hiltech.shared.core.procurement.PoReceivingDeliveryNoteUploader
+import com.hiltech.shared.core.procurement.PurchaseOrderDeliveryAmendmentApiClient
+import com.hiltech.shared.core.procurement.SupplierQuoteDocumentUploader
+import com.hiltech.shared.core.evidence.EvidenceApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
 import com.hiltech.shared.core.people.ChangeWorkforceAssignmentRequestDto
 import com.hiltech.shared.core.people.CreateEmployeeRequestDto
@@ -223,6 +238,30 @@ class DesktopIdentityRuntime(
 
     internal val physicalWarehouseInstallationId: String
         get() = installationId
+
+    internal val procurementApi = PurchaseRequirementApiClient(productApi)
+    internal val warehouseReplenishmentApi = WarehouseReplenishmentApiClient(productApi)
+    internal val officeStockNeedApi = OfficeStockNeedApiClient(productApi)
+    internal val assetPurchaseNeedApi = AssetPurchaseNeedApiClient(productApi)
+    internal val supplierSourcingApi = SupplierSourcingApiClient(productApi)
+    internal val purchaseOrderCandidateApi = PurchaseOrderCandidateApiClient(productApi)
+    internal val purchaseOrderIssueApi = PurchaseOrderIssueApiClient(productApi)
+    internal val supplierInvoiceFinanceApi = SupplierInvoiceFinanceApiClient(productApi)
+    internal val supplierPoCommunicationApi = SupplierPoCommunicationApiClient(productApi)
+    internal val supplierInvoiceDocumentUploader = SupplierInvoiceDocumentUploader(
+        supplierInvoiceFinanceApi, EvidenceApiClient(productApi, httpClient),
+    )
+    internal val poWarehouseIntakeApi = PoWarehouseIntakeApiClient(productApi)
+    internal val poReceivingDeliveryNoteUploader = PoReceivingDeliveryNoteUploader(
+        EvidenceApiClient(productApi, httpClient),
+    )
+    internal val purchaseOrderDeliveryAmendmentApi =
+        PurchaseOrderDeliveryAmendmentApiClient(productApi)
+    internal val supplierQuoteDocumentUploader = SupplierQuoteDocumentUploader(
+        supplierSourcingApi,
+        EvidenceApiClient(productApi, httpClient),
+    )
+    internal val procurementWorkApi: WorkApiClient get() = workApi
 
 
     private val planningApi =

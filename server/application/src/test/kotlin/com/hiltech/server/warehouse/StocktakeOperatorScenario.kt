@@ -356,6 +356,8 @@ internal class StocktakeOperatorScenario(
                 com.hiltech.server.security.AuthorizationProjectionIntentWriter { }, events,
             ),
             warehouse, authority, executor(), JdbcAuditEventWriter(jdbc), events, clock,
+            com.hiltech.server.procurement.ProcurementPoReceivingGuard(
+                jdbc, com.hiltech.server.procurement.PurchaseOrderIssuePersistence(jdbc)),
         )
         val record = receivingService.create(context(UUID.randomUUID()).receiving(), CreateReceivingRequest(
             organization, location.storageLocationId, ReceivingSourceType.OTHER, sourceRef = source,
