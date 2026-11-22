@@ -112,7 +112,8 @@ class PurchaseOrderDeliveryAmendmentService @Autowired constructor(
         val state = purchases.effectiveState(orderId) ?: unavailable()
         issuer.requireIssuerForLifecycle(actor, state.order.organizationId)
         if (state.effectiveState != "ISSUED" ||
-            state.order.supplierDispatchState != "NOT_SENT"
+            state.order.supplierDispatchState != "NOT_SENT" ||
+            purchases.hasSupplierCommunication(orderId)
         ) unavailable()
         val source = candidates.byId(state.order.candidateId) ?: unavailable()
         val demand = requirements.byId(source.requirementId) ?: unavailable()
@@ -132,7 +133,8 @@ class PurchaseOrderDeliveryAmendmentService @Autowired constructor(
         val state = purchases.effectiveState(orderId) ?: unavailable()
         issuer.requireIssuerForLifecycle(actor, state.order.organizationId)
         if (state.effectiveState != "ISSUED" ||
-            state.order.supplierDispatchState != "NOT_SENT"
+            state.order.supplierDispatchState != "NOT_SENT" ||
+            purchases.hasSupplierCommunication(orderId)
         ) unavailable()
         val proposal = proposals.byOrderAndBase(orderId, state.version) ?: return null
         val subject = ApprovalSubjectRef(
@@ -174,6 +176,7 @@ class PurchaseOrderDeliveryAmendmentService @Autowired constructor(
             val state = purchases.effectiveState(orderId) ?: unavailable()
             if (state.order != order || state.effectiveState != "ISSUED" ||
                 state.order.supplierDispatchState != "NOT_SENT" ||
+                purchases.hasSupplierCommunication(orderId) ||
                 state.version != request.expectedOrderVersion ||
                 state.destinationId == request.proposedStorageLocationId
             ) stale()
@@ -290,6 +293,7 @@ class PurchaseOrderDeliveryAmendmentService @Autowired constructor(
             val current = purchases.effectiveState(proposal.purchaseOrderId) ?: unavailable()
             if (current.order.organizationId != proposal.organizationId ||
                 current.order.supplierDispatchState != "NOT_SENT" ||
+                purchases.hasSupplierCommunication(proposal.purchaseOrderId) ||
                 current.effectiveState != "ISSUED" ||
                 current.version != proposal.baseVersion ||
                 request.expectedOrderVersion != proposal.baseVersion
