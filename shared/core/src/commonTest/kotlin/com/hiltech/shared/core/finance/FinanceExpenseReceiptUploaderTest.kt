@@ -21,15 +21,15 @@ class FinanceExpenseReceiptUploaderTest {
     private val evidenceId = "33333333-3333-3333-3333-333333333333"
     private val session = "44444444-4444-4444-4444-444444444444"
     private val device = "55555555-5555-5555-5555-555555555555"
-    private val sha = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-    private val bytes = "abc".encodeToByteArray()
+    private val sha = "86edbaa24831badfa0a8b04bb410141e2ee4182b6d0014493fe262a7a331c20b"
+    private val bytes = "%PDF-1.7".encodeToByteArray()
 
     private fun metadata(target: String, state: String) = """
         {"evidenceId":"$evidenceId","uploadSessionId":"$session",
          "targetType":"FINANCE_EXPENSE_RECEIPT","targetId":"$target",
          "evidenceRequirementKey":"FINANCE_EXPENSE_RECEIPT_BINARY",
          "evidenceTypeCode":"FINANCE_EXPENSE_RECEIPT",
-         "contentType":"application/pdf","sizeBytes":3,"sha256":"$sha",
+         "contentType":"application/pdf","sizeBytes":8,"sha256":"$sha",
          "storageState":"$state","classificationCode":"HIGHLY_RESTRICTED",
          "clientVisibilityMode":"INTERNAL_ONLY","evidenceVersion":1}
     """.trimIndent()
@@ -54,7 +54,7 @@ class FinanceExpenseReceiptUploaderTest {
                     respond("""{"evidence":${metadata(draft, "RESERVED")},
                         "upload":{"uploadUrl":"https://private-storage.test/receipt",
                         "requiredHeaders":{},"expiresAt":"2026-11-23T12:10:00Z",
-                        "expectedSizeBytes":3},"correlationId":"test","replayed":false}""",
+                        "expectedSizeBytes":8},"correlationId":"test","replayed":false}""",
                         HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
                 "/v1/evidence/$evidenceId/finalize" ->
                     respond("""{"evidence":${metadata(draft, "READY")},
@@ -95,7 +95,7 @@ class FinanceExpenseReceiptUploaderTest {
                     respond("""{"evidence":${metadata(foreignDraft, "RESERVED")},
                         "upload":{"uploadUrl":"https://private-storage.test/receipt",
                         "requiredHeaders":{},"expiresAt":"2026-11-23T12:10:00Z",
-                        "expectedSizeBytes":3},"correlationId":"test","replayed":false}""",
+                        "expectedSizeBytes":8},"correlationId":"test","replayed":false}""",
                         HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
                 else -> error("Unexpected route")
             }
