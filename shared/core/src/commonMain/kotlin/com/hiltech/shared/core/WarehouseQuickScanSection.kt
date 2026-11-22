@@ -23,6 +23,18 @@ data class WarehouseQuickScanState(
     val stockSearchResults: List<StockItemDto> = emptyList(),
 )
 
+/**
+ * The operator's existing read-only lookup content, retained while switching
+ * between Warehouse Today and code lookup. One session per warehouse/org.
+ * No authoritative cache: the UI only retains last explicitly retrieved results.
+ */
+class WarehouseQuickScanSession {
+    var results by mutableStateOf(WarehouseQuickScanState())
+    var tag by mutableStateOf("")
+    var assetSearch by mutableStateOf("")
+    var stockSearch by mutableStateOf("")
+}
+
 @Composable
 fun WarehouseQuickScanSection(
     api: WarehouseApiClient,
@@ -31,26 +43,30 @@ fun WarehouseQuickScanSection(
     installationId: String,
     busy: Boolean,
     runTask: (suspend () -> Unit) -> Unit,
+    session: WarehouseQuickScanSession? = null,
 ) {
-    var state by remember(warehouseId, organizationId) { mutableStateOf(WarehouseQuickScanState()) }
+    val visibleSession = session ?: remember(warehouseId, organizationId) { WarehouseQuickScanSession() }
     WarehouseQuickScanControls(
-        state = state,
+        state = visibleSession.results,
+        session = visibleSession,
         busy = busy,
         onAssetTagLookup = { code ->
             runTask {
-                state = state.copy(assetTagResult = api.lookupAssetTag(code, installationId))
+                visibleSession.results = visibleSession.results.copy(
+                    assetTagResult = api.lookupAssetTag(code, installationId),
+                )
             }
         },
         onAssetSearch = { query ->
             runTask {
-                state = state.copy(
+                visibleSession.results = visibleSession.results.copy(
                     assetSearchResults = api.assets(warehouseId, query, null, installationId).take(20),
                 )
             }
         },
         onStockSearch = { query ->
             runTask {
-                state = state.copy(
+                visibleSession.results = visibleSession.results.copy(
                     stockSearchResults = api.searchStockItems(organizationId, query, installationId).take(20),
                 )
             }
@@ -65,10 +81,14 @@ fun WarehouseQuickScanControls(
     onAssetTagLookup: (String) -> Unit,
     onAssetSearch: (String) -> Unit,
     onStockSearch: (String) -> Unit,
+    session: WarehouseQuickScanSession? = null,
 ) {
-    var tag by remember { mutableStateOf("") }
-    var assetSearch by remember { mutableStateOf("") }
-    var stockSearch by remember { mutableStateOf("") }
+    var localTag by remember { mutableStateOf("") }
+    var localAssetSearch by remember { mutableStateOf("") }
+    var localStockSearch by remember { mutableStateOf("") }
+    val tag = session?.tag ?: localTag
+    val assetSearch = session?.assetSearch ?: localAssetSearch
+    val stockSearch = session?.stockSearch ?: localStockSearch
     val validTag = Regex("[A-Za-z0-9_-]{1,128}").matches(tag.trim())
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -77,7 +97,9 @@ fun WarehouseQuickScanControls(
 
         OutlinedTextField(
             value = tag,
-            onValueChange = { tag = it.take(128) },
+            onValueChange = { value ->
+                if (session != null) session.tag = value.take(128) else localTag = value.take(128)
+            },
             label = { Text("AssetTag / كود الأصل") },
             singleLine = true,
             enabled = !busy,
@@ -97,7 +119,10 @@ fun WarehouseQuickScanControls(
 
         OutlinedTextField(
             value = assetSearch,
-            onValueChange = { assetSearch = it.take(160) },
+            onValueChange = { value ->
+                if (session != null) session.assetSearch = value.take(160)
+                else localAssetSearch = value.take(160)
+            },
             label = { Text("Asset search / بحث الأصل") },
             singleLine = true,
             enabled = !busy,
@@ -116,7 +141,10 @@ fun WarehouseQuickScanControls(
 
         OutlinedTextField(
             value = stockSearch,
-            onValueChange = { stockSearch = it.take(160) },
+            onValueChange = { value ->
+                if (session != null) session.stockSearch = value.take(160)
+                else localStockSearch = value.take(160)
+            },
             label = { Text("Stock code / part number") },
             singleLine = true,
             enabled = !busy,
