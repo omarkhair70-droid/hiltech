@@ -61,6 +61,23 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
         { row, _ -> row.rfqRecord() }, id,
     ).singleOrNull()
 
+    /** The buyer's own organization's internal RFQ rounds for this requirement. */
+    fun roundsForRequirement(organizationId: UUID, requirementId: UUID): List<SupplierRfqRecord> =
+        jdbc.query(
+            """
+            SELECT * FROM procurement_supplier_rfq
+            WHERE organization_id = ? AND requirement_id = ?
+            ORDER BY requirement_version DESC, created_at DESC, id DESC
+            LIMIT 100
+            """.trimIndent(),
+            { row, _ -> row.rfqRecord() }, organizationId, requirementId,
+        )
+
+    fun countQuotes(rfqId: UUID): Int = jdbc.query(
+        "SELECT COUNT(*) FROM procurement_supplier_quote_evidence WHERE rfq_id = ?",
+        { row, _ -> row.getInt(1) }, rfqId,
+    ).single()
+
     fun byRequirementAndVersion(requirementId: UUID, version: Long): SupplierRfqRecord? =
         jdbc.query(
             """

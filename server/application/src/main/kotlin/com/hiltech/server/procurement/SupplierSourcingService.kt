@@ -199,6 +199,19 @@ class SupplierSourcingService @Autowired constructor(
         return SupplierQuoteReceipt(id, rfqId, request.expectedRevisionNumber, execution.replayed)
     }
 
+    /** All rounds are private to the source's organization and buyer authority. */
+    fun roundsForRequirement(actor: UUID, requirementId: UUID): List<SupplierRfqView> {
+        requireEnabled()
+        val root = requirements.byId(requirementId) ?: unavailable()
+        requireAuthority(actor, root.organizationId)
+        return sourcing.roundsForRequirement(root.organizationId, requirementId).map { round ->
+            if (round.organizationId != root.organizationId ||
+                round.requirementId != requirementId
+            ) unavailable()
+            rfqView(actor, round, sourcing.countQuotes(round.id))
+        }
+    }
+
     /** Price comparison never awards a supplier; only sourcing authority can read terms. */
     fun comparison(actor: UUID, rfqId: UUID): SupplierRfqComparisonView {
         requireEnabled()

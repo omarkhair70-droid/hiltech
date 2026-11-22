@@ -50,6 +50,7 @@ threshold would need a real versioned, non-bypassable source.
 ## Endpoints (all feature OFF/default denied)
 
 - POST `/v1/purchase-requirements/{id}/supplier-rfqs`
+- GET `/v1/purchase-requirements/{id}/supplier-rfqs` (buyer-only scoped RFQ list)
 - POST `/v1/sourcing/rfqs/{rfqId}/quote-evidence`
 - GET `/v1/sourcing/rfqs/{rfqId}/comparison`
 

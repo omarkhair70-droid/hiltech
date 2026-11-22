@@ -109,6 +109,20 @@ class SupplierSourcingApiClientTest {
         assertFalse(comparison.comparison.purchaseAuthorized)
     }
 
+    @Test fun scopedRfqRoundListNeedsTheCurrentAuthenticatedBuyerIdentity() = runBlocking {
+        val http = HttpClient(MockEngine { call ->
+            assertEquals("GET", call.method.value)
+            assertEquals("/v1/purchase-requirements/$requirement/supplier-rfqs", call.url.encodedPath)
+            assertEquals("Bearer restricted-buyer-token", call.headers[HttpHeaders.Authorization])
+            respond("[${rfqJson()}]", HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).roundsForRequirement(requirement, installation)
+        assertEquals(1, result.size)
+        assertEquals(rfq, result.single().id)
+        assertFalse(result.single().purchaseAuthorized)
+    }
+
     @Test fun deniedBuyerReadsStayDeniedInsteadOfAppearingAsEmptyPriceLists() = runBlocking {
         val http = HttpClient(MockEngine {
             respond("""{"code":"SOURCING_UNAVAILABLE","message":"Unavailable",

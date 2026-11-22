@@ -25,6 +25,10 @@ class SupplierSourcingController(private val service: SupplierSourcingService) {
         @RequestBody body: OpenSupplierRfqRequest,
     ): SupplierRfqReceipt = service.openRfq(request.sourcingContext(body.operationId), id, body)
 
+    @GetMapping("/v1/purchase-requirements/{id}/supplier-rfqs")
+    fun roundsForRequirement(request: HttpServletRequest, @PathVariable id: UUID): List<SupplierRfqView> =
+        service.roundsForRequirement(request.sourcingActor(), id)
+
     @PostMapping("/v1/sourcing/rfqs/{rfqId}/quote-evidence")
     fun recordQuote(
         request: HttpServletRequest,

@@ -4,6 +4,7 @@ import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 /**
@@ -24,6 +25,18 @@ class SupplierSourcingApiClient(
         "/v1/purchase-requirements/" + uuid(requirementId) + "/supplier-rfqs",
         request.operationId, json.encodeToString(OpenSupplierRfqDto.serializer(), request),
         installationId, SupplierRfqReceiptDto.serializer(),
+    )
+
+    suspend fun roundsForRequirement(
+        requirementId: String,
+        installationId: String,
+    ): List<SupplierRfqDto> = api.request(
+        method = HttpMethod.Get,
+        path = "/v1/purchase-requirements/" + uuid(requirementId) + "/supplier-rfqs",
+        options = HiltechRequestOptions(installationId = installationId),
+        decode = {
+            json.decodeFromString(ListSerializer(SupplierRfqDto.serializer()), it)
+        },
     )
 
     suspend fun recordQuote(

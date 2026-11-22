@@ -199,6 +199,34 @@ class SupplierSourcingServiceTest {
         }.code)
     }
 
+    @Test fun buyerRoundListIsOrganizationScopedAndDoesNotExposeUnrelatedSource() {
+        allow()
+        service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
+        Mockito.`when`(sourcing.roundsForRequirement(org, requirementId))
+            .thenReturn(listOf(createdRfq!!))
+        Mockito.`when`(sourcing.countQuotes(rfqId)).thenReturn(2)
+        val records = service().roundsForRequirement(actor, requirementId)
+        assertEquals(1, records.size)
+        assertEquals(2, records.single().quoteCount)
+        assertEquals(requirementId, records.single().requirementId)
+        assertFalse(records.single().purchaseAuthorized)
+
+        Mockito.`when`(auth.canManageSourcing(actor, org)).thenReturn(false)
+        assertEquals("SOURCING_UNAVAILABLE", assertThrows<ProductApiException> {
+            service().roundsForRequirement(actor, requirementId)
+        }.code)
+    }
+
+    @Test fun buyerRoundListRefusesCrossOrganizationRowsEvenIfPersistenceIsCorrupted() {
+        allow()
+        service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
+        Mockito.`when`(sourcing.roundsForRequirement(org, requirementId))
+            .thenReturn(listOf(createdRfq!!.copy(organizationId = UUID.randomUUID())))
+        assertEquals("SOURCING_UNAVAILABLE", assertThrows<ProductApiException> {
+            service().roundsForRequirement(actor, requirementId)
+        }.code)
+    }
+
     @Test fun restrictedComparisonCannotApproveCheapestVendor() {
         allow()
         service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
