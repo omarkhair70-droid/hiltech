@@ -194,6 +194,10 @@ class Payroll9bDraftPostgresContractTest {
         }!!
         assertEquals(2, newer.first.generation)
         assertNotNull(newer.first.sourceFingerprint)
+        val history = service.history(actor, periodId)
+        assertEquals(2, history.items.size)
+        assertEquals(2, history.items.first().generation)
+        assertEquals(1, history.items.first().employeeCount)
         val guard = PayrollRunApprovalVersionSource(
             jdbc, factory.getBeanProvider(PayrollApprovedInputSourcePort::class.java),
         )
@@ -270,6 +274,29 @@ class Payroll9bDraftPostgresContractTest {
                 .getBeanProvider(PayrollFinancePaymentResultsPort::class.java),
             clock,
         )
+        val financeReviewer = Payroll9cRunFinanceStatusService(
+            service, permission,
+            StaticListableBeanFactory(mapOf("approvedPublication" to approval))
+                .getBeanProvider(PayrollRunPublicationPort::class.java),
+            StaticListableBeanFactory(mapOf("financeReference" to finance))
+                .getBeanProvider(PayrollFinancePaymentResultsPort::class.java),
+        )
+        val notReleased = Payroll9cRunFinanceStatusService(
+            service, permission,
+            StaticListableBeanFactory().getBeanProvider(PayrollRunPublicationPort::class.java),
+            StaticListableBeanFactory().getBeanProvider(PayrollFinancePaymentResultsPort::class.java),
+        )
+        assertEquals(
+            "NOT_RELEASED",
+            notReleased.status(actor, publishedRunId).status,
+        )
+        val unknownFinance = financeReviewer.status(actor, publishedRunId)
+        assertEquals("REQUIRES_REVIEW", unknownFinance.status)
+        assertEquals(1, unknownFinance.unresolvedCount)
+        assertEquals("UNKNOWN", unknownFinance.employeeOutcomes.single().outcome)
+        assertThrows<ProductApiException> {
+            financeReviewer.status(UUID.randomUUID(), publishedRunId)
+        }
         val pending = self.own(actor, org, "p9c-private")
         assertEquals(1, pending.items.size)
         assertEquals(employee.toString(), pending.items.single().employeeId)
@@ -286,12 +313,14 @@ class Payroll9bDraftPostgresContractTest {
             ),
         )
         assertEquals("SUCCESS", self.own(actor, org, "p9c-private").items.single().paymentStatus)
+        assertEquals("PAID", financeReviewer.status(actor, publishedRunId).status)
         paymentEvents = paymentEvents + paymentEvents.first().copy(
             outcomeEventId = UUID.randomUUID(),
             outcome = PayrollFinanceOutcome.RETURNED, financeSourceVersion = 2,
             observedAt = at.plusSeconds(30),
         )
         assertEquals("RETURNED", self.own(actor, org, "p9c-private").items.single().paymentStatus)
+        assertEquals("REQUIRES_REVIEW", financeReviewer.status(actor, publishedRunId).status)
 
         // Unknown and former identities have no other employee's payslip.
         assertThrows<ProductApiException> {
