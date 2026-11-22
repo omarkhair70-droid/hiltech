@@ -203,3 +203,50 @@ fun PayrollRunHistorySection(
         }
     }
 }
+
+
+/** Final pay consumes the existing People offboarding case; no device maths. */
+@Composable
+fun PayrollFinalPayReviewSection(
+    finalPay: PayrollFinalPayReadinessDto?,
+    loading: Boolean,
+    errorCode: String?,
+    onOpenOffboardingCase: (String) -> Unit,
+    onRefresh: () -> Unit,
+) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.verticalScroll(rememberScrollState()),
+        ) {
+            Text("مستحقات نهاية الخدمة", style = MaterialTheme.typography.titleMedium)
+            Text("مراجعة ملف خروج الموظف من مصدره الأصلي.")
+            OutlinedButton(onClick = onRefresh) { Text("تحديث") }
+            if (loading) CircularProgressIndicator()
+            errorCode?.let { Text("تعذرت المراجعة: " + it) }
+            finalPay?.let { report ->
+                Text("آخر يوم عمل: " + report.lastWorkingDate)
+                Text("ملف الخروج: " + report.offboardingState)
+                Text("الموارد البشرية: " + (report.hrClearanceState ?: "غير معروفة"))
+                Text("المالية: " + (report.financeClearanceState ?: "غير معروفة"))
+                Text("مراجعة المرتبات: " + (report.payrollClearanceState ?: "غير معروفة"))
+                if (report.blockers.isNotEmpty()) {
+                    Text("في نقاط تحتاج مراجعة", style = MaterialTheme.typography.titleSmall)
+                    report.blockers.forEach { Text("• " + it) }
+                } else {
+                    Text("مصادر المستحقات ونتيجة الصرف مؤكدة للمراجعة النهائية.")
+                }
+                report.frozenNet?.let { net ->
+                    Text("الصافي المسجل: " + net + " " + (report.currency ?: ""))
+                }
+                Text("حالة الصرف: " + (report.paymentStatus ?: "لم تتأكد المالية من الصرف"))
+                OutlinedButton(
+                    onClick = { onOpenOffboardingCase(report.offboardingCaseId) },
+                ) {
+                    Text("فتح ملف خروج الموظف")
+                }
+                Text("أي صرف أو تسوية فعلية تتم داخل النظام المالي، وليس من هذه الشاشة.")
+            }
+        }
+    }
+}
