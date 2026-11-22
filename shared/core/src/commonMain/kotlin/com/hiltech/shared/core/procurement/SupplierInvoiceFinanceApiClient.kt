@@ -8,6 +8,18 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 @Serializable
+data class InvoicablePurchaseOrderDto(
+    val purchaseOrderId: String,
+    val poCode: String,
+    val supplierOrganizationId: String,
+    val stockItemId: String,
+    val quantity: String,
+    val currency: String,
+    val unitPrice: String,
+    val taxAmount: String,
+    val version: Long,
+)
+@Serializable
 data class SupplierInvoiceSlotDto(
     val slotId: String,
     val purchaseOrderId: String,
@@ -56,6 +68,17 @@ class SupplierInvoiceFinanceApiClient(
     private val api: HiltechApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
 ) {
+    suspend fun eligibleOrders(
+        orgId: String, installationId: String,
+    ): List<InvoicablePurchaseOrderDto> = api.request(
+        method = HttpMethod.Get,
+        path = "/v1/procurement/organizations/" + uuid(orgId) + "/invoicable-pos",
+        options = HiltechRequestOptions(installationId = installationId),
+        decode = {
+            json.decodeFromString(ListSerializer(InvoicablePurchaseOrderDto.serializer()), it)
+        },
+    )
+
     suspend fun list(orgId: String, installationId: String): List<SupplierInvoiceDto> = api.request(
         method = HttpMethod.Get,
         path = "/v1/procurement/organizations/" + uuid(orgId) + "/supplier-invoices",
