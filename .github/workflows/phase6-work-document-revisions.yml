@@ -60,9 +60,15 @@ jobs:
         with:
           gradle-version: "9.5.0"
 
-      - name: Verify source and approval/readiness contracts
+      - name: Verify architecture, source, and field contracts
         run: |
-          ./gradlew             :server:application:test               --tests com.hiltech.server.work.WorkDocumentRevisionSourceTest             --no-configuration-cache --console=plain
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.ArchitectureTest \
+            --tests com.hiltech.server.work.WorkDocumentRevisionSourceTest \
+            --tests com.hiltech.server.work.FieldAssignedAssetLookupServiceTest \
+            --tests com.hiltech.server.work.FieldEngineeringTestServiceTest \
+            --tests com.hiltech.server.warehouse.WarehouseFieldAssignedAssetSourceTest \
+            --no-configuration-cache --console=plain
 
       - name: Create isolated contract databases
         env:
@@ -77,7 +83,12 @@ jobs:
         env:
           HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech_migration
         run: |
-          ./gradlew             :server:application:test               --tests com.hiltech.server.DatabaseMigrationContractTest             --rerun-tasks --no-configuration-cache --console=plain
+          if ! ./gradlew :server:application:test \
+            --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --rerun-tasks --no-configuration-cache --console=plain --info; then
+            cat server/application/build/test-results/test/TEST-com.hiltech.server.DatabaseMigrationContractTest.xml || true
+            exit 1
+          fi
 
       - name: Verify Work document revision semantics on PostgreSQL
         env:
