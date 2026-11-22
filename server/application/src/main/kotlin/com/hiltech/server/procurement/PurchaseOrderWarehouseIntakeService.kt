@@ -36,6 +36,7 @@ data class PurchaseOrderWarehouseIntakeRow(
     val physicallyReceivedQuantity: String,
     val remainingQuantity: String,
     val effectiveOrderVersion: Long,
+    val openReceivingRecordIds: List<UUID> = emptyList(),
 )
 data class StartPoWarehouseReceivingRequest(val operationId: UUID)
 
@@ -93,11 +94,26 @@ class PurchaseOrderWarehouseIntakeService @Autowired constructor(
                 BigDecimal::class.java, id, org,
             ) ?: BigDecimal.ZERO
             val remaining = source.first.subtract(received)
-            if (remaining.signum() <= 0) return@mapNotNull null
+            // A PO can be fully physically posted but still require the
+            // delivery note and final inspection. Never hide unfinished
+            // receipts from the Warehouse operator on restart.
+            val openRecords = jdbc.query(
+                """
+                SELECT r.id FROM procurement_po_receiving_link b
+                JOIN receiving_record r ON r.id=b.receiving_record_id
+                  AND r.organization_id=b.organization_id
+                WHERE b.purchase_order_id=? AND b.organization_id=?
+                  AND r.state IN ('DRAFT','IN_PROGRESS')
+                ORDER BY r.created_at, r.id LIMIT 30
+                """.trimIndent(),
+                { rs, _ -> rs.getObject("id", UUID::class.java) }, id, org,
+            )
+            if (remaining.signum() <= 0 && openRecords.isEmpty()) return@mapNotNull null
             PurchaseOrderWarehouseIntakeRow(
                 id, state.order.code, state.order.stockItemId, source.second,
                 location.storageLocationId, source.first.toPlainString(),
                 received.toPlainString(), remaining.toPlainString(), state.version,
+                openRecords,
             )
         }
     }
