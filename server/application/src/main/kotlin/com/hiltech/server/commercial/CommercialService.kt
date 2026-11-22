@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -47,6 +48,17 @@ private fun currency(value: String) = value.also {
     if (!Regex("^[A-Z]{3}$").matches(it)) throw commercialError(
         "COMMERCIAL_CURRENCY_INVALID", "ISO currency required.", HttpStatus.BAD_REQUEST)
 }
+internal fun commercialExactLineTotal(quantity: BigDecimal, sellUnitPrice: BigDecimal): BigDecimal =
+    try {
+        quantity.multiply(sellUnitPrice).setScale(4, RoundingMode.UNNECESSARY)
+    } catch (_: ArithmeticException) {
+        throw commercialError(
+            "COMMERCIAL_EXACT_PRICE_REQUIRED",
+            "The quantity multiplied by unit price has more than four nonzero decimal places. An explicit pricing revision is required; no silent rounding.",
+            HttpStatus.UNPROCESSABLE_ENTITY,
+        )
+    }
+
 private fun amount(value: BigDecimal, positive: Boolean = false) {
     if ((if (positive) value.signum() <= 0 else value.signum() < 0) ||
         value.scale() > 4 || value.precision() > 20)
@@ -402,7 +414,7 @@ class CommercialService(
             )
             if (lines.isEmpty()) throw commercialError("COMMERCIAL_QUOTE_EMPTY","BOQ has no lines.",HttpStatus.CONFLICT)
             val total = lines.fold(BigDecimal.ZERO) { sum,l ->
-                sum + (l["quantity"] as BigDecimal).multiply(l["sell_unit_price"] as BigDecimal)
+                sum + commercialExactLineTotal(l["quantity"] as BigDecimal,l["sell_unit_price"] as BigDecimal)
             }
             amount(total)
             jdbc.update(
