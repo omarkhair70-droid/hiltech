@@ -2827,6 +2827,9 @@ fun main() {
                                         System.getenv("HILTECH_PO_CANDIDATES_UI_ENABLED")
                                             ?.equals("true", ignoreCase = true) == true
                                     },
+                                    purchaseApprovalRequestEnabled =
+                                        System.getenv("HILTECH_PO_APPROVAL_REQUEST_UI_ENABLED")
+                                            ?.equals("true", ignoreCase = true) == true,
                                     quoteDocumentUploader = runtime.supplierQuoteDocumentUploader,
                                     pickQuoteFile = {
                                         kotlinx.coroutines.withContext(Dispatchers.IO) {
