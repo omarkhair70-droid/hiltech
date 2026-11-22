@@ -24,6 +24,8 @@ fun SupplierInvoiceFinanceSection(
     organizationId: String,
     installationId: String,
     newOperationId: () -> String,
+    documentUploader: SupplierInvoiceDocumentUploader? = null,
+    pickInvoiceFile: (suspend () -> SupplierInvoiceSelectedFile?)? = null,
 ) {
     val scope = rememberCoroutineScope()
     var busy by remember(organizationId) { mutableStateOf(false) }
@@ -39,6 +41,21 @@ fun SupplierInvoiceFinanceSection(
                 "no payable or payment is generated.",
             style = MaterialTheme.typography.bodySmall,
         )
+        if (documentUploader != null && pickInvoiceFile != null) {
+            SupplierInvoiceCaptureSection(
+                api, documentUploader, pickInvoiceFile, organizationId, installationId,
+                newOperationId, onCaptured = {
+                    scope.launch {
+                        try {
+                            invoices = api.list(organizationId, installationId)
+                            loaded = true
+                        } catch (failure: Exception) {
+                            error = failure.message ?: "Invoice captured; refresh review queue."
+                        }
+                    }
+                },
+            )
+        }
         OutlinedButton(enabled = !busy, onClick = {
             busy = true
             error = null
