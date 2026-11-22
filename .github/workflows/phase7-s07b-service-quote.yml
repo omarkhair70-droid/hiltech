@@ -52,6 +52,7 @@ jobs:
             --tests com.hiltech.server.procurement.ServicePurchaseNeedServiceTest \
             --tests com.hiltech.server.procurement.ServiceSupplierSourcingServiceTest \
             --tests com.hiltech.server.procurement.ServiceQuoteProtectedDocumentTest \
+            --tests com.hiltech.server.documents.persistence.ServiceRestrictedEvidenceReservationTest \
             --no-daemon --console=plain
       - name: Compile Windows and Android actual native clients
         run: |
