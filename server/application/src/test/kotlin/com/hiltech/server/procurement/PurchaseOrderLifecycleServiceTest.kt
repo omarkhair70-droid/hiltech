@@ -7,6 +7,7 @@ import com.hiltech.server.platform.IdempotentCommandExecutor
 import com.hiltech.server.platform.IdempotentCommandOutcome
 import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
+import org.springframework.http.HttpStatus
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
@@ -118,7 +119,7 @@ class PurchaseOrderLifecycleServiceTest {
         Mockito.`when`(issuer.requireIssuerForLifecycle(actor, org)).thenThrow(
             ProductApiException(
                 "PROCUREMENT_PO_ISSUE_UNAVAILABLE", "Issuer permission revoked",
-                org.springframework.http.HttpStatus.NOT_FOUND,
+                HttpStatus.NOT_FOUND,
             ),
         )
         assertEquals("PROCUREMENT_PO_ISSUE_UNAVAILABLE", assertThrows<ProductApiException> {
