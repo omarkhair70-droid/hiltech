@@ -1,25 +1,51 @@
-# HILTECH staging — live Coolify state (2026-11-22)
+# HILTECH — verified shared-Coolify staging (2026-11-22)
 
-This is a point-in-time **execution checkpoint**, not a deploy approval or a claim that HILTECH is operational. User expressly requested trying the existing server alongside Teswa before buying another VM.
+**Actual runtime**, not the not-yet-deployed `compose.yaml` candidate. Owner approved using the shared `teswa-core01` host for **synthetic staging**, accepting possible resource contention and no new VM charges. **Do not deploy the reference Compose over these existing resources.** Existing Teswa service was last observed `running:healthy`; no Teswa service or volume was deleted, stopped or modified.
 
-## Actual Coolify
+## Live resource inventory
 
-- Control plane: Coolify 4.7.6, project `HILTECH Internal OS` (`i2xxnpik1gr6gcfqfahe2qss`), `staging` (`r3ygvl4ylezsit7a224hzapq`).
-- Server: `teswa-core01` (`s2nvk0fyktzm7sk6aoobld5e`). Existing Teswa multi-component service remained `running:healthy` at last check; **do not stop it**.
-- THREE separate PostgreSQL 18 resources, all **running:healthy**, `is_public=false`:
-  - app DB `hiltech-staging-postgres` (`ei5x0hwvcvbbzaswr6jwwmr9`): 0.4 CPU, 512m.
-  - Keycloak DB `hiltech-keycloak-staging-postgres` (`yet9pjfbohz0wzs65xffgate`): 0.25 CPU, 384m.
-  - OpenFGA DB `hiltech-openfga-staging-postgres` (`5vd1og3yyimgqubqrpq9tnzi`): 0.25 CPU, 384m.
-- Keycloak application `hiltech-keycloak-staging` (`asnlu4h5knflvfqw837kp40s`), version 26.7.4, 0.6 CPU / 1152m, `start` command configured; **not started** (Coolify displays `exited:unhealthy` before startup).
-- OpenFGA application `hiltech-openfga-staging` (`sq08tht73kkhr6svkwc2fmrj`), version v1.20.0, 0.30 CPU / 384m, `run` command configured; **not started**, its separate PostgreSQL migration is not run.
-- HILTECH Spring API Docker-image application was **created**, UUID `pkysbfynkffrexh9tqhhtg99`, using verified published commit tag `ghcr.io/omarkhair70-droid/hiltech-server:staging-fae1d7f36eb9adeaecfea6ccbd07baba6b2af646`, corresponding to image digest `sha256:6bf83b62746cf6811a610e0f59e9f35469a9fe4b7061bc01debe48c1d8e4d1e8`. **Not started**. Fail-closed `HILTECH_OIDC_ENABLED=true`, `HILTECH_FGA_ENABLED=true`, `HILTECH_EVIDENCE_STORAGE_ENABLED=true` were created as runtime environment variables. Resource `app get` showed `limits_cpus=0`, `limits_memory=0`; **set strict resource limits before any deployment**. CLI `app update --limits-cpus` unsupported and a metadata update returned 422. Do not claim the API is capped.
+| Resource | UUID | Verified status and limits |
+|---|---|---|
+| App PostgreSQL | `ei5x0hwvcvbbzaswr6jwwmr9` | Private, `running:healthy`, 0.4 CPU / 512 MB |
+| Keycloak PostgreSQL | `yet9pjfbohz0wzs65xffgate` | Private, `running:healthy`, 0.25 CPU / 384 MB |
+| OpenFGA PostgreSQL | `5vd1og3yyimgqubqrpq9tnzi` | Private, `running:healthy`, 0.25 CPU / 384 MB |
+| Keycloak v26.7.4 | `hdcv8jgvtxqt9uhyv0pj5atc` | Dockerfile runtime, `running:unknown`, logs show prod startup and schema init; internal :8080; 0.6 CPU / 1152 MB, no public FQDN |
+| OpenFGA v1.20.0 | `dod3foopx0kqpkafyxarcmga` | Dockerfile runtime, `running:unknown`, **preshared auth enabled**; 0.3 CPU / 384 MB, no public FQDN, internal `hiltech-fga-private:8080` |
+| One-shot OpenFGA migration | `ekmx5nbtd2gj5smhqq79s6if` | PostgreSQL schema migrated **0 -> 6** and helper stopped intentionally; its `exited:unhealthy` status is normal for the stopped helper |
+| RustFS 1.0.6 S3 storage | `vp6uhpyidhl7cewuhxlunlen` | `running:unknown`, no public FQDN, 0.35 CPU / 640 MB, internal `hiltech-evidence-private:9000`; isolated persistent volume `vp6uhpyidhl7cewuhxlunlen-hiltech-rustfs-evidence-staging-volume` mounted at `/data` |
+| Capped immutable-image Spring API candidate | `wgjw7g8howou32biinncnxul` | **NOT started**, no public FQDN, 0.55 CPU / 1536 MB; OIDC/FGA/evidence require full configuration |
 
-## Constraints and integration work
+Earlier failed or superseded applications (`asnlu4h5knflvfqw837kp40s` old Keycloak, `sq08tht73kkhr6svkwc2fmrj` old OpenFGA, `pkysbfynkffrexh9tqhhtg99` old uncapped API) must **not** be used as the deployment targets.
 
-1. Keycloak database credential + random bootstrap-admin credential provisioning attempted with Remote Desktop Commander, **blocked twice by client security**; an exact-call review panel was presented to owner and was still pending at subsequent key-only inspection. Never work around the block, publish secrets, or treat a chat reply as execution of the review UI button.
-2. All DBs are separately created by Coolify; the existing [staging compose candidate](compose.yaml) uses **one** PostgreSQL service and is not identical to live topology. **Do not deploy that compose concurrently** on top of the 3 existing databases; reconcile it or use independent Coolify resources with correctly scoped DB accounts.
-3. Current auto-generated Keycloak and FGA domains are HTTP at a Tailscale `100.x` host. Do not present them as production-safe or globally reachable. Prepare correct HTTPS/public or private-access native OIDC redirect plan; no public PostgreSQL/FGA port.
-4. No OpenFGA migrated schema/store/model, no Keycloak realm/native client, no S3 private evidence bucket, no real native-client E2E. `coolify service create minio` returned `404 Invalid service type` and **did not create a new MinIO resource**. Existing older MinIO belongs to another service; do not reuse its data/credentials without scope approval.
-5. Shared host capacity remains small, and Teswa must remain untouched. Run load and memory checks during staged activation. Owner accepted performance risk for **synthetic staging**, but no authorization to delete projects or company data.
+**Note:** these are Coolify point-in-time status readings; `running:unknown` is **not** a passing configured healthcheck or an end-to-end proof. The source Compose reference defines a *single* Postgres server with multiple databases whereas these three PGs are independently deployed. No real employee, salary, stock or asset records were introduced.
 
-**Next safe action:** Complete the already-presented review for the legitimate credential configuration (or explicitly choose a different owner-authorized secure credential-entry workflow). Then provision scoped credentials via supported Coolify controls, establish internal app-to-DB DNS, OpenFGA migrations, Keycloak HTTPS/realm/client, private S3 evidence with native-client reachability, and start one service at a time while watching Teswa. Deploy the API only after OIDC + FGA + evidence integration and memory/CPU limits are verified. Preserve synthetic staging separation.
+## Verified authentication/network integration
+
+- Previously a RustFS-to-OpenFGA probe could not resolve either the app UUID or the app's display name via Docker DNS. The Coolify destination selection alone did not imply `connect_to_docker_network=true`.
+- A strong random preshared key was stored in **private Coolify environment variables** for OpenFGA and a matching key in the **inactive** Spring API candidate. No keys printed, committed or copied to a scheduled task.
+- OpenFGA was redeployed with `OPENFGA_AUTHN_METHOD=preshared`, then given the stable internal name `hiltech-fga-private` and connected to the predefined Docker network. RustFS was also joined through `hiltech-evidence-private`; all public FQDNs remain blank.
+- From inside RustFS, `curl -fsS http://hiltech-fga-private:8080/stores` returned **HTTP 401**, demonstrating successful internal DNS/routing **and rejection without a token**. Positive authenticated OpenFGA checks and real store/model setup **remain incomplete**.
+- OpenFGA internal HTTP traffic is **not TLS**, so do not expose its port outside the host or network. Keycloak is not yet configured with proper HTTPS OIDC issuer/native redirect URIs.
+
+## Actual S3 storage proof
+
+Bucket `hiltech-internal-evidence-staging` was created on RustFS using the locally stored S3 access/secret credentials and AWS Signature V4. A synthetic object at `synthetic/health-probe.txt` completed all checks:
+
+1. Signed S3 PUT: **success**.
+2. Signed S3 GET: **success**, returned bytes exactly matched `HILTECH_STAGING_SYNTHETIC_PROBE_20261122`.
+3. Anonymous GET of same object: **HTTP 403** (not public).
+4. Signed DELETE: **success**.
+5. Signed GET after deletion: **HTTP 404**, confirming cleanup.
+
+Bucket remains for staging; the synthetic object was deleted. This is **not yet** an HTTPS presigned-URL test on Android or Windows. CORS, tenant-scoped evidence access, AV, object retention, backups and restoration require additional validation.
+
+The probe tasks on RustFS are **disabled** (not recurring). Attempts to delete their task definitions returned Coolify API 403 missing delete permissions, so leave them disabled pending owner cleanup. No secret values are stored in task command strings; the S3 commands refer only to existing environment-variable names.
+
+## Source and remaining gates
+
+- [Draft PR #155](https://github.com/omarkhair70-droid/hiltech/pull/155) contains Compose reference and Dockerfile/deployment docs. It must be reconciled with real live topology before a fresh installation.
+- [Draft PR #159](https://github.com/omarkhair70-droid/hiltech/pull/159) implements OpenFGA preshared bearer HTTP requests, fail-closed validation, and loopback transport tests in Spring. The [dedicated security run](https://github.com/omarkhair70-droid/hiltech/actions/runs/45057839739) and [server package proof](https://github.com/omarkhair70-droid/hiltech/actions/runs/45057839567) passed. The changes have **not been merged or shipped into the current immutable Spring API image**, so do not deploy that old candidate with an assumption of authenticated OpenFGA support.
+- Canonical reviewed policy is `docs/13-delivery/first-slice-contract-pack/openfga/first-slice-model.fga`. GitHub CI candidate `.github/workflows/devops-fga-live-model-export.yml` is intended to convert it with official CLI into versioned JSON. Do not invent or substitute a policy model.
+- Before starting Spring API: create dedicated FGA store/model and configure IDs; publish updated authenticated API image; configure Keycloak realm and HTTPS issuer/audience plus Android/Windows native OIDC clients; arrange native-reachable HTTPS S3 presigned URLs, scoped bucket rights and cursor signing keys; run readiness, auth allow/deny, evidence, QR/stock/workflow client E2E and backup/restore. Sensitive business-operation feature flags remain OFF until approval.
+
+**Bottom line:** PostgreSQL, Keycloak, authenticated OpenFGA infrastructure, and internal S3 storage have actually been deployed and partially integration-tested on shared Coolify; **HILTECH is not yet fully deployed or production-ready**. See [HILTECH issue #133](https://github.com/omarkhair70-droid/hiltech/issues/133) for individual execution checkpoints.
