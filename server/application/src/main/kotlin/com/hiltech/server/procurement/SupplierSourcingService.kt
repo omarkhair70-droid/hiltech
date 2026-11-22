@@ -184,9 +184,10 @@ class SupplierSourcingService @Autowired constructor(
                 source.version != current.requirementVersion ||
                 source.state != "READY_FOR_SOURCING" || !source.sourceCurrent
             ) stale()
-            if (sourcing.supplierTypeAndStatus(request.supplierOrganizationId) !=
-                ("SUPPLIER" to "ACTIVE")
-            ) invalid()
+            // A global supplier row cannot bypass organization-specific sourcing.
+            if (!sourcing.isEligibleSupplier(current.organizationId, request.supplierOrganizationId)) {
+                invalid()
+            }
             val revision = sourcing.latestRevision(rfqId, request.supplierOrganizationId)
             if (request.expectedRevisionNumber != revision + 1) stale()
             val now = clock.instant()
@@ -288,6 +289,13 @@ class SupplierSourcingService @Autowired constructor(
                 sourcingRoundExists = sourcing.byRequirementAndVersion(id, source.version) != null,
             )
         }
+    }
+
+    /** Buyer-only scoped directory; no unrelated global supplier enumeration. */
+    fun eligibleSuppliers(actor: UUID, organizationId: UUID): List<SourcingSupplierCandidate> {
+        requireEnabled()
+        requireAuthority(actor, organizationId)
+        return sourcing.eligibleSuppliers(organizationId)
     }
 
     /** All rounds are private to the source's organization and buyer authority. */
