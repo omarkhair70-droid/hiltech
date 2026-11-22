@@ -228,12 +228,20 @@ class CurrentExecutiveSources(
     }
 
     override fun assetExceptions(actor: UUID, organizationId: UUID): ExecutiveSection<ExecutiveAssetException> {
-        val allowed = warehouses.warehouses(actor, organizationId).filter { it.organizationId == organizationId }
+        val allowed = warehouses.warehouses(actor, organizationId)
+            .filter { it.organizationId == organizationId }
+            .sortedWith(compareBy({ it.code }, { it.warehouseId.toString() }))
         val warehouseWindow = allowed.take(8)
         var capped = allowed.size > warehouseWindow.size
         var inaccessibleQueue = false
         val items = mutableListOf<ExecutiveAssetException>()
-        warehouseWindow.forEach { warehouse ->
+        for (warehouse in warehouseWindow) {
+            // Never run additional warehouse queries once the bounded response
+            // is full. An unread warehouse means PARTIAL, never zero.
+            if (items.size >= 30) {
+                capped = true
+                break
+            }
             val queue = try {
                 // AssetService checks the actor's warehouse access again at read time.
                 assetService.queue(actor, warehouse.warehouseId, null)
@@ -242,11 +250,12 @@ class CurrentExecutiveSources(
                 emptyList()
             }
             if (queue.size >= 100) capped = true // Source's own page cap.
-            queue.forEach { asset ->
-                if (items.size == 30) {
+            for (asset in queue) {
+                if (items.size >= 30) {
                     capped = true
-                } else {
-                    items.add(
+                    break
+                }
+                items.add(
                         ExecutiveAssetException(
                             warehouseId = warehouse.warehouseId.toString(),
                             assetId = asset.id.toString(),
@@ -266,7 +275,6 @@ class CurrentExecutiveSources(
                             ),
                         ),
                     )
-                }
             }
         }
         return ExecutiveSection(
