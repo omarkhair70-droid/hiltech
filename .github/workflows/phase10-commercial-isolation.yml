@@ -66,7 +66,8 @@ jobs:
             psql -h 127.0.0.1 -U hiltech -d hiltech \
             -v ON_ERROR_STOP=1 \
             -f /repo/database/phase10/pending_commercial_schema.sql \
-            -f /repo/database/phase10/commercial_schema_assertions.sql
+            -f /repo/database/phase10/commercial_schema_assertions.sql \
+            -f /repo/database/phase10/commercial_negative_contract.sql
       - name: Native KMP desktop and customer quote number contract
         run: |
           ./gradlew :shared:core:desktopTest :shared:core:compileKotlinDesktop \
