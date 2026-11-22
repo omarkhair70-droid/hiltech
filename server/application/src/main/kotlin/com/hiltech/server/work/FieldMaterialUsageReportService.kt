@@ -9,6 +9,7 @@ import com.hiltech.server.platform.IdempotentCommandExecutor
 import com.hiltech.server.platform.IdempotentCommandOutcome
 import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -47,7 +48,7 @@ data class FieldMaterialUsageReportReceipt(
 )
 
 @Service
-class FieldMaterialUsageReportService(
+class FieldMaterialUsageReportService @Autowired constructor(
     private val source: WorkAssignmentSourceAuthorityPort,
     private val authorization: WorkAssignmentAuthorizationPort,
     private val work: WorkPersistencePort,

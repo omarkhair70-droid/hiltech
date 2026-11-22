@@ -1,0 +1,23 @@
+# Build input: single verified Spring Boot JAR + database/migrations copied into
+# an ephemeral CI packaging context. No Java source/Gradle compilation on Coolify.
+# Multi-arch manifest digest verified 2026-11-22 with docker buildx imagetools inspect.
+FROM eclipse-temurin:21-jre-jammy@sha256:a8bff88f760e87e0c8844f8461f807c203fd5e8f78c951c843024647e965eaf5
+
+LABEL org.opencontainers.image.title="HILTECH Internal OS — Server" \
+      org.opencontainers.image.description="Private Spring Boot server; staging package candidate, not a public release"
+
+WORKDIR /opt/hiltech
+
+# The native server loads Flyway migrations from an external directory specified
+# by HILTECH_MIGRATIONS_PATH, not automatically from inside its Boot JAR.
+COPY --chown=10001:10001 app.jar /opt/hiltech/app.jar
+COPY --chown=10001:10001 migrations/ /opt/hiltech/migrations/
+
+ENV HILTECH_MIGRATIONS_PATH=/opt/hiltech/migrations
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70.0 -XX:+ExitOnOutOfMemoryError"
+
+# Numeric unprivileged UID/GID; prevents JVM from running as root.
+USER 10001:10001
+EXPOSE 8080
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["java", "-jar", "/opt/hiltech/app.jar"]
