@@ -104,6 +104,14 @@ class PurchaseOrderIssueService @Autowired constructor(
                     candidate.organizationId, location, clock.instant(),
                 ))
             }
+            "ASSET_MAINTENANCE_OR_REPLACEMENT" -> {
+                val location = sourceVerifier?.assetDestination(
+                    requirement, requirements.latestTransition(requirement.id),
+                ) ?: unavailable()
+                listOfNotNull(purchases.warehouseDeliveryDestination(
+                    candidate.organizationId, location, clock.instant(),
+                ))
+            }
             else -> unavailable()
         }
     }
@@ -185,6 +193,17 @@ class PurchaseOrderIssueService @Autowired constructor(
                 } == true && sourceVerifier?.isCurrent(
                     frozenRequirement, requirements.latestTransition(frozenRequirement.id),
                 ) == true
+                "ASSET_MAINTENANCE_OR_REPLACEMENT" -> frozenRequirement.assetId?.let { assetId ->
+                    purchases.lockAssetAndStockSource(
+                        current.organizationId, assetId,
+                        frozenRequirement.assetIncidentId,
+                        frozenRequirement.assetMaintenanceId,
+                        frozenRequirement.assetDeliveryLocationId ?: unavailable(),
+                        current.stockItemId,
+                    )
+                } == true && sourceVerifier?.isCurrent(
+                    frozenRequirement, requirements.latestTransition(frozenRequirement.id),
+                ) == true
                 else -> false
             }
             if (!sourceLocked) unavailable()
@@ -235,6 +254,15 @@ class PurchaseOrderIssueService @Autowired constructor(
                 }
                 "WAREHOUSE_REPLENISHMENT" -> {
                     val location = sourceVerifier?.warehouseDestination(
+                        need, requirements.latestTransition(need.id),
+                    ) ?: unavailable()
+                    location == request.deliveryStorageLocationId &&
+                        purchases.warehouseDeliveryDestination(
+                            current.organizationId, location, now,
+                        ) != null
+                }
+                "ASSET_MAINTENANCE_OR_REPLACEMENT" -> {
+                    val location = sourceVerifier?.assetDestination(
                         need, requirements.latestTransition(need.id),
                     ) ?: unavailable()
                     location == request.deliveryStorageLocationId &&

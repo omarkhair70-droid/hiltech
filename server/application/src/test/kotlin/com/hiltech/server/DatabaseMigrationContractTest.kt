@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(25, result.migrationsExecuted)
+        assertEquals(26, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -338,6 +338,58 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(typedSourceIndex.next())
                 assertEquals(1, typedSourceIndex.getInt(1))
+
+                // V0059 uses a real company-bound Asset / incident or
+                // maintenance source; no synthetic WorkOrder or opaque JSON.
+                val assetDemandConstraints = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid='procurement_purchase_requirement'::regclass
+                      AND conname IN (
+                        'ck_procurement_requirement_typed_source',
+                        'fk_requirement_asset_company',
+                        'fk_requirement_asset_incident',
+                        'fk_requirement_asset_maintenance',
+                        'fk_requirement_asset_delivery_location'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(assetDemandConstraints.next())
+                assertEquals(5, assetDemandConstraints.getInt(1))
+                val assetDemandGuard = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='procurement_purchase_requirement'::regclass
+                      AND tgname='procurement_asset_source_insert_guard'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(assetDemandGuard.next())
+                assertEquals(1, assetDemandGuard.getInt(1))
+                val assetDemandIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename='procurement_purchase_requirement'
+                      AND indexname='idx_procurement_asset_purchase_need'
+                    """.trimIndent(),
+                )
+                assertTrue(assetDemandIndex.next())
+                assertEquals(1, assetDemandIndex.getInt(1))
+                val assetIssueColumns = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema='public'
+                      AND table_name='procurement_purchase_requirement'
+                      AND column_name IN (
+                        'asset_id', 'asset_source_version',
+                        'asset_incident_id', 'asset_maintenance_id',
+                        'asset_issue_version', 'asset_delivery_location_id',
+                        'asset_delivery_location_version'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(assetIssueColumns.next())
+                assertEquals(7, assetIssueColumns.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not

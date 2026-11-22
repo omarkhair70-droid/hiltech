@@ -21,6 +21,7 @@ class ProcurementDemandSourceVerifier(
     private val warehouse: WarehousePersistencePort,
     private val stock: StockLedgerPersistence,
     private val clock: Clock,
+    private val assetSource: AssetPurchaseSource,
 ) {
     fun isCurrent(
         root: PurchaseRequirementDraftRecord,
@@ -61,9 +62,15 @@ class ProcurementDemandSourceVerifier(
                     location.projectId == null && location.siteId == null &&
                     location.kind.name in setOf("MAIN_WAREHOUSE", "WAREHOUSE")
             }
+            "ASSET_MAINTENANCE_OR_REPLACEMENT" ->
+                assetSource.current(root, last)
             else -> false
         }
     }
+
+    fun assetDestination(root: PurchaseRequirementDraftRecord,
+                         last: PurchaseRequirementTransitionRecord?): UUID? =
+        assetSource.destination(root, last)
 
     /** Source-bound warehouse PO cannot silently be delivered to another project or site. */
     fun warehouseDestination(root: PurchaseRequirementDraftRecord,

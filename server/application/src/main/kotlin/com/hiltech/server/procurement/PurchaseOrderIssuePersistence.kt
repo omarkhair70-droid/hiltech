@@ -324,6 +324,44 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
      * Typed internal Warehouse demand: never forge a WorkOrder in the
      * approval-to-PO transaction. Lock actual company source and stock.
      */
+    /** Lock the real asset/incident/maintenance and stock on issue.
+     * Final source-currentness is checked again under these held row locks. */
+    fun lockAssetAndStockSource(
+        organizationId: UUID, assetId: UUID, incidentId: UUID?,
+        maintenanceId: UUID?, deliveryLocationId: UUID, stockItemId: UUID,
+    ): Boolean {
+        if ((incidentId == null) == (maintenanceId == null)) return false
+        val src = jdbc.query(
+            """
+            SELECT id FROM asset WHERE id=? AND organization_id=?
+            FOR SHARE
+            """.trimIndent(),
+            { rs, _ -> rs.getObject("id", UUID::class.java) },
+            assetId, organizationId,
+        ).isNotEmpty()
+        if (!src) return false
+        val issue = if (incidentId != null) jdbc.query(
+            """
+            SELECT id FROM asset_incident
+            WHERE id=? AND asset_id=? AND organization_id=?
+            FOR SHARE
+            """.trimIndent(),
+            { rs, _ -> rs.getObject("id", UUID::class.java) },
+            incidentId, assetId, organizationId,
+        ).isNotEmpty() else jdbc.query(
+            """
+            SELECT id FROM asset_maintenance_record
+            WHERE id=? AND asset_id=? AND organization_id=?
+            FOR SHARE
+            """.trimIndent(),
+            { rs, _ -> rs.getObject("id", UUID::class.java) },
+            maintenanceId, assetId, organizationId,
+        ).isNotEmpty()
+        return issue && lockWarehouseAndStockSource(
+            organizationId, deliveryLocationId, stockItemId,
+        )
+    }
+
     fun lockWarehouseAndStockSource(
         organizationId: UUID, locationId: UUID, itemId: UUID,
     ): Boolean {

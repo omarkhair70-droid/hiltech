@@ -30,6 +30,13 @@ data class PurchaseRequirementDraftRecord(
     val sourceType: String = "WORK_ORDER",
     val warehouseStorageLocationId: UUID? = null,
     val warehouseSourceVersion: Long? = null,
+    val assetId: UUID? = null,
+    val assetSourceVersion: Long? = null,
+    val assetIncidentId: UUID? = null,
+    val assetMaintenanceId: UUID? = null,
+    val assetIssueVersion: Long? = null,
+    val assetDeliveryLocationId: UUID? = null,
+    val assetDeliveryLocationVersion: Long? = null,
 )
 
 data class PurchaseRequirementRevision(
@@ -70,8 +77,12 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
                 stock_item_id, stock_item_version, requested_quantity, unit_code,
                 justification, lifecycle_state, assessment_code, visible_free_quantity,
                 assessment_at, created_by_user_id, created_at, correlation_id, version,
-                source_type, warehouse_storage_location_id, warehouse_source_version
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+                source_type, warehouse_storage_location_id, warehouse_source_version,
+                asset_id, asset_source_version, asset_incident_id,
+                asset_maintenance_id, asset_issue_version,
+                asset_delivery_location_id, asset_delivery_location_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?, 1,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
             draft.id, draft.operationId, draft.organizationId, draft.workOrderId,
             draft.sourceWorkVersion, draft.stockItemId, draft.stockItemVersion,
@@ -80,6 +91,9 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
             draft.assessedAt.atOffset(ZoneOffset.UTC), draft.requestedBy,
             draft.createdAt.atOffset(ZoneOffset.UTC), draft.correlationId,
             draft.sourceType, draft.warehouseStorageLocationId, draft.warehouseSourceVersion,
+            draft.assetId, draft.assetSourceVersion, draft.assetIncidentId,
+            draft.assetMaintenanceId, draft.assetIssueVersion,
+            draft.assetDeliveryLocationId, draft.assetDeliveryLocationVersion,
         ) == 1)
     }
 
@@ -181,6 +195,14 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
             { row, _ -> row.draft() }, id,
         ).singleOrNull()
 
+    fun forAsset(assetId: UUID): List<PurchaseRequirementDraftRecord> = jdbc.query(
+        """
+        SELECT * FROM procurement_purchase_requirement
+        WHERE source_type='ASSET_MAINTENANCE_OR_REPLACEMENT' AND asset_id=?
+        ORDER BY created_at DESC, id DESC LIMIT 100
+        """.trimIndent(), { row, _ -> row.draft() }, assetId,
+    )
+
     fun forWarehouseLocation(
         organizationId: UUID,
         storageLocationId: UUID,
@@ -263,5 +285,12 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
         sourceType = getString("source_type"),
         warehouseStorageLocationId = getObject("warehouse_storage_location_id", UUID::class.java),
         warehouseSourceVersion = getLong("warehouse_source_version").takeUnless { wasNull() },
+        assetId = getObject("asset_id", UUID::class.java),
+        assetSourceVersion = getLong("asset_source_version").takeUnless { wasNull() },
+        assetIncidentId = getObject("asset_incident_id", UUID::class.java),
+        assetMaintenanceId = getObject("asset_maintenance_id", UUID::class.java),
+        assetIssueVersion = getLong("asset_issue_version").takeUnless { wasNull() },
+        assetDeliveryLocationId = getObject("asset_delivery_location_id", UUID::class.java),
+        assetDeliveryLocationVersion = getLong("asset_delivery_location_version").takeUnless { wasNull() },
     )
 }

@@ -16,6 +16,7 @@ import com.hiltech.shared.core.WarehouseImportReviewDraft
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
 import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
 import com.hiltech.shared.core.procurement.WarehouseReplenishmentSection
+import com.hiltech.shared.core.procurement.AssetPurchaseNeedSection
 import com.hiltech.shared.core.procurement.SupplierSourcingBuyerSection
 import com.hiltech.shared.core.procurement.PurchaseOrderIssuerSection
 import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceSection
@@ -2931,6 +2932,27 @@ fun main() {
                                         currentInstant = { java.time.Instant.now().toString() },
                                     )
                                 }
+                            }
+                        }
+                    }
+                    if (System.getenv("HILTECH_ASSET_PURCHASE_NEEDS_ENABLED")
+                            ?.equals("true", ignoreCase = true) == true
+                    ) {
+                        val signed = shellState.value as? HiltechShellState.SignedIn
+                        val identity = signed?.identity
+                        val organization = identity?.organizations?.firstOrNull { it.primary }
+                            ?: identity?.organizations?.firstOrNull()
+                        if (identity != null && organization != null) {
+                            androidx.compose.runtime.key(
+                                identity.identityId, organization.organizationId, "asset-parts-needs",
+                            ) {
+                                AssetPurchaseNeedSection(
+                                    api = runtime.assetPurchaseNeedApi,
+                                    warehouseApi = runtime.physicalWarehouseApi,
+                                    organizationId = organization.organizationId,
+                                    installationId = runtime.physicalWarehouseInstallationId,
+                                    newOperationId = { java.util.UUID.randomUUID().toString() },
+                                )
                             }
                         }
                     }

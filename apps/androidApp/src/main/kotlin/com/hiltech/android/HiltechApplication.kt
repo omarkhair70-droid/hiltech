@@ -22,6 +22,7 @@ import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.procurement.PurchaseRequirementApiClient
 import com.hiltech.shared.core.procurement.WarehouseReplenishmentApiClient
+import com.hiltech.shared.core.procurement.AssetPurchaseNeedApiClient
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeApiClient
 import com.hiltech.shared.core.procurement.PoReceivingDeliveryNoteUploader
 import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceApiClient
@@ -100,6 +101,7 @@ class HiltechApplication : Application() {
     val warehouseApi by lazy { WarehouseApiClient(productApi) }
     val procurementApi by lazy { PurchaseRequirementApiClient(productApi) }
     val warehouseReplenishmentApi by lazy { WarehouseReplenishmentApiClient(productApi) }
+    val assetPurchaseNeedApi by lazy { AssetPurchaseNeedApiClient(productApi) }
     val poWarehouseIntakeApi by lazy { PoWarehouseIntakeApiClient(productApi) }
     val supplierInvoiceFinanceApi by lazy { SupplierInvoiceFinanceApiClient(productApi) }
     val procurementWorkApi by lazy { WorkApiClient(productApi) }
