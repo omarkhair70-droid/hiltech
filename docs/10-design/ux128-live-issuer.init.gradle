@@ -1,0 +1,13 @@
+// QA-only: render the SAME source-connected issuer screen component using
+// explicitly synthetic queue/receipt data and a non-networked action slot.
+gradle.projectsEvaluated {
+    def desktop = gradle.rootProject.findProject(':apps:desktopApp')
+    if (desktop == null) return
+    desktop.tasks.register('renderUx128LiveIssuer', org.gradle.api.tasks.JavaExec) {
+        group = 'verification'
+        description = 'Render native issuer work area across widths, contrast, text scale and state'
+        dependsOn(desktop.tasks.named('testClasses'))
+        classpath = desktop.sourceSets.test.runtimeClasspath
+        mainClass.set('com.hiltech.desktop.evidence.UX128LiveIssuerVisualEvidenceKt')
+    }
+}
