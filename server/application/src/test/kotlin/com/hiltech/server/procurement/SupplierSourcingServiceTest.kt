@@ -46,6 +46,7 @@ class SupplierSourcingServiceTest {
     private val stock = Mockito.mock(StockLedgerPersistence::class.java)
     private val auth = Mockito.mock(SupplierSourcingAuthorizationPort::class.java)
     private val reviewerAuth = Mockito.mock(SupplierQuoteTechnicalReviewerAuthorizationPort::class.java)
+    private val quoteDocumentVerification = Mockito.mock(SupplierQuoteDocumentVerificationPort::class.java)
     private var capturedReview: SupplierQuoteTechnicalAssessmentRecord? = null
     private val audit = Mockito.mock(AuditEventWriter::class.java)
     private val order = Mockito.mock(WorkOrderSnapshot::class.java)
@@ -74,7 +75,7 @@ class SupplierSourcingServiceTest {
     }
     private val context = ProcurementDraftContext(op, actor, "test")
     private fun service(enabled: Boolean = true) = SupplierSourcingService(
-        sourcing, requirements, work, stock, auth, reviewerAuth, commands, audit,
+        sourcing, requirements, work, stock, auth, reviewerAuth, quoteDocumentVerification, commands, audit,
         Clock.fixed(at, ZoneOffset.UTC), enabled,
     )
 
@@ -111,6 +112,9 @@ class SupplierSourcingServiceTest {
         Mockito.`when`(sourcing.supplierTypeAndStatus(supplierId))
             .thenReturn("SUPPLIER" to "ACTIVE")
         Mockito.`when`(sourcing.isEligibleSupplier(org, supplierId)).thenReturn(true)
+        Mockito.`when`(quoteDocumentVerification.isVerified(
+            actor, org, rfqId, supplierId, "internal:quote-evidence:421", "f".repeat(64),
+        )).thenReturn(true)
         val sample = SupplierQuoteRecord(
             SupplierQuoteEvidence(
                 UUID.randomUUID(), rfqId, supplierId, "Q-01", 1, "EGP",
@@ -200,6 +204,20 @@ class SupplierSourcingServiceTest {
         assertEquals("f".repeat(64), createdQuote?.evidence?.sourceSha256)
         assertEquals("NOT_ASSESSED", createdQuote?.evidence?.technicalCompliance)
         assertEquals(1, createdQuote?.evidence?.revisionNumber)
+    }
+
+    @Test fun arbitraryUnverifiedDocumentReferenceCannotBecomeQuotationEvidence() {
+        allow()
+        service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
+        val quote = quoteRequest().copy(sourceEvidenceRef = "internal:fake:unverified")
+        val exception = assertThrows<ProductApiException> {
+            service().recordQuote(
+                ProcurementDraftContext(quote.operationId, actor, "unverified"),
+                rfqId, quote,
+            )
+        }
+        assertEquals("SOURCING_UNAVAILABLE", exception.code)
+        assertEquals(null, createdQuote)
     }
 
     @Test fun revisionSequenceAndSupplierStatusCannotBeFaked() {
