@@ -63,6 +63,17 @@ class SupplierSourcingApiClient(
         },
     )
 
+    suspend fun createQuoteDocumentSlot(
+        rfqId: String,
+        request: CreateSupplierQuoteDocumentSlotDto,
+        installationId: String,
+    ): SupplierQuoteDocumentSlotReceiptDto = post(
+        "/v1/sourcing/rfqs/" + uuid(rfqId) + "/document-slots",
+        request.operationId,
+        json.encodeToString(CreateSupplierQuoteDocumentSlotDto.serializer(), request),
+        installationId, SupplierQuoteDocumentSlotReceiptDto.serializer(),
+    )
+
     suspend fun recordQuote(
         rfqId: String,
         request: RecordSupplierQuoteDto,
