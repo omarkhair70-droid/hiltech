@@ -33,6 +33,12 @@ CREATE TABLE payroll_run_version (
 );
 CREATE INDEX idx_payroll_run_period ON payroll_run_version(payroll_period_id, generation DESC);
 
+-- The employee ID in a run line must be the employee of its snapshot;
+-- prohibit cross-employee substitution at the database layer, not only service.
+ALTER TABLE payroll_employee_input_snapshot
+    ADD CONSTRAINT uq_payroll_snapshot_period_employee_fkey
+    UNIQUE (id, payroll_period_id, employee_id);
+
 CREATE TABLE payroll_run_employee_line (
     id uuid PRIMARY KEY,
     run_version_id uuid NOT NULL,
@@ -49,8 +55,10 @@ CREATE TABLE payroll_run_employee_line (
     UNIQUE (run_version_id, employee_snapshot_id),
     CONSTRAINT fk_payroll_line_run_period FOREIGN KEY (run_version_id, payroll_period_id)
         REFERENCES payroll_run_version(id, payroll_period_id) ON DELETE RESTRICT,
-    CONSTRAINT fk_payroll_line_snapshot_period FOREIGN KEY (employee_snapshot_id, payroll_period_id)
-        REFERENCES payroll_employee_input_snapshot(id, payroll_period_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_payroll_line_snapshot_period_employee
+        FOREIGN KEY (employee_snapshot_id, payroll_period_id, employee_id)
+        REFERENCES payroll_employee_input_snapshot(id, payroll_period_id, employee_id)
+        ON DELETE RESTRICT,
     CHECK (net = gross + reimbursements - deductions)
 );
 CREATE INDEX idx_payroll_run_employee_lookup

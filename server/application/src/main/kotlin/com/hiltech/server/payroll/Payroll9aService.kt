@@ -446,17 +446,23 @@ class Payroll9aService(
             """
             SELECT s.*, e.version AS current_employee_version,
                    em.version AS current_employment_version,
-                   wa.version AS current_assignment_version,
-                   (
-                       SELECT a.id FROM workforce_assignment a
-                       WHERE a.employee_id = s.employee_id AND a.state = 'ACTIVE'
-                         AND a.organization_id = s.organization_id
-                       ORDER BY a.effective_from DESC LIMIT 1
-                   ) AS current_assignment_id
+                   current_wa.version AS current_assignment_version,
+                   current_wa.id AS current_assignment_id
             FROM payroll_employee_input_snapshot s
             JOIN employee e ON e.id = s.employee_id AND e.organization_id = s.organization_id
             LEFT JOIN employment em ON em.id = s.employment_id
-            LEFT JOIN workforce_assignment wa ON wa.id = s.workforce_assignment_id
+            LEFT JOIN LATERAL (
+                SELECT a.id, a.version
+                FROM workforce_assignment a
+                JOIN payroll_period pp ON pp.id = s.payroll_period_id
+                WHERE a.employee_id = s.employee_id
+                  AND a.organization_id = s.organization_id
+                  AND a.effective_from < ((pp.cutoff_date + 1)::timestamp AT TIME ZONE 'UTC')
+                  AND (a.effective_to IS NULL OR
+                       a.effective_to >= (pp.start_date::timestamp AT TIME ZONE 'UTC'))
+                ORDER BY a.effective_from DESC, a.id DESC
+                LIMIT 1
+            ) current_wa ON true
             WHERE s.payroll_period_id = ?
             ORDER BY s.employee_code, s.employee_id
             """.trimIndent(),
