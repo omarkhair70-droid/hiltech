@@ -278,7 +278,7 @@ private fun ExecutiveSectionHeader(
         Text(explanation, style = MaterialTheme.typography.bodySmall)
         Text(
             "المصدر " + section.source + " · " + when (section.status) {
-                "CURRENT" -> "قراءة حالية من المصدر"
+                "CURRENT" -> "استجاب المصدر لنافذة القراءة؛ حداثة كل سجل موضحة بوقته"
                 "PARTIAL" -> "قراءة جزئية — لا تفسرها كإجمالي"
                 else -> "المصدر غير متاح — لا توجد قيمة صفرية مفترضة"
             },
@@ -296,7 +296,10 @@ private fun ExecutiveSectionHeader(
             )
         }
         if (section.partial) {
-            Text("هناك عناصر خارج نافذة القراءة الحالية.", style = MaterialTheme.typography.labelSmall)
+            Text(
+                "النافذة غير مكتملة: قد توجد عناصر أخرى أو تعذر قراءة جزء من المصدر.",
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }
