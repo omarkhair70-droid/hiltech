@@ -206,6 +206,7 @@ class Payroll9b9cDomainTest {
             offboardingCaseId = UUID.randomUUID(), offboardingCaseVersion = 3,
             lastWorkingDate = java.time.LocalDate.parse("2026-11-15"),
             approvedFinalPayScopeRef = "synthetic-approved-final-pay-scope",
+            approvedFinalPayScopeVersion = 1,
             approval = PayrollInputApproval.APPROVED,
         )
         val accepted = Payroll9bCalculator.calculate(
@@ -219,6 +220,12 @@ class Payroll9b9cDomainTest {
             separation = proof.copy(offboardingCaseVersion = 4),
         )
         assertNotEquals(accepted.sourceFingerprint, changed.sourceFingerprint)
+        val revisedScope = Payroll9bCalculator.calculate(
+            org, periodId, employee, policy, listOf(earning), verifiedCoverage,
+            employeeState = "OFFBOARDING",
+            separation = proof.copy(approvedFinalPayScopeVersion = 2),
+        )
+        assertNotEquals(accepted.sourceFingerprint, revisedScope.sourceFingerprint)
         assertThrows<ProductApiException> {
             Payroll9bCalculator.calculate(
                 org, periodId, employee, policy, listOf(earning), verifiedCoverage,
