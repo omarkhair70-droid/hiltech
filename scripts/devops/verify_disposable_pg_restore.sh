@@ -68,9 +68,21 @@ pgtool pg_dump --schema-only --no-owner --no-acl \
   -h 127.0.0.1 -U hiltech -d hiltech -f /artifacts/source-schema.sql
 pgtool pg_dump --schema-only --no-owner --no-acl \
   -h 127.0.0.1 -U hiltech -d hiltech_disposable_restore -f /artifacts/restore-schema.sql
+# A restored DDL expression may be rewritten canonically on parse in PostgreSQL 18.
+# Compare the custom archive restore to an *independently re-parsed* source
+# schema: first load the source's plain schema dump into a fresh throwaway DB.
+# This avoids false text mismatches for semantically equal CHECK expressions
+# while still comparing every DDL line and separately validating restored rows.
+test "$(query postgres "SELECT COUNT(*) FROM pg_database WHERE datname='hiltech_disposable_schema_reference'")" = 0 || {
+  echo "BLOCKED: schema reference database already exists" >&2
+  exit 1
+}
+pgtool createdb -h 127.0.0.1 -U hiltech hiltech_disposable_schema_reference
+pgtool psql -X -q -v ON_ERROR_STOP=1 -h 127.0.0.1 -U hiltech -d hiltech_disposable_schema_reference -f /artifacts/source-schema.sql
+pgtool pg_dump --schema-only --no-owner --no-acl -h 127.0.0.1 -U hiltech -d hiltech_disposable_schema_reference -f /artifacts/reference-schema.sql
 # PostgreSQL 18 may generate different random psql \\restrict transport tokens.
 # Compare every schema DDL line, excluding ONLY those volatile tokens.
-if ! python3 - "$archive_dir/source-schema.sql" "$archive_dir/restore-schema.sql" <<'PY'
+if ! python3 - "$archive_dir/reference-schema.sql" "$archive_dir/restore-schema.sql" <<'PY'
 from pathlib import Path
 import sys
 
@@ -93,7 +105,7 @@ if left != right:
 sys.exit(0)
 PY
 then
-  echo "BLOCKED: restored schema differs from disposable source" >&2
+  echo "BLOCKED: archive restore differs from independently re-parsed source DDL" >&2
   exit 1
 fi
 
