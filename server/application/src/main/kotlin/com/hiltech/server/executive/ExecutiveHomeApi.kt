@@ -291,22 +291,26 @@ class ExecutiveHomeService(
     fun home(actor: UUID, organizationId: UUID, correlationId: String): ExecutiveHomeResponse {
         // Reject a foreign or revoked org BEFORE evaluating any actor-wide Inbox
         // data; a guessed organization ID cannot reveal another membership.
-        if (!access.isCurrentMember(actor, organizationId)) {
-            throw ProductApiException(
-                code = "EXECUTIVE_HOME_NOT_FOUND",
-                message = "The executive home is unavailable.",
-                status = HttpStatus.NOT_FOUND,
-            )
-        }
+        requireCurrentOrganizationAccess(actor, organizationId)
+        val decisions = safely("INBOX_WORK_QUEUE") { sources.needsYou(actor, correlationId) }
+        val projectHealth = safely("PROJECTS_AND_PROJECT_HEALTH") { sources.projects(actor, organizationId) }
+        val assetQueue = safely("ASSET_SERVICE_QUEUE") { sources.assetExceptions(actor, organizationId) }
+
+        // A membership may be revoked while the source queries run. Never
+        // deliver a successful cross-domain snapshot if that has happened.
+        // The source modules independently reauthorize each individual read.
+        requireCurrentOrganizationAccess(actor, organizationId)
+
         return ExecutiveHomeResponse(
             viewerIdentityId = actor.toString(),
             organizationId = organizationId.toString(),
+            // Composition timestamp belongs AFTER its source reads.
             asOf = clock.instant().toString(),
             correlationId = correlationId,
             needsYouScope = "CURRENT_ACTOR_ACROSS_AUTHORIZED_MEMBERSHIPS",
-            needsYou = safely("INBOX_WORK_QUEUE") { sources.needsYou(actor, correlationId) },
-            projects = safely("PROJECTS_AND_PROJECT_HEALTH") { sources.projects(actor, organizationId) },
-            assetExceptions = safely("ASSET_SERVICE_QUEUE") { sources.assetExceptions(actor, organizationId) },
+            needsYou = decisions,
+            projects = projectHealth,
+            assetExceptions = assetQueue,
             pendingDomains = listOf(
                 ExecutivePendingDomain("FINANCE"),
                 ExecutivePendingDomain("PAYROLL"),
@@ -315,6 +319,16 @@ class ExecutiveHomeService(
                 ExecutivePendingDomain("SECURITY_HARDWARE"),
             ),
         )
+    }
+
+    private fun requireCurrentOrganizationAccess(actor: UUID, organizationId: UUID) {
+        if (!access.isCurrentMember(actor, organizationId)) {
+            throw ProductApiException(
+                code = "EXECUTIVE_HOME_NOT_FOUND",
+                message = "The executive home is unavailable.",
+                status = HttpStatus.NOT_FOUND,
+            )
+        }
     }
 
     private inline fun <T> safely(source: String, block: () -> ExecutiveSection<T>): ExecutiveSection<T> =
