@@ -15,7 +15,7 @@ All create operations are actor-bound (no client employeeId), with real active U
 
 ## Integrations
 
-Server `hiltech.finance.employee-requests.enabled=false` by default. No new or assumed finance approvers. Employee GET lists only currently authenticated employee's own drafts. Native Compose for employee is an **unmounted** integration-owned Windows/Android module; private online-only API, no offline finance queue. Finance admin queue, reviewer actions, Evidence-based receipt acceptance and any approvals are intentionally withheld for policy validation.
+Server `hiltech.finance.employee-requests.enabled=false` by default. No new or assumed finance approvers. Employee GET lists only currently authenticated employee's own drafts. Native Compose for employee is an **unmounted** integration-owned Windows/Android module; private online-only API, no offline finance queue. An independent **read-only** Finance employee draft review queue is additionally gated by `hiltech.finance.employee-review.enabled=false` and an explicitly bound `hiltech.finance.employee-review.authority-key`. It exposes no approval, reimbursement, funding, salary deduction or settlement commands and has separate native Windows/Android read-only Compose module. Finance admin queue, reviewer actions, Evidence-based receipt acceptance and any approvals are intentionally withheld for policy validation.
 
 Future contracts — DO NOT fake:
 - Expense receipt Evidence bound to exact expense/version and restricted classification, validity/duplicate review, company expense category and project cost source, then Finance reimbursement payable.

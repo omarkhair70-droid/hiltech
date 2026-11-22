@@ -53,6 +53,7 @@ jobs:
           ./gradlew :server:application:test \
             --tests com.hiltech.server.finance.FinanceEmployeeDraftMigrationContractTest \
             --tests com.hiltech.server.finance.FinanceEmployeeDraftServiceTest \
+            --tests com.hiltech.server.finance.FinanceEmployeeReviewServiceTest \
             --tests com.hiltech.server.finance.FinancePayableCandidateServiceTest \
             --tests com.hiltech.server.finance.FinancePayableMigrationContractTest \
             --no-daemon --console=plain
