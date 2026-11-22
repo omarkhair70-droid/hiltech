@@ -64,6 +64,24 @@ data class SupplierQuoteReceiptDto(
     val replayed: Boolean,
 )
 
+/** A separate technical-review right is enforced on the server. */
+@Serializable
+data class RecordSupplierQuoteTechnicalAssessmentDto(
+    val operationId: String,
+    val expectedReviewRevision: Int,
+    val decision: String,
+    val justification: String,
+)
+
+@Serializable
+data class SupplierQuoteTechnicalAssessmentReceiptDto(
+    val id: String,
+    val quoteEvidenceId: String,
+    val reviewRevision: Int,
+    val decision: String,
+    val replayed: Boolean,
+)
+
 @Serializable
 data class SupplierQuoteComparisonRowDto(
     val quoteId: String,

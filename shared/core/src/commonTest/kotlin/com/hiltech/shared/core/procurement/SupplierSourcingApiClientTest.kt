@@ -79,6 +79,32 @@ class SupplierSourcingApiClientTest {
         assertFalse(result.replayed)
     }
 
+    @Test fun technicalAssessmentUsesSeparateTypedEndpointAndIdempotency() = runBlocking {
+        val quoteId = "66666666-6666-6666-6666-666666666666"
+        val request = RecordSupplierQuoteTechnicalAssessmentDto(
+            operationId = operation,
+            expectedReviewRevision = 1,
+            decision = "NEEDS_CLARIFICATION",
+            justification = "Missing fiber performance documentation",
+        )
+        val http = HttpClient(MockEngine { call ->
+            assertEquals("POST", call.method.value)
+            assertEquals("/v1/sourcing/quotes/$quoteId/technical-assessments", call.url.encodedPath)
+            assertEquals(operation, call.headers["Idempotency-Key"])
+            assertEquals("Bearer restricted-buyer-token", call.headers[HttpHeaders.Authorization])
+            val payload = (call.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            assertEquals(request,
+                Json.decodeFromString<RecordSupplierQuoteTechnicalAssessmentDto>(payload))
+            respond("""{"id":"$operation","quoteEvidenceId":"$quoteId",
+                "reviewRevision":1,"decision":"NEEDS_CLARIFICATION","replayed":false}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).recordTechnicalAssessment(quoteId, request, installation)
+        assertEquals(quoteId, result.quoteEvidenceId)
+        assertEquals("NEEDS_CLARIFICATION", result.decision)
+        assertFalse(result.replayed)
+    }
+
     @Test fun confidentialComparisonParsesHumanWarningsWithoutChoosingAVendor() = runBlocking {
         val http = HttpClient(MockEngine { call ->
             assertEquals("GET", call.method.value)

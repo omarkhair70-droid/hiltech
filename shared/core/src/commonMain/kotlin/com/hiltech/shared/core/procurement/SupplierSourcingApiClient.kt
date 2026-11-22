@@ -61,6 +61,17 @@ class SupplierSourcingApiClient(
         installationId, SupplierQuoteReceiptDto.serializer(),
     )
 
+    suspend fun recordTechnicalAssessment(
+        quoteEvidenceId: String,
+        request: RecordSupplierQuoteTechnicalAssessmentDto,
+        installationId: String,
+    ): SupplierQuoteTechnicalAssessmentReceiptDto = post(
+        "/v1/sourcing/quotes/" + uuid(quoteEvidenceId) + "/technical-assessments",
+        request.operationId,
+        json.encodeToString(RecordSupplierQuoteTechnicalAssessmentDto.serializer(), request),
+        installationId, SupplierQuoteTechnicalAssessmentReceiptDto.serializer(),
+    )
+
     suspend fun comparison(
         rfqId: String,
         installationId: String,
