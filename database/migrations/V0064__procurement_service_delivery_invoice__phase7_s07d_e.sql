@@ -259,7 +259,10 @@ BEGIN
       AND EXISTS(
         SELECT 1 FROM procurement_service_acceptance ac
         WHERE ac.service_order_id=ord.id AND ac.organization_id=NEW.organization_id
-          AND ac.outcome='ACCEPTED' AND ac.evidence_id=m.accepted_evidence_id)
+          AND ac.outcome='ACCEPTED' AND ac.evidence_id=m.accepted_evidence_id
+          AND ac.id=(SELECT latest.id FROM procurement_service_acceptance latest
+            WHERE latest.service_order_id=ord.id
+            ORDER BY latest.reviewed_at DESC,latest.id DESC LIMIT 1))
   ) THEN
     RAISE EXCEPTION 'Finance handoff requires latest genuinely matched service proof'
       USING ERRCODE='23514';
