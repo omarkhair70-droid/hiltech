@@ -1,0 +1,47 @@
+﻿{
+    "study":  "HILTECH UX128 Phase7 full-screen source-typed QA",
+    "rendered_source_commit":  "39ba5772a70f852c683e07cdf3946625cd39fdc8",
+    "renderer":  "JetBrains Compose ImageComposeScene on Windows",
+    "synthetic":  true,
+    "backend_authority_verified":  false,
+    "physical_android_test":  false,
+    "production_installed":  false,
+    "screenshot_count":  5,
+    "files":  [
+                  {
+                      "name":  "01-buyer-decision-workbench.png",
+                      "width":  1440,
+                      "height":  940,
+                      "bytes":  109946,
+                      "sha256":  "80422ff8a31924e0021d6da7ec734e09c5e898adcafb3f6f5be7a42cc0a05636"
+                  },
+                  {
+                      "name":  "02-buyer-quote-ledger.png",
+                      "width":  1440,
+                      "height":  940,
+                      "bytes":  86911,
+                      "sha256":  "1b3ca16eb6f6d44cfb00182da5299ceeb270aa3df0e00446f53a4df78f51fd08"
+                  },
+                  {
+                      "name":  "03-buyer-stale-source.png",
+                      "width":  1440,
+                      "height":  940,
+                      "bytes":  113452,
+                      "sha256":  "c75aa013447f09a2759d85ce6fcac8351045f40a324746c485c03eabf6dc2cbc"
+                  },
+                  {
+                      "name":  "04-field-requirement-stale.png",
+                      "width":  430,
+                      "height":  960,
+                      "bytes":  32284,
+                      "sha256":  "e6850139e800b96af94d66fef302b11e7abd2c7ca9ea75b2dd72fe7ca7f832cb"
+                  },
+                  {
+                      "name":  "05-field-requirement-current.png",
+                      "width":  430,
+                      "height":  960,
+                      "bytes":  31659,
+                      "sha256":  "f232d7654d2c28bdea5fb21311c476f3cb4e3af62021c33f8ddb8ba5ea3ccc02"
+                  }
+              ]
+}

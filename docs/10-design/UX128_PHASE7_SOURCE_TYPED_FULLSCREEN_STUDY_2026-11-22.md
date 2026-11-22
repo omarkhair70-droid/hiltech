@@ -55,3 +55,27 @@ Captured files live only on authorized Windows QA storage under `apps/desktopApp
 - Validate field view on physical Android, long labels, RTL, TalkBack, System Back, 200% text and offline/role loss.
 - Integrate only a narrow, reviewed component/adaptor after Phase7 source bindings and Engineering agree; don't wholesale merge an old stacked research prototype.
 - Continue Chat02 research for Warehouse, Field, PM, Finance and Phase13 executive Home, preserving original whole-product design polish gate after Phase13.
+
+## Pass 03 / Visual audit and source-typed QA — tested checkpoint
+
+**Local tested code SHA:** `39ba5772a70f852c683e07cdf3946625cd39fdc8`.
+
+The first native Compose render completed with `BUILD SUCCESSFUL` and 5 synthetic screenshots. Visual inspection showed:
+1. Comparison-first was merely a smaller stack of cards, not a different interaction model.
+2. The field screen's stock panel was narrow rather than matching phone width.
+3. The field UI exposed unlocalized raw backend enums (`SUBMITTED`, `WAREHOUSE_REVIEW_REQUIRED`) and inert gray action buttons, despite the action being neither wired nor permitted.
+4. The buyer inspector was close to clipping at 940px, and a source-changed RFQ still called its quotes current.
+5. An offer could be technically compliant yet have outstanding delivery issues. Treating it as technically rejected would be inaccurate.
+
+Actual implemented correction:
+- Comparison-first now renders `LedgerQuoteRow` compact evidence rows and a source strip, while Decision-first retains source-oriented cards/rail.
+- The field view extends to full viewport width with `Panel(fillMaxWidth)`; uses explicit Arabic status/assessment copy, LTR isolation for quantity + unit, and does not display unwired buttons.
+- Inspector width/flow and source context are distinguished; stale buyer comparison is explicitly labeled **HISTORICAL QUOTES — SOURCE CHANGED**.
+- Technical compliance and source issues are independently reported; an unfamiliar technical enum is not silently shown as compliant.
+- Added common KMP tests covering fail-closed unknown statuses, hidden stock, currency comparability, action hints, bilingual source data and bidi isolation.
+
+**Verification:** `Gradle :shared:core:desktopTest --tests 'com.hiltech.shared.core.ux.procurement.*' :apps:desktopApp:renderUx128ProcurementFullscreen` passed with **BUILD SUCCESSFUL in 3m 19s**, process exit code 0. Three test suites: `HuxProcurementExperienceTest` 4/4, `HuxProcurementCopyTest` 3/3, `HuxQuoteCopyTest` 1/1 — **8/8 PASS, 0 failures/errors/skipped**. All five images 5/5 rendered, same synthetic fixture structure and exact source-typed DTOs; local capture manifest script validated dimensions, byte thresholds and SHA256. PNGs plus manifest under `docs/10-design/evidence/ux128-p7-fullscreen/`. Synthetic content clearly marked, none from live operator or company records.
+
+**Critique, still open:** This is **not** final product identity; high-contrast/pressed/keyboard focus, Android emulator and physical native device, 200% text scaling, real HILTECH users, large quote lists, supplier document security, organization change and source revocation all remain to be exercised. Buyer comparison's right inspector might require adaptive collapse for narrower Windows, which must be tested, not claimed. Final typography, illustration/icon family, system palette and motion are **not frozen**. There is no integration with original `HiltechShell`, no authoritative company approval, and no production activation.
+
+**Coordination:** Stack this UX-only Draft PR on the current Phase7 S03 research source, and do **not** merge automatically; source S03 and S04/S05 may evolve. Once reviewed, port narrow approved UX into latest Engineering source with current server authority and exact-head validation. Original Chat02 remains parallel until whole-system visual polish after Phase13.
