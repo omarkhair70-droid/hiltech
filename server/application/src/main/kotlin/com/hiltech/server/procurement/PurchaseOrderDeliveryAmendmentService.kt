@@ -103,6 +103,7 @@ class PurchaseOrderDeliveryAmendmentService @Autowired constructor(
     private val enabled: Boolean = false,
     @Value("\${hiltech.procurement.po.delivery-amendment-policy-key:}")
     private val policyKey: String = "",
+    private val poReceiving: ProcurementPoReceivingSourcePort = DenyPoReceivingSource,
 ) {
     fun destinations(
         actor: UUID,
@@ -171,6 +172,7 @@ class PurchaseOrderDeliveryAmendmentService @Autowired constructor(
         )) {
             if (!purchases.lockOrder(orderId, order.organizationId)) unavailable()
             issuer.requireIssuerForLifecycle(ctx.actor, order.organizationId)
+            if (poReceiving.hasAnyLinkedReceipt(orderId)) stale()
             val state = purchases.effectiveState(orderId) ?: unavailable()
             if (state.order != order || state.effectiveState != "ISSUED" ||
                 state.order.supplierDispatchState != "NOT_SENT" ||
@@ -283,6 +285,7 @@ class PurchaseOrderDeliveryAmendmentService @Autowired constructor(
             if (!purchases.lockOrder(proposal.purchaseOrderId, proposal.organizationId))
                 unavailable()
             issuer.requireIssuerForLifecycle(ctx.actor, proposal.organizationId)
+            if (poReceiving.hasAnyLinkedReceipt(proposal.purchaseOrderId)) stale()
             if (!purchases.lockDeliveryLocation(
                     proposal.organizationId, proposal.newDestinationId,
                 )
