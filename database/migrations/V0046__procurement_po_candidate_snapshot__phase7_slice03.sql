@@ -21,7 +21,7 @@ CREATE TABLE procurement_po_candidate (
     currency char(3) NOT NULL CHECK (currency ~ '^[A-Z]{3}$'),
     unit_price numeric(18,6) NOT NULL CHECK (unit_price >= 0),
     tax_amount numeric(24,6) NOT NULL CHECK (tax_amount >= 0),
-    total_amount numeric(24,6) NOT NULL CHECK (total_amount = quantity * unit_price + tax_amount),
+    total_amount numeric(24,6) NOT NULL CHECK (total_amount = ROUND(quantity * unit_price + tax_amount, 6)),
     quote_evidence_sha256 char(64) NOT NULL CHECK (quote_evidence_sha256 ~ '^[0-9a-f]{64}$'),
     rationale varchar(1000) NOT NULL CHECK (length(btrim(rationale)) BETWEEN 12 AND 1000),
     selected_by_user_id uuid NOT NULL REFERENCES user_identity(id) ON DELETE RESTRICT,
