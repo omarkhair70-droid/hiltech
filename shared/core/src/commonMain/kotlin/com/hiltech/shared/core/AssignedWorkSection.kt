@@ -186,6 +186,22 @@ fun AssignedWorkSection(
                 var restoreOffset by remember(focusScopeKey) { mutableStateOf<Int?>(null) }
                 val focusedId = focusedWorkOrderId
                     ?.takeIf { id -> state.today.any { it.workOrderId == id } }
+                // Revocation or reassignment must consume local focus, not only
+                // hide the current content. If that same ID later returns to
+                // Today, the user must explicitly select it again.
+                val admittedTodayIds = state.today.map { it.workOrderId }
+                LaunchedEffect(focusScopeKey, focusedWorkOrderId, admittedTodayIds) {
+                    val requested = focusedWorkOrderId
+                    if (requested != null && requested !in admittedTodayIds) {
+                        focusedWorkOrderId = null
+                        returnWorkOrderId = null
+                        selectedCardViewportY = null
+                        restoreOffset = null
+                        savedTodayOffset = 0
+                        cardViewportY.clear()
+                        focusHostScroll?.scrollTo(0)
+                    }
+                }
                 // Keep one scroll owner: the actual Shell's scroll, supplied
                 // by the caller only when/if this research candidate is wired.
                 LaunchedEffect(focusScopeKey) {
