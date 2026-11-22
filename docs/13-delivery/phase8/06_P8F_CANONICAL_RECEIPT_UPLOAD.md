@@ -35,3 +35,17 @@ PR #174 P7 S07 has V0061 colliding with Finance8A #164 provisional V0061, Financ
 
 ## Finance privilege separation
 `FINALIZE` for Finance receipts is accepted only for the originating current employee via `canReserve` authorization. Finance reviewers with current approval-authority binding can `VIEW`/`DOWNLOAD` evidence but cannot finish another employee's upload. No expense approval or transfer is implied.
+
+## Native file-selection implementation and proof (follow-on)
+- Android: `apps/androidApp/src/main/kotlin/com/hiltech/android/finance/FinanceAndroidReceiptPickerControl.kt` uses real `OpenDocument` system chooser, private bounded `ContentResolver` read, SHA-256 and no public cache. It calls the existing shared upload control, not a mock image.
+- Windows: `apps/desktopApp/src/main/kotlin/com/hiltech/desktop/finance/FinanceWindowsReceiptPickerControl.kt` uses real `JFileChooser`, bounded file bytes, SHA-256 and the same upload control.
+- `FinanceReceiptBytes` is a single shared pre-upload byte-signature policy (PDF/PNG/JPEG), with cross-platform tests. It rejects extension/MIME spoofing before the signed reservation. Server S3 validation repeats the signature/hash/length checks after PUT.
+- `FinanceExpenseReceiptUploaderTest` now uses actual PDF-prefixed bytes and correct digest, not synthetic `abc` mislabeled PDF. Desktop chooser signature contract and KMP bytes tests run in the targeted workflow.
+- The receipt readiness query was corrected: signed PDF uses `SIGNED_DOCUMENT`; PNG/JPEG use `NATIVE_MEDIA`, not `ARBITRARY_FILE`. The PostgreSQL test asserts the valid positive case and negative mismatch cases.
+- Finance reviewer can view/download when specifically authorized, but `FINALIZE` requires original active employee. This separation is now enforced in canonical Evidence operation dispatch.
+- Finance review candidate pulse now explicitly reveals its upstream 100-item source cap and whether unreturned records may exist; never present the returned page as full company liability.
+- Platform picker components are **implemented but not mounted into actual authenticated native app navigation**; DevOps/UX shell owner must connect them. Until route and device verification pass, do not report the installed application as supporting receipt upload.
+- Existing format-checking and S3 checksum DO NOT establish antivirus clearance. No approval, funding, payroll or cash movement is authorized by this Evidence path.
+
+## Exact-head validation requirement
+CI on the latest 8F branch must finish with PASS for real PostgreSQL Evidence source/negative tests, shared KMP uploader/byte tests, Windows picker test, desktop compilation, Android APK build and existing Evidence regressions. The last test runs were still **queued** when this checkpoint was authored. Then verify the actual signed storage end-to-end through on-device chooser under an active employee identity, plus denied cross-org/other-employee reviewer access. Until then the PR stays Draft and flags stay OFF.
