@@ -58,6 +58,30 @@ data class PurchaseOrderDeliveryDestination(
     val kind: String,
 )
 
+data class PurchaseOrderLifecycleEvent(
+    val id: UUID,
+    val operationId: UUID,
+    val organizationId: UUID,
+    val orderId: UUID,
+    val version: Long,
+    val type: String,
+    val reason: String,
+    val actor: UUID,
+    val at: Instant,
+    val correlationId: String,
+)
+
+data class PurchaseOrderLifecycleSummary(
+    val id: UUID,
+    val code: String,
+    val candidateId: UUID,
+    val effectiveState: String,
+    val version: Long,
+    val supplierDispatchState: String,
+    val total: String,
+    val currency: String,
+)
+
 @Repository
 class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
     fun issuerQueue(
@@ -113,6 +137,88 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
         ) },
         organizationId, at.atOffset(ZoneOffset.UTC), at.atOffset(ZoneOffset.UTC),
         projectId, siteId,
+    )
+
+    fun byId(orderId: UUID): PurchaseOrderIssuedRecord? = jdbc.query(
+        "SELECT candidate_id FROM procurement_purchase_order WHERE id = ?",
+        { rs, _ -> rs.getObject("candidate_id", UUID::class.java) }, orderId,
+    ).singleOrNull()?.let(::byCandidate)?.takeIf { it.id == orderId }
+
+    /** Serialize cancellation with any later lifecycle/dispatch operation. */
+    fun lockOrder(orderId: UUID, organizationId: UUID): Boolean = jdbc.query(
+        """
+        SELECT id FROM procurement_purchase_order
+        WHERE id = ? AND organization_id = ? AND state = 'ISSUED'
+          AND supplier_dispatch_state = 'NOT_SENT'
+        FOR UPDATE
+        """.trimIndent(),
+        { rs, _ -> rs.getObject("id", UUID::class.java) }, orderId, organizationId,
+    ).isNotEmpty()
+
+    fun lifecycleEvents(orderId: UUID): List<PurchaseOrderLifecycleEvent> = jdbc.query(
+        """
+        SELECT id, operation_id, organization_id, purchase_order_id, event_version,
+               event_type, reason, recorded_by_user_id, recorded_at, correlation_id
+        FROM procurement_po_lifecycle_event
+        WHERE purchase_order_id = ?
+        ORDER BY event_version, id
+        """.trimIndent(),
+        { rs, _ -> PurchaseOrderLifecycleEvent(
+            id = rs.getObject("id", UUID::class.java),
+            operationId = rs.getObject("operation_id", UUID::class.java),
+            organizationId = rs.getObject("organization_id", UUID::class.java),
+            orderId = rs.getObject("purchase_order_id", UUID::class.java),
+            version = rs.getLong("event_version"),
+            type = rs.getString("event_type"),
+            reason = rs.getString("reason"),
+            actor = rs.getObject("recorded_by_user_id", UUID::class.java),
+            at = rs.getObject("recorded_at", OffsetDateTime::class.java).toInstant(),
+            correlationId = rs.getString("correlation_id"),
+        ) }, orderId,
+    )
+
+    fun appendLifecycleEvent(event: PurchaseOrderLifecycleEvent) {
+        check(jdbc.update(
+            """
+            INSERT INTO procurement_po_lifecycle_event (
+                id, operation_id, organization_id, purchase_order_id, event_version,
+                event_type, reason, recorded_by_user_id, recorded_at, correlation_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+            event.id, event.operationId, event.organizationId, event.orderId,
+            event.version, event.type, event.reason, event.actor,
+            event.at.atOffset(ZoneOffset.UTC), event.correlationId,
+        ) == 1)
+    }
+
+    fun issuedOrderList(organizationId: UUID): List<PurchaseOrderLifecycleSummary> = jdbc.query(
+        """
+        SELECT p.id, p.po_code, p.candidate_id, p.issued_at,
+               p.supplier_dispatch_state, c.total_amount, c.currency,
+               e.event_type, e.event_version
+        FROM procurement_purchase_order p
+        JOIN procurement_po_candidate c ON c.id = p.candidate_id
+        LEFT JOIN LATERAL (
+            SELECT event_type, event_version
+            FROM procurement_po_lifecycle_event
+            WHERE purchase_order_id = p.id
+            ORDER BY event_version DESC LIMIT 1
+        ) e ON true
+        WHERE p.organization_id = ?
+        ORDER BY p.issued_at DESC, p.id DESC LIMIT 100
+        """.trimIndent(),
+        { rs, _ -> PurchaseOrderLifecycleSummary(
+            id = rs.getObject("id", UUID::class.java),
+            code = rs.getString("po_code"),
+            candidateId = rs.getObject("candidate_id", UUID::class.java),
+            effectiveState = if (rs.getString("event_type") == "CANCELLED")
+                "CANCELLED" else "ISSUED",
+            version = if (rs.getObject("event_version") == null) 1L
+                else rs.getLong("event_version"),
+            supplierDispatchState = rs.getString("supplier_dispatch_state"),
+            total = rs.getBigDecimal("total_amount").toPlainString(),
+            currency = rs.getString("currency"),
+        ) }, organizationId,
     )
 
     fun byCandidate(candidateId: UUID): PurchaseOrderIssuedRecord? = jdbc.query(
