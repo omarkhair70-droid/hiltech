@@ -172,12 +172,13 @@ internal class ReceivingOperatorScenario(
         assertEquals(ReceivingCandidateClass.STOCK_SERIALIZED, serializedStillStock.candidateClass)
         assertEquals(null, serializedStillStock.receivedAssetId)
 
-        val poOnly = service.create(context(UUID.randomUUID()), CreateReceivingRequest(
-            organization, location.storageLocationId, ReceivingSourceType.PO,
-            sourceRef = "PO-SYNTH-ONLY", deliveryDocumentRef = "INVOICE-TOTAL-IS-NOT-A-LINE",
-        )).record
-        assertEquals("RECEIVING_INCOMPLETE", assertThrows<ProductApiException> {
-            service.complete(context(UUID.randomUUID()), poOnly.id, CompleteReceivingRequest(poOnly.version))
+        // Legacy arbitrary "PO" labels are now denied: only a locked,
+        // exact company PO with canonical evidence and scope is receivable.
+        assertEquals("PROCUREMENT_PO_RECEIVING_DISABLED", assertThrows<ProductApiException> {
+            service.create(context(UUID.randomUUID()), CreateReceivingRequest(
+                organization, location.storageLocationId, ReceivingSourceType.PO,
+                sourceRef = "PO-SYNTH-ONLY", deliveryDocumentRef = "INVOICE-TOTAL-IS-NOT-A-LINE",
+            ))
         }.code)
 
         jdbc.update("UPDATE storage_location SET lifecycle_state = 'RETIRED', active_until = ? WHERE id = ?",
