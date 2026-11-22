@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(13, result.migrationsExecuted)
+        assertEquals(14, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -150,12 +150,14 @@ class DatabaseMigrationContractTest {
                         'procurement_supplier_quote_technical_assessment',
                         'procurement_supplier_link_event',
                         'procurement_supplier_quote_document_slot',
-                        'procurement_po_candidate'
+                        'procurement_po_candidate',
+                        'procurement_po_number_counter',
+                        'procurement_purchase_order'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(74, tables.getInt(1))
+                assertEquals(76, tables.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
@@ -275,6 +277,32 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(candidateTrigger.next())
                 assertEquals(1, candidateTrigger.getInt(1))
+                val purchaseOrderTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_purchase_order'::regclass
+                      AND tgname = 'procurement_po_number_issue_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(purchaseOrderTrigger.next())
+                assertEquals(1, purchaseOrderTrigger.getInt(1))
+                val purchaseOrderConstraints = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_purchase_order'::regclass
+                      AND conname IN (
+                        'fk_po_candidate_org',
+                        'fk_po_location_org',
+                        'fk_po_stock_item_org',
+                        'fk_po_approval_policy',
+                        'uq_po_organization_code',
+                        'uq_po_organization_serial'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(purchaseOrderConstraints.next())
+                assertEquals(6, purchaseOrderConstraints.getInt(1))
                 val candidateScopedFk = statement.executeQuery(
                     """
                     SELECT COUNT(*) FROM pg_constraint
