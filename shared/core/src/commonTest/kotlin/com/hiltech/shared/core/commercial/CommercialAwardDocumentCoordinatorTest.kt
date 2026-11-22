@@ -12,6 +12,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 /** Canonical shared-client contract. Does not claim to exercise actual object storage. */
@@ -102,6 +103,9 @@ class CommercialAwardDocumentCoordinatorTest {
         assertEquals("RESERVED",reservation.evidence.storageState)
         val ready=coordinator.uploadAndFinalize(input,reservation)
         assertEquals("READY",ready.storageState)
+        assertFailsWith<IllegalArgumentException> {
+            coordinator.confirm(input,ready.copy(storageState="QUARANTINED"))
+        }
         assertEquals("SIGNED",coordinator.confirm(input,ready).state)
         assertEquals(listOf(
             "/v1/evidence/reservations","/upload",
