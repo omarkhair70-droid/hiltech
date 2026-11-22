@@ -22,6 +22,13 @@ data class SourcingEligibleNeedDto(
 )
 
 @Serializable
+data class SourcingSupplierCandidateDto(
+    val supplierOrganizationId: String,
+    val displayName: String,
+    val relationshipRevision: Int,
+)
+
+@Serializable
 data class SupplierRfqDto(
     val id: String,
     val requirementId: String,
