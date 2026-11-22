@@ -113,6 +113,7 @@ CREATE TABLE procurement_service_order (
   approval_policy_key varchar(96) NOT NULL,
   approval_policy_version integer NOT NULL,
   issuer_authority_binding_id uuid NOT NULL REFERENCES approval_authority_binding(id) ON DELETE RESTRICT,
+  issuer_authority_key varchar(80) NOT NULL CHECK(issuer_authority_key ~ '^[A-Z][A-Z0-9_]{2,79}$'),
   currency char(3) NOT NULL CHECK(currency ~ '^[A-Z]{3}$'),
   total_amount numeric(24,6) NOT NULL CHECK(total_amount>=0),
   issued_by_user_id uuid NOT NULL REFERENCES user_identity(id) ON DELETE RESTRICT,
@@ -171,7 +172,8 @@ BEGIN
     OR NOT EXISTS(
       SELECT 1 FROM approval_authority_binding b
       WHERE b.id=NEW.issuer_authority_binding_id
-        AND b.organization_id=NEW.organization_id AND b.active=true
+        AND b.organization_id=NEW.organization_id
+        AND b.authority_key=NEW.issuer_authority_key AND b.active=true
         AND b.effective_from<=NEW.issued_at
         AND (b.effective_to IS NULL OR b.effective_to>NEW.issued_at))
   THEN
@@ -184,16 +186,28 @@ BEGIN
     SELECT 1 FROM procurement_service_rfq rfq
     JOIN procurement_service_need need ON need.id=rfq.service_need_id
     JOIN team t ON t.id=need.team_id AND t.active=true AND t.version=need.team_version
-    JOIN organization o ON o.id=need.organization_id AND o.status='ACTIVE'
+    JOIN organization o ON o.id=need.organization_id
+      AND o.status='ACTIVE' AND o.organization_type='HILTECH'
     JOIN LATERAL(
       SELECT e.result_version,e.to_state FROM procurement_service_need_event e
       WHERE e.need_id=need.id ORDER BY e.result_version DESC LIMIT 1
     ) last ON true
     JOIN procurement_service_supplier_quote q ON q.id=candidate.quote_id
-      AND q.rfq_id=rfq.id
+      AND q.rfq_id=rfq.id AND q.organization_id=rfq.organization_id
+    JOIN procurement_service_quote_document_slot slot ON slot.id=q.slot_id
+      AND slot.organization_id=rfq.organization_id
+      AND slot.rfq_id=rfq.id AND slot.supplier_organization_id=q.supplier_organization_id
+    JOIN evidence e ON e.id=q.evidence_id AND e.organization_id=rfq.organization_id
+      AND e.target_type='SERVICE_QUOTE_DOCUMENT' AND e.target_id=slot.id
+    JOIN evidence_upload_session us ON us.evidence_id=e.id
     WHERE rfq.id=candidate.rfq_id AND rfq.organization_id=NEW.organization_id
       AND last.to_state='READY_FOR_SOURCING'
       AND last.result_version=rfq.service_need_version
+      AND e.sha256=q.sha256 AND us.expected_sha256=q.sha256
+      AND e.storage_state='READY' AND us.state='READY'
+      AND e.finalized_at IS NOT NULL AND us.finalized_at IS NOT NULL
+      AND e.classification_code='HIGHLY_RESTRICTED'
+      AND e.client_visibility_mode='INTERNAL_ONLY'
       AND (q.valid_until IS NULL OR q.valid_until>=CURRENT_DATE)
       AND NOT EXISTS (
         SELECT 1 FROM procurement_service_supplier_quote newer
