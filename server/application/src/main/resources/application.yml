@@ -27,6 +27,9 @@ hiltech:
     # OFF until role, review and warehouse reconciliation are approved.
     material-usage-report:
       enabled: ${HILTECH_FIELD_MATERIAL_USAGE_REPORT_ENABLED:false}
+    # Read-only reviewer queue, OFF until authorized origin visibility is approved.
+    material-usage-review-read:
+      enabled: ${HILTECH_FIELD_MATERIAL_USAGE_REVIEW_READ_ENABLED:false}
 
 
   activity:
