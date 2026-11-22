@@ -123,6 +123,7 @@ class PurchaseOrderIssueServiceTest {
         Mockito.`when`(issued.validDeliveryLocation(
             org, destinationId, projectId, workSiteId, at,
         )).thenReturn(true)
+        Mockito.`when`(issued.lockCurrentPurchasingOrganization(org)).thenReturn(true)
         Mockito.`when`(issued.allocateSerial(org)).thenReturn(26L)
         Mockito.doAnswer { invocation ->
             actualIssued = invocation.getArgument(0)
