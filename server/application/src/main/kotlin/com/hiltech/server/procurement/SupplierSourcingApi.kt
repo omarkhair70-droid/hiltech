@@ -37,6 +37,14 @@ class SupplierSourcingController(private val service: SupplierSourcingService) {
     fun roundsForRequirement(request: HttpServletRequest, @PathVariable id: UUID): List<SupplierRfqView> =
         service.roundsForRequirement(request.sourcingActor(), id)
 
+    @PostMapping("/v1/sourcing/rfqs/{rfqId}/document-slots")
+    fun createQuoteDocumentSlot(
+        request: HttpServletRequest,
+        @PathVariable rfqId: UUID,
+        @RequestBody body: CreateSupplierQuoteDocumentSlotRequest,
+    ): SupplierQuoteDocumentSlotReceipt =
+        service.createQuoteDocumentSlot(request.sourcingContext(body.operationId), rfqId, body)
+
     @PostMapping("/v1/sourcing/rfqs/{rfqId}/quote-evidence")
     fun recordQuote(
         request: HttpServletRequest,
