@@ -239,7 +239,35 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
         ).singleOrNull()?:hidden()
         if(!authorized(actor,row.organizationId,issuerKey) &&
             !authorized(actor,row.organizationId,buyerKey))hidden()
-        return row
+        // Never show hard-coded success flags. Current service acceptance and
+        // latest supplier invoice matching are read from their real sources.
+        val accepted=jdbc.queryForObject(
+            """
+            SELECT EXISTS (
+              SELECT 1 FROM procurement_service_acceptance a
+              WHERE a.service_order_id=? AND a.organization_id=?
+                AND a.outcome='ACCEPTED'
+                AND a.id=(SELECT latest.id FROM procurement_service_acceptance latest
+                  WHERE latest.service_order_id=?
+                  ORDER BY latest.reviewed_at DESC,latest.id DESC LIMIT 1)
+            )
+            """.trimIndent(),Boolean::class.java,id,row.organizationId,id,
+        )==true
+        val matched=accepted && jdbc.queryForObject(
+            """
+            SELECT EXISTS (
+              SELECT 1 FROM procurement_service_invoice inv
+              JOIN procurement_service_invoice_match match
+                ON match.service_invoice_id=inv.id AND match.organization_id=inv.organization_id
+              WHERE inv.service_order_id=? AND inv.organization_id=?
+                AND match.result_code='MATCHED'
+                AND match.revision=(SELECT MAX(latest.revision)
+                  FROM procurement_service_invoice_match latest
+                  WHERE latest.service_invoice_id=inv.id)
+            )
+            """.trimIndent(),Boolean::class.java,id,row.organizationId,
+        )==true
+        return row.copy(serviceAccepted=accepted,invoiceMatched=matched)
     }
 
     private fun quote(rfqId:UUID,quoteId:UUID):Quote?=jdbc.query(
