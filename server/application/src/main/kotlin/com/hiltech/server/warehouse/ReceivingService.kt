@@ -90,7 +90,11 @@ class ReceivingService(
     fun detail(actor: UUID, id: UUID): ReceivingDetailView {
         val record = receiving.record(id) ?: unavailable()
         requireVisible(actor, record)
-        return ReceivingDetailView(record, receiving.lines(id), receiving.discrepancies(id), receiving.poRejectedLineIds(id))
+        return ReceivingDetailView(
+            record, receiving.lines(id), receiving.discrepancies(id),
+            receiving.poRejectedLineIds(id),
+            receiving.hasReadyPoDeliveryNote(id, record.organizationId),
+        )
     }
 
     fun create(context: ReceivingCommandContext, request: CreateReceivingRequest): ReceivingRecordResult {
