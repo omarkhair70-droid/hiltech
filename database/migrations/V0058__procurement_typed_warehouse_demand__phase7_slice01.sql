@@ -23,6 +23,7 @@ ALTER TABLE procurement_purchase_requirement
       AND work_order_id IS NULL
       AND source_work_version IS NULL
       AND warehouse_storage_location_id IS NOT NULL
+      AND warehouse_source_version IS NOT NULL
       AND warehouse_source_version >= 1)
   );
 
