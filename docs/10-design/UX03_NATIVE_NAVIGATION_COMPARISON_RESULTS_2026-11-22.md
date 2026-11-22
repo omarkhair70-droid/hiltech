@@ -47,7 +47,28 @@ Generated native Desktop Compose screenshots, synthetic fixture, not Android run
 - One pass exposed a **history loop defect** when selecting a prior area via tabs created a new history entry. Correction in code: selecting any already-present previous context consumes the intervening trail. The next test explicitly clicks the visible Back control and asserts no cyclic history.
 - Workbench is only proven against one warehouse fixture; technician / PM / admin / owner tasks still open.
 
-**This section must be updated with exact tested code SHA and final PASS/FAIL for revised pointer and back tests, not guessed.**
+**Verified final Pass02 source SHA:** `759219184383075537c6d48e7dcad971e0e659f8`.
+
+Ran the exact checked-out source in the isolated Windows QA directory using
+`./gradlew.bat :apps:desktopApp:renderPhase5WarehouseEvidence --no-daemon` with JDK17 scoped to that process. **BUILD SUCCESSFUL in 5m 31s**, 15 tasks (7 executed, 8 up-to-date), exit code **0**.
+
+Harness output:
+- `UX128_NAV_MODEL_PASS forbidden_destination=PASS back_context=PASS revoked_destination=PASS`
+- `UX128_NAV_POINTER_PASS objects=PASS return=PASS context_scope_reset=PASS`
+
+The interaction sequence is a real headless Compose `ImageComposeScene` pointer **Press + Release** on the visible Context-first `OBJECTS` button, then a real Press + Release on the visible `رجوع للسياق السابق` button, with callbacks checked. This is not a physical Android test. The pure state model additionally asserts that selecting the previous area via tab **consumes** the old history and cannot create the detected navigation loop. `scope.key` changes for a different warehouse context; remember state is keyed to the principal/organization/object context. The variant-specific on-device permission revalidation is **not** established because the inputs are synthetic fixtures.
+
+Screen capture filenames (actual Compose render, local only):
+`ux128-global-click-00-work.png`, `ux128-global-click-01-objects.png`, `ux128-global-click-02-return.png`, plus four `ux128-global-{context,workbench}-{phone,windows}.png` candidate comparison renders.
+
+All are generated in the authorized Windows QA folder:
+`D:/02_QA-and-Builds/HILTECH/UX-128/repo-main/apps/desktopApp/build/reports/phase5-warehouse/`. PNG binaries are **not claimed uploaded to GitHub**.
+
+### Pass02 critical decision
+
+The original back-loop defect is **FIXED in the pure model and headless Compose Back interaction now passes**. Neither Context-first nor Workbench-first is an accepted HILTECH shell. Workbench on 430px places `مهام المخزن` and a `تغيير المساحة` disclosure before the operational attention queue; Context-first exposes both destinations directly. The reduced chrome vs increased discovery step is a real tradeoff but operator time was not measured.
+
+Still a **P1 missing capability**: source-linked Asset/Project details and exact filter/scroll/back-stack context are not routed through a complete live global shell. Empty/loading/denied source nav projection, screen-reader/keyboard, high font scale, Android runtime and multi-role real-source journeys remain OPEN.
 
 ## Why no production activation yet
 
