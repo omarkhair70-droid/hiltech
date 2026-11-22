@@ -372,7 +372,7 @@ class HandoverService(
 ) {
     @Transactional(readOnly = true)
     fun readiness(projectId: UUID, actor: UUID): HandoverReadinessDto {
-        val project = authorizedProject(projectId, actor, false)
+        val project = authorizedProject(projectId, actor, true)
         val works = sources.work(projectId)
         val docs = sources.approvedDocuments(projectId, project.organizationId)
         val missing = HandoverReadinessPolicy.missing(works, sources.requirements(projectId), docs)
@@ -386,7 +386,7 @@ class HandoverService(
 
     @Transactional(readOnly = true)
     fun latest(projectId: UUID, actor: UUID): HandoverPackageVersionDto? {
-        authorizedProject(projectId, actor, false)
+        authorizedProject(projectId, actor, true)
         return sources.latest(projectId)?.toDto(false)
     }
 
