@@ -90,6 +90,7 @@ jobs:
             --tests com.hiltech.server.procurement.SupplierQuoteComparisonTest \
             --tests com.hiltech.server.procurement.SupplierSourcingServiceTest \
             --tests com.hiltech.server.procurement.SupplierQuoteProtectedDocumentTest \
+            --tests com.hiltech.server.procurement.SupplierMasterDataServiceTest \
             --tests com.hiltech.server.DatabaseMigrationContractTest \
             --tests com.hiltech.server.people.HrDocumentsPostgresEvidenceContractTest \
             --tests com.hiltech.server.documents.EvidenceLifecyclePostgresOpenFgaS3ContractTest \
