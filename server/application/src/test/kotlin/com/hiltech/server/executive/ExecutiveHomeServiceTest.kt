@@ -31,6 +31,22 @@ class ExecutiveHomeServiceTest {
     }
 
     @Test
+    fun enabledEndpointRejectsUnverifiedIdentityBeforeReadingAnyExecutiveData() {
+        val sources = CapturingSources()
+        val controller = ExecutiveHomeController(
+            service = ExecutiveHomeService(sources, clock),
+            enabled = true,
+        )
+        val failure = assertThrows<ProductApiException> {
+            controller.home(MockHttpServletRequest(), organization.toString())
+        }
+        assertEquals("UNAUTHENTICATED", failure.code)
+        assertEquals(null, sources.needsActor)
+        assertEquals(null, sources.projectsActor)
+        assertEquals(null, sources.assetsActor)
+    }
+
+    @Test
     fun delegatesCurrentIdentityAndOrganizationWithoutExecutivePrivilege() {
         val sources = CapturingSources()
         val result = ExecutiveHomeService(sources, clock).home(actor, organization, "correlation-123")
