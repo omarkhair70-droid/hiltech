@@ -18,7 +18,12 @@ fun WarehouseCommandCenterSection(
     onOpenStorageLocations: () -> Unit = {},
     onDrill: (String, String) -> Unit = { _, _ -> },
     onOpenWorkResource: (String, String) -> Unit = { _, _ -> },
+    presentation: WarehouseCommandCenterPresentation = WarehouseCommandCenterPresentation.BASELINE,
 ) {
+    if (presentation != WarehouseCommandCenterPresentation.BASELINE) {
+        WarehouseCommandCenterCandidate(snapshot, presentation, onOpenStorageLocations, onDrill, onOpenWorkResource)
+        return
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("مركز عمليات المخزن", style = MaterialTheme.typography.titleLarge)
         Text(snapshot.warehouseCode + " · " + snapshot.warehouseName + " · " + snapshot.asOf)
