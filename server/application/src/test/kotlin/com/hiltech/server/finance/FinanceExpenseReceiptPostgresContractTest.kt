@@ -116,6 +116,7 @@ class FinanceExpenseReceiptPostgresContractTest {
                     creator: UUID = actor,
                     state: String = "READY",
                     storedHash: String = hash,
+                    scanClass: String = "SIGNED_DOCUMENT",
                 ): UUID {
                     val evidence = UUID.randomUUID()
                     val upload = UUID.randomUUID()
@@ -132,7 +133,7 @@ class FinanceExpenseReceiptPostgresContractTest {
                             'FINANCE_EXPENSE_RECEIPT','application/pdf',
                             'expense-receipt.pdf',80,'$storedHash',$d,
                             '$creator','$state','evidence/internal/receipt',$d,
-                            'HIGHLY_RESTRICTED','INTERNAL_ONLY','ARBITRARY_FILE',$d)
+                            'HIGHLY_RESTRICTED','INTERNAL_ONLY','$scanClass',$d)
                     """.trimIndent())
                     sql("""
                         INSERT INTO evidence_upload_session(
@@ -154,6 +155,7 @@ class FinanceExpenseReceiptPostgresContractTest {
                 insertEvidence(creator = someoneElse)
                 insertEvidence(state = "QUARANTINED")
                 insertEvidence(storedHash = "b".repeat(64))
+                insertEvidence(scanClass = "ARBITRARY_FILE")
                 val result = service.checkExpenseEvidence(
                     expense, org, "125.50", "EGP", actor,
                 )
