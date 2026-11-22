@@ -28,6 +28,7 @@ data class CommercialDealWorkspaceState(
     val canCost: Boolean = false,
     val canRelease: Boolean = false,
     val canAward: Boolean = false,
+    val canCreateProject: Boolean = false,
     val deal: CommercialDealDetailDto? = null,
     val privateCostLines: List<CommercialPrivateCostLineDto> = emptyList(),
     val privateCostSummaries: List<CommercialPrivateCostSummaryDto> = emptyList(),
@@ -140,7 +141,7 @@ fun CommercialDealWorkspaceSection(
                     detail, state.canWrite, state.canRelease, onAction,
                 )
                 CommercialStage.AWARD -> CommercialAwardPanel(
-                    detail, state.canAward, onAction,
+                    detail, state.canAward, state.canCreateProject, onAction,
                 )
             }
         }
@@ -401,6 +402,7 @@ private fun CommercialQuotePanel(
 private fun CommercialAwardPanel(
     deal: CommercialDealDetailDto,
     canAward: Boolean,
+    canCreateProject: Boolean,
     onAction: (CommercialDealAction) -> Unit,
 ) {
     val op=deal.opportunity
@@ -466,8 +468,14 @@ private fun CommercialAwardPanel(
         }
         val contract=deal.contracts.firstOrNull { it.id == po.contractId }
         if(po.verified && contract?.state == "SIGNED") {
-            Button(onClick={onAction(CommercialDealAction.ConvertToProject(op.id,contract.id,po.id))}) {
+            Button(
+                enabled=canCreateProject,
+                onClick={onAction(CommercialDealAction.ConvertToProject(op.id,contract.id,po.id))},
+            ) {
                 Text("Create canonical project from this verified award")
+            }
+            if (!canCreateProject) {
+                Text("Project creation requires a separate active PROJECT_ADMIN grant.")
             }
         }
     }
