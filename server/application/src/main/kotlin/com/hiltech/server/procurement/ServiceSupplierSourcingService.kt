@@ -60,7 +60,7 @@ data class ServiceQuoteReceipt(val quote: ServiceQuoteView, val replayed: Boolea
  * Binary quotes require the canonical READY private Evidence target.
  */
 @Service
-class ServiceSupplierSourcingService(
+class ServiceSupplierSourcingService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val approvals: ApprovalPersistencePort,
     private val suppliers: SupplierSourcingPersistence,
