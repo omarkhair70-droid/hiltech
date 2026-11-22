@@ -28,6 +28,7 @@ class ExecutiveHomeServiceTest {
         assertEquals("CURRENT_ACTOR_ACROSS_AUTHORIZED_MEMBERSHIPS", result.needsYouScope)
         assertEquals(now.toString(), result.asOf)
         assertEquals(organization.toString(), result.organizationId)
+        assertEquals(actor.toString(), result.viewerIdentityId)
         assertEquals("correlation-123", result.correlationId)
         assertEquals("INBOX_WORK_QUEUE", result.needsYou.source)
         assertTrue(result.pendingDomains.any { it.domain == "PAYROLL" })
