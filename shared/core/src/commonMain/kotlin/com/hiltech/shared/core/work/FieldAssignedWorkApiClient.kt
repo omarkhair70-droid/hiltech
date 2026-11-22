@@ -1,6 +1,7 @@
 package com.hiltech.shared.core.work
 
 import com.hiltech.shared.core.network.HiltechApiClient
+import com.hiltech.shared.core.warehouse.AssetTagLookupDto
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.builtins.ListSerializer
@@ -57,6 +58,32 @@ class FieldAssignedWorkApiClient(
             decode = {
                 json.decodeFromString(
                     TechnicianJobBundleDto.serializer(),
+                    it,
+                )
+            },
+        )
+    }
+
+    /** Live only: selected assigned WorkOrder narrows the canonical AssetTag lookup. */
+    suspend fun assignedAssetTag(
+        workOrderId: String,
+        opaqueCode: String,
+        installationId: String,
+    ): AssetTagLookupDto {
+        require(UUID.matches(workOrderId.trim())) {
+            "WorkOrder id must use canonical UUID format."
+        }
+        val tag = opaqueCode.trim()
+        require(Regex("[A-Za-z0-9_-]{1,128}").matches(tag)) {
+            "Asset tag must be an opaque code."
+        }
+        return api.request(
+            HttpMethod.Get,
+            "/v1/field/work-orders/" + workOrderId.trim() + "/assets/by-tag/" + tag,
+            HiltechRequestOptions(installationId = installationId),
+            decode = {
+                json.decodeFromString(
+                    AssetTagLookupDto.serializer(),
                     it,
                 )
             },

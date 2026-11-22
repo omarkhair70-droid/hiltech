@@ -38,6 +38,7 @@ data class HiltechFieldState(
     val personalIssuedStock: FieldPersonalIssuedStockSnapshotDto? = null,
     val personalIssuedStockLoading: Boolean = false,
     val personalIssuedStockError: String? = null,
+    val assignedAssetLookup: AssetLookupState = AssetLookupState(),
 )
 
 @Composable
@@ -52,6 +53,8 @@ fun AssignedWorkSection(
     onTakeEvidencePhoto: (String) -> Unit = {},
     onRefreshPersonalIssuedStock: (String) -> Unit = {},
     showPersonalIssuedStock: Boolean = false,
+    onLookupAssignedAssetTag: (String, String) -> Unit = { _, _ -> },
+    showAssignedAssetLookup: Boolean = false,
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -98,6 +101,9 @@ fun AssignedWorkSection(
                                 personalIssuedStockError = state.personalIssuedStockError,
                                 onRefreshPersonalIssuedStock = onRefreshPersonalIssuedStock,
                                 showPersonalIssuedStock = showPersonalIssuedStock,
+                                assignedAssetLookup = state.assignedAssetLookup,
+                                onLookupAssignedAssetTag = onLookupAssignedAssetTag,
+                                showAssignedAssetLookup = showAssignedAssetLookup,
                                 modifier =
                                     Modifier.weight(1f),
                             )
@@ -136,6 +142,9 @@ fun AssignedWorkSection(
                                 personalIssuedStockError = state.personalIssuedStockError,
                                 onRefreshPersonalIssuedStock = onRefreshPersonalIssuedStock,
                                 showPersonalIssuedStock = showPersonalIssuedStock,
+                                assignedAssetLookup = state.assignedAssetLookup,
+                                onLookupAssignedAssetTag = onLookupAssignedAssetTag,
+                                showAssignedAssetLookup = showAssignedAssetLookup,
                                 modifier =
                                     Modifier.fillMaxWidth(),
                             )
@@ -309,6 +318,9 @@ private fun JobBundleDetail(
     personalIssuedStockError: String?,
     onRefreshPersonalIssuedStock: (String) -> Unit,
     showPersonalIssuedStock: Boolean,
+    assignedAssetLookup: AssetLookupState,
+    onLookupAssignedAssetTag: (String, String) -> Unit,
+    showAssignedAssetLookup: Boolean,
     modifier: Modifier,
 ) {
     Column(
@@ -578,6 +590,20 @@ private fun JobBundleDetail(
                 }
                 Text("الأرقام دي رصيد متبقٍ من الخامات المصروفة لك؛ مش رصيد المخزن أو كمية تم استهلاكها.")
             }
+        }
+
+        if (showAssignedAssetLookup && cached) {
+            Text("QR / AssetTag: يلزم الاتصال للتحقق من الأصل وصالحية التكليف الحالية.")
+        } else if (showAssignedAssetLookup) {
+            Text(
+                "QR / AssetTag داخل التكليف",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text("النتيجة Live من السيرفر ومقيدة بالـWorkOrder المفتوح؛ المسح لا يغير عهدة أو مخزون.")
+            AssetTagLookupSection(
+                state = assignedAssetLookup,
+                lookup = { code -> onLookupAssignedAssetTag(bundle.workOrderId, code) },
+            )
         }
 
         if (bundle.blockers.isNotEmpty()) {
