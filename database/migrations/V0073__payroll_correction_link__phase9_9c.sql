@@ -49,8 +49,35 @@ CREATE INDEX idx_payroll_correction_org_date
     ON payroll_run_correction(organization_id, recorded_at DESC);
 
 CREATE FUNCTION payroll_9c_correction_insert_guard() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql AS $
 BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM payroll_authority_binding grant_row
+        JOIN user_identity principal
+          ON principal.id = grant_row.identity_id
+        JOIN organization_membership membership
+          ON membership.user_identity_id = principal.id
+         AND membership.organization_id = grant_row.organization_id
+        JOIN organization org
+          ON org.id = grant_row.organization_id
+        WHERE grant_row.organization_id = NEW.organization_id
+          AND grant_row.identity_id = NEW.recorded_by_user_id
+          AND grant_row.capability = 'REVIEW'
+          AND grant_row.active = true
+          AND grant_row.valid_from <= NEW.recorded_at
+          AND (grant_row.valid_until IS NULL OR
+               grant_row.valid_until >= NEW.recorded_at)
+          AND principal.status = 'ACTIVE'
+          AND org.status = 'ACTIVE'
+          AND membership.state = 'ACTIVE'
+          AND membership.valid_from <= NEW.recorded_at
+          AND (membership.valid_until IS NULL OR
+               membership.valid_until >= NEW.recorded_at)
+    ) THEN
+        RAISE EXCEPTION 'Current payroll reviewer authority and membership required';
+    END IF;
+
     IF NOT EXISTS (
         SELECT 1
         FROM payroll_run_version older

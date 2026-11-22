@@ -271,6 +271,17 @@ class Payroll9bDraftPostgresContractTest {
             """.trimIndent(),
             UUID.randomUUID(), org, time.minusDays(2), actor, time,
         )
+        // The API check is not the only authority wall: PostgreSQL itself
+        // also verifies a current Payroll REVIEW grant and company membership.
+        jdbc.update(
+            """
+            INSERT INTO payroll_authority_binding (
+                id, organization_id, identity_id, capability,
+                valid_from, active, source_approval_ref, created_at
+            ) VALUES (?, ?, ?, 'REVIEW', ?, true, 'SYNTHETIC_APPROVED_PAYROLL_REVIEW', ?)
+            """.trimIndent(),
+            UUID.randomUUID(), org, actor, time.minusDays(1), time,
+        )
         var policyAvailable = false
         var decisionVersion = 1
         var permittedSubject = currentSubject
@@ -311,6 +322,42 @@ class Payroll9bDraftPostgresContractTest {
             tx.execute {
                 releases.release(actor, previousSubject.subjectId, UUID.randomUUID(), "p9b-release")
             }
+        }
+        val userWithoutPayrollGrant = UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO user_identity (
+                id, auth_provider, auth_subject, status, primary_organization_id, created_at
+            ) VALUES (?, 'payroll-test', ?, 'ACTIVE', ?, ?)
+            """.trimIndent(),
+            userWithoutPayrollGrant, userWithoutPayrollGrant.toString(), org, time,
+        )
+        jdbc.update(
+            """
+            INSERT INTO organization_membership (
+                id, organization_id, user_identity_id, membership_type,
+                state, valid_from
+            ) VALUES (?, ?, ?, 'EMPLOYEE', 'ACTIVE', ?)
+            """.trimIndent(),
+            UUID.randomUUID(), org, userWithoutPayrollGrant,
+            time.minusDays(1),
+        )
+        // A direct DB write using a valid active company user still cannot
+        // create a payroll release without the separately approved REVIEW grant.
+        assertThrows<Exception> {
+            jdbc.update(
+                """
+                INSERT INTO payroll_run_release (
+                    id, operation_id, organization_id, run_version_id,
+                    run_source_fingerprint, policy_key, policy_version,
+                    decision_path, released_by_user_id, released_at
+                ) VALUES (?, ?, ?, ?, ?, 'PAYROLL_REVIEW_TEST', 1,
+                          'ROUTINE_AUTHORIZED', ?, ?)
+                """.trimIndent(),
+                UUID.randomUUID(), UUID.randomUUID(), org,
+                UUID.fromString(newer.first.runVersionId),
+                newer.first.sourceFingerprint, userWithoutPayrollGrant, time,
+            )
         }
         val releaseOperation = UUID.randomUUID()
         val released = tx.execute {
