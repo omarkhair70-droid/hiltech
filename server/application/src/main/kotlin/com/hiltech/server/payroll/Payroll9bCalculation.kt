@@ -101,7 +101,9 @@ object Payroll9bCalculator {
             }
             if (input.approval != PayrollInputApproval.APPROVED ||
                 input.sourceApprovalReference.isBlank() || input.sourceVersion < 1 ||
-                input.sourceDomain.isBlank() || input.componentCode.isBlank() ||
+                !Regex("^[A-Z][A-Z0-9_-]{0,79}$").matches(input.sourceDomain) ||
+                !Regex("^[A-Z][A-Z0-9_-]{0,79}$").matches(input.componentCode) ||
+                input.sourceApprovalReference.length > 240 ||
                 input.currency != policy.currency
             ) {
                 Payroll9aPolicy.fail("PAYROLL_APPROVED_INPUT_REQUIRED", HttpStatus.CONFLICT)
@@ -125,7 +127,16 @@ object Payroll9bCalculator {
             if (original <= BigDecimal.ZERO || original.precision() > 18) {
                 Payroll9aPolicy.fail("PAYROLL_INVALID_AMOUNT", HttpStatus.BAD_REQUEST)
             }
-            val amount = original.setScale(policy.fractionalDigits, policy.roundingMode)
+            val amount = try {
+                original.setScale(policy.fractionalDigits, policy.roundingMode)
+            } catch (_: ArithmeticException) {
+                Payroll9aPolicy.fail("PAYROLL_UNSUPPORTED_PRECISION", HttpStatus.CONFLICT)
+            }
+            // PostgreSQL numeric(20,6): no overflow and no positive amount
+            // quietly rounded down to zero.
+            if (amount <= BigDecimal.ZERO || amount.precision() - amount.scale() > 14) {
+                Payroll9aPolicy.fail("PAYROLL_AMOUNT_OUT_OF_RANGE", HttpStatus.CONFLICT)
+            }
             PayrollComponentCalculation(
                 code = input.componentCode,
                 kind = input.kind,
@@ -145,6 +156,11 @@ object Payroll9bCalculator {
         val reimbursements = calculated.filter { it.kind == PayrollComponentKind.REIMBURSEMENT }
             .fold(zero) { total, line -> total.add(line.amount) }
         val net = gross.add(reimbursements).subtract(deductions)
+        if (listOf(gross, deductions, reimbursements, net).any {
+            it.precision() - it.scale() > 14
+        }) {
+            Payroll9aPolicy.fail("PAYROLL_TOTAL_OUT_OF_RANGE", HttpStatus.CONFLICT)
+        }
         if (gross <= zero || net < zero) {
             Payroll9aPolicy.fail("PAYROLL_INVALID_NET", HttpStatus.CONFLICT)
         }
