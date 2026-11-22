@@ -8,6 +8,7 @@ on:
       - "server/application/src/test/kotlin/com/hiltech/server/commercial/**"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/commercial/**"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/CommercialWorkbenchSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/CommercialDealWorkspaceSection.kt"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/commercial/**"
       - ".github/workflows/phase10-commercial-isolation.yml"
   workflow_dispatch:
@@ -57,6 +58,8 @@ jobs:
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           gradle-version: "9.5.0"
+      - name: Validate unnumbered commercial DDL shape before SQL execution
+        run: python3 database/phase10/validate_schema_static.py
       - name: Canonical Flyway and commercial contract unit tests
         run: |
           ./gradlew :server:application:test \
