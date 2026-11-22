@@ -99,6 +99,15 @@ data class EvidenceDownloadTargetResponse(
 
 fun interface EvidenceStorageAccessPort {
     fun current(): EvidenceObjectStoragePort?
+
+    /**
+     * Narrow server-only restricted byte access for a source-authorized caller.
+     * It never exposes storage object keys, credentials or signed URLs.
+     * The caller must independently verify actor, READY Evidence, scope,
+     * content SHA-256, media type and exact allowed byte size.
+     */
+    fun readRestrictedObject(objectKey: String, maxBytes: Long): ByteArray? =
+        current()?.readRestrictedObject(objectKey, maxBytes)
 }
 
 @Component
