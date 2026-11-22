@@ -2823,6 +2823,10 @@ fun main() {
                                     organizationId = organization.organizationId,
                                     installationId = runtime.physicalWarehouseInstallationId,
                                     newOperationId = { java.util.UUID.randomUUID().toString() },
+                                    purchaseCandidateApi = runtime.purchaseOrderCandidateApi.takeIf {
+                                        System.getenv("HILTECH_PO_CANDIDATES_UI_ENABLED")
+                                            ?.equals("true", ignoreCase = true) == true
+                                    },
                                     quoteDocumentUploader = runtime.supplierQuoteDocumentUploader,
                                     pickQuoteFile = {
                                         kotlinx.coroutines.withContext(Dispatchers.IO) {
