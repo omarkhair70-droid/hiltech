@@ -1,5 +1,6 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.documents.EvidenceFinalizeRecord
 import com.hiltech.server.documents.EvidencePersistencePort
@@ -91,7 +92,12 @@ class SupplierQuoteProtectedDocumentTest {
         assertEquals("application/pdf", document.contentType)
         assertArrayEquals(bytes, document.bytes)
         Mockito.verify(storage).readRestrictedObject(key, bytes.size.toLong())
-        Mockito.verify(audit).append(Mockito.any())
+        val events = Mockito.mockingDetails(audit).invocations
+            .filter { it.method.name == "append" }
+            .map { it.arguments.single() as AuditEventRecord }
+        assertEquals(1, events.size)
+        assertEquals("PROCUREMENT_SUPPLIER_QUOTE_DOCUMENT_READ", events.single().action)
+        assertEquals(quoteId, events.single().targetId)
     }
 
     @Test fun ordinaryNonbuyerCannotProbePrivateQuoteOrReadStorage() {
