@@ -140,6 +140,10 @@ class ProcurementPoReceivingGuard @Autowired constructor(
         val effective = orders.effectiveState(orderId)
             ?.takeIf { it.order.organizationId == organizationId &&
                 it.effectiveState == "ISSUED" } ?: invalid()
+        // A source-bound PO is not eligible for physical receipt just because
+        // an internal issuer clicked Issue. An external dispatch attestation
+        // must exist; this command does not itself notify the supplier.
+        if (!orders.hasSupplierCommunication(orderId)) invalid()
         return snapshot.copy(version = effective.version, destinationId = effective.destinationId)
     }
 
