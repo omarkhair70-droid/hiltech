@@ -36,6 +36,7 @@ data class PurchaseOrderIssuedRecord(
     val issuer: UUID,
     val issuedAt: Instant,
     val correlationId: String,
+    val supplierDispatchState: String = "NOT_SENT",
 )
 
 data class PurchaseOrderIssuerQueueItem(
@@ -243,6 +244,7 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
                 rs.getObject("issued_by_user_id", UUID::class.java),
                 rs.getObject("issued_at", OffsetDateTime::class.java).toInstant(),
                 rs.getString("correlation_id"),
+                rs.getString("supplier_dispatch_state"),
             )
         }, candidateId,
     ).singleOrNull()
