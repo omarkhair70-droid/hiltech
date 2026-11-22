@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(19, result.migrationsExecuted)
+        assertEquals(20, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -160,12 +160,13 @@ class DatabaseMigrationContractTest {
                         'procurement_supplier_invoice_document_slot',
                         'procurement_supplier_invoice_intake',
                         'procurement_supplier_invoice_match_event',
-                        'procurement_supplier_invoice_finance_handoff'
+                        'procurement_supplier_invoice_finance_handoff',
+                        'procurement_po_supersession_link'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(84, tables.getInt(1))
+                assertEquals(85, tables.getInt(1))
 
                 // V0050 links canonical Warehouse Receiving to a company-scoped
                 // approved PO without creating another physical stock ledger.
@@ -226,6 +227,18 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(invoiceHistoryTriggers.next())
                 assertEquals(5, invoiceHistoryTriggers.getInt(1))
+
+                val poReplacementGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='procurement_po_supersession_link'::regclass
+                      AND tgname IN ('procurement_po_supersession_insert_guard',
+                        'procurement_po_supersession_immutable')
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(poReplacementGuards.next())
+                assertEquals(2, poReplacementGuards.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
