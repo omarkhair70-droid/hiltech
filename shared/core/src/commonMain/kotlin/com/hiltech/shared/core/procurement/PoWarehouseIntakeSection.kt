@@ -37,6 +37,8 @@ fun PoWarehouseIntakeSection(
     installationId: String,
     newOperationId: () -> String,
     warehouseApi: WarehouseApiClient? = null,
+    deliveryNoteUploader: PoReceivingDeliveryNoteUploader? = null,
+    pickDeliveryNote: (suspend () -> PoDeliveryNoteFile?)? = null,
 ) {
     val scope = rememberCoroutineScope()
     var loading by remember(organizationId) { mutableStateOf(false) }
@@ -67,7 +69,10 @@ fun PoWarehouseIntakeSection(
         }) { Text(if (loading) "Loading…" else "Refresh authorized PO arrivals") }
         if (loaded && items.isEmpty()) Text("No eligible POs awaiting receiving.")
         items.forEach { po ->
-            PoWarehouseStartAction(po, api, warehouseApi, installationId, newOperationId)
+            PoWarehouseStartAction(
+                po, api, warehouseApi, installationId, newOperationId,
+                deliveryNoteUploader, pickDeliveryNote,
+            )
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
@@ -80,6 +85,8 @@ private fun PoWarehouseStartAction(
     warehouseApi: WarehouseApiClient?,
     installationId: String,
     newOperationId: () -> String,
+    deliveryNoteUploader: PoReceivingDeliveryNoteUploader?,
+    pickDeliveryNote: (suspend () -> PoDeliveryNoteFile?)?,
 ) {
     val scope = rememberCoroutineScope()
     var busy by remember(po.purchaseOrderId) { mutableStateOf(false) }
@@ -113,7 +120,10 @@ private fun PoWarehouseStartAction(
             startedId?.let { recordId ->
                 Text("Canonical Receiving #" + recordId.take(8), style = MaterialTheme.typography.bodySmall)
                 if (warehouseApi != null) {
-                    PoWarehouseInspectionPanel(po, recordId, warehouseApi, installationId, newOperationId)
+                    PoWarehouseInspectionPanel(
+                        po, recordId, warehouseApi, installationId, newOperationId,
+                        deliveryNoteUploader, pickDeliveryNote,
+                    )
                 } else Text("Open the Warehouse workspace for line inspection.")
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -129,6 +139,8 @@ private fun PoWarehouseInspectionPanel(
     api: WarehouseApiClient,
     installationId: String,
     newOperationId: () -> String,
+    deliveryNoteUploader: PoReceivingDeliveryNoteUploader?,
+    pickDeliveryNote: (suspend () -> PoDeliveryNoteFile?)?,
 ) {
     val scope = rememberCoroutineScope()
     var busy by remember(recordId) { mutableStateOf(false) }
@@ -137,6 +149,9 @@ private fun PoWarehouseInspectionPanel(
     var stock by remember(recordId) { mutableStateOf<StockItemDto?>(null) }
     var addOp by remember(recordId) { mutableStateOf<String?>(null) }
     var finishOp by remember(recordId) { mutableStateOf<String?>(null) }
+    var noteFile by remember(recordId) { mutableStateOf<PoDeliveryNoteFile?>(null) }
+    var noteReserveOp by remember(recordId) { mutableStateOf<String?>(null) }
+    var noteFinalizeOp by remember(recordId) { mutableStateOf<String?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedButton(enabled = !busy, onClick = {
             busy = true
@@ -162,6 +177,58 @@ private fun PoWarehouseInspectionPanel(
         if (current != null && item != null) {
             Text("Receiving state: " + current.record.state + " · revision " +
                 current.record.version, style = MaterialTheme.typography.bodySmall)
+            Text(
+                if (current.deliveryNoteReady) "Delivery note: verified READY"
+                else "Delivery note: REQUIRED before closing this PO receiving",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (!current.deliveryNoteReady &&
+                current.record.state in setOf("DRAFT", "IN_PROGRESS") &&
+                deliveryNoteUploader != null && pickDeliveryNote != null
+            ) {
+                OutlinedButton(enabled = !busy, onClick = {
+                    busy = true
+                    error = null
+                    scope.launch {
+                        try {
+                            noteFile = pickDeliveryNote()
+                            noteReserveOp = null
+                            noteFinalizeOp = null
+                        } catch (failure: Exception) {
+                            error = failure.message ?: "Unable to select delivery note."
+                        } finally { busy = false }
+                    }
+                }) { Text(noteFile?.originalFileName ?: "Choose delivery note PDF/image") }
+                val chosenNote = noteFile
+                if (chosenNote != null) {
+                    OutlinedButton(enabled = !busy, onClick = {
+                        busy = true
+                        error = null
+                        scope.launch {
+                            try {
+                                val reserve = noteReserveOp ?: newOperationId().also {
+                                    noteReserveOp = it
+                                }
+                                val finalize = noteFinalizeOp ?: newOperationId().also {
+                                    noteFinalizeOp = it
+                                }
+                                deliveryNoteUploader.upload(
+                                    PoDeliveryNoteUploadRequest(
+                                        recordId, reserve, finalize, chosenNote,
+                                    ), installationId,
+                                )
+                                noteFile = null
+                                noteReserveOp = null
+                                noteFinalizeOp = null
+                                detail = api.receivingDetail(recordId, installationId)
+                            } catch (failure: Exception) {
+                                error = failure.message ?:
+                                    "Delivery note did not reach verified READY state."
+                            } finally { busy = false }
+                        }
+                    }) { Text(if (busy) "Verifying…" else "Upload & verify delivery note") }
+                }
+            }
             if (current.record.state in setOf("DRAFT", "IN_PROGRESS") && current.lines.isEmpty()) {
                 OutlinedButton(enabled = !busy, onClick = {
                     busy = true
@@ -204,7 +271,7 @@ private fun PoWarehouseInspectionPanel(
             val resolved = current.lines.isNotEmpty() && current.lines.all {
                 it.receivedAt != null || it.id in current.rejectedLineIds
             }
-            if (resolved && current.record.state == "IN_PROGRESS") {
+            if (resolved && current.deliveryNoteReady && current.record.state == "IN_PROGRESS") {
                 OutlinedButton(enabled = !busy, onClick = {
                     busy = true
                     error = null
