@@ -44,6 +44,12 @@ on:
       - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/Main.kt"
       - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/DesktopIdentityRuntime.kt"
 
+# Keep only the newest evidence for each branch/PR; stale heads cannot
+# validate or close a draft and must not occupy the CI queue.
+concurrency:
+  group: phase7-s02-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
