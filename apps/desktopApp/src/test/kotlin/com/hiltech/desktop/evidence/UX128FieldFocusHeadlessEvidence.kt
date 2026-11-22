@@ -75,7 +75,7 @@ fun main() = runBlocking<Unit> {
         // to execute is still disabled by the existing source component.
         fieldState = fixtureState("cached")
         save(selectedScene, dir.resolve("ux128-field-02-cached-phone.png"), 430, 960)
-        selectedScene.sendPointerEvent(PointerEventType.Press, Offset(101f, 40f))
+        selectedScene.sendPointerEvent(PointerEventType.Press, Offset(331f, 40f))
         selectedScene.sendPointerEvent(PointerEventType.Release, Offset(101f, 40f))
         save(selectedScene, dir.resolve("ux128-field-03-return-phone.png"), 430, 960)
         // If back did not restore the list, the same pointer cannot reselect.
