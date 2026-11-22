@@ -259,9 +259,12 @@ private fun PoWarehouseLineInspectionAction(
         Text("Stock " + item.itemCode + " · expected " +
             (line.expectedQuantity ?: "not stated"), style = MaterialTheme.typography.titleSmall)
         OutlinedTextField(
-            value = quantity, onValueChange = {
-                quantity = it; pendingOp = null
-            }, label = { Text(if (rejection) "Rejected quantity" else "Accepted quantity") },
+            value = if (rejection) (line.expectedQuantity ?: quantity) else quantity,
+            onValueChange = {
+                if (!rejection) { quantity = it; pendingOp = null }
+            },
+            readOnly = rejection,
+            label = { Text(if (rejection) "Full rejected line quantity" else "Accepted quantity") },
         )
         if (!rejection) {
             OutlinedButton(enabled = !busy, onClick = {
@@ -276,6 +279,7 @@ private fun PoWarehouseLineInspectionAction(
                 )
             }
         } else {
+            Text("A rejected line must cover its entire expected quantity. Record accepted and rejected parts as separate receiving records.")
             OutlinedButton(onClick = { menu = true }) { Text("Rejection: " + rejectionType) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 listOf("DAMAGED_ON_RECEIPT", "WRONG_ITEM", "SERIAL_MISMATCH",
@@ -298,7 +302,7 @@ private fun PoWarehouseLineInspectionAction(
             pendingOp = null
         }) { Text(if (rejection) "Return to accepted stock" else "Reject this delivery (no inventory posting)") }
         OutlinedButton(enabled = !busy && quantity.isNotBlank() &&
-            (!rejection || reason.trim().length >= 12), onClick = {
+            (!rejection || (line.expectedQuantity != null && reason.trim().length >= 12)), onClick = {
             busy = true
             error = null
             scope.launch {
@@ -308,7 +312,7 @@ private fun PoWarehouseLineInspectionAction(
                         api.rejectPoReceivingStockLine(
                             recordId, RejectPoReceivingStockLineDto(
                                 op, line.id, detail.record.version, line.version,
-                                quantity, rejectionType, reason,
+                                line.expectedQuantity ?: quantity, rejectionType, reason,
                             ), installationId,
                         )
                     } else {

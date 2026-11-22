@@ -183,13 +183,10 @@ class SupplierInvoiceMatchingService @Autowired constructor(
                 req.documentSlotId, poId, po.org, po.supplier, req.evidenceId,
             ) == true
             if (!validEvidence) unavailable()
-            // Never accept a second supplier invoice exceeding the approved
-            // PO quantity; all writers serialize on the immutable PO parent.
-            val existingQty = jdbc.queryForObject(
-                "SELECT COALESCE(SUM(quantity),0) FROM procurement_supplier_invoice_intake WHERE purchase_order_id=?",
-                BigDecimal::class.java, poId,
-            ) ?: BigDecimal.ZERO
-            if (existingQty.add(qty).compareTo(po.quantity) > 0) stale()
+            // Record what the supplier actually invoiced, including mistakes.
+            // Never silently discard an over-billed invoice: the immutable
+            // Finance match must classify QUANTITY_MISMATCH and block handoff.
+            // The DB unique invoice-number key prevents duplicate capture.
             check(jdbc.update(
                 """
                 INSERT INTO procurement_supplier_invoice_intake (
@@ -390,20 +387,41 @@ class SupplierInvoiceMatchingService @Autowired constructor(
         val qDelta = received.accepted.subtract(invoicedTotal)
         val pDelta = inv.unitPrice.subtract(po.unitPrice)
         val tDelta = inv.tax.subtract(taxExpected)
-        val result = when {
-            received.discrepancy -> "REVIEW_REQUIRED"
-            inv.currency != po.currency -> "CURRENCY_MISMATCH"
-            pDelta.compareTo(BigDecimal.ZERO) != 0 -> "PRICE_MISMATCH"
-            tDelta.compareTo(BigDecimal.ZERO) != 0 -> "TAX_MISMATCH"
-            received.accepted.signum() == 0 -> "MISSING_RECEIPT"
-            qDelta.signum() != 0 -> "QUANTITY_MISMATCH"
-            received.accepted.compareTo(po.quantity) < 0 -> "PARTIAL_RECEIPT"
-            else -> "MATCHED"
-        }
+        val result = SupplierInvoiceMatchRules.classify(
+            SupplierInvoiceMatchFacts(
+                orderedQuantity = po.quantity,
+                acceptedQuantity = received.accepted,
+                invoicedQuantity = invoicedTotal,
+                poCurrency = po.currency,
+                invoiceCurrency = inv.currency,
+                priceVariance = pDelta,
+                taxVariance = tDelta,
+                unresolvedPhysicalDiscrepancy = received.discrepancy,
+            ),
+        )
+        val discrepancyRefs = jdbc.queryForObject(
+            """
+            SELECT COALESCE(STRING_AGG(source_ref, ',' ORDER BY source_ref), '')
+            FROM (
+              SELECT 'DISCREPANCY:' || d.id::text || ':' || d.version::text AS source_ref
+              FROM receiving_discrepancy d
+              JOIN procurement_po_receiving_link b
+                ON b.receiving_record_id = d.receiving_record_id
+              WHERE b.purchase_order_id = ? AND b.organization_id = ?
+              UNION ALL
+              SELECT 'REJECTED:' || r.id::text AS source_ref
+              FROM procurement_po_receiving_rejection_event r
+              JOIN procurement_po_receiving_link b
+                ON b.receiving_record_id = r.receiving_record_id
+              WHERE b.purchase_order_id = ? AND b.organization_id = ?
+            ) physical_exceptions
+            """.trimIndent(),
+            String::class.java, inv.po, inv.org, inv.po, inv.org,
+        ) ?: ""
         val source = hash(inv.id, po.id, po.quantity, po.currency, po.unitPrice,
             po.tax, inv.quantity, inv.currency, inv.unitPrice, inv.tax, inv.evidenceId,
             received.accepted, received.discrepancy, received.receiptRefs,
-            invoicedTotal, result)
+            discrepancyRefs, invoicedTotal, result)
         return SupplierInvoiceMatchView(inv.id, inv.po, source, result,
             po.quantity.toPlainString(), received.accepted.toPlainString(),
             invoicedTotal.toPlainString(), qDelta.toPlainString(),
@@ -449,7 +467,10 @@ class SupplierInvoiceMatchingService @Autowired constructor(
     private fun lockAndValidatePo(id: UUID, org: UUID) {
         if (!purchases.lockOrder(id, org)) unavailable()
         val effective = purchases.effectiveState(id) ?: unavailable()
-        if (effective.order.organizationId != org || effective.effectiveState != "ISSUED") stale()
+        if (effective.order.organizationId != org ||
+            effective.effectiveState != "ISSUED" ||
+            !purchases.hasSupplierCommunication(id)
+        ) stale()
     }
 
     private fun requireFinance(actor: UUID, org: UUID) {

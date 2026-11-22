@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(21, result.migrationsExecuted)
+        assertEquals(23, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -255,6 +255,41 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(rejectionGuards.next())
                 assertEquals(2, rejectionGuards.getInt(1))
+
+                val rejectedMovementGuard = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='receiving_line'::regclass
+                      AND tgname='receiving_rejected_po_line_receipt_guard'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(rejectedMovementGuard.next())
+                assertEquals(1, rejectedMovementGuard.getInt(1))
+
+                val fullLineRejectionGuard = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='procurement_po_receiving_rejection_event'::regclass
+                      AND tgname='po_rejection_full_line_guard'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(fullLineRejectionGuard.next())
+                assertEquals(1, fullLineRejectionGuard.getInt(1))
+
+                val foldedInvoiceIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE schemaname='public'
+                      AND tablename='procurement_supplier_invoice_intake'
+                      AND indexname='uq_supplier_invoice_number_casefold'
+                      AND indexdef ILIKE '%lower%'
+                      AND indexdef ILIKE '%btrim%'
+                    """.trimIndent(),
+                )
+                assertTrue(foldedInvoiceIndex.next())
+                assertEquals(1, foldedInvoiceIndex.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not

@@ -67,7 +67,8 @@ class ProcurementPoReceivingGuard @Autowired constructor(
     ) {
         val po = bound(record) ?: return
         if (po.stockItemId != stockItemId || po.unitCode != unitCode ||
-            (expected != null && expected.compareTo(po.quantity) > 0)
+            expected == null || expected.signum() <= 0 ||
+            expected.compareTo(po.quantity) > 0
         ) invalid()
     }
 

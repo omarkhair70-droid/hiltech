@@ -24,6 +24,11 @@ Every change is stacked in Draft branches; **main is unchanged** and server/comp
 
 **Known open points not disguised as DONE** — Direct authenticated transport receipt verification (V0051 is operator attestation, not network provider send), delivery note file-backed Evidence for PO receiving, multi-line/multi-source procurement adapters outside initial WorkOrder/StockItem, end-to-end on-device operator proof with live policy, cross-slice merge review, post-merge Bootstrap and staged recovery/rollback demonstration. Finance payable/payment implementation is a later owned Finance domain, NOT in Phase 7 scope.
 
-## Review verdict
+## Review verdict and closeout audit
 
-Engineering code is in development and CI pending. **Final Gap Review FAIL / NOT RELEASED / do not mark Phase 7 closed or enable live procurement.** This document must be updated with exact-head CI and human evidence before release approval; no manual assent substitutes for those results.
+- Source baseline for the previous integration head `3cf6c8e6`: Actions `45053594574` (PostgreSQL+native) and `45053594587` (container boot) both **PASSED**. This proves automated build and selected contracts, not realistic multi-role end-to-end acceptance.
+- Current `main` advanced 13 infrastructure/CI commits from the original Phase 7 base; the six changed main paths have no direct path overlap with #143/#146/#148/#153/#157/#158. This is **not** a merge or a substitute for a main-based integration run.
+- S05 closeout fixes (not yet verified): retain overbilled supplier invoices as immutable exception evidence, guard against un-dispatched POs, bind match fingerprints to actual discrepancy/rejection event identities, and block duplicate supplier invoice numbers regardless of case/outer whitespace (V0055).
+- S04 full-line rejection safety (not yet verified): a full rejection must account for the entire expected line quantity, enforced by backend and PostgreSQL V0056. Partial receipts remain supported using separate canonical Receiving records; never silently close an unresolved remainder.
+
+**Final Gap Review OPEN / NOT RELEASED / Phase 7 NOT CLOSED.** Re-run exact-head CI and main-compatibility proof after every change, then complete cross-role native acceptance before merge or live procurement. No manual assent substitutes for source-current proof.

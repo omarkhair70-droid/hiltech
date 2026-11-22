@@ -30,4 +30,12 @@ S03 issued PO V1 is the commercial record. S04 Warehouse `receiving_record`, `re
 3. Confirm actual operator uses Windows uploader and Finance workspace on device with genuine permitted redacted sample PDF, and Android review works with current-source reauthorization.
 4. Validate company Finance handoff semantics with Ahmed/accountant and bank/payable ownership before enabling any live AP feature.
 
+### Engineering closeout correction (2026-11-22, verification pending)
+
+- A supplier invoice is **evidence**, even when wrong: capture must retain an overbilled invoice and report `QUANTITY_MISMATCH` instead of discarding its source record. No match/Finance handoff is possible until the discrepancy is resolved.
+- A current dispatched PO is required for new capture/match/handoff, not only an internally issued PO.
+- The S05 match source fingerprint includes the exact immutable Warehouse discrepancy event and rejection IDs in addition to posted receipt line IDs/versions and PO commercial facts. Previously recorded match evidence cannot silently survive newly recorded Warehouse discrepancies.
+- A separate V0055 unique case-folded supplier invoice number index protects against capitalization/edge-whitespace duplicates within the same purchasing company and supplier.
+- Added deterministic classification tests for MATCHED, missing/partial receiving, over- and under-billing, wrong currency, unit price/tax mismatch and physical discrepancy. Exact-head CI confirmation remains required; do not update the closure state from code-only evidence.
+
 Status **NOT RELEASED** until these checks and Phase 7 cross-role final gap review pass.

@@ -321,7 +321,9 @@ class ReceivingService(
                 )
             ) stale()
             val expected = line.expectedQuantity?.let(::quantity)
-            if (expected != null && rejected.compareTo(expected) > 0) invalid()
+            // This command resolves an entire delivery line; never record a
+            // partial rejection and silently close its uninspected balance.
+            if (expected == null || rejected.compareTo(expected) != 0) invalid()
             val at = clock.instant().truncatedTo(ChronoUnit.MICROS)
             receiving.insertPoRejection(
                 eventId, context, record, line.id, rejected, request.type, reason, at,
