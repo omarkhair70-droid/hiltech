@@ -19,6 +19,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
@@ -440,7 +441,7 @@ interface FieldEngineeringInstrumentSourcePort {
 }
 
 @Service
-class FieldEngineeringTestService(
+class FieldEngineeringTestService @Autowired constructor(
     private val persistence: FieldEngineeringTestPersistencePort,
     private val work: WorkPersistencePort,
     private val readiness: ReadinessAssignmentPersistencePort,

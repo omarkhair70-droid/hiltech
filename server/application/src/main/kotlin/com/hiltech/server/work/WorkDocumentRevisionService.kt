@@ -17,6 +17,7 @@ import com.hiltech.server.projects.ProjectsPersistencePort
 import jakarta.servlet.http.HttpServletRequest
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.event.EventListener
@@ -60,7 +61,7 @@ data class WorkDocumentRevisionResult(
 )
 
 @Service
-class WorkDocumentRevisionService(
+class WorkDocumentRevisionService @Autowired constructor(
     private val persistence:
         WorkDocumentRevisionPersistence,
     private val work: WorkPersistencePort,
@@ -611,7 +612,7 @@ class WorkDocumentRevisionService(
 }
 
 @Component
-class WorkDocumentApprovalSubjectVersionSource(
+class WorkDocumentApprovalSubjectVersionSource @Autowired constructor(
     private val persistence:
         WorkDocumentRevisionPersistence,
     @Value("\${hiltech.field.work-documents.enabled:false}")
@@ -651,7 +652,7 @@ class WorkDocumentApprovalSubjectVersionSource(
 }
 
 @Component
-class WorkDocumentApprovalListener(
+class WorkDocumentApprovalListener @Autowired constructor(
     private val persistence:
         WorkDocumentRevisionPersistence,
     private val audit: AuditEventWriter,
@@ -758,7 +759,7 @@ fun interface WorkDocumentReadinessSource {
 }
 
 @Component
-class JdbcWorkDocumentReadinessSource(
+class JdbcWorkDocumentReadinessSource @Autowired constructor(
     private val persistence:
         WorkDocumentRevisionPersistence,
     @Value("\${hiltech.field.work-documents.enabled:false}")

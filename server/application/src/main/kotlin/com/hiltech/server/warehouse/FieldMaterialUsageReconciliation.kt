@@ -9,6 +9,7 @@ import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.work.WorkPersistencePort
 import jakarta.servlet.http.HttpServletRequest
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
@@ -157,7 +158,7 @@ class FieldMaterialUsageReconciliationPersistence(
 }
 
 @Service
-class FieldMaterialUsageReconciliationService(
+class FieldMaterialUsageReconciliationService @Autowired constructor(
     private val persistence: FieldMaterialUsageReconciliationPersistencePort,
     private val warehouse: WarehousePersistencePort,
     private val authorization: WarehouseAuthorizationPort,

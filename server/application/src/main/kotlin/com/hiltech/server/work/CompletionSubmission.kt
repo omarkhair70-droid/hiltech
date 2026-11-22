@@ -20,6 +20,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus
@@ -558,7 +559,7 @@ class JdbcCompletionSubmissionPersistence(
 }
 
 @Service
-class CompletionSubmissionService(
+class CompletionSubmissionService @Autowired constructor(
     private val persistence:
         CompletionSubmissionPersistencePort,
     private val work: WorkPersistencePort,

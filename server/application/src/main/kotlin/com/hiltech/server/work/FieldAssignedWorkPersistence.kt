@@ -1,5 +1,6 @@
 package com.hiltech.server.work
 
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -39,7 +40,7 @@ data class FieldWorkContext(
 )
 
 @Component
-class JdbcFieldAssignedWorkPersistence(
+class JdbcFieldAssignedWorkPersistence @Autowired constructor(
     private val jdbc: JdbcTemplate,
     @Value("\${hiltech.field.work-documents.enabled:false}")
     private val workDocumentsEnabled: Boolean = false,
