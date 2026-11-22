@@ -2,13 +2,14 @@ package com.hiltech.server.procurement
 
 import com.hiltech.server.documents.SupplierQuoteDocumentEvidenceTarget
 import com.hiltech.server.documents.SupplierQuoteDocumentEvidenceTargetPort
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.util.UUID
 
 /** Source-bound buyer authorization, not generic Evidence creator access. */
 @Component
-class SupplierQuoteDocumentTargetAdapter(
+class SupplierQuoteDocumentTargetAdapter @Autowired constructor(
     private val sourcing: SupplierSourcingPersistence,
     private val authority: SupplierSourcingAuthorizationPort,
     @Value("\${hiltech.procurement.sourcing.enabled:false}")
