@@ -17,6 +17,9 @@ import com.hiltech.shared.core.WarehousePhysicalOperatorSection
 import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
 import com.hiltech.shared.core.procurement.SupplierSourcingBuyerSection
 import com.hiltech.shared.core.procurement.PurchaseOrderIssuerSection
+import com.hiltech.shared.core.procurement.ProcurementWorkArea
+import com.hiltech.shared.core.procurement.ProcurementWorkAreaRouter
+import com.hiltech.shared.core.procurement.ProcurementNoAssignedWorkOrders
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
@@ -2767,6 +2770,8 @@ fun main() {
                     System.getenv("HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED")
                         ?.equals("true", ignoreCase = true) == true ||
                     System.getenv("HILTECH_SUPPLIER_SOURCING_UI_ENABLED")
+                        ?.equals("true", ignoreCase = true) == true ||
+                    System.getenv("HILTECH_PO_ISSUER_UI_ENABLED")
                         ?.equals("true", ignoreCase = true) == true,
                 warehouseOperator = {
                     val signed = shellState.value as? HiltechShellState.SignedIn
@@ -2795,7 +2800,29 @@ fun main() {
                     }
                 },
                 procurementOperator = {
-                    if (System.getenv("HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED")
+                    val signedContext = shellState.value as? HiltechShellState.SignedIn
+                    val signedIdentity = signedContext?.identity
+                    val signedOrganization = signedIdentity?.organizations?.firstOrNull { it.primary }
+                        ?: signedIdentity?.organizations?.firstOrNull()
+                    val requirementsRouteEnabled =
+                        System.getenv("HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED")
+                            ?.equals("true", ignoreCase = true) == true
+                    val sourcingRouteEnabled =
+                        System.getenv("HILTECH_SUPPLIER_SOURCING_UI_ENABLED")
+                            ?.equals("true", ignoreCase = true) == true
+                    val issuanceRouteEnabled =
+                        System.getenv("HILTECH_PO_ISSUER_UI_ENABLED")
+                            ?.equals("true", ignoreCase = true) == true
+
+                    ProcurementWorkAreaRouter(
+                        identityId = signedIdentity?.identityId,
+                        organizationId = signedOrganization?.organizationId,
+                        requirementsEnabled = requirementsRouteEnabled,
+                        sourcingEnabled = sourcingRouteEnabled,
+                        issuerEnabled = issuanceRouteEnabled,
+                    ) { activeArea ->
+                    if (activeArea == ProcurementWorkArea.REQUIREMENTS &&
+                        System.getenv("HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED")
                             ?.equals("true", ignoreCase = true) == true
                     ) {
                         val signed = shellState.value as? HiltechShellState.SignedIn
@@ -2813,9 +2840,12 @@ fun main() {
                                     newOperationId = { java.util.UUID.randomUUID().toString() },
                                 )
                             }
+                        } else if (identity != null) {
+                            ProcurementNoAssignedWorkOrders()
                         }
                     }
-                    if (System.getenv("HILTECH_SUPPLIER_SOURCING_UI_ENABLED")
+                    if (activeArea == ProcurementWorkArea.SOURCING &&
+                        System.getenv("HILTECH_SUPPLIER_SOURCING_UI_ENABLED")
                             ?.equals("true", ignoreCase = true) == true
                     ) {
                         val signed = shellState.value as? HiltechShellState.SignedIn
@@ -2892,7 +2922,8 @@ fun main() {
                             }
                         }
                     }
-                    if (System.getenv("HILTECH_PO_ISSUER_UI_ENABLED")
+                    if (activeArea == ProcurementWorkArea.ISSUANCE &&
+                        System.getenv("HILTECH_PO_ISSUER_UI_ENABLED")
                             ?.equals("true", ignoreCase = true) == true
                     ) {
                         val signed = shellState.value as? HiltechShellState.SignedIn
@@ -2919,6 +2950,7 @@ fun main() {
                             }
                         }
                     }
+                    } // ProcurementWorkAreaRouter
                 },
                 onRefreshProjects =
                     ::refreshProjects,
