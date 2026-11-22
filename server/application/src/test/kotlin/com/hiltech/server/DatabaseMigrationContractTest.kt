@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(14, result.migrationsExecuted)
+        assertEquals(15, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -152,12 +152,13 @@ class DatabaseMigrationContractTest {
                         'procurement_supplier_quote_document_slot',
                         'procurement_po_candidate',
                         'procurement_po_number_counter',
-                        'procurement_purchase_order'
+                        'procurement_purchase_order',
+                        'procurement_po_lifecycle_event'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(76, tables.getInt(1))
+                assertEquals(77, tables.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
@@ -287,6 +288,29 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(purchaseOrderTrigger.next())
                 assertEquals(1, purchaseOrderTrigger.getInt(1))
+                val lifecycleEventTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_po_lifecycle_event'::regclass
+                      AND tgname = 'procurement_po_lifecycle_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(lifecycleEventTrigger.next())
+                assertEquals(1, lifecycleEventTrigger.getInt(1))
+                val lifecycleOrgFk = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_po_lifecycle_event'::regclass
+                      AND conname IN (
+                        'fk_po_lifecycle_org',
+                        'uq_po_lifecycle_version',
+                        'uq_po_lifecycle_terminal_cancel'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(lifecycleOrgFk.next())
+                assertEquals(3, lifecycleOrgFk.getInt(1))
                 val purchaseOrderConstraints = statement.executeQuery(
                     """
                     SELECT COUNT(*) FROM pg_constraint
