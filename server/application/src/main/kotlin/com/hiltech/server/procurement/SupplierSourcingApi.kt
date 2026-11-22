@@ -65,6 +65,23 @@ class SupplierSourcingController(private val service: SupplierSourcingService) {
         service.comparison(request.sourcingActor(), rfqId)
 }
 
+/**
+ * Separate administrative supplier-registry permission.
+ * Ordinary buyers and technical reviewers cannot maintain supplier links.
+ */
+@RestController
+class SupplierMasterDataController(
+    private val masterData: SupplierMasterDataService,
+) {
+    @PostMapping("/v1/sourcing/organizations/{orgId}/supplier-links")
+    fun changeSupplierLink(
+        request: HttpServletRequest,
+        @PathVariable orgId: UUID,
+        @RequestBody body: ChangeSupplierLinkRequest,
+    ): SupplierLinkEventReceipt =
+        masterData.changeSupplierLink(request.sourcingContext(body.operationId), orgId, body)
+}
+
 private fun HttpServletRequest.sourcingActor(): UUID =
     HiltechRequestContext.current(this).identityId
         ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
