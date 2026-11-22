@@ -22,9 +22,11 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.field.FieldExecutionIntent
+import com.hiltech.shared.core.field.FieldMaterialUsageIntent
 import com.hiltech.shared.core.field.FieldQueuedIntent
 import com.hiltech.shared.core.local.LocalEvidenceEntity
 import com.hiltech.shared.core.work.FieldEngineeringTestDefinitionDto
+import com.hiltech.shared.core.work.FieldPersonalIssuedStockLineDto
 import com.hiltech.shared.core.work.FieldPersonalIssuedStockSnapshotDto
 import com.hiltech.shared.core.work.FieldTodayItemDto
 import com.hiltech.shared.core.work.TechnicianJobBundleDto
@@ -52,6 +54,8 @@ data class HiltechFieldState(
     val personalIssuedStock: FieldPersonalIssuedStockSnapshotDto? = null,
     val personalIssuedStockLoading: Boolean = false,
     val personalIssuedStockError: String? = null,
+    val materialUsageIntents: List<FieldMaterialUsageIntent> = emptyList(),
+    val materialUsageMessage: String? = null,
     val assignedAssetLookup: AssetLookupState = AssetLookupState(),
     val engineeringTestSubmitting: Boolean = false,
     val engineeringTestMessage: String? = null,
@@ -70,6 +74,8 @@ fun AssignedWorkSection(
     onTakeEvidencePhoto: (String) -> Unit = {},
     onRefreshPersonalIssuedStock: (String) -> Unit = {},
     showPersonalIssuedStock: Boolean = false,
+    onQueueMaterialUsage: (FieldPersonalIssuedStockLineDto, String) -> Unit = { _, _ -> },
+    showMaterialUsageReporting: Boolean = false,
     onLookupAssignedAssetTag: (String, String) -> Unit = { _, _ -> },
     showAssignedAssetLookup: Boolean = false,
     onSubmitEngineeringTest: (String, FieldEngineeringTestDraft) -> Unit = { _, _ -> },
@@ -121,6 +127,10 @@ fun AssignedWorkSection(
                                 personalIssuedStockError = state.personalIssuedStockError,
                                 onRefreshPersonalIssuedStock = onRefreshPersonalIssuedStock,
                                 showPersonalIssuedStock = showPersonalIssuedStock,
+                                materialUsageIntents = state.materialUsageIntents,
+                                materialUsageMessage = state.materialUsageMessage,
+                                onQueueMaterialUsage = onQueueMaterialUsage,
+                                showMaterialUsageReporting = showMaterialUsageReporting,
                                 assignedAssetLookup = state.assignedAssetLookup,
                                 onLookupAssignedAssetTag = onLookupAssignedAssetTag,
                                 showAssignedAssetLookup = showAssignedAssetLookup,
@@ -167,6 +177,10 @@ fun AssignedWorkSection(
                                 personalIssuedStockError = state.personalIssuedStockError,
                                 onRefreshPersonalIssuedStock = onRefreshPersonalIssuedStock,
                                 showPersonalIssuedStock = showPersonalIssuedStock,
+                                materialUsageIntents = state.materialUsageIntents,
+                                materialUsageMessage = state.materialUsageMessage,
+                                onQueueMaterialUsage = onQueueMaterialUsage,
+                                showMaterialUsageReporting = showMaterialUsageReporting,
                                 assignedAssetLookup = state.assignedAssetLookup,
                                 onLookupAssignedAssetTag = onLookupAssignedAssetTag,
                                 showAssignedAssetLookup = showAssignedAssetLookup,
@@ -348,6 +362,10 @@ private fun JobBundleDetail(
     personalIssuedStockError: String?,
     onRefreshPersonalIssuedStock: (String) -> Unit,
     showPersonalIssuedStock: Boolean,
+    materialUsageIntents: List<FieldMaterialUsageIntent>,
+    materialUsageMessage: String?,
+    onQueueMaterialUsage: (FieldPersonalIssuedStockLineDto, String) -> Unit,
+    showMaterialUsageReporting: Boolean,
     assignedAssetLookup: AssetLookupState,
     onLookupAssignedAssetTag: (String, String) -> Unit,
     showAssignedAssetLookup: Boolean,
@@ -702,13 +720,24 @@ private fun JobBundleDetail(
                     "NO_ISSUED_CONTEXT" ->
                         Text("لا توجد سجلات خامات مصروفة لك في التكليف ده.")
                     "SOURCE_CURRENT" -> issued.items.forEach { item ->
-                        Text("• " + item.stockItemName + " (" + item.stockItemCode +
-                            ") · المتبقي في عهدتك " + item.outstandingQuantity +
-                            " " + item.unitCode + " · إصدار المصدر " + item.sourceVersion)
+                        MaterialUsageCaptureLine(
+                            item = item,
+                            intents =
+                                materialUsageIntents.filter {
+                                    it.requirementId == item.requirementId &&
+                                        it.stockItemId == item.stockItemId
+                                },
+                            enabled = showMaterialUsageReporting,
+                            onQueue = onQueueMaterialUsage,
+                        )
                     }
                     else -> Text("حالة المصدر غير معروفة، يلزم إعادة التحقق.")
                 }
                 Text("الأرقام دي رصيد متبقٍ من الخامات المصروفة لك؛ مش رصيد المخزن أو كمية تم استهلاكها.")
+                if (showMaterialUsageReporting) {
+                    Text("بلاغ الاستخدام المحلي لا يخصم الرصيد ده. الخصم الحقيقي يحصل فقط بعد مراجعة المخزن والتسوية الرسمية.")
+                    materialUsageMessage?.let { Text(it) }
+                }
             }
         }
 
@@ -796,6 +825,74 @@ private fun JobBundleDetail(
     }
 }
 
+
+@Composable
+private fun MaterialUsageCaptureLine(
+    item: FieldPersonalIssuedStockLineDto,
+    intents: List<FieldMaterialUsageIntent>,
+    enabled: Boolean,
+    onQueue: (FieldPersonalIssuedStockLineDto, String) -> Unit,
+) {
+    var quantity by remember(
+        item.requirementId,
+        item.stockItemId,
+        item.sourceVersion,
+    ) {
+        mutableStateOf("")
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            "• " + item.stockItemName + " (" + item.stockItemCode +
+                ") · المتبقي في عهدتك " + item.outstandingQuantity +
+                " " + item.unitCode + " · إصدار المصدر " + item.sourceVersion,
+        )
+        if (enabled) {
+            OutlinedTextField(
+                value = quantity,
+                onValueChange = { quantity = it },
+                label = { Text("الكمية المستخدمة (" + item.unitCode + ")") },
+                supportingText = {
+                    Text("ده بلاغ استخدام فقط؛ مش خصم مخزون محلي.")
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedButton(
+                onClick = {
+                    onQueue(item, quantity.trim())
+                    quantity = ""
+                },
+                enabled = quantity.trim().isNotEmpty(),
+            ) {
+                Text("سجل استخدام الخامة")
+            }
+        }
+        intents.forEach { intent ->
+            val stateText =
+                when (intent.state) {
+                    "PENDING", "RETRYABLE", "SYNCING" ->
+                        "معلّق محليًا — هيتبعت بنفس العملية لما الاتصال يرجع"
+                    "APPLIED" ->
+                        "وصل للسيرفر — PENDING_REVIEW، ولسه مش خصم مخزون"
+                    "CONFLICT" ->
+                        "تعارض مع المصدر — راجع الرصيد الحالي قبل إعادة القرار"
+                    "TERMINAL_FAILED" ->
+                        "مرفوض نهائيًا — راجع البيانات"
+                    "CANCELLED_LOCAL" ->
+                        "ملغي محليًا"
+                    else -> intent.state
+                }
+            Text(
+                "↳ " + intent.quantity + " " + intent.unitCode +
+                    " · " + stateText +
+                    (intent.lastResultCode?.let { " · " + it } ?: ""),
+            )
+        }
+    }
+}
 
 @Composable
 private fun EngineeringTestCaptureCard(

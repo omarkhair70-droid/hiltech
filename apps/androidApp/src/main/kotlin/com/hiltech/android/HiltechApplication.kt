@@ -10,6 +10,7 @@ import com.hiltech.shared.core.field.FieldExecutionQueue
 import com.hiltech.shared.core.field.FieldCompletionQueue
 import com.hiltech.shared.core.field.FieldEvidenceQueue
 import com.hiltech.shared.core.field.FieldEngineeringTestOfflineQueue
+import com.hiltech.shared.core.field.FieldMaterialUsageQueue
 import com.hiltech.shared.core.evidence.EvidenceApiClient
 import com.hiltech.android.field.AndroidFieldEvidenceFiles
 import com.hiltech.android.field.AndroidFieldEvidenceSyncRuntime
@@ -105,6 +106,10 @@ class HiltechApplication : Application() {
 
     val fieldCompletionQueue by lazy {
         FieldCompletionQueue(localDatabase)
+    }
+
+    val fieldMaterialUsageQueue by lazy {
+        FieldMaterialUsageQueue(localDatabase)
     }
 
     val fieldEvidenceQueue by lazy {

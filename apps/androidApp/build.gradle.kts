@@ -10,6 +10,9 @@ val hiltechOidcClientId = providers.gradleProperty("hiltech.oidcClientId")
 val personalIssuedStockUiEnabled = providers
     .gradleProperty("hiltech.personalIssuedStockEnabled")
     .getOrElse("false") == "true"
+val materialUsageReportingUiEnabled = providers
+    .gradleProperty("hiltech.materialUsageReportingEnabled")
+    .getOrElse("false") == "true"
 val assignedAssetLookupUiEnabled = providers
     .gradleProperty("hiltech.assignedAssetLookupEnabled")
     .getOrElse("false") == "true"
@@ -52,6 +55,11 @@ android {
             "boolean",
             "HILTECH_PERSONAL_ISSUED_STOCK_ENABLED",
             personalIssuedStockUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_MATERIAL_USAGE_REPORTING_ENABLED",
+            materialUsageReportingUiEnabled.toString(),
         )
         buildConfigField(
             "boolean",
