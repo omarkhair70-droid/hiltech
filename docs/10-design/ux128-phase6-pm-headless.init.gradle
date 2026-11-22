@@ -2,7 +2,9 @@
 // Re-run from the repository root using:
 // ./gradlew -I docs/10-design/ux128-phase6-pm-headless.init.gradle :apps:desktopApp:renderUx128Phase6Pm --no-daemon
 gradle.projectsEvaluated {
-    def desktop = gradle.rootProject.project(':apps:desktopApp')
+    // Gradle evaluates included build-logic too; do not register our task there.
+    def desktop = gradle.rootProject.findProject(':apps:desktopApp')
+    if (desktop == null) return
     desktop.tasks.register('renderUx128Phase6Pm', org.gradle.api.tasks.JavaExec) {
         group = 'verification'
         description = 'Renders Phase4 PM canonical Compose fixture headlessly without desktop Robot capture.'
