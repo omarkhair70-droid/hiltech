@@ -51,7 +51,7 @@ data class IssuedServiceOrderView(
  * emails, external commitments or financial mutation are done here.
  */
 @Service
-class ServiceOrderService(
+class ServiceOrderService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val approvals:ApprovalPersistencePort,
     private val engine:ApprovalEngineService,
