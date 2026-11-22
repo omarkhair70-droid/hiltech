@@ -1,7 +1,7 @@
 # Phase 7 / Slice 03 — Buyer Selection → Canonical Approval → Issued PO
 
 Date: 2026-11-22
-Status: **S03 implementation checkpoint / internally issued PO path coded, exact-head CI pending; amendment/cancellation and release NOT CLOSED**
+Status: **S03 implementation checkpoint / V0047 issued PO + V0048 cancellation + V0049 destination amendment coded; exact-head CI and live release NOT CLOSED**
 Base: stacked on S02 PR #148 (which itself follows #146 → #143).
 No main merge or live company purchasing enablement.
 
@@ -214,3 +214,80 @@ versions, delivery/dispatch policy and role-based operator acceptance. Issued
 V1 is immutable, so amendments must never rewrite a commercial history row.
 S04 integrates physical receipts with canonical Warehouse; S05 matches invoices
 without creating unauthorized payables.
+
+## V0048/V0049 — Immutable post-issue cancellation and destination amendment
+
+### Cancellation
+
+V0048 creates `procurement_po_lifecycle_event` with company-scoped FK,
+unique operation/version and an immutable trigger. A cancellation does NOT
+UPDATE/DELETE the issued V1. Only a currently authorized issuer can use
+`POST /v1/procurement/purchase-orders/{poId}/cancel` with idempotency,
+an exact expected version and a written reason (12–1000 characters).
+The issuer authority is checked on read, mutation and replay.
+The PO row is locked and dispatch must be `NOT_SENT`. The command denies a
+previous cancellation, concurrent/later version or hidden/foreign order,
+and appends a terminal CANCELLED event with the next sequence number.
+
+`GET /v1/procurement/organizations/{orgId}/issued-pos` reads the immutable
+base plus latest lifecycle event. Authorized Windows issuer UX shows the
+order's effective state and requires a *second confirmation* before cancel.
+No supplier email, inventory rollback or finance payment occurs. S04's
+future warehouse receiving and any future supplier dispatch MUST consult
+this effective state and must explicitly refuse cancelled orders.
+
+### Delivery-only amendment
+
+V0049 adds immutable `procurement_po_delivery_amendment_proposal` and
+an optional, approval-bound `DELIVERY_AMENDED` lifecycle payload. Original
+PO supplier, quantity, pricing, tax, quote SHA, and PO code stay unchanged.
+A controlled destination amendment is three distinct steps:
+
+1. `POST /v1/procurement/purchase-orders/{id}/delivery-amendments`
+   captures old/current destination, new authorized storage location,
+   exact effective order version, operator and reason. New location must
+   belong to the same HILTECH organization and correct WorkOrder
+   project/site. Unsent and not-cancelled PO only.
+2. `POST /v1/procurement/po-delivery-amendments/{id}/request-approval`
+   uses **canonical ApprovalEngine** with subject type
+   `PROCUREMENT_PO_DELIVERY_AMENDMENT` V1 and server-configured
+   `hiltech.procurement.po.delivery-amendment-policy-key`. No requester
+   bypass; a new human decision is required for that exact amendment.
+3. `POST /v1/procurement/po-delivery-amendments/{id}/apply` rechecks
+   current issuer and the exact approved policy version, actual APPROVE
+   decision, immutable proposal, PO lock, current order version, active
+   destination and proper org/site. It appends `DELIVERY_AMENDED` V(N+1)
+   with approval ID and destination; all commercial values remain in V1.
+
+Current proposal status and destination choices are independently retrievable
+after re-login. Windows exposes a separate, opt-in issuer amendment workbench
+with proposal / approval / apply, not a single hidden auto-update.
+
+The effective PO version is derived **only** from immutable event history.
+Subsequent amendments require another approved proposal on the new version;
+cancellation uses the latest expected version and always ends the lifecycle.
+A later mutation of PO V1 is never permitted. Changing supplier, price,
+tax, quantity or commercial terms **is not a delivery amendment**:
+the existing source-bound RFQ+ApprovalEngine path must issue a separately
+approved replacement order, explicitly linked to its predecessor in a
+future controlled supersession workflow. Do not treat the original quote
+approval as permission to change prices.
+
+### New default-OFF gates
+
+- `hiltech.procurement.po-cancellation.enabled=false`
+- `hiltech.procurement.po.delivery-amendments.enabled=false`
+- `hiltech.procurement.po.delivery-amendment-policy-key`: empty
+- Windows `HILTECH_PO_CANCELLATION_UI_ENABLED` and
+  `HILTECH_PO_AMENDMENT_UI_ENABLED`: absent/false
+
+These are additional to prior issuer/buyer gates and active policy/authority.
+No real company approvals, supplier records, store destinations or POs have
+been seeded or activated by this branch.
+
+**Remaining release gates:** exact-head CI, real company-controlled
+approval/issuer role bindings and policy versions, cross-role on-device
+acceptance using authentic sample purchasing records, and explicit
+commercial-terms supersession and supplier-dispatch policy before
+public release. Phase 7 as a whole additionally requires S04 canonical
+Warehouse receipt, S05 Finance handoff, and cross-slice field E2E.
