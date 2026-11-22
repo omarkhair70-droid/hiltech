@@ -53,6 +53,12 @@ threshold would need a real versioned, non-bypassable source.
 - POST `/v1/sourcing/rfqs/{rfqId}/quote-evidence`
 - GET `/v1/sourcing/rfqs/{rfqId}/comparison`
 
+The shared KMP Android/Windows transport is in
+`shared/core/.../procurement/SupplierSourcingApiClient.kt` with the exact
+same typed routes, bearer identity, device id, idempotency header and
+restricted-source errors. It is a client contract, **not yet a native buyer
+screen**, and offers no offline write queue.
+
 Default feature: `hiltech.procurement.sourcing.enabled=false`.
 All writes require authenticated matching Idempotency-Key and immutable
 current S01 technical version; quote revision is locked and sequential.

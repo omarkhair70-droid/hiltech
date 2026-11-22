@@ -10,6 +10,8 @@ on:
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/**"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/**"
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/**"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/**"
   pull_request:
     branches:
       - "phase7/s01-purchase-requirement-20261122"
@@ -19,6 +21,8 @@ on:
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/**"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/**"
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/**"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/**"
 
 permissions:
   contents: read
@@ -66,4 +70,10 @@ jobs:
             --tests com.hiltech.server.procurement.SupplierQuoteComparisonTest \
             --tests com.hiltech.server.procurement.SupplierSourcingServiceTest \
             --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --no-daemon --console=plain
+
+      - name: Verify authenticated KMP buyer transport
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests '*SupplierSourcingApiClientTest' \
             --no-daemon --console=plain
