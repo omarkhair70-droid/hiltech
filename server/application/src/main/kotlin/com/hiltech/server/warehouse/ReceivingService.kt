@@ -41,6 +41,10 @@ data class ReceiveAssetLineRequest(
 data class AddReceivingDiscrepancyRequest(
     val recordVersion: Long, val lineId: UUID? = null, val type: ReceivingDiscrepancyType, val description: String,
 )
+data class RejectPoReceivingStockLineRequest(
+    val recordVersion: Long, val lineVersion: Long,
+    val quantity: String, val type: ReceivingDiscrepancyType, val reason: String,
+)
 data class CompleteReceivingRequest(val recordVersion: Long)
 data class ReceivingRecordResult(val record: ReceivingRecordView, val replayed: Boolean)
 data class ReceivingLineResult(val line: ReceivingLineView, val replayed: Boolean)
@@ -172,7 +176,8 @@ class ReceivingService(
             if (record.version != request.recordVersion || record.state != ReceivingState.IN_PROGRESS) stale()
             requireDestination(context.actor, record.organizationId, record.destinationStorageLocationId)
             val line = receiving.line(lineId, lock = true)?.takeIf { it.receivingRecordId == record.id } ?: unavailable()
-            if (line.version != request.lineVersion || line.receivedAt != null) stale()
+            if (line.version != request.lineVersion || line.receivedAt != null ||
+                receiving.hasPoRejection(line.id)) stale()
             val itemId = line.expectedStockItemId ?: invalid()
             val item = stock.item(itemId, lock = true)?.takeIf {
                 it.active && it.organizationId == record.organizationId && it.version == request.stockItemVersion
@@ -263,6 +268,75 @@ class ReceivingService(
         return ReceivingDiscrepancyResult(discrepancy, receiving.record(id) ?: unavailable(), replayed)
     }
 
+    /**
+     * Physical rejection: preserve a typed discrepancy with an immutable PO
+     * rejection event, and never append a stock movement for rejected goods.
+     */
+    fun rejectPoStockLine(
+        context: ReceivingCommandContext, recordId: UUID, lineId: UUID,
+        request: RejectPoReceivingStockLineRequest,
+    ): ReceivingDiscrepancyResult {
+        val visible = receiving.record(recordId) ?: unavailable()
+        requireDestination(context.actor, visible.organizationId, visible.destinationStorageLocationId)
+        val rejected = quantity(request.quantity)
+        val reason = request.reason.trim()
+        if (request.type !in setOf(
+                ReceivingDiscrepancyType.WRONG_ITEM,
+                ReceivingDiscrepancyType.DAMAGED_ON_RECEIPT,
+                ReceivingDiscrepancyType.SERIAL_MISMATCH,
+                ReceivingDiscrepancyType.UNEXPECTED_ITEM,
+                ReceivingDiscrepancyType.DOCUMENT_MISMATCH,
+            ) || reason.length !in 12..2000 || reason.any { it.code < 32 }
+        ) invalid()
+        val eventId = UUID.nameUUIDFromBytes(
+            "hiltech:po-receiving-rejection:${context.operationId}".toByteArray(Charsets.UTF_8),
+        )
+        val discrepancyId = UUID.nameUUIDFromBytes(
+            "hiltech:po-receiving-rejection-discrepancy:${context.operationId}"
+                .toByteArray(Charsets.UTF_8),
+        )
+        val replayed = execute(
+            context, "RECEIVING_PO_LINE_REJECTED", "RECEIVING_PO_REJECTION",
+            eventId, recordId, lineId, request.recordVersion, request.lineVersion,
+            rejected.toPlainString(), request.type, reason,
+        ) {
+            val record = receiving.record(recordId, lock = true) ?: unavailable()
+            if (record.version != request.recordVersion ||
+                record.state != ReceivingState.IN_PROGRESS) stale()
+            requireDestination(context.actor, record.organizationId, record.destinationStorageLocationId)
+            if (record.sourceType != ReceivingSourceType.PO) invalid()
+            poReceiving.requireBoundCurrent(record)
+            val line = receiving.line(lineId, lock = true)
+                ?.takeIf { it.receivingRecordId == record.id } ?: unavailable()
+            if (line.version != request.lineVersion || line.receivedAt != null ||
+                receiving.hasPoRejection(line.id) ||
+                line.candidateClass !in setOf(
+                    ReceivingCandidateClass.STOCK_QUANTITY,
+                    ReceivingCandidateClass.STOCK_SERIALIZED,
+                )
+            ) stale()
+            val expected = line.expectedQuantity?.let(::quantity)
+            if (expected != null && rejected.compareTo(expected) > 0) invalid()
+            val at = clock.instant().truncatedTo(ChronoUnit.MICROS)
+            receiving.insertPoRejection(
+                eventId, context, record, line.id, rejected, request.type, reason, at,
+            )
+            receiving.insertDiscrepancy(
+                discrepancyId, record, line.id, request.type, reason, context.actor, at,
+            )
+            if (!receiving.touchInProgress(record.id, record.version, at)) stale()
+            events.publishEvent(ReceivingDiscrepancyRecorded(
+                record.id, discrepancyId, line.id, request.type, context.actor,
+            ))
+        }
+        return ReceivingDiscrepancyResult(
+            receiving.discrepancies(recordId).singleOrNull { it.id == discrepancyId }
+                ?: unavailable(),
+            receiving.record(recordId) ?: unavailable(),
+            replayed,
+        )
+    }
+
     fun complete(context: ReceivingCommandContext, id: UUID, request: CompleteReceivingRequest): ReceivingRecordResult {
         val visible = receiving.record(id) ?: unavailable()
         requireDestination(context.actor, visible.organizationId, visible.destinationStorageLocationId)
@@ -272,7 +346,7 @@ class ReceivingService(
             requireDestination(context.actor, record.organizationId, record.destinationStorageLocationId)
             poReceiving.requireBoundCurrent(record)
             val lines = receiving.lines(record.id)
-            if (lines.isEmpty() || lines.any { it.receivedAt == null }) incomplete()
+            if (lines.isEmpty() || lines.any { it.receivedAt == null && !receiving.hasPoRejection(it.id) }) incomplete()
             if (record.state != ReceivingState.IN_PROGRESS) stale()
             val target = if (receiving.hasDiscrepancy(record.id))
                 ReceivingState.RECEIVED_WITH_DISCREPANCY else ReceivingState.RECEIVED
@@ -332,5 +406,5 @@ class ReceivingService(
     private fun invalid(): Nothing = throw ProductApiException(
         "INVALID_RECEIVING", "Invalid Receiving input.", HttpStatus.BAD_REQUEST)
     private fun incomplete(): Nothing = throw ProductApiException(
-        "RECEIVING_INCOMPLETE", "Every Receiving line must be physically received first.", HttpStatus.CONFLICT)
+        "RECEIVING_INCOMPLETE", "Each receiving line must be physically accepted or explicitly rejected.", HttpStatus.CONFLICT)
 }
