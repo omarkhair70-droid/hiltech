@@ -309,7 +309,8 @@ class WarehouseReplenishmentService @Autowired constructor(
             location.lifecycleState != StorageLocationLifecycle.ACTIVE ||
             (location.activeFrom != null && location.activeFrom > now) ||
             (location.activeUntil != null && location.activeUntil <= now) ||
-            location.projectId != null || location.siteId != null
+            location.projectId != null || location.siteId != null ||
+            location.kind.name !in setOf("MAIN_WAREHOUSE", "WAREHOUSE")
         ) hidden()
         val canRequest = warehouseAuth.canReceiveAt(actor, location)
         val canReview = warehouseAuth.canManageWarehouse(actor, facility)
