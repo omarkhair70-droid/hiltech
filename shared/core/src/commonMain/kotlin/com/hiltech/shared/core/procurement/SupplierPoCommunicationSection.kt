@@ -140,7 +140,7 @@ private fun SupplierPoCommunicationAction(
                                             currentInstant(),
                                         ), installationId,
                                     )
-                                    if (entry.eventType != type) error("Unexpected attestation result")
+                                    if (entry.eventType != type) throw IllegalStateException("Unexpected attestation result")
                                     pendingOperation = null
                                     ref = ""
                                     history = api.history(order.id, installationId)
