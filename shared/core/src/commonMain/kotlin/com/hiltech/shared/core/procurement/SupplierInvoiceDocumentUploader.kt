@@ -5,6 +5,14 @@ import com.hiltech.shared.core.evidence.EvidenceMetadataDto
 import com.hiltech.shared.core.evidence.FinalizeEvidenceRequestDto
 import com.hiltech.shared.core.evidence.ReserveEvidenceUploadRequestDto
 
+data class SupplierInvoiceSelectedFile(
+    val contentType: String,
+    val originalFileName: String,
+    val bytes: ByteArray,
+    val sha256: String,
+    val capturedAt: String,
+)
+
 /** Trusted private PDF/image upload before a Finance invoice may be captured. */
 data class SupplierInvoiceDocumentUploadInput(
     val purchaseOrderId: String,
