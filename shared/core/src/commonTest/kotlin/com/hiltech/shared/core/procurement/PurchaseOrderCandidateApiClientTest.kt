@@ -48,6 +48,30 @@ class PurchaseOrderCandidateApiClientTest {
         assertEquals(2, result.blockers.size)
     }
 
+    @Test fun explicitApprovalRequestUsesConfiguredServerPolicyAndNoPurchaseClaim() = runBlocking {
+        val request = RequestPurchaseCandidateApprovalDto(operation)
+        val http = HttpClient(MockEngine { call ->
+            assertEquals("POST", call.method.value)
+            assertEquals("/v1/sourcing/po-candidates/$quote/request-approval",
+                call.url.encodedPath)
+            assertEquals(operation, call.headers["Idempotency-Key"])
+            assertEquals("Bearer buyer-token", call.headers[HttpHeaders.Authorization])
+            val body = (call.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            assertEquals(request, Json.decodeFromString<RequestPurchaseCandidateApprovalDto>(body))
+            respond("""{"candidateId":"$quote","candidateVersion":1,
+                "approvalRequestId":"$operation","approvalRequired":true,
+                "approvalState":"PENDING","policyKey":"PROCUREMENT_STANDARD",
+                "policyVersion":7,"replayed":false,"purchaseAuthorized":false,
+                "purchaseOrderIssued":false}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).requestApproval(quote, request, installation)
+        assertEquals("PENDING", result.approvalState)
+        assertEquals(7, result.policyVersion)
+        assertFalse(result.purchaseAuthorized)
+        assertFalse(result.purchaseOrderIssued)
+    }
+
     @Test fun proposalUsesIdempotencyAndNeverClaimsPurchaseApproval() = runBlocking {
         val command = ProposePurchaseOrderCandidateDto(
             operationId = operation,
