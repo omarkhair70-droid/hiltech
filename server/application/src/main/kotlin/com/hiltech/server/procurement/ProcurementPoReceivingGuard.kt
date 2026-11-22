@@ -56,6 +56,9 @@ class ProcurementPoReceivingGuard @Autowired constructor(
         ) == 1)
     }
 
+    /** Only new verified PO receipts are governed; legacy free-text PO refs remain unchanged while feature is off. */
+    fun isGovernedPo(record: ReceivingRecordView): Boolean = bound(record) != null
+
     fun requireStockLine(
         record: ReceivingRecordView,
         stockItemId: UUID,
