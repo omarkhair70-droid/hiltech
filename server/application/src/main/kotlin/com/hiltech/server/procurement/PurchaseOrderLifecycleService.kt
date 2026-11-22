@@ -48,6 +48,7 @@ class PurchaseOrderLifecycleService @Autowired constructor(
     private val cancellationEnabled: Boolean = false,
     @Value("\${hiltech.procurement.po.delivery-amendments.enabled:false}")
     private val amendmentEnabled: Boolean = false,
+    private val poReceiving: ProcurementPoReceivingSourcePort = DenyPoReceivingSource,
 ) {
     fun issuedOrders(actor: UUID, organizationId: UUID): List<PurchaseOrderLifecycleSummary> {
         if (!cancellationEnabled && !amendmentEnabled) unavailable()
@@ -85,7 +86,9 @@ class PurchaseOrderLifecycleService @Autowired constructor(
         )) {
             if (!purchases.lockOrder(purchaseOrderId, order.organizationId)) unavailable()
             val current = purchases.byId(purchaseOrderId) ?: unavailable()
-            if (current != order || current.supplierDispatchState != "NOT_SENT") stale()
+            if (current != order || current.supplierDispatchState != "NOT_SENT" ||
+                poReceiving.hasAnyLinkedReceipt(purchaseOrderId)
+            ) stale()
             issuer.requireIssuerForLifecycle(context.actor, current.organizationId)
             val history = purchases.lifecycleEvents(purchaseOrderId)
             if (history.any { it.organizationId != current.organizationId ||
