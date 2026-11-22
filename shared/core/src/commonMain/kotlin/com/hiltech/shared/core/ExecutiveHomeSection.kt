@@ -23,6 +23,8 @@ import com.hiltech.shared.core.executive.ExecutiveSourceReferenceDto
 import com.hiltech.shared.core.executive.resolveExecutiveDestination
 import com.hiltech.shared.core.executive.executiveSnapshotMatchesSession
 import com.hiltech.shared.core.executive.orderExecutiveProjectsByHealth
+import com.hiltech.shared.core.executive.executiveVisiblePulse
+import com.hiltech.shared.core.executive.ExecutivePulseState
 
 /**
  * Native Windows + Android executive surface. Stateless by design:
@@ -97,6 +99,35 @@ fun ExecutiveHomeSection(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("ملخص القراءة — وليس إجمالي الشركة", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "من القرارات والمشاريع والمعدات المتاحة لصلاحياتك في نافذة القراءة الحالية فقط.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                executiveVisiblePulse(home).forEach { pulse ->
+                    val color = when (pulse.state) {
+                        ExecutivePulseState.CRITICAL_VISIBLE,
+                        ExecutivePulseState.SOURCE_UNAVAILABLE -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurface
+                    }
+                    Text(pulse.label + " · " + pulse.statement, color = color)
+                    if (pulse.incomplete) {
+                        Text(
+                            "قراءة جزئية أو غير مؤكدة؛ افتح النظام الأصلي للتحقق.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
 
         ExecutiveSectionHeader(
             "يحتاج قرارك",
