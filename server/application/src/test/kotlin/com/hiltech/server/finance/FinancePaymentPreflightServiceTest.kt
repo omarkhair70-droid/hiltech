@@ -112,4 +112,20 @@ class FinancePaymentPreflightServiceTest {
         assertFalse(pulse.actualBankBalanceKnown)
         assertFalse(pulse.reconciliationAvailable)
     }
+    @Test fun reachingTheSourceLimitNeverPretendsToBeTheCompanyWideTotal() {
+        val page = (1..100).map { candidate(amount = "1.00") }
+        Mockito.`when`(payable.candidates(actor, org)).thenReturn(page)
+        val pulse = service(true).pulse(actor, org)
+        assertEquals(100, pulse.sourceItems)
+        assertEquals(100, pulse.sourceQueryLimit)
+        assertTrue(pulse.possibleUnreturnedSources)
+        assertEquals("100", pulse.groupsByCurrency.single().reviewCandidateTotal)
+        assertNull(pulse.groupsByCurrency.single().postedPayables)
+
+        val preview = service(true).report(actor, org)
+        assertTrue(preview.possibleUnreturnedSources)
+        assertEquals(100, preview.sourceQueryLimit)
+        assertFalse(preview.paymentInstructionEnabled)
+    }
+
 }
