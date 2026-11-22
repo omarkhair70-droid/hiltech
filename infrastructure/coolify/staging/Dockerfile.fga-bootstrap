@@ -1,0 +1,15 @@
+# Isolated one-shot staging policy bootstrap runner. No exposed port and no embedded key.
+# Source inputs are pinned to the reviewed PR #155 commit that passed CI model tests.
+FROM python:3.13.9-alpine
+WORKDIR /opt/hiltech-fga
+RUN apk add --no-cache ca-certificates \
+ && wget -q -O bootstrap.py https://raw.githubusercontent.com/omarkhair70-droid/hiltech/92319ba01699fe135a7334e85d239171bd494008/scripts/devops/bootstrap_hiltech_openfga.py \
+ && wget -q -O first-slice-model.json https://raw.githubusercontent.com/omarkhair70-droid/hiltech/92319ba01699fe135a7334e85d239171bd494008/infrastructure/coolify/staging/first-slice-model.generated.json \
+ && python bootstrap.py --model first-slice-model.json \
+ && addgroup -S hiltech && adduser -S -G hiltech hiltech \
+ && chown -R hiltech:hiltech /opt/hiltech-fga
+USER hiltech
+# No remote listener, no application business data, no automatic model mutation.
+# An explicit operator-triggered Coolify task performs:
+# python /opt/hiltech-fga/bootstrap.py --model /opt/hiltech-fga/first-slice-model.json --apply
+CMD ["tail", "-f", "/dev/null"]
