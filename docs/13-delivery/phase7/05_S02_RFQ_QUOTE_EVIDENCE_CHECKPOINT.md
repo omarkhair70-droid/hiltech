@@ -66,9 +66,9 @@ shell only if `HILTECH_SUPPLIER_SOURCING_UI_ENABLED=true` is explicitly
 set. It reads eligible needs and existing RFQ rounds from real server
 source history and can create a draft RFQ from a current eligible need
 without hand-entering UUIDs. It can inspect recorded quote comparisons.
-There is NO supplier quote entry form until a secure supplier lookup,
-actual supplier-document links and restricted technical compliance workflow
-are bound. The server sourcing feature and buyer authority still default
+The follow-on native buyer form records linked suppliers, price/quantity/
+terms and revisioned quotations only after a canonical restricted document
+reaches READY; the technical reviewer remains separately authorized. The server sourcing feature and buyer authority still default
 to **deny** independently of the optional UI flag.
 
 Default feature: `hiltech.procurement.sourcing.enabled=false`.
@@ -172,7 +172,15 @@ Evidence clients for a strict, online-only slot → reservation → private
 binary PUT → finalize sequence. It exposes a canonical reference to quote
 capture **only** on READY. It has no offline write queue.
 
-**Remaining integration:** Wire native Windows file selection and buyer quote
-capture to the upload coordinator, prove buyer/reviewer roles and supplier
-master-data authoring in a real company source, and test direct restricted
-document delivery/review. All sourcing features remain OFF by default.
+**Latest native integration:** Windows now supplies a bounded PDF/image
+file picker and JVM SHA-256, passes the bytes to the shared authenticated
+supplier document uploader, and shows a buyer-only linked supplier/terms
+capture form. The form fetches current quote revisions before append-only
+submission; the server rechecks the revision atomically. No offline queue,
+supplier notification, award, PO, invoice or payment was added.
+
+**Remaining integration:** Prove real buyer/reviewer authorization and
+supplier master-data authoring in the company's current policy source,
+restricted document delivery/reviewer UX, and real connected-role E2E
+with company-owned sample quotations. All sourcing features remain OFF
+by default.
