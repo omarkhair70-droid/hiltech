@@ -21,6 +21,7 @@ import com.hiltech.shared.core.local.buildHiltechLocalDatabase
 import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.procurement.PurchaseRequirementApiClient
+import com.hiltech.shared.core.procurement.PoWarehouseIntakeApiClient
 import com.hiltech.shared.core.work.WorkApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
 import com.hiltech.shared.core.people.HrDocumentsApiClient
@@ -95,6 +96,7 @@ class HiltechApplication : Application() {
 
     val warehouseApi by lazy { WarehouseApiClient(productApi) }
     val procurementApi by lazy { PurchaseRequirementApiClient(productApi) }
+    val poWarehouseIntakeApi by lazy { PoWarehouseIntakeApiClient(productApi) }
     val procurementWorkApi by lazy { WorkApiClient(productApi) }
 
     val fieldAssignedWorkApi:
