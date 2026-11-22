@@ -15,6 +15,12 @@ data class ServiceRfqDto(
     val supplierCount:Int,val purchaseAuthorized:Boolean=false,
 )
 @Serializable
+data class ServiceEligibleNeedDto(
+    val needId:String,val needVersion:Long,val organizationId:String,
+    val specification:String,val acceptanceCriteria:String,
+    val rfqId:String?=null,val sourceCurrent:Boolean,
+)
+@Serializable
 data class ServiceRfqReceiptDto(val rfq:ServiceRfqDto,val replayed:Boolean)
 @Serializable
 data class OpenServiceRfqDto(val operationId:String,val expectedNeedVersion:Long)
@@ -51,9 +57,9 @@ class ServiceSupplierSourcingApiClient(
     private val api:HiltechApiClient,
     private val json:Json=Json {ignoreUnknownKeys=true;explicitNulls=false},
 ) {
-    suspend fun eligibleNeeds(org:String,install:String):List<ServiceRfqDto> =
+    suspend fun eligibleNeeds(org:String,install:String):List<ServiceEligibleNeedDto> =
         get("/v1/service-procurement/organizations/"+uuid(org)+"/sourcing-eligible-needs",
-            install,ListSerializer(ServiceRfqDto.serializer()))
+            install,ListSerializer(ServiceEligibleNeedDto.serializer()))
 
     suspend fun rounds(need:String,install:String):List<ServiceRfqDto> =
         get("/v1/service-procurement/needs/"+uuid(need)+"/rfqs",install,
