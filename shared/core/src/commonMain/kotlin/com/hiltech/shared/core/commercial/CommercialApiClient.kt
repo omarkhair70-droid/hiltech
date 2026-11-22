@@ -29,6 +29,88 @@ data class CreateCommercialOpportunityDto(
     val expectedDecisionDate: String? = null,
 )
 @Serializable
+data class QualifyCommercialOpportunityDto(
+    val operationId: String,
+    val baseVersion: Long,
+    val discoverySummary: String,
+    val openQuestions: String = "",
+)
+
+@Serializable
+data class CommercialEvidenceConfirmationDto(
+    val operationId: String,
+    val evidenceId: String,
+)
+
+@Serializable
+data class CommercialScopeDto(
+    val operationId: String,
+    val description: String,
+    val inclusions: String,
+    val exclusions: String,
+    val assumptions: String,
+    val technicalConstraints: String,
+    val clientResponsibilities: String,
+)
+
+@Serializable
+data class CommercialBoqLineDto(
+    val lineCode: String,
+    val description: String,
+    val category: String,
+    val quantity: JsonPrimitive,
+    val unit: String,
+    val internalUnitCost: JsonPrimitive? = null,
+    val sellUnitPrice: JsonPrimitive,
+)
+
+@Serializable
+data class CommercialBoqDto(
+    val operationId: String,
+    val scopeVersionId: String,
+    val currency: String,
+    val lines: List<CommercialBoqLineDto>,
+)
+
+@Serializable
+data class CommercialQuoteDraftDto(
+    val operationId: String,
+    val boqVersionId: String,
+    val paymentTerms: String,
+    val deliveryTerms: String,
+    val exclusions: String,
+    val validityDate: String,
+)
+
+@Serializable
+data class CommercialContractDraftDto(
+    val operationId: String,
+    val quoteVersionId: String,
+    val contractCode: String,
+    val effectiveDate: String? = null,
+    val endDate: String? = null,
+    val warrantyTerms: String? = null,
+    val maintenanceTerms: String? = null,
+)
+
+@Serializable
+data class CommercialClientPoDraftDto(
+    val operationId: String,
+    val contractId: String,
+    val clientPoNumber: String,
+    val issuedOn: String,
+    val amount: JsonPrimitive,
+    val currency: String,
+)
+
+@Serializable
+data class CommercialConversionDto(
+    val operationId: String,
+    val contractId: String,
+    val clientPoId: String,
+)
+
+@Serializable
 data class PlanCommercialVisitDto(
     val operationId: String,
     val scheduledAt: String,
@@ -93,6 +175,55 @@ class CommercialApiClient(
             request.operationId, installationId,
             json.encodeToString(PlanCommercialVisitDto.serializer(), request),
         )
+
+    suspend fun qualify(opportunityId: String, request: QualifyCommercialOpportunityDto, installationId: String) =
+        command("/v1/commercial/opportunities/" + opportunityId + "/qualify",
+            request.operationId, installationId,
+            json.encodeToString(QualifyCommercialOpportunityDto.serializer(), request))
+
+    suspend fun scope(opportunityId: String, request: CommercialScopeDto, installationId: String) =
+        command("/v1/commercial/opportunities/" + opportunityId + "/scopes",
+            request.operationId, installationId,
+            json.encodeToString(CommercialScopeDto.serializer(), request))
+
+    suspend fun boq(opportunityId: String, request: CommercialBoqDto, installationId: String) =
+        command("/v1/commercial/opportunities/" + opportunityId + "/boqs",
+            request.operationId, installationId,
+            json.encodeToString(CommercialBoqDto.serializer(), request))
+
+    suspend fun draftQuote(opportunityId: String, request: CommercialQuoteDraftDto, installationId: String) =
+        command("/v1/commercial/opportunities/" + opportunityId + "/quotes",
+            request.operationId, installationId,
+            json.encodeToString(CommercialQuoteDraftDto.serializer(), request))
+
+    suspend fun draftContract(opportunityId: String, request: CommercialContractDraftDto, installationId: String) =
+        command("/v1/commercial/opportunities/" + opportunityId + "/contracts",
+            request.operationId, installationId,
+            json.encodeToString(CommercialContractDraftDto.serializer(), request))
+
+    suspend fun draftClientPo(opportunityId: String, request: CommercialClientPoDraftDto, installationId: String) =
+        command("/v1/commercial/opportunities/" + opportunityId + "/client-pos",
+            request.operationId, installationId,
+            json.encodeToString(CommercialClientPoDraftDto.serializer(), request))
+
+    suspend fun confirmSigned(contractId: String, evidenceId: String,
+                              operationId: String, installationId: String) =
+        command("/v1/commercial/contracts/" + contractId + "/confirm-signed",
+            operationId, installationId,
+            json.encodeToString(CommercialEvidenceConfirmationDto.serializer(),
+                CommercialEvidenceConfirmationDto(operationId, evidenceId)))
+
+    suspend fun verifyClientPo(clientPoId: String, evidenceId: String,
+                              operationId: String, installationId: String) =
+        command("/v1/commercial/client-pos/" + clientPoId + "/verify",
+            operationId, installationId,
+            json.encodeToString(CommercialEvidenceConfirmationDto.serializer(),
+                CommercialEvidenceConfirmationDto(operationId, evidenceId)))
+
+    suspend fun convertToProject(opportunityId: String, request: CommercialConversionDto, installationId: String) =
+        command("/v1/commercial/opportunities/" + opportunityId + "/convert",
+            request.operationId, installationId,
+            json.encodeToString(CommercialConversionDto.serializer(), request))
 
     suspend fun requestApproval(quoteId: String, operationId: String, installationId: String) =
         command(
