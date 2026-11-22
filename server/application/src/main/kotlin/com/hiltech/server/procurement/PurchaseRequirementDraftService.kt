@@ -201,7 +201,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
         requireEnabled()
         if (context.operationId != request.operationId) invalid()
         val record = drafts.byId(id) ?: hidden()
-        val initialOrder = authorizedOrder(context.actor, record.workOrderId)
+        val initialOrder = authorizedOrder(context.actor, workId(record))
         if (record.organizationId != initialOrder.organizationId || record.requestedBy != context.actor) hidden()
         val execution = commands.execute(
             IdempotentCommandSpec(
@@ -217,8 +217,8 @@ class PurchaseRequirementDraftService @Autowired constructor(
             val currentVersion = previous?.resultVersion ?: root.version
             if (currentVersion != request.expectedVersion) stale()
             if ((previous?.toState ?: "DRAFT") != "DRAFT") ended()
-            if (!work.lockWorkOrder(root.workOrderId)) hidden()
-            val currentOrder = authorizedOrder(context.actor, root.workOrderId)
+            if (!work.lockWorkOrder(workId(root))) hidden()
+            val currentOrder = authorizedOrder(context.actor, workId(root))
             if (!acceptsDemand(currentOrder.lifecycleState)) ended()
             val spec = effectiveSpec(root, previous)
             val currentItem = matchingItem(currentOrder, root.stockItemId)
@@ -253,7 +253,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
         requireEnabled()
         if (context.operationId != request.operationId) invalid()
         val record = drafts.byId(id) ?: hidden()
-        val initialOrder = authorizedOrder(context.actor, record.workOrderId)
+        val initialOrder = authorizedOrder(context.actor, workId(record))
         if (record.organizationId != initialOrder.organizationId || record.requestedBy != context.actor) hidden()
         val quantity = parseQuantity(request.quantity)
         val justification = request.justification.trim()
@@ -277,8 +277,8 @@ class PurchaseRequirementDraftService @Autowired constructor(
             val state = previous?.toState ?: "DRAFT"
             if (version != request.expectedVersion) stale()
             if (state !in setOf("DRAFT", "NEEDS_INFO")) ended()
-            if (!work.lockWorkOrder(root.workOrderId)) hidden()
-            val current = authorizedOrder(context.actor, root.workOrderId)
+            if (!work.lockWorkOrder(workId(root))) hidden()
+            val current = authorizedOrder(context.actor, workId(root))
             if (!acceptsDemand(current.lifecycleState)) ended()
             if (current.version != request.baseWorkOrderVersion) stale()
             val currentItem = matchingItem(current, root.stockItemId)
@@ -326,7 +326,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
             (reason != null && reason.length > 500)
         ) invalid()
         val root = drafts.byId(id) ?: hidden()
-        val initialOrder = managedOrder(context.actor, root.workOrderId)
+        val initialOrder = managedOrder(context.actor, workId(root))
         if (root.organizationId != initialOrder.organizationId) hidden()
         val fields = listOf(id.toString(), request.expectedVersion.toString(), type, reason.orEmpty())
         val canonical = fields.joinToString("") { "${it.length}:$it" }
@@ -348,8 +348,8 @@ class PurchaseRequirementDraftService @Autowired constructor(
             if (type != "TECHNICAL_READY" &&
                 currentState !in setOf("SUBMITTED", "READY_FOR_SOURCING")
             ) ended()
-            if (!work.lockWorkOrder(locked.workOrderId)) hidden()
-            val current = managedOrder(context.actor, locked.workOrderId)
+            if (!work.lockWorkOrder(workId(locked))) hidden()
+            val current = managedOrder(context.actor, workId(locked))
             if (type == "TECHNICAL_READY") {
                 if (!acceptsDemand(current.lifecycleState)) ended()
                 val spec = effectiveSpec(locked, previous)
@@ -384,7 +384,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
         val project = projects.project(projectId, clock.instant()) ?: hidden()
         if (project.projectId != projectId || !projectAuth.canManageProject(actor, project)) hidden()
         return drafts.projectIntake(project.organizationId, projectId).mapNotNull { record ->
-            val order = work.workOrder(record.workOrderId)
+            val order = work.workOrder(workId(record))
             if (order != null && order.organizationId == project.organizationId &&
                 order.projectId == projectId && record.organizationId == project.organizationId
             ) view(actor, order, record) else null
@@ -400,7 +400,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
         requireEnabled()
         if (context.operationId != request.operationId) invalid()
         val record = drafts.byId(id) ?: hidden()
-        val order = authorizedOrder(context.actor, record.workOrderId)
+        val order = authorizedOrder(context.actor, workId(record))
         if (record.organizationId != order.organizationId || record.requestedBy != context.actor) hidden()
         val reason = request.reason?.trim()
         if (request.reason != null && (reason.isNullOrEmpty() || reason.length > 500)) invalid()
@@ -415,7 +415,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
         ) {
             if (!drafts.lock(id)) hidden()
             val locked = drafts.byId(id) ?: hidden()
-            val source = authorizedOrder(context.actor, locked.workOrderId)
+            val source = authorizedOrder(context.actor, workId(locked))
             if (source.organizationId != locked.organizationId || locked.requestedBy != context.actor) hidden()
             val previous = drafts.latestTransition(id)
             val currentVersion = previous?.resultVersion ?: locked.version
@@ -456,7 +456,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
     fun reviewPreview(actor: UUID, id: UUID): PurchaseRequirementReviewPreview {
         requireEnabled()
         val record = drafts.byId(id) ?: hidden()
-        val order = authorizedOrder(actor, record.workOrderId, allowManager = true)
+        val order = authorizedOrder(actor, workId(record), allowManager = true)
         if (record.organizationId != order.organizationId) hidden()
         val latest = drafts.latestTransition(id)
         val state = latest?.toState ?: "DRAFT"
@@ -478,7 +478,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
             else -> assess(actor, order, requireNotNull(item), spec.quantity, at)
         }
         val other = drafts.otherOpenDraftIds(
-            order.organizationId, record.workOrderId, record.stockItemId, record.id,
+            order.organizationId, workId(record), record.stockItemId, record.id,
         )
         return PurchaseRequirementReviewPreview(
             requirementId = record.id,
@@ -504,7 +504,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
     fun detail(actor: UUID, id: UUID): PurchaseRequirementDraftView {
         requireEnabled()
         val record = drafts.byId(id) ?: hidden()
-        val order = authorizedOrder(actor, record.workOrderId, allowManager = true)
+        val order = authorizedOrder(actor, workId(record), allowManager = true)
         if (record.organizationId != order.organizationId) hidden()
         return view(actor, order, record)
     }
@@ -513,7 +513,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
         root: PurchaseRequirementDraftRecord, latest: PurchaseRequirementTransitionRecord?,
     ): PurchaseRequirementRevision =
         latest?.revised ?: PurchaseRequirementRevision(
-            root.requestedQuantity, root.justification, root.sourceWorkVersion, root.stockItemVersion,
+            root.requestedQuantity, root.justification, root.sourceWorkVersion ?: hidden(), root.stockItemVersion,
             root.unitCode, root.assessmentCode, root.visibleFreeQuantity, root.assessedAt,
         )
 
@@ -542,7 +542,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
                 projectAuth.canManageProject(actor, it)
         } ?: false
         return PurchaseRequirementDraftView(
-            record.id, record.workOrderId, record.sourceWorkVersion,
+            record.id, workId(record), record.sourceWorkVersion ?: hidden(),
             record.stockItemId, record.stockItemVersion, spec.quantity.toPlainString(),
             spec.unitCode, spec.justification, state,
             if (canReadSnapshot) spec.assessmentCode else "WAREHOUSE_REVIEW_REQUIRED",
@@ -584,6 +584,9 @@ class PurchaseRequirementDraftService @Autowired constructor(
             free, at,
         )
     }
+
+    private fun workId(record: PurchaseRequirementDraftRecord): UUID =
+        record.workOrderId?.takeIf { record.sourceType == "WORK_ORDER" } ?: hidden()
 
     private fun authorizedOrder(
         actor: UUID, id: UUID, allowManager: Boolean = false,
