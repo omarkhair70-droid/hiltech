@@ -2823,6 +2823,58 @@ fun main() {
                                     organizationId = organization.organizationId,
                                     installationId = runtime.physicalWarehouseInstallationId,
                                     newOperationId = { java.util.UUID.randomUUID().toString() },
+                                    quoteDocumentUploader = runtime.supplierQuoteDocumentUploader,
+                                    pickQuoteFile = {
+                                        kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                            val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                            javax.swing.SwingUtilities.invokeAndWait {
+                                                val picker = javax.swing.JFileChooser()
+                                                picker.dialogTitle = "Private supplier quotation document"
+                                                picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter(
+                                                    "Quotation PDF or image (max 16 MiB)", "pdf", "jpg", "jpeg", "png", "webp",
+                                                )
+                                                picker.isAcceptAllFileFilterUsed = false
+                                                if (picker.showOpenDialog(null) ==
+                                                    javax.swing.JFileChooser.APPROVE_OPTION
+                                                ) chosen.set(picker.selectedFile)
+                                            }
+                                            val file = chosen.get()
+                                            if (file == null) null else {
+                                                val path = file.toPath()
+                                                require(java.nio.file.Files.isRegularFile(
+                                                    path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
+                                                )) { "Quotation source must be a regular file." }
+                                                val size = java.nio.file.Files.size(path)
+                                                require(size in 1..(16L * 1024L * 1024L)) {
+                                                    "Quotation file must be between 1 byte and 16 MiB."
+                                                }
+                                                val ext = file.extension.lowercase()
+                                                val mime = when (ext) {
+                                                    "pdf" -> "application/pdf"
+                                                    "jpg", "jpeg" -> "image/jpeg"
+                                                    "png" -> "image/png"
+                                                    "webp" -> "image/webp"
+                                                    else -> error("Unsupported quotation document format.")
+                                                }
+                                                val bytes = java.nio.file.Files.readAllBytes(path)
+                                                require(bytes.size.toLong() == size) {
+                                                    "Quotation source changed during file selection."
+                                                }
+                                                val digest = java.security.MessageDigest
+                                                    .getInstance("SHA-256").digest(bytes)
+                                                    .joinToString("") { byte ->
+                                                        "%02x".format(byte.toInt() and 0xff)
+                                                    }
+                                                com.hiltech.shared.core.procurement.SupplierQuotePickedFile(
+                                                    fileName = file.name,
+                                                    contentType = mime,
+                                                    sha256 = digest,
+                                                    bytes = bytes,
+                                                    capturedAt = java.time.Instant.now().toString(),
+                                                )
+                                            }
+                                        }
+                                    },
                                 )
                             }
                         }
