@@ -67,10 +67,14 @@ fun ExecutiveHomeSection(
 
         if (loadError != null) {
             Text(
-                "تعذر تحميل بيانات الإدارة. لا نعرض أرقامًا قديمة باعتبارها حالية.",
+                "تعذر تحميل بيانات الإدارة. لن نعرض لقطة قديمة أو معلومات خطأ غير موثوقة.",
                 color = MaterialTheme.colorScheme.error,
             )
-            Text(loadError, style = MaterialTheme.typography.bodySmall)
+            return@Column
+        }
+        if (loading) {
+            Text("جارٍ قراءة الصلاحيات والبيانات الحالية. لا نعرض اللقطة السابقة أثناء التحديث.")
+            return@Column
         }
         // Prevent a delayed response for organization A being rendered in B's
         // executive view. The shell must also clear on sign-out/revocation.
