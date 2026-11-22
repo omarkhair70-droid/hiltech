@@ -99,7 +99,12 @@ class PurchaseOrderCandidateServiceTest {
             Unit
         }.`when`(candidates).insert(
             Mockito.any(PurchaseOrderCandidateRecord::class.java)
-                ?: throw IllegalStateException("Mock matcher failed"),
+                ?: PurchaseOrderCandidateRecord(
+                    UUID.randomUUID(), operation, org, rfqId, requirementId, 3L,
+                    quoteId, 1, supplier, itemId, BigDecimal("100"), "M", "EGP",
+                    BigDecimal("12.50"), BigDecimal("20"), BigDecimal("1270"),
+                    sourceSha, "Fixture candidate", actor, now, "s03-test",
+                ),
         )
         Mockito.`when`(candidates.byRfq(rfqId)).thenAnswer { submitted }
     }
