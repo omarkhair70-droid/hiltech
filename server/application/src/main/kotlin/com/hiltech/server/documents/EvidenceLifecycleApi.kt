@@ -1832,7 +1832,13 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
                 val target = port.loadTarget(record.targetId) ?: return false
                 target.organizationId == record.organizationId &&
                     target.createdByUserId == record.capturedByUserId &&
-                    port.canAccess(actorIdentityId, target)
+                    when (operation) {
+                        EvidenceTargetOperation.FINALIZE ->
+                            port.canReserve(actorIdentityId, target)
+                        EvidenceTargetOperation.VIEW,
+                        EvidenceTargetOperation.DOWNLOAD ->
+                            port.canAccess(actorIdentityId, target)
+                    }
             }
 
             "PO_RECEIVING_DELIVERY_NOTE" -> {
