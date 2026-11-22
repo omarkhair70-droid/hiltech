@@ -38,7 +38,8 @@ class PurchaseOrderDeliveryAmendmentApiClientTest {
                 "/v1/procurement/purchase-orders/$po/amendment-destinations" ->
                     """[{"storageLocationId":"$destination","code":"W02",
                     "name":"Site warehouse","kind":"SITE_STORAGE"}]"""
-                "/v1/procurement/purchase-orders/$po/current-delivery-amendment" -> "null"
+                "/v1/procurement/purchase-orders/$po/current-delivery-amendment" ->
+                    """{"proposal":null}"""
                 else -> error("Unexpected issuer route " + req.url)
             }
             respond(body, HttpStatusCode.OK,
