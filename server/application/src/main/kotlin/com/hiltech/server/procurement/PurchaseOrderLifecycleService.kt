@@ -61,7 +61,7 @@ class PurchaseOrderLifecycleService @Autowired constructor(
         if (!cancellationEnabled) unavailable()
         val reason = request.reason.trim()
         if (request.operationId != context.operationId ||
-            request.expectedVersion != 1L ||
+            request.expectedVersion < 1L ||
             reason.length !in 12..1000 ||
             reason.any { it.code < 32 }
         ) invalid()
@@ -85,14 +85,19 @@ class PurchaseOrderLifecycleService @Autowired constructor(
             val current = purchases.byId(purchaseOrderId) ?: unavailable()
             if (current != order || current.supplierDispatchState != "NOT_SENT") stale()
             issuer.requireIssuerForLifecycle(context.actor, current.organizationId)
-            if (purchases.lifecycleEvents(purchaseOrderId).isNotEmpty()) stale()
+            val history = purchases.lifecycleEvents(purchaseOrderId)
+            if (history.any { it.organizationId != current.organizationId ||
+                    it.orderId != purchaseOrderId || it.type == "CANCELLED" } ||
+                history.map { it.version } != (2L..(history.size + 1L)).toList() ||
+                request.expectedVersion != history.size + 1L
+            ) stale()
             val at = clock.instant()
             purchases.appendLifecycleEvent(PurchaseOrderLifecycleEvent(
                 id = eventId,
                 operationId = context.operationId,
                 organizationId = current.organizationId,
                 orderId = purchaseOrderId,
-                version = 2L,
+                version = request.expectedVersion + 1L,
                 type = "CANCELLED",
                 reason = reason,
                 actor = context.actor,
@@ -117,7 +122,8 @@ class PurchaseOrderLifecycleService @Autowired constructor(
             .singleOrNull { it.id == eventId && it.operationId == context.operationId }
             ?: unavailable()
         if (event.organizationId != order.organizationId ||
-            event.type != "CANCELLED" || event.version != 2L
+            event.type != "CANCELLED" ||
+            event.version != request.expectedVersion + 1L
         ) unavailable()
         return CancelPurchaseOrderReceipt(
             purchaseOrderId, order.code, "CANCELLED",
