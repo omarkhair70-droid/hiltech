@@ -30,7 +30,7 @@ data class ProtectedServiceQuoteDocument(
 
 /** HIGHLY_RESTRICTED service quote delivery, no direct object link. */
 @Service
-class ServiceQuoteProtectedDocumentService(
+class ServiceQuoteProtectedDocumentService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val evidence:EvidencePersistencePort,
     private val targetAccess:ServiceQuoteDocumentTargetAdapter,
