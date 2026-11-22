@@ -29,6 +29,7 @@ data class ReceivingDiscrepancyDto(
 data class ReceivingDetailDto(
     val record: ReceivingRecordDto, val lines: List<ReceivingLineDto>, val discrepancies: List<ReceivingDiscrepancyDto>,
     val rejectedLineIds: List<String> = emptyList(),
+    val deliveryNoteReady: Boolean = false,
 )
 
 @Serializable
