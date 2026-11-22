@@ -8,6 +8,8 @@ data class CreatePayrollDraftRequestDto(val operationId: String)
 @Serializable
 data class PayrollRunLineDto(
     val employeeId: String,
+    val employeeCode: String,
+    val displayName: String,
     val snapshotId: String,
     val currency: String,
     val gross: String,

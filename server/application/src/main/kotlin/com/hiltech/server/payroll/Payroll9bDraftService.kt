@@ -19,6 +19,8 @@ import java.util.UUID
 
 data class Payroll9bRunLineDto(
     val employeeId: String,
+    val employeeCode: String,
+    val displayName: String,
     val snapshotId: String,
     val currency: String,
     val gross: String,
@@ -279,15 +281,20 @@ class Payroll9bDraftService(
             sourceFingerprint = row.fingerprint,
             lines = jdbc.query(
                 """
-                SELECT s.employee_id, s.employee_snapshot_id, s.currency,
+                SELECT s.employee_id, snap.employee_code, snap.display_name,
+                       s.employee_snapshot_id, s.currency,
                        s.gross, s.deductions, s.reimbursements, s.net,
                        s.source_fingerprint
-                FROM payroll_run_employee_line s WHERE s.run_version_id = ?
+                FROM payroll_run_employee_line s
+                JOIN payroll_employee_input_snapshot snap ON snap.id = s.employee_snapshot_id
+                WHERE s.run_version_id = ?
                 ORDER BY s.employee_id
                 """.trimIndent(),
                 { rs, _ ->
                     Payroll9bRunLineDto(
                         employeeId = rs.getObject("employee_id", UUID::class.java).toString(),
+                        employeeCode = rs.getString("employee_code"),
+                        displayName = rs.getString("display_name"),
                         snapshotId = rs.getObject("employee_snapshot_id", UUID::class.java).toString(),
                         currency = rs.getString("currency"),
                         gross = rs.getBigDecimal("gross").toPlainString(),
