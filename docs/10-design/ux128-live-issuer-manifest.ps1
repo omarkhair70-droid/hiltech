@@ -25,7 +25,12 @@ foreach($name in $names) {
   if($bytes.Length -lt 15000){throw "Unexpected small issuer image: $name"}
   $width=[System.Net.IPAddress]::NetworkToHostOrder([BitConverter]::ToInt32($bytes,16))
   $height=[System.Net.IPAddress]::NetworkToHostOrder([BitConverter]::ToInt32($bytes,20))
-  $sha=(Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+  $hasher=[System.Security.Cryptography.SHA256]::Create()
+  try {
+    $sha=[BitConverter]::ToString($hasher.ComputeHash($bytes)).Replace('-','').ToLowerInvariant()
+  } finally {
+    $hasher.Dispose()
+  }
   Copy-Item $file (Join-Path $dst $name) -Force
   $items+= [pscustomobject]@{ name=$name;width=$width;height=$height;bytes=$bytes.Length;sha256=$sha }
 }

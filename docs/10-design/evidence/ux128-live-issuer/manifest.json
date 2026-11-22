@@ -1,0 +1,76 @@
+﻿{
+    "kind":  "Native QA of source-connected production PurchaseOrderIssuerLiveScreen",
+    "source_head":  "732d3bc57036c2e17fabacd20eafc564a2530053",
+    "synthetic_typed_source":  true,
+    "actual_live_issue_action_in_static_renderer":  false,
+    "company_credentials_or_data_used":  false,
+    "authenticated_server_run":  false,
+    "real_operator_accepted":  false,
+    "actual_desktop_code_compile_required":  true,
+    "count":  9,
+    "images":  [
+                   {
+                       "name":  "01-windows-approved-queue-and-inspector.png",
+                       "width":  1440,
+                       "height":  1150,
+                       "bytes":  99131,
+                       "sha256":  "ae9325e3420168c3024db74f2cc3acf7daabfe5584fc3a3dd122a309424ecda0"
+                   },
+                   {
+                       "name":  "02-windows-compact.png",
+                       "width":  800,
+                       "height":  2150,
+                       "bytes":  98323,
+                       "sha256":  "69878b1b15146e32bb4e79d3dc4b31b9cbe3e6f750657513272902ac6b57b33f"
+                   },
+                   {
+                       "name":  "03-windows-dark.png",
+                       "width":  1440,
+                       "height":  1150,
+                       "bytes":  100862,
+                       "sha256":  "368beed87b5a314ce8b4973f0a8564d631c2878862a96a63d64dd881730520fb"
+                   },
+                   {
+                       "name":  "04-windows-high-contrast.png",
+                       "width":  1440,
+                       "height":  1150,
+                       "bytes":  94239,
+                       "sha256":  "88269988f42a21352f16a594cbc0bcb1ef846b9372c1c8360ad177bca9edc71d"
+                   },
+                   {
+                       "name":  "05-windows-180pct-text.png",
+                       "width":  1440,
+                       "height":  1750,
+                       "bytes":  198478,
+                       "sha256":  "2c4f29ccf44fcdba4ba313e317a8e095f975ebca7200cfd2b7e440b8d4e17eba"
+                   },
+                   {
+                       "name":  "06-empty-authorized-issuer-queue.png",
+                       "width":  1440,
+                       "height":  850,
+                       "bytes":  48868,
+                       "sha256":  "5e61fe53109330a61786a65df7e0d0e12add893d30eddcec5f75b6cfa409d74a"
+                   },
+                   {
+                       "name":  "07-confirmed-internal-po-server-receipt.png",
+                       "width":  1440,
+                       "height":  1380,
+                       "bytes":  88082,
+                       "sha256":  "7507e09e761b444e71234df4c74852bb831a0fd995a0a6a90756c0b744cc2dec"
+                   },
+                   {
+                       "name":  "08-paged-authorized-issuer-queue.png",
+                       "width":  1440,
+                       "height":  2100,
+                       "bytes":  151785,
+                       "sha256":  "a54ca5b0a21600a4b26dc673fa3c0f10487a9c3b4bad60bf37bdea85bd22f235"
+                   },
+                   {
+                       "name":  "09-existing-PO-verified-in-register.png",
+                       "width":  1440,
+                       "height":  1300,
+                       "bytes":  85957,
+                       "sha256":  "4774366063e4c7bdc34b9d5e909898e41ce86d234de844e7938f6c0617346158"
+                   }
+               ]
+}
