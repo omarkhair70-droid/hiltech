@@ -172,14 +172,14 @@ object PayrollRunSourceFingerprint {
 }
 
 /**
- * A separate company-configured ApprovalEngine decision is required for
- * publication. Routine/exception policy is NOT inferred from someone's name.
- * No configured policy key, stale sources or no approved decision => private.
+ * A private payslip is exposed only if the exact run has a durable, current
+ * company release record. ApprovalEngine approval alone is insufficient:
+ * an explicit Finance-review release was not necessarily signed.
  */
 @Component
 class ApprovalBackedPayrollPublication(
-    private val approvals: ApprovalEngineService,
     private val guard: PayrollRunApprovalVersionSource,
+    private val decisions: PayrollRunReleaseDecisionPort,
     private val jdbc: JdbcTemplate,
     @Value("\${hiltech.payroll.run-approval-policy-key:}") private val policyKey: String,
 ) : PayrollRunPublicationPort {
@@ -187,17 +187,30 @@ class ApprovalBackedPayrollPublication(
         organizationId: UUID,
         runVersionId: UUID,
         exactSourceFingerprint: String,
-    ): Boolean {
-        if (policyKey.isBlank() || !Regex("^[A-Z][A-Z0-9_-]{0,79}$").matches(policyKey)) return false
-        val storedFingerprint = jdbc.query(
+    ): Boolean = runCatching {
+        if (!Regex("^[A-Z][A-Z0-9_]{2,95}$").matches(policyKey)) return false
+        val record = jdbc.query(
             """
-            SELECT source_fingerprint FROM payroll_run_version
-            WHERE id = ? AND organization_id = ?
+            SELECT r.run_source_fingerprint, r.policy_version,
+                   r.decision_path, r.approval_request_id, r.released_by_user_id
+            FROM payroll_run_release r
+            JOIN payroll_run_version rv
+              ON rv.id = r.run_version_id AND rv.organization_id = r.organization_id
+            WHERE r.organization_id = ? AND r.run_version_id = ?
+              AND r.policy_key = ? AND rv.source_fingerprint = ?
             """.trimIndent(),
-            { rs, _ -> rs.getString("source_fingerprint") },
-            runVersionId, organizationId,
+            { rs, _ ->
+                PayrollReleaseReadModel(
+                    fingerprint = rs.getString("run_source_fingerprint"),
+                    policyVersion = rs.getInt("policy_version"),
+                    path = rs.getString("decision_path"),
+                    approvalId = rs.getObject("approval_request_id", UUID::class.java),
+                    actorId = rs.getObject("released_by_user_id", UUID::class.java),
+                )
+            },
+            organizationId, runVersionId, policyKey, exactSourceFingerprint,
         ).singleOrNull() ?: return false
-        if (storedFingerprint != exactSourceFingerprint) return false
+        if (record.fingerprint != exactSourceFingerprint) return false
         val subject = ApprovalSubjectRef(
             organizationId = organizationId,
             subjectType = "PAYROLL_RUN_VERSION",
@@ -205,6 +218,17 @@ class ApprovalBackedPayrollPublication(
             subjectVersion = 1,
         )
         if (!guard.isCurrent(subject)) return false
-        return approvals.subjectStatus(subject, policyKey)?.state == ApprovalRequestState.APPROVED
-    }
+        val current = decisions.resolve(record.actorId, subject, policyKey) ?: return false
+        current.policyVersion == record.policyVersion &&
+            current.path == record.path &&
+            current.approvalRequestId == record.approvalId
+    }.getOrDefault(false)
+
+    private data class PayrollReleaseReadModel(
+        val fingerprint: String,
+        val policyVersion: Int,
+        val path: String,
+        val approvalId: UUID?,
+        val actorId: UUID,
+    )
 }
