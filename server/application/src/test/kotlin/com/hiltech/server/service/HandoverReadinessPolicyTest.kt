@@ -57,6 +57,22 @@ class HandoverReadinessPolicyTest {
     }
 
     @Test
+    fun digestChangesWhenWorkAcceptanceOrRequirementStateChanges() {
+        val documents = listOf(approved())
+        val accepted = listOf(HandoverWorkFact(work, "ACCEPTED"))
+        val inReview = listOf(HandoverWorkFact(work, "SUBMITTED_FOR_REVIEW"))
+        val required = listOf(HandoverRequirementFact(work, "AS_BUILT", "SATISFIED"))
+        val waived = listOf(HandoverRequirementFact(work, "AS_BUILT", "WAIVED"))
+        val original = HandoverReadinessPolicy.digest(documents, accepted, required)
+        assertFalse(original == HandoverReadinessPolicy.digest(documents, inReview, required))
+        assertFalse(original == HandoverReadinessPolicy.digest(documents, accepted, waived))
+        assertEquals(
+            original,
+            HandoverReadinessPolicy.digest(documents.reversed(), accepted.reversed(), required.reversed()),
+        )
+    }
+
+    @Test
     fun digestIsDeterministicAndSensitiveToEvidence() {
         val another = approved().copy(
             documentId = UUID.fromString("00000000-0000-0000-0000-000000000015"),

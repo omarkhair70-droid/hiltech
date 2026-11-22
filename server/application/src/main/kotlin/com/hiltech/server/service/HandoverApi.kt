@@ -144,12 +144,30 @@ object HandoverReadinessPolicy {
         }.distinct()
     }
 
-    fun digest(documents: List<HandoverDocumentFact>): String {
-        val canonical = documents.sortedWith(compareBy({ it.documentId.toString() }, { it.revisionId.toString() }))
-            .joinToString("\n") {
-                listOf(it.workOrderId, it.documentId, it.revisionId, it.evidenceId, it.sourceSha256)
-                    .joinToString("|")
+    fun digest(
+        documents: List<HandoverDocumentFact>,
+        works: List<HandoverWorkFact> = emptyList(),
+        requirements: List<HandoverRequirementFact> = emptyList(),
+    ): String {
+        // A source stamp must change if a WorkOrder acceptance or its required
+        // document satisfaction changes, not only when the Evidence binary changes.
+        val canonical = buildList {
+            add("HANDOVER-SOURCE-V2")
+            works.sortedBy { it.workOrderId.toString() }.forEach {
+                add(listOf("WORK", it.workOrderId, it.lifecycleState).joinToString("|"))
             }
+            requirements.sortedWith(
+                compareBy({ it.workOrderId.toString() }, { it.requirementKey })
+            ).forEach {
+                add(listOf("REQUIREMENT", it.workOrderId, it.requirementKey, it.satisfactionState)
+                    .joinToString("|"))
+            }
+            documents.sortedWith(compareBy({ it.documentId.toString() }, { it.revisionId.toString() }))
+                .forEach {
+                    add(listOf("DOCUMENT", it.workOrderId, it.documentId,
+                        it.revisionId, it.evidenceId, it.sourceSha256).joinToString("|"))
+                }
+        }.joinToString("\n")
         return MessageDigest.getInstance("SHA-256")
             .digest(canonical.toByteArray(StandardCharsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
@@ -375,12 +393,13 @@ class HandoverService(
         val project = authorizedProject(projectId, actor, true)
         val works = sources.work(projectId)
         val docs = sources.approvedDocuments(projectId, project.organizationId)
-        val missing = HandoverReadinessPolicy.missing(works, sources.requirements(projectId), docs)
+        val requirements = sources.requirements(projectId)
+        val missing = HandoverReadinessPolicy.missing(works, requirements, docs)
         return HandoverReadinessDto(
             projectId.toString(), project.organizationId.toString(), docs.size, works.size,
             missing, canSubmitForInternalReview = false,
             canShareWithClient = false, canAcceptForClient = false,
-            sourceDigest = HandoverReadinessPolicy.digest(docs),
+            sourceDigest = HandoverReadinessPolicy.digest(docs, works, requirements),
         )
     }
 
@@ -428,10 +447,10 @@ class HandoverService(
                 problem("HANDOVER_PACKAGE_VERSION_STALE", HttpStatus.CONFLICT)
             }
             val docs = sources.approvedDocuments(projectId, fresh.organizationId)
-            val reasons = HandoverReadinessPolicy.missing(
-                sources.work(projectId), sources.requirements(projectId), docs,
-            )
-            val digest = HandoverReadinessPolicy.digest(docs)
+            val works = sources.work(projectId)
+            val requirements = sources.requirements(projectId)
+            val reasons = HandoverReadinessPolicy.missing(works, requirements, docs)
+            val digest = HandoverReadinessPolicy.digest(docs, works, requirements)
             val at = clock.instant()
             sources.insertDraft(
                 fresh, packageId, versionId, latest + 1, operationId,

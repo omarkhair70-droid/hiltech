@@ -25,6 +25,8 @@ CREATE TABLE service_support_ticket (
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
     version bigint NOT NULL DEFAULT 1 CHECK(version = 1),
+    CONSTRAINT fk_support_ticket_project_org FOREIGN KEY(project_id, organization_id)
+        REFERENCES project(id, organization_id) ON DELETE RESTRICT,
     UNIQUE(id, organization_id, project_id)
 );
 CREATE INDEX idx_service_support_ticket_project

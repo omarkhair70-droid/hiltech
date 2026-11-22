@@ -8,6 +8,8 @@ CREATE TABLE service_handover_package (
     project_id uuid NOT NULL REFERENCES project(id) ON DELETE RESTRICT,
     created_by uuid NOT NULL REFERENCES user_identity(id) ON DELETE RESTRICT,
     created_at timestamptz NOT NULL,
+    CONSTRAINT fk_handover_project_org FOREIGN KEY (project_id, organization_id)
+        REFERENCES project(id, organization_id) ON DELETE RESTRICT,
     UNIQUE(project_id),
     UNIQUE(id, organization_id, project_id)
 );
