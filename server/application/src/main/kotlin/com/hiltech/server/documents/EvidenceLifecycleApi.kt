@@ -1388,9 +1388,10 @@ class EvidenceLifecycleService(
                 target != null && target.organizationId == record.organizationId &&
                     record.classificationCode == "HIGHLY_RESTRICTED" &&
                     record.clientVisibilityMode == "INTERNAL_ONLY" &&
-                    record.evidenceTypeCode ==
+                    record.evidenceTypeCode == (
                         if (record.targetType == "COMMERCIAL_CONTRACT")
-                            "COMMERCIAL_SIGNED_CONTRACT" else "COMMERCIAL_CLIENT_PO" &&
+                            "COMMERCIAL_SIGNED_CONTRACT" else "COMMERCIAL_CLIENT_PO"
+                    ) &&
                     commercialEvidenceTarget.canAccess(actorIdentityId, target)
             }
 
