@@ -107,10 +107,10 @@ class CommercialService(
     private fun lockOpportunity(id: UUID) {
         row("SELECT id FROM commercial_opportunity WHERE id=? FOR UPDATE", id)
     }
-    private fun next(table: String, id: UUID): Int {
+    private fun next(table: String, id: UUID, column: String = "version_number"): Int {
         // Table is a private fixed literal at callsites, not caller-controlled input.
         return jdbc.queryForObject(
-            "SELECT coalesce(max(version_number),0)+1 FROM " + table + " WHERE opportunity_id=?",
+            "SELECT coalesce(max(" + column + "),0)+1 FROM " + table + " WHERE opportunity_id=?",
             Int::class.java, id,
         ) ?: 1
     }
@@ -198,7 +198,7 @@ class CommercialService(
                    (id,organization_id,opportunity_id,revision_number,tender_type,reference_number,
                     received_at,submission_deadline,clarification_deadline,source_channel,created_by,created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                target,parent["organization_id"],id,next("commercial_tender_revision",id),
+                target,parent["organization_id"],id,next("commercial_tender_revision",id,"revision_number"),
                 r.tenderType,nullable(r.referenceNumber,120),received,deadline,clarification,
                 nullable(r.sourceChannel,160),actor,now(),
             )
@@ -390,6 +390,7 @@ class CommercialService(
         access.require(actor,company,"SALES_WRITE")
         val replay = execute(key,actor,"COMMERCIAL_QUOTE_REQUEST_APPROVAL",id,id.toString(),correlation) {
             val q = quote(id);access.require(actor,company,"SALES_WRITE")
+            open(op(q["opportunity_id"] as UUID,actor,"SALES_WRITE"))
             if (q["state"] != "DRAFT") throw commercialError("COMMERCIAL_QUOTE_NOT_DRAFT","Quote already submitted.",HttpStatus.CONFLICT)
             if (jdbc.update(
                 """UPDATE commercial_quote_version SET state='APPROVAL_PENDING',version=version+1
@@ -417,6 +418,7 @@ class CommercialService(
         access.require(actor,company,"SALES_RELEASE")
         val replay = execute(key,actor,"COMMERCIAL_QUOTE_RELEASE",id,id.toString(),correlation) {
             val q = quote(id);access.require(actor,company,"SALES_RELEASE")
+            open(op(q["opportunity_id"] as UUID,actor,"SALES_RELEASE"))
             if (q["state"] != "APPROVAL_PENDING")
                 throw commercialError("COMMERCIAL_QUOTE_NOT_PENDING","Quote not pending approved release.",HttpStatus.CONFLICT)
             val latest = next("commercial_quote_version",q["opportunity_id"] as UUID)-1
@@ -480,14 +482,14 @@ class CommercialService(
 
     fun draftContract(id: UUID,r: CommercialContractDraftRequest,key: UUID,
                       actor: UUID,correlation: String): CommercialCommandResult {
-        val parent=op(id,actor,"SALES_AWARD")
+        val parent=op(id,actor,"SALES_AWARD");open(parent)
         val quoteId=r.quoteVersionId.commercialUuid()
         val start=r.effectiveDate?.let(::date);val end=r.endDate?.let(::date)
         if (start != null && end != null && end < start)
             throw commercialError("COMMERCIAL_CONTRACT_DATES","Invalid dates.",HttpStatus.BAD_REQUEST)
         val target=this.id("contract",key)
         val replay=execute(key,actor,"COMMERCIAL_CONTRACT_DRAFT",target,r.toString(),correlation) {
-            access.require(actor,parent["organization_id"] as UUID,"SALES_AWARD")
+            open(op(id,actor,"SALES_AWARD"))
             val q=quote(quoteId)
             if(q["organization_id"]!=parent["organization_id"]||q["opportunity_id"]!=id||q["state"]!="RELEASED")
                 throw commercialError("COMMERCIAL_CONTRACT_SOURCE","Exact released quote required.",HttpStatus.CONFLICT)
@@ -506,13 +508,13 @@ class CommercialService(
 
     fun draftClientPo(id: UUID,r: CommercialClientPoDraftRequest,key: UUID,
                       actor: UUID,correlation: String): CommercialCommandResult {
-        val parent=op(id,actor,"SALES_AWARD")
+        val parent=op(id,actor,"SALES_AWARD");open(parent)
         val contractId=r.contractId.commercialUuid()
         currency(r.currency);amount(r.amount)
         val issued=date(r.issuedOn)
         val target=this.id("client-po",key)
         val replay=execute(key,actor,"COMMERCIAL_CLIENT_PO_DRAFT",target,r.toString(),correlation) {
-            access.require(actor,parent["organization_id"] as UUID,"SALES_AWARD")
+            open(op(id,actor,"SALES_AWARD"))
             val c=row(
                 """SELECT q.currency FROM commercial_contract c
                    JOIN commercial_quote_version q ON q.id=c.quote_version_id
