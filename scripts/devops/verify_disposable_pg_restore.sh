@@ -80,7 +80,17 @@ def normalized(path: str) -> list[str]:
         if not line.startswith("\\restrict ") and not line.startswith("\\unrestrict ")
     ]
 
-sys.exit(0 if normalized(sys.argv[1]) == normalized(sys.argv[2]) else 1)
+left = normalized(sys.argv[1])
+right = normalized(sys.argv[2])
+if left != right:
+    from difflib import unified_diff
+    from itertools import islice
+    # This CI database contains only synthetic data; dump files are still removed.
+    # Print just enough DDL diff to diagnose the mismatch, not the whole schema.
+    for line in islice(unified_diff(left, right, fromfile="disposable-source", tofile="disposable-restore", lineterm=""), 100):
+        print(line, file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
 PY
 then
   echo "BLOCKED: restored schema differs from disposable source" >&2
