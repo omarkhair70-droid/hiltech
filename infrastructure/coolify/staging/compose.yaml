@@ -86,55 +86,6 @@ services:
     expose: ["8080"]
     networks: [private]
 
-  hiltech-api:
-    # Verified immutable ARM64/AMD64 release, source fae1d7f36eb9adeaecfea6ccbd07baba6b2af646
-    image: ghcr.io/omarkhair70-droid/hiltech-server@sha256:6bf83b62746cf6811a610e0f59e9f35469a9fe4b7061bc01debe48c1d8e4d1e8
-    <<: *default-security
-    profiles: ["api"]
-    init: true
-    mem_limit: 1536m
-    cpus: 1.5
-    depends_on:
-      postgres:
-        condition: service_healthy
-      keycloak:
-        condition: service_started
-      openfga:
-        condition: service_started
-    environment:
-      HILTECH_SERVER_PORT: "8080"
-      HILTECH_DB_URL: jdbc:postgresql://postgres:5432/hiltech
-      HILTECH_DB_USER: hiltech_app
-      HILTECH_DB_PASSWORD: ${HILTECH_APP_DB_PASSWORD:?Set app DB secret}
-      HILTECH_OIDC_ENABLED: "true"
-      HILTECH_OIDC_ISSUER_URI: ${HILTECH_OIDC_ISSUER_URI:?Set Keycloak realm issuer URI}
-      HILTECH_OIDC_AUDIENCE: ${HILTECH_OIDC_AUDIENCE:?Set token audience}
-      HILTECH_OIDC_NATIVE_CLIENT_ID: ${HILTECH_OIDC_NATIVE_CLIENT_ID:?Set registered native client}
-      HILTECH_FGA_ENABLED: "true"
-      HILTECH_FGA_API_URL: http://openfga:8080
-      HILTECH_FGA_STORE_ID: ${HILTECH_FGA_STORE_ID:?Provision real FGA store}
-      HILTECH_FGA_MODEL_ID: ${HILTECH_FGA_MODEL_ID:?Publish reviewed FGA model}
-      HILTECH_EVIDENCE_STORAGE_ENABLED: "true"
-      # Must resolve over HTTPS from Android and Windows for presigned upload URLs.
-      HILTECH_EVIDENCE_STORAGE_ENDPOINT: ${HILTECH_EVIDENCE_STORAGE_ENDPOINT:?Set HTTPS S3 endpoint}
-      HILTECH_EVIDENCE_STORAGE_REGION: ${HILTECH_EVIDENCE_STORAGE_REGION:?Set S3 region}
-      HILTECH_EVIDENCE_STORAGE_BUCKET: ${HILTECH_EVIDENCE_STORAGE_BUCKET:?Set isolated staging bucket}
-      HILTECH_EVIDENCE_STORAGE_ACCESS_KEY: ${HILTECH_EVIDENCE_STORAGE_ACCESS_KEY:?Set scoped S3 access key}
-      HILTECH_EVIDENCE_STORAGE_SECRET_KEY: ${HILTECH_EVIDENCE_STORAGE_SECRET_KEY:?Set scoped S3 secret key}
-      HILTECH_ACTIVITY_CURSOR_SIGNING_KEY: ${HILTECH_ACTIVITY_CURSOR_SIGNING_KEY:?Set signing key}
-      HILTECH_APPROVAL_CURSOR_SIGNING_KEY: ${HILTECH_APPROVAL_CURSOR_SIGNING_KEY:?Set signing key}
-      HILTECH_INBOX_CURSOR_SIGNING_KEY: ${HILTECH_INBOX_CURSOR_SIGNING_KEY:?Set signing key}
-      HILTECH_FIELD_PERSONAL_ISSUED_STOCK_ENABLED: "false"
-      HILTECH_FIELD_MATERIAL_USAGE_REPORT_ENABLED: "false"
-      HILTECH_FIELD_MATERIAL_USAGE_REVIEW_READ_ENABLED: "false"
-      HILTECH_FIELD_MATERIAL_USAGE_RECONCILIATION_ENABLED: "false"
-      HILTECH_FIELD_ASSIGNED_ASSET_LOOKUP_ENABLED: "false"
-      HILTECH_FIELD_ENGINEERING_TESTS_ENABLED: "false"
-      HILTECH_FIELD_WORK_DOCUMENTS_ENABLED: "false"
-      HILTECH_FIELD_COMPLETION_ENABLED: "false"
-    expose: ["8080"]
-    networks: [private, proxy]
-
 volumes:
   pg_data:
 
