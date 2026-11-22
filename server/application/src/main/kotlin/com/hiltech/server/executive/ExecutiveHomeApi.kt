@@ -9,6 +9,7 @@ import com.hiltech.server.warehouse.WarehouseReadService
 import com.hiltech.server.work.ReviewProgressHealthService
 import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
@@ -299,9 +300,19 @@ class ExecutiveHomeService(private val sources: ExecutiveSources, private val cl
 }
 
 @RestController
-class ExecutiveHomeController(private val service: ExecutiveHomeService) {
+class ExecutiveHomeController(
+    private val service: ExecutiveHomeService,
+    @Value("\${hiltech.executive.home-enabled:false}") private val enabled: Boolean,
+) {
     @GetMapping("/v1/executive/home")
     fun home(request: HttpServletRequest, @RequestParam organizationId: String): ExecutiveHomeResponse {
+        if (!enabled) {
+            throw ProductApiException(
+                code = "EXECUTIVE_HOME_DISABLED",
+                message = "Executive Home is not enabled for this deployment.",
+                status = HttpStatus.SERVICE_UNAVAILABLE,
+            )
+        }
         val context = HiltechRequestContext.current(request)
         val actor = context.identityId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
             ?: throw ProductApiException(
