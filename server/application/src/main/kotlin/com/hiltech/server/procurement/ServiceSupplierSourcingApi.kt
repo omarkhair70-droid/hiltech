@@ -17,7 +17,7 @@ import java.util.UUID
 class ServiceSupplierSourcingController(private val sourcing: ServiceSupplierSourcingService) {
     @GetMapping("/v1/service-procurement/organizations/{orgId}/sourcing-eligible-needs")
     fun eligible(request: HttpServletRequest,@PathVariable orgId: UUID):
-        List<ServiceRfqView> = sourcing.eligibleNeeds(request.actor(),orgId)
+        List<ServiceEligibleNeedView> = sourcing.eligibleNeeds(request.actor(),orgId)
 
     @PostMapping("/v1/service-procurement/needs/{id}/rfqs")
     fun open(request: HttpServletRequest,@PathVariable id: UUID,
