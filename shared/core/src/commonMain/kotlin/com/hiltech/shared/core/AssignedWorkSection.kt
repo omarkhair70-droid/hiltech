@@ -1,5 +1,6 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -13,11 +14,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -91,6 +94,9 @@ fun AssignedWorkSection(
     showEngineeringTests: Boolean = false,
     presentation: FieldWorkPresentation = FieldWorkPresentation.BASELINE,
     focusScopeKey: String = "",
+    // Only for the opt-in focus study; must be the SAME scroll state used
+    // by the parent host, never a second nested vertical scroll.
+    focusHostScroll: ScrollState? = null,
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -164,14 +170,39 @@ fun AssignedWorkSection(
                 var focusedWorkOrderId by remember(focusScopeKey) {
                     mutableStateOf<String?>(null)
                 }
+                var savedTodayOffset by remember(focusScopeKey) { mutableStateOf(0) }
+                var restoreOffset by remember(focusScopeKey) { mutableStateOf<Int?>(null) }
                 val focusedId = focusedWorkOrderId
                     ?.takeIf { id -> state.today.any { it.workOrderId == id } }
+                // Keep one scroll owner: the actual Shell's scroll, supplied
+                // by the caller only when/if this research candidate is wired.
+                LaunchedEffect(focusScopeKey) {
+                    focusHostScroll?.scrollTo(0)
+                }
+                LaunchedEffect(focusScopeKey, focusedId, restoreOffset) {
+                    val scroll = focusHostScroll
+                    if (scroll != null) {
+                        if (focusedId != null) {
+                            scroll.scrollTo(0)
+                        } else {
+                            restoreOffset?.let { target ->
+                                // Wait for Today content to lay out after leaving
+                                // detail; clamped restoration is deliberate.
+                                withFrameNanos { }
+                                scroll.scrollTo(target)
+                                restoreOffset = null
+                            }
+                        }
+                    }
+                }
                 if (focusedId == null) {
                     TodayColumn(
                         state = state,
                         onRefresh = onRefresh,
                         onSelectWork = { id ->
                             if (state.today.any { it.workOrderId == id }) {
+                                savedTodayOffset = focusHostScroll?.value ?: 0
+                                restoreOffset = null
                                 focusedWorkOrderId = id
                                 onSelectWork(id)
                             }
@@ -183,7 +214,10 @@ fun AssignedWorkSection(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        OutlinedButton(onClick = { focusedWorkOrderId = null }) {
+                        OutlinedButton(onClick = {
+                            focusedWorkOrderId = null
+                            restoreOffset = savedTodayOffset
+                        }) {
                             Text("الرجوع لشغلي اليوم")
                         }
                         // The selected bundle MUST belong to the requested and
