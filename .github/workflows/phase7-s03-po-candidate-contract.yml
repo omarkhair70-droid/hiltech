@@ -8,16 +8,20 @@ on:
       - ".github/workflows/phase7-s03-po-candidate-contract.yml"
       - "database/migrations/V0046__procurement_po_candidate_snapshot__phase7_slice03.sql"
       - "database/migrations/V0047__procurement_po_issue__phase7_slice03.sql"
+      - "database/migrations/V0048__procurement_po_lifecycle__phase7_slice03.sql"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderCandidate*"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderIssue*"
+      - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderLifecycle*"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderCandidate*"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderIssue*"
+      - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderLifecycle*"
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
       - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/Main.kt"
       - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/DesktopIdentityRuntime.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/SupplierSourcingBuyerSection.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCandidate*"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderIssue*"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCancellation*"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCandidate*"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderIssue*"
       - "docs/13-delivery/phase7/06_S03_PO_CANDIDATE_APPROVAL_CHECKPOINT.md"
@@ -28,16 +32,20 @@ on:
       - ".github/workflows/phase7-s03-po-candidate-contract.yml"
       - "database/migrations/V0046__procurement_po_candidate_snapshot__phase7_slice03.sql"
       - "database/migrations/V0047__procurement_po_issue__phase7_slice03.sql"
+      - "database/migrations/V0048__procurement_po_lifecycle__phase7_slice03.sql"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderCandidate*"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderIssue*"
+      - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderLifecycle*"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderCandidate*"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderIssue*"
+      - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderLifecycle*"
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
       - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/Main.kt"
       - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/DesktopIdentityRuntime.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/SupplierSourcingBuyerSection.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCandidate*"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderIssue*"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCancellation*"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCandidate*"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderIssue*"
       - "docs/13-delivery/phase7/06_S03_PO_CANDIDATE_APPROVAL_CHECKPOINT.md"
@@ -91,6 +99,7 @@ jobs:
             --tests com.hiltech.server.procurement.PurchaseOrderCandidateApprovalSubjectTest \
             --tests com.hiltech.server.procurement.PurchaseOrderCandidateApprovalRequestTest \
             --tests com.hiltech.server.procurement.PurchaseOrderIssueServiceTest \
+            --tests com.hiltech.server.procurement.PurchaseOrderLifecycleServiceTest \
             --tests com.hiltech.server.procurement.SupplierSourcingServiceTest \
             --no-daemon --console=plain
       - name: Verify KMP buyer candidate transport
