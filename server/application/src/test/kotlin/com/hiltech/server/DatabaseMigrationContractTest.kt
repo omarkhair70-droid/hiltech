@@ -170,6 +170,7 @@ class DatabaseMigrationContractTest {
                         'procurement_service_supplier_quote',
                         'procurement_service_order_candidate',
                         'procurement_service_order',
+                        'procurement_service_order_supplier_communication',
                         'procurement_service_document_slot',
                         'procurement_service_acceptance',
                         'procurement_service_invoice',
@@ -179,7 +180,7 @@ class DatabaseMigrationContractTest {
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(98, tables.getInt(1))
+                assertEquals(99, tables.getInt(1))
 
                 // V0050 links canonical Warehouse Receiving to a company-scoped
                 // approved PO without creating another physical stock ledger.
@@ -492,11 +493,14 @@ class DatabaseMigrationContractTest {
                         OR (tgrelid='procurement_service_order'::regclass
                           AND tgname IN ('procurement_service_order_guard',
                             'procurement_service_order_immutable'))
+                        OR (tgrelid='procurement_service_order_supplier_communication'::regclass
+                          AND tgname IN ('procurement_service_order_supplier_comm_guard',
+                            'procurement_service_order_supplier_comm_immutable'))
                     )
                     """.trimIndent(),
                 )
                 assertTrue(serviceOrderGuards.next())
-                assertEquals(4, serviceOrderGuards.getInt(1))
+                assertEquals(6, serviceOrderGuards.getInt(1))
 
                 val serviceCompletionGuards = statement.executeQuery(
                     """
