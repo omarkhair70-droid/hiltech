@@ -1,0 +1,69 @@
+name: DevOps - Coolify isolated staging compose contract
+
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/coolify/staging/**'
+      - 'scripts/devops/verify_coolify_staging_template.py'
+      - '.github/workflows/devops-coolify-staging-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      # Synthetic credentials only. Ephemeral runner, fresh project, no owner host access.
+      HILTECH_COMPOSE_PROJECT_NAME: hiltech-ci-${{ github.run_id }}
+      HILTECH_COOLIFY_PROXY_NETWORK: coolify
+      HILTECH_PG_ADMIN_PASSWORD: synthetic-ci-admin
+      HILTECH_APP_DB_PASSWORD: synthetic-ci-app
+      HILTECH_KEYCLOAK_DB_PASSWORD: synthetic-ci-kc
+      HILTECH_OPENFGA_DB_PASSWORD: synthetic-ci-fga
+      HILTECH_OPENFGA_DATABASE_URI: postgres://hiltech_openfga:synthetic-ci-fga@postgres:5432/hiltech_openfga?sslmode=disable
+      HILTECH_KC_BOOTSTRAP_ADMIN_USERNAME: synthetic-admin
+      HILTECH_KC_BOOTSTRAP_ADMIN_PASSWORD: synthetic-ci-bootstrap
+      HILTECH_KC_PUBLIC_URL: https://auth.staging.invalid
+      HILTECH_OIDC_ISSUER_URI: https://auth.staging.invalid/realms/hiltech
+      HILTECH_OIDC_AUDIENCE: synthetic-native-api
+      HILTECH_OIDC_NATIVE_CLIENT_ID: synthetic-native
+      HILTECH_FGA_STORE_ID: synthetic-store
+      HILTECH_FGA_MODEL_ID: synthetic-model
+      HILTECH_EVIDENCE_STORAGE_ENDPOINT: https://evidence.staging.invalid
+      HILTECH_EVIDENCE_STORAGE_REGION: us-east-1
+      HILTECH_EVIDENCE_STORAGE_BUCKET: hiltech-staging-synthetic
+      HILTECH_EVIDENCE_STORAGE_ACCESS_KEY: synthetic-access
+      HILTECH_EVIDENCE_STORAGE_SECRET_KEY: synthetic-secret
+      HILTECH_ACTIVITY_CURSOR_SIGNING_KEY: synthetic-cursor-activity
+      HILTECH_APPROVAL_CURSOR_SIGNING_KEY: synthetic-cursor-approval
+      HILTECH_INBOX_CURSOR_SIGNING_KEY: synthetic-cursor-inbox
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify static isolation and fail-closed flags
+        run: python3 scripts/devops/verify_coolify_staging_template.py
+      - name: Parse full Docker Compose with synthetic values
+        run: docker compose -f infrastructure/coolify/staging/compose.yaml --profile api config --quiet
+      - name: Start only fresh isolated Postgres
+        run: docker compose -f infrastructure/coolify/staging/compose.yaml up -d postgres
+      - name: Confirm real SQL initialization and three distinct database owners
+        shell: bash
+        run: |
+          set -euo pipefail
+          compose=(docker compose -f infrastructure/coolify/staging/compose.yaml)
+          for i in {1..40}; do
+            if "${compose[@]}" exec -T postgres pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          actual=$("${compose[@]}" exec -T postgres psql -U postgres -d postgres -At -F ':' -c "SELECT datname, pg_get_userbyid(datdba) FROM pg_database WHERE datname IN ('hiltech','hiltech_keycloak','hiltech_openfga') ORDER BY datname")
+          grep -Fxq 'hiltech:hiltech_app' <<< "$actual"
+          grep -Fxq 'hiltech_keycloak:hiltech_keycloak' <<< "$actual"
+          grep -Fxq 'hiltech_openfga:hiltech_openfga' <<< "$actual"
+          echo 'PASS: isolated Postgres created the 3 expected databases with correct separate owners'
+      - name: Tear down only this ephemeral CI project
+        if: always()
+        run: docker compose -f infrastructure/coolify/staging/compose.yaml down --volumes --remove-orphans || true
