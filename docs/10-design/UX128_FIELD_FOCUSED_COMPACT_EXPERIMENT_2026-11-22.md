@@ -191,4 +191,12 @@ These cases use a synthetic Android debug Field fixture rendered by **Desktop Co
 
 Actual production app entrypoints still use `BASELINE` by default; **no merge, rollout, device installation or approval**. The experiment is a review candidate only, not the final Industrial. Precise. Alive. appearance.
 
-**Android same-head `assembleDebug`: pending a separate compile check at time of this report revision.** Never infer Android runtime testing from synthetic Desktop Compose output.
+**Android Debug build PASS on same source SHA `8d36b1df7482bc1a29e3e31ad08a59628fb55c7e`:** `./gradlew.bat :apps:androidApp:assembleDebug --no-daemon` with local JDK17 and Android SDK environment scoped to the QA shell only; **BUILD SUCCESSFUL in 5m02s, 56 tasks (9 executed, 47 up-to-date), process exit 0**. Verified local `apps/androidApp/build/outputs/apk/debug/androidApp-debug.apk`, **22,345,216 bytes**. APK not installed, launched, published or sent to any device. Shipping Android entrypoint still uses default `BASELINE`; this gate proves compile compatibility of shared code only, not real Android navigation or real role authorization.
+
+### Phase 6 Shell integration dependency — source audited, not implemented
+
+Source in `main` `HiltechShell.kt` currently owns a single `Column(...verticalScroll(rememberScrollState())...)` and calls `AssignedWorkSection` with current `BASELINE` parameters in SignedIn and OfflineFieldReadOnly branches. `MainActivity` passes callbacks and build feature gates to `HiltechShell`; it does not expose this experimental presentation or Android system Back. The existing `WarehousePhysicalOperatorSection` is independently keyed using actual identity and organization, but that **does not** automatically establish a Field focus scope contract.
+
+**Before coordinated UX integration:** hoist the Shell scroll state, define an authoritative actor/org/project-or-work scope key from the authenticated session (not a hardcoded UI role), propagate this only to the appropriate Field destination, consume system Back only when a selected authorized detail is open, and preserve the fail-closed OfflineFieldReadOnly branch. A properly coordinated wrapper must also avoid carrying selected focus across 401/403/sign-out, org switch, or Project/WorkOrder re-scoping. This is a proposed integration contract; **none of these app entrypoint edits have been made**.
+
+A source Today membership check and a Compose focus key are presentation guards only; they cannot grant field commands or revalidate the server's current assignment. Real server transitions, accessibility, variable-height cards and Android/Windows on-device usability remain required.
