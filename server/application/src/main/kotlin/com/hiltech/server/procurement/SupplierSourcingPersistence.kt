@@ -52,6 +52,14 @@ data class SupplierQuoteDocumentSource(
 /** Last authoritative supplier relationship event, including revocations. */
 data class SupplierLinkRevision(val revisionNumber: Int, val state: String)
 
+data class SupplierRegistryCandidate(
+    val supplierOrganizationId: UUID,
+    val displayName: String,
+    val supplierStatus: String,
+    val relationshipRevision: Int,
+    val relationshipState: String?,
+)
+
 data class SupplierLinkEventRecord(
     val id: UUID,
     val operationId: UUID,
@@ -119,6 +127,37 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
             row.getString("correlation_id"),
         ) }, id,
     ).singleOrNull()
+
+    /** Master-data-only supplier search: includes unlinked/inactive records. */
+    fun supplierRegistryCandidates(
+        purchasingOrganizationId: UUID,
+        nameContains: String,
+    ): List<SupplierRegistryCandidate> = jdbc.query(
+        """
+        SELECT o.id, o.display_name, o.status, latest.revision_number, latest.state
+        FROM organization o
+        LEFT JOIN LATERAL (
+            SELECT l.revision_number, l.state
+            FROM procurement_supplier_link_event l
+            WHERE l.organization_id = ?
+              AND l.supplier_organization_id = o.id
+            ORDER BY l.revision_number DESC LIMIT 1
+        ) latest ON true
+        WHERE o.organization_type = 'SUPPLIER'
+          AND o.display_name ILIKE '%' || ? || '%'
+        ORDER BY o.display_name, o.id
+        LIMIT 100
+        """.trimIndent(),
+        { row, _ -> SupplierRegistryCandidate(
+            row.getObject("id", UUID::class.java),
+            row.getString("display_name"),
+            row.getString("status"),
+            row.getInt("revision_number"),
+            row.getString("state"),
+        ) },
+        purchasingOrganizationId,
+        nameContains,
+    )
 
     /** Serialize supplier link revision transitions by purchasing organization. */
     fun lockActiveOrganizationForSupplierLinks(organizationId: UUID): Boolean = jdbc.query(
