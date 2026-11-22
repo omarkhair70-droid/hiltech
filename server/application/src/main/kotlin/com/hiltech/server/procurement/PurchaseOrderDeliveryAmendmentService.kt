@@ -36,6 +36,16 @@ data class PurchaseOrderDeliveryAmendmentProposalReceipt(
     val replayed: Boolean,
 )
 
+data class PurchaseOrderDeliveryAmendmentStatus(
+    val proposalId: UUID,
+    val purchaseOrderId: UUID,
+    val baseVersion: Long,
+    val proposedStorageLocationId: UUID,
+    val reason: String,
+    val approvalState: String,
+    val approvalRequestId: UUID?,
+)
+
 data class RequestPurchaseOrderDeliveryAmendmentApproval(
     val operationId: UUID,
 )
@@ -94,6 +104,50 @@ class PurchaseOrderDeliveryAmendmentService @Autowired constructor(
     @Value("\${hiltech.procurement.po.delivery-amendment-policy-key:}")
     private val policyKey: String = "",
 ) {
+    fun destinations(
+        actor: UUID,
+        orderId: UUID,
+    ): List<PurchaseOrderDeliveryDestination> {
+        if (!enabled) unavailable()
+        val state = purchases.effectiveState(orderId) ?: unavailable()
+        issuer.requireIssuerForLifecycle(actor, state.order.organizationId)
+        if (state.effectiveState != "ISSUED" ||
+            state.order.supplierDispatchState != "NOT_SENT"
+        ) unavailable()
+        val source = candidates.byId(state.order.candidateId) ?: unavailable()
+        val demand = requirements.byId(source.requirementId) ?: unavailable()
+        if (source.organizationId != state.order.organizationId ||
+            demand.organizationId != state.order.organizationId
+        ) unavailable()
+        val workOrder = work.workOrder(demand.workOrderId) ?: unavailable()
+        if (workOrder.organizationId != state.order.organizationId) unavailable()
+        return purchases.deliveryDestinations(
+            state.order.organizationId, workOrder.projectId, workOrder.siteId,
+            clock.instant(),
+        )
+    }
+
+    fun pending(actor: UUID, orderId: UUID): PurchaseOrderDeliveryAmendmentStatus? {
+        if (!enabled) unavailable()
+        val state = purchases.effectiveState(orderId) ?: unavailable()
+        issuer.requireIssuerForLifecycle(actor, state.order.organizationId)
+        if (state.effectiveState != "ISSUED" ||
+            state.order.supplierDispatchState != "NOT_SENT"
+        ) unavailable()
+        val proposal = proposals.byOrderAndBase(orderId, state.version) ?: return null
+        val subject = ApprovalSubjectRef(
+            state.order.organizationId, "PROCUREMENT_PO_DELIVERY_AMENDMENT",
+            proposal.id, 1L,
+        )
+        val existing = approvalRecords.loadSubjectApproval(subject, requirePolicyKey())
+        return PurchaseOrderDeliveryAmendmentStatus(
+            proposal.id, orderId, proposal.baseVersion,
+            proposal.newDestinationId, proposal.reason,
+            existing?.state?.name ?: "NOT_REQUESTED",
+            existing?.requestId,
+        )
+    }
+
     fun propose(
         ctx: ProcurementDraftContext,
         orderId: UUID,
