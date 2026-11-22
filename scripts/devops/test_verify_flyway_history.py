@@ -18,14 +18,14 @@ class FlywayHistoryGateTests(unittest.TestCase):
         self.base = dict([migration(1, "baseline"), migration(2, "warehouse")])
 
     def test_appended_contiguous_migration_is_allowed(self):
-        candidate = {**self.base, *[migration(3, "finance")]}
+        candidate = {**self.base, **dict([migration(3, "finance")])}
         self.assertEqual(verify_history(self.base, candidate), (2, 1, 3))
 
     def test_same_main_is_allowed(self):
         self.assertEqual(verify_history(self.base, self.base), (2, 0, 2))
 
     def test_gap_blocks_higher_parallel_lane(self):
-        candidate = {**self.base, *[migration(7, "payroll")]}
+        candidate = {**self.base, **dict([migration(7, "payroll")])}
         with self.assertRaisesRegex(MigrationGateError, "missing lower Flyway"):
             verify_history(self.base, candidate)
 
@@ -43,7 +43,7 @@ class FlywayHistoryGateTests(unittest.TestCase):
             verify_history(self.base, candidate)
 
     def test_duplicate_version_is_blocked(self):
-        candidate = {**self.base, *[migration(3, "finance"), migration(3, "payroll")]}
+        candidate = {**self.base, **dict([migration(3, "finance"), migration(3, "payroll")])}
         with self.assertRaisesRegex(MigrationGateError, "duplicate V0003"):
             verify_history(self.base, candidate)
 
