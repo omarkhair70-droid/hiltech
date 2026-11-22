@@ -2,6 +2,10 @@ package com.hiltech.server.payroll
 
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.ProductApiException
+import com.hiltech.server.security.AuthorizationCheckPort
+import com.hiltech.server.security.RoleTeamSourceAuthorityPort
+import org.mockito.Mockito
+import org.springframework.beans.factory.support.StaticListableBeanFactory
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -25,7 +29,7 @@ class Payroll9aContractTest {
         val command = Payroll9aPeriodCommand(
             operationId = UUID.randomUUID(),
             organizationId = UUID.randomUUID(),
-            periodCode = "2026_NOV",
+            periodCode = "PAY_2026_NOV",
             startDate = LocalDate.parse("2026-11-01"),
             endDate = LocalDate.parse("2026-11-30"),
             cutoffDate = LocalDate.parse("2026-11-30"),
@@ -54,6 +58,34 @@ class Payroll9aContractTest {
                 3, 2, assignment, 4, 4, 2, assignment, 4,
             ),
         )
+    }
+
+
+    @Test
+    fun payrollAuthorityFailsClosedWithoutSourceMembershipAndOpenFga() {
+        val actor = UUID.randomUUID()
+        val organization = UUID.randomUUID()
+        val now = Instant.parse("2026-11-22T20:00:00Z")
+        val source = Mockito.mock(RoleTeamSourceAuthorityPort::class.java)
+        val provider = StaticListableBeanFactory()
+            .getBeanProvider(AuthorizationCheckPort::class.java)
+        val permission = JdbcPayroll9aAuthority(
+            jdbc = JdbcTemplate(),
+            source = source,
+            authorizationProvider = provider,
+            clock = Clock.fixed(now, ZoneOffset.UTC),
+        )
+        assertFalse(permission.canRead(actor, organization))
+        assertFalse(permission.canPrepare(actor, organization))
+        assertFalse(permission.canReview(actor, organization))
+        Mockito.`when`(
+            source.isOrganizationMemberCurrent(actor, organization, now),
+        ).thenReturn(true)
+        // Current People/organization membership remains insufficient
+        // without a positive OpenFGA check AND explicit payroll grant.
+        assertFalse(permission.canRead(actor, organization))
+        assertFalse(permission.canPrepare(actor, organization))
+        assertFalse(permission.canReview(actor, organization))
     }
 
     @Test
