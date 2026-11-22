@@ -232,6 +232,52 @@ BEGIN
   END IF;
  END;
 
+
+ -- Direct SQL must not create a pre-approved quotation or forged signed award.
+ BEGIN
+  INSERT INTO commercial_quote_version
+   (id,organization_id,opportunity_id,client_organization_id,scope_version_id,boq_version_id,
+    version_number,quote_code,currency,total_price,payment_terms,delivery_terms,exclusions,
+    validity_date,state,released_at,created_by,created_at)
+  VALUES (gen_random_uuid(),company_a,opportunity,client_a,scope_id,boq_id,
+          99,'FORGED-RELEASE','EGP',40,'fake','fake','fake',date '2026-12-01',
+          'RELEASED',now(),actor,now());
+  RAISE EXCEPTION 'EXPECTED_FAKE_QUOTE_INSERT_BLOCK_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%Quote must begin as an unreleased draft%' THEN
+   RAISE EXCEPTION 'Direct released quotation insert was not rejected: %',error_message;
+  END IF;
+ END;
+
+ BEGIN
+  INSERT INTO commercial_contract
+   (id,organization_id,opportunity_id,quote_version_id,contract_code,state,
+    signed_evidence_id,created_by,created_at)
+  VALUES(gen_random_uuid(),company_a,opportunity,quote_id,'FAKE-SIGNED-CONTRACT',
+         'SIGNED',gen_random_uuid(),actor,now());
+  RAISE EXCEPTION 'EXPECTED_FAKE_SIGNED_CONTRACT_INSERT_BLOCK_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%Contract must begin unsigned%' THEN
+   RAISE EXCEPTION 'Direct signed contract insert was not rejected: %',error_message;
+  END IF;
+ END;
+
+ BEGIN
+  INSERT INTO commercial_client_po
+   (id,organization_id,opportunity_id,contract_id,client_po_number,issued_on,
+    amount,currency,verified,evidence_id,created_by,created_at)
+  VALUES(gen_random_uuid(),company_a,opportunity,contract_id,'FAKE-PO',
+         date '2026-11-23',40,'EGP',true,gen_random_uuid(),actor,now());
+  RAISE EXCEPTION 'EXPECTED_FAKE_VERIFIED_PO_INSERT_BLOCK_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%Client PO must begin unverified%' THEN
+   RAISE EXCEPTION 'Direct verified PO insert was not rejected: %',error_message;
+  END IF;
+ END;
+
  RAISE NOTICE 'PHASE10_NEGATIVE_SCHEMA_CONTRACT_PASS';
 END $$;
 ROLLBACK;
