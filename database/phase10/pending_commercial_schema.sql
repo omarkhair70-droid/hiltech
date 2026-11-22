@@ -547,6 +547,9 @@ BEGIN
    FROM commercial_opportunity o
    JOIN project p ON p.id=NEW.project_id AND p.organization_id=o.organization_id
        AND p.client_organization_id=o.client_organization_id
+       AND p.source_type='IMPORT'
+       AND p.source_external_reference=
+           ('COMMERCIAL:' || o.id::text || ':QUOTE:' || NEW.quote_version_id::text)
    JOIN commercial_quote_version q ON q.id=NEW.quote_version_id
        AND q.organization_id=o.organization_id AND q.opportunity_id=o.id
        AND q.client_organization_id=o.client_organization_id AND q.state='RELEASED'
@@ -561,6 +564,11 @@ BEGIN
        AND ce.target_type='COMMERCIAL_CONTRACT' AND ce.target_id=c.id
        AND ce.evidence_type_code='COMMERCIAL_SIGNED_CONTRACT'
        AND ce.storage_state='READY' AND ce.finalized_at IS NOT NULL
+       AND ce.object_key_ref IS NOT NULL
+       AND ce.classification_code='HIGHLY_RESTRICTED'
+       AND ce.client_visibility_mode='INTERNAL_ONLY'
+       AND ce.security_scan_class='ARBITRARY_FILE'
+       AND ce.content_type IN ('application/pdf','image/png','image/jpeg')
    JOIN evidence_upload_session ces ON ces.evidence_id=ce.id AND ces.state='READY'
        AND ces.finalized_at IS NOT NULL AND ces.expected_sha256=ce.sha256
        AND ces.expected_size_bytes=ce.size_bytes
@@ -569,6 +577,11 @@ BEGIN
        AND pe.target_type='COMMERCIAL_CLIENT_PO' AND pe.target_id=cp.id
        AND pe.evidence_type_code='COMMERCIAL_CLIENT_PO'
        AND pe.storage_state='READY' AND pe.finalized_at IS NOT NULL
+       AND pe.object_key_ref IS NOT NULL
+       AND pe.classification_code='HIGHLY_RESTRICTED'
+       AND pe.client_visibility_mode='INTERNAL_ONLY'
+       AND pe.security_scan_class='ARBITRARY_FILE'
+       AND pe.content_type IN ('application/pdf','image/png','image/jpeg')
    JOIN evidence_upload_session pes ON pes.evidence_id=pe.id AND pes.state='READY'
        AND pes.finalized_at IS NOT NULL AND pes.expected_sha256=pe.sha256
        AND pes.expected_size_bytes=pe.size_bytes
