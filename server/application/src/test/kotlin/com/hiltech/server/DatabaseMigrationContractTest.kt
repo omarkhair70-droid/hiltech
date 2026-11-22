@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(30, result.migrationsExecuted)
+        assertEquals(31, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -169,12 +169,17 @@ class DatabaseMigrationContractTest {
                         'procurement_service_quote_document_slot',
                         'procurement_service_supplier_quote',
                         'procurement_service_order_candidate',
-                        'procurement_service_order'
+                        'procurement_service_order',
+                        'procurement_service_document_slot',
+                        'procurement_service_acceptance',
+                        'procurement_service_invoice',
+                        'procurement_service_invoice_match',
+                        'procurement_service_finance_handoff'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(93, tables.getInt(1))
+                assertEquals(98, tables.getInt(1))
 
                 // V0050 links canonical Warehouse Receiving to a company-scoped
                 // approved PO without creating another physical stock ledger.
@@ -492,6 +497,30 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(serviceOrderGuards.next())
                 assertEquals(4, serviceOrderGuards.getInt(1))
+
+                val serviceCompletionGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger WHERE NOT tgisinternal AND (
+                      (tgrelid='procurement_service_document_slot'::regclass
+                        AND tgname='service_document_slot_immutable')
+                      OR (tgrelid='evidence'::regclass
+                        AND tgname='service_purchase_document_evidence_guard')
+                      OR (tgrelid='procurement_service_acceptance'::regclass
+                        AND tgname IN ('procurement_service_acceptance_immutable',
+                          'service_acceptance_evidence_guard'))
+                      OR (tgrelid='procurement_service_invoice'::regclass
+                        AND tgname IN ('procurement_service_invoice_immutable',
+                          'service_invoice_evidence_guard'))
+                      OR (tgrelid='procurement_service_invoice_match'::regclass
+                        AND tgname='procurement_service_invoice_match_immutable')
+                      OR (tgrelid='procurement_service_finance_handoff'::regclass
+                        AND tgname IN ('procurement_service_finance_handoff_immutable',
+                          'procurement_service_finance_handoff_guard'))
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(serviceCompletionGuards.next())
+                assertEquals(9, serviceCompletionGuards.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
