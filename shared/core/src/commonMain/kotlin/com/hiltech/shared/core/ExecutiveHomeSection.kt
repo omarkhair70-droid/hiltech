@@ -14,9 +14,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.executive.ExecutiveDestination
 import com.hiltech.shared.core.executive.ExecutiveHomeDto
 import com.hiltech.shared.core.executive.ExecutiveSectionDto
 import com.hiltech.shared.core.executive.ExecutiveSourceReferenceDto
+import com.hiltech.shared.core.executive.resolveExecutiveDestination
 
 /**
  * Native Windows + Android executive surface. Stateless by design:
@@ -31,7 +33,7 @@ fun ExecutiveHomeSection(
     loading: Boolean,
     loadError: String?,
     onRefresh: () -> Unit,
-    onOpenSource: (ExecutiveSourceReferenceDto) -> Unit,
+    onOpenSource: (ExecutiveDestination) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -155,8 +157,13 @@ fun ExecutiveHomeSection(
                                 " · تقييم " + (project.healthAsOf ?: "غير متاح"),
                             style = MaterialTheme.typography.labelSmall,
                         )
-                        OutlinedButton(onClick = { onOpenSource(project.reference) }) {
-                            Text("افتح المشروع")
+                        val destination = resolveExecutiveDestination(project.reference)
+                        if (destination != null) {
+                            OutlinedButton(onClick = { onOpenSource(destination) }) {
+                                Text("افتح المشروع")
+                            }
+                        } else {
+                            Text("رابط المشروع غير مدعوم؛ افتحه من قائمة المشاريع.")
                         }
                     }
                 }
@@ -259,7 +266,7 @@ private fun ExecutiveSourceCard(
     sourceLine: String,
     actionLabel: String,
     reference: ExecutiveSourceReferenceDto,
-    onOpenSource: (ExecutiveSourceReferenceDto) -> Unit,
+    onOpenSource: (ExecutiveDestination) -> Unit,
 ) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -273,8 +280,13 @@ private fun ExecutiveSourceCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedButton(onClick = { onOpenSource(reference) }) {
-                Text(actionLabel)
+            val destination = resolveExecutiveDestination(reference)
+            if (destination != null) {
+                OutlinedButton(onClick = { onOpenSource(destination) }) {
+                    Text(actionLabel)
+                }
+            } else {
+                Text("تفاصيل المصدر غير متاحة للتنقل من هنا.")
             }
         }
     }
