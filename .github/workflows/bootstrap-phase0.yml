@@ -181,7 +181,7 @@ jobs:
           exit 1
 
       - name: Verify signed evidence storage contract
-        run: ./gradlew :server:application:test --tests com.hiltech.server.documents.storage.EvidenceObjectStorageContractTest --rerun-tasks
+        run: ./gradlew :server:application:test --tests com.hiltech.server.documents.storage.EvidenceObjectStorageContractTest --rerun-tasks --no-configuration-cache
 
       - name: Moto logs on failure
         if: failure()
@@ -322,7 +322,7 @@ jobs:
             --tests com.hiltech.server.people.OnboardingPostgresContractTest \
             --tests com.hiltech.server.people.OffboardingPostgresContractTest \
             --tests com.hiltech.server.projects.ProjectsPostgresOpenFgaContractTest \
-            --rerun-tasks
+            --rerun-tasks --no-configuration-cache
 
           if PGPASSWORD=hiltech-keycloak-local \
             psql -h 127.0.0.1 -U hiltech_keycloak -d hiltech \
