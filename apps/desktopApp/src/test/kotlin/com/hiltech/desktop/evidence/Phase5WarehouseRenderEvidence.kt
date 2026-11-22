@@ -8,6 +8,8 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -67,6 +69,7 @@ import com.hiltech.shared.core.WarehouseCommandCenterSection
 import com.hiltech.shared.core.WarehouseCommandCenterPresentation
 import com.hiltech.shared.core.WarehouseOperatorFocus
 import com.hiltech.shared.core.WarehouseOperatorFocusFlow
+import com.hiltech.shared.core.WarehouseQuickScanSession
 import com.hiltech.shared.core.WarehouseQuickScanControls
 import com.hiltech.shared.core.WarehouseQuickScanState
 import com.hiltech.shared.core.warehouse.WarehouseCommandCenterDto
@@ -298,6 +301,54 @@ fun main() = runBlocking<Unit> {
             }
             captureAndClose(journeyScene, directory.resolve("ux128-$candidateLabel-flow-$focusLabel-phone.png"))
         }
+    }
+
+    // Real headless Compose pointer interaction proof, not just alternate initial-state screenshots.
+    val persistedLookup = WarehouseQuickScanSession().apply {
+        tag = "synthetic-current-tag"
+        results = quickState
+    }
+    var observedFocus = WarehouseOperatorFocus.TODAY
+    val clickScene = ImageComposeScene(width = 430, height = 960, coroutineContext = coroutineContext) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(18.dp)) {
+            WarehouseOperatorFocusFlow(
+                warehouseId = commandCenter.warehouseId,
+                busy = false,
+                onFocusChange = { observedFocus = it },
+                today = { Text("UX128_TODAY_FOCUS_PROOF") },
+                codeLookup = {
+                    WarehouseQuickScanControls(
+                        state = persistedLookup.results,
+                        busy = false,
+                        onAssetTagLookup = {},
+                        onAssetSearch = {},
+                        onStockSearch = {},
+                        session = persistedLookup,
+                    )
+                },
+            )
+        }
+    }
+    try {
+        captureScene(clickScene, directory.resolve("ux128-click-00-today.png"))
+        check(observedFocus == WarehouseOperatorFocus.TODAY)
+        clickScene.sendPointerEvent(PointerEventType.Press, Offset(173f, 80f))
+        clickScene.sendPointerEvent(PointerEventType.Release, Offset(173f, 80f))
+        captureScene(clickScene, directory.resolve("ux128-click-01-lookup.png"))
+        check(observedFocus == WarehouseOperatorFocus.CODE_LOOKUP) {
+            "Warehouse Today -> code lookup must be selectable by a real Compose pointer click."
+        }
+        check(persistedLookup.tag == "synthetic-current-tag") {
+            "The scoped code lookup text must survive navigation."
+        }
+        clickScene.sendPointerEvent(PointerEventType.Press, Offset(60f, 80f))
+        clickScene.sendPointerEvent(PointerEventType.Release, Offset(60f, 80f))
+        captureScene(clickScene, directory.resolve("ux128-click-02-return.png"))
+        check(observedFocus == WarehouseOperatorFocus.TODAY) {
+            "Warehouse code lookup -> Today must be reversible by real Compose pointer click."
+        }
+    } finally {
+        clickScene.close()
     }
 
     val stock = syntheticStock(state)
