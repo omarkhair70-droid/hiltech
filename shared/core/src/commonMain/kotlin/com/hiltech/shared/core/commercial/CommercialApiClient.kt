@@ -95,6 +95,21 @@ data class CommercialQuoteSummaryDto(
     val currency: String,
 )
 
+/** Never include this in general-purpose customer or Sales Viewer responses. */
+@Serializable
+data class CommercialPrivateCostLineDto(
+    @SerialName("boq_version_id") val boqVersionId: String,
+    @SerialName("version_number") val versionNumber: Int,
+    val currency: String,
+    @SerialName("line_code") val lineCode: String,
+    val description: String,
+    val category: String,
+    val quantity: JsonPrimitive,
+    val unit: String,
+    @SerialName("internal_unit_cost") val internalUnitCost: JsonPrimitive? = null,
+    @SerialName("sell_unit_price") val sellUnitPrice: JsonPrimitive,
+)
+
 @Serializable
 data class CommercialContractSummaryDto(
     val id: String,
@@ -260,6 +275,15 @@ class CommercialApiClient(
             path = "/v1/commercial/opportunities/" + opportunityId,
             options = HiltechRequestOptions(installationId = installationId),
             decode = { json.decodeFromString(CommercialDealDetailDto.serializer(), it) },
+        )
+
+    /** Restricted endpoint: only invoke after explicit SALES_COST_VIEW capability. */
+    suspend fun privateCosting(opportunityId: String, installationId: String): List<CommercialPrivateCostLineDto> =
+        api.request(
+            method = HttpMethod.Get,
+            path = "/v1/commercial/opportunities/" + opportunityId + "/costing",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(ListSerializer(CommercialPrivateCostLineDto.serializer()), it) },
         )
 
     suspend fun createOpportunity(request: CreateCommercialOpportunityDto, installationId: String) =
