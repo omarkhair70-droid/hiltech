@@ -113,9 +113,11 @@ An active `organization_type=SUPPLIER` record is **not** a globally valid
 buyer-supplier relationship. V0044 stores append-only supplier link events
 per purchasing organization. An INACTIVE event at a higher revision revokes
 an older ACTIVE event, without erasing its source history. The link source
-requires a reference, actor and timestamp; its creation has **no API** until
-HILTECH establishes a real master-data authority. No hypothetical company
-relationships or supplier approvals were seeded.
+requires a reference, actor and timestamp. A separate administrative API
+has now been added, but it is gated by BOTH sourcing and
+`hiltech.procurement.supplier-master-data.enabled` (default OFF) plus an
+independent `SupplierMasterDataAuthorizationPort` (default deny). No
+hypothetical company relationships or supplier approvals were seeded.
 
 The read endpoint `GET /v1/sourcing/organizations/{orgId}/suppliers` is
 buyer-only, feature-gated and organization-scoped. Recording an RFQ quote now
@@ -215,3 +217,29 @@ manufacture signed URLs. Disposable mock tests cover cross-tenant,
 nonbuyer, quarantine and altered-object rejection. The real S3 contract
 test additionally verifies the object size bound. Feature flag and
 authority defaults remain DENY.
+
+## Separate supplier master-data control (administrative S02 follow-on)
+
+A company-authorized supplier registrar has a **separate** API and KMP
+transport, not an unrestricted extension of buyer sourcing:
+- `GET /v1/sourcing/organizations/{orgId}/supplier-registry?query=...`
+  returns existing supplier organizations with current ACTIVE/INACTIVE link
+  revision (or zero when no link exists), scoped to authorized custodians.
+- `POST /v1/sourcing/organizations/{orgId}/supplier-links` appends an
+  idempotent ACTIVE/INACTIVE event using the caller's recorded reference and
+  expected revision number. Organization-row locking serializes concurrent
+  supplier link changes; the V0044 mutation-rejection trigger protects history.
+- Ordinary buyers and technical reviewers do not automatically gain supplier
+  registry custodial authority. A globally active supplier organization
+  cannot be quoted until its buyer-organization link is active.
+
+The source reference is an **operator attestation**, not automatically
+verified third-party evidence. The real company role/policy and trusted
+supplier-record validation must be established before enabling the two
+default-OFF gates. Revocation and reactivation retain history; there is no
+auto-award, purchase approval, PO, payment or supplier email. The registry
+returns names and revisions, not raw global company or staff details.
+
+S02 engineering can be reviewed while the live mapping is still absent;
+this is a deliberate rollout gate, not a reason to grant a fictional user
+or to alter production settings.
