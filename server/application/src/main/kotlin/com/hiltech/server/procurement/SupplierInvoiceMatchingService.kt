@@ -91,6 +91,7 @@ private data class OrderedFacts(
     val unitPrice: BigDecimal, val tax: BigDecimal,
 )
 private data class ReceiptFacts(val accepted: BigDecimal, val discrepancy: Boolean, val receiptRefs: String)
+private data class ReceiptEvidenceState(val requiresReview: Boolean, val sourceRefs: String)
 
 /**
  * S05 receives restricted, READY invoice Evidence; compares immutable
@@ -378,6 +379,41 @@ class SupplierInvoiceMatchingService @Autowired constructor(
                 rs.getString("receipt_refs"),
             ) }, inv.po, inv.po,
         ).singleOrNull() ?: ReceiptFacts(BigDecimal.ZERO, false, "")
+        // A posted stock line is not yet approved three-way-match evidence:
+        // the parent Receiving must be CLOSED with a verified delivery note.
+        // Any unclosed or undocumented sibling delivery blocks Finance handoff.
+        val deliveryEvidence = jdbc.query(
+            """
+            SELECT
+              COALESCE(BOOL_OR(
+                r.state NOT IN ('RECEIVED','RECEIVED_WITH_DISCREPANCY')
+                OR e.id IS NULL
+              ),false) AS requires_review,
+              COALESCE(STRING_AGG(
+                r.id::text || ':' || r.version::text || ':' || r.state ||
+                ':' || COALESCE(e.id::text,'NO_READY_NOTE'),
+                ',' ORDER BY r.id
+              ),'') AS source_refs
+            FROM procurement_po_receiving_link b
+            JOIN receiving_record r ON r.id=b.receiving_record_id
+              AND r.organization_id=b.organization_id
+            LEFT JOIN LATERAL (
+              SELECT proof.id FROM evidence proof
+              WHERE proof.organization_id=r.organization_id
+                AND proof.target_id=r.id
+                AND proof.target_type='PO_RECEIVING_DELIVERY_NOTE'
+                AND proof.evidence_requirement_key='PO_DELIVERY_NOTE_BINARY'
+                AND proof.evidence_type_code='PO_DELIVERY_NOTE'
+                AND proof.storage_state='READY'
+                AND proof.classification_code='HIGHLY_RESTRICTED'
+                AND proof.client_visibility_mode='INTERNAL_ONLY'
+              LIMIT 1
+            ) e ON true
+            WHERE b.purchase_order_id=? AND b.organization_id=?
+            """.trimIndent(), { rs, _ -> ReceiptEvidenceState(
+                rs.getBoolean("requires_review"), rs.getString("source_refs"),
+            ) }, inv.po, inv.org,
+        ).singleOrNull() ?: ReceiptEvidenceState(true, "")
         val invoicedTotal = jdbc.queryForObject(
             "SELECT COALESCE(SUM(quantity),0) FROM procurement_supplier_invoice_intake WHERE purchase_order_id=?",
             BigDecimal::class.java, inv.po,
@@ -396,7 +432,7 @@ class SupplierInvoiceMatchingService @Autowired constructor(
                 invoiceCurrency = inv.currency,
                 priceVariance = pDelta,
                 taxVariance = tDelta,
-                unresolvedPhysicalDiscrepancy = received.discrepancy,
+                unresolvedPhysicalDiscrepancy = received.discrepancy || deliveryEvidence.requiresReview,
             ),
         )
         val discrepancyRefs = jdbc.queryForObject(
@@ -421,7 +457,7 @@ class SupplierInvoiceMatchingService @Autowired constructor(
         val source = hash(inv.id, po.id, po.quantity, po.currency, po.unitPrice,
             po.tax, inv.quantity, inv.currency, inv.unitPrice, inv.tax, inv.evidenceId,
             received.accepted, received.discrepancy, received.receiptRefs,
-            discrepancyRefs, invoicedTotal, result)
+            discrepancyRefs, deliveryEvidence.sourceRefs, invoicedTotal, result)
         return SupplierInvoiceMatchView(inv.id, inv.po, source, result,
             po.quantity.toPlainString(), received.accepted.toPlainString(),
             invoicedTotal.toPlainString(), qDelta.toPlainString(),
