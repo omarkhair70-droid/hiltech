@@ -2900,6 +2900,10 @@ fun main() {
                             ) {
                                 PurchaseOrderIssuerSection(
                                     api = runtime.purchaseOrderIssueApi,
+                                    amendmentApi = runtime.purchaseOrderDeliveryAmendmentApi.takeIf {
+                                        System.getenv("HILTECH_PO_AMENDMENT_UI_ENABLED")
+                                            ?.equals("true", ignoreCase = true) == true
+                                    },
                                     cancellationEnabled =
                                         System.getenv("HILTECH_PO_CANCELLATION_UI_ENABLED")
                                             ?.equals("true", ignoreCase = true) == true,
