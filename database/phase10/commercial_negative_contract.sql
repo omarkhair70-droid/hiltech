@@ -28,6 +28,33 @@ BEGIN
   (id,organization_id,client_organization_id,owner_user_id,source,opportunity_code,
    title,state,created_by,created_at,updated_at)
  VALUES(opportunity,company_a,client_a,actor,'RFQ','PHASE10_TEST_OPP','Synthetic commercial test','OPEN',actor,now(),now());
+ INSERT INTO commercial_tender_revision
+  (id,organization_id,opportunity_id,revision_number,tender_type,received_at,created_by,created_at)
+ VALUES(gen_random_uuid(),company_a,opportunity,1,'RFQ',now(),actor,now());
+ BEGIN
+  UPDATE commercial_tender_revision SET submission_state='SUBMITTED'
+  WHERE opportunity_id=opportunity;
+  RAISE EXCEPTION 'EXPECTED_TENDER_APPEND_ONLY_GUARD_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%snapshot is immutable%' THEN
+   RAISE EXCEPTION 'Tender revision history can be overwritten: %',error_message;
+  END IF;
+ END;
+ INSERT INTO commercial_qualification_record
+  (id,organization_id,opportunity_id,discovery_summary,open_questions,qualified_by,qualified_at)
+ VALUES(gen_random_uuid(),company_a,opportunity,'Synthetic discovery','Unresolved',actor,now());
+ BEGIN
+  UPDATE commercial_qualification_record SET discovery_summary='Rewritten'
+  WHERE opportunity_id=opportunity;
+  RAISE EXCEPTION 'EXPECTED_QUALIFICATION_APPEND_ONLY_GUARD_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%snapshot is immutable%' THEN
+   RAISE EXCEPTION 'Recorded qualification can be overwritten: %',error_message;
+  END IF;
+ END;
+
  INSERT INTO commercial_scope_version
   (id,organization_id,opportunity_id,version_number,description,inclusions,
    exclusions,assumptions,technical_constraints,client_responsibilities,created_by,created_at)
