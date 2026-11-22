@@ -62,6 +62,7 @@ class PurchaseOrderIssueService @Autowired constructor(
     private val issuerAuthorityKey: String = "",
     @Value("\${hiltech.procurement.po.number-prefix:}")
     private val poNumberPrefix: String = "",
+    private val sourceVerifier: ProcurementDemandSourceVerifier? = null,
 ) {
     /** Separate workbench for currently assigned issuer, never broad procurement reads. */
     fun issuerQueue(actor: UUID, organizationId: UUID): List<PurchaseOrderIssuerQueueItem> {
@@ -87,11 +88,24 @@ class PurchaseOrderIssueService @Autowired constructor(
         ) stale()
         val requirement = requirements.byId(candidate.requirementId) ?: unavailable()
         if (requirement.organizationId != candidate.organizationId) unavailable()
-        val order = work.workOrder(requirement.workOrderId) ?: unavailable()
-        if (order.organizationId != candidate.organizationId) unavailable()
-        return purchases.deliveryDestinations(
-            candidate.organizationId, order.projectId, order.siteId, clock.instant(),
-        )
+        return when (requirement.sourceType) {
+            "WORK_ORDER" -> {
+                val order = requirement.workOrderId?.let { work.workOrder(it) } ?: unavailable()
+                if (order.organizationId != candidate.organizationId) unavailable()
+                purchases.deliveryDestinations(
+                    candidate.organizationId, order.projectId, order.siteId, clock.instant(),
+                )
+            }
+            "WAREHOUSE_REPLENISHMENT" -> {
+                val location = sourceVerifier?.warehouseDestination(
+                    requirement, requirements.latestTransition(requirement.id),
+                ) ?: unavailable()
+                listOfNotNull(purchases.warehouseDeliveryDestination(
+                    candidate.organizationId, location, clock.instant(),
+                ))
+            }
+            else -> unavailable()
+        }
     }
 
     /** Reuse the existing real company issuer authority for lifecycle actions. */
@@ -160,11 +174,20 @@ class PurchaseOrderIssueService @Autowired constructor(
             if (!requirements.lock(current.requirementId)) unavailable()
             val frozenRequirement = requirements.byId(current.requirementId) ?: unavailable()
             if (frozenRequirement.organizationId != current.organizationId ||
-                frozenRequirement.stockItemId != current.stockItemId ||
-                !purchases.lockWorkAndStockSource(
-                    current.organizationId, frozenRequirement.workOrderId, current.stockItemId,
-                )
+                frozenRequirement.stockItemId != current.stockItemId
             ) unavailable()
+            val sourceLocked = when (frozenRequirement.sourceType) {
+                "WORK_ORDER" -> frozenRequirement.workOrderId?.let {
+                    purchases.lockWorkAndStockSource(current.organizationId, it, current.stockItemId)
+                } == true
+                "WAREHOUSE_REPLENISHMENT" -> frozenRequirement.warehouseStorageLocationId?.let {
+                    purchases.lockWarehouseAndStockSource(current.organizationId, it, current.stockItemId)
+                } == true && sourceVerifier?.isCurrent(
+                    frozenRequirement, requirements.latestTransition(frozenRequirement.id),
+                ) == true
+                else -> false
+            }
+            if (!sourceLocked) unavailable()
             if (!purchases.lockCurrentPurchasingOrganization(current.organizationId))
                 unavailable()
             val now = clock.instant()
@@ -201,13 +224,27 @@ class PurchaseOrderIssueService @Autowired constructor(
 
             val need = requirements.byId(current.requirementId) ?: unavailable()
             if (need.organizationId != current.organizationId) unavailable()
-            val order = work.workOrder(need.workOrderId) ?: unavailable()
-            if (order.organizationId != current.organizationId ||
-                !purchases.validDeliveryLocation(
-                    current.organizationId, request.deliveryStorageLocationId,
-                    order.projectId, order.siteId, now,
-                )
-            ) unavailable()
+            val validDestination = when (need.sourceType) {
+                "WORK_ORDER" -> {
+                    val order = need.workOrderId?.let { work.workOrder(it) } ?: unavailable()
+                    order.organizationId == current.organizationId &&
+                        purchases.validDeliveryLocation(
+                            current.organizationId, request.deliveryStorageLocationId,
+                            order.projectId, order.siteId, now,
+                        )
+                }
+                "WAREHOUSE_REPLENISHMENT" -> {
+                    val location = sourceVerifier?.warehouseDestination(
+                        need, requirements.latestTransition(need.id),
+                    ) ?: unavailable()
+                    location == request.deliveryStorageLocationId &&
+                        purchases.warehouseDeliveryDestination(
+                            current.organizationId, location, now,
+                        ) != null
+                }
+                else -> false
+            }
+            if (!validDestination) unavailable()
             if (purchases.byCandidate(candidateId) != null) {
                 throw ProductApiException(
                     "PROCUREMENT_PO_ALREADY_ISSUED",
