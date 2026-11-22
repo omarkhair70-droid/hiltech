@@ -122,13 +122,9 @@ class SupplierMasterDataServiceTest {
         assertEquals("SUPPLIER_LINK_REVISION_CONFLICT", assertThrows<ProductApiException> {
             service().changeSupplierLink(context, org, request("INACTIVE", 5))
         }.code)
-        Mockito.verify(repo, Mockito.never()).insertSupplierLinkEvent(
-            Mockito.any(SupplierLinkEventRecord::class.java)
-                ?: SupplierLinkEventRecord(
-                    UUID.randomUUID(), operation, org, supplier, 1,
-                    "ACTIVE", "fixture-source", actor, at, "supplier-test",
-                ),
-        )
+        assertEquals(0, Mockito.mockingDetails(repo).invocations.count {
+            it.method.name == "insertSupplierLinkEvent"
+        })
     }
 
     @Test fun deactivationWithoutCurrentLinkAndActivationOfInactiveSupplierAreDenied() {
