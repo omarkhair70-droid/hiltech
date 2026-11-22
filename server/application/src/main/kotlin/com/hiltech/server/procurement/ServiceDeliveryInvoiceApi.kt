@@ -15,6 +15,14 @@ import java.util.UUID
 /** No stock receipt, supplier email, payment or Finance payable endpoints. */
 @RestController
 class ServiceDeliveryInvoiceController(private val service:ServiceDeliveryInvoiceService) {
+    @GetMapping("/v1/service-procurement/organizations/{orgId}/delivery-orders")
+    fun deliveryOrders(req:HttpServletRequest,@PathVariable orgId:UUID):
+        List<ServiceWorkOrderOption> = service.ordersForRole(req.actor(),orgId,"DELIVERY")
+
+    @GetMapping("/v1/service-procurement/organizations/{orgId}/invoice-orders")
+    fun financeOrders(req:HttpServletRequest,@PathVariable orgId:UUID):
+        List<ServiceWorkOrderOption> = service.ordersForRole(req.actor(),orgId,"INVOICE")
+
     @PostMapping("/v1/service-procurement/orders/{orderId}/document-slots")
     fun documentSlot(req:HttpServletRequest,@PathVariable orderId:UUID,
                      @RequestBody input:CreateServicePurchaseDocumentSlotRequest):
