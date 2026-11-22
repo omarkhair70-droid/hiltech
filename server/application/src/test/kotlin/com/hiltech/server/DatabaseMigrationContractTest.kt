@@ -86,7 +86,12 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(27, result.migrationsExecuted)
+        // Exact isolated Phase 7 S01–S06 -> Finance 8A -> Finance 8B stack:
+        // V0034–V0060 (27), V0061 Finance8A, V0062 Finance8B = 29
+        // migrations after the V0033 disposable baseline.
+        // Numbers remain provisional while S07 Procurement also claims V0061/V0062.
+        // Do not use this isolated count as approval to merge either branch to main.
+        assertEquals(29, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
