@@ -152,6 +152,21 @@ class SupplierSourcingApiClientTest {
         assertFalse(result.single().sourcingRoundExists)
     }
 
+    @Test fun buyerSupplierLookupUsesOnlyTheScopedServerDirectory() = runBlocking {
+        val http = HttpClient(MockEngine { call ->
+            assertEquals("GET", call.method.value)
+            assertEquals("/v1/sourcing/organizations/$supplier/suppliers", call.url.encodedPath)
+            assertEquals("Bearer restricted-buyer-token", call.headers[HttpHeaders.Authorization])
+            respond("""[{"supplierOrganizationId":"$rfq","displayName":"Linked Supplier",
+                "relationshipRevision":2}]""", HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).eligibleSuppliers(supplier, installation)
+        assertEquals(1, result.size)
+        assertEquals("Linked Supplier", result.single().displayName)
+        assertEquals(2, result.single().relationshipRevision)
+    }
+
     @Test fun scopedRfqRoundListNeedsTheCurrentAuthenticatedBuyerIdentity() = runBlocking {
         val http = HttpClient(MockEngine { call ->
             assertEquals("GET", call.method.value)
