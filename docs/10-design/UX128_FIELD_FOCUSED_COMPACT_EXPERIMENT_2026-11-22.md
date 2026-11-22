@@ -109,3 +109,16 @@ Also inspected the `1150×980` wide-mode PNG from the same fixture, confirming t
 - PM Project/Site/WorkOrder drill and Inbox delivery remain separate UX work; no fake source routes or providers introduced.
 
 **Pass02 closure:** test of multi-WorkOrder selection + parent-scroll return on synthetic source fixtures PASSED. UX #128 as a whole remains OPEN. No visual system or production integration approved.
+
+
+## Android compilation gate (same source SHA, no device interaction)
+
+The authorized isolated QA clone also built the **actual Android Debug app** at exact source SHA `005fa08a389ea580d3f2391d12c46a1175869b6a`.
+
+- Command: `./gradlew.bat :apps:androidApp:assembleDebug --no-daemon`, with JDK 17 and **ANDROID_HOME / ANDROID_SDK_ROOT scoped to that shell process only** (using the existing locally installed Android SDK). No permanent SDK configuration or source file changes.
+- **BUILD SUCCESSFUL in 6m23s, 60 tasks (38 executed, 18 from cache, 4 up-to-date), process exit 0.**
+- Verified the debug APK at `apps/androidApp/build/outputs/apk/debug/androidApp-debug.apk` in the isolated QA clone, **20,527,928 bytes**. This is a local build artifact, not published or installed.
+- Initial build attempt without `ANDROID_HOME` failed at SDK discovery, before Android compilation; fixed only the process environment and repeated successfully.
+- Because the currently shipping app passes default `BASELINE`, Android compilation establishes that the shared Kotlin/Compose experimental additions do not break building the native Android target. It **does not establish the new focused UX is accessible from a real Android screen**, nor touch gestures/system Back/TalkBack/operator acceptance. No phone/emulator was installed or interacted with.
+
+The prior Desktop synthetic multi-task pointer test and this Android native compilation are separate gates, both PASS for their bounded claims. Real Android runtime, multi-role permission projection, source revocation and Phase6 production feature-flag tests remain OPEN.
