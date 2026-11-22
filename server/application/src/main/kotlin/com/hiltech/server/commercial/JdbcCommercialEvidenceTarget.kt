@@ -2,6 +2,7 @@ package com.hiltech.server.commercial
 
 import com.hiltech.server.documents.CommercialEvidenceTargetPort
 import com.hiltech.server.documents.CommercialEvidenceTargetSnapshot
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import java.util.UUID
@@ -14,11 +15,15 @@ import java.util.UUID
 class JdbcCommercialEvidenceTarget(
     private val jdbc: JdbcTemplate,
     private val access: CommercialAccess,
+    @Value("\${hiltech.commercial.enabled:false}")
+    private val enabled: Boolean = false,
 ) : CommercialEvidenceTargetPort {
     override fun loadTarget(
         targetType: String,
         targetId: UUID,
     ): CommercialEvidenceTargetSnapshot? {
+        // Canonical Evidence routes remain safe before the Phase10 schema is deployed.
+        if (!enabled) return null
         val record = when (targetType) {
             "COMMERCIAL_CONTRACT" -> jdbc.queryForList(
                 """SELECT c.organization_id, c.state AS document_state,
