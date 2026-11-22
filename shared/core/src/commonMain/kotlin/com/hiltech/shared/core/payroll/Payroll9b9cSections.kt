@@ -23,6 +23,11 @@ data class PayrollRunReviewUiState(
     val run: PayrollRunDto? = null,
     val errorCode: String? = null,
     val mayPrepare: Boolean = false,
+    val mayRequestApproval: Boolean = false,
+    val mayReleaseForFinanceReview: Boolean = false,
+    val approval: PayrollApprovalResultDto? = null,
+    val release: PayrollReleaseResultDto? = null,
+    val finance: PayrollRunFinanceStatusDto? = null,
 )
 
 @Composable
@@ -30,6 +35,8 @@ fun PayrollRunReviewSection(
     state: PayrollRunReviewUiState,
     periodId: String,
     onPrepareDraft: (String) -> Unit,
+    onRequestApproval: (String) -> Unit,
+    onReleaseForFinanceReview: (String) -> Unit,
     onRefresh: () -> Unit,
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -59,14 +66,60 @@ fun PayrollRunReviewSection(
                 Text("نسخة المصادر: " + run.sourceFingerprint.take(12))
                 run.lines.forEach { line ->
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("الموظف " + line.employeeId, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            line.displayName + " — " + line.employeeCode,
+                            style = MaterialTheme.typography.titleSmall,
+                        )
                         Text("إجمالي " + line.gross + " | خصم " + line.deductions)
                         Text("صافي " + line.net + " " + line.currency)
                     }
                 }
-                if (!run.approvalAllowed || !run.paymentAllowed) {
-                    Text("لا يسمح هذا التشغيل باعتماد أو صرف مباشر.")
+                if (state.mayRequestApproval) {
+                    OutlinedButton(onClick = { onRequestApproval(run.runVersionId) }) {
+                        Text("إحالة النسخة للموافقة حسب سياسة الشركة")
+                    }
                 }
+                if (state.mayReleaseForFinanceReview) {
+                    Button(onClick = { onReleaseForFinanceReview(run.runVersionId) }) {
+                        Text("تثبيت اعتماد النسخة للمراجعة المالية")
+                    }
+                }
+                state.approval?.let {
+                    Text("طلب الموافقة: " +
+                        (it.approvalState ?: if (it.approvalRequired) "معلّق" else "اعتماد إضافي غير مطلوب"))
+                }
+                state.release?.let {
+                    Text("تسليم للمراجعة المالية: " + it.status +
+                        " — " + it.decisionPath)
+                }
+                state.finance?.let { finance ->
+                    Text("المطابقة المالية", style = MaterialTheme.typography.titleSmall)
+                    Text("الحالة: " + when (finance.status) {
+                        "PAID" -> "مؤكد بالكامل من المالية"
+                        "PARTIALLY_PAID" -> "صرف جزئي"
+                        "REQUIRES_REVIEW" -> "مراجعة نتائج الصرف مطلوبة"
+                        "NOT_RELEASED" -> "لم يُعتمد التسليم للمالية"
+                        "FINANCE_NOT_CONNECTED" -> "مصدر نتيجة المالية غير متصل"
+                        else -> "لم يُنفّذ صرف مؤكد"
+                    })
+                    Text("مؤكد " + finance.settledCount +
+                        " | لم يكتمل " + finance.unresolvedCount +
+                        " من " + finance.employeeCount)
+                    finance.employeeOutcomes.forEach { person ->
+                        val label = run.lines.firstOrNull {
+                            it.employeeId == person.employeeId
+                        }?.displayName ?: person.employeeId
+                        Text(label + ": " + when (person.outcome) {
+                            "SUCCESS" -> "مؤكد"
+                            "FAILED" -> "فشل"
+                            "RETURNED" -> "مرتجع"
+                            "PENDING" -> "معلّق"
+                            else -> "غير معروف"
+                        })
+                    }
+                }
+                Text("عمليات البنك الفعلية غير متاحة من شاشة Payroll.")
+
             }
         }
     }
@@ -111,6 +164,39 @@ fun OwnPayslipSection(
                             "PENDING" -> "قيد التنفيذ"
                             else -> "غير مؤكدة — قيد المراجعة"
                         })
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+/** Source-backed history: selecting a run never initiates a payment. */
+@Composable
+fun PayrollRunHistorySection(
+    history: PayrollRunHistoryDto?,
+    loading: Boolean,
+    onOpenRun: (String) -> Unit,
+    onRefresh: () -> Unit,
+) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.verticalScroll(rememberScrollState()),
+        ) {
+            Text("سجل نسخ المرتبات", style = MaterialTheme.typography.titleMedium)
+            OutlinedButton(onClick = onRefresh) { Text("تحديث") }
+            if (loading) CircularProgressIndicator()
+            if (history?.items?.isEmpty() == true) Text("لم تُجهّز نسخ لهذه الفترة.")
+            history?.items?.forEach { run ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("النسخة " + run.generation +
+                        " — " + run.state, style = MaterialTheme.typography.titleSmall)
+                    Text("صافي " + run.net + " " + run.currency +
+                        " | عدد الموظفين " + run.employeeCount)
+                    OutlinedButton(onClick = { onOpenRun(run.runVersionId) }) {
+                        Text("فتح نسخة التشغيل")
                     }
                 }
             }
