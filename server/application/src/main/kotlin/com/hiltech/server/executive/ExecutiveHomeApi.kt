@@ -4,6 +4,7 @@ import com.hiltech.server.inbox.InboxService
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.projects.ProjectsService
+import com.hiltech.server.security.RoleTeamAuthorizationService
 import com.hiltech.server.warehouse.AssetService
 import com.hiltech.server.warehouse.WarehouseReadService
 import com.hiltech.server.work.ReviewProgressHealthService
@@ -107,6 +108,23 @@ interface ExecutiveSources {
     fun needsYou(actor: UUID, correlationId: String): ExecutiveSection<ExecutiveDecision>
     fun projects(actor: UUID, organizationId: UUID): ExecutiveSection<ExecutiveProject>
     fun assetExceptions(actor: UUID, organizationId: UUID): ExecutiveSection<ExecutiveAssetException>
+}
+
+/**
+ * The executive read surface cannot widen organization membership. This is
+ * not a Mohamed-name or executive-role permission: source modules still decide
+ * whether the actor may see each individual request, project or warehouse.
+ */
+interface ExecutiveOrganizationAccess {
+    fun isCurrentMember(actor: UUID, organizationId: UUID): Boolean
+}
+
+@Component
+class SourceExecutiveOrganizationAccess(
+    private val roleTeamAuthorization: RoleTeamAuthorizationService,
+) : ExecutiveOrganizationAccess {
+    override fun isCurrentMember(actor: UUID, organizationId: UUID): Boolean =
+        roleTeamAuthorization.isOrganizationMember(actor, organizationId)
 }
 
 @Component
@@ -261,11 +279,24 @@ class CurrentExecutiveSources(
 }
 
 @Service
-class ExecutiveHomeService(private val sources: ExecutiveSources, private val clock: Clock) {
+class ExecutiveHomeService(
+    private val sources: ExecutiveSources,
+    private val access: ExecutiveOrganizationAccess,
+    private val clock: Clock,
+) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    fun home(actor: UUID, organizationId: UUID, correlationId: String) =
-        ExecutiveHomeResponse(
+    fun home(actor: UUID, organizationId: UUID, correlationId: String): ExecutiveHomeResponse {
+        // Reject a foreign or revoked org BEFORE evaluating any actor-wide Inbox
+        // data; a guessed organization ID cannot reveal another membership.
+        if (!access.isCurrentMember(actor, organizationId)) {
+            throw ProductApiException(
+                code = "EXECUTIVE_HOME_NOT_FOUND",
+                message = "The executive home is unavailable.",
+                status = HttpStatus.NOT_FOUND,
+            )
+        }
+        return ExecutiveHomeResponse(
             viewerIdentityId = actor.toString(),
             organizationId = organizationId.toString(),
             asOf = clock.instant().toString(),
@@ -282,6 +313,7 @@ class ExecutiveHomeService(private val sources: ExecutiveSources, private val cl
                 ExecutivePendingDomain("SECURITY_HARDWARE"),
             ),
         )
+    }
 
     private inline fun <T> safely(source: String, block: () -> ExecutiveSection<T>): ExecutiveSection<T> =
         try {
