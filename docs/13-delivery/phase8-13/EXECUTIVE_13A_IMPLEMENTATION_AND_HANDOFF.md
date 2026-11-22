@@ -49,3 +49,13 @@ Reference: PR #161, \`06_PHASE13_EXECUTIVE.md\`; canonical \`docs/13-delivery/IM
 - Executive assets with denied source queues must be PARTIAL, never CURRENT.
 - Verification: `.github/workflows/phase13-executive-contract.yml` and local Gradle source tests. These are engineering checks only, not signed-in company device UAT, real PostgreSQL/OpenFGA matrix or release approval.
 - Native shells remain **owned by DevOps integration**. Pass current identity, organization, installation, and `onOpenSource: (ExecutiveDestination) -> Unit` to `ExecutiveHomeRoute`. Revoke/organization switch must unmount or re-key the route. Keep the feature OFF until acceptance.
+
+## Company Pulse (source-bound first view) and source-read hardening — 23 November 2026
+
+- Added `ExecutiveVisiblePulse` in shared KMP, wired into native `ExecutiveHomeSection`. It makes three truthful *visible-window* observations: this actor's authorized decisions, visible project health, and asset service exceptions. **No risk score, company-wide total, synthetic zero, salary data or inferred finance state.**
+- A visibly critical source project is clearly called out even when the project window is partial. Unknown/unavailable health, empty-but-partial windows, and denied asset queues become `UNVERIFIED` or `SOURCE_UNAVAILABLE`, **never green or company clear**. `ExecutiveVisiblePulseTest` has focused regressions.
+- `ExecutiveHomeService` now checks live source membership and OpenFGA both **before and after** composing the cross-domain snapshot; if membership changes while queries run, the response fails closed. Added a revocation-during-read regression. Producer module permissions remain independently authoritative.
+- Aggregate `asOf` is now recorded **after** producer reads. Individual source timestamps still reflect their own actual updates and may not satisfy any unstated freshness policy.
+- Asset service queue queries select stable warehouse order and stop once the 30-card read window is full; unknown/unread warehouses remain `PARTIAL`. This avoids needless repeated producer queries without inventing a full company count.
+- Changed partial and `CURRENT` UI copy to avoid implying global completeness, a fixed refresh SLA, or proven absence of incidents.
+- All prior baseline Phase13 GitHub Actions on `57a233dc21ae0f74c68b4541eb07faf89111d1e2` finished SUCCESS, including source/controller/architecture/shared tests and Android+Windows compilation. **Newer commits above are NOT considered verified until their exact-head CI succeeds.**
