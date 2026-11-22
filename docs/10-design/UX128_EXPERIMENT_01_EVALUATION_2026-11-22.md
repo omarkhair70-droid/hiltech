@@ -30,7 +30,8 @@ Commit `f96e9483c648256676b112aaf9d46004b2d5e279`:
 - Direction-isolated LTR UTC values while preserving source precision text; timestamps no longer embedded inside Arabic inline runs.
 - Remove tinted `Surface` wrapper around every row and preserve dividers instead.
 - Only show a human explanation for low-stock policy when the source reason identifies missing threshold; otherwise preserve the source reason instead of inventing one.
-- B must be re-rendered to verify the narrow pane issue is truly repaired. **No Pass 02 build/test conclusion until collected.**
+- Re-rendered **Pass 02** from tested source commit `f96e9483c648256676b112aaf9d46004b2d5e279`: `:apps:desktopApp:renderPhase5WarehouseEvidence` **BUILD SUCCESSFUL in 2m 39s**, 15 tasks. Visually re-inspected `ux128-object-windows.png` and `ux128-action-phone.png`. B no longer breaks the right-rail action labels; A's UTC timestamps are visually isolated from Arabic. Card tint removed. These corrections address the *observed visual defects*, not operator acceptance.
+- Latest 4 synthetic screenshots remain in the isolated authorized Windows QA workspace `D:/02_QA-and-Builds/HILTECH/UX-128/repo-main/apps/desktopApp/build/reports/phase5-warehouse/` (also copied into local, staged `docs/10-design/reviews/ux128-20261122/`). **Binary image commit/push from the remote Desktop Commander session was stopped by the security gateway**; these PNG files are NOT claimed uploaded to GitHub and the PR still only contains Kotlin/markdown.
 
 ## Scorecard (research-only; operator measures pending)
 | Dimension | Baseline | A first render | B first render |
@@ -64,3 +65,10 @@ Use A as **Warehouse Today / action queue hypothesis** and explore B as **Invent
 2. Implement a real navigation handoff from role-scoped Warehouse Today to existing Quick Scan / Asset Passport, without adding unauthorized actions or rewriting the Phase 5 ledger. This is a separate bounded UX slice requiring interaction tests.
 3. Validate Android/Windows UI states, actual operator job time, mixed-direction identifiers, offline and role revocation.
 4. Maintain functional correctness through Phases 6–13; defer whole-product signature typography, theme/motion craft freeze until core Phase 13 completion, without shipping known accessibility/interaction defects now.
+
+
+## Pass 02 evaluation conclusion
+- **Visual viewport:** 430×960 phone-width Desktop Compose and 1150×1000 Windows-layout render inspected; no button character stacking in repaired B; chronological timestamps readable LTR. These are screenshot evidence only, not accessibility or Android runtime proof.
+- **Best first operational hypothesis:** A for Warehouse Today due to top-of-screen overdue/calibration/receiving attention. B is a stronger candidate for an Inventory/Object-focused view. These are **not mutually exclusive** and neither is visually/operationally frozen.
+- **Remaining visible shortcomings:** extremely utilitarian default Material controls; short source values still mixed-language in sections; right-rail information hierarchy needs keyboard/focus testing and narrow-window constraints. No working Warehouse Today -> Quick Scan action yet.
+- **No approval/deploy:** keep Draft PR #134 and Issue #128 open; Stage 2 must prove native Android/Windows interaction and human operator tasks before merging.
