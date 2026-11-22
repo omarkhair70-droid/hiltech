@@ -1,0 +1,121 @@
+name: Publish reviewed HILTECH staging image (no deploy)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Explicit approval to publish one private staging image. Does NOT deploy to Coolify."
+        type: choice
+        required: true
+        default: no-publish
+        options:
+          - no-publish
+          - publish-reviewed-staging-image
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hiltech-staging-publish-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  prove:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'publish-reviewed-staging-image'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/devops-hiltech-server-package.yml
+
+  publish:
+    name: Publish immutable-digest staging OCI image
+    needs: prove
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out the exact source that passed the packaging tests
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download this run's tested HILTECH JAR and source evidence
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: hiltech-server-bootjar-${{ github.sha }}
+          path: build/staging-input
+
+      - name: Verify the exact tested source, JAR SHA-256 and migration bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = 'refs/heads/main'
+          test "${GITHUB_EVENT_NAME}" = 'workflow_dispatch'
+          mapfile -t jars < <(find build/staging-input -type f -name '*.jar' ! -name '*-plain.jar' | sort)
+          mapfile -t checksums < <(find build/staging-input -type f -name SHA256SUMS | sort)
+          mapfile -t sources < <(find build/staging-input -type f -name source.txt | sort)
+          test "${#jars[@]}" -eq 1
+          test "${#checksums[@]}" -eq 1
+          test "${#sources[@]}" -eq 1
+          grep -Fx "source_sha=${GITHUB_SHA}" "${sources[0]}"
+          expected="$(awk 'NR==1 {print $1}' "${checksums[0]}")"
+          actual="$(sha256sum "${jars[0]}" | awk '{print $1}')"
+          test -n "$expected"
+          test "$expected" = "$actual"
+          mkdir -p build/tmp/hiltech-staging-oci/migrations
+          cp "${jars[0]}" build/tmp/hiltech-staging-oci/app.jar
+          cp -a database/migrations/. build/tmp/hiltech-staging-oci/migrations/
+          test "$(find build/tmp/hiltech-staging-oci/migrations -maxdepth 1 -name 'V*.sql' -type f | wc -l)" -gt 0
+          echo "PASS: exact tested Java 21 JAR and checked-in Flyway migrations."
+
+      - name: Configure Docker Buildx for multi-architecture publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx create --name "hiltech-publish-${GITHUB_RUN_ID}" --use
+          docker buildx inspect --bootstrap
+
+      - name: Authenticate only to the GitHub Container Registry
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Publish reproducible multiarch staging image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/hiltech-server"
+          mkdir -p build/reports/devops-staging-image
+          docker buildx build --platform linux/amd64,linux/arm64 --push \
+            --provenance=false --sbom=false \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "$image:staging-${GITHUB_SHA}" \
+            --metadata-file build/reports/devops-staging-image/metadata.json \
+            -f infrastructure/coolify/Dockerfile.server build/tmp/hiltech-staging-oci
+          digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["containerimage.digest"])' build/reports/devops-staging-image/metadata.json)"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          docker buildx imagetools inspect "$image@$digest" > build/reports/devops-staging-image/manifest.txt
+          grep -q 'linux/amd64' build/reports/devops-staging-image/manifest.txt
+          grep -q 'linux/arm64' build/reports/devops-staging-image/manifest.txt
+          printf 'source_sha=%s\nimage_ref=%s\n' "${GITHUB_SHA}" "$image@$digest" \
+            > build/reports/devops-staging-image/pinned-image.txt
+          {
+            echo "### HILTECH staging image"
+            echo "CI-tested source: \`${GITHUB_SHA}\`"
+            echo "Pinned OCI image: \`$image@$digest\`"
+            echo "Platforms: linux/amd64, linux/arm64"
+            echo "Published only; no deployment, database, ingress or Coolify modification."
+            echo "Registry package visibility must be checked before any consumer pull."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "PASS: immutable digest and two architectures verified in GHCR."
+
+      - name: Retain short-lived digest proof (without registry credentials)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hiltech-staging-image-${{ github.sha }}
+          path: build/reports/devops-staging-image/
+          if-no-files-found: error
+          retention-days: 7
