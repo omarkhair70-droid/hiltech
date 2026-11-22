@@ -1,0 +1,49 @@
+name: Phase 13 - Source-bound Executive Home
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/phase13-executive-contract.yml"
+      - "server/application/src/main/kotlin/com/hiltech/server/executive/**"
+      - "server/application/src/test/kotlin/com/hiltech/server/executive/**"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/executive/**"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/ExecutiveHomeSection.kt"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/executive/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase13-executive-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Exact PR source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Frozen Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+      - name: Executive controller, default-OFF gate, session scope and architecture
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.executive.ExecutiveHomeServiceTest \
+            --tests com.hiltech.server.ArchitectureTest
+      - name: Restricted source DTOs, navigation allowlist, native shared render
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests 'com.hiltech.shared.core.executive.*'
+      - name: Compile Android and Windows native consumers
+        run: |
+          ./gradlew :apps:androidApp:assembleDebug \
+            :apps:desktopApp:compileKotlin
