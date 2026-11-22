@@ -1,6 +1,8 @@
 package com.hiltech.desktop.evidence
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -48,8 +50,9 @@ fun main() = runBlocking<Unit> {
     Files.createDirectories(dir)
     var fieldState by androidx.compose.runtime.mutableStateOf(fixtureState("today"))
     val selected = mutableListOf<String>()
+    val oneWorkScroll = ScrollState(0)
     val selectedScene = ImageComposeScene(width = 430, height = 960, coroutineContext = coroutineContext) {
-        Column(Modifier.fillMaxSize().background(Color.White).padding(16.dp)) {
+        Column(Modifier.fillMaxSize().background(Color.White).verticalScroll(oneWorkScroll).padding(16.dp)) {
                 AssignedWorkSection(
                     state = fieldState,
                     onRefresh = {},
@@ -59,6 +62,7 @@ fun main() = runBlocking<Unit> {
                     },
                     presentation = FieldWorkPresentation.FOCUSED_COMPACT,
                     focusScopeKey = "synthetic-actor:synthetic-org:warehouse-job-study",
+                    focusHostScroll = oneWorkScroll,
                 )
         }
     }
@@ -107,6 +111,87 @@ fun main() = runBlocking<Unit> {
     } finally {
         wide.close()
     }
+
+    // Multi-WorkOrder proof. Entries are variants of the real Android debug
+    // fixture; only test IDs/codes differ. Source authority remains fake data.
+    val original = todayItem(actionable = true)
+    val manyTasks = (1..12).map { n ->
+        original.copy(
+            workOrderId = WORK_ORDER_ID.dropLast(4) + n.toString().padStart(4, '0'),
+            workOrderCode = "WO-QA-" + n.toString().padStart(2, '0'),
+            title = "اختبار تكليف متعدد رقم $n",
+        )
+    }
+    val manyScroll = ScrollState(0)
+    val clickedIds = mutableListOf<String>()
+    var manyState by androidx.compose.runtime.mutableStateOf(
+        fixtureState("today").copy(today = manyTasks),
+    )
+    val multipleScene = ImageComposeScene(width = 430, height = 720, coroutineContext = coroutineContext) {
+        Column(
+            Modifier.fillMaxSize().background(Color.White)
+                .verticalScroll(manyScroll).padding(16.dp),
+        ) {
+            AssignedWorkSection(
+                state = manyState,
+                onRefresh = {},
+                onSelectWork = { selectedId ->
+                    clickedIds += selectedId
+                    val item = manyTasks.single { it.workOrderId == selectedId }
+                    manyState = manyState.copy(
+                        selectedWorkOrderId = item.workOrderId,
+                        selectedBundle = jobBundle().copy(
+                            workOrderId = item.workOrderId,
+                            workOrderCode = item.workOrderCode,
+                            title = item.title,
+                        ),
+                    )
+                },
+                presentation = FieldWorkPresentation.FOCUSED_COMPACT,
+                focusScopeKey = "synthetic-actor:synthetic-org:multi-assignments",
+                focusHostScroll = manyScroll,
+            )
+        }
+    }
+    try {
+        save(multipleScene, dir.resolve("ux128-field-06-multiple-top.png"), 430, 720)
+        check(manyScroll.maxValue > 500) {
+            "The 12-item fixture must actually overflow the viewport for a scroll restoration test."
+        }
+        val beforeFocusOffset = minOf(550, manyScroll.maxValue)
+        manyScroll.scrollTo(beforeFocusOffset)
+        save(multipleScene, dir.resolve("ux128-field-07-multiple-scrolled.png"), 430, 720)
+        // Layout coordinate is checked with a captured pre-click image.
+        multipleScene.sendPointerEvent(PointerEventType.Press, Offset(180f, 210f))
+        multipleScene.sendPointerEvent(PointerEventType.Release, Offset(180f, 210f))
+        kotlinx.coroutines.yield()
+        save(multipleScene, dir.resolve("ux128-field-08-multiple-focused.png"), 430, 720)
+        check(clickedIds.size == 1) {
+            "Selecting a card deep in the list must call the original onSelectWork exactly once: $clickedIds"
+        }
+        check(clickedIds.single() in manyTasks.map { it.workOrderId }) {
+            "Selected source object must belong to current Today assignment list."
+        }
+        check(manyScroll.value == 0) {
+            "Focused JobBundle must be brought to top, not left at the old list scroll offset: ${manyScroll.value}"
+        }
+        multipleScene.sendPointerEvent(PointerEventType.Press, Offset(320f, 40f))
+        multipleScene.sendPointerEvent(PointerEventType.Release, Offset(320f, 40f))
+        kotlinx.coroutines.yield()
+        save(multipleScene, dir.resolve("ux128-field-09-multiple-return.png"), 430, 720)
+        check(manyScroll.value == beforeFocusOffset) {
+            "Back should restore previous list position. expected=$beforeFocusOffset actual=${manyScroll.value}"
+        }
+        // Reassign/remove another job with same local focus state, ensuring it
+        // cannot display an already-removed source object after a new selection.
+        manyState = manyState.copy(today = manyTasks.filterNot { it.workOrderId == clickedIds.single() })
+        save(multipleScene, dir.resolve("ux128-field-10-multiple-revoked.png"), 430, 720)
+    } finally {
+        multipleScene.close()
+    }
+
+    println("UX128_FIELD_MULTI_PASS source_list=12 selected_current=PASS focused_top=PASS return_scroll=PASS")
+
     println(
         "UX128_FIELD_FOCUS_PASS selected_source=PASS back_reselect=PASS cached_read_only_source=PASS " +
         "revoked_hides_detail=INSPECT_IMAGE wide_layout=INSPECT_IMAGE no_robot=true synthetic_fixture=true",
