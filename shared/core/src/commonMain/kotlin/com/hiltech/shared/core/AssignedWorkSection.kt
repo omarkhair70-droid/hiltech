@@ -207,8 +207,7 @@ fun AssignedWorkSection(
                                 )
                             }
                         } else {
-                        matchingBundle
-                            ?.let {
+                        matchingBundle.let {
                                 JobBundleDetail(
                                     bundle = it,
                                     cached = state.cachedBundleAt != null,
