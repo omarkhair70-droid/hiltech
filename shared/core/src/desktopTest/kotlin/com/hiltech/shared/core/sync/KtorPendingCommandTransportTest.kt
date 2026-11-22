@@ -305,6 +305,91 @@ class KtorPendingCommandTransportTest {
         assertEquals(false, networkCalled)
     }
 
+    @Test
+    fun `material usage replay uses frozen endpoint and strips local display metadata`() = runBlocking {
+        var capturedPath = ""
+        var capturedBody = ""
+        val engine = MockEngine { request ->
+            capturedPath = request.url.encodedPath
+            capturedBody = (request.body as TextContent).text
+            respond(
+                content = """{
+                    "operationId":"mat-op",
+                    "workOrderId":"work-42",
+                    "status":"PENDING_REVIEW",
+                    "stockMoved":false,
+                    "replayed":false
+                }""".trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        }
+
+        val result = transport(engine).execute(
+            command(
+                operationId = "mat-op",
+                commandType = "ReportMaterialUsage",
+                targetType = "WorkOrder",
+                targetId = "work-42",
+                payloadJson = """{
+                    "assignmentId":"assignment-1",
+                    "assignmentVersion":3,
+                    "workVersion":7,
+                    "requirementId":"requirement-1",
+                    "stockItemId":"item-1",
+                    "issuedVersion":9,
+                    "quantity":"2.5",
+                    "unitCode":"M",
+                    "_localStockItemCode":"CBL-01",
+                    "_localStockItemName":"Cable"
+                }""".trimIndent(),
+            ),
+        )
+
+        assertEquals(
+            "/v1/work-orders/work-42/material-usage-reports",
+            capturedPath,
+        )
+        val body = Json.parseToJsonElement(capturedBody).jsonObject
+        assertEquals("mat-op", body.getValue("operationId").jsonPrimitive.content)
+        assertEquals("7", body.getValue("workVersion").jsonPrimitive.content)
+        assertEquals("9", body.getValue("issuedVersion").jsonPrimitive.content)
+        assertEquals("2.5", body.getValue("quantity").jsonPrimitive.content)
+        assertTrue("baseVersion" !in body)
+        assertTrue("_localStockItemCode" !in body)
+        assertTrue("_localStockItemName" !in body)
+        assertTrue(result is CommandTransportResult.Applied)
+    }
+
+    @Test
+    fun `material source conflict preserves local report for explicit recovery`() = runBlocking {
+        val engine = MockEngine {
+            respond(
+                content = """{
+                    "code":"FIELD_MATERIAL_USAGE_ISSUED_STOCK_CHANGED",
+                    "message":"Issued stock changed",
+                    "correlationId":"material-conflict",
+                    "retryable":false
+                }""".trimIndent(),
+                status = HttpStatusCode.Conflict,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        }
+
+        val result = transport(engine).execute(
+            command(
+                operationId = "mat-conflict",
+                commandType = "ReportMaterialUsage",
+                targetType = "WorkOrder",
+                targetId = "work-42",
+            ),
+        ) as CommandTransportResult.Conflict
+
+        assertEquals("FIELD_MATERIAL_USAGE_ISSUED_STOCK_CHANGED", result.conflictType)
+        assertTrue(result.allowedRecoveryActionsJson.contains("REFRESH_ISSUED_STOCK"))
+        assertEquals("material-conflict", result.correlationId)
+    }
+
     private fun transport(engine: MockEngine): KtorPendingCommandTransport =
         KtorPendingCommandTransport(
             client = HttpClient(engine),

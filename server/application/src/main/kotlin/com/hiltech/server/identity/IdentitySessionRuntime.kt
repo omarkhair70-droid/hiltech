@@ -1,5 +1,6 @@
 package com.hiltech.server.identity
 
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.security.oauth2.jwt.Jwt
@@ -383,7 +384,7 @@ data class IdentityAccessContext(
 )
 
 @Component
-class IdentitySessionService(
+class IdentitySessionService @Autowired constructor(
     private val identityRepository: IdentityRuntimeRepository,
     private val sessionRepository: IdentitySessionRepository,
     private val properties: HiltechIdentitySessionProperties,

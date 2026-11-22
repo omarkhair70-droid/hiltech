@@ -77,6 +77,22 @@ class FieldCompletionQueue(
                 "A completion submission for this WorkOrder is already pending."
             }
             require(
+                database.pendingCommandDao()
+                    .materialUsageForWorkOrder(
+                        identityId,
+                        installationId,
+                        bundle.workOrderId,
+                    )
+                    .none {
+                        it.state !in setOf(
+                            PendingCommandStates.APPLIED,
+                            PendingCommandStates.CANCELLED_LOCAL,
+                        )
+                    },
+            ) {
+                "Sync or resolve pending material-usage reports before completion."
+            }
+            require(
                 database.engineeringTestIntentDao()
                     .outstandingForWorkOrder(
                         identityId,

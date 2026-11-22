@@ -3,6 +3,7 @@ package com.hiltech.server.work
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.ProductApiException
 import jakarta.servlet.http.HttpServletRequest
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -54,7 +55,7 @@ fun interface FieldAssignedAssetSourcePort {
  * the adapter because it already depends on Work for resource fulfillment.
  */
 @Service
-class FieldAssignedAssetLookupService(
+class FieldAssignedAssetLookupService @Autowired constructor(
     private val source: WorkAssignmentSourceAuthorityPort,
     private val authorization: WorkAssignmentAuthorizationPort,
     private val work: WorkPersistencePort,

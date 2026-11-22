@@ -85,6 +85,23 @@ interface PendingCommandDao {
 
     @Query(
         """
+        SELECT * FROM pending_command
+        WHERE actor_user_identity_id = :identityId
+          AND device_id = :installationId
+          AND target_type = 'WorkOrder'
+          AND target_id = :workOrderId
+          AND command_type = 'ReportMaterialUsage'
+        ORDER BY local_sequence DESC
+        """,
+    )
+    suspend fun materialUsageForWorkOrder(
+        identityId: String,
+        installationId: String,
+        workOrderId: String,
+    ): List<PendingCommandEntity>
+
+    @Query(
+        """
         SELECT EXISTS (
           SELECT 1 FROM pending_command
           WHERE actor_user_identity_id = :actorId AND device_id = :installationId

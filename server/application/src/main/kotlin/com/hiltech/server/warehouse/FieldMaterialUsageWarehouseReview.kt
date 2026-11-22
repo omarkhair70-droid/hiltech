@@ -2,6 +2,7 @@ package com.hiltech.server.warehouse
 
 import com.hiltech.server.platform.ProductApiException
 import jakarta.servlet.http.HttpServletRequest
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
@@ -99,7 +100,7 @@ class JdbcFieldUsageWarehouseReviewRead(private val jdbc: JdbcTemplate) : FieldU
  * This does NOT grant review approval, Consume or any cross-warehouse visibility.
  */
 @Service
-class FieldUsageWarehouseReviewService(
+class FieldUsageWarehouseReviewService @Autowired constructor(
     private val warehouse: WarehousePersistencePort,
     private val authorization: WarehouseAuthorizationPort,
     private val stock: StockFulfillmentPersistence,

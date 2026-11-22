@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - phase6/s05-completion-review-20261122
+      - phase6/s06-durable-recovery-20261122
     paths:
       - "shared/core/src/desktopTest/kotlin/com/hiltech/shared/core/sync/Phase6DurableRecoveryTest.kt"
       - "shared/core/src/desktopTest/kotlin/com/hiltech/shared/core/local/FieldRoomMigrationTest.kt"
@@ -63,15 +64,32 @@ jobs:
             --no-configuration-cache --console=plain
 
       - name: Full durable Room replay and migration tests
+        shell: bash
         run: |
-          ./gradlew :shared:core:desktopTest \
-            --no-configuration-cache --console=plain
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if ./gradlew :shared:core:desktopTest \
+                --no-configuration-cache --console=plain 2>&1 | tee /tmp/hiltech-room-test.log; then
+              exit 0
+            fi
+            if ! grep -Eqi '429|Too Many Requests' /tmp/hiltech-room-test.log; then
+              echo 'Room/desktop test failure was not a transient dependency rate limit.' >&2
+              exit 1
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              echo 'Room/desktop tests still blocked by dependency rate limits.' >&2
+              exit 1
+            fi
+            sleep "$((attempt * 20))"
+          done
 
       - name: Android feature-enabled native compile
         run: |
           ./gradlew :apps:androidApp:compileDebugKotlin \
             -Philtech.engineeringTestsEnabled=true \
             -Philtech.assignedAssetLookupEnabled=true \
+            -Philtech.personalIssuedStockEnabled=true \
+            -Philtech.materialUsageReportingEnabled=true \
             --no-configuration-cache --console=plain
 
       - name: Windows desktop native Kotlin compile

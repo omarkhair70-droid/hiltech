@@ -2,6 +2,7 @@ package com.hiltech.server.identity
 
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpStatus
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
 import org.springframework.security.oauth2.jwt.Jwt
@@ -105,7 +106,7 @@ class OidcIdTokenProofVerifier(
 }
 
 @Component
-class IdentitySessionSecurityService(
+class IdentitySessionSecurityService @Autowired constructor(
     private val sessionService: IdentitySessionService,
     private val sessionRepository: IdentitySessionRepository,
     private val identityRepository: IdentityRuntimeRepository,

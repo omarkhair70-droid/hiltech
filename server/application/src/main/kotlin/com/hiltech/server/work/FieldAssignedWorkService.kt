@@ -1,6 +1,7 @@
 package com.hiltech.server.work
 
 import com.hiltech.server.platform.ProductApiException
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
@@ -9,7 +10,7 @@ import java.time.Instant
 import java.util.UUID
 
 @Component
-class FieldAssignedWorkService(
+class FieldAssignedWorkService @Autowired constructor(
     private val work: WorkPersistencePort,
     private val readiness:
         ReadinessAssignmentPersistencePort,
