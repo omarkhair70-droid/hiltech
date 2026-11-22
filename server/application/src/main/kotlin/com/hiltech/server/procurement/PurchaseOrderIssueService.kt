@@ -62,6 +62,61 @@ class PurchaseOrderIssueService @Autowired constructor(
     @Value("\${hiltech.procurement.po.number-prefix:}")
     private val poNumberPrefix: String = "",
 ) {
+    /** Separate workbench for currently assigned issuer, never broad procurement reads. */
+    fun issuerQueue(actor: UUID, organizationId: UUID): List<PurchaseOrderIssuerQueueItem> {
+        val policyVersion = requireIssuerRead(actor, organizationId)
+        return purchases.issuerQueue(
+            organizationId, approvalPolicyKey.trim(), policyVersion,
+        ).filter { row ->
+            sourceGuard.isCurrent(ApprovalSubjectRef(
+                organizationId, "PROCUREMENT_PO_CANDIDATE", row.candidateId, 1L,
+            ))
+        }
+    }
+
+    fun deliveryDestinations(
+        actor: UUID,
+        candidateId: UUID,
+    ): List<PurchaseOrderDeliveryDestination> {
+        val candidate = candidates.byId(candidateId) ?: unavailable()
+        requireIssuerRead(actor, candidate.organizationId)
+        if (!sourceGuard.isCurrent(ApprovalSubjectRef(
+                candidate.organizationId, "PROCUREMENT_PO_CANDIDATE", candidate.id, 1L,
+            ))
+        ) stale()
+        val requirement = requirements.byId(candidate.requirementId) ?: unavailable()
+        if (requirement.organizationId != candidate.organizationId) unavailable()
+        val order = work.workOrder(requirement.workOrderId) ?: unavailable()
+        if (order.organizationId != candidate.organizationId) unavailable()
+        return purchases.deliveryDestinations(
+            candidate.organizationId, order.projectId, order.siteId, clock.instant(),
+        )
+    }
+
+    private fun requireIssuerRead(actor: UUID, organizationId: UUID): Int {
+        val policyKey = approvalPolicyKey.trim()
+        val authorityKey = issuerAuthorityKey.trim()
+        if (!issueEnabled || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(policyKey) ||
+            !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(authorityKey) ||
+            !Regex("^[A-Z][A-Z0-9-]{1,23}$").matches(poNumberPrefix.trim())
+        ) unavailable()
+        val now = clock.instant()
+        if (!approvalPersistence.isActiveOrganizationMember(organizationId, actor, now))
+            unavailable()
+        val issuer = approvalPersistence.resolveCurrentAuthority(
+            organizationId, authorityKey, now,
+        ) ?: unavailable()
+        if (issuer.organizationId != organizationId || issuer.authorityKey != authorityKey ||
+            !approvalPersistence.actorMatchesAuthority(actor, issuer, now)
+        ) unavailable()
+        val policy = approvalPersistence.loadActivePolicy(
+            organizationId, policyKey, now,
+        ) ?: unavailable()
+        if (!policy.approvalRequired || policy.mode != ApprovalPolicyMode.SINGLE)
+            unavailable()
+        return policy.versionNumber
+    }
+
     fun issue(
         ctx: ProcurementDraftContext,
         candidateId: UUID,
