@@ -192,6 +192,11 @@ class ReceivingService(
                         BigDecimal(serials.size).compareTo(amount) != 0) invalid()
                 }
             }
+            // Damaged/unfit PO goods must be rejected with discrepancy evidence;
+            // accepting them into StockLedger would inflate usable inventory.
+            if (record.sourceType == ReceivingSourceType.PO &&
+                request.condition in setOf(AssetCondition.DAMAGED, AssetCondition.UNFIT)
+            ) invalid()
             poReceiving.requireStockReceipt(record, item.id, item.baseUnitCode, amount)
             val now = clock.instant().truncatedTo(ChronoUnit.MICROS)
             if (!receiving.markLineReceived(line.id, line.version, amount, request.condition, serials, context.actor, now)) stale()
