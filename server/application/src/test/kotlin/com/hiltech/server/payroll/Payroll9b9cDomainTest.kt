@@ -193,6 +193,55 @@ class Payroll9b9cDomainTest {
     }
 
     @Test
+    fun separatedEmployeesNeedExactApprovedPeopleCaseAndVersion() {
+        val earning = component(PayrollComponentKind.EARNING, "100")
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(
+                org, periodId, employee, policy, listOf(earning),
+                verifiedCoverage, employeeState = "OFFBOARDING",
+            )
+        }
+        val proof = PayrollVerifiedSeparationEligibility(
+            organizationId = org, payrollPeriodId = periodId, employeeId = employee,
+            offboardingCaseId = UUID.randomUUID(), offboardingCaseVersion = 3,
+            lastWorkingDate = java.time.LocalDate.parse("2026-11-15"),
+            approvedFinalPayScopeRef = "synthetic-approved-final-pay-scope",
+            approval = PayrollInputApproval.APPROVED,
+        )
+        val accepted = Payroll9bCalculator.calculate(
+            org, periodId, employee, policy, listOf(earning), verifiedCoverage,
+            employeeState = "OFFBOARDING", separation = proof,
+        )
+        assertEquals("100.00", accepted.net.toPlainString())
+        val changed = Payroll9bCalculator.calculate(
+            org, periodId, employee, policy, listOf(earning), verifiedCoverage,
+            employeeState = "OFFBOARDING",
+            separation = proof.copy(offboardingCaseVersion = 4),
+        )
+        assertNotEquals(accepted.sourceFingerprint, changed.sourceFingerprint)
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(
+                org, periodId, employee, policy, listOf(earning), verifiedCoverage,
+                employeeState = "FORMER",
+                separation = proof.copy(approval = PayrollInputApproval.PENDING),
+            )
+        }
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(
+                org, periodId, employee, policy, listOf(earning), verifiedCoverage,
+                employeeState = "FORMER",
+                separation = proof.copy(organizationId = UUID.randomUUID()),
+            )
+        }
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(
+                org, periodId, employee, policy, listOf(earning), verifiedCoverage,
+                employeeState = "ACTIVE", separation = proof,
+            )
+        }
+    }
+
+    @Test
     fun duplicateComponentIsRejectedAndZeroIsNotInvented() {
         val earning = component(PayrollComponentKind.EARNING, "100")
         assertThrows<ProductApiException> {
