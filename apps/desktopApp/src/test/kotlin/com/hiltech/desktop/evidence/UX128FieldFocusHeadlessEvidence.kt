@@ -172,7 +172,7 @@ fun main() = runBlocking<Unit> {
         // Layout coordinate is checked with a captured pre-click image.
         multipleScene.sendPointerEvent(PointerEventType.Press, Offset(180f, 210f))
         multipleScene.sendPointerEvent(PointerEventType.Release, Offset(180f, 210f))
-        kotlinx.coroutines.yield()
+        settleNativeLayout(multipleScene)
         save(multipleScene, dir.resolve("ux128-field-08-multiple-focused.png"), 430, 720)
         check(clickedIds.size == 1) {
             "Selecting a card deep in the list must call the original onSelectWork exactly once: $clickedIds"
@@ -185,7 +185,7 @@ fun main() = runBlocking<Unit> {
         }
         multipleScene.sendPointerEvent(PointerEventType.Press, Offset(320f, 40f))
         multipleScene.sendPointerEvent(PointerEventType.Release, Offset(320f, 40f))
-        kotlinx.coroutines.yield()
+        settleNativeLayout(multipleScene)
         save(multipleScene, dir.resolve("ux128-field-09-multiple-return.png"), 430, 720)
         check(manyScroll.value == beforeFocusOffset) {
             "Back should restore previous list position. expected=$beforeFocusOffset actual=${manyScroll.value}"
@@ -204,6 +204,16 @@ fun main() = runBlocking<Unit> {
         "UX128_FIELD_FOCUS_PASS selected_source=PASS back_reselect=PASS cached_read_only_source=PASS " +
         "revoked_hides_detail=INSPECT_IMAGE wide_layout=INSPECT_IMAGE no_robot=true synthetic_fixture=true",
     )
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+private suspend fun settleNativeLayout(scene: ImageComposeScene) {
+    // Headless Compose effects can await the next frame while native list
+    // constraints change. Drive a few actual frames, not an arbitrary delay.
+    repeat(3) {
+        scene.render().close()
+        kotlinx.coroutines.yield()
+    }
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
