@@ -38,6 +38,13 @@ data class PurchaseOrderCandidateRecord(
 
 @Repository
 class PurchaseOrderCandidatePersistence(private val jdbc: JdbcTemplate) {
+    /** ApprovalEngine subject lookup; never trusts an arbitrary RFQ identifier. */
+    fun byId(candidateId: UUID): PurchaseOrderCandidateRecord? =
+        jdbc.query(
+            "SELECT rfq_id FROM procurement_po_candidate WHERE id = ?",
+            { row, _ -> row.getObject("rfq_id", UUID::class.java) }, candidateId,
+        ).singleOrNull()?.let(::byRfq)?.takeIf { it.id == candidateId }
+
     fun byRfq(rfqId: UUID): PurchaseOrderCandidateRecord? = jdbc.query(
         "SELECT * FROM procurement_po_candidate WHERE rfq_id = ?",
         { row, _ -> PurchaseOrderCandidateRecord(
