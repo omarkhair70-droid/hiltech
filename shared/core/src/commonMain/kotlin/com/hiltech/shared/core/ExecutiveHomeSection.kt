@@ -21,6 +21,7 @@ import com.hiltech.shared.core.executive.ExecutiveHomeDto
 import com.hiltech.shared.core.executive.ExecutiveSectionDto
 import com.hiltech.shared.core.executive.ExecutiveSourceReferenceDto
 import com.hiltech.shared.core.executive.resolveExecutiveDestination
+import com.hiltech.shared.core.executive.executiveSnapshotMatchesSession
 
 /**
  * Native Windows + Android executive surface. Stateless by design:
@@ -73,8 +74,11 @@ fun ExecutiveHomeSection(
         }
         // Prevent a delayed response for organization A being rendered in B's
         // executive view. The shell must also clear on sign-out/revocation.
-        if (home != null && (home.organizationId != expectedOrganizationId ||
-            home.viewerIdentityId != expectedIdentityId)) {
+        if (home != null && !executiveSnapshotMatchesSession(
+                home,
+                expectedIdentityId,
+                expectedOrganizationId,
+            )) {
             Text("بيانات جلسة أو مؤسسة سابقة لا تُعرض هنا؛ يلزم تحديث الصلاحيات الحالية.")
             return@Column
         }
