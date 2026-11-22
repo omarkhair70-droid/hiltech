@@ -55,6 +55,11 @@ jobs:
             --tests com.hiltech.server.finance.FinanceExpenseReceiptEvidenceTargetTest \
             --tests com.hiltech.server.finance.FinanceBankResultRulesTest \
             --no-daemon --console=plain
+      - name: Verify signed receipt upload private PUT and scan transition client
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests com.hiltech.shared.core.finance.FinanceExpenseReceiptUploaderTest \
+            --no-daemon --console=plain
       - name: Compile Windows/Android/Finance native integrations
         run: |
           ./gradlew :apps:desktopApp:compileKotlin :apps:androidApp:assembleDebug \
