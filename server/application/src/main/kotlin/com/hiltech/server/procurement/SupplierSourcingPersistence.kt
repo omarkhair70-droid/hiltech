@@ -49,6 +49,22 @@ data class SupplierQuoteDocumentSource(
     val sourceSha256: String,
 )
 
+/** Last authoritative supplier relationship event, including revocations. */
+data class SupplierLinkRevision(val revisionNumber: Int, val state: String)
+
+data class SupplierLinkEventRecord(
+    val id: UUID,
+    val operationId: UUID,
+    val organizationId: UUID,
+    val supplierOrganizationId: UUID,
+    val revisionNumber: Int,
+    val state: String,
+    val sourceReference: String,
+    val actor: UUID,
+    val at: Instant,
+    val correlationId: String,
+)
+
 data class SupplierQuoteRecord(
     val evidence: SupplierQuoteEvidence,
     val operationId: UUID,
@@ -103,6 +119,43 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
             row.getString("correlation_id"),
         ) }, id,
     ).singleOrNull()
+
+    /** Serialize supplier link revision transitions by purchasing organization. */
+    fun lockActiveOrganizationForSupplierLinks(organizationId: UUID): Boolean = jdbc.query(
+        "SELECT id FROM organization WHERE id = ? AND status = 'ACTIVE' FOR UPDATE",
+        { row, _ -> row.getObject("id", UUID::class.java) },
+        organizationId,
+    ).isNotEmpty()
+
+    fun currentSupplierLink(organizationId: UUID, supplierId: UUID): SupplierLinkRevision? =
+        jdbc.query(
+            """
+            SELECT revision_number, state
+            FROM procurement_supplier_link_event
+            WHERE organization_id = ? AND supplier_organization_id = ?
+            ORDER BY revision_number DESC LIMIT 1
+            """.trimIndent(),
+            { row, _ -> SupplierLinkRevision(
+                row.getInt("revision_number"),
+                row.getString("state"),
+            ) },
+            organizationId, supplierId,
+        ).singleOrNull()
+
+    /** Append only; no UPDATE, DELETE or implicit sourcing authorization. */
+    fun insertSupplierLinkEvent(value: SupplierLinkEventRecord) {
+        check(jdbc.update(
+            """
+            INSERT INTO procurement_supplier_link_event (
+                id, organization_id, supplier_organization_id, revision_number,
+                state, source_reference, recorded_by_user_id, recorded_at, correlation_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+            value.id, value.organizationId, value.supplierOrganizationId,
+            value.revisionNumber, value.state, value.sourceReference, value.actor,
+            value.at.atOffset(ZoneOffset.UTC), value.correlationId,
+        ) == 1)
+    }
 
     /** Lock the RFQ row while appending a supplier revision; root itself is immutable. */
     fun lockRfq(id: UUID): Boolean = jdbc.query(
