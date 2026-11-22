@@ -49,7 +49,7 @@ class PurchaseOrderDeliveryAmendmentSubject @Autowired constructor(
         if (demand.organizationId != subject.organizationId ||
             demand.stockItemId != state.order.stockItemId
         ) return false
-        val order = work.workOrder(demand.workOrderId) ?: return false
+        val order = demand.workOrderId?.let { work.workOrder(it) } ?: return false
         if (order.organizationId != subject.organizationId) return false
 
         return purchases.validDeliveryLocation(
