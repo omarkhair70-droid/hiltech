@@ -22,10 +22,14 @@ class MaintenanceDraftPolicyTest {
     }
 
     @Test
-    fun actualFindingsNeedPreviouslyAcceptedWork() {
+    fun findingsCanBeCapturedDuringRealFieldExecutionWithReadyEvidence() {
         assertFalse(MaintenanceDraftPolicy.canRecordEvidenceFinding(WorkOrderLifecycle.DRAFT))
-        assertFalse(MaintenanceDraftPolicy.canRecordEvidenceFinding(WorkOrderLifecycle.SUBMITTED_FOR_REVIEW))
-        assertFalse(MaintenanceDraftPolicy.canRecordEvidenceFinding(WorkOrderLifecycle.REWORK_REQUIRED))
+        assertFalse(MaintenanceDraftPolicy.canRecordEvidenceFinding(WorkOrderLifecycle.PLANNED))
+        assertFalse(MaintenanceDraftPolicy.canRecordEvidenceFinding(WorkOrderLifecycle.CANCELLED))
+        assertTrue(MaintenanceDraftPolicy.canRecordEvidenceFinding(WorkOrderLifecycle.IN_PROGRESS))
+        assertTrue(MaintenanceDraftPolicy.canRecordEvidenceFinding(WorkOrderLifecycle.BLOCKED))
+        assertTrue(MaintenanceDraftPolicy.canRecordEvidenceFinding(WorkOrderLifecycle.SUBMITTED_FOR_REVIEW))
+        assertTrue(MaintenanceDraftPolicy.canRecordEvidenceFinding(WorkOrderLifecycle.REWORK_REQUIRED))
         assertTrue(MaintenanceDraftPolicy.canRecordEvidenceFinding(WorkOrderLifecycle.ACCEPTED))
         assertTrue(MaintenanceDraftPolicy.canRecordEvidenceFinding(WorkOrderLifecycle.CLOSED))
     }

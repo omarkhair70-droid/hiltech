@@ -33,6 +33,8 @@ data class MaintenanceUiState(
     val visits: List<MaintenanceVisitDto> = emptyList(),
     val selectedVisit: MaintenanceVisitDto? = null,
     val findings: List<MaintenanceFindingDto> = emptyList(),
+    val sourceStatus: MaintenanceSourceStatusDto? = null,
+    val readyEvidence: List<MaintenanceReadyEvidenceDto> = emptyList(),
     val errorMessage: String? = null,
 )
 
@@ -135,8 +137,8 @@ fun MaintenanceVisitsSection(
             }
             Text("Evidence-linked field findings", style = MaterialTheme.typography.titleMedium)
             Text(
-                "An accepted source WorkOrder and READY Evidence from that exact work are " +
-                    "required. Recording a finding does not mark this visit completed.",
+                "Findings can be recorded during real field execution using READY Evidence " +
+                    "from the exact WorkOrder. The visit is not automatically marked complete.",
                 style = MaterialTheme.typography.bodySmall,
             )
             state.findings.forEach { finding ->
@@ -145,10 +147,34 @@ fun MaintenanceVisitsSection(
                 Text("Evidence " + finding.evidenceId.take(8),
                     style = MaterialTheme.typography.bodySmall)
             }
-            OutlinedTextField(
-                value = evidenceId, onValueChange = { evidenceId = it },
-                label = { Text("Existing READY evidence ID") }, modifier = Modifier.fillMaxWidth(),
-            )
+            state.sourceStatus?.let { status ->
+                Text("Canonical WorkOrder: " + status.workOrderLifecycleState +
+                    " · v" + status.currentWorkVersion)
+                Text("Required checklist: " +
+                    (status.requiredChecklistTotal - status.requiredChecklistPending) +
+                    "/" + status.requiredChecklistTotal +
+                    " · READY Evidence " + status.readyWorkEvidenceCount)
+                if (!status.canRecordInternalFinding) {
+                    Text("Field findings unavailable before actual execution or after cancellation.",
+                        color = MaterialTheme.colorScheme.error)
+                }
+                Text("Visit completion not confirmed · Coverage " + status.contractCoverageState,
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            Text("Select existing READY Work Evidence")
+            if (state.readyEvidence.isEmpty()) {
+                Text("No READY Evidence choices returned for this WorkOrder.")
+            }
+            state.readyEvidence.filter { it.workOrderId == visit.workOrderId }.forEach { evidence ->
+                OutlinedButton(
+                    enabled = !state.loading,
+                    onClick = { evidenceId = evidence.evidenceId },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(evidence.evidenceTypeCode + " · " + evidence.capturedAt +
+                        if (evidenceId == evidence.evidenceId) " · selected" else "")
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = findingType, onValueChange = { findingType = it },
@@ -164,8 +190,9 @@ fun MaintenanceVisitsSection(
                 label = { Text("Observed finding") }, modifier = Modifier.fillMaxWidth(),
             )
             Button(
-                enabled = !state.loading && evidenceId.isNotBlank() && findingType.isNotBlank() &&
-                    findingSeverity.isNotBlank() && findingDescription.isNotBlank(),
+                enabled = !state.loading && state.sourceStatus?.canRecordInternalFinding == true &&
+                    state.readyEvidence.any { it.evidenceId == evidenceId && it.workOrderId == visit.workOrderId } &&
+                    findingType.isNotBlank() && findingSeverity.isNotBlank() && findingDescription.isNotBlank(),
                 onClick = {
                     onRecordFinding(
                         visit.visitId, evidenceId,

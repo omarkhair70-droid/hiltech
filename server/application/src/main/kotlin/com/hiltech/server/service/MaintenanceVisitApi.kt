@@ -97,6 +97,26 @@ data class MaintenanceWorkChoiceDto(
     val lifecycleState: String,
 )
 
+data class MaintenanceReadyEvidenceDto(
+    val evidenceId: String,
+    val workOrderId: String,
+    val evidenceTypeCode: String,
+    val capturedAt: String,
+)
+
+data class MaintenanceSourceStatusDto(
+    val visitId: String,
+    val workOrderId: String,
+    val workOrderLifecycleState: String,
+    val currentWorkVersion: Long,
+    val requiredChecklistTotal: Int,
+    val requiredChecklistPending: Int,
+    val readyWorkEvidenceCount: Int,
+    val canRecordInternalFinding: Boolean,
+    val visitCompletionConfirmed: Boolean = false,
+    val contractCoverageState: String = "UNVERIFIED",
+)
+
 data class MaintenanceVisitRow(
     val id: UUID,
     val projectId: UUID,
@@ -118,7 +138,11 @@ object MaintenanceDraftPolicy {
         )
 
     fun canRecordEvidenceFinding(state: WorkOrderLifecycle) =
-        state in setOf(WorkOrderLifecycle.ACCEPTED, WorkOrderLifecycle.CLOSED)
+        state in setOf(
+            WorkOrderLifecycle.IN_PROGRESS, WorkOrderLifecycle.BLOCKED,
+            WorkOrderLifecycle.SUBMITTED_FOR_REVIEW, WorkOrderLifecycle.REWORK_REQUIRED,
+            WorkOrderLifecycle.ACCEPTED, WorkOrderLifecycle.CLOSED,
+        )
 
     fun plannedForIsFuture(plannedFor: Instant, at: Instant) = plannedFor.isAfter(at)
 
@@ -217,6 +241,37 @@ class JdbcMaintenanceVisitStore(private val jdbc: JdbcTemplate) {
             Boolean::class.java, evidenceId, org, workOrderId, workOrderId,
         ) == true
 
+    /** IDs/types only. No object storage keys, filenames or binary links returned. */
+    fun readyEvidenceChoices(org: UUID, workId: UUID): List<MaintenanceReadyEvidenceDto> =
+        jdbc.query(
+            """
+            SELECT id, work_order_id, evidence_type_code, captured_at
+              FROM evidence
+             WHERE organization_id=? AND work_order_id=?
+               AND target_type='WORK_ORDER' AND target_id=?
+               AND storage_state='READY'
+             ORDER BY captured_at DESC, id LIMIT 200
+            """.trimIndent(),
+            { rs, _ ->
+                MaintenanceReadyEvidenceDto(
+                    rs.getObject("id", UUID::class.java).toString(),
+                    rs.getObject("work_order_id", UUID::class.java).toString(),
+                    rs.getString("evidence_type_code"),
+                    rs.getObject("captured_at", OffsetDateTime::class.java).toInstant().toString(),
+                )
+            }, org, workId, workId,
+        )
+
+    fun readyEvidenceCount(org: UUID, workId: UUID): Int =
+        jdbc.queryForObject(
+            """
+            SELECT COUNT(*) FROM evidence
+             WHERE organization_id=? AND work_order_id=?
+               AND target_type='WORK_ORDER' AND target_id=?
+               AND storage_state='READY'
+            """.trimIndent(), Int::class.java, org, workId, workId,
+        ) ?: 0
+
     fun insertFinding(
         id: UUID, visit: MaintenanceVisitRow, org: UUID,
         evidenceId: UUID, typeCode: String, severityCode: String,
@@ -297,6 +352,39 @@ class MaintenanceVisitService(
     fun visits(projectId: UUID, actor: UUID): List<MaintenanceVisitDto> {
         manageProject(projectId, actor)
         return store.visits(projectId).map { it.asDto(false) }
+    }
+
+    @Transactional(readOnly = true)
+    fun sourceStatus(
+        projectId: UUID, visitId: UUID, actor: UUID,
+    ): MaintenanceSourceStatusDto {
+        val project = manageProject(projectId, actor)
+        val visit = store.visit(visitId, projectId)
+            ?: maintenanceError("VISIT_NOT_FOUND", HttpStatus.NOT_FOUND)
+        val current = matchingWork(project, visit.workOrderId)
+        val checklist = store.checklist(current.workOrderId)
+        return MaintenanceSourceStatusDto(
+            visitId.toString(), current.workOrderId.toString(),
+            current.lifecycleState.name, current.version,
+            checklist.count { it.required },
+            checklist.count {
+                it.required && it.completionState != "COMPLETE" &&
+                    it.completionState != "NOT_APPLICABLE"
+            },
+            store.readyEvidenceCount(project.organizationId, current.workOrderId),
+            MaintenanceDraftPolicy.canRecordEvidenceFinding(current.lifecycleState),
+        )
+    }
+
+    @Transactional(readOnly = true)
+    fun readyEvidenceChoices(
+        projectId: UUID, visitId: UUID, actor: UUID,
+    ): List<MaintenanceReadyEvidenceDto> {
+        val project = manageProject(projectId, actor)
+        val visit = store.visit(visitId, projectId)
+            ?: maintenanceError("VISIT_NOT_FOUND", HttpStatus.NOT_FOUND)
+        val source = matchingWork(project, visit.workOrderId)
+        return store.readyEvidenceChoices(project.organizationId, source.workOrderId)
     }
 
     @Transactional(readOnly = true)
@@ -452,6 +540,16 @@ class MaintenanceVisitController(private val service: MaintenanceVisitService) {
             HiltechRequestContext.current(request).correlationId,
         )
     }
+
+    @GetMapping("/{visitId}/source-status")
+    fun sourceStatus(
+        request: HttpServletRequest, @PathVariable projectId: UUID, @PathVariable visitId: UUID,
+    ) = service.sourceStatus(projectId, visitId, actor(request))
+
+    @GetMapping("/{visitId}/ready-evidence")
+    fun readyEvidenceChoices(
+        request: HttpServletRequest, @PathVariable projectId: UUID, @PathVariable visitId: UUID,
+    ) = service.readyEvidenceChoices(projectId, visitId, actor(request))
 
     @GetMapping("/{visitId}/findings")
     fun findings(

@@ -43,6 +43,28 @@ data class MaintenanceWorkChoiceDto(
 )
 
 @Serializable
+data class MaintenanceReadyEvidenceDto(
+    val evidenceId: String,
+    val workOrderId: String,
+    val evidenceTypeCode: String,
+    val capturedAt: String,
+)
+
+@Serializable
+data class MaintenanceSourceStatusDto(
+    val visitId: String,
+    val workOrderId: String,
+    val workOrderLifecycleState: String,
+    val currentWorkVersion: Long,
+    val requiredChecklistTotal: Int,
+    val requiredChecklistPending: Int,
+    val readyWorkEvidenceCount: Int,
+    val canRecordInternalFinding: Boolean,
+    val visitCompletionConfirmed: Boolean,
+    val contractCoverageState: String,
+)
+
+@Serializable
 data class MaintenanceVisitDto(
     val visitId: String,
     val projectId: String,
@@ -121,6 +143,30 @@ class MaintenanceApiClient(
             ),
             requestBody = json.encodeToString(CreateMaintenanceVisitDraftDto.serializer(), input),
             decode = { json.decodeFromString(MaintenanceVisitDto.serializer(), it) },
+        )
+    }
+
+    suspend fun sourceStatus(
+        projectId: String, visitId: String, installationId: String,
+    ): MaintenanceSourceStatusDto {
+        requireId(projectId); requireId(visitId)
+        return api.request(
+            method = HttpMethod.Get,
+            path = "/v1/projects/" + projectId + "/maintenance-visits/" + visitId + "/source-status",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(MaintenanceSourceStatusDto.serializer(), it) },
+        )
+    }
+
+    suspend fun readyEvidenceChoices(
+        projectId: String, visitId: String, installationId: String,
+    ): List<MaintenanceReadyEvidenceDto> {
+        requireId(projectId); requireId(visitId)
+        return api.request(
+            method = HttpMethod.Get,
+            path = "/v1/projects/" + projectId + "/maintenance-visits/" + visitId + "/ready-evidence",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(ListSerializer(MaintenanceReadyEvidenceDto.serializer()), it) },
         )
     }
 
