@@ -41,8 +41,9 @@ There is no separate late "UX completion" slice. Every slice owns its full requi
 
 ## S01 initial engineering checkpoint — intentionally bounded
 
-The first source checkpoint supports only an **internal DRAFT** material StockItem
-request sourced from an authorized WorkOrder. It does not submit for sourcing,
+The source checkpoint supports an **internal DRAFT** material StockItem
+request sourced from an authorized WorkOrder, plus an append-only requester
+withdrawal (V0040) which preserves the draft evidence. It does not submit for sourcing,
 approve, purchase, reserve, move goods, email suppliers or post Finance data.
 
 Canonical ReservationPersistence reads current reserved stock and available balance.
@@ -55,10 +56,17 @@ Endpoints:
 - POST /v1/work-orders/{workOrderId}/purchase-requirements
 - GET /v1/work-orders/{workOrderId}/purchase-requirements
 - GET /v1/purchase-requirements/{id}
+- POST /v1/purchase-requirements/{id}/withdraw
 
 All default OFF: hiltech.procurement.requirements.enabled=false.
 POST requires authentication, matching Idempotency-Key, current project demand
 authority, expected WorkOrder/StockItem versions, valid canonical unit and quantity.
+
+The five engineering slices are not five mandatory user-facing steps.
+An ordinary purchase must be low-friction; policy-gated approvals and exception
+routes are handled through the canonical shared engine only when warranted.
+See 03_PROCUREMENT_FLEXIBILITY_AND_LIFECYCLE_DELTA.md for a grounded
+confirmed/correction/missing review of the owner-requested flexibility.
 
 This checkpoint DOES NOT complete S01. Later S01 work: additional demand
 sources (asset/service/office), purchasing review decisions and transitions,

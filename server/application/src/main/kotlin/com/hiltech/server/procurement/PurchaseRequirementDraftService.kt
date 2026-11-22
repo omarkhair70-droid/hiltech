@@ -39,6 +39,12 @@ data class CreatePurchaseRequirementDraftRequest(
 
 data class ProcurementDraftContext(val operationId: UUID, val actor: UUID, val correlationId: String)
 
+data class WithdrawPurchaseRequirementRequest(
+    val operationId: UUID,
+    val expectedVersion: Long,
+    val reason: String? = null,
+)
+
 data class PurchaseRequirementDraftView(
     val id: UUID,
     val workOrderId: UUID,
@@ -56,6 +62,7 @@ data class PurchaseRequirementDraftView(
     val createdAt: Instant,
     val sourceCurrent: Boolean,
     val assessmentRequiresRefresh: Boolean = true,
+    val version: Long = 1,
 )
 
 data class PurchaseRequirementDraftReceipt(val draft: PurchaseRequirementDraftView, val replayed: Boolean)
@@ -143,6 +150,64 @@ class PurchaseRequirementDraftService @Autowired constructor(
         return PurchaseRequirementDraftReceipt(view(context.actor, order, record), execution.replayed)
     }
 
+    /** A requester can retract their own unsubmitted draft; root evidence stays immutable. */
+    fun withdraw(
+        context: ProcurementDraftContext,
+        id: UUID,
+        request: WithdrawPurchaseRequirementRequest,
+    ): PurchaseRequirementDraftReceipt {
+        requireEnabled()
+        if (context.operationId != request.operationId) invalid()
+        val record = drafts.byId(id) ?: hidden()
+        val order = authorizedOrder(context.actor, record.workOrderId)
+        if (record.organizationId != order.organizationId || record.requestedBy != context.actor) hidden()
+        val reason = request.reason?.trim()
+        if (request.reason != null && (reason.isNullOrEmpty() || reason.length > 500)) invalid()
+        val semantic = listOf(id.toString(), request.expectedVersion.toString(), reason.orEmpty())
+            .joinToString("") { "${it.length}:$it" }
+        val execution = commands.execute(
+            IdempotentCommandSpec(
+                context.operationId, context.actor, "PROCUREMENT_REQUIREMENT_WITHDRAWN",
+                "PURCHASE_REQUIREMENT", id,
+                IdempotencyKeyContract.fingerprint(semantic), context.correlationId,
+            ),
+        ) {
+            if (!drafts.lock(id)) hidden()
+            val locked = drafts.byId(id) ?: hidden()
+            val source = authorizedOrder(context.actor, locked.workOrderId)
+            if (source.organizationId != locked.organizationId || locked.requestedBy != context.actor) hidden()
+            val previous = drafts.latestTransition(id)
+            val currentVersion = previous?.resultVersion ?: locked.version
+            val currentState = previous?.toState ?: "DRAFT"
+            if (currentVersion != request.expectedVersion) stale()
+            if (currentState != "DRAFT") ended()
+            val now = clock.instant()
+            drafts.appendTransition(
+                PurchaseRequirementTransitionRecord(
+                    UUID.nameUUIDFromBytes(
+                        "hiltech:procurement:requirement-transition:${context.operationId}".toByteArray(Charsets.UTF_8),
+                    ),
+                    context.operationId, locked.id, locked.organizationId, currentVersion, currentVersion + 1,
+                    "WITHDRAW", "DRAFT", "WITHDRAWN", reason, context.actor, now, context.correlationId,
+                ),
+            )
+            audit.append(
+                AuditEventRecord(
+                    actorUserId = context.actor,
+                    action = "PROCUREMENT_REQUIREMENT_WITHDRAWN",
+                    targetType = "PURCHASE_REQUIREMENT",
+                    targetId = id,
+                    occurredAt = now,
+                    correlationId = context.correlationId,
+                ),
+            )
+            IdempotentCommandOutcome("PROCUREMENT_REQUIREMENT_WITHDRAWN", """{"id":"$id"}""")
+        }
+        return PurchaseRequirementDraftReceipt(
+            view(context.actor, order, drafts.byId(id) ?: hidden()), execution.replayed,
+        )
+    }
+
     fun forWork(actor: UUID, workOrderId: UUID): List<PurchaseRequirementDraftView> {
         requireEnabled()
         val order = authorizedOrder(actor, workOrderId)
@@ -162,7 +227,9 @@ class PurchaseRequirementDraftService @Autowired constructor(
         actor: UUID, order: WorkOrderSnapshot, record: PurchaseRequirementDraftRecord,
     ): PurchaseRequirementDraftView {
         val item = stock.item(record.stockItemId)
-        val current = item != null && item.active && item.organizationId == order.organizationId &&
+        val latest = drafts.latestTransition(record.id)
+        val effectiveState = latest?.toState ?: "DRAFT"
+        val current = effectiveState == "DRAFT" && item != null && item.active && item.organizationId == order.organizationId &&
             item.version == record.stockItemVersion && order.version == record.sourceWorkVersion &&
             acceptsDemand(order.lifecycleState)
         // Never disclose an earlier quantitative snapshot after warehouse visibility is revoked.
@@ -172,10 +239,11 @@ class PurchaseRequirementDraftService @Autowired constructor(
         return PurchaseRequirementDraftView(
             record.id, record.workOrderId, record.sourceWorkVersion,
             record.stockItemId, record.stockItemVersion, record.requestedQuantity.toPlainString(),
-            record.unitCode, record.justification, "DRAFT",
+            record.unitCode, record.justification, effectiveState,
             if (canReadSnapshot) record.assessmentCode else "WAREHOUSE_REVIEW_REQUIRED",
             if (canReadSnapshot) record.visibleFreeQuantity?.toPlainString() else null,
             record.assessedAt, record.requestedBy, record.createdAt, current,
+            version = latest?.resultVersion ?: record.version,
         )
     }
 

@@ -29,6 +29,22 @@ data class PurchaseRequirementDraftRecord(
     val version: Long = 1,
 )
 
+data class PurchaseRequirementTransitionRecord(
+    val id: UUID,
+    val operationId: UUID,
+    val requirementId: UUID,
+    val organizationId: UUID,
+    val sourceVersion: Long,
+    val resultVersion: Long,
+    val type: String,
+    val fromState: String,
+    val toState: String,
+    val reason: String?,
+    val actor: UUID,
+    val at: Instant,
+    val correlationId: String,
+)
+
 @Repository
 class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
     fun insert(draft: PurchaseRequirementDraftRecord) {
@@ -47,6 +63,49 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
             draft.assessmentCode, draft.visibleFreeQuantity,
             draft.assessedAt.atOffset(ZoneOffset.UTC), draft.requestedBy,
             draft.createdAt.atOffset(ZoneOffset.UTC), draft.correlationId,
+        ) == 1)
+    }
+
+    /** Serialize all transitions on the immutable root without rewriting that root. */
+    fun lock(id: UUID): Boolean = jdbc.query(
+        "SELECT id FROM procurement_purchase_requirement WHERE id = ? FOR UPDATE",
+        { rs, _ -> rs.getObject("id", UUID::class.java) }, id,
+    ).isNotEmpty()
+
+    fun latestTransition(requirementId: UUID): PurchaseRequirementTransitionRecord? =
+        jdbc.query(
+            """SELECT * FROM procurement_requirement_transition WHERE requirement_id = ?
+               ORDER BY result_version DESC LIMIT 1""",
+            { rs, _ ->
+                PurchaseRequirementTransitionRecord(
+                    rs.getObject("id", UUID::class.java),
+                    rs.getObject("operation_id", UUID::class.java),
+                    rs.getObject("requirement_id", UUID::class.java),
+                    rs.getObject("organization_id", UUID::class.java),
+                    rs.getLong("source_version"),
+                    rs.getLong("result_version"),
+                    rs.getString("transition_type"),
+                    rs.getString("from_state"),
+                    rs.getString("to_state"),
+                    rs.getString("reason"),
+                    rs.getObject("actor_user_id", UUID::class.java),
+                    rs.getObject("occurred_at", OffsetDateTime::class.java).toInstant(),
+                    rs.getString("correlation_id"),
+                )
+            }, requirementId,
+        ).singleOrNull()
+
+    fun appendTransition(record: PurchaseRequirementTransitionRecord) {
+        check(jdbc.update(
+            """INSERT INTO procurement_requirement_transition (
+                id, operation_id, requirement_id, organization_id, source_version,
+                result_version, transition_type, from_state, to_state, reason,
+                actor_user_id, occurred_at, correlation_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            record.id, record.operationId, record.requirementId, record.organizationId,
+            record.sourceVersion, record.resultVersion, record.type,
+            record.fromState, record.toState, record.reason, record.actor,
+            record.at.atOffset(ZoneOffset.UTC), record.correlationId,
         ) == 1)
     }
 

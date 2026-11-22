@@ -22,6 +22,14 @@ class PurchaseRequirementDraftController(private val service: PurchaseRequiremen
     ): PurchaseRequirementDraftReceipt =
         service.create(request.purchaseDraftContext(body.operationId), workOrderId, body)
 
+    @PostMapping("/v1/purchase-requirements/{id}/withdraw")
+    fun withdraw(
+        request: HttpServletRequest,
+        @PathVariable id: UUID,
+        @RequestBody body: WithdrawPurchaseRequirementRequest,
+    ): PurchaseRequirementDraftReceipt =
+        service.withdraw(request.purchaseDraftContext(body.operationId), id, body)
+
     @GetMapping("/v1/work-orders/{workOrderId}/purchase-requirements")
     fun forWork(request: HttpServletRequest, @PathVariable workOrderId: UUID): List<PurchaseRequirementDraftView> =
         service.forWork(request.purchaseDraftActor(), workOrderId)

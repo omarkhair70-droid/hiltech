@@ -57,6 +57,10 @@ class PurchaseRequirementDraftServiceTest {
     private val warehouseAuth = Mockito.mock(WarehouseAuthorizationPort::class.java)
     private val audit = Mockito.mock(AuditEventWriter::class.java)
     private var written: PurchaseRequirementDraftRecord? = null
+    private var transitioned: PurchaseRequirementTransitionRecord? = null
+    private val draftId = UUID.nameUUIDFromBytes(
+        "hiltech:procurement:purchase-requirement:${operation}".toByteArray(Charsets.UTF_8),
+    )
     private var applied = 0
     private val commands = object : IdempotentCommandExecutor {
         override fun execute(
@@ -114,6 +118,18 @@ class PurchaseRequirementDraftServiceTest {
         }.`when`(drafts).insert(any(PurchaseRequirementDraftRecord::class.java) ?: placeholder)
         Mockito.`when`(drafts.byId(any(UUID::class.java) ?: UUID.randomUUID()))
             .thenAnswer { written }
+        Mockito.`when`(drafts.lock(draftId)).thenReturn(true)
+        val placeholderAction = PurchaseRequirementTransitionRecord(
+            UUID.randomUUID(), UUID.randomUUID(), draftId, org, 1, 2,
+            "WITHDRAW", "DRAFT", "WITHDRAWN", null, actor, at, "test-correlation",
+        )
+        Mockito.doAnswer { invocation ->
+            transitioned = invocation.getArgument<PurchaseRequirementTransitionRecord>(0)
+            Unit
+        }.`when`(drafts).appendTransition(
+            any(PurchaseRequirementTransitionRecord::class.java) ?: placeholderAction,
+        )
+        Mockito.`when`(drafts.latestTransition(draftId)).thenAnswer { transitioned }
     }
 
     @Test fun `feature is off by default without reading source`() {
@@ -188,6 +204,77 @@ class PurchaseRequirementDraftServiceTest {
         assertEquals("PROCUREMENT_WORK_ENDED",
             assertThrows<ProductApiException> { service().create(context, workId, request) }.code)
         assertNull(written)
+    }
+
+    @Test fun `owner can withdraw own draft without altering original stock proof`() {
+        allow()
+        val svc = service()
+        val original = svc.create(context, workId, request).draft
+        val withdrawalId = UUID.randomUUID()
+        val result = svc.withdraw(
+            ProcurementDraftContext(withdrawalId, actor, "withdraw-test"),
+            draftId,
+            WithdrawPurchaseRequirementRequest(withdrawalId, 1, "Demand changed"),
+        )
+        assertEquals("DRAFT", original.state)
+        assertEquals("WITHDRAWN", result.draft.state)
+        assertEquals(2, result.draft.version)
+        assertFalse(result.draft.sourceCurrent)
+        assertEquals(1, written?.version)
+        assertEquals("WITHDRAW", transitioned?.type)
+        assertEquals("Demand changed", transitioned?.reason)
+        assertEquals(1, transitioned?.sourceVersion)
+        assertEquals(2, transitioned?.resultVersion)
+        assertEquals(2, applied)
+    }
+
+    @Test fun `second withdrawal cannot create another transition`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val first = UUID.randomUUID()
+        svc.withdraw(
+            ProcurementDraftContext(first, actor, "withdraw-test"),
+            draftId, WithdrawPurchaseRequirementRequest(first, 1),
+        )
+        val second = UUID.randomUUID()
+        assertEquals("PROCUREMENT_WORK_ENDED", assertThrows<ProductApiException> {
+            svc.withdraw(
+                ProcurementDraftContext(second, actor, "withdraw-test-2"),
+                draftId, WithdrawPurchaseRequirementRequest(second, 2),
+            )
+        }.code)
+        assertEquals(first, transitioned?.operationId)
+    }
+
+    @Test fun `different user cannot withdraw another requester draft`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val differentActor = UUID.randomUUID()
+        Mockito.`when`(projectAuth.canRequestResources(differentActor, project)).thenReturn(true)
+        val withdrawalId = UUID.randomUUID()
+        assertEquals("PROCUREMENT_UNAVAILABLE", assertThrows<ProductApiException> {
+            svc.withdraw(
+                ProcurementDraftContext(withdrawalId, differentActor, "withdraw-test"),
+                draftId, WithdrawPurchaseRequirementRequest(withdrawalId, 1),
+            )
+        }.code)
+        assertNull(transitioned)
+    }
+
+    @Test fun `withdrawal is off when procurement flag is disabled`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val withdrawalId = UUID.randomUUID()
+        assertEquals("PROCUREMENT_UNAVAILABLE", assertThrows<ProductApiException> {
+            service(false).withdraw(
+                ProcurementDraftContext(withdrawalId, actor, "withdraw-test"),
+                draftId, WithdrawPurchaseRequirementRequest(withdrawalId, 1),
+            )
+        }.code)
+        assertNull(transitioned)
     }
 
     @Test fun `lost warehouse access redacts an earlier quantity snapshot`() {
