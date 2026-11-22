@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.hiltech.shared.core.finance.FinanceChosenExpenseReceipt
 import com.hiltech.shared.core.finance.FinanceExpenseReceiptUploadControl
 import com.hiltech.shared.core.finance.FinanceExpenseReceiptUploader
+import com.hiltech.shared.core.finance.FinanceReceiptBytes
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -94,6 +95,9 @@ private suspend fun readPrivateFinanceReceipt(
         require(size > 0) { "Expense receipt is empty." }
         output.toByteArray()
     } ?: error("Selected receipt cannot be read.")
+    require(FinanceReceiptBytes.validSelectedReceipt(bytes, mime)) {
+        "Selected receipt content does not match its declared PDF/image format."
+    }
     val filename = context.contentResolver.query(
         uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null,
     )?.use { cursor ->
