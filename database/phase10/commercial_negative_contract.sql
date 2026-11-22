@@ -66,6 +66,39 @@ BEGIN
   (id,boq_version_id,line_code,description,category,quantity,unit,internal_unit_cost,sell_unit_price,created_at)
  VALUES(line_id,boq_id,'T1','Synthetic sample','LABOR',2,'hour',12.0000,20.0000,now());
 
+ -- Publish only fully assembled BOQ snapshots; afterwards even INSERT is denied.
+ UPDATE commercial_boq_version SET sealed_at=now() WHERE id=boq_id;
+ BEGIN
+  INSERT INTO commercial_boq_cost_line
+   (id,boq_version_id,line_code,description,category,quantity,unit,sell_unit_price,created_at)
+  VALUES(gen_random_uuid(),boq_id,'LATE','Late unapproved line','OTHER',1,'unit',1,now());
+  RAISE EXCEPTION 'EXPECTED_SEALED_BOQ_APPEND_DENIAL_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%Cannot append lines to sealed BOQ%' THEN
+   RAISE EXCEPTION 'BOQ line append after publication succeeded: %',error_message;
+  END IF;
+ END;
+
+ -- A missing internal cost is UNKNOWN, never interpreted as a zero-cost job.
+ INSERT INTO commercial_boq_version
+  (id,organization_id,opportunity_id,scope_version_id,version_number,currency,created_by,created_at)
+ VALUES(gen_random_uuid(),company_a,opportunity,scope_id,2,'EGP',actor,now());
+ INSERT INTO commercial_boq_cost_line
+  (id,boq_version_id,line_code,description,category,quantity,unit,sell_unit_price,created_at)
+ SELECT gen_random_uuid(),b.id,'UNCOSTED','Synthetic unknown cost',
+        'MATERIAL',1,'item',5.0000,now()
+ FROM commercial_boq_version b WHERE b.opportunity_id=opportunity AND b.version_number=2;
+ UPDATE commercial_boq_version SET sealed_at=now()
+ WHERE opportunity_id=opportunity AND version_number=2;
+ IF NOT EXISTS(
+   SELECT 1 FROM commercial_private_boq_cost_summary
+   WHERE opportunity_id=opportunity AND version_number=2
+     AND missing_cost_lines=1 AND complete_internal_cost_total IS NULL
+     AND proposed_sell_total=5.0000
+ ) THEN RAISE EXCEPTION 'Unknown internal costing was shown as complete'; END IF;
+
+
  BEGIN
   UPDATE commercial_boq_cost_line SET internal_unit_cost=13 WHERE id=line_id;
   RAISE EXCEPTION 'EXPECTED_PRIVATE_SNAPSHOT_BLOCK_MISSING';
