@@ -46,6 +46,28 @@ class Payroll9b9cApiClient(
             decode = { json.decodeFromString(PayrollRunDto.serializer(), it) },
         )
 
+    suspend fun history(
+        payrollPeriodId: String,
+        installationId: String,
+    ): PayrollRunHistoryDto =
+        api.request(
+            method = HttpMethod.Get,
+            path = "/v1/payroll/periods/" + payrollPeriodId + "/runs",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(PayrollRunHistoryDto.serializer(), it) },
+        )
+
+    suspend fun financeStatus(
+        runVersionId: String,
+        installationId: String,
+    ): PayrollRunFinanceStatusDto =
+        api.request(
+            method = HttpMethod.Get,
+            path = "/v1/payroll/runs/" + runVersionId + "/finance-status",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(PayrollRunFinanceStatusDto.serializer(), it) },
+        )
+
     suspend fun ownPayslips(
         organizationId: String,
         installationId: String,

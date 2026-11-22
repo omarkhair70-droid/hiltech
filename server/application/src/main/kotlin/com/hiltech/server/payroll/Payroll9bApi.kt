@@ -47,6 +47,15 @@ class Payroll9bController(private val service: Payroll9bDraftService) {
         return Payroll9bDraftCommandDto(draft, replayed, ctx.correlationId)
     }
 
+    @GetMapping("/v1/payroll/periods/{periodId}/runs")
+    fun history(
+        request: HttpServletRequest,
+        @PathVariable periodId: String,
+    ): Payroll9bRunHistoryDto {
+        val ctx = HiltechRequestContext.current(request)
+        return service.history(ctx.payrollIdentity(), periodId.payrollUuid())
+    }
+
     @GetMapping("/v1/payroll/runs/{runId}")
     fun read(
         request: HttpServletRequest,

@@ -51,6 +51,21 @@ data class Payroll9bDraftCommandDto(
     val correlationId: String,
 )
 
+data class Payroll9bRunSummaryDto(
+    val runVersionId: String,
+    val generation: Int,
+    val state: String,
+    val currency: String,
+    val net: String,
+    val employeeCount: Int,
+    val sourceFingerprint: String,
+)
+
+data class Payroll9bRunHistoryDto(
+    val payrollPeriodId: String,
+    val items: List<Payroll9bRunSummaryDto>,
+)
+
 private data class DraftRunPersisted(
     val id: UUID,
     val operationId: UUID,
@@ -203,6 +218,37 @@ class Payroll9bDraftService(
             ),
         )
         return present(loadById(runId) ?: Payroll9aPolicy.fail("PAYROLL_DRAFT_NOT_FOUND", HttpStatus.NOT_FOUND)) to false
+    }
+
+    fun history(actorUserId: UUID, periodId: UUID): Payroll9bRunHistoryDto {
+        val period = payroll9a.detail(actorUserId, periodId)
+        val org = UUID.fromString(period.period.organizationId)
+        return Payroll9bRunHistoryDto(
+            payrollPeriodId = periodId.toString(),
+            items = jdbc.query(
+                """
+                SELECT r.id, r.generation, r.state, r.currency, r.net,
+                       r.source_fingerprint, COUNT(l.id) AS employee_count
+                FROM payroll_run_version r
+                LEFT JOIN payroll_run_employee_line l ON l.run_version_id = r.id
+                WHERE r.payroll_period_id = ? AND r.organization_id = ?
+                GROUP BY r.id, r.generation, r.state, r.currency,
+                         r.net, r.source_fingerprint
+                ORDER BY r.generation DESC LIMIT 100
+                """.trimIndent(),
+                { rs, _ ->
+                    Payroll9bRunSummaryDto(
+                        runVersionId = rs.getObject("id", UUID::class.java).toString(),
+                        generation = rs.getInt("generation"),
+                        state = rs.getString("state"),
+                        currency = rs.getString("currency"),
+                        net = rs.getBigDecimal("net").toPlainString(),
+                        employeeCount = rs.getInt("employee_count"),
+                        sourceFingerprint = rs.getString("source_fingerprint"),
+                    )
+                }, periodId, org,
+            ),
+        )
     }
 
     fun read(actorUserId: UUID, runVersionId: UUID): Payroll9bRunDto {

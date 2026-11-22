@@ -43,6 +43,41 @@ data class PayrollRunDraftCommandDto(
 )
 
 @Serializable
+data class PayrollRunSummaryDto(
+    val runVersionId: String,
+    val generation: Int,
+    val state: String,
+    val currency: String,
+    val net: String,
+    val employeeCount: Int,
+    val sourceFingerprint: String,
+)
+
+@Serializable
+data class PayrollRunHistoryDto(
+    val payrollPeriodId: String,
+    val items: List<PayrollRunSummaryDto>,
+)
+
+@Serializable
+data class PayrollEmployeeFinanceStatusDto(
+    val employeeId: String,
+    val outcome: String,
+)
+
+@Serializable
+data class PayrollRunFinanceStatusDto(
+    val runVersionId: String,
+    val status: String,
+    val financeConnected: Boolean,
+    val publicationApproved: Boolean,
+    val employeeCount: Int,
+    val settledCount: Int,
+    val unresolvedCount: Int,
+    val employeeOutcomes: List<PayrollEmployeeFinanceStatusDto>,
+)
+
+@Serializable
 data class PrivatePayslipDto(
     val runVersionId: String,
     val employeeId: String,
