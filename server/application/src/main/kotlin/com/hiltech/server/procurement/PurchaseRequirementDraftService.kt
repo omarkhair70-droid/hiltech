@@ -343,7 +343,11 @@ class PurchaseRequirementDraftService @Autowired constructor(
             val previous = drafts.latestTransition(id)
             val version = previous?.resultVersion ?: locked.version
             if (version != request.expectedVersion) stale()
-            if ((previous?.toState ?: "DRAFT") != "SUBMITTED") ended()
+            val currentState = previous?.toState ?: "DRAFT"
+            if (type == "TECHNICAL_READY" && currentState != "SUBMITTED") ended()
+            if (type != "TECHNICAL_READY" &&
+                currentState !in setOf("SUBMITTED", "READY_FOR_SOURCING")
+            ) ended()
             if (!work.lockWorkOrder(locked.workOrderId)) hidden()
             val current = managedOrder(context.actor, locked.workOrderId)
             if (type == "TECHNICAL_READY") {
@@ -359,7 +363,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
             val at = clock.instant()
             drafts.appendTransition(PurchaseRequirementTransitionRecord(
                 transitionId(context.operationId), context.operationId, id, locked.organizationId,
-                version, version + 1, type, "SUBMITTED", request.decision, reason,
+                version, version + 1, type, currentState, request.decision, reason,
                 context.actor, at, context.correlationId, previous?.revised,
             ))
             audit.append(AuditEventRecord(
@@ -417,7 +421,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
             val currentVersion = previous?.resultVersion ?: locked.version
             val currentState = previous?.toState ?: "DRAFT"
             if (currentVersion != request.expectedVersion) stale()
-            if (currentState !in setOf("DRAFT", "SUBMITTED", "NEEDS_INFO")) ended()
+            if (currentState !in setOf("DRAFT", "SUBMITTED", "NEEDS_INFO", "READY_FOR_SOURCING")) ended()
             val now = clock.instant()
             drafts.appendTransition(
                 PurchaseRequirementTransitionRecord(
@@ -545,10 +549,10 @@ class PurchaseRequirementDraftService @Autowired constructor(
             if (canReadSnapshot) spec.freeQuantity?.toPlainString() else null,
             spec.assessedAt, record.requestedBy, record.createdAt, current,
             version = latest?.resultVersion ?: record.version,
-            canWithdraw = state in setOf("DRAFT", "SUBMITTED", "NEEDS_INFO") && record.requestedBy == actor,
+            canWithdraw = state in setOf("DRAFT", "SUBMITTED", "NEEDS_INFO", "READY_FOR_SOURCING") && record.requestedBy == actor,
             canSubmit = state == "DRAFT" && current && record.requestedBy == actor,
             canRevise = state in setOf("DRAFT", "NEEDS_INFO") && record.requestedBy == actor,
-            canTechnicalReview = state == "SUBMITTED" && manager,
+            canTechnicalReview = state in setOf("SUBMITTED", "READY_FOR_SOURCING") && manager,
             lastReviewReason = if (state == "NEEDS_INFO") latest?.reason else null,
         )
     }

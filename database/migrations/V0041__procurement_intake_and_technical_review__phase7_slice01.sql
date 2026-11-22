@@ -19,15 +19,15 @@ ALTER TABLE procurement_requirement_transition
     ADD COLUMN spec_assessed_at timestamptz,
     ADD CONSTRAINT ck_procurement_intake_transition CHECK (
         (transition_type = 'SUBMIT' AND from_state = 'DRAFT' AND to_state = 'SUBMITTED')
-        OR (transition_type = 'WITHDRAW' AND from_state IN ('DRAFT','SUBMITTED','NEEDS_INFO')
+        OR (transition_type = 'WITHDRAW' AND from_state IN ('DRAFT','SUBMITTED','NEEDS_INFO','READY_FOR_SOURCING')
             AND to_state = 'WITHDRAWN')
         OR (transition_type = 'REVISE' AND from_state IN ('DRAFT','NEEDS_INFO')
             AND to_state = 'DRAFT')
-        OR (transition_type = 'RETURN_FOR_INFO' AND from_state = 'SUBMITTED'
+        OR (transition_type = 'RETURN_FOR_INFO' AND from_state IN ('SUBMITTED','READY_FOR_SOURCING')
             AND to_state = 'NEEDS_INFO')
         OR (transition_type = 'TECHNICAL_READY' AND from_state = 'SUBMITTED'
             AND to_state = 'READY_FOR_SOURCING')
-        OR (transition_type = 'REJECT' AND from_state = 'SUBMITTED'
+        OR (transition_type = 'REJECT' AND from_state IN ('SUBMITTED','READY_FOR_SOURCING')
             AND to_state = 'REJECTED')
     ),
     ADD CONSTRAINT ck_procurement_review_reason CHECK (

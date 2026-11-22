@@ -22,10 +22,10 @@ Idempotency-Key must match the operation UUID and audit is correlated.
 | --- | --- | --- | --- |
 | DRAFT -> SUBMITTED | original requester with current request authority | source/work/item fresh, WorkOrder active | creates submitted intake, no PO |
 | DRAFT/NEEDS_INFO -> DRAFT | original requester | current work/item versions provided | immutable revised quantity/spec/evidence |
-| SUBMITTED -> NEEDS_INFO | project manager (canManageProject) | reason required | asks requester to revise |
+| SUBMITTED/READY_FOR_SOURCING -> NEEDS_INFO | project manager (canManageProject) | reason required | asks requester to revise before any commercial action |
 | SUBMITTED -> READY_FOR_SOURCING | project manager (canManageProject) | live source versions current | technical readiness only |
-| SUBMITTED -> REJECTED | project manager (canManageProject) | reason required | stops technical intake |
-| DRAFT/SUBMITTED/NEEDS_INFO -> WITHDRAWN | original requester | expected version matches | preserves historical evidence |
+| SUBMITTED/READY_FOR_SOURCING -> REJECTED | project manager (canManageProject) | reason required | stops technical intake before sourcing |
+| DRAFT/SUBMITTED/NEEDS_INFO/READY_FOR_SOURCING -> WITHDRAWN | original requester | expected version matches | preserves historical evidence before commercial action |
 
 `READY_FOR_SOURCING` is *not* a purchase order, approval, budget
 authorization, supplier award, stock reservation, invoice or payment.

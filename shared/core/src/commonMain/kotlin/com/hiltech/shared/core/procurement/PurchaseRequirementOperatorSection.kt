@@ -407,11 +407,14 @@ fun PurchaseRequirementOperatorSection(
                                 value = reviewReason, onValueChange = { reviewReason = it },
                                 label = { Text("Technical review reason / questions") }, minLines = 2,
                             )
-                            listOf(
+                            (if (draft.state == "SUBMITTED") listOf(
                                 "READY_FOR_SOURCING" to "Technically ready for sourcing",
                                 "NEEDS_INFO" to "Request more information",
                                 "REJECTED" to "Reject this technical need",
-                            ).forEach { choice ->
+                            ) else listOf(
+                                "NEEDS_INFO" to "Return to requester for revision",
+                                "REJECTED" to "Reject technical need before sourcing",
+                            )).forEach { choice ->
                                 OutlinedButton(
                                     enabled = !submitting && (choice.first == "READY_FOR_SOURCING" ||
                                         reviewReason.trim().isNotEmpty()),
@@ -422,7 +425,7 @@ fun PurchaseRequirementOperatorSection(
                                             try {
                                                 api.technicalReview(draft.id, ReviewPurchaseRequirementDto(
                                                     newOperationId(), draft.version, choice.first,
-                                                    reviewReason.trim().ifEmpty { null },
+                                                    reviewReason.trim().takeIf { it.isNotEmpty() },
                                                 ), installationId)
                                                 reviewId = null
                                                 message = "Technical intake decision saved: ${choice.first}. Not a purchase authorization."

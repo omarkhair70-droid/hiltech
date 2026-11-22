@@ -345,7 +345,7 @@ class PurchaseRequirementDraftServiceTest {
             ReviewPurchaseRequirementRequest(rev, 2, "READY_FOR_SOURCING", "Technical requirements checked"))
         assertEquals("READY_FOR_SOURCING", ready.draft.state)
         assertEquals(3, ready.draft.version)
-        assertFalse(ready.draft.canTechnicalReview)
+        assertTrue(ready.draft.canTechnicalReview) // manager may return/reject before sourcing
         assertEquals("TECHNICAL_READY", transitioned?.type)
         assertEquals("READY_FOR_SOURCING", transitioned?.toState)
         assertEquals(3, applied)
@@ -462,6 +462,48 @@ class PurchaseRequirementDraftServiceTest {
                 RevisePurchaseRequirementRequest(op, 1, 5, 3, "4", "PCS", "Changed"))
         }.code)
         assertNull(transitioned)
+    }
+
+    @Test fun `technically ready requirement can be withdrawn before any sourcing begins`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val manager = UUID.randomUUID()
+        Mockito.`when`(projectAuth.canManageProject(manager, project)).thenReturn(true)
+        val sub = UUID.randomUUID()
+        svc.submit(ProcurementDraftContext(sub, actor, "submit"), draftId,
+            SubmitPurchaseRequirementRequest(sub, 1))
+        val review = UUID.randomUUID()
+        svc.technicalReview(ProcurementDraftContext(review, manager, "ready"), draftId,
+            ReviewPurchaseRequirementRequest(review, 2, "READY_FOR_SOURCING"))
+        val op = UUID.randomUUID()
+        val result = svc.withdraw(ProcurementDraftContext(op, actor, "withdraw"), draftId,
+            WithdrawPurchaseRequirementRequest(op, 3, "No longer required"))
+        assertEquals("WITHDRAWN", result.draft.state)
+        assertEquals(4, result.draft.version)
+        assertEquals("READY_FOR_SOURCING", transitioned?.fromState)
+        assertFalse(result.draft.canWithdraw)
+    }
+
+    @Test fun `project manager can reopen technical ready need for correction before sourcing`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val manager = UUID.randomUUID()
+        Mockito.`when`(projectAuth.canManageProject(manager, project)).thenReturn(true)
+        val sub = UUID.randomUUID()
+        svc.submit(ProcurementDraftContext(sub, actor, "submit"), draftId,
+            SubmitPurchaseRequirementRequest(sub, 1))
+        val review = UUID.randomUUID()
+        svc.technicalReview(ProcurementDraftContext(review, manager, "ready"), draftId,
+            ReviewPurchaseRequirementRequest(review, 2, "READY_FOR_SOURCING"))
+        val back = UUID.randomUUID()
+        val reopened = svc.technicalReview(ProcurementDraftContext(back, manager, "return"), draftId,
+            ReviewPurchaseRequirementRequest(back, 3, "NEEDS_INFO", "Material specification changed"))
+        assertEquals("NEEDS_INFO", reopened.draft.state)
+        assertEquals("READY_FOR_SOURCING", transitioned?.fromState)
+        assertEquals(4, reopened.draft.version)
+        assertEquals("Material specification changed", reopened.draft.lastReviewReason)
     }
 
     @Test fun `review preview recalculates available stock and warns about open same-work drafts`() {
