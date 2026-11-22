@@ -154,6 +154,12 @@ class Payroll9bDraftService(
             acc, item -> acc + item.second.first.reimbursements
         }
         val net = gross + reimbursements - deductions
+        // Each employee component may fit numeric(20,6), while an entire
+        // payroll company total could still overflow that same DB column.
+        if (listOf(gross, deductions, reimbursements, net).any {
+                it.precision() - it.scale() > 14
+            }
+        ) Payroll9aPolicy.fail("PAYROLL_RUN_TOTAL_OUT_OF_RANGE", HttpStatus.CONFLICT)
         val next = (jdbc.queryForObject(
             "SELECT COALESCE(MAX(generation), 0) + 1 FROM payroll_run_version WHERE payroll_period_id = ?",
             Int::class.java, periodId,
