@@ -26,16 +26,25 @@ class PayrollRunApprovalVersionSource(
         subjectType == "PAYROLL_RUN_VERSION"
 
     override fun isCurrent(subject: ApprovalSubjectRef): Boolean =
-        runCatching { validate(subject) }.getOrDefault(false)
+        runCatching { validate(subject, forPublication = false) }.getOrDefault(false)
 
-    private fun validate(subject: ApprovalSubjectRef): Boolean {
+    fun isCurrentForPublication(subject: ApprovalSubjectRef): Boolean =
+        runCatching { validate(subject, forPublication = true) }.getOrDefault(false)
+
+    private fun validate(subject: ApprovalSubjectRef, forPublication: Boolean): Boolean {
         if (subject.subjectVersion != 1L) return false
         val run = jdbc.query(
             """
             SELECT rv.organization_id, rv.payroll_period_id, rv.policy_version_id,
                    rv.policy_version, rv.source_fingerprint, rv.generation, rv.state,
                    (SELECT MAX(generation) FROM payroll_run_version
-                    WHERE payroll_period_id = rv.payroll_period_id) AS newest
+                    WHERE payroll_period_id = rv.payroll_period_id) AS newest,
+                   (SELECT MAX(released.generation)
+                    FROM payroll_run_version released
+                    JOIN payroll_run_release approval ON
+                        approval.run_version_id = released.id
+                    WHERE released.payroll_period_id = rv.payroll_period_id)
+                       AS newest_published
             FROM payroll_run_version rv WHERE rv.id = ?
             """.trimIndent(),
             { rs, _ ->
@@ -47,12 +56,15 @@ class PayrollRunApprovalVersionSource(
                     fingerprint = rs.getString("source_fingerprint"),
                     generation = rs.getInt("generation"),
                     newest = rs.getInt("newest"),
+                    newestPublished = rs.getObject("newest_published", Integer::class.java)?.toInt(),
                     state = rs.getString("state"),
                 )
             }, subject.subjectId,
         ).singleOrNull() ?: return false
         if (run.organizationId != subject.organizationId ||
-            run.generation != run.newest || run.state != "DRAFT"
+            run.state != "DRAFT" ||
+            (forPublication && run.generation != run.newestPublished) ||
+            (!forPublication && run.generation != run.newest)
         ) return false
         val provider = providers.ifAvailable ?: return false
         val policy = provider.policyFor(run.organizationId, run.periodId) ?: return false
@@ -136,6 +148,7 @@ class PayrollRunApprovalVersionSource(
         val fingerprint: String,
         val generation: Int,
         val newest: Int,
+        val newestPublished: Int?,
         val state: String,
     )
 
@@ -217,7 +230,7 @@ class ApprovalBackedPayrollPublication(
             subjectId = runVersionId,
             subjectVersion = 1,
         )
-        if (!guard.isCurrent(subject)) return@runCatching false
+        if (!guard.isCurrentForPublication(subject)) return@runCatching false
         val current = decisions.resolve(record.actorId, subject, policyKey) ?: return@runCatching false
         current.policyVersion == record.policyVersion &&
             current.path == record.path &&
