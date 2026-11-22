@@ -52,6 +52,18 @@ data class ServiceWorkOrderDto(
     val accepted:Boolean,val invoiceCaptured:Boolean,
 )
 @Serializable
+data class AttestServiceSupplierCommunicationDto(
+    val operationId:String,val eventType:String,val channel:String,
+    val externalReference:String,val occurredAt:String,
+)
+@Serializable
+data class ServiceSupplierCommunicationDto(
+    val id:String,val serviceOrderId:String,val eventVersion:Long,
+    val eventType:String,val channel:String,val externalReference:String,
+    val occurredAt:String,val recordedBy:String,
+    val replayed:Boolean=false,val sentByThisApi:Boolean=false,
+)
+@Serializable
 data class CreateServicePurchaseDocumentSlotDto(
     val operationId:String,val documentKind:String,
 )
@@ -143,6 +155,19 @@ class ServiceOrderAndInvoiceApiClient(
     suspend fun order(id:String,install:String):IssuedServiceOrderDto =
         get("/v1/service-procurement/orders/"+uuid(id),install,
             IssuedServiceOrderDto.serializer())
+
+    suspend fun serviceSupplierCommunications(orderId:String,install:String):
+        List<ServiceSupplierCommunicationDto> =
+        get("/v1/service-procurement/orders/"+uuid(orderId)+"/supplier-communications",
+            install,ListSerializer(ServiceSupplierCommunicationDto.serializer()))
+
+    suspend fun attestServiceSupplierCommunication(
+        orderId:String,input:AttestServiceSupplierCommunicationDto,install:String
+    ):ServiceSupplierCommunicationDto=post(
+        "/v1/service-procurement/orders/"+uuid(orderId)+"/supplier-communications",
+        input.operationId,
+        json.encodeToString(AttestServiceSupplierCommunicationDto.serializer(),input),
+        install,ServiceSupplierCommunicationDto.serializer())
 
     suspend fun deliveryOrders(org:String,install:String):List<ServiceWorkOrderDto> =
         get("/v1/service-procurement/organizations/"+uuid(org)+"/delivery-orders",
