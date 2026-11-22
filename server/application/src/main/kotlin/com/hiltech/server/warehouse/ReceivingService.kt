@@ -194,7 +194,7 @@ class ReceivingService(
             }
             // Damaged/unfit PO goods must be rejected with discrepancy evidence;
             // accepting them into StockLedger would inflate usable inventory.
-            if (record.sourceType == ReceivingSourceType.PO &&
+            if (poReceiving.isGovernedPo(record) &&
                 request.condition in setOf(AssetCondition.DAMAGED, AssetCondition.UNFIT)
             ) invalid()
             poReceiving.requireStockReceipt(record, item.id, item.baseUnitCode, amount)
