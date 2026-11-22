@@ -199,6 +199,13 @@ interface EvidencePersistencePort {
         throw UnsupportedOperationException("Service quote Evidence repository is not configured.")
     }
 
+    fun insertServicePurchaseDocumentReservation(
+        value: SupplierQuoteDocumentEvidenceReservationInsert,
+        documentKind: String,
+    ) {
+        throw UnsupportedOperationException("Service purchase Evidence repository is not configured.")
+    }
+
     fun insertSupplierInvoiceDocumentReservation(
         value: SupplierInvoiceDocumentEvidenceReservationInsert,
     ) {
