@@ -184,3 +184,34 @@ supplier master-data authoring in the company's current policy source,
 restricted document delivery/reviewer UX, and real connected-role E2E
 with company-owned sample quotations. All sourcing features remain OFF
 by default.
+
+## Buyer-only protected quotation document retrieval
+
+Quotation source Evidence is classified `HIGHLY_RESTRICTED`; its generic
+`/v1/evidence/{id}/download-target` endpoint **still denies** presigned
+downloads. The sourcing-specific
+`POST /v1/sourcing/quotes/{quoteId}/protected-document` instead sends a
+private authenticated buyer response with `Cache-Control: no-store`,
+`X-Content-Type-Options: nosniff` and an attachment filename that is generated
+from the immutable quote identifier, not from a user-supplied filename.
+
+The protected server reads the immutable quote source, rechecks organization
+buyer authority, current supplier link and source hash via the canonical
+Evidence verification adapter, then verifies the exact READY/RESTRICTED
+record, internal object key prefix, content type, capped length, actual
+SHA-256 and file signature before returning a single bounded binary payload.
+Successful disclosure writes a dedicated audit event. Unauthorized, unready,
+cross-organization, unverified and tampered sources do not return bytes.
+
+**Privacy boundary:** technical assessment authority does not imply access
+to documents that may include prices or other commercially restricted terms.
+A technical reviewer-specific redacted technical evidence workflow would
+require a separately authorized, company-approved policy. There is no
+automatic document export from the Windows buyer screen; this endpoint is
+for an explicitly authorized internal client operation only.
+
+The S3 private-read adapter is intentionally bounded to 16 MiB and does not
+manufacture signed URLs. Disposable mock tests cover cross-tenant,
+nonbuyer, quarantine and altered-object rejection. The real S3 contract
+test additionally verifies the object size bound. Feature flag and
+authority defaults remain DENY.
