@@ -56,6 +56,50 @@ class PurchaseOrderIssueApiClientTest {
             client(http).destinations(candidate, installation).single().kind)
     }
 
+    @Test fun cancellationRequiresExactUnsentIssuedVersionAndNeverPostsFinanceOrWarehouse() = runBlocking {
+        val request = CancelPurchaseOrderDto(
+            operationId = op, expectedVersion = 1L,
+            reason = "Duplicate unsent order safely cancelled before supplier transmission",
+        )
+        val http = HttpClient(MockEngine { req ->
+            assertEquals("POST", req.method.value)
+            assertEquals("/v1/procurement/purchase-orders/$candidate/cancel", req.url.encodedPath)
+            assertEquals(op, req.headers["Idempotency-Key"])
+            assertEquals("Bearer issuer-only-token", req.headers[HttpHeaders.Authorization])
+            assertEquals(
+                request,
+                Json.decodeFromString<CancelPurchaseOrderDto>(
+                    (req.body as OutgoingContent.ByteArrayContent).bytes().decodeToString(),
+                ),
+            )
+            respond("""{"purchaseOrderId":"$candidate","code":"PO-000031",
+                "state":"CANCELLED","eventId":"$op","eventVersion":2,
+                "replayed":false,"supplierNotified":false,
+                "inventoryChanged":false,"paymentChanged":false}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).cancel(candidate, request, installation)
+        assertEquals(2L, result.eventVersion)
+        assertEquals("CANCELLED", result.state)
+        assertFalse(result.supplierNotified)
+        assertFalse(result.inventoryChanged)
+        assertFalse(result.paymentChanged)
+    }
+
+    @Test fun issuerReadsExactCurrentPoStateIncludingCancelledOrder() = runBlocking {
+        val http = HttpClient(MockEngine { req ->
+            assertEquals("GET", req.method.value)
+            assertEquals("/v1/procurement/organizations/$org/issued-pos", req.url.encodedPath)
+            respond("""[{"id":"$candidate","code":"PO-000031",
+                "candidateId":"$op","effectiveState":"CANCELLED","version":2,
+                "supplierDispatchState":"NOT_SENT","total":"1270","currency":"EGP"}]""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val row = client(http).issuedOrders(org, installation).single()
+        assertEquals("CANCELLED", row.effectiveState)
+        assertEquals(2L, row.version)
+    }
+
     @Test fun idempotentIssueIsInternallyIssuedNotSentOrPaid() = runBlocking {
         val command = IssuePurchaseOrderDto(op, 1L, destination)
         val http = HttpClient(MockEngine { req ->
