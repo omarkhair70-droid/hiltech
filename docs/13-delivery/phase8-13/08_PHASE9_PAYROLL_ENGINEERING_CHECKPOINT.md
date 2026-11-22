@@ -136,3 +136,79 @@ Actual company-backed salary, attendance, Finance deduction, legal policy and
 payment-result adapter: NOT YET CONNECTED or certified.
 Latest expanded exact-head CI: must be verified.
 Main merge, staging live employee access and production: NOT DONE.
+
+
+## November 23 continuation — corrections and end of employment
+
+### V0073: no destructive correction to an already released payroll
+
+- Provisional migration `V0073__payroll_correction_link__phase9_9c.sql`
+  creates an immutable link from the **last released original run** to one
+  newer payroll generation. It references the original release; never edits
+  the original gross/net, releases or Finance payment history.
+- A replacement run may be released only when its exact source fingerprint
+  **differs** from the original and an independent
+  `PayrollVerifiedCorrectionSourcePort` provides an APPROVED company reason,
+  a versioned HR evidence reference and a versioned Finance clearance.
+- Allowed Finance dispositions are
+  `NO_PRIOR_TRANSFER_VERIFIED`, `REVERSAL_VERIFIED` and
+  `SETTLED_DIFFERENTIAL_AUTHORIZED`. These are **signed source facts**,
+  not formulas and not instructions to pay again. Unknown/returned payments
+  cannot be silently treated as final clearance.
+- The correction record and replacement release share the same database
+  transaction and period lock. An insert trigger rejects a wrong company,
+  different payroll period, stale generation, wrong source fingerprint,
+  missing original release or already released replacement.
+- PostgreSQL test models an already released run, a newer unapproved draft,
+  a changed Finance coverage source, a failed correction without HR/Finance
+  evidence, and an approved link that leaves the original release replayable.
+- Source port remains **unconnected** until real HR and Finance evidence exist.
+
+### Payroll eligibility for employees who have left
+
+- Calculation of an OFFBOARDING or FORMER employee now requires a separate
+  APPROVED, versioned `PayrollVerifiedSeparationEligibility` from the real
+  People offboarding case and company/accountant final-pay scope, in addition
+  to regular compensation, approved-time and Finance coverage receipts.
+- Any change to the People case version or approved final-pay scope version
+  invalidates the run fingerprint. An ACTIVE employee cannot reuse an
+  offboarding-only source record.
+- Disabled `PayrollPeopleSeparationSource` uses
+  `OffboardingPersistencePort.latestForEmployee` and payroll period end
+  date, plus a separate `PayrollApprovedFinalPayScopeSourcePort`. It does
+  not duplicate HR employee state or create legal severance calculations.
+- Offboarding eligibility and final-pay scope ports are not yet live in
+  the company; absent approval means the calculation stays blocked.
+
+### Final pay and employee departure
+
+- Read-only, authorization-checked
+  `GET /v1/payroll/offboarding/{caseId}/final-pay-readiness` reuses the
+  **existing People OffboardingCase and its HR/Finance/PAYROLL clearances**.
+- Positive readiness requires a signed matching final-pay source:
+  exact case version, last working date, employee and organization; an
+  existing released payroll run with a matching frozen net/fingerprint;
+  and the authoritative Finance per-employee payment result.
+- Pending HR or Finance clearance, missing validated statutory scope,
+  missing run release, stale source, wrong Finance instruction, or an
+  unconfirmed payment yields explicit blockers — **never a made-up final
+  salary, severance entitlement or PAID state**.
+- Android/Windows native UI has case navigation, financial source status,
+  Arabic review blockers, frozen net only when verified and external
+  payment status. Component remains unmounted in global nav until
+  UX/DevOps shared-shell integration.
+- Default OFF: `hiltech.payroll.final-pay-review-enabled` and
+  `hiltech.payroll.separation-source-enabled`.
+
+### Incremental exact-head proof / not-live reminder
+
+The expanded workflow now includes V0073 and
+`Payroll9cFinalPayTest`. PostgreSQL migration/partial payout/exception
+tests and shared native compilation are required before merging.
+A successful **old** 9A workflow cannot certify newer code. The latest
+pipeline must be completed at the exact final commit, not just queued.
+
+Neither the correction flow nor final-pay view creates a payment, reopens
+an old payment instruction or silently deducts employee advances. Real
+Finance bank authority, legal/accountant policy, employee source protection,
+consecutive Flyway numbers and staging acceptance remain mandatory.
