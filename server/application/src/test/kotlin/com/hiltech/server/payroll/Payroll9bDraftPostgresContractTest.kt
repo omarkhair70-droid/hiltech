@@ -560,6 +560,23 @@ class Payroll9bDraftPostgresContractTest {
             financeClearanceReference = "synthetic-finance-reversal-confirmed",
             financeClearanceVersion = 2,
         )
+        // Even a database writer with a current Payroll REVIEW grant and
+        // valid routine company policy cannot skip the HR+Finance correction
+        // ledger by writing a second release directly.
+        assertThrows<Exception> {
+            jdbc.update(
+                """
+                INSERT INTO payroll_run_release (
+                    id, operation_id, organization_id, run_version_id,
+                    run_source_fingerprint, policy_key, policy_version,
+                    decision_path, released_by_user_id, released_at
+                ) VALUES (?, ?, ?, ?, ?, 'PAYROLL_REVIEW_TEST', 1,
+                          'ROUTINE_AUTHORIZED', ?, ?)
+                """.trimIndent(),
+                UUID.randomUUID(), UUID.randomUUID(), org,
+                correctedRun, corrected.first.sourceFingerprint, actor, time,
+            )
+        }
         val correctionOperation = UUID.randomUUID()
         val correctedRelease = tx.execute {
             releases.release(actor, correctedRun, correctionOperation, "p9c-correction")

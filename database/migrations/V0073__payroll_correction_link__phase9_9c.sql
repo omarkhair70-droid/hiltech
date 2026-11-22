@@ -92,6 +92,14 @@ BEGIN
           AND older.organization_id = NEW.organization_id
           AND older.payroll_period_id = newer.payroll_period_id
           AND older.generation < newer.generation
+          AND older.generation = (
+              SELECT MAX(previous.generation)
+              FROM payroll_run_version previous
+              JOIN payroll_run_release previous_release
+                ON previous_release.run_version_id = previous.id
+              WHERE previous.payroll_period_id = older.payroll_period_id
+                AND previous.generation < newer.generation
+          )
           AND older.source_fingerprint = NEW.original_source_fingerprint
           AND newer.source_fingerprint = NEW.replacement_source_fingerprint
           AND newer.state = 'DRAFT'
@@ -118,3 +126,49 @@ CREATE TRIGGER payroll_9c_correction_insert_validate
 CREATE TRIGGER payroll_9c_correction_immutable
     BEFORE UPDATE OR DELETE ON payroll_run_correction FOR EACH ROW
     EXECUTE FUNCTION payroll_9a_immutable_guard();
+
+-- A direct SQL writer with Payroll REVIEW access cannot skip the company's
+-- authoritative Finance correction clearance by inserting a second release.
+-- The application records the correction FIRST under the payroll period lock
+-- in the same transaction, so this stays compatible with routine operations.
+CREATE FUNCTION payroll_9c_release_requires_correction() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    current_period uuid;
+    current_generation integer;
+    previous_released_run uuid;
+BEGIN
+    SELECT rv.payroll_period_id, rv.generation
+      INTO current_period, current_generation
+    FROM payroll_run_version rv
+    WHERE rv.id = NEW.run_version_id
+      AND rv.organization_id = NEW.organization_id;
+
+    SELECT prior.run_version_id
+      INTO previous_released_run
+    FROM payroll_run_release prior
+    JOIN payroll_run_version older ON older.id = prior.run_version_id
+    WHERE older.payroll_period_id = current_period
+      AND older.organization_id = NEW.organization_id
+      AND older.generation < current_generation
+    ORDER BY older.generation DESC
+    LIMIT 1;
+
+    IF previous_released_run IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM payroll_run_correction c
+        WHERE c.organization_id = NEW.organization_id
+          AND c.replacement_run_version_id = NEW.run_version_id
+          AND c.original_run_version_id = previous_released_run
+          AND c.replacement_source_fingerprint = NEW.run_source_fingerprint
+          AND c.recorded_by_user_id = NEW.released_by_user_id
+    ) THEN
+        RAISE EXCEPTION 'Payroll replacement release requires verified correction';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER payroll_9c_release_correction_validate
+    BEFORE INSERT ON payroll_run_release FOR EACH ROW
+    EXECUTE FUNCTION payroll_9c_release_requires_correction();
