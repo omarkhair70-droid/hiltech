@@ -68,7 +68,21 @@ pgtool pg_dump --schema-only --no-owner --no-acl \
   -h 127.0.0.1 -U hiltech -d hiltech -f /artifacts/source-schema.sql
 pgtool pg_dump --schema-only --no-owner --no-acl \
   -h 127.0.0.1 -U hiltech -d hiltech_disposable_restore -f /artifacts/restore-schema.sql
-if ! pgtool diff /artifacts/source-schema.sql /artifacts/restore-schema.sql; then
+# PostgreSQL 18 may generate different random psql \\restrict transport tokens.
+# Compare every schema DDL line, excluding ONLY those volatile tokens.
+if ! python3 - "$archive_dir/source-schema.sql" "$archive_dir/restore-schema.sql" <<'PY'
+from pathlib import Path
+import sys
+
+def normalized(path: str) -> list[str]:
+    return [
+        line for line in Path(path).read_text(encoding="utf-8").splitlines()
+        if not line.startswith("\\restrict ") and not line.startswith("\\unrestrict ")
+    ]
+
+sys.exit(0 if normalized(sys.argv[1]) == normalized(sys.argv[2]) else 1)
+PY
+then
   echo "BLOCKED: restored schema differs from disposable source" >&2
   exit 1
 fi
