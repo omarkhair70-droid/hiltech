@@ -67,8 +67,27 @@ order and stock item** (with a truncation flag when there are more).
 Stale/withdrawn sources do NOT return any current quantitative stock claim.
 This is advisory only: no purchase approval, duplicate hard-block, supplier
 selection, stock reservation, stock movement or persistent state mutation.
-The shared KMP client exposes the identical GET contract to Android/Windows,
-but no native screen has been connected to it yet.
+The shared KMP client exposes the identical GET contract to Android/Windows.
+The single shared Compose operator surface
+`shared/core/.../procurement/PurchaseRequirementOperatorSection.kt` is now
+routed through both signed-in Android (selected field WorkOrder) and Windows
+(project WorkOrder picker). Its stock picker reads canonical Work resource
+catalog and current StockItem versions; the WorkOrder version comes from the
+canonical Work API. It supports save/list/review/withdraw without arbitrary
+UUID entry, offline writes, stock movements or PO issue.
+
+There are TWO independent OFF-by-default gates:
+- Server: `hiltech.procurement.requirements.enabled=false`.
+- Android build UI: `hiltech.procurementRequirementsEnabled=false` unless
+  explicitly set at build time.
+- Windows UI: absent/false `HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED`
+  environment variable. No production enablement from this PR.
+
+The existing HILTECH Shell does not mount this operator in signed-out or
+offline read-only mode. Read/list actions require server permission. The
+server's canWithdraw boolean is only UX guidance; every withdrawal is
+authorized again server-side. UI integration does NOT equal operator
+acceptance; no actual company policy or purchaser handoff is live.
 
 All default OFF: hiltech.procurement.requirements.enabled=false.
 POST requires authentication, matching Idempotency-Key, current project demand

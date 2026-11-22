@@ -14,6 +14,7 @@ import com.hiltech.shared.core.HiltechProjectsState
 import com.hiltech.shared.core.HiltechWarehouseState
 import com.hiltech.shared.core.WarehouseImportReviewDraft
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
+import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
@@ -2784,6 +2785,27 @@ fun main() {
                                 ).toString()
                             },
                         )
+                    }
+                },
+                procurementOperator = {
+                    if (System.getenv("HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED")
+                            ?.equals("true", ignoreCase = true) == true
+                    ) {
+                        val signed = shellState.value as? HiltechShellState.SignedIn
+                        val identity = signed?.identity
+                        val works = signed?.projects?.workOrders.orEmpty()
+                        if (identity != null && works.isNotEmpty()) {
+                            androidx.compose.runtime.key(identity.identityId) {
+                                PurchaseRequirementOperatorSection(
+                                    api = runtime.procurementApi,
+                                    warehouseApi = runtime.physicalWarehouseApi,
+                                    workApi = runtime.procurementWorkApi,
+                                    installationId = runtime.physicalWarehouseInstallationId,
+                                    workChoices = works,
+                                    newOperationId = { java.util.UUID.randomUUID().toString() },
+                                )
+                            }
+                        }
                     }
                 },
                 onRefreshProjects =

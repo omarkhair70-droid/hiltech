@@ -35,6 +35,7 @@ import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
+import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
 import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
@@ -156,6 +157,25 @@ class MainActivity : ComponentActivity() {
                                     java.util.UUID.nameUUIDFromBytes(payload.toByteArray(Charsets.UTF_8)).toString()
                                 },
                             )
+                        }
+                    }
+                },
+                procurementOperator = {
+                    if (BuildConfig.HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED) {
+                        val signed = shellState as? HiltechShellState.SignedIn
+                        val identity = signed?.identity
+                        val selectedWork = signed?.field?.selectedWorkOrderId
+                        if (identity != null && !selectedWork.isNullOrBlank()) {
+                            key(identity.identityId, selectedWork) {
+                                PurchaseRequirementOperatorSection(
+                                    api = hiltechApplication.procurementApi,
+                                    warehouseApi = hiltechApplication.warehouseApi,
+                                    workApi = hiltechApplication.procurementWorkApi,
+                                    installationId = hiltechApplication.installationId,
+                                    selectedWorkOrderId = selectedWork,
+                                    newOperationId = { UUID.randomUUID().toString() },
+                                )
+                            }
                         }
                     }
                 },
