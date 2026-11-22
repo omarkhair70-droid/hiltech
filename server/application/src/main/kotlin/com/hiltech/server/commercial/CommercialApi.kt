@@ -55,6 +55,16 @@ class CommercialController(private val service: CommercialService) {
             HiltechRequestContext.current(http).requireIdentityId(),
         )
 
+    @PostMapping("/opportunities/{opportunityId}/qualify")
+    fun qualify(http: HttpServletRequest, @PathVariable opportunityId: String,
+                @RequestHeader("Idempotency-Key") key: String,
+                @RequestBody body: CommercialQualifyRequest) =
+        service.qualifyOpportunity(
+            opportunityId.commercialUuid(),body,operation(key,body.operationId),
+            HiltechRequestContext.current(http).requireIdentityId(),
+            HiltechRequestContext.current(http).correlationId,
+        )
+
     @PostMapping("/opportunities/{opportunityId}/tenders")
     fun tender(http: HttpServletRequest, @PathVariable opportunityId: String,
                @RequestHeader("Idempotency-Key") key: String,
@@ -175,6 +185,26 @@ class CommercialController(private val service: CommercialService) {
                  @RequestBody body: CommercialClientPoDraftRequest) =
         service.draftClientPo(
             opportunityId.commercialUuid(), body, operation(key, body.operationId),
+            HiltechRequestContext.current(http).requireIdentityId(),
+            HiltechRequestContext.current(http).correlationId,
+        )
+
+    @PostMapping("/contracts/{contractId}/confirm-signed")
+    fun confirmSigned(http: HttpServletRequest, @PathVariable contractId: String,
+                      @RequestHeader("Idempotency-Key") key: String,
+                      @RequestBody body: CommercialEvidenceConfirmationRequest) =
+        service.confirmSignedContract(
+            contractId.commercialUuid(),body,operation(key,body.operationId),
+            HiltechRequestContext.current(http).requireIdentityId(),
+            HiltechRequestContext.current(http).correlationId,
+        )
+
+    @PostMapping("/client-pos/{clientPoId}/verify")
+    fun verifyPo(http: HttpServletRequest, @PathVariable clientPoId: String,
+                 @RequestHeader("Idempotency-Key") key: String,
+                 @RequestBody body: CommercialEvidenceConfirmationRequest) =
+        service.verifyClientPo(
+            clientPoId.commercialUuid(),body,operation(key,body.operationId),
             HiltechRequestContext.current(http).requireIdentityId(),
             HiltechRequestContext.current(http).correlationId,
         )

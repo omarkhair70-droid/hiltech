@@ -164,6 +164,9 @@ class CommercialService(
                 """SELECT id,organization_id,client_organization_id,owner_user_id,opportunity_code,
                           title,description,source,state,closed_reason,expected_decision_date,version
                    FROM commercial_opportunity WHERE id=?""",id),
+            "qualification" to jdbc.queryForList(
+                """SELECT id,discovery_summary,open_questions,qualified_by,qualified_at
+                   FROM commercial_qualification_record WHERE opportunity_id=?""",id),
             "tenders" to jdbc.queryForList(
                 """SELECT id,tender_type,revision_number,reference_number,received_at,
                           submission_deadline,clarification_deadline,source_channel,submission_state
@@ -179,6 +182,35 @@ class CommercialService(
                 """SELECT id,quote_code,version_number,currency,total_price,state,validity_date
                    FROM commercial_quote_version WHERE opportunity_id=? ORDER BY version_number DESC""",id),
         )
+    }
+
+    fun qualifyOpportunity(id: UUID,r: CommercialQualifyRequest,key: UUID,
+                           actor: UUID,correlation: String): CommercialCommandResult {
+        val company = op(id,actor,"SALES_WRITE")["organization_id"] as UUID
+        val discovery = required(r.discoverySummary,10000)
+        val questions = nullable(r.openQuestions,10000) ?: ""
+        val target = this.id("qualification",key)
+        val replay = execute(key,actor,"COMMERCIAL_OPPORTUNITY_QUALIFY",target,"$id|$r",correlation) {
+            access.require(actor,company,"SALES_WRITE")
+            lockOpportunity(id)
+            if (jdbc.update(
+                """UPDATE commercial_opportunity
+                   SET state='QUALIFIED',version=version+1,updated_at=?
+                   WHERE id=? AND version=? AND state='OPEN'""",
+                now(),id,r.baseVersion,
+            ) != 1) throw commercialError(
+                "COMMERCIAL_QUALIFICATION_CONFLICT",
+                "Opportunity is no longer open at this version.",HttpStatus.CONFLICT,
+            )
+            jdbc.update(
+                """INSERT INTO commercial_qualification_record
+                   (id,organization_id,opportunity_id,discovery_summary,open_questions,qualified_by,qualified_at)
+                   VALUES (?,?,?,?,?,?,?)""",
+                target,company,id,discovery,questions,actor,now(),
+            )
+            audit(actor,"COMMERCIAL_OPPORTUNITY_QUALIFIED",id,"QUALIFIED",correlation)
+        }
+        return result(id,replay,"QUALIFIED",correlation)
     }
 
     fun addTender(id: UUID,r: CommercialTenderRequest,key: UUID,actor: UUID,correlation: String): CommercialCommandResult {
@@ -536,6 +568,82 @@ class CommercialService(
         return result(target,replay,"UNVERIFIED",correlation)
     }
 
+
+    /**
+     * This does not sign a contract. It acknowledges an already signed external
+     * contract only after the canonical Evidence storage proves READY target-bound bytes.
+     */
+    fun confirmSignedContract(contractId: UUID,r: CommercialEvidenceConfirmationRequest,
+                              key: UUID,actor: UUID,correlation: String): CommercialCommandResult {
+        val c = row(
+            "SELECT id,organization_id,opportunity_id,state FROM commercial_contract WHERE id=?",
+            contractId,
+        )
+        val company = c["organization_id"] as UUID
+        access.require(actor,company,"SALES_AWARD")
+        val evidenceId = r.evidenceId.commercialUuid()
+        val replay = execute(key,actor,"COMMERCIAL_CONTRACT_CONFIRM_SIGNED",
+            contractId,"$contractId|$evidenceId",correlation) {
+            access.require(actor,company,"SALES_AWARD")
+            val current = row(
+                "SELECT id,state,opportunity_id FROM commercial_contract WHERE id=? AND organization_id=? FOR UPDATE",
+                contractId,company,
+            )
+            if (current["state"] != "DRAFT")
+                throw commercialError("COMMERCIAL_CONTRACT_ALREADY_HANDLED",
+                    "Contract is no longer a draft.",HttpStatus.CONFLICT)
+            if (!awardEvidence.verifiedEvidence(evidenceId,"COMMERCIAL_CONTRACT",contractId,company))
+                throw commercialError("COMMERCIAL_CONTRACT_EVIDENCE_NOT_READY",
+                    "Verified restricted signed contract evidence is required.",HttpStatus.CONFLICT)
+            if (jdbc.update(
+                """UPDATE commercial_contract SET state='SIGNED',signed_evidence_id=?
+                   WHERE id=? AND organization_id=? AND state='DRAFT'""",
+                evidenceId,contractId,company,
+            ) != 1) throw commercialError(
+                "COMMERCIAL_CONTRACT_STALE","Contract changed.",HttpStatus.CONFLICT,
+            )
+            audit(actor,"COMMERCIAL_CONTRACT_SIGNED_EVIDENCE_CONFIRMED",contractId,"SIGNED",correlation)
+        }
+        return result(contractId,replay,"SIGNED",correlation)
+    }
+
+    fun verifyClientPo(clientPoId: UUID,r: CommercialEvidenceConfirmationRequest,
+                       key: UUID,actor: UUID,correlation: String): CommercialCommandResult {
+        val po = row(
+            "SELECT id,organization_id,contract_id,verified FROM commercial_client_po WHERE id=?",
+            clientPoId,
+        )
+        val company = po["organization_id"] as UUID
+        access.require(actor,company,"SALES_AWARD")
+        val evidenceId = r.evidenceId.commercialUuid()
+        val replay = execute(key,actor,"COMMERCIAL_CLIENT_PO_VERIFY",clientPoId,
+            "$clientPoId|$evidenceId",correlation) {
+            access.require(actor,company,"SALES_AWARD")
+            val current = row(
+                """SELECT p.id,p.verified,c.state AS contract_state
+                   FROM commercial_client_po p
+                   JOIN commercial_contract c ON c.id=p.contract_id
+                   WHERE p.id=? AND p.organization_id=? FOR UPDATE OF p""",
+                clientPoId,company,
+            )
+            if (current["verified"] == true || current["contract_state"] != "SIGNED")
+                throw commercialError("COMMERCIAL_PO_NOT_ELIGIBLE",
+                    "PO must be unverified and the contract signed.",HttpStatus.CONFLICT)
+            if (!awardEvidence.verifiedEvidence(evidenceId,"COMMERCIAL_CLIENT_PO",clientPoId,company))
+                throw commercialError("COMMERCIAL_PO_EVIDENCE_NOT_READY",
+                    "Verified restricted client PO evidence is required.",HttpStatus.CONFLICT)
+            if (jdbc.update(
+                """UPDATE commercial_client_po SET verified=true,evidence_id=?
+                   WHERE id=? AND organization_id=? AND verified=false""",
+                evidenceId,clientPoId,company,
+            ) != 1) throw commercialError(
+                "COMMERCIAL_PO_STALE","Client PO changed.",HttpStatus.CONFLICT,
+            )
+            audit(actor,"COMMERCIAL_CLIENT_PO_EVIDENCE_VERIFIED",clientPoId,"VERIFIED",correlation)
+        }
+        return result(clientPoId,replay,"VERIFIED",correlation)
+    }
+
     fun convertToProject(id: UUID,r: CommercialConversionRequest,key: UUID,
                          actor: UUID,correlation: String): CommercialCommandResult {
         val parent=op(id,actor,"SALES_AWARD")
@@ -593,12 +701,16 @@ class CommercialService(
 }
 
 /** A real signed-contract/Client-PO Evidence target adapter must replace this before activation. */
-fun interface CommercialAwardEvidenceGate {
+interface CommercialAwardEvidenceGate {
+    fun verifiedEvidence(evidenceId: UUID, targetType: String, targetId: UUID, organizationId: UUID): Boolean
     fun verifiedAward(contractId: UUID, clientPoId: UUID, organizationId: UUID): Boolean
 }
-@Component
+
+/** Test-only/no-integration sentinel, deliberately not registered as Spring bean. */
 class FailClosedCommercialAwardEvidenceGate : CommercialAwardEvidenceGate {
-    override fun verifiedAward(contractId: UUID, clientPoId: UUID, organizationId: UUID): Boolean = false
+    override fun verifiedEvidence(evidenceId: UUID, targetType: String,
+                                  targetId: UUID, organizationId: UUID) = false
+    override fun verifiedAward(contractId: UUID, clientPoId: UUID, organizationId: UUID) = false
 }
 @Component
 class CommercialQuoteVersionGuard(private val jdbc: JdbcTemplate): ApprovalSubjectVersionSource {

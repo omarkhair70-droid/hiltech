@@ -12,6 +12,18 @@ data class CreateCommercialOpportunityRequest(
     val expectedDecisionDate: String? = null,
 )
 
+data class CommercialQualifyRequest(
+    val operationId: String,
+    val baseVersion: Long,
+    val discoverySummary: String,
+    val openQuestions: String = "",
+)
+
+data class CommercialEvidenceConfirmationRequest(
+    val operationId: String,
+    val evidenceId: String,
+)
+
 data class CommercialTenderRequest(
     val operationId: String,
     val tenderType: String,
