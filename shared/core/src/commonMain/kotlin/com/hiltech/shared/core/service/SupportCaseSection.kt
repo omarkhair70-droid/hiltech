@@ -60,6 +60,10 @@ fun SupportCaseSection(
     val status = current?.internalState
     val evidenceForWork = state.readyEvidence.filter { it.workOrderId == current?.linkedWorkOrderId }
     val chosenReady = evidenceForWork.firstOrNull { it.id == chosenEvidence }
+    val linkedWorkState = state.workChoices.firstOrNull {
+        it.id == current?.linkedWorkOrderId
+    }?.lifecycleState
+    val workWasAccepted = linkedWorkState in setOf("ACCEPTED", "CLOSED")
     val permitted = !state.loading && current != null && reason.isNotBlank()
 
     Column(
@@ -122,8 +126,13 @@ fun SupportCaseSection(
                         onClick = { chosenEvidence = evidence.id },
                     ) { Text(evidence.label + if (chosenEvidence == evidence.id) " · selected" else "") }
                 }
+                if (!workWasAccepted) {
+                    Text("Existing linked WorkOrder must be ACCEPTED or CLOSED before recording internal resolution.",
+                        color = MaterialTheme.colorScheme.error)
+                }
                 Button(
-                    enabled = permitted && current.linkedWorkOrderId != null && chosenReady != null,
+                    enabled = permitted && workWasAccepted &&
+                        current.linkedWorkOrderId != null && chosenReady != null,
                     onClick = {
                         onRecord("RESOLUTION_RECORDED", reason, current.linkedWorkOrderId,
                             chosenEvidence, current.latestEventNumber)

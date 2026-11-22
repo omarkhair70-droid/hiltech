@@ -8,6 +8,7 @@ on:
       - "server/application/src/main/kotlin/com/hiltech/server/service/**"
       - "server/application/src/test/kotlin/com/hiltech/server/service/**"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/service/**"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/service/**"
       - "scripts/ci/phase11-*.sql"
   workflow_dispatch:
 

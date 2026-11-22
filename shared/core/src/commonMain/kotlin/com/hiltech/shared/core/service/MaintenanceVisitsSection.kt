@@ -147,7 +147,7 @@ fun MaintenanceVisitsSection(
                 Text("Evidence " + finding.evidenceId.take(8),
                     style = MaterialTheme.typography.bodySmall)
             }
-            state.sourceStatus?.let { status ->
+            state.sourceStatus?.takeIf { it.visitId == visit.visitId }?.let { status ->
                 Text("Canonical WorkOrder: " + status.workOrderLifecycleState +
                     " · v" + status.currentWorkVersion)
                 Text("Required checklist: " +
@@ -190,7 +190,8 @@ fun MaintenanceVisitsSection(
                 label = { Text("Observed finding") }, modifier = Modifier.fillMaxWidth(),
             )
             Button(
-                enabled = !state.loading && state.sourceStatus?.canRecordInternalFinding == true &&
+                enabled = !state.loading && state.sourceStatus?.visitId == visit.visitId &&
+                    state.sourceStatus?.canRecordInternalFinding == true &&
                     state.readyEvidence.any { it.evidenceId == evidenceId && it.workOrderId == visit.workOrderId } &&
                     findingType.isNotBlank() && findingSeverity.isNotBlank() && findingDescription.isNotBlank(),
                 onClick = {
