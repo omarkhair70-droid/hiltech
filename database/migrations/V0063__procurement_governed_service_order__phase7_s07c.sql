@@ -16,7 +16,8 @@ CREATE TABLE procurement_service_order_candidate (
   correlation_id varchar(128) NOT NULL CHECK(length(btrim(correlation_id))>0),
   version bigint NOT NULL DEFAULT 1 CHECK(version=1),
   UNIQUE(id,organization_id),
-  UNIQUE(rfq_id,quote_id),
+  -- A rejected approval can be retried as a new immutable candidate.
+  -- The issued order, NOT the candidate, is unique per RFQ.
   FOREIGN KEY(rfq_id,organization_id)
     REFERENCES procurement_service_rfq(id,organization_id) ON DELETE RESTRICT,
   FOREIGN KEY(quote_id,organization_id)
