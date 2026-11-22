@@ -147,7 +147,7 @@ class PurchaseOrderCandidateService @Autowired constructor(
                 .comparison.latestBySupplier.singleOrNull { it.quoteId == request.quoteEvidenceId }
                 ?: stale()
             if (chosen.revisionNumber != request.expectedQuoteRevision ||
-                chosen.quantity != lockedRfq.sourceQuantity.toPlainString() ||
+                BigDecimal(chosen.quantity).compareTo(lockedRfq.sourceQuantity) != 0 ||
                 chosen.unitCode != lockedRfq.sourceUnitCode
             ) stale()
             val quote = sourcing.quotes(rfqId).singleOrNull { it.id == request.quoteEvidenceId }
@@ -159,7 +159,7 @@ class PurchaseOrderCandidateService @Autowired constructor(
             ) stale()
             val moneyTotal = quote.unitPrice.multiply(quote.quantity)
                 .add(quote.taxAmount).setScale(6, RoundingMode.HALF_UP)
-            if (quote.quantity != lockedRfq.sourceQuantity ||
+            if (quote.quantity.compareTo(lockedRfq.sourceQuantity) != 0 ||
                 quote.unitCode != lockedRfq.sourceUnitCode ||
                 moneyTotal.signum() < 0
             ) stale()
