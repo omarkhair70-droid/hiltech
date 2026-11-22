@@ -155,7 +155,7 @@ class CommercialPostgresAuthorizationContractTest {
                     classification_code,client_visibility_mode,security_scan_class,created_at)
                    VALUES (?,?,'COMMERCIAL_CONTRACT',?,'COMMERCIAL_SIGNED_CONTRACT',
                     'application/pdf',120,?,now(),?,'UPLOADED_UNVERIFIED',?,
-                    'HIGHLY_RESTRICTED','INTERNAL_ONLY','ARBITRARY_FILE',now())""",
+                    'HIGHLY_RESTRICTED','INTERNAL_ONLY','SIGNED_DOCUMENT',now())""",
                 evidence,company,contract,sha,actor,"phase10-contract/test/" + evidence,
             )
             jdbc.update(
@@ -169,6 +169,11 @@ class CommercialPostgresAuthorizationContractTest {
             assertFalse(gate.verifiedEvidence(evidence,"COMMERCIAL_CONTRACT",contract,company))
             jdbc.update("UPDATE evidence SET storage_state='READY',finalized_at=now() WHERE id=?",evidence)
             jdbc.update("UPDATE evidence_upload_session SET state='READY',finalized_at=now() WHERE id=?",session)
+            assertTrue(gate.verifiedEvidence(evidence,"COMMERCIAL_CONTRACT",contract,company))
+            // READY + an arbitrary-file class is not a valid finalized signed document.
+            jdbc.update("UPDATE evidence SET security_scan_class='ARBITRARY_FILE' WHERE id=?",evidence)
+            assertFalse(gate.verifiedEvidence(evidence,"COMMERCIAL_CONTRACT",contract,company))
+            jdbc.update("UPDATE evidence SET security_scan_class='SIGNED_DOCUMENT' WHERE id=?",evidence)
             assertTrue(gate.verifiedEvidence(evidence,"COMMERCIAL_CONTRACT",contract,company))
             assertFalse(gate.verifiedEvidence(evidence,"COMMERCIAL_CONTRACT",po,company))
             assertFalse(gate.verifiedEvidence(evidence,"COMMERCIAL_CLIENT_PO",contract,company))

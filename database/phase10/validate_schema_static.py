@@ -27,6 +27,9 @@ assert "sealed_at timestamptz" in sql
 assert "Cannot append lines to sealed BOQ" in sql
 assert "Quote must begin as an unreleased draft" in sql
 assert "Canonical signed contract Evidence is not READY" in sql
+assert "security_scan_class='SIGNED_DOCUMENT'" in sql
+assert "security_scan_class='NATIVE_MEDIA'" in sql
+assert "security_scan_class='ARBITRARY_FILE'" not in sql
 assert "Canonical client PO Evidence is not READY" in sql
 assert "Project handoff requires exact ready award and same client" in sql
 assert "commercial_private_boq_cost_summary" in sql

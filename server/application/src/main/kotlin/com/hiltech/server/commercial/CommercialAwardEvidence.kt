@@ -44,7 +44,8 @@ class JdbcCommercialAwardEvidenceGate(
                 AND e.object_key_ref IS NOT NULL
                 AND e.classification_code='HIGHLY_RESTRICTED'
                 AND e.client_visibility_mode='INTERNAL_ONLY'
-                AND e.security_scan_class='ARBITRARY_FILE'
+                AND ((e.content_type='application/pdf' AND e.security_scan_class='SIGNED_DOCUMENT')
+                  OR (e.content_type IN ('image/png','image/jpeg') AND e.security_scan_class='NATIVE_MEDIA'))
                 AND e.content_type IN ('application/pdf','image/png','image/jpeg')
                 AND e.sha256=u.expected_sha256
                 AND e.size_bytes=u.expected_size_bytes

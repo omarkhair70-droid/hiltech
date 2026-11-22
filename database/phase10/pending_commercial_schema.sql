@@ -494,7 +494,8 @@ BEGIN
        AND e.evidence_type_code='COMMERCIAL_SIGNED_CONTRACT'
        AND e.storage_state='READY' AND u.state='READY'
        AND e.finalized_at IS NOT NULL AND u.finalized_at IS NOT NULL
-       AND e.security_scan_class='ARBITRARY_FILE'
+       AND ((e.content_type='application/pdf' AND e.security_scan_class='SIGNED_DOCUMENT')
+            OR (e.content_type IN ('image/png','image/jpeg') AND e.security_scan_class='NATIVE_MEDIA'))
        AND e.classification_code='HIGHLY_RESTRICTED'
        AND e.client_visibility_mode='INTERNAL_ONLY'
        AND e.sha256=u.expected_sha256 AND e.size_bytes=u.expected_size_bytes
@@ -516,7 +517,8 @@ BEGIN
        AND e.evidence_type_code='COMMERCIAL_CLIENT_PO'
        AND e.storage_state='READY' AND u.state='READY'
        AND e.finalized_at IS NOT NULL AND u.finalized_at IS NOT NULL
-       AND e.security_scan_class='ARBITRARY_FILE'
+       AND ((e.content_type='application/pdf' AND e.security_scan_class='SIGNED_DOCUMENT')
+            OR (e.content_type IN ('image/png','image/jpeg') AND e.security_scan_class='NATIVE_MEDIA'))
        AND e.classification_code='HIGHLY_RESTRICTED'
        AND e.client_visibility_mode='INTERNAL_ONLY'
        AND e.sha256=u.expected_sha256 AND e.size_bytes=u.expected_size_bytes
@@ -567,7 +569,8 @@ BEGIN
        AND ce.object_key_ref IS NOT NULL
        AND ce.classification_code='HIGHLY_RESTRICTED'
        AND ce.client_visibility_mode='INTERNAL_ONLY'
-       AND ce.security_scan_class='ARBITRARY_FILE'
+       AND ((ce.content_type='application/pdf' AND ce.security_scan_class='SIGNED_DOCUMENT')
+        OR (ce.content_type IN ('image/png','image/jpeg') AND ce.security_scan_class='NATIVE_MEDIA'))
        AND ce.content_type IN ('application/pdf','image/png','image/jpeg')
    JOIN evidence_upload_session ces ON ces.evidence_id=ce.id AND ces.state='READY'
        AND ces.finalized_at IS NOT NULL AND ces.expected_sha256=ce.sha256
@@ -580,7 +583,8 @@ BEGIN
        AND pe.object_key_ref IS NOT NULL
        AND pe.classification_code='HIGHLY_RESTRICTED'
        AND pe.client_visibility_mode='INTERNAL_ONLY'
-       AND pe.security_scan_class='ARBITRARY_FILE'
+       AND ((pe.content_type='application/pdf' AND pe.security_scan_class='SIGNED_DOCUMENT')
+        OR (pe.content_type IN ('image/png','image/jpeg') AND pe.security_scan_class='NATIVE_MEDIA'))
        AND pe.content_type IN ('application/pdf','image/png','image/jpeg')
    JOIN evidence_upload_session pes ON pes.evidence_id=pe.id AND pes.state='READY'
        AND pes.finalized_at IS NOT NULL AND pes.expected_sha256=pe.sha256
