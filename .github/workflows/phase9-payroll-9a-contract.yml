@@ -1,4 +1,4 @@
-name: Phase 9 - Payroll 9A source snapshot and native contracts
+name: Phase 9 - Payroll 9A-9C policy, source, release, native
 
 on:
   pull_request:
@@ -8,6 +8,8 @@ on:
       - "server/application/src/test/kotlin/com/hiltech/server/payroll/**"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/payroll/**"
       - "database/migrations/V0070__payroll_period_snapshot__phase9_9a.sql"
+      - "database/migrations/V0071__payroll_draft_run__phase9_9b.sql"
+      - "database/migrations/V0072__payroll_run_release__phase9_9b.sql"
   workflow_dispatch:
 
 permissions:
@@ -59,6 +61,7 @@ jobs:
             --tests com.hiltech.server.payroll.Payroll9aContractTest \
             --tests com.hiltech.server.payroll.Payroll9bDraftPostgresContractTest \
             --tests com.hiltech.server.payroll.Payroll9b9cDomainTest \
+            --tests com.hiltech.server.payroll.Payroll9bSourceAssemblerTest \
             --rerun-tasks
       - name: Compile exact server head
         run: ./gradlew :server:application:bootJar
