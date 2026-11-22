@@ -261,6 +261,12 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
                 ON match.service_invoice_id=inv.id AND match.organization_id=inv.organization_id
               WHERE inv.service_order_id=? AND inv.organization_id=?
                 AND match.result_code='MATCHED'
+                AND match.accepted_evidence_id=(
+                  SELECT latest.evidence_id FROM procurement_service_acceptance latest
+                  WHERE latest.organization_id=inv.organization_id
+                    AND latest.service_order_id=inv.service_order_id
+                  ORDER BY latest.reviewed_at DESC,latest.id DESC LIMIT 1
+                )
                 AND match.revision=(SELECT MAX(latest.revision)
                   FROM procurement_service_invoice_match latest
                   WHERE latest.service_invoice_id=inv.id)
