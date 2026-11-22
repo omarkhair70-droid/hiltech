@@ -326,6 +326,20 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
      */
     /** Lock the real asset/incident/maintenance and stock on issue.
      * Final source-currentness is checked again under these held row locks. */
+    fun lockOfficeAndStockSource(
+        organizationId: UUID, teamId: UUID, deliveryLocationId: UUID,
+        stockItemId: UUID,
+    ): Boolean {
+        val teamLocked = jdbc.query(
+            "SELECT id FROM team WHERE id=? AND organization_id=? AND active=true FOR SHARE",
+            { rs, _ -> rs.getObject("id", UUID::class.java) },
+            teamId, organizationId,
+        ).isNotEmpty()
+        return teamLocked && lockWarehouseAndStockSource(
+            organizationId, deliveryLocationId, stockItemId,
+        )
+    }
+
     fun lockAssetAndStockSource(
         organizationId: UUID, assetId: UUID, incidentId: UUID?,
         maintenanceId: UUID?, deliveryLocationId: UUID, stockItemId: UUID,

@@ -16,6 +16,7 @@ import com.hiltech.shared.core.WarehouseImportReviewDraft
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
 import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
 import com.hiltech.shared.core.procurement.WarehouseReplenishmentSection
+import com.hiltech.shared.core.procurement.OfficeStockNeedSection
 import com.hiltech.shared.core.procurement.AssetPurchaseNeedSection
 import com.hiltech.shared.core.procurement.SupplierSourcingBuyerSection
 import com.hiltech.shared.core.procurement.PurchaseOrderIssuerSection
@@ -2950,6 +2951,26 @@ fun main() {
                                     api = runtime.assetPurchaseNeedApi,
                                     warehouseApi = runtime.physicalWarehouseApi,
                                     organizationId = organization.organizationId,
+                                    installationId = runtime.physicalWarehouseInstallationId,
+                                    newOperationId = { java.util.UUID.randomUUID().toString() },
+                                )
+                            }
+                        }
+                    }
+                    if (System.getenv("HILTECH_OFFICE_STOCK_NEEDS_ENABLED")
+                            ?.equals("true", ignoreCase = true) == true
+                    ) {
+                        val signed = shellState.value as? HiltechShellState.SignedIn
+                        val identity = signed?.identity
+                        val org = identity?.organizations?.firstOrNull { it.primary }
+                            ?: identity?.organizations?.firstOrNull()
+                        if (identity != null && org != null) {
+                            androidx.compose.runtime.key(
+                                identity.identityId, org.organizationId, "office-needs",
+                            ) {
+                                OfficeStockNeedSection(
+                                    api = runtime.officeStockNeedApi,
+                                    organizationId = org.organizationId,
                                     installationId = runtime.physicalWarehouseInstallationId,
                                     newOperationId = { java.util.UUID.randomUUID().toString() },
                                 )

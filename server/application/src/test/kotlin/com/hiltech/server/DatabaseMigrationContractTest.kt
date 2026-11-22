@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(26, result.migrationsExecuted)
+        assertEquals(27, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -390,6 +390,39 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(assetIssueColumns.next())
                 assertEquals(7, assetIssueColumns.getInt(1))
+
+                // V0060: a real current HILTECH team and company Warehouse
+                // backs stocked office requests, with DB source type and scope.
+                val officeChecks = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid='procurement_purchase_requirement'::regclass
+                      AND conname IN ('ck_procurement_requirement_typed_source',
+                        'fk_procurement_office_need_team',
+                        'fk_procurement_office_need_location')
+                    """.trimIndent(),
+                )
+                assertTrue(officeChecks.next())
+                assertEquals(3, officeChecks.getInt(1))
+                val officeGuard = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='procurement_purchase_requirement'::regclass
+                      AND tgname='procurement_office_stock_source_insert_guard'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(officeGuard.next())
+                assertEquals(1, officeGuard.getInt(1))
+                val officeIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename='procurement_purchase_requirement'
+                      AND indexname='idx_procurement_office_team_needs'
+                    """.trimIndent(),
+                )
+                assertTrue(officeIndex.next())
+                assertEquals(1, officeIndex.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not

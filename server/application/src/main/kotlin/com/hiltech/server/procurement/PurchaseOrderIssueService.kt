@@ -112,6 +112,14 @@ class PurchaseOrderIssueService @Autowired constructor(
                     candidate.organizationId, location, clock.instant(),
                 ))
             }
+            "OFFICE_TEAM_STOCK" -> {
+                val location = sourceVerifier?.officeDestination(
+                    requirement, requirements.latestTransition(requirement.id),
+                ) ?: unavailable()
+                listOfNotNull(purchases.warehouseDeliveryDestination(
+                    candidate.organizationId, location, clock.instant(),
+                ))
+            }
             else -> unavailable()
         }
     }
@@ -204,6 +212,15 @@ class PurchaseOrderIssueService @Autowired constructor(
                 } == true && sourceVerifier?.isCurrent(
                     frozenRequirement, requirements.latestTransition(frozenRequirement.id),
                 ) == true
+                "OFFICE_TEAM_STOCK" -> frozenRequirement.officeTeamId?.let { teamId ->
+                    purchases.lockOfficeAndStockSource(
+                        current.organizationId, teamId,
+                        frozenRequirement.officeDeliveryLocationId ?: unavailable(),
+                        current.stockItemId,
+                    )
+                } == true && sourceVerifier?.isCurrent(
+                    frozenRequirement, requirements.latestTransition(frozenRequirement.id),
+                ) == true
                 else -> false
             }
             if (!sourceLocked) unavailable()
@@ -263,6 +280,15 @@ class PurchaseOrderIssueService @Autowired constructor(
                 }
                 "ASSET_MAINTENANCE_OR_REPLACEMENT" -> {
                     val location = sourceVerifier?.assetDestination(
+                        need, requirements.latestTransition(need.id),
+                    ) ?: unavailable()
+                    location == request.deliveryStorageLocationId &&
+                        purchases.warehouseDeliveryDestination(
+                            current.organizationId, location, now,
+                        ) != null
+                }
+                "OFFICE_TEAM_STOCK" -> {
+                    val location = sourceVerifier?.officeDestination(
                         need, requirements.latestTransition(need.id),
                     ) ?: unavailable()
                     location == request.deliveryStorageLocationId &&

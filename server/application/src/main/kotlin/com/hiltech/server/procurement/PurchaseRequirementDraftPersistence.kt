@@ -37,6 +37,10 @@ data class PurchaseRequirementDraftRecord(
     val assetIssueVersion: Long? = null,
     val assetDeliveryLocationId: UUID? = null,
     val assetDeliveryLocationVersion: Long? = null,
+    val officeTeamId: UUID? = null,
+    val officeTeamVersion: Long? = null,
+    val officeDeliveryLocationId: UUID? = null,
+    val officeDeliveryLocationVersion: Long? = null,
 )
 
 data class PurchaseRequirementRevision(
@@ -80,9 +84,11 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
                 source_type, warehouse_storage_location_id, warehouse_source_version,
                 asset_id, asset_source_version, asset_incident_id,
                 asset_maintenance_id, asset_issue_version,
-                asset_delivery_location_id, asset_delivery_location_version
+                asset_delivery_location_id, asset_delivery_location_version,
+                office_team_id, office_team_version,
+                office_delivery_location_id, office_delivery_location_version
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?, 1,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
             draft.id, draft.operationId, draft.organizationId, draft.workOrderId,
             draft.sourceWorkVersion, draft.stockItemId, draft.stockItemVersion,
@@ -94,6 +100,8 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
             draft.assetId, draft.assetSourceVersion, draft.assetIncidentId,
             draft.assetMaintenanceId, draft.assetIssueVersion,
             draft.assetDeliveryLocationId, draft.assetDeliveryLocationVersion,
+            draft.officeTeamId, draft.officeTeamVersion,
+            draft.officeDeliveryLocationId, draft.officeDeliveryLocationVersion,
         ) == 1)
     }
 
@@ -220,6 +228,16 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
         organizationId, assetId, incidentId, maintenanceId, stockItemId,
     ) == true
 
+    fun forOfficeTeam(organizationId: UUID, teamId: UUID):
+        List<PurchaseRequirementDraftRecord> = jdbc.query(
+        """
+        SELECT * FROM procurement_purchase_requirement
+        WHERE organization_id=? AND source_type='OFFICE_TEAM_STOCK'
+          AND office_team_id=?
+        ORDER BY created_at DESC, id DESC LIMIT 100
+        """.trimIndent(), { row, _ -> row.draft() }, organizationId, teamId,
+    )
+
     fun forAsset(assetId: UUID): List<PurchaseRequirementDraftRecord> = jdbc.query(
         """
         SELECT * FROM procurement_purchase_requirement
@@ -317,5 +335,9 @@ class PurchaseRequirementDraftPersistence(private val jdbc: JdbcTemplate) {
         assetIssueVersion = getLong("asset_issue_version").takeUnless { wasNull() },
         assetDeliveryLocationId = getObject("asset_delivery_location_id", UUID::class.java),
         assetDeliveryLocationVersion = getLong("asset_delivery_location_version").takeUnless { wasNull() },
+        officeTeamId = getObject("office_team_id", UUID::class.java),
+        officeTeamVersion = getLong("office_team_version").takeUnless { wasNull() },
+        officeDeliveryLocationId = getObject("office_delivery_location_id", UUID::class.java),
+        officeDeliveryLocationVersion = getLong("office_delivery_location_version").takeUnless { wasNull() },
     )
 }

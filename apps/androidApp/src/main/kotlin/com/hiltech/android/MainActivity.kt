@@ -37,6 +37,7 @@ import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
 import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
 import com.hiltech.shared.core.procurement.WarehouseReplenishmentSection
+import com.hiltech.shared.core.procurement.OfficeStockNeedSection
 import com.hiltech.shared.core.procurement.AssetPurchaseNeedSection
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeSection
 import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceSection
@@ -166,6 +167,16 @@ class MainActivity : ComponentActivity() {
                                     AssetPurchaseNeedSection(
                                         api = hiltechApplication.assetPurchaseNeedApi,
                                         warehouseApi = hiltechApplication.warehouseApi,
+                                        organizationId = organization.organizationId,
+                                        installationId = hiltechApplication.installationId,
+                                        newOperationId = { UUID.randomUUID().toString() },
+                                    )
+                                }
+                            }
+                            if (BuildConfig.HILTECH_OFFICE_STOCK_NEEDS_ENABLED) {
+                                key(identity.identityId, organization.organizationId, "office-needs") {
+                                    OfficeStockNeedSection(
+                                        api = hiltechApplication.officeStockNeedApi,
                                         organizationId = organization.organizationId,
                                         installationId = hiltechApplication.installationId,
                                         newOperationId = { UUID.randomUUID().toString() },

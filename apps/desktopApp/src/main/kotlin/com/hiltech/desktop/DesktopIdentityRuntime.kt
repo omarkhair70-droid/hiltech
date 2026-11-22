@@ -51,6 +51,7 @@ import com.hiltech.shared.core.identity.auth.NativeOidcSessionManager
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.procurement.PurchaseRequirementApiClient
 import com.hiltech.shared.core.procurement.WarehouseReplenishmentApiClient
+import com.hiltech.shared.core.procurement.OfficeStockNeedApiClient
 import com.hiltech.shared.core.procurement.AssetPurchaseNeedApiClient
 import com.hiltech.shared.core.procurement.SupplierSourcingApiClient
 import com.hiltech.shared.core.procurement.PurchaseOrderCandidateApiClient
@@ -240,6 +241,7 @@ class DesktopIdentityRuntime(
 
     internal val procurementApi = PurchaseRequirementApiClient(productApi)
     internal val warehouseReplenishmentApi = WarehouseReplenishmentApiClient(productApi)
+    internal val officeStockNeedApi = OfficeStockNeedApiClient(productApi)
     internal val assetPurchaseNeedApi = AssetPurchaseNeedApiClient(productApi)
     internal val supplierSourcingApi = SupplierSourcingApiClient(productApi)
     internal val purchaseOrderCandidateApi = PurchaseOrderCandidateApiClient(productApi)

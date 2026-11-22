@@ -22,6 +22,7 @@ class ProcurementDemandSourceVerifier(
     private val stock: StockLedgerPersistence,
     private val clock: Clock,
     private val assetSource: AssetPurchaseSource,
+    private val officeSource: OfficeStockSource,
 ) {
     fun isCurrent(
         root: PurchaseRequirementDraftRecord,
@@ -64,9 +65,14 @@ class ProcurementDemandSourceVerifier(
             }
             "ASSET_MAINTENANCE_OR_REPLACEMENT" ->
                 assetSource.current(root, last)
+            "OFFICE_TEAM_STOCK" -> officeSource.current(root, last)
             else -> false
         }
     }
+
+    fun officeDestination(root: PurchaseRequirementDraftRecord,
+                          last: PurchaseRequirementTransitionRecord?): UUID? =
+        officeSource.destination(root, last)
 
     fun assetDestination(root: PurchaseRequirementDraftRecord,
                          last: PurchaseRequirementTransitionRecord?): UUID? =
