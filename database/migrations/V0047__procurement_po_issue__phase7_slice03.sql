@@ -3,6 +3,10 @@
 -- A supplier-facing transmission, warehouse receipt, payable or payment is NOT issued.
 CREATE UNIQUE INDEX uq_po_candidate_id_org
     ON procurement_po_candidate(id, organization_id);
+CREATE UNIQUE INDEX uq_po_approval_request_id_org
+    ON approval_request(id, organization_id);
+CREATE UNIQUE INDEX uq_po_issuer_binding_id_org
+    ON approval_authority_binding(id, organization_id);
 CREATE UNIQUE INDEX uq_po_storage_location_id_org
     ON storage_location(id, organization_id);
 
@@ -44,6 +48,10 @@ CREATE TABLE procurement_purchase_order (
     CONSTRAINT uq_po_organization_serial UNIQUE (organization_id, po_serial),
     CONSTRAINT fk_po_candidate_org FOREIGN KEY (candidate_id, organization_id)
        REFERENCES procurement_po_candidate(id, organization_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_po_approval_request_org FOREIGN KEY (approval_request_id, organization_id)
+       REFERENCES approval_request(id, organization_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_po_issuer_binding_org FOREIGN KEY (issuer_authority_binding_id, organization_id)
+       REFERENCES approval_authority_binding(id, organization_id) ON DELETE RESTRICT,
     CONSTRAINT fk_po_location_org FOREIGN KEY (delivery_storage_location_id, organization_id)
        REFERENCES storage_location(id, organization_id) ON DELETE RESTRICT,
     CONSTRAINT fk_po_stock_item_org FOREIGN KEY (stock_item_id, organization_id)
