@@ -2900,6 +2900,9 @@ fun main() {
                             ) {
                                 PurchaseOrderIssuerSection(
                                     api = runtime.purchaseOrderIssueApi,
+                                    cancellationEnabled =
+                                        System.getenv("HILTECH_PO_CANCELLATION_UI_ENABLED")
+                                            ?.equals("true", ignoreCase = true) == true,
                                     organizationId = organization.organizationId,
                                     installationId = runtime.physicalWarehouseInstallationId,
                                     newOperationId = { java.util.UUID.randomUUID().toString() },
