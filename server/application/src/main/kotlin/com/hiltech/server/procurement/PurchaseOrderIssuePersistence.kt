@@ -93,6 +93,7 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
         organizationId: UUID,
         destinationId: UUID,
         projectId: UUID,
+        siteId: UUID,
         at: Instant,
     ): Boolean = jdbc.queryForObject(
         """
@@ -103,10 +104,11 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
             AND (l.active_until IS NULL OR l.active_until > ?)
             AND (l.project_id IS NULL OR l.project_id = ?)
             AND l.kind IN ('MAIN_WAREHOUSE','WAREHOUSE','PROJECT_STORAGE','SITE_STORAGE')
+            AND (l.kind <> 'SITE_STORAGE' OR l.site_id = ?)
         )
         """.trimIndent(),
         Boolean::class.java, destinationId, organizationId,
-        at.atOffset(ZoneOffset.UTC), at.atOffset(ZoneOffset.UTC), projectId,
+        at.atOffset(ZoneOffset.UTC), at.atOffset(ZoneOffset.UTC), projectId, siteId,
     ) == true
 
     /** Atomic company-scoped PO serial, allocated only inside idempotent issue transaction. */
