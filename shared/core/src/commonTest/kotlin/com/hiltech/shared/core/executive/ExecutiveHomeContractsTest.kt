@@ -11,6 +11,7 @@ class ExecutiveHomeContractsTest {
     @Test
     fun roundTripPreservesUnavailableAndUnknownInsteadOfManufacturingMetrics() {
         val original = ExecutiveHomeDto(
+            viewerIdentityId = "12345678-1234-4123-8123-123456789abc",
             organizationId = "dd09c3a1-447e-4ca7-97d4-9aab2dabfba9",
             asOf = "2026-11-22T20:00:00Z",
             correlationId = "trace-1",
@@ -63,6 +64,7 @@ class ExecutiveHomeContractsTest {
             codec.encodeToString(ExecutiveHomeDto.serializer(), original),
         )
 
+        assertEquals(original.viewerIdentityId, decoded.viewerIdentityId)
         assertEquals("UNAVAILABLE", decoded.needsYou.status)
         assertEquals("SOURCE_READ_FAILED_OR_NOT_AUTHORIZED", decoded.needsYou.unavailableReason)
         assertTrue(decoded.needsYou.items.isEmpty())
