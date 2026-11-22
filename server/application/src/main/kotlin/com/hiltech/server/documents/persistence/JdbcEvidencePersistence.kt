@@ -529,7 +529,11 @@ class JdbcEvidencePersistence(
         uploadExpiresAt: Instant,
         createdAt: Instant,
     ) {
-        require(targetType in setOf("EMPLOYEE_DOCUMENT", "SUPPLIER_QUOTE_DOCUMENT", "SUPPLIER_INVOICE_DOCUMENT", "PO_RECEIVING_DELIVERY_NOTE"))
+        require(targetType in setOf(
+            "EMPLOYEE_DOCUMENT", "SUPPLIER_QUOTE_DOCUMENT", "SUPPLIER_INVOICE_DOCUMENT",
+            "PO_RECEIVING_DELIVERY_NOTE", "SERVICE_QUOTE_DOCUMENT",
+            "SERVICE_PURCHASE_DOCUMENT",
+        ))
         jdbc.update(
             """
             INSERT INTO evidence (
