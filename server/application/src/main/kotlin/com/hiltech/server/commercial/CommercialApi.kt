@@ -1,8 +1,11 @@
 package com.hiltech.server.commercial
 
 import com.hiltech.server.platform.HiltechRequestContext
+import com.hiltech.server.platform.HiltechRequestContextSnapshot
+import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.platform.IdempotencyKeyContract
 import jakarta.servlet.http.HttpServletRequest
+import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -186,3 +189,12 @@ class CommercialController(private val service: CommercialService) {
             HiltechRequestContext.current(http).correlationId,
         )
 }
+
+
+private fun HiltechRequestContextSnapshot.requireIdentityId(): UUID =
+    identityId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        ?: throw ProductApiException(
+            code = "UNAUTHENTICATED",
+            message = "Authenticated HILTECH identity required.",
+            status = HttpStatus.UNAUTHORIZED,
+        )
