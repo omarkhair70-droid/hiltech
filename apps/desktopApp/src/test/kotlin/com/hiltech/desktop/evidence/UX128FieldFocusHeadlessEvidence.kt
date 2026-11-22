@@ -50,6 +50,7 @@ fun main() = runBlocking<Unit> {
     Files.createDirectories(dir)
     var fieldState by androidx.compose.runtime.mutableStateOf(fixtureState("today"))
     val selected = mutableListOf<String>()
+    var activeActorScope by androidx.compose.runtime.mutableStateOf("actor-A:org-A:work")
     val oneWorkScroll = ScrollState(0)
     val selectedScene = ImageComposeScene(width = 430, height = 960, coroutineContext = coroutineContext) {
         Column(Modifier.fillMaxSize().background(Color.White).verticalScroll(oneWorkScroll).padding(16.dp)) {
@@ -61,7 +62,7 @@ fun main() = runBlocking<Unit> {
                         fieldState = fixtureState("detail")
                     },
                     presentation = FieldWorkPresentation.FOCUSED_COMPACT,
-                    focusScopeKey = "synthetic-actor:synthetic-org:warehouse-job-study",
+                    focusScopeKey = activeActorScope,
                     focusHostScroll = oneWorkScroll,
                 )
         }
@@ -109,6 +110,21 @@ fun main() = runBlocking<Unit> {
         }
         save(selectedScene, dir.resolve("ux128-field-14-regranted-explicit-focus.png"), 430, 960)
         println("UX128_FIELD_REVOKE_REGRANT_PASS removed=PASS no_auto_focus=PASS explicit_reselect=PASS")
+
+        // A session/organization/context switch is a HARD route-state reset,
+        // even if a currently cached read fixture happens to contain the same
+        // WorkOrder ID. No previous actor's selected detail may carry over.
+        activeActorScope = "actor-B:org-B:work"
+        settleNativeLayout(selectedScene)
+        save(selectedScene, dir.resolve("ux128-field-15-new-actor-must-select.png"), 430, 960)
+        check(selected.size == 3) { "Scope switch must not auto-select a WorkOrder." }
+        selectedScene.sendPointerEvent(PointerEventType.Press, Offset(187f, 148f))
+        selectedScene.sendPointerEvent(PointerEventType.Release, Offset(187f, 148f))
+        settleNativeLayout(selectedScene)
+        check(selected.size == 4 && selected.last() == WORK_ORDER_ID) {
+            "New actor scope requires a fresh explicit source selection: $selected"
+        }
+        println("UX128_FIELD_SCOPE_SWITCH_PASS old_focus_cleared=PASS new_explicit_select=PASS")
     } finally {
         selectedScene.close()
     }
