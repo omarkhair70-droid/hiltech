@@ -6,7 +6,6 @@ import com.hiltech.server.platform.IdempotentCommandExecutor
 import com.hiltech.server.platform.IdempotentCommandOutcome
 import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
-import com.hiltech.server.procurement.ProcurementPoReceivingGuard
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
@@ -73,7 +72,7 @@ class ReceivingService(
     private val audit: AuditEventWriter,
     private val events: ApplicationEventPublisher,
     private val clock: Clock,
-    private val poReceiving: ProcurementPoReceivingGuard,
+    private val poReceiving: PoReceivingPolicyPort,
 ) {
     fun directory(actor: UUID, warehouseId: UUID, afterUpdatedAt: String? = null,
         afterId: UUID? = null): ReceivingDirectoryView {
