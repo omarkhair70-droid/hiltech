@@ -144,6 +144,7 @@ class Payroll9bRunReleaseService(
     private val authority: Payroll9aAuthorityPort,
     private val guard: PayrollRunApprovalVersionSource,
     private val decision: PayrollRunReleaseDecisionPort,
+    private val corrections: Payroll9cCorrectionService,
     private val audit: AuditEventWriter,
     private val clock: Clock,
     @Value("\${hiltech.payroll.run-approval-policy-key:}") private val policyKey: String,
@@ -168,10 +169,8 @@ class Payroll9bRunReleaseService(
             "SELECT id FROM payroll_period WHERE id = ? AND organization_id = ? FOR UPDATE",
             UUID::class.java, UUID.fromString(run.payrollPeriodId), org,
         ) ?: Payroll9aPolicy.fail("PAYROLL_PERIOD_NOT_FOUND", HttpStatus.NOT_FOUND)
-        val subject = ApprovalSubjectRef(org, "PAYROLL_RUN_VERSION", runId, 1)
-        if (!guard.isCurrent(subject)) {
-            Payroll9aPolicy.fail("PAYROLL_RELEASE_SOURCE_STALE", HttpStatus.CONFLICT)
-        }
+        // A retry of an already committed command remains a historical
+        // replay even if a later correction generation now exists.
         val existing = findByOperation(operationId)
         if (existing != null) {
             if (existing.org != org || existing.runId != runId ||
@@ -179,6 +178,10 @@ class Payroll9bRunReleaseService(
                 existing.policyKey != policyKey
             ) Payroll9aPolicy.fail("PAYROLL_RELEASE_IDEMPOTENCY_CONFLICT", HttpStatus.CONFLICT)
             return toDto(existing, replayed = true)
+        }
+        val subject = ApprovalSubjectRef(org, "PAYROLL_RUN_VERSION", runId, 1)
+        if (!guard.isCurrent(subject)) {
+            Payroll9aPolicy.fail("PAYROLL_RELEASE_SOURCE_STALE", HttpStatus.CONFLICT)
         }
         val policy = decision.resolve(actorId, subject, policyKey)
             ?: Payroll9aPolicy.fail("PAYROLL_RELEASE_APPROVAL_REQUIRED", HttpStatus.CONFLICT)
@@ -188,6 +191,10 @@ class Payroll9bRunReleaseService(
             (policy.path == "APPROVED_EXCEPTION" && policy.approvalRequestId == null) ||
             (policy.path == "ROUTINE_AUTHORIZED" && policy.approvalRequestId != null)
         ) Payroll9aPolicy.fail("PAYROLL_RELEASE_INVALID_DECISION", HttpStatus.CONFLICT)
+        // A previous released payroll needs signed HR+Finance correction
+        // clearance before another release. This and the release INSERT share
+        // one transaction: failures roll back the correction ledger too.
+        corrections.recordIfCorrecting(actorId, run, operationId, correlationId)
         val id = UUID.nameUUIDFromBytes(
             ("hiltech:payroll-release:" + operationId).toByteArray(StandardCharsets.UTF_8),
         )

@@ -285,6 +285,13 @@ class Payroll9bDraftPostgresContractTest {
         }
         val releases = Payroll9bRunReleaseService(
             jdbc, service, permission, guard, policyDecision,
+            Payroll9cCorrectionService(
+                jdbc,
+                StaticListableBeanFactory().getBeanProvider(
+                    PayrollVerifiedCorrectionSourcePort::class.java,
+                ),
+                AuditEventWriter.NOOP, clock,
+            ),
             AuditEventWriter.NOOP, clock, "PAYROLL_REVIEW_TEST",
         )
         assertThrows<ProductApiException> {
