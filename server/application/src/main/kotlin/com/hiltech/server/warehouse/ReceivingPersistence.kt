@@ -39,6 +39,7 @@ data class ReceivingDiscrepancyView(
 data class ReceivingDetailView(
     val record: ReceivingRecordView, val lines: List<ReceivingLineView>, val discrepancies: List<ReceivingDiscrepancyView>,
     val rejectedLineIds: List<UUID> = emptyList(),
+    val deliveryNoteReady: Boolean = false,
 )
 data class ReceivingDirectoryView(
     val items: List<ReceivingRecordView>, val limited: Boolean,
@@ -156,6 +157,24 @@ class ReceivingPersistence(private val jdbc: JdbcTemplate) {
     ) == 1
 
     /** A PO-line rejection is physical inspection truth, not inventory intake. */
+    fun hasReadyPoDeliveryNote(recordId: UUID, organizationId: UUID): Boolean =
+        jdbc.queryForObject(
+            """
+            SELECT EXISTS (
+              SELECT 1 FROM evidence e
+              JOIN procurement_po_receiving_link b
+                ON b.receiving_record_id=e.target_id AND b.organization_id=e.organization_id
+              WHERE e.target_type='PO_RECEIVING_DELIVERY_NOTE'
+                AND e.target_id=? AND e.organization_id=?
+                AND e.evidence_requirement_key='PO_DELIVERY_NOTE_BINARY'
+                AND e.evidence_type_code='PO_DELIVERY_NOTE'
+                AND e.storage_state='READY'
+                AND e.classification_code='HIGHLY_RESTRICTED'
+                AND e.client_visibility_mode='INTERNAL_ONLY'
+            )
+            """.trimIndent(), Boolean::class.java, recordId, organizationId,
+        ) == true
+
     fun poRejectedLineIds(recordId: UUID): List<UUID> = jdbc.query(
         """
         SELECT receiving_line_id FROM procurement_po_receiving_rejection_event
