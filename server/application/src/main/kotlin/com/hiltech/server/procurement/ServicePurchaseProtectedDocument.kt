@@ -112,7 +112,7 @@ class ServicePurchaseProtectedDocumentService @org.springframework.beans.factory
 
 @RestController
 class ServicePurchaseProtectedDocumentController(
-    private val protected:ServicePurchaseProtectedDocumentService,
+    private val delivery:ServicePurchaseProtectedDocumentService,
 ) {
     @PostMapping("/v1/service-procurement/evidence/{id}/protected-document")
     fun read(req:HttpServletRequest,@PathVariable id:UUID):ResponseEntity<ByteArray> {
@@ -120,7 +120,7 @@ class ServicePurchaseProtectedDocumentController(
         val actor=c.identityId?.let {runCatching {UUID.fromString(it)}.getOrNull()}
             ?:throw ProductApiException("UNAUTHENTICATED","Authentication required.",
                 HttpStatus.UNAUTHORIZED)
-        val file=protected.read(actor,id,c.correlationId)
+        val file=delivery.read(actor,id,c.correlationId)
         val ext=when(file.contentType) {
             "application/pdf"->"pdf"
             "image/jpeg"->"jpg"
