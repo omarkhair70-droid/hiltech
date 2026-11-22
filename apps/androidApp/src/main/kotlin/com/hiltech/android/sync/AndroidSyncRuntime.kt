@@ -91,6 +91,80 @@ class AndroidSyncRuntime(
             database = database,
             transport = transport,
             replayScope = CommandReplayScope(verifiedActor, installationId),
+            excludeCommandTypes = setOf("SubmitWorkCompletion"),
+        ).replayOnce()
+
+        if (
+            database.pendingCommandDao()
+                .pausedForReauthBeforeCompletion(verifiedActor, installationId) > 0
+        ) {
+            return AndroidSyncRunResult.ReauthenticationRequired
+        }
+
+        if (
+            summary.retryable > 0 ||
+            database.pendingCommandDao().earliestRetryBeforeCompletion(verifiedActor, installationId) != null
+        ) {
+            return AndroidSyncRunResult.Retry
+        }
+
+        return AndroidSyncRunResult.Completed(summary)
+    }
+
+    /**
+     * Terminal replay stage, intentionally separate from field transitions.
+     * Call this only after Evidence and engineering-test replay has completed.
+     */
+    suspend fun replayCompletionOnce(): AndroidSyncRunResult {
+        if (apiBaseUrl.isBlank()) {
+            return AndroidSyncRunResult.RuntimeNotConfigured
+        }
+        val verifiedActor =
+            try {
+                verifiedActorProvider.currentVerifiedActorId()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                if (
+                    failure is com.hiltech.shared.core.network.HiltechApiException &&
+                    failure.httpStatus in setOf(401, 403, 404)
+                ) {
+                    return AndroidSyncRunResult.ReauthenticationRequired
+                }
+                return AndroidSyncRunResult.Retry
+            }?.takeIf { it.isNotBlank() }
+                ?: return AndroidSyncRunResult.ReauthenticationRequired
+
+        val accessToken =
+            sessionTokenProvider.currentAccessToken()
+                ?.takeIf { it.isNotBlank() }
+                ?: return AndroidSyncRunResult.ReauthenticationRequired
+
+        database.pendingCommandDao().releaseReauthenticatedCommands(
+            verifiedActor,
+            installationId,
+            System.currentTimeMillis(),
+        )
+
+        val transport = KtorPendingCommandTransport(
+            client = httpClient,
+            baseUrl = apiBaseUrl,
+            tokenProvider = AccessTokenProvider { accessToken },
+            correlationIdProvider = CorrelationIdProvider {
+                UUID.randomUUID().toString()
+            },
+            traceParentProvider = TraceParentProvider { null },
+            clientMetadata = NativeClientMetadata(
+                platform = "android",
+                version = clientVersion,
+                installationId = installationId,
+            ),
+        )
+        val summary = PendingCommandReplayEngine(
+            database = database,
+            transport = transport,
+            replayScope = CommandReplayScope(verifiedActor, installationId),
+            includeCommandTypes = setOf("SubmitWorkCompletion"),
         ).replayOnce()
 
         if (
@@ -99,14 +173,15 @@ class AndroidSyncRuntime(
         ) {
             return AndroidSyncRunResult.ReauthenticationRequired
         }
-
         if (
             summary.retryable > 0 ||
-            database.pendingCommandDao().earliestRetryAtForActor(verifiedActor, installationId) != null
+            database.pendingCommandDao().earliestRetryAtForActor(
+                verifiedActor,
+                installationId,
+            ) != null
         ) {
             return AndroidSyncRunResult.Retry
         }
-
         return AndroidSyncRunResult.Completed(summary)
     }
 }

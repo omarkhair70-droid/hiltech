@@ -120,6 +120,32 @@ class FieldAssignedWorkApiClient(
         )
     }
 
+    /** Server-authoritative completion. Offline capture is a separate frozen intent. */
+    suspend fun submitCompletion(
+        workOrderId: String,
+        request: FieldCompletionSubmissionDto,
+        installationId: String,
+    ): FieldCompletionSubmissionReceiptDto {
+        require(UUID.matches(workOrderId.trim()))
+        require(UUID.matches(request.operationId.trim()))
+        require(UUID.matches(request.assignmentId.trim()))
+        return api.request(
+            HttpMethod.Post,
+            "/v1/work-orders/" + workOrderId.trim() + "/submit-completion",
+            HiltechRequestOptions(
+                installationId = installationId,
+                idempotencyKey = request.operationId,
+            ),
+            requestBody = json.encodeToString(request),
+            decode = {
+                json.decodeFromString(
+                    FieldCompletionSubmissionReceiptDto.serializer(),
+                    it,
+                )
+            },
+        )
+    }
+
     /** No offline fallback or persisted personal stock: source auth is checked on every GET. */
     suspend fun personalIssuedStock(
         workOrderId: String,

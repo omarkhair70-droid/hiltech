@@ -22,6 +22,20 @@ class FieldAssignedWorkService(
     private val clock: Clock,
     @Value("\${hiltech.field.engineering-tests.enabled:false}")
     private val engineeringTestsEnabled: Boolean = false,
+    private val completionGateSource:
+        FieldCompletionGateSourcePort =
+        FieldCompletionGateSourcePort {
+            FieldCompletionGate(
+                available = false,
+                satisfied = false,
+                reasonCodes =
+                    listOf(
+                        "COMPLETION_UNAVAILABLE",
+                    ),
+            )
+        },
+    @Value("\${hiltech.field.completion.enabled:false}")
+    private val completionEnabled: Boolean = false,
 ) {
     fun today(
         actorUserId: UUID,
@@ -124,6 +138,21 @@ class FieldAssignedWorkService(
                         it.evidencePolicy.revision,
                 )
             } ?: emptyList()
+        val completionGate =
+            if (completionEnabled) {
+                completionGateSource.evaluate(
+                    order,
+                )
+            } else {
+                FieldCompletionGate(
+                    available = false,
+                    satisfied = false,
+                    reasonCodes =
+                        listOf(
+                            "COMPLETION_UNAVAILABLE",
+                        ),
+                )
+            }
 
         return TechnicianJobBundle(
             workOrderId =
@@ -197,6 +226,20 @@ class FieldAssignedWorkService(
                                     it.allowedContentTypes.isNotEmpty()
                             } &&
                             authorization.canUseAssignedWork(actorUserId, workOrderId, "can_submit_completion"),
+                    submitOffline =
+                        completionEnabled &&
+                            completionGate.available &&
+                            completionGate.satisfied &&
+                            context.project.lifecycleState == "ACTIVE" &&
+                            order.lifecycleState in setOf(
+                                WorkOrderLifecycle.IN_PROGRESS,
+                                WorkOrderLifecycle.REWORK_REQUIRED,
+                            ) &&
+                            authorization.canUseAssignedWork(
+                                actorUserId,
+                                workOrderId,
+                                "can_submit_completion",
+                            ),
                     engineeringTestCaptureOffline =
                         engineeringTestsEnabled &&
                             context.project.lifecycleState == "ACTIVE" &&
@@ -215,6 +258,8 @@ class FieldAssignedWorkService(
                     authoritativeOfflineQueue = false,
                 ),
             asOf = now,
+            completionGate =
+                completionGate,
         )
     }
 

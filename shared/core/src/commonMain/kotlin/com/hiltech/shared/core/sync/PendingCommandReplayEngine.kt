@@ -99,13 +99,17 @@ class PendingCommandReplayEngine(
     private val clock: SyncClock = SystemSyncClock,
     private val backoffPolicy: FirstSliceRetryBackoffPolicy = FirstSliceRetryBackoffPolicy(),
     private val replayScope: CommandReplayScope? = null,
+    private val includeCommandTypes: Set<String>? = null,
+    private val excludeCommandTypes: Set<String> = emptySet(),
 ) {
     suspend fun replayOnce(): ReplaySummary {
         val now = clock.nowEpochMs()
         val candidates = database.pendingCommandDao().listSyncable(now).filter { command ->
-            replayScope == null ||
+            (replayScope == null ||
                 (command.actorUserIdentityId == replayScope.actorIdentityId &&
-                    command.deviceId == replayScope.installationId)
+                    command.deviceId == replayScope.installationId)) &&
+                (includeCommandTypes == null || command.commandType in includeCommandTypes) &&
+                command.commandType !in excludeCommandTypes
         }
 
         var attempted = 0

@@ -222,6 +222,12 @@ data class FieldExecutionCapabilitiesResponse(
     val engineeringTestCaptureOffline: Boolean,
 )
 
+data class FieldCompletionGateResponse(
+    val available: Boolean,
+    val satisfied: Boolean,
+    val reasonCodes: List<String>,
+)
+
 data class TechnicianJobBundleResponse(
     val workOrderId: String,
     val workOrderCode: String,
@@ -247,6 +253,7 @@ data class TechnicianJobBundleResponse(
     val waitingReasonCodes: List<String>,
     val executionCapabilities: FieldExecutionCapabilitiesResponse,
     val asOf: String,
+    val completionGate: FieldCompletionGateResponse,
 )
 
 @RestController
@@ -594,6 +601,15 @@ private fun TechnicianJobBundle.response() =
                         .authoritativeOfflineQueue,
             ),
         asOf = asOf.toString(),
+        completionGate =
+            FieldCompletionGateResponse(
+                available =
+                    completionGate.available,
+                satisfied =
+                    completionGate.satisfied,
+                reasonCodes =
+                    completionGate.reasonCodes,
+            ),
     )
 
 private fun FieldProjectContext.response() =

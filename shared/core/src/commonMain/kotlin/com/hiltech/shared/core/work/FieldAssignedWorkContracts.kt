@@ -294,4 +294,17 @@ data class TechnicianJobBundleDto(
     val waitingReasonCodes: List<String> = emptyList(),
     val executionCapabilities: FieldExecutionCapabilitiesDto,
     val asOf: String,
+    val completionGate:
+        FieldCompletionGateDto =
+        FieldCompletionGateDto(),
+)
+
+@kotlinx.serialization.Serializable
+data class FieldCompletionGateDto(
+    val available: Boolean = false,
+    val satisfied: Boolean = false,
+    val reasonCodes: List<String> =
+        listOf(
+            "COMPLETION_UNAVAILABLE",
+        ),
 )

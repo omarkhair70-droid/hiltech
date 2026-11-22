@@ -64,6 +64,7 @@ fun AssignedWorkSection(
     onSelectWork: (String) -> Unit,
     captureFieldIntent: Boolean = false,
     onQueueFieldIntent: (FieldExecutionIntent, String?) -> Unit = { _, _ -> },
+    onQueueCompletion: () -> Unit = {},
     captureEvidence: Boolean = false,
     onSelectEvidenceFile: (String) -> Unit = {},
     onTakeEvidencePhoto: (String) -> Unit = {},
@@ -109,6 +110,7 @@ fun AssignedWorkSection(
                                 pending = state.pendingFieldIntent,
                                 feedback = state.fieldIntentMessage,
                                 onQueue = onQueueFieldIntent,
+                                onQueueCompletion = onQueueCompletion,
                                 captureEvidence = captureEvidence,
                                 localEvidence = state.localEvidence,
                                 evidenceFeedback = state.evidenceMessage,
@@ -154,6 +156,7 @@ fun AssignedWorkSection(
                                 pending = state.pendingFieldIntent,
                                 feedback = state.fieldIntentMessage,
                                 onQueue = onQueueFieldIntent,
+                                onQueueCompletion = onQueueCompletion,
                                 captureEvidence = captureEvidence,
                                 localEvidence = state.localEvidence,
                                 evidenceFeedback = state.evidenceMessage,
@@ -334,6 +337,7 @@ private fun JobBundleDetail(
     pending: FieldQueuedIntent?,
     feedback: String?,
     onQueue: (FieldExecutionIntent, String?) -> Unit,
+    onQueueCompletion: () -> Unit,
     captureEvidence: Boolean,
     localEvidence: List<LocalEvidenceEntity>,
     evidenceFeedback: String?,
@@ -424,6 +428,59 @@ private fun JobBundleDetail(
             feedback = feedback,
             onQueue = onQueue,
         )
+
+        if (bundle.completionGate.available) {
+            Text(
+                "تسليم العمل للمراجعة",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            val gate = bundle.completionGate
+            if (!gate.satisfied) {
+                Text("التسليم متوقف لحين استيفاء المتطلبات:")
+                gate.reasonCodes.forEach { reason ->
+                    Text("• " + reason)
+                }
+            }
+            if (pending?.commandType == "SubmitWorkCompletion") {
+                Text("طلب التسليم محفوظ محليًا: " + pending.state)
+            }
+            var confirmCompletion by remember(
+                bundle.workOrderId,
+                bundle.workOrderVersion,
+            ) { mutableStateOf(false) }
+            if (confirmCompletion) {
+                Text("سيُرسل هذا العمل إلى المراجع، ولن يُعتبر مقبولًا قبل قرار المراجعة.")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { confirmCompletion = false }) {
+                        Text("إلغاء")
+                    }
+                    OutlinedButton(
+                        enabled =
+                            !cached &&
+                                pending == null &&
+                                bundle.executionCapabilities.submitOffline &&
+                                gate.satisfied,
+                        onClick = {
+                            confirmCompletion = false
+                            onQueueCompletion()
+                        },
+                    ) {
+                        Text("تأكيد التسليم للمراجعة")
+                    }
+                }
+            } else {
+                OutlinedButton(
+                    enabled =
+                        !cached &&
+                            pending == null &&
+                            bundle.executionCapabilities.submitOffline &&
+                            gate.satisfied,
+                    onClick = { confirmCompletion = true },
+                ) {
+                    Text("تقديم العمل للمراجعة")
+                }
+            }
+        }
 
         bundle.binding?.let {
             Text(
