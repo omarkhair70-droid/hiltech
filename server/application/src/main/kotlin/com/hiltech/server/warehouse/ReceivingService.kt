@@ -352,6 +352,7 @@ class ReceivingService(
             if (record.version != request.recordVersion) stale()
             requireDestination(context.actor, record.organizationId, record.destinationStorageLocationId)
             poReceiving.requireBoundCurrent(record)
+            poReceiving.requireReadyDeliveryNote(record)
             val lines = receiving.lines(record.id)
             if (lines.isEmpty() || lines.any { it.receivedAt == null && !receiving.hasPoRejection(it.id) }) incomplete()
             if (record.state != ReceivingState.IN_PROGRESS) stale()
