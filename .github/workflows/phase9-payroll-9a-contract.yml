@@ -57,6 +57,8 @@ jobs:
         run: |
           ./gradlew :server:application:test \
             --tests com.hiltech.server.payroll.Payroll9aContractTest \
+            --tests com.hiltech.server.payroll.Payroll9bDraftPostgresContractTest \
+            --tests com.hiltech.server.payroll.Payroll9b9cDomainTest \
             --rerun-tasks
       - name: Compile exact server head
         run: ./gradlew :server:application:bootJar
