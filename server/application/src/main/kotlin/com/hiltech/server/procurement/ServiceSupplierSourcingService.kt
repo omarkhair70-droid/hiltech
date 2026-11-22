@@ -25,6 +25,11 @@ data class ServiceRfqView(
     val sourceCurrent: Boolean, val supplierCount: Int,
     val purchaseAuthorized: Boolean = false,
 )
+data class ServiceEligibleNeedView(
+    val needId: UUID, val needVersion: Long, val organizationId: UUID,
+    val specification: String, val acceptanceCriteria: String,
+    val rfqId: UUID?, val sourceCurrent: Boolean,
+)
 data class ServiceRfqReceipt(val rfq: ServiceRfqView, val replayed: Boolean)
 data class CreateServiceQuoteSlotRequest(
     val operationId: UUID, val supplierOrganizationId: UUID,
@@ -88,7 +93,7 @@ class ServiceSupplierSourcingService(
         val terms: String, val validUntil: LocalDate?, val evidenceId: UUID,
     )
 
-    fun eligibleNeeds(actor: UUID, org: UUID): List<ServiceRfqView> {
+    fun eligibleNeeds(actor: UUID, org: UUID): List<ServiceEligibleNeedView> {
         requireBuyer(actor,org)
         val ids=jdbc.query(
             """
@@ -108,10 +113,10 @@ class ServiceSupplierSourcingService(
                     "SELECT id FROM procurement_service_rfq WHERE service_need_id=? AND service_need_version=?",
                     {rs,_->rs.getObject("id",UUID::class.java)},id,src.version,
                 ).singleOrNull()
-                if(rid==null) ServiceRfqView(
-                    UUID(0,0),src.id,src.version,src.org,src.specification,src.acceptance,
-                    true,0,
-                ) else view(actor,rfq(rid)?:return@mapNotNull null)
+                ServiceEligibleNeedView(
+                    src.id,src.version,src.org,src.specification,src.acceptance,
+                    rid,true,
+                )
             }
         }
     }
