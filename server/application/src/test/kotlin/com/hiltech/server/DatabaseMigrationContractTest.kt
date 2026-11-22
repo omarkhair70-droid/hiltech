@@ -455,6 +455,26 @@ class DatabaseMigrationContractTest {
                 assertTrue(serviceGuards.next())
                 assertEquals(10, serviceGuards.getInt(1))
 
+                val serviceEvidenceGuard = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='evidence'::regclass
+                      AND tgname='service_quote_evidence_insert_guard'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(serviceEvidenceGuard.next())
+                assertEquals(1, serviceEvidenceGuard.getInt(1))
+                val serviceEvidenceIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename='evidence'
+                      AND indexname='uq_service_quote_document_evidence_slot'
+                    """.trimIndent(),
+                )
+                assertTrue(serviceEvidenceIndex.next())
+                assertEquals(1, serviceEvidenceIndex.getInt(1))
+
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
                 // merely Flyway migration count.
