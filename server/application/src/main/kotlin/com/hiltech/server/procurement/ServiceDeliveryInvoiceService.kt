@@ -38,6 +38,10 @@ data class CaptureServiceInvoiceRequest(
     val evidenceSha256:String,val invoiceNumber:String,val invoiceDate:LocalDate,
     val currency:String,val serviceAmount:String,val taxAmount:String,
 )
+data class ServiceWorkOrderOption(
+    val orderId:UUID,val supplierOrganizationId:UUID,
+    val accepted:Boolean,val invoiceCaptured:Boolean,
+)
 data class ServiceInvoiceView(
     val invoiceId:UUID,val serviceOrderId:UUID,val invoiceNumber:String,
     val supplierOrganizationId:UUID,val invoiceDate:LocalDate,val currency:String,
@@ -108,6 +112,31 @@ class ServiceDeliveryInvoiceService @org.springframework.beans.factory.annotatio
     private data class Match(
         val id:UUID,val revision:Long,val result:String,val sha:String,
     )
+
+    fun ordersForRole(actor:UUID,org:UUID,kind:String):List<ServiceWorkOrderOption> {
+        requireAuthority(actor,org,kind)
+        return jdbc.query(
+            """
+            SELECT ord.id,ord.supplier_organization_id,
+              EXISTS(
+                SELECT 1 FROM procurement_service_acceptance a
+                WHERE a.service_order_id=ord.id AND a.outcome='ACCEPTED'
+                  AND a.id=(SELECT latest.id FROM procurement_service_acceptance latest
+                            WHERE latest.service_order_id=ord.id
+                            ORDER BY latest.reviewed_at DESC,latest.id DESC LIMIT 1)
+              ) AS accepted,
+              EXISTS(SELECT 1 FROM procurement_service_invoice inv
+                     WHERE inv.service_order_id=ord.id) AS invoiced
+            FROM procurement_service_order ord
+            WHERE ord.organization_id=?
+            ORDER BY ord.issued_at DESC,ord.id DESC LIMIT 100
+            """.trimIndent(),
+            {rs,_->ServiceWorkOrderOption(
+                rs.getObject("id",UUID::class.java),
+                rs.getObject("supplier_organization_id",UUID::class.java),
+                rs.getBoolean("accepted"),rs.getBoolean("invoiced"))},org,
+        )
+    }
 
     fun documentSlot(ctx:ProcurementDraftContext,orderId:UUID,
                      input:CreateServicePurchaseDocumentSlotRequest):
