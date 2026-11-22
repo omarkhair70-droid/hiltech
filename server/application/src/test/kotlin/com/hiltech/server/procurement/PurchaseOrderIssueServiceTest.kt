@@ -65,6 +65,7 @@ class PurchaseOrderIssueServiceTest {
     )
     private val repository = Mockito.mock(PurchaseOrderCandidatePersistence::class.java)
     private val issued = Mockito.mock(PurchaseOrderIssuePersistence::class.java)
+    private val sourcing = Mockito.mock(SupplierSourcingPersistence::class.java)
     private val source = Mockito.mock(PurchaseRequirementDraftPersistence::class.java)
     private val work = Mockito.mock(WorkPersistencePort::class.java)
     private val workSnapshot = Mockito.mock(WorkOrderSnapshot::class.java)
@@ -83,7 +84,7 @@ class PurchaseOrderIssueServiceTest {
         authorityKey: String = "PROCUREMENT_PO_ISSUER",
         prefix: String = "PO",
     ) = PurchaseOrderIssueService(
-        repository, issued, source, work, approvals, guard, commands, audit,
+        repository, issued, sourcing, source, work, approvals, guard, commands, audit,
         Clock.fixed(at, ZoneOffset.UTC), enabled, policyKey, authorityKey, prefix,
     )
 
@@ -93,6 +94,11 @@ class PurchaseOrderIssueServiceTest {
     private fun allow() {
         Mockito.`when`(repository.byId(candidateId)).thenReturn(candidate)
         Mockito.`when`(repository.lockCandidate(candidateId)).thenReturn(true)
+        Mockito.`when`(sourcing.lockRfq(candidate.rfqId)).thenReturn(true)
+        Mockito.`when`(source.lock(candidate.requirementId)).thenReturn(true)
+        Mockito.`when`(issued.lockWorkAndStockSource(
+            org, workId, candidate.stockItemId,
+        )).thenReturn(true)
         Mockito.`when`(guard.isCurrent(
             com.hiltech.server.approval.ApprovalSubjectRef(
                 org, "PROCUREMENT_PO_CANDIDATE", candidateId, 1L,
