@@ -20,6 +20,14 @@ import com.hiltech.android.field.FieldEvidenceOnlineIdentity
 import com.hiltech.shared.core.local.buildHiltechLocalDatabase
 import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
 import com.hiltech.shared.core.network.HiltechApiClient
+import com.hiltech.shared.core.procurement.PurchaseRequirementApiClient
+import com.hiltech.shared.core.procurement.WarehouseReplenishmentApiClient
+import com.hiltech.shared.core.procurement.OfficeStockNeedApiClient
+import com.hiltech.shared.core.procurement.AssetPurchaseNeedApiClient
+import com.hiltech.shared.core.procurement.PoWarehouseIntakeApiClient
+import com.hiltech.shared.core.procurement.PoReceivingDeliveryNoteUploader
+import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceApiClient
+import com.hiltech.shared.core.work.WorkApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
 import com.hiltech.shared.core.people.HrDocumentsApiClient
 import com.hiltech.shared.core.people.OnboardingApiClient
@@ -92,6 +100,13 @@ class HiltechApplication : Application() {
     }
 
     val warehouseApi by lazy { WarehouseApiClient(productApi) }
+    val procurementApi by lazy { PurchaseRequirementApiClient(productApi) }
+    val warehouseReplenishmentApi by lazy { WarehouseReplenishmentApiClient(productApi) }
+    val officeStockNeedApi by lazy { OfficeStockNeedApiClient(productApi) }
+    val assetPurchaseNeedApi by lazy { AssetPurchaseNeedApiClient(productApi) }
+    val poWarehouseIntakeApi by lazy { PoWarehouseIntakeApiClient(productApi) }
+    val supplierInvoiceFinanceApi by lazy { SupplierInvoiceFinanceApiClient(productApi) }
+    val procurementWorkApi by lazy { WorkApiClient(productApi) }
 
     val fieldAssignedWorkApi:
         FieldAssignedWorkApiClient by lazy {
@@ -127,6 +142,8 @@ class HiltechApplication : Application() {
     private val evidenceApi by lazy {
         EvidenceApiClient(productApi, httpClient)
     }
+
+    val poDeliveryNoteUploader by lazy { PoReceivingDeliveryNoteUploader(evidenceApi) }
 
     val fieldEvidenceSyncRuntime by lazy {
         AndroidFieldEvidenceSyncRuntime(

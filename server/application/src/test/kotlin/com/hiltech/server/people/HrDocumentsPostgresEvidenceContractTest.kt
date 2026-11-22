@@ -271,6 +271,9 @@ class HrDocumentsPostgresEvidenceContractTest {
                         denyWorkOrderAuthorization(),
                     employeeDocumentTarget =
                         targetAdapter,
+                    supplierQuoteDocumentTarget = org.mockito.Mockito.mock(
+                        com.hiltech.server.documents.SupplierQuoteDocumentEvidenceTargetPort::class.java,
+                    ),
                     idempotency =
                         idempotency,
                     projectionWriter =

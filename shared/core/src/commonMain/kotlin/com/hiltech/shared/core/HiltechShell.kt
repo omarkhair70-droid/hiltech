@@ -255,6 +255,7 @@ fun HiltechShell(
     onSelectEvidenceFile: (String) -> Unit = {},
     onTakeEvidencePhoto: (String) -> Unit = {},
     warehouseOperator: @Composable () -> Unit = {},
+    procurementOperator: @Composable () -> Unit = {},
 ) {
     MaterialTheme {
         Column(
@@ -499,6 +500,9 @@ fun HiltechShell(
                     }
 
                     warehouseOperator()
+                    // Host applications mount procurement only with an explicit,
+                    // default-OFF feature flag. Never show it during offline mode.
+                    procurementOperator()
 
                     state.warehouse?.let { warehouse ->
                         WarehouseSetupSection(

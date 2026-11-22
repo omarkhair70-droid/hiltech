@@ -58,6 +58,63 @@ data class EmployeeDocumentEvidenceReservationInsert(
     val createdAt: Instant,
 )
 
+data class SupplierQuoteDocumentEvidenceReservationInsert(
+    val evidenceId: UUID,
+    val uploadSessionId: UUID,
+    val operationId: UUID,
+    val objectKey: String,
+    val organizationId: UUID,
+    val documentSlotId: UUID,
+    val contentType: String,
+    val originalFileName: String?,
+    val sizeBytes: Long,
+    val sha256: String,
+    val capturedAt: Instant,
+    val clientOccurredAt: Instant?,
+    val capturedByUserId: UUID,
+    val securityScanClass: String,
+    val uploadExpiresAt: Instant,
+    val createdAt: Instant,
+)
+
+data class SupplierInvoiceDocumentEvidenceReservationInsert(
+    val evidenceId: UUID,
+    val uploadSessionId: UUID,
+    val operationId: UUID,
+    val objectKey: String,
+    val organizationId: UUID,
+    val documentSlotId: UUID,
+    val contentType: String,
+    val originalFileName: String?,
+    val sizeBytes: Long,
+    val sha256: String,
+    val capturedAt: Instant,
+    val clientOccurredAt: Instant?,
+    val capturedByUserId: UUID,
+    val securityScanClass: String,
+    val uploadExpiresAt: Instant,
+    val createdAt: Instant,
+)
+
+data class PoReceivingDeliveryNoteEvidenceReservationInsert(
+    val evidenceId: UUID,
+    val uploadSessionId: UUID,
+    val operationId: UUID,
+    val objectKey: String,
+    val organizationId: UUID,
+    val receivingRecordId: UUID,
+    val contentType: String,
+    val originalFileName: String?,
+    val sizeBytes: Long,
+    val sha256: String,
+    val capturedAt: Instant,
+    val clientOccurredAt: Instant?,
+    val capturedByUserId: UUID,
+    val securityScanClass: String,
+    val uploadExpiresAt: Instant,
+    val createdAt: Instant,
+)
+
 data class EvidenceReservationRecord(
     val evidenceId: UUID,
     val uploadSessionId: UUID,
@@ -131,6 +188,22 @@ interface EvidencePersistencePort {
     fun insertEmployeeDocumentReservation(
         value: EmployeeDocumentEvidenceReservationInsert,
     )
+
+    fun insertSupplierQuoteDocumentReservation(
+        value: SupplierQuoteDocumentEvidenceReservationInsert,
+    )
+
+    fun insertSupplierInvoiceDocumentReservation(
+        value: SupplierInvoiceDocumentEvidenceReservationInsert,
+    ) {
+        throw UnsupportedOperationException("Invoice Evidence repository is not configured.")
+    }
+
+    fun insertPoReceivingDeliveryNoteReservation(
+        value: PoReceivingDeliveryNoteEvidenceReservationInsert,
+    ) {
+        throw UnsupportedOperationException("PO delivery note Evidence repository is not configured.")
+    }
 
     fun findReservationByOperationId(
         operationId: UUID,

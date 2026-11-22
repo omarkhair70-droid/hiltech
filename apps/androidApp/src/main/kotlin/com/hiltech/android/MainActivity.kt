@@ -35,6 +35,12 @@ import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
+import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
+import com.hiltech.shared.core.procurement.WarehouseReplenishmentSection
+import com.hiltech.shared.core.procurement.OfficeStockNeedSection
+import com.hiltech.shared.core.procurement.AssetPurchaseNeedSection
+import com.hiltech.shared.core.procurement.PoWarehouseIntakeSection
+import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceSection
 import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
@@ -156,6 +162,82 @@ class MainActivity : ComponentActivity() {
                                     java.util.UUID.nameUUIDFromBytes(payload.toByteArray(Charsets.UTF_8)).toString()
                                 },
                             )
+                            if (BuildConfig.HILTECH_ASSET_PURCHASE_NEEDS_ENABLED) {
+                                key(identity.identityId, organization.organizationId, "asset-parts-needs") {
+                                    AssetPurchaseNeedSection(
+                                        api = hiltechApplication.assetPurchaseNeedApi,
+                                        warehouseApi = hiltechApplication.warehouseApi,
+                                        organizationId = organization.organizationId,
+                                        installationId = hiltechApplication.installationId,
+                                        newOperationId = { UUID.randomUUID().toString() },
+                                    )
+                                }
+                            }
+                            if (BuildConfig.HILTECH_OFFICE_STOCK_NEEDS_ENABLED) {
+                                key(identity.identityId, organization.organizationId, "office-needs") {
+                                    OfficeStockNeedSection(
+                                        api = hiltechApplication.officeStockNeedApi,
+                                        organizationId = organization.organizationId,
+                                        installationId = hiltechApplication.installationId,
+                                        newOperationId = { UUID.randomUUID().toString() },
+                                    )
+                                }
+                            }
+                            if (BuildConfig.HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED) {
+                                key(identity.identityId, organization.organizationId, "warehouse-needs") {
+                                    WarehouseReplenishmentSection(
+                                        api = hiltechApplication.warehouseReplenishmentApi,
+                                        warehouseApi = hiltechApplication.warehouseApi,
+                                        organizationId = organization.organizationId,
+                                        installationId = hiltechApplication.installationId,
+                                        newOperationId = { UUID.randomUUID().toString() },
+                                    )
+                                }
+                            }
+                            if (BuildConfig.HILTECH_PO_WAREHOUSE_INTAKE_ENABLED) {
+                                AndroidPoWarehouseIntakeSection(
+                                    api = hiltechApplication.poWarehouseIntakeApi,
+                                    warehouseApi = hiltechApplication.warehouseApi,
+                                    deliveryNoteUploader = hiltechApplication.poDeliveryNoteUploader,
+                                    organizationId = organization.organizationId,
+                                    installationId = hiltechApplication.installationId,
+                                )
+                            }
+                        }
+                    }
+                },
+                procurementOperator = {
+                    if (BuildConfig.HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED) {
+                        val signed = shellState as? HiltechShellState.SignedIn
+                        val identity = signed?.identity
+                        val selectedWork = signed?.field?.selectedWorkOrderId
+                        if (identity != null && !selectedWork.isNullOrBlank()) {
+                            key(identity.identityId, selectedWork) {
+                                PurchaseRequirementOperatorSection(
+                                    api = hiltechApplication.procurementApi,
+                                    warehouseApi = hiltechApplication.warehouseApi,
+                                    workApi = hiltechApplication.procurementWorkApi,
+                                    installationId = hiltechApplication.installationId,
+                                    selectedWorkOrderId = selectedWork,
+                                    newOperationId = { UUID.randomUUID().toString() },
+                                )
+                            }
+                        }
+                    }
+                    if (BuildConfig.HILTECH_SUPPLIER_INVOICE_FINANCE_ENABLED) {
+                        val signed = shellState as? HiltechShellState.SignedIn
+                        val identity = signed?.identity
+                        val organization = identity?.organizations?.firstOrNull { it.primary }
+                            ?: identity?.organizations?.firstOrNull()
+                        if (identity != null && organization != null) {
+                            key(identity.identityId, organization.organizationId, "finance-invoice") {
+                                SupplierInvoiceFinanceSection(
+                                    api = hiltechApplication.supplierInvoiceFinanceApi,
+                                    organizationId = organization.organizationId,
+                                    installationId = hiltechApplication.installationId,
+                                    newOperationId = { UUID.randomUUID().toString() },
+                                )
+                            }
                         }
                     }
                 },

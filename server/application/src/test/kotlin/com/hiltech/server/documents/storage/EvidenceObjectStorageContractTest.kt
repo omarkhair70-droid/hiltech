@@ -148,6 +148,18 @@ class EvidenceObjectStorageContractTest {
             assertEquals(bytes.size.toLong(), finalized.sizeBytes)
             assertEquals(spec.expectedSha256Hex, finalized.sha256Hex)
 
+            // Protected procurement documents are read server-side only,
+            // without ever exposing a presigned download target.
+            assertArrayEquals(
+                bytes,
+                storage.readRestrictedObject(upload.objectKey, bytes.size.toLong()),
+            )
+            org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException::class.java,
+            ) {
+                storage.readRestrictedObject(upload.objectKey, (bytes.size - 1).toLong())
+            }
+
             val unsignedUrl =
                 endpoint.trimEnd('/') +
                     "/$bucket/${upload.objectKey}"
