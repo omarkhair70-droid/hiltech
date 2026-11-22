@@ -12,6 +12,9 @@ on:
       - "database/migrations/V0044__procurement_supplier_link_history__phase7_slice02.sql"
       - "database/migrations/V0045__procurement_supplier_quote_document_slot__phase7_slice02.sql"
       - "docs/13-delivery/phase7/05_S02_RFQ_QUOTE_EVIDENCE_CHECKPOINT.md"
+      - "server/application/src/main/kotlin/com/hiltech/server/documents/**"
+      - "server/application/src/test/kotlin/com/hiltech/server/documents/**"
+      - "server/application/src/test/kotlin/com/hiltech/server/people/HrDocumentsPostgresEvidenceContractTest.kt"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/**"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/**"
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
@@ -30,6 +33,9 @@ on:
       - "database/migrations/V0044__procurement_supplier_link_history__phase7_slice02.sql"
       - "database/migrations/V0045__procurement_supplier_quote_document_slot__phase7_slice02.sql"
       - "docs/13-delivery/phase7/05_S02_RFQ_QUOTE_EVIDENCE_CHECKPOINT.md"
+      - "server/application/src/main/kotlin/com/hiltech/server/documents/**"
+      - "server/application/src/test/kotlin/com/hiltech/server/documents/**"
+      - "server/application/src/test/kotlin/com/hiltech/server/people/HrDocumentsPostgresEvidenceContractTest.kt"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/**"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/**"
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
@@ -84,12 +90,15 @@ jobs:
             --tests com.hiltech.server.procurement.SupplierQuoteComparisonTest \
             --tests com.hiltech.server.procurement.SupplierSourcingServiceTest \
             --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --tests com.hiltech.server.people.HrDocumentsPostgresEvidenceContractTest \
+            --tests com.hiltech.server.documents.EvidenceLifecyclePostgresOpenFgaS3ContractTest \
             --no-daemon --console=plain
 
       - name: Verify authenticated KMP buyer transport
         run: |
           ./gradlew :shared:core:desktopTest \
             --tests '*SupplierSourcingApiClientTest' \
+            --tests '*SupplierQuoteDocumentUploaderTest' \
             --no-daemon --console=plain
 
       - name: Compile gated native sourcing buyer surface
