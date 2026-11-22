@@ -272,7 +272,7 @@ class CurrentExecutiveSources(
             items = items,
             source = "ASSET_SERVICE_QUEUE",
             sourceAsOf = null, // Each asset includes actual source evaluation time.
-            partial = capped,
+            partial = capped || inaccessibleQueue,
             unavailableReason = if (inaccessibleQueue) "SOME_WAREHOUSE_QUEUES_UNAVAILABLE" else null,
         )
     }
