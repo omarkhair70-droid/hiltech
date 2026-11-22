@@ -156,16 +156,16 @@ jobs:
         run: |
           set -euo pipefail
           arm64_tag="hiltech-server:ci-arm64-${GITHUB_SHA}"
-          docker build --platform linux/arm64 \\
-            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \\
-            -f infrastructure/coolify/Dockerfile.server \\
+          docker build --platform linux/arm64 \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            -f infrastructure/coolify/Dockerfile.server \
             -t "$arm64_tag" build/tmp/hiltech-image-context
           test "$(docker image inspect -f '{{.Architecture}}' "$arm64_tag")" = "arm64"
           test "$(docker image inspect -f '{{.Os}}' "$arm64_tag")" = "linux"
           test "$(docker image inspect -f '{{.Config.User}}' "$arm64_tag")" = "10001:10001"
-          docker image inspect --format='{{.Id}}' "$arm64_tag" \\
+          docker image inspect --format='{{.Id}}' "$arm64_tag" \
             > build/reports/devops-server-package/container-arm64-image-id.txt
-          printf 'arm64_image_tag=%s\n' "$arm64_tag" \\
+          printf 'arm64_image_tag=%s\n' "$arm64_tag" \
             >> build/reports/devops-server-package/source.txt
           echo "PASS: linux/arm64 OCI image built nonroot for Oracle A1."
           echo "NOTE: build proof only. ARM64 runtime, staging auth and recovery remain unverified."
