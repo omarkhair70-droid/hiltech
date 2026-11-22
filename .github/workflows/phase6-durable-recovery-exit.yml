@@ -1,0 +1,133 @@
+name: Phase 6 — Durable Recovery and Exit Gate
+
+on:
+  pull_request:
+    branches:
+      - phase6/s05-completion-review-20261122
+    paths:
+      - "shared/core/src/desktopTest/kotlin/com/hiltech/shared/core/sync/Phase6DurableRecoveryTest.kt"
+      - "shared/core/src/desktopTest/kotlin/com/hiltech/shared/core/local/FieldRoomMigrationTest.kt"
+      - "shared/core/src/commonMain/**"
+      - "apps/androidApp/src/main/**"
+      - "server/application/src/main/**"
+      - "docs/13-delivery/phase6/14_SLICE06_DURABLE_RECOVERY_SECURITY_EXIT_2026-11-22.md"
+      - ".github/workflows/phase6-durable-recovery-exit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phase6-automated-exit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: hiltech
+          POSTGRES_USER: hiltech
+          POSTGRES_PASSWORD: hiltech
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hiltech -d hiltech"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      HILTECH_DB_CONTRACT_TEST: "0"
+      HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
+      HILTECH_DB_USER: hiltech
+      HILTECH_DB_PASSWORD: hiltech
+      HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Full server architecture, authorization, field and reviewer contracts
+        run: |
+          ./gradlew :server:application:test \
+            --no-configuration-cache --console=plain
+
+      - name: Full durable Room replay and migration tests
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --no-configuration-cache --console=plain
+
+      - name: Android feature-enabled native compile
+        run: |
+          ./gradlew :apps:androidApp:compileDebugKotlin \
+            -Philtech.engineeringTestsEnabled=true \
+            -Philtech.assignedAssetLookupEnabled=true \
+            --no-configuration-cache --console=plain
+
+      - name: Windows desktop native Kotlin compile
+        run: |
+          ./gradlew :apps:desktopApp:compileKotlin \
+            --no-configuration-cache --console=plain
+
+      - name: Create isolated PostgreSQL contract databases
+        env:
+          PGPASSWORD: hiltech
+        run: |
+          psql -h localhost -U hiltech -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE DATABASE hiltech_s06_migration;
+          CREATE DATABASE hiltech_s06_completion;
+          CREATE DATABASE hiltech_s06_drawings;
+          SQL
+
+      - name: Verify full database migration through V0038
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech_s06_migration
+        run: |
+          if ! ./gradlew :server:application:test \
+            --tests com.hiltech.server.DatabaseMigrationContractTest \
+            --rerun-tasks --no-configuration-cache --console=plain; then
+            cat server/application/build/test-results/test/TEST-com.hiltech.server.DatabaseMigrationContractTest.xml || true
+            exit 1
+          fi
+
+      - name: Verify WorkOrder completion and immutable PostgreSQL receipt
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech_s06_completion
+        run: |
+          if ! ./gradlew :server:application:test \
+            --tests com.hiltech.server.work.CompletionSubmissionPostgresContractTest \
+            --rerun-tasks --no-configuration-cache --console=plain; then
+            cat server/application/build/test-results/test/TEST-com.hiltech.server.work.CompletionSubmissionPostgresContractTest.xml || true
+            exit 1
+          fi
+
+      - name: Verify Work drawing revision approval freshness on PostgreSQL
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech_s06_drawings
+        run: |
+          if ! ./gradlew :server:application:test \
+            --tests com.hiltech.server.work.WorkDocumentRevisionPostgresContractTest \
+            --rerun-tasks --no-configuration-cache --console=plain; then
+            cat server/application/build/test-results/test/TEST-com.hiltech.server.work.WorkDocumentRevisionPostgresContractTest.xml || true
+            exit 1
+          fi
+
+      - name: Retain production rollout disabled and patch clean
+        run: |
+          grep -Fq 'enabled: ${HILTECH_FIELD_ENGINEERING_TESTS_ENABLED:false}' server/application/src/main/resources/application.yml
+          grep -Fq 'enabled: ${HILTECH_FIELD_WORK_DOCUMENTS_ENABLED:false}' server/application/src/main/resources/application.yml
+          grep -Fq 'enabled: ${HILTECH_FIELD_COMPLETION_ENABLED:false}' server/application/src/main/resources/application.yml
+          git diff --check HEAD^ HEAD
