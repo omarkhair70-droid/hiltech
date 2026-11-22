@@ -29,7 +29,7 @@ CREATE UNIQUE INDEX uq_service_purchase_document_evidence_slot
 
 CREATE FUNCTION guard_service_purchase_document_evidence() RETURNS trigger
 LANGUAGE plpgsql AS $$
-  slot procurement_service_document_slot%ROWTYPE;
+DECLARE slot procurement_service_document_slot%ROWTYPE;
 BEGIN
   SELECT * INTO slot FROM procurement_service_document_slot WHERE id=NEW.target_id;
   IF slot.id IS NULL OR slot.organization_id<>NEW.organization_id
@@ -126,7 +126,7 @@ FOR EACH ROW EXECUTE FUNCTION reject_procurement_draft_mutation();
 -- No attachment reference, hash or "accepted" checkbox from a client is
 -- sufficient without canonical READY, restricted, slot-scoped Evidence.
 CREATE FUNCTION guard_service_purchase_verified_document() RETURNS trigger
-LANGUAGE plpgsql AS $
+LANGUAGE plpgsql AS $$
 DECLARE slot_kind varchar(24);
   expected_type varchar(40);
   expected_req varchar(40);
