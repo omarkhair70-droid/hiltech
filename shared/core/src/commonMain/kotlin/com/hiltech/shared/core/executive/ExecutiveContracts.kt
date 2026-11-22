@@ -79,6 +79,7 @@ data class ExecutivePendingDomainDto(
 
 @Serializable
 data class ExecutiveHomeDto(
+    val viewerIdentityId: String,
     val organizationId: String,
     val asOf: String,
     val correlationId: String,
