@@ -151,6 +151,10 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
             "PROCUREMENT_SERVICE_ORDER",id,fp,ctx.correlationId,
         )) {
             val current=lockedCandidate(candidateId)?:hidden()
+            // Supplier quote revisions serialize on the RFQ row. Lock that
+            // same source here before currentness and approval checks so an
+            // older quote cannot be issued during a concurrent replacement.
+            lockRfq(current.rfq)
             val binding=requireIssuer(ctx.actor,current.org)
             if(!sourceGuard.isCurrent(subject(current)))stale()
             val policy=approvals.loadActivePolicy(current.org,policyKey.trim(),clock.instant())
