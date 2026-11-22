@@ -25,6 +25,7 @@ data class FieldUsagePendingForWarehouse(
     val employeeId: UUID,
     val quantity: String,
     val unitCode: String,
+    val workVersion: Long,
     val issuedVersion: Long,
     val recordedAt: Instant,
 )
@@ -45,9 +46,13 @@ class JdbcFieldUsageWarehouseReviewRead(private val jdbc: JdbcTemplate) : FieldU
         """
         SELECT r.operation_id, r.organization_id, r.work_order_id, r.requirement_id,
                r.stock_item_id, r.employee_id, r.quantity, r.unit_code,
-               r.issued_version, r.created_at
+               r.work_version, r.issued_version, r.created_at
         FROM field_material_usage_report r
         WHERE r.organization_id = ? AND r.state = 'PENDING_REVIEW'
+          AND NOT EXISTS (
+              SELECT 1 FROM field_material_usage_reconciliation x
+              WHERE x.report_operation_id = r.operation_id
+          )
           AND EXISTS (
               SELECT 1 FROM stock_movement m JOIN storage_location l
                 ON l.id = m.from_storage_location_id
@@ -81,7 +86,7 @@ class JdbcFieldUsageWarehouseReviewRead(private val jdbc: JdbcTemplate) : FieldU
                 row.getObject("stock_item_id", UUID::class.java),
                 row.getObject("employee_id", UUID::class.java),
                 row.getBigDecimal("quantity").toPlainString(),
-                row.getString("unit_code"), row.getLong("issued_version"),
+                row.getString("unit_code"), row.getLong("work_version"), row.getLong("issued_version"),
                 row.getObject("created_at", OffsetDateTime::class.java).toInstant(),
             )
         },

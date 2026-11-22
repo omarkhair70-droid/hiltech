@@ -377,6 +377,50 @@ internal class ReservationOperatorScenario(
             assertEquals("8.000000", personalStock.ownForWorkOrder(
                 org, order.projectId, order.siteId, order.workOrderId, employee,
             ).single().outstandingQuantity, "S04B report must not change issued custody.")
+
+            // S04B reconciliation proof: the immutable report is resolved by
+            // the canonical Warehouse CONSUME path, not a second inventory ledger.
+            val reconcilePersistence = FieldMaterialUsageReconciliationPersistence(jdbc)
+            val reconcileCommands = JdbcIdempotentCommandExecutor(
+                jdbc, manager, commandClock, HiltechTelemetryRuntime(OpenTelemetry.noop()) {},
+            )
+            val reconcileService = FieldMaterialUsageReconciliationService(
+                reconcilePersistence, warehouse, authority, fulfillment, service, work,
+                reconcileCommands, JdbcAuditEventWriter(jdbc), commandClock, true,
+            )
+            val reconcileOperation = UUID.randomUUID()
+            val reconciled = reconcileService.reconcile(
+                StockCommandContext(reconcileOperation, operator, "synthetic-material-review"),
+                facility,
+                proposedOperation,
+                FieldMaterialUsageReconciliationRequest(
+                    reconcileOperation, "CONSUME", order.version, ownRows.single().sourceVersion,
+                ),
+            )
+            assertTrue(reconciled.stockMoved)
+            assertEquals(beforeMovementCount + 1, jdbc.queryForObject(
+                "SELECT count(*) FROM stock_movement WHERE work_order_id = ? AND stock_item_id = ?",
+                Int::class.java, order.workOrderId, item,
+            ))
+            assertEquals("5.000000", personalStock.ownForWorkOrder(
+                org, order.projectId, order.siteId, order.workOrderId, employee,
+            ).single().outstandingQuantity)
+            assertEquals(0, BigDecimal.ZERO.compareTo(usageReports.totalPending(
+                order.workOrderId, employee, previous.requirementId, item,
+            )), "A reconciled report must no longer reserve pending quantity.")
+            assertTrue(warehouseReviewSource.pending(org, facility)
+                .none { it.operationId == proposedOperation },
+                "A reconciled report must leave the pending review queue.")
+            assertThrows<DataIntegrityViolationException> {
+                TransactionTemplate(manager).apply {
+                    propagationBehavior = TransactionDefinition.PROPAGATION_NESTED
+                }.executeWithoutResult {
+                    jdbc.update(
+                        "UPDATE field_material_usage_reconciliation SET reason = 'mutated' WHERE report_operation_id = ?",
+                        proposedOperation,
+                    )
+                }
+            }
             assertThrows<DataIntegrityViolationException> {
                 jdbc.update("UPDATE field_material_usage_report SET state = 'RECONCILED' WHERE operation_id = ?",
                     proposedOperation)
