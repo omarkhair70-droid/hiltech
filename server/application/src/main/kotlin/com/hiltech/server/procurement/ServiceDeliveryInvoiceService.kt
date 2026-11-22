@@ -72,7 +72,7 @@ data class ServiceInvoiceHandoffReceipt(
  * Does not invent stock, send supplier messages, create a payable or pay money.
  */
 @Service
-class ServiceDeliveryInvoiceService(
+class ServiceDeliveryInvoiceService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val approvals:ApprovalPersistencePort,
     private val documentTarget:ServicePurchaseDocumentTargetAdapter,
