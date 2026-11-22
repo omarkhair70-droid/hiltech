@@ -24,7 +24,7 @@ CREATE TABLE procurement_service_need (
 -- A direct database insert cannot invent a source or a requester membership.
 -- Named requester/reviewer authority is additionally checked by the server.
 CREATE FUNCTION guard_procurement_service_need_root() RETURNS trigger
-LANGUAGE plpgsql AS $
+LANGUAGE plpgsql AS $$
 BEGIN
   IF NOT EXISTS (
       SELECT 1 FROM team t JOIN organization o ON o.id=t.organization_id
@@ -43,7 +43,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 CREATE TRIGGER procurement_service_need_root_guard
 BEFORE INSERT ON procurement_service_need
 FOR EACH ROW EXECUTE FUNCTION guard_procurement_service_need_root();
