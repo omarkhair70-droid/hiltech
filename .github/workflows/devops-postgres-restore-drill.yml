@@ -2,7 +2,7 @@ name: DevOps — disposable PostgreSQL backup and restore rehearsal
 
 on:
   push:
-    branches: [devops/hiltech-postgres-restore-drill-20261123]
+    branches: [devops/hiltech-postgres-restore-drill-20261123, devops/disposable-pg-restore-semantic-schema-20261123]
   pull_request:
     branches: [main]
     paths:
