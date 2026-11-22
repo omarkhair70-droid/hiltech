@@ -48,9 +48,11 @@ class PurchaseOrderLifecycleService @Autowired constructor(
     private val cancellationEnabled: Boolean = false,
     @Value("\${hiltech.procurement.po.delivery-amendments.enabled:false}")
     private val amendmentEnabled: Boolean = false,
+    @Value("\${hiltech.procurement.po.supplier-communications.enabled:false}")
+    private val communicationEnabled: Boolean = false,
 ) {
     fun issuedOrders(actor: UUID, organizationId: UUID): List<PurchaseOrderLifecycleSummary> {
-        if (!cancellationEnabled && !amendmentEnabled) unavailable()
+        if (!cancellationEnabled && !amendmentEnabled && !communicationEnabled) unavailable()
         issuer.requireIssuerForLifecycle(actor, organizationId)
         return purchases.issuedOrderList(organizationId)
     }
