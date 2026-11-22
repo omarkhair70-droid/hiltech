@@ -55,7 +55,7 @@ class DatabaseMigrationContractTest {
     private val migrationPath = System.getenv("HILTECH_MIGRATIONS_PATH") ?: "database/migrations"
 
     @Test
-    fun emptyPostgresMigratesThroughV0033ThenV0041AndRejectsInvalidStates() {
+    fun emptyPostgresMigratesThroughV0033ThenV0042AndRejectsInvalidStates() {
         assumeTrue(enabled)
 
         val priorSliceResult =
@@ -85,7 +85,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(8, result.migrationsExecuted)
+        assertEquals(9, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -143,12 +143,14 @@ class DatabaseMigrationContractTest {
                         'work_document_revision_release',
                         'work_completion_submission',
                         'procurement_purchase_requirement',
-                        'procurement_requirement_transition'
+                        'procurement_requirement_transition',
+                        'procurement_supplier_rfq',
+                        'procurement_supplier_quote_evidence'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(68, tables.getInt(1))
+                assertEquals(70, tables.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
@@ -189,6 +191,33 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(immutableHistory.next())
                 assertEquals(1, immutableHistory.getInt(1))
+
+                // S02 supplier terms are immutable restricted evidence. Two
+                // source-linked tables and protected revision uniqueness.
+                val sourcingTriggers = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE NOT tgisinternal AND (
+                        (tgrelid = 'procurement_supplier_rfq'::regclass
+                            AND tgname = 'procurement_supplier_rfq_immutable')
+                        OR (tgrelid = 'procurement_supplier_quote_evidence'::regclass
+                            AND tgname = 'procurement_supplier_quote_evidence_immutable')
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(sourcingTriggers.next())
+                assertEquals(2, sourcingTriggers.getInt(1))
+                val sourcingUniques = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE (conrelid = 'procurement_supplier_rfq'::regclass
+                            AND conname = 'uq_procurement_rfq_source_version')
+                       OR (conrelid = 'procurement_supplier_quote_evidence'::regclass
+                            AND conname = 'uq_procurement_quote_supplier_revision')
+                    """.trimIndent(),
+                )
+                assertTrue(sourcingUniques.next())
+                assertEquals(2, sourcingUniques.getInt(1))
             }
 
             val orgId = UUID.randomUUID()
