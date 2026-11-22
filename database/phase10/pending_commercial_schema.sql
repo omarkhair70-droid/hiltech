@@ -343,12 +343,22 @@ CREATE TRIGGER trg_commercial_quote_no_delete BEFORE DELETE
 -- Any amendment requires a new version/document and review.
 CREATE FUNCTION commercial_guard_award_document_update() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+ IF TG_OP='DELETE' THEN
+   RAISE EXCEPTION 'Commercial award documents cannot be deleted';
+ END IF;
  IF TG_TABLE_NAME='commercial_contract' THEN
    IF OLD.state='SIGNED' THEN
      RAISE EXCEPTION 'Signed commercial contract is immutable';
    END IF;
    IF OLD.state <> 'DRAFT' OR NEW.state <> 'SIGNED'
-      OR NEW.signed_evidence_id IS NULL THEN
+      OR NEW.signed_evidence_id IS NULL
+      OR ROW(NEW.id,NEW.organization_id,NEW.opportunity_id,NEW.quote_version_id,
+             NEW.contract_code,NEW.effective_date,NEW.end_date,
+             NEW.warranty_terms,NEW.maintenance_terms,NEW.created_by,NEW.created_at)
+          IS DISTINCT FROM
+         ROW(OLD.id,OLD.organization_id,OLD.opportunity_id,OLD.quote_version_id,
+             OLD.contract_code,OLD.effective_date,OLD.end_date,
+             OLD.warranty_terms,OLD.maintenance_terms,OLD.created_by,OLD.created_at) THEN
      RAISE EXCEPTION 'Only verified signing of draft contract is allowed';
    END IF;
  ELSIF TG_TABLE_NAME='commercial_client_po' THEN
