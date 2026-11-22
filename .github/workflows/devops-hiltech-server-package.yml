@@ -65,7 +65,22 @@ jobs:
             --rerun-tasks
 
       - name: Generate source from validated PostgreSQL schema
-        run: ./gradlew :server:application:verifyJooqGeneration
+        shell: bash
+        run: |
+          set -euo pipefail
+          # jOOQ generation is not configuration-cache compatible.
+          # A bounded retry handles transient upstream Maven Central HTTP 429.
+          for attempt in 1 2 3; do
+            if ./gradlew :server:application:verifyJooqGeneration \
+                --no-configuration-cache --console=plain; then
+              exit 0
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "jOOQ generation failed after three explicit attempts." >&2
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
 
       - name: Build Java 21 HILTECH Spring Boot artifact
         run: ./gradlew :server:application:bootJar
