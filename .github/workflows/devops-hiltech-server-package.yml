@@ -147,6 +147,29 @@ jobs:
           set -euo pipefail
           bash scripts/devops/image-runtime-smoke.sh "hiltech-server:ci-${GITHUB_SHA}"
 
+      # Oracle VM.Standard.A1.Flex is aarch64/ARM64. A successful amd64 CI
+      # runtime smoke does NOT prove a deployable binary for that host.
+      # This Dockerfile has no RUN instructions, so cross-building the ARM64
+      # image does not require executing foreign-architecture code on CI.
+      - name: Verify deployable ARM64 image for Oracle Ampere A1
+        shell: bash
+        run: |
+          set -euo pipefail
+          arm64_tag="hiltech-server:ci-arm64-${GITHUB_SHA}"
+          docker build --platform linux/arm64 \\
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \\
+            -f infrastructure/coolify/Dockerfile.server \\
+            -t "$arm64_tag" build/tmp/hiltech-image-context
+          test "$(docker image inspect -f '{{.Architecture}}' "$arm64_tag")" = "arm64"
+          test "$(docker image inspect -f '{{.Os}}' "$arm64_tag")" = "linux"
+          test "$(docker image inspect -f '{{.Config.User}}' "$arm64_tag")" = "10001:10001"
+          docker image inspect --format='{{.Id}}' "$arm64_tag" \\
+            > build/reports/devops-server-package/container-arm64-image-id.txt
+          printf 'arm64_image_tag=%s\n' "$arm64_tag" \\
+            >> build/reports/devops-server-package/source.txt
+          echo "PASS: linux/arm64 OCI image built nonroot for Oracle A1."
+          echo "NOTE: build proof only. ARM64 runtime, staging auth and recovery remain unverified."
+
       - name: Save restricted-lifetime build proof
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
