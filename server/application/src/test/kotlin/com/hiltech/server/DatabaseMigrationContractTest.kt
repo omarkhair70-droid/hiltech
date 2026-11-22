@@ -58,12 +58,24 @@ class DatabaseMigrationContractTest {
     fun emptyPostgresMigratesThroughV0033ThenV0037AndRejectsInvalidStates() {
         assumeTrue(enabled)
 
-        val priorSliceResult = Flyway.configure()
-            .dataSource(url, user, password)
-            .locations("filesystem:$migrationPath")
-            .target("33")
-            .load()
-            .migrate()
+        val priorSliceResult =
+            try {
+                Flyway.configure()
+                    .dataSource(url, user, password)
+                    .locations("filesystem:$migrationPath")
+                    .target("33")
+                    .load()
+                    .migrate()
+            } catch (failure: Exception) {
+                System.err.println(
+                    "HILTECH_MIGRATION_CONTRACT_TARGET33_FAILURE: " +
+                        generateSequence(failure as Throwable?) { it.cause }
+                            .joinToString(" -> ") {
+                                it::class.java.simpleName + ": " + (it.message ?: "<no message>")
+                            },
+                )
+                throw failure
+            }
 
         assertEquals(33, priorSliceResult.migrationsExecuted)
 
