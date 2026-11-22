@@ -110,7 +110,7 @@ class SpringEvidenceStorageAccess(
 }
 
 @Component
-class EvidenceLifecycleService(
+class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val persistence: EvidencePersistencePort,
     private val targetAuthorization: EvidenceTargetAuthorizationPort,
     private val employeeDocumentTarget:
