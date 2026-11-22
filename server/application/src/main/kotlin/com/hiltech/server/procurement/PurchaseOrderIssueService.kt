@@ -46,6 +46,7 @@ data class PurchaseOrderIssueReceipt(
 class PurchaseOrderIssueService @Autowired constructor(
     private val candidates: PurchaseOrderCandidatePersistence,
     private val purchases: PurchaseOrderIssuePersistence,
+    private val sourcing: SupplierSourcingPersistence,
     private val requirements: PurchaseRequirementDraftPersistence,
     private val work: WorkPersistencePort,
     private val approvalPersistence: ApprovalPersistencePort,
@@ -147,6 +148,17 @@ class PurchaseOrderIssueService @Autowired constructor(
             if (!candidates.lockCandidate(candidateId)) unavailable()
             val current = candidates.byId(candidateId) ?: unavailable()
             if (current != candidate) stale()
+            // All sourcing writes and technical reviews lock the RFQ row.
+            if (!sourcing.lockRfq(current.rfqId)) unavailable()
+            // Requirement transitions lock the immutable requirement root.
+            if (!requirements.lock(current.requirementId)) unavailable()
+            val frozenRequirement = requirements.byId(current.requirementId) ?: unavailable()
+            if (frozenRequirement.organizationId != current.organizationId ||
+                frozenRequirement.stockItemId != current.stockItemId ||
+                !purchases.lockWorkAndStockSource(
+                    current.organizationId, frozenRequirement.workOrderId, current.stockItemId,
+                )
+            ) unavailable()
             val now = clock.instant()
             val subject = ApprovalSubjectRef(
                 current.organizationId, "PROCUREMENT_PO_CANDIDATE", current.id, 1L,
