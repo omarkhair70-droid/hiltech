@@ -1,0 +1,13 @@
+// UX128 QA-only Gradle task. Included build-logic is intentionally skipped.
+// Run: ./gradlew -I docs/10-design/ux128-field-focus-headless.init.gradle :apps:desktopApp:renderUx128FieldFocus --no-daemon
+gradle.projectsEvaluated {
+    def desktop = gradle.rootProject.findProject(':apps:desktopApp')
+    if (desktop == null) return
+    desktop.tasks.register('renderUx128FieldFocus', org.gradle.api.tasks.JavaExec) {
+        group = 'verification'
+        description = 'Native Kotlin/Compose focused Field WorkOrder navigation evidence without foreground capture'
+        dependsOn(desktop.tasks.named('testClasses'))
+        classpath = desktop.sourceSets.test.runtimeClasspath
+        mainClass.set('com.hiltech.desktop.evidence.UX128FieldFocusHeadlessEvidenceKt')
+    }
+}
