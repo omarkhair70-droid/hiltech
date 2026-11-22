@@ -1,0 +1,61 @@
+{
+  "$schema_description": "Local evidence checklist only. Does not inspect or deploy anything. Do not store credentials, PII, tokens, endpoint secrets or company data here.",
+  "environment": "preprod",
+  "source_commit": "",
+  "immutable_image_digest": "",
+  "deployment_url": "",
+  "evidence_gates": {
+    "host_capacity_isolation": {
+      "status": "PENDING",
+      "proof_refs": []
+    },
+    "immutable_image_provenance": {
+      "status": "PENDING",
+      "proof_refs": []
+    },
+    "private_tls_ingress": {
+      "status": "PENDING",
+      "proof_refs": []
+    },
+    "separate_postgres_migration": {
+      "status": "PENDING",
+      "proof_refs": []
+    },
+    "real_keycloak_oidc_revocation": {
+      "status": "PENDING",
+      "proof_refs": []
+    },
+    "persistent_canonical_openfga": {
+      "status": "PENDING",
+      "proof_refs": []
+    },
+    "private_durable_evidence_storage": {
+      "status": "PENDING",
+      "proof_refs": []
+    },
+    "operational_health_observability": {
+      "status": "PENDING",
+      "proof_refs": []
+    },
+    "backups_disposable_restore": {
+      "status": "PENDING",
+      "proof_refs": []
+    },
+    "real_native_android_windows_e2e": {
+      "status": "PENDING",
+      "proof_refs": []
+    },
+    "cross_role_full_journey_and_denials": {
+      "status": "PENDING",
+      "proof_refs": []
+    },
+    "authorized_operator_acceptance": {
+      "status": "PENDING",
+      "proof_refs": []
+    }
+  },
+  "owner_release_approval": {
+    "status": "PENDING",
+    "proof_refs": []
+  }
+}
