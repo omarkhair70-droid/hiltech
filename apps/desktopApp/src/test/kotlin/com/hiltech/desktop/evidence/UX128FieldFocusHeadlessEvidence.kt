@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
@@ -48,8 +47,7 @@ fun main() = runBlocking<Unit> {
     var fieldState by androidx.compose.runtime.mutableStateOf(fixtureState("today"))
     val selected = mutableListOf<String>()
     val selectedScene = ImageComposeScene(width = 430, height = 960, coroutineContext = coroutineContext) {
-        MaterialTheme {
-            Column(Modifier.fillMaxSize().background(Color.White).padding(16.dp)) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(16.dp)) {
                 AssignedWorkSection(
                     state = fieldState,
                     onRefresh = {},
@@ -60,7 +58,6 @@ fun main() = runBlocking<Unit> {
                     presentation = FieldWorkPresentation.FOCUSED_COMPACT,
                     focusScopeKey = "synthetic-actor:synthetic-org:warehouse-job-study",
                 )
-            }
         }
     }
     try {
@@ -90,8 +87,7 @@ fun main() = runBlocking<Unit> {
     }
 
     val wide = ImageComposeScene(width = 1150, height = 980, coroutineContext = coroutineContext) {
-        MaterialTheme {
-            Column(Modifier.fillMaxSize().background(Color.White).padding(16.dp)) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(16.dp)) {
                 AssignedWorkSection(
                     state = fixtureState("detail"),
                     onRefresh = {},
@@ -99,7 +95,6 @@ fun main() = runBlocking<Unit> {
                     presentation = FieldWorkPresentation.FOCUSED_COMPACT,
                     focusScopeKey = "synthetic-actor:synthetic-org:warehouse-job-study",
                 )
-            }
         }
     }
     try {
