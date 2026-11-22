@@ -69,6 +69,13 @@ data class AddReceivingDiscrepancyDto(
     val type: String, val description: String,
 )
 @Serializable
+data class RejectPoReceivingStockLineDto(
+    val operationId: String, val lineId: String,
+    val recordVersion: Long, val lineVersion: Long,
+    val quantity: String, val type: String, val reason: String,
+)
+
+@Serializable
 data class CompleteReceivingDto(val operationId: String, val recordVersion: Long)
 
 @Serializable
