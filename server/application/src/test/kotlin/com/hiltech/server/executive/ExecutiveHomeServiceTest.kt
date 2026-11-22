@@ -7,6 +7,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.mock.web.MockHttpServletRequest
 import com.hiltech.server.platform.ProductApiException
+import com.hiltech.server.security.AuthorizationCheckPort
+import com.hiltech.server.security.RoleTeamAuthorizationService
+import com.hiltech.server.security.RoleTeamSourceAuthorityPort
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -135,6 +138,65 @@ class ExecutiveHomeServiceTest {
         ExecutiveHomeService(sources, access, clock).home(actor, organization, "source-checked")
         assertEquals(actor, lastActor)
         assertEquals(organization, lastOrganization)
+    }
+
+    @Test
+    fun currentOrganizationMembershipAndOpenFgaBothRequiredForExecutiveRead() {
+        var currentlyActive = true
+        var openFgaPermits = true
+        var openFgaCalls = 0
+        val sourceAuthority = object : RoleTeamSourceAuthorityPort {
+            override fun isOrganizationMemberCurrent(identityId: UUID, organizationId: UUID, at: Instant): Boolean =
+                currentlyActive && identityId == actor && organizationId == organization
+
+            override fun isTeamMemberCurrent(identityId: UUID, teamId: UUID, at: Instant): Boolean = false
+            override fun isTeamManagerCurrent(identityId: UUID, teamId: UUID, at: Instant): Boolean = false
+        }
+        val membership = RoleTeamAuthorizationService(
+            authorization = AuthorizationCheckPort {
+                openFgaCalls++
+                openFgaPermits
+            },
+            sourceAuthority = sourceAuthority,
+            clock = clock,
+        )
+        val sources = CapturingSources()
+        val service = ExecutiveHomeService(sources, SourceExecutiveOrganizationAccess(membership), clock)
+
+        // One correctly configured actor + org with a present FGA tuple.
+        assertEquals(organization.toString(), service.home(actor, organization, "allowed").organizationId)
+        assertEquals(1, openFgaCalls)
+
+        // Neither an invented organization nor a second account can use the
+        // authorized actor's source readings.
+        assertEquals("EXECUTIVE_HOME_NOT_FOUND", assertThrows<ProductApiException> {
+            service.home(actor, UUID.randomUUID(), "foreign-org")
+        }.code)
+        assertEquals(1, openFgaCalls)
+
+        // Live source revocation must deny BEFORE even asking OpenFGA.
+        currentlyActive = false
+        val beforeRevocationChecks = openFgaCalls
+        assertEquals("EXECUTIVE_HOME_NOT_FOUND", assertThrows<ProductApiException> {
+            service.home(actor, organization, "revoked")
+        }.code)
+        assertEquals(beforeRevocationChecks, openFgaCalls)
+
+        // An active source membership cannot compensate for a missing FGA
+        // relation, and neither failure can consult the executive producers.
+        currentlyActive = true
+        openFgaPermits = false
+        val previousInboxActor = sources.needsActor
+        sources.needsActor = null
+        sources.projectsActor = null
+        sources.assetsActor = null
+        assertEquals("EXECUTIVE_HOME_NOT_FOUND", assertThrows<ProductApiException> {
+            service.home(actor, organization, "fga-denied")
+        }.code)
+        assertEquals(null, sources.needsActor)
+        assertEquals(null, sources.projectsActor)
+        assertEquals(null, sources.assetsActor)
+        assertEquals(actor, previousInboxActor)
     }
 
     private object AllowedMembership : ExecutiveOrganizationAccess {
