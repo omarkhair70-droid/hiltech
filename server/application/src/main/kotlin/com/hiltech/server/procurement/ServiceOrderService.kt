@@ -273,7 +273,20 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
             )
             """.trimIndent(),Boolean::class.java,id,row.organizationId,
         )==true
-        return row.copy(serviceAccepted=accepted,invoiceMatched=matched)
+        val latest=jdbc.query(
+            """
+            SELECT event_type FROM procurement_service_order_supplier_communication
+            WHERE service_order_id=? AND organization_id=?
+            ORDER BY event_version DESC LIMIT 1
+            """.trimIndent(),{rs,_->rs.getString("event_type")},id,row.organizationId,
+        ).singleOrNull()
+        val dispatch=when(latest) {
+            "EXTERNAL_DISPATCH_ATTESTED" -> "DISPATCH_ATTESTED"
+            "SUPPLIER_ACK_ATTESTED" -> "ACK_ATTESTED"
+            else -> "NOT_SENT"
+        }
+        return row.copy(supplierDispatchState=dispatch,
+            serviceAccepted=accepted,invoiceMatched=matched)
     }
 
     private fun quote(rfqId:UUID,quoteId:UUID):Quote?=jdbc.query(
@@ -319,6 +332,11 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
     private fun requireBuyer(actor:UUID,org:UUID) {
         if(!authorized(actor,org,buyerKey))hidden()
     }
+    /** Same existing service issuer, no new supplier messaging role. */
+    fun requireIssuerForSupplierCommunication(actor:UUID,org:UUID) {
+        requireIssuer(actor,org)
+    }
+
     private fun requireIssuer(actor:UUID,org:UUID):UUID {
         if(!enabled || !sourcingEnabled || !validKey(policyKey.trim()))hidden()
         val key=issuerKey.trim()
