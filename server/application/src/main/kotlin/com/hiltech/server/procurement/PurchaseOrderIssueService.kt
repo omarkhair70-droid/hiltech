@@ -130,7 +130,7 @@ class PurchaseOrderIssueService @Autowired constructor(
             if (order.organizationId != current.organizationId ||
                 !purchases.validDeliveryLocation(
                     current.organizationId, request.deliveryStorageLocationId,
-                    order.projectId, now,
+                    order.projectId, order.siteId, now,
                 )
             ) unavailable()
             if (purchases.byCandidate(candidateId) != null) {
