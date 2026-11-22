@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(11, result.migrationsExecuted)
+        assertEquals(12, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -148,12 +148,13 @@ class DatabaseMigrationContractTest {
                         'procurement_supplier_rfq',
                         'procurement_supplier_quote_evidence',
                         'procurement_supplier_quote_technical_assessment',
-                        'procurement_supplier_link_event'
+                        'procurement_supplier_link_event',
+                        'procurement_supplier_quote_document_slot'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(72, tables.getInt(1))
+                assertEquals(73, tables.getInt(1))
 
                 // V0041 is an append-only event extension, never a second
                 // mutable root state. Verify real PostgreSQL metadata, not
@@ -253,6 +254,16 @@ class DatabaseMigrationContractTest {
                 )
                 assertTrue(linkConstraints.next())
                 assertEquals(2, linkConstraints.getInt(1))
+                val supplierSlotTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_supplier_quote_document_slot'::regclass
+                      AND tgname = 'procurement_supplier_quote_document_slot_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(supplierSlotTrigger.next())
+                assertEquals(1, supplierSlotTrigger.getInt(1))
                 val sourcingUniques = statement.executeQuery(
                     """
                     SELECT COUNT(*) FROM pg_constraint
