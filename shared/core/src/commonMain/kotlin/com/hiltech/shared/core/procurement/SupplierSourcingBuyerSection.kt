@@ -31,6 +31,8 @@ fun SupplierSourcingBuyerSection(
     organizationId: String,
     installationId: String,
     newOperationId: () -> String,
+    quoteDocumentUploader: SupplierQuoteDocumentUploader? = null,
+    pickQuoteFile: suspend () -> SupplierQuotePickedFile? = { null },
 ) {
     val scope = rememberCoroutineScope()
     var loading by remember(organizationId) { mutableStateOf(false) }
@@ -162,6 +164,17 @@ fun SupplierSourcingBuyerSection(
                                         }
                                     },
                                 ) { Text("Compare quotations") }
+                                if (quoteDocumentUploader != null && suppliers.isNotEmpty()) {
+                                    SupplierQuoteCaptureForm(
+                                        api = api,
+                                        uploader = quoteDocumentUploader,
+                                        pickFile = pickQuoteFile,
+                                        rfq = round,
+                                        suppliers = suppliers,
+                                        installationId = installationId,
+                                        newOperationId = newOperationId,
+                                    )
+                                }
                                 comparison?.takeIf { comparingRfq == round.id }?.let { view ->
                                     Text("Latest revisions · ${view.recordedSupplierCount} suppliers",
                                         style = MaterialTheme.typography.titleSmall)
