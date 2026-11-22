@@ -68,7 +68,13 @@ routes are handled through the canonical shared engine only when warranted.
 See 03_PROCUREMENT_FLEXIBILITY_AND_LIFECYCLE_DELTA.md for a grounded
 confirmed/correction/missing review of the owner-requested flexibility.
 
-This checkpoint DOES NOT complete S01. Later S01 work: additional demand
-sources (asset/service/office), purchasing review decisions and transitions,
-duplicate detection, role-specific action inbox, shared KMP transport,
-full Windows/Android journeys, real request and approval/stock examples.
+This checkpoint DOES NOT complete S01. The current shared KMP
+`shared/core/.../procurement/PurchaseRequirementApiClient.kt` implements the
+authenticated, online-only Android/Windows transport for current WorkOrder
+DRAFT create/list/detail/withdraw; it is NOT yet a routed operator UI.
+The server canWithdraw boolean is derived from the original requester/current
+state and remains advisory; server authority is always rechecked.
+
+Later S01 work: additional demand sources (asset/service/office), purchasing
+review decisions and transitions, duplicate detection, role-specific action inbox,
+wired native Windows/Android journeys, real request and approval/stock examples.

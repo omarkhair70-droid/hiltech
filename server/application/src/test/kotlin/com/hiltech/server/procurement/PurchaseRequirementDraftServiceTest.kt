@@ -183,6 +183,7 @@ class PurchaseRequirementDraftServiceTest {
         assertEquals("VISIBLE_STOCK_SHORTAGE", receipt.draft.assessmentCode)
         assertEquals("2", receipt.draft.observedFreeQuantity)
         assertEquals("DRAFT", receipt.draft.state)
+        assertTrue(receipt.draft.canWithdraw)
         assertTrue(receipt.draft.assessmentRequiresRefresh)
         assertEquals("2", written?.visibleFreeQuantity?.toPlainString())
         assertEquals(workId, written?.workOrderId)
@@ -218,6 +219,7 @@ class PurchaseRequirementDraftServiceTest {
         )
         assertEquals("DRAFT", original.state)
         assertEquals("WITHDRAWN", result.draft.state)
+        assertFalse(result.draft.canWithdraw)
         assertEquals(2, result.draft.version)
         assertFalse(result.draft.sourceCurrent)
         assertEquals(1, written?.version)
@@ -245,6 +247,17 @@ class PurchaseRequirementDraftServiceTest {
             )
         }.code)
         assertEquals(first, transitioned?.operationId)
+    }
+
+    @Test fun `authorized coworker can read but never gets requester withdrawal capability`() {
+        allow()
+        val svc = service()
+        svc.create(context, workId, request)
+        val coworker = UUID.randomUUID()
+        Mockito.`when`(projectAuth.canRequestResources(coworker, project)).thenReturn(true)
+        val view = svc.detail(coworker, draftId)
+        assertEquals("DRAFT", view.state)
+        assertFalse(view.canWithdraw)
     }
 
     @Test fun `different user cannot withdraw another requester draft`() {

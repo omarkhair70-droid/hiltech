@@ -63,6 +63,7 @@ data class PurchaseRequirementDraftView(
     val sourceCurrent: Boolean,
     val assessmentRequiresRefresh: Boolean = true,
     val version: Long = 1,
+    val canWithdraw: Boolean = false,
 )
 
 data class PurchaseRequirementDraftReceipt(val draft: PurchaseRequirementDraftView, val replayed: Boolean)
@@ -244,6 +245,7 @@ class PurchaseRequirementDraftService @Autowired constructor(
             if (canReadSnapshot) record.visibleFreeQuantity?.toPlainString() else null,
             record.assessedAt, record.requestedBy, record.createdAt, current,
             version = latest?.resultVersion ?: record.version,
+            canWithdraw = effectiveState == "DRAFT" && record.requestedBy == actor,
         )
     }
 
