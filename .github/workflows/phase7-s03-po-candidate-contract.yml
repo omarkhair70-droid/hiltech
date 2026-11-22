@@ -9,12 +9,15 @@ on:
       - "database/migrations/V0046__procurement_po_candidate_snapshot__phase7_slice03.sql"
       - "database/migrations/V0047__procurement_po_issue__phase7_slice03.sql"
       - "database/migrations/V0048__procurement_po_lifecycle__phase7_slice03.sql"
+      - "database/migrations/V0049__procurement_po_delivery_amendment__phase7_slice03.sql"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderCandidate*"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderIssue*"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderLifecycle*"
+      - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderDeliveryAmendment*"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderCandidate*"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderIssue*"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderLifecycle*"
+      - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderDeliveryAmendment*"
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
       - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/Main.kt"
       - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/DesktopIdentityRuntime.kt"
@@ -22,8 +25,10 @@ on:
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCandidate*"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderIssue*"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCancellation*"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderDeliveryAmendment*"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCandidate*"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderIssue*"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderDeliveryAmendment*"
       - "docs/13-delivery/phase7/06_S03_PO_CANDIDATE_APPROVAL_CHECKPOINT.md"
   pull_request:
     branches:
@@ -33,12 +38,15 @@ on:
       - "database/migrations/V0046__procurement_po_candidate_snapshot__phase7_slice03.sql"
       - "database/migrations/V0047__procurement_po_issue__phase7_slice03.sql"
       - "database/migrations/V0048__procurement_po_lifecycle__phase7_slice03.sql"
+      - "database/migrations/V0049__procurement_po_delivery_amendment__phase7_slice03.sql"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderCandidate*"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderIssue*"
       - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderLifecycle*"
+      - "server/application/src/main/kotlin/com/hiltech/server/procurement/PurchaseOrderDeliveryAmendment*"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderCandidate*"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderIssue*"
       - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderLifecycle*"
+      - "server/application/src/test/kotlin/com/hiltech/server/procurement/PurchaseOrderDeliveryAmendment*"
       - "server/application/src/test/kotlin/com/hiltech/server/DatabaseMigrationContractTest.kt"
       - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/Main.kt"
       - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/DesktopIdentityRuntime.kt"
@@ -46,8 +54,10 @@ on:
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCandidate*"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderIssue*"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCancellation*"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderDeliveryAmendment*"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderCandidate*"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderIssue*"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/procurement/PurchaseOrderDeliveryAmendment*"
       - "docs/13-delivery/phase7/06_S03_PO_CANDIDATE_APPROVAL_CHECKPOINT.md"
 
 concurrency:
@@ -100,6 +110,7 @@ jobs:
             --tests com.hiltech.server.procurement.PurchaseOrderCandidateApprovalRequestTest \
             --tests com.hiltech.server.procurement.PurchaseOrderIssueServiceTest \
             --tests com.hiltech.server.procurement.PurchaseOrderLifecycleServiceTest \
+            --tests com.hiltech.server.procurement.PurchaseOrderDeliveryAmendmentServiceTest \
             --tests com.hiltech.server.procurement.SupplierSourcingServiceTest \
             --no-daemon --console=plain
       - name: Verify KMP buyer candidate transport
@@ -107,6 +118,7 @@ jobs:
           ./gradlew :shared:core:desktopTest \
             --tests '*PurchaseOrderCandidateApiClientTest' \
             --tests '*PurchaseOrderIssueApiClientTest' \
+            --tests '*PurchaseOrderDeliveryAmendmentApiClientTest' \
             --no-daemon --console=plain
       - name: Compile Android and Windows candidate surfaces
         run: |
