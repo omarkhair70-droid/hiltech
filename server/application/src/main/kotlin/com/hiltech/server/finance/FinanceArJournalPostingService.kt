@@ -313,8 +313,35 @@ class FinanceArJournalPostingService(
             approval=approved.approvalRequestId,journal=journal,
             replayed=outcome.replayed)
     }
+    /** Discover only currently approved, unrecorded operations for the existing operator authority. */
+    fun operatorQueue(actor: UUID, org: UUID): List<FinanceArJournalReceipt> {
+        authority(actor,org,"hiltech.finance.receivables.ar-posting.operator-authority-key")
+        val ids = jdbc.query(
+            """SELECT p.id FROM finance_ar_posting_proposal p
+               WHERE p.organization_id=?
+               AND EXISTS (SELECT 1 FROM approval_request a
+                 WHERE a.organization_id=p.organization_id AND a.subject_id=p.id
+                 AND a.subject_type=? AND a.state='APPROVED'
+                 AND a.requester_user_id<>?)
+               AND NOT EXISTS (SELECT 1 FROM finance_ar_posted_journal r
+                 WHERE r.organization_id=p.organization_id AND r.proposal_id=p.id)
+               ORDER BY p.id LIMIT 100""",
+            { rs,_ -> rs.getObject("id",UUID::class.java) },org,FINANCE_AR_JOURNAL_POSTING_SUBJECT,actor,
+        )
+        return ids.mapNotNull { id ->
+            val snapshot = subject.current(org,id) ?: return@mapNotNull null
+            if (snapshot.preparedBy == actor) return@mapNotNull null
+            val current = status(actor,org,id)
+            current.takeIf { it.state=="APPROVED" && it.approvalRequestId!=null && it.postedJournalId==null }
+        }
+    }
+
     fun status(actor:UUID,org:UUID,id:UUID):FinanceArJournalReceipt {
-        authority(actor,org,"hiltech.finance.receivables.ar-posting.preparer-authority-key")
+        val operator = try {
+            authority(actor,org,"hiltech.finance.receivables.ar-posting.operator-authority-key")
+            true
+        } catch (_: ProductApiException) { false }
+        if (!operator) authority(actor,org,"hiltech.finance.receivables.ar-posting.preparer-authority-key")
         historic(org,id)?.let { return it }
         val snap=subject.current(org,id) ?: stale()
         val review=engine.subjectStatus(
@@ -412,6 +439,9 @@ class FinanceArJournalPostingController(private val finance:FinanceArJournalPost
         IdempotencyKeyContract.requireMatches(ctx.idempotencyKey,body.operationId)
         return finance.post(actor(http),orgId,id,body.operationId,ctx.correlationId)
     }
+    @GetMapping("/v1/finance/organizations/{orgId}/ar-journal-proposals/operator-queue")
+    fun operatorQueue(http:HttpServletRequest,@PathVariable orgId:UUID):List<FinanceArJournalReceipt> =
+        finance.operatorQueue(actor(http),orgId)
     @GetMapping("/v1/finance/organizations/{orgId}/ar-journal-proposals/{id}")
     fun status(http:HttpServletRequest,@PathVariable orgId:UUID,
         @PathVariable id:UUID):FinanceArJournalReceipt =

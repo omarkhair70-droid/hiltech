@@ -393,8 +393,35 @@ class FinanceApJournalPostingService(
             replayed=result.replayed)
     }
 
+    /** Discover only currently approved, unrecorded operations for the existing operator authority. */
+    fun operatorQueue(actor: UUID, org: UUID): List<FinanceApPostingReceipt> {
+        requireAuthority(actor,org,"hiltech.finance.ap-posting.operator-authority-key")
+        val ids = jdbc.query(
+            """SELECT p.id FROM finance_ap_posting_proposal p
+               WHERE p.organization_id=?
+               AND EXISTS (SELECT 1 FROM approval_request a
+                 WHERE a.organization_id=p.organization_id AND a.subject_id=p.id
+                 AND a.subject_type=? AND a.state='APPROVED'
+                 AND a.requester_user_id<>?)
+               AND NOT EXISTS (SELECT 1 FROM finance_ap_posted_journal r
+                 WHERE r.organization_id=p.organization_id AND r.proposal_id=p.id)
+               ORDER BY p.id LIMIT 100""",
+            { rs,_ -> rs.getObject("id",UUID::class.java) },org,FINANCE_AP_JOURNAL_POSTING_SUBJECT,actor,
+        )
+        return ids.mapNotNull { id ->
+            val snapshot = postingSubject.current(org,id) ?: return@mapNotNull null
+            if (snapshot.requesterUserId == actor) return@mapNotNull null
+            val current = status(actor,org,id)
+            current.takeIf { it.state=="APPROVED" && it.postingReviewRequestId!=null && it.postedJournalId==null }
+        }
+    }
+
     fun status(actor: UUID,org: UUID,proposalId: UUID): FinanceApPostingReceipt {
-        requireAuthority(actor,org,"hiltech.finance.ap-posting.preparer-authority-key")
+        val operator = try {
+            requireAuthority(actor,org,"hiltech.finance.ap-posting.operator-authority-key")
+            true
+        } catch (_: ProductApiException) { false }
+        if (!operator) requireAuthority(actor,org,"hiltech.finance.ap-posting.preparer-authority-key")
         // Historical posted AP remains recognized even when the underlying
         // supplier source later changes. That is not payment or a new booking.
         readPosted(org,proposalId)?.let { return it }
@@ -552,6 +579,10 @@ class FinanceApJournalPostingController(
         IdempotencyKeyContract.requireMatches(ctx.idempotencyKey,body.operationId)
         return finance.post(actor(http),orgId,id,body.operationId,ctx.correlationId)
     }
+
+    @GetMapping("/v1/finance/organizations/{orgId}/ap-journal-proposals/operator-queue")
+    fun operatorQueue(http:HttpServletRequest,@PathVariable orgId:UUID):List<FinanceApPostingReceipt> =
+        finance.operatorQueue(actor(http),orgId)
 
     @GetMapping("/v1/finance/organizations/{orgId}/ap-journal-proposals/{id}")
     fun status(http:HttpServletRequest,@PathVariable orgId:UUID,
