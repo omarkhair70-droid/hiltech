@@ -28,16 +28,16 @@ fun ServicePurchaseNeedSection(
     newOperationId: () -> String,
 ) {
     val scope = rememberCoroutineScope()
-    var loading by remember(organizationId) { mutableStateOf(false) }
-    var error by remember(organizationId) { mutableStateOf<String?>(null) }
-    var teams by remember(organizationId) { mutableStateOf<List<ServicePurchaseTeamDto>>(emptyList()) }
-    var selected by remember(organizationId) { mutableStateOf<ServicePurchaseTeamDto?>(null) }
-    var showTeams by remember(organizationId) { mutableStateOf(false) }
-    var needs by remember(organizationId) { mutableStateOf<List<ServicePurchaseNeedDto>>(emptyList()) }
-    var spec by remember(organizationId) { mutableStateOf("") }
-    var acceptance by remember(organizationId) { mutableStateOf("") }
-    var why by remember(organizationId) { mutableStateOf("") }
-    var pendingCreate by remember(organizationId) { mutableStateOf<String?>(null) }
+    var loading by remember(organizationId, installationId) { mutableStateOf(false) }
+    var error by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
+    var teams by remember(organizationId, installationId) { mutableStateOf<List<ServicePurchaseTeamDto>>(emptyList()) }
+    var selected by remember(organizationId, installationId) { mutableStateOf<ServicePurchaseTeamDto?>(null) }
+    var showTeams by remember(organizationId, installationId) { mutableStateOf(false) }
+    var needs by remember(organizationId, installationId) { mutableStateOf<List<ServicePurchaseNeedDto>>(emptyList()) }
+    var spec by remember(organizationId, installationId) { mutableStateOf("") }
+    var acceptance by remember(organizationId, installationId) { mutableStateOf("") }
+    var why by remember(organizationId, installationId) { mutableStateOf("") }
+    var pendingCreate by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("External service requests",style = MaterialTheme.typography.titleLarge)
