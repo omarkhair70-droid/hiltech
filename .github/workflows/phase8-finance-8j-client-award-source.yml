@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "phase8/finance-8j-client-award-source-readiness-20261123"
+      - "integration/hiltech-closeout-finance8j-20261123"
   pull_request:
     branches:
       - "phase8/finance-8i-supplier-accounting-review-20261123"
