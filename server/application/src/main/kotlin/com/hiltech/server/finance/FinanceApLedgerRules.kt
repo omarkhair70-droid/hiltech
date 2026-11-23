@@ -148,7 +148,12 @@ object FinanceApLedgerRules {
         )
     }
 
-    private fun precisePositive(value: BigDecimal): Boolean =
-        value.signum() > 0 && value.stripTrailingZeros().scale() <= 6 &&
-            value.precision() <= 24
+    private fun precisePositive(value: BigDecimal): Boolean {
+        val exact = value.stripTrailingZeros()
+        // PostgreSQL numeric(24,6) holds at most 18 integer digits and
+        // six fractional digits; total precision<=24 is insufficient.
+        val integerDigits = (exact.precision() - exact.scale()).coerceAtLeast(0)
+        return exact.signum() > 0 && exact.scale() <= 6 &&
+            integerDigits <= 18 && exact.precision() <= 24
+    }
 }
