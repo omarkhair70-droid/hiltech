@@ -37,6 +37,8 @@ jobs:
       HILTECH_DB_PASSWORD: hiltech
       HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
       HILTECH_REPO_ROOT: ${{ github.workspace }}
+      HILTECH_AP_LEDGER_SQL: ${{ github.workspace }}/database/phase8/pending_ap_ledger_posting.sql
+      HILTECH_GL_CLOSE_SQL: ${{ github.workspace }}/database/phase8/pending_gl_period_close.sql
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
