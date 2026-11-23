@@ -55,8 +55,11 @@ class FinanceCashCountApprovalSubject(
  override fun isCurrent(subject:ApprovalSubjectRef):Boolean =
    supports(subject.subjectType) &&
      current(subject.organizationId,subject.subjectId)?.version==subject.subjectVersion
- fun enabled():Boolean=environment.getProperty(
-   "hiltech.finance.cashbox.count-enabled",Boolean::class.java,false)
+ fun enabled():Boolean=
+   environment.getProperty(
+     "hiltech.finance.cashbox.enabled",Boolean::class.java,false) &&
+   environment.getProperty(
+     "hiltech.finance.cashbox.count-enabled",Boolean::class.java,false)
  fun policyKey():String?=environment.getProperty(
    "hiltech.finance.cashbox.count-policy-key",""
  ).trim().takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
