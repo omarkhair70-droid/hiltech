@@ -461,7 +461,7 @@ class Payroll9bDraftPostgresContractTest {
         assertThrows<ProductApiException> {
             tx.execute {
                 noFinanceHandoff.handoff(
-                    actor, publishedRunId, UUID.randomUUID(), "synthetic-finance-handoff",
+                    actor, currentSubject.subjectId, UUID.randomUUID(), "synthetic-finance-handoff",
                 )
             }
         }
@@ -504,7 +504,7 @@ class Payroll9bDraftPostgresContractTest {
         val handoffOperation = UUID.randomUUID()
         val handoff = tx.execute {
             financeReviewHandoff.handoff(
-                actor, publishedRunId, handoffOperation, "synthetic-finance-handoff",
+                actor, currentSubject.subjectId, handoffOperation, "synthetic-finance-handoff",
             )
         }!!
         assertEquals("REVIEW_REQUIRED", handoff.state)
@@ -516,14 +516,14 @@ class Payroll9bDraftPostgresContractTest {
         assertEquals(newer.first.net, acceptedManifest?.payableTotal?.toPlainString())
         assertTrue(tx.execute {
             financeReviewHandoff.handoff(
-                actor, publishedRunId, handoffOperation, "synthetic-finance-handoff",
+                actor, currentSubject.subjectId, handoffOperation, "synthetic-finance-handoff",
             )
         }!!.replayed)
         assertEquals(1, acceptedOperations.size)
         assertThrows<ProductApiException> {
             tx.execute {
                 financeReviewHandoff.handoff(
-                    UUID.randomUUID(), publishedRunId, UUID.randomUUID(),
+                    UUID.randomUUID(), currentSubject.subjectId, UUID.randomUUID(),
                     "synthetic-finance-handoff",
                 )
             }
