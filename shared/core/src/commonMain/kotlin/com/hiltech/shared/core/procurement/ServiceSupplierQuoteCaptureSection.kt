@@ -224,7 +224,7 @@ fun ServiceSupplierQuoteCaptureSection(
                     Regex("[A-Z]{3}").matches(currency) &&
                     money.matches(amount) && money.matches(tax) &&
                     terms.trim().length in 12..2000 &&
-                    (validUntil.isBlank() || Regex("\\d{4}-\\d{2}-\\d{2}").matches(validUntil))
+                    (validUntil.isBlank() || servicePurchaseDateIsReal(validUntil))
                 OutlinedButton(enabled = !busy && valid, onClick = {
                     // The native picker suspends. Freeze the selected actual
                     // server-source context and form before opening it.
