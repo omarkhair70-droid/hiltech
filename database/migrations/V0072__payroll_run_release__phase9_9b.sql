@@ -43,7 +43,7 @@ CREATE TRIGGER payroll_9b_release_immutable
 -- policy, or unapproved exception. Application OpenFGA/role grants remain
 -- additional mandatory checks.
 CREATE FUNCTION payroll_9b_release_insert_guard() RETURNS trigger
-LANGUAGE plpgsql AS $
+LANGUAGE plpgsql AS $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1

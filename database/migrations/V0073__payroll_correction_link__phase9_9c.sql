@@ -49,7 +49,7 @@ CREATE INDEX idx_payroll_correction_org_date
     ON payroll_run_correction(organization_id, recorded_at DESC);
 
 CREATE FUNCTION payroll_9c_correction_insert_guard() RETURNS trigger
-LANGUAGE plpgsql AS $
+LANGUAGE plpgsql AS $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1
