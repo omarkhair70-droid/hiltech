@@ -28,6 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 
 /**
  * Host-provided, source-authorized route. This is neither a new role grant nor
@@ -90,15 +93,21 @@ fun NativeOperationalWorkspaceHub(
         checking = true
         accessMessage = null
         granted.clear()
-        for (workspace in eligible) {
-            val allowed = try {
-                workspace.canReadSource()
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                false
-            }
-            granted[workspace.id] = allowed
+        // Independent source reads: a slow P11 project/contract check
+        // must not block an already-authorized Payroll, P7 or Executive tab.
+        coroutineScope {
+            eligible.map { workspace ->
+                launch {
+                    val allowed = try {
+                        workspace.canReadSource()
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        false
+                    }
+                    granted[workspace.id] = allowed
+                }
+            }.joinAll()
         }
         checking = false
     }
@@ -133,7 +142,7 @@ fun NativeOperationalWorkspaceHub(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             visible.forEach { workspace ->
-                OutlinedButton(enabled = !checking && pendingOpen == null, onClick = {
+                OutlinedButton(enabled = pendingOpen == null, onClick = {
                     // A current source read is mandatory even if the button
                     // was visible from an earlier successful read.
                     selectedId = null
