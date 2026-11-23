@@ -78,6 +78,9 @@ fun NativeOperationalWorkspaceHub(
         mutableStateOf<String?>(null)
     }
     var revision by remember(scopeKey, authorityRevisionKey) { mutableStateOf(0) }
+    var pendingOpen by remember(scopeKey, authorityRevisionKey) {
+        mutableStateOf<String?>(null)
+    }
     var checking by remember(scopeKey, authorityRevisionKey) { mutableStateOf(true) }
 
     LaunchedEffect(scopeKey, authorityRevisionKey, eligible.map { it.id }, revision) {
@@ -96,6 +99,21 @@ fun NativeOperationalWorkspaceHub(
         checking = false
     }
 
+    LaunchedEffect(scopeKey, authorityRevisionKey, pendingOpen) {
+        val requested = pendingOpen ?: return@LaunchedEffect
+        val workspace = eligible.firstOrNull { it.id == requested }
+        val allowed = if (workspace == null) false else try {
+            workspace.canReadSource()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
+        granted[requested] = allowed
+        selectedId = if (allowed) requested else null
+        pendingOpen = null
+    }
+
     val visible = eligible.filter {
         nativeWorkspaceMayBeShown(true, scopeKey.isNotBlank(), granted[it.id] == true)
     }
@@ -110,11 +128,10 @@ fun NativeOperationalWorkspaceHub(
         ) {
             visible.forEach { workspace ->
                 OutlinedButton(onClick = {
-                    // On open, immediately revoke the previous grant and redo
-                    // source preflight; stale navigation cannot grant access.
+                    // A current source read is mandatory even if the button
+                    // was visible from an earlier successful read.
                     selectedId = null
-                    revision += 1
-                    // Route selection is set only after the new read below.
+                    pendingOpen = workspace.id
                 }) { Text(workspace.label) }
             }
             OutlinedButton(enabled = !checking, onClick = { selectedId = null; revision += 1 }) {
