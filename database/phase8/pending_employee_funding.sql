@@ -161,7 +161,7 @@ BEGIN
        USING ERRCODE='23514';
  END IF;
  SELECT coalesce(sum(allocated_amount),0) INTO already_cash
-   FROM finance_cash_allocation_record
+   FROM finance_cash_allocation_effective
    WHERE organization_id=NEW.organization_id
      AND bank_statement_line_id=NEW.bank_statement_line_id;
  SELECT coalesce(sum(amount),0) INTO already_funded
@@ -248,11 +248,11 @@ BEGIN
      USING ERRCODE='23514';
  END IF;
  SELECT coalesce(sum(allocated_amount),0) INTO old_source_total
- FROM finance_cash_allocation_record
+ FROM finance_cash_allocation_effective
  WHERE organization_id=NEW.organization_id AND source_kind=NEW.source_kind
    AND source_journal_id=NEW.source_journal_id;
  SELECT coalesce(sum(allocated_amount),0) INTO old_bank_total
- FROM finance_cash_allocation_record
+ FROM finance_cash_allocation_effective
  WHERE organization_id=NEW.organization_id
    AND bank_statement_line_id=NEW.bank_statement_line_id;
  SELECT coalesce(sum(amount),0) INTO old_employee_funding
