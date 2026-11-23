@@ -88,6 +88,14 @@ BEGIN
    WHERE j.id=NEW.source_journal_id AND j.organization_id=NEW.organization_id
    FOR UPDATE;
  END IF;
+ IF NEW.source_kind='AP' AND EXISTS(
+    SELECT 1 FROM finance_ap_journal_reversal rv
+    WHERE rv.organization_id=NEW.organization_id
+      AND rv.original_journal_id=NEW.source_journal_id
+ ) THEN
+   RAISE EXCEPTION 'Reversed AP cannot be allocated to new bank payment'
+     USING ERRCODE='23514';
+ END IF;
  IF source_matched IS NULL OR source_currency<>NEW.currency
     OR source_hash<>p.source_journal_sha256 THEN
    RAISE EXCEPTION 'Recognized current immutable supplier/customer journal required'
