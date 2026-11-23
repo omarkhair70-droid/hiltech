@@ -35,7 +35,7 @@ VALUES('a11a11a1-0000-4000-8000-000000000007',
        'a11a11a1-0000-4000-8000-000000000004',
        'a11a11a1-0000-4000-8000-000000000005',
        'a11a11a1-0000-4000-8000-000000000006',
-       'P11-CI-WORK','Synthetic source WorkOrder','DRAFT','NOT_EVALUATED',
+       'P11-CI-WORK','Synthetic source WorkOrder','IN_PROGRESS','NOT_EVALUATED',
        'NORMAL',1,now(),'a11a11a1-0000-4000-8000-000000000003',now());
 
 INSERT INTO service_support_ticket(
@@ -150,6 +150,20 @@ VALUES('a11a11a1-0000-4000-8000-000000000033',
        'a11a11a1-0000-4000-8000-000000000034',
        'a11a11a1-0000-4000-8000-000000000003',now());
 
+-- Intentionally historical source proof: valid READY storage but older than visit.
+INSERT INTO evidence(
+  id,organization_id,target_type,target_id,work_order_id,
+  evidence_type_code,content_type,size_bytes,sha256,captured_at,
+  captured_by_user_id,storage_state,classification_code,client_visibility_mode,created_at)
+VALUES('a11a11a1-0000-4000-8000-000000000037',
+       'a11a11a1-0000-4000-8000-000000000001',
+       'WORK_ORDER','a11a11a1-0000-4000-8000-000000000007',
+       'a11a11a1-0000-4000-8000-000000000007',
+       'SITE_PHOTO','image/jpeg',128,repeat('c',64),
+       now()-interval '2 hours',
+       'a11a11a1-0000-4000-8000-000000000003',
+       'READY','INTERNAL','INTERNAL_ONLY',now());
+
 DO $$
 DECLARE
  ticket_count integer;
@@ -189,6 +203,26 @@ BEGIN
   RAISE NOTICE 'PASS follow-up history immutability';
  END;
 
+ -- Cannot file an old WorkOrder photo as evidence from this new visit.
+ BEGIN
+  INSERT INTO service_maintenance_finding(
+   id,visit_id,organization_id,project_id,work_order_id,
+   finding_type_code,severity_code,description,evidence_id,
+   source_operation_id,created_by_user_id,created_at)
+  VALUES('a11a11a1-0000-4000-8000-000000000038',
+         'a11a11a1-0000-4000-8000-000000000019',
+         'a11a11a1-0000-4000-8000-000000000001',
+         'a11a11a1-0000-4000-8000-000000000004',
+         'a11a11a1-0000-4000-8000-000000000007',
+         'DEFECT','HIGH','Attempted evidence reuse from before this visit',
+         'a11a11a1-0000-4000-8000-000000000037',
+         'a11a11a1-0000-4000-8000-000000000039',
+         'a11a11a1-0000-4000-8000-000000000003',now());
+  RAISE EXCEPTION 'INVALID: historical evidence accepted as new visit proof';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS pre-visit evidence rejected';
+ END;
+
  -- Cannot falsely close a still-investigating ticket.
  BEGIN
   INSERT INTO service_support_case_event(
@@ -206,7 +240,7 @@ BEGIN
   RAISE NOTICE 'PASS support closure without resolution rejected';
  END;
 
- -- WorkOrder is still DRAFT; an invented completed resolution is rejected.
+ -- WorkOrder is only IN_PROGRESS; an invented ACCEPTED resolution is rejected.
  BEGIN
   INSERT INTO service_support_case_event(
      id,ticket_id,organization_id,project_id,event_number,

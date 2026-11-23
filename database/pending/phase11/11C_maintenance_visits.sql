@@ -49,15 +49,45 @@ CREATE INDEX idx_maintenance_finding_visit ON service_maintenance_finding(visit_
 
 CREATE FUNCTION enforce_service_finding_evidence() RETURNS trigger
 LANGUAGE plpgsql AS $$
+DECLARE
+  proposed_visit_created_at timestamptz;
 BEGIN
+  -- A DRAFT/PLANNED/ASSIGNED work item is not a performed inspection.
+  -- Lock the real source work so it cannot change while evidence is recorded.
+  PERFORM 1 FROM work_order wo
+   WHERE wo.id = NEW.work_order_id
+     AND wo.organization_id = NEW.organization_id
+     AND wo.project_id = NEW.project_id
+     AND wo.lifecycle_state IN (
+       'IN_PROGRESS','BLOCKED','SUBMITTED_FOR_REVIEW',
+       'REWORK_REQUIRED','ACCEPTED','CLOSED'
+     ) FOR SHARE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Field finding requires executed source work'
+      USING ERRCODE = '23514';
+  END IF;
+  SELECT created_at INTO proposed_visit_created_at
+    FROM service_maintenance_visit_plan
+   WHERE id = NEW.visit_id AND organization_id = NEW.organization_id
+     AND project_id = NEW.project_id AND work_order_id = NEW.work_order_id;
+  IF proposed_visit_created_at IS NULL THEN
+    RAISE EXCEPTION 'Original visit source missing' USING ERRCODE = '23514';
+  END IF;
   IF NOT EXISTS(
     SELECT 1 FROM evidence e WHERE e.id = NEW.evidence_id
      AND e.organization_id = NEW.organization_id
      AND e.work_order_id = NEW.work_order_id
      AND e.target_type = 'WORK_ORDER' AND e.target_id = NEW.work_order_id
      AND e.storage_state = 'READY'
+     -- Old evidence must not be labelled as a new visit's observation.
+     AND e.captured_at >= proposed_visit_created_at
+     AND NOT EXISTS(
+       SELECT 1 FROM evidence replacement
+       WHERE replacement.supersedes_evidence_id = e.id
+         AND replacement.storage_state = 'READY'
+     )
   ) THEN
-    RAISE EXCEPTION 'Finding Evidence must be READY and match original WorkOrder'
+    RAISE EXCEPTION 'Finding needs current READY Evidence captured after visit draft creation'
       USING ERRCODE = '23514';
   END IF;
   RETURN NEW;

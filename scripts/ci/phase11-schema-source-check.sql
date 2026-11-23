@@ -41,7 +41,7 @@ BEGIN
        'service_support_case_event','service_maintenance_finding',
        'service_maintenance_ticket_followup'
  ) AND tr.tgname ~ '(source|owner|evidence)';
- IF source_gates<7 THEN
+ IF source_gates<8 THEN
    RAISE EXCEPTION 'Insufficient source validation gates: %',source_gates;
  END IF;
  IF NOT EXISTS (

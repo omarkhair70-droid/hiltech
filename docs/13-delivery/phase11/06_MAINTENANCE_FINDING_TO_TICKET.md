@@ -18,3 +18,12 @@ No automatic ticket creation, field dispatch, replacement part reservation, supp
 
 ## Validation/merge gate
 Do not merge/enable before latest exact-head GitHub workflow verifies Kotlin server, PostgreSQL trigger/SQL fixture and Android/Desktop native client assembly, and UX/DevOps integrate authenticated screens. Entire Phase11 remains draft/feature flags OFF in this branch.
+
+
+## Source integrity repair (2026-11-23)
+- A field finding is allowed only while its canonical WorkOrder is genuinely IN_PROGRESS, BLOCKED, SUBMITTED_FOR_REVIEW, REWORK_REQUIRED, ACCEPTED or CLOSED. This is checked in the Spring service **and** by the P11C insert trigger even if the API is bypassed.
+- The source WorkOrder row is locked while the finding insert is committed, protecting against racing field lifecycle changes.
+- READY Evidence must be WorkOrder-scoped and captured on or after the internal visit draft was created. An older image or a READY image superseded by a new READY revision is not eligible; the server's evidence count/choices and PostgreSQL trigger share this condition.
+- The dedicated disposable PostgreSQL negative test now creates one historical READY source photo and rejects attempting to use it for a new visit; positive same-visit field evidence remains accepted, with no claim that the visit itself is completed.
+- The server reads canonical Work and checklist/Evidence metadata in repeatable-read source snapshots so source status and counters are not mixed across in-flight field updates.
+- Case resolution uses an accepted original WorkOrder row lock and attempts after REOPENED demand fresh source link and new READY evidence. Triage after internal case close is also guarded in SQL.

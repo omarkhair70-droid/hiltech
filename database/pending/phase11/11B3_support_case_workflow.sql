@@ -102,7 +102,7 @@ BEGIN
     END IF;
     SELECT lifecycle_state INTO source_state FROM work_order
       WHERE id=NEW.work_order_id AND organization_id=NEW.organization_id
-      AND project_id=NEW.project_id;
+      AND project_id=NEW.project_id FOR SHARE;
     IF source_state IS DISTINCT FROM 'ACCEPTED' AND source_state IS DISTINCT FROM 'CLOSED' THEN
       RAISE EXCEPTION 'WorkOrder must already be accepted'
         USING ERRCODE='23514';
@@ -138,3 +138,29 @@ EXECUTE FUNCTION service_support_immutable();
 CREATE TRIGGER trg_support_case_no_truncate
 BEFORE TRUNCATE ON service_support_case_event FOR EACH STATEMENT
 EXECUTE FUNCTION service_support_immutable();
+
+-- Both case-state and triage updates serialize on the same source ticket.
+-- This protects the invariant even if someone bypasses the service API.
+CREATE FUNCTION service_triage_case_state_gate() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+ latest_state text;
+BEGIN
+ PERFORM 1 FROM service_support_ticket
+  WHERE id=NEW.ticket_id AND project_id=NEW.project_id
+    AND organization_id=NEW.organization_id FOR UPDATE;
+ IF NOT FOUND THEN
+   RAISE EXCEPTION 'Triage ticket/project source unavailable' USING ERRCODE='23514';
+ END IF;
+ SELECT resulting_state INTO latest_state FROM service_support_case_event
+  WHERE ticket_id=NEW.ticket_id ORDER BY event_number DESC LIMIT 1;
+ IF latest_state IN ('RESOLVED_INTERNAL','CLOSED_INTERNAL') THEN
+   RAISE EXCEPTION 'Triage requires reopened case after resolution'
+     USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_triage_case_source_gate
+BEFORE INSERT ON service_support_triage_event FOR EACH ROW
+EXECUTE FUNCTION service_triage_case_state_gate();

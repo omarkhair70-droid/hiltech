@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -228,28 +229,44 @@ class JdbcMaintenanceVisitStore(private val jdbc: JdbcTemplate) {
             workOrderId,
         )
 
-    fun readyWorkEvidence(evidenceId: UUID, org: UUID, workOrderId: UUID): Boolean =
+    fun readyWorkEvidence(
+        evidenceId: UUID, org: UUID, workOrderId: UUID, visitCreatedAt: Instant,
+    ): Boolean =
         jdbc.queryForObject(
             """
             SELECT EXISTS(
-                SELECT 1 FROM evidence
-                 WHERE id = ? AND organization_id = ?
-                   AND work_order_id = ? AND target_type = 'WORK_ORDER'
-                   AND target_id = ? AND storage_state = 'READY'
+                SELECT 1 FROM evidence e
+                 WHERE e.id = ? AND e.organization_id = ?
+                   AND e.work_order_id = ? AND e.target_type = 'WORK_ORDER'
+                   AND e.target_id = ? AND e.storage_state = 'READY'
+                   AND e.captured_at >= ?
+                   AND NOT EXISTS(
+                     SELECT 1 FROM evidence replacement
+                      WHERE replacement.supersedes_evidence_id=e.id
+                        AND replacement.storage_state='READY'
+                   )
             )
             """.trimIndent(),
             Boolean::class.java, evidenceId, org, workOrderId, workOrderId,
+            visitCreatedAt.atOffset(ZoneOffset.UTC),
         ) == true
 
     /** IDs/types only. No object storage keys, filenames or binary links returned. */
-    fun readyEvidenceChoices(org: UUID, workId: UUID): List<MaintenanceReadyEvidenceDto> =
+    fun readyEvidenceChoices(
+        org: UUID, workId: UUID, visitCreatedAt: Instant,
+    ): List<MaintenanceReadyEvidenceDto> =
         jdbc.query(
             """
             SELECT id, work_order_id, evidence_type_code, captured_at
               FROM evidence
              WHERE organization_id=? AND work_order_id=?
                AND target_type='WORK_ORDER' AND target_id=?
-               AND storage_state='READY'
+               AND storage_state='READY' AND captured_at>=?
+               AND NOT EXISTS(
+                 SELECT 1 FROM evidence replacement
+                  WHERE replacement.supersedes_evidence_id=evidence.id
+                    AND replacement.storage_state='READY'
+               )
              ORDER BY captured_at DESC, id LIMIT 200
             """.trimIndent(),
             { rs, _ ->
@@ -259,17 +276,23 @@ class JdbcMaintenanceVisitStore(private val jdbc: JdbcTemplate) {
                     rs.getString("evidence_type_code"),
                     rs.getObject("captured_at", OffsetDateTime::class.java).toInstant().toString(),
                 )
-            }, org, workId, workId,
+            }, org, workId, workId, visitCreatedAt.atOffset(ZoneOffset.UTC),
         )
 
-    fun readyEvidenceCount(org: UUID, workId: UUID): Int =
+    fun readyEvidenceCount(org: UUID, workId: UUID, visitCreatedAt: Instant): Int =
         jdbc.queryForObject(
             """
             SELECT COUNT(*) FROM evidence
              WHERE organization_id=? AND work_order_id=?
                AND target_type='WORK_ORDER' AND target_id=?
-               AND storage_state='READY'
+               AND storage_state='READY' AND captured_at >= ?
+               AND NOT EXISTS(
+                 SELECT 1 FROM evidence replacement
+                  WHERE replacement.supersedes_evidence_id=evidence.id
+                    AND replacement.storage_state='READY'
+               )
             """.trimIndent(), Int::class.java, org, workId, workId,
+            visitCreatedAt.atOffset(ZoneOffset.UTC),
         ) ?: 0
 
     fun insertFinding(
@@ -331,7 +354,7 @@ class MaintenanceVisitService(
     private val audit: AuditEventWriter,
     private val clock: Clock,
 ) {
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun workChoices(projectId: UUID, actor: UUID): List<MaintenanceWorkChoiceDto> {
         val project = manageProject(projectId, actor)
         return work.workOrders(projectId)
@@ -348,13 +371,13 @@ class MaintenanceVisitService(
             }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun visits(projectId: UUID, actor: UUID): List<MaintenanceVisitDto> {
         manageProject(projectId, actor)
         return store.visits(projectId).map { it.asDto(false) }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun sourceStatus(
         projectId: UUID, visitId: UUID, actor: UUID,
     ): MaintenanceSourceStatusDto {
@@ -371,12 +394,12 @@ class MaintenanceVisitService(
                 it.required && it.completionState != "COMPLETE" &&
                     it.completionState != "NOT_APPLICABLE"
             },
-            store.readyEvidenceCount(project.organizationId, current.workOrderId),
+            store.readyEvidenceCount(project.organizationId, current.workOrderId, visit.createdAt),
             MaintenanceDraftPolicy.canRecordEvidenceFinding(current.lifecycleState),
         )
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun readyEvidenceChoices(
         projectId: UUID, visitId: UUID, actor: UUID,
     ): List<MaintenanceReadyEvidenceDto> {
@@ -384,10 +407,10 @@ class MaintenanceVisitService(
         val visit = store.visit(visitId, projectId)
             ?: maintenanceError("VISIT_NOT_FOUND", HttpStatus.NOT_FOUND)
         val source = matchingWork(project, visit.workOrderId)
-        return store.readyEvidenceChoices(project.organizationId, source.workOrderId)
+        return store.readyEvidenceChoices(project.organizationId, source.workOrderId, visit.createdAt)
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun findings(projectId: UUID, visitId: UUID, actor: UUID): List<MaintenanceFindingDto> {
         manageProject(projectId, actor)
         store.visit(visitId, projectId) ?: maintenanceError("VISIT_NOT_FOUND", HttpStatus.NOT_FOUND)
@@ -466,10 +489,13 @@ class MaintenanceVisitService(
             val fresh = manageProject(projectId, actor)
             val currentVisit = store.visit(visitId, projectId)
                 ?: maintenanceError("VISIT_NOT_FOUND", HttpStatus.NOT_FOUND)
+            if (!store.lockWorkOrder(currentVisit.workOrderId))
+                maintenanceError("FINDING_WORK_NOT_FOUND", HttpStatus.NOT_FOUND)
             val currentWork = matchingWork(fresh, currentVisit.workOrderId)
             if (!MaintenanceDraftPolicy.canRecordEvidenceFinding(currentWork.lifecycleState))
                 maintenanceError("FINDING_WORK_NOT_ACCEPTED", HttpStatus.CONFLICT)
-            if (!store.readyWorkEvidence(evidenceId, fresh.organizationId, currentWork.workOrderId))
+            if (!store.readyWorkEvidence(evidenceId, fresh.organizationId, currentWork.workOrderId,
+                    currentVisit.createdAt))
                 maintenanceError("FINDING_EVIDENCE_NOT_READY", HttpStatus.CONFLICT)
             val at = clock.instant()
             store.insertFinding(

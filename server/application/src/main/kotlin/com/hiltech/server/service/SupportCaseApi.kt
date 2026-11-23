@@ -137,6 +137,17 @@ class JdbcSupportCaseStore(private val jdbc: JdbcTemplate) {
             "SELECT id FROM service_support_ticket WHERE id=? AND project_id=? FOR UPDATE",
             { rs, _ -> rs.getObject(1, UUID::class.java) }, ticketId, projectId,
         ).isNotEmpty()
+    
+    fun lockSourceWork(workOrderId: UUID, organizationId: UUID, projectId: UUID): Boolean =
+        jdbc.query(
+            """
+            SELECT id FROM work_order
+             WHERE id=? AND organization_id=? AND project_id=?
+             FOR SHARE
+            """.trimIndent(),
+            { rs, _ -> rs.getObject(1, UUID::class.java) },
+            workOrderId, organizationId, projectId,
+        ).isNotEmpty()
 
     fun latest(ticketId: UUID): SupportCaseEventDto? =
         jdbc.query(
@@ -382,6 +393,8 @@ class SupportCaseService(
             val next = SupportCasePolicy.next(current.internalState, payload.eventType)
                 ?: caseProblem("CASE_INVALID_TRANSITION", HttpStatus.CONFLICT)
             payload.workOrderId?.let { workId ->
+                if (!store.lockSourceWork(workId, project.organizationId, projectId))
+                    caseProblem("CASE_WORK_NOT_FOUND", HttpStatus.NOT_FOUND)
                 val source = work.workOrder(workId)
                     ?: caseProblem("CASE_WORK_NOT_FOUND", HttpStatus.NOT_FOUND)
                 if (source.organizationId != project.organizationId || source.projectId != projectId)

@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -189,7 +190,7 @@ class HandoverReviewService(
     private val audit: AuditEventWriter,
     private val clock: Clock,
 ) {
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun summary(projectId: UUID, versionId: UUID, actor: UUID): HandoverReviewSummaryDto {
         val project = manageProject(projectId, actor)
         val source = reviews.draft(versionId, projectId)
@@ -206,7 +207,7 @@ class HandoverReviewService(
         )
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun history(projectId: UUID, versionId: UUID, actor: UUID): List<HandoverReviewEventDto> {
         val project = manageProject(projectId, actor)
         val source = reviews.draft(versionId, projectId)
@@ -216,7 +217,7 @@ class HandoverReviewService(
         return reviews.events(versionId)
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     fun record(
         projectId: UUID, versionId: UUID, actor: UUID, operationId: UUID,
         expectedNumber: Int, type: String, reasonRaw: String, correlationId: String,

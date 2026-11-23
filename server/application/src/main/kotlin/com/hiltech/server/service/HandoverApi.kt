@@ -22,6 +22,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -413,7 +414,7 @@ class HandoverService(
     private val audit: AuditEventWriter,
     private val clock: Clock,
 ) {
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun readiness(projectId: UUID, actor: UUID): HandoverReadinessDto {
         val project = authorizedProject(projectId, actor, true)
         val works = sources.work(projectId)
@@ -428,13 +429,13 @@ class HandoverService(
         )
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun latest(projectId: UUID, actor: UUID): HandoverPackageVersionDto? {
         authorizedProject(projectId, actor, true)
         return sources.latest(projectId)?.toDto(false)
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     fun createDraft(
         projectId: UUID,
         actor: UUID,
