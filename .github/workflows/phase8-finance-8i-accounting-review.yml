@@ -56,6 +56,14 @@ jobs:
             --tests com.hiltech.server.finance.FinanceSupplierAccountingReviewServiceTest \
             --tests com.hiltech.server.finance.FinanceExpenseDocumentationSourcePostgresContractTest \
             --tests com.hiltech.server.finance.FinanceMoneyDraftPolicySourcePostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceExpenseReceiptReadinessServiceTest \
+            --tests com.hiltech.server.finance.FinanceExpenseReceiptPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceExpenseReceiptEvidenceTargetTest \
+            --tests com.hiltech.server.finance.FinanceExpenseDocumentationReviewServiceTest \
+            --tests com.hiltech.server.finance.FinanceExpenseDocumentationStatusServiceTest \
+            --tests com.hiltech.server.finance.FinanceMoneyDraftPolicyApprovalSubjectTest \
+            --tests com.hiltech.server.finance.FinanceMoneyDraftPolicyReviewServiceTest \
+            --tests com.hiltech.server.finance.FinanceBankResultRulesTest \
             --no-daemon --console=plain
       - name: Check typed real native supplier Accounting review source and outcome
         run: |
@@ -63,6 +71,13 @@ jobs:
             --tests com.hiltech.shared.core.finance.FinanceSupplierAccountingReviewApiClientTest \
             --tests com.hiltech.shared.core.finance.FinanceExpenseDocumentationReviewApiClientTest \
             --tests com.hiltech.shared.core.finance.FinanceMoneyPolicyReviewApiClientTest \
+            --tests com.hiltech.shared.core.finance.FinanceExpenseReceiptUploaderTest \
+            --tests com.hiltech.shared.core.finance.FinanceReceiptBytesTest \
+            --no-daemon --console=plain
+      - name: Verify true Windows source file signature
+        run: |
+          ./gradlew :apps:desktopApp:test \
+            --tests com.hiltech.desktop.finance.FinanceWindowsReceiptPickerContractTest \
             --no-daemon --console=plain
       - name: Compile production native Finance clients
         run: |
