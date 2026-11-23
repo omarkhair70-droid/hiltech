@@ -143,6 +143,17 @@ class FinanceSupplierAccountingApprovalSubject(
                 AND e.target_id=i.document_slot_id
                 AND e.storage_state='READY'
                 AND e.finalized_at IS NOT NULL
+                AND e.evidence_requirement_key='SUPPLIER_INVOICE_BINARY'
+                AND e.evidence_type_code='SUPPLIER_INVOICE'
+                AND e.classification_code='HIGHLY_RESTRICTED'
+                AND e.client_visibility_mode='INTERNAL_ONLY'
+                AND e.object_key_ref IS NOT NULL
+            JOIN evidence_upload_session session
+                ON session.evidence_id=e.id
+                AND session.state='READY'
+                AND session.finalized_at IS NOT NULL
+                AND session.expected_sha256=e.sha256
+                AND session.expected_size_bytes=e.size_bytes
             JOIN organization company
                 ON company.id=c.organization_id
                 AND company.status='ACTIVE'
