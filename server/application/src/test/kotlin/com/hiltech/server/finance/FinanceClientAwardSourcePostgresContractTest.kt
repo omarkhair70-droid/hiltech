@@ -3,6 +3,7 @@ package com.hiltech.server.finance
 import com.hiltech.server.approval.ApprovalAuthorityBindingSnapshot
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPrincipalType
+import com.hiltech.server.platform.ProductApiException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 import org.springframework.core.env.MapPropertySource
@@ -122,6 +124,24 @@ class FinanceClientAwardSourcePostgresContractTest {
                 val exact = finance.detail(actor, org, row.opportunityId)
                 assertEquals(row, exact)
                 assertEquals(row.sourceFingerprintSha256, exact.sourceFingerprintSha256)
+                // A record beyond the first 100 must be reachable by its
+                // exact source UUID without treating the list as complete.
+                val beyondId = requireNotNull(jdbc.queryForObject(
+                    "SELECT md5('opportunity-101')::uuid", UUID::class.java,
+                ))
+                val beyond = finance.detail(actor, org, beyondId)
+                assertEquals(0, BigDecimal(beyond.sellAmount).compareTo(BigDecimal("1601")))
+                assertFalse(beyond.receivableRecognized)
+                assertFalse(beyond.customerInvoiceIssued)
+                assertThrows<ProductApiException> {
+                    finance.detail(actor, org, UUID.randomUUID())
+                }
+                assertThrows<ProductApiException> {
+                    finance.list(actor, UUID.randomUUID())
+                }
+                assertThrows<ProductApiException> {
+                    finance.list(UUID.randomUUID(), org)
+                }
                 assertNotEquals(org, client)
             } finally {
                 connection.rollback()
