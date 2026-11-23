@@ -1,5 +1,8 @@
 package com.hiltech.server.documents
 
+import com.hiltech.server.finance.FinanceBankCsvParser
+import com.hiltech.server.finance.FinanceBankIntakeEvidenceBinding
+import com.hiltech.server.finance.FinanceBankStatementEvidenceTargetPort
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.documents.storage.EvidenceFinalizeVerification
@@ -27,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.time.Clock
 import java.time.Instant
+import java.util.Base64
 import java.util.UUID
 
 data class ReserveEvidenceUploadRequest(
@@ -43,6 +47,9 @@ data class ReserveEvidenceUploadRequest(
     val capturedAt: String,
     val clientOccurredAt: String? = null,
     val supersedesEvidenceId: String? = null,
+    // These are required only for canonical Finance bank statement Evidence.
+    val bankIntakeOperationId: String? = null,
+    val bankAccountId: String? = null,
 )
 
 data class FinalizeEvidenceRequest(
@@ -135,6 +142,7 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
     private val financeExpenseReceiptTargetProvider: ObjectProvider<FinanceExpenseReceiptEvidenceTargetPort>? = null,
     private val commercialEvidenceTarget: CommercialEvidenceTargetPort =
         DisabledCommercialEvidenceTargetPort,
+    private val bankStatementTargetProvider: ObjectProvider<FinanceBankStatementEvidenceTargetPort>? = null,
 ) {
     fun reserve(
         actorIdentityId: UUID,
@@ -180,6 +188,9 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
         }
         if (command.targetType == "FINANCE_EXPENSE_RECEIPT") {
             return reserveFinanceExpenseReceipt(actorIdentityId, correlationId, command)
+        }
+        if (command.targetType == "FINANCE_BANK_STATEMENT_INTAKE") {
+            return reserveFinanceBankStatement(actorIdentityId, correlationId, command)
         }
 
         if (command.targetType in setOf("COMMERCIAL_CONTRACT", "COMMERCIAL_CLIENT_PO")) {
@@ -2595,6 +2606,12 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
                     ?.toUuid(
                         "INVALID_SUPERSEDES_EVIDENCE_ID",
                     ),
+            bankIntakeOperationId = bankIntakeOperationId
+                ?.takeIf { it.isNotBlank() }
+                ?.toUuid("INVALID_BANK_INTAKE_OPERATION_ID"),
+            bankAccountId = bankAccountId
+                ?.takeIf { it.isNotBlank() }
+                ?.toUuid("INVALID_BANK_ACCOUNT_ID"),
         )
     }
 
@@ -2613,7 +2630,11 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
                 capturedAt,
                 clientOccurredAt,
                 supersedesEvidenceId,
-            ).joinToString("|") {
+            ).let { original ->
+                if (targetType == "FINANCE_BANK_STATEMENT_INTAKE")
+                    original + listOf(bankIntakeOperationId, bankAccountId)
+                else original
+            }.joinToString("|") {
                 it?.toString() ?: ""
             },
         )
@@ -2813,6 +2834,8 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
         val capturedAt: Instant,
         val clientOccurredAt: Instant?,
         val supersedesEvidenceId: UUID?,
+        val bankIntakeOperationId: UUID?,
+        val bankAccountId: UUID?,
     )
 
     companion object {
