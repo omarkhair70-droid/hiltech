@@ -1042,6 +1042,154 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
         )
     }
 
+    /**
+     * A bank statement is evidence for a FUTURE deterministic intake proposal.
+     * The proposal does not exist before Evidence becomes READY; do not require
+     * the proposal row at reserve time or bypass original Finance authority.
+     */
+    private fun reserveFinanceBankStatement(
+        actorIdentityId: UUID,
+        correlationId: String,
+        command: ReserveCommand,
+    ): ReserveEvidenceUploadResponse {
+        val port = bankStatementTargetProvider?.ifAvailable
+            ?: throw ProductApiException(
+                "EVIDENCE_TARGET_UNSUPPORTED",
+                "Finance bank Evidence target is unavailable.",
+                HttpStatus.NOT_FOUND,
+            )
+        val bankOperation = command.bankIntakeOperationId
+        val bankAccountId = command.bankAccountId
+        if (bankOperation == null || bankAccountId == null ||
+            command.workOrderId != null || command.supersedesEvidenceId != null ||
+            command.requirementKey != "FINANCE_BANK_STATEMENT_INTAKE_BINARY" ||
+            command.assertedEvidenceTypeCode != "FINANCE_BANK_STATEMENT_INTAKE" ||
+            command.contentType != "text/csv" ||
+            command.sizeBytes !in 1L..FinanceBankCsvParser.MAX_BYTES.toLong() ||
+            FinanceBankIntakeEvidenceBinding.proposalId(bankOperation) != command.targetId
+        ) throw ProductApiException(
+            "EVIDENCE_BANK_STATEMENT_CONTRACT_MISMATCH",
+            "Canonical CSV, original bank operation and proposal binding required.",
+            HttpStatus.UNPROCESSABLE_ENTITY,
+        )
+        val account = port.loadApprovedAccount(bankAccountId)
+            ?: throw ProductApiException(
+                "OBJECT_NOT_VISIBLE", "Company bank account unavailable.", HttpStatus.NOT_FOUND,
+            )
+        if (!port.canReserve(actorIdentityId, account)) throw ProductApiException(
+            "OBJECT_NOT_VISIBLE", "Company bank account unavailable.", HttpStatus.NOT_FOUND,
+        )
+        val storage = requireStorage()
+        val now = clock.instant()
+        val evidenceId = UUID.randomUUID()
+        val uploadSessionId = UUID.randomUUID()
+        val spec = EvidenceUploadSpec(
+            evidenceId = evidenceId,
+            organizationId = account.organizationId,
+            objectVersionId = UUID.randomUUID(),
+            contentType = command.contentType,
+            expectedSizeBytes = command.sizeBytes,
+            expectedSha256Hex = command.sha256,
+        )
+        val expires = now.plusSeconds(storageProperties.uploadExpirySeconds)
+        val execution = idempotency.execute(
+            spec = IdempotentCommandSpec(
+                operationId = command.operationId,
+                actorUserId = actorIdentityId,
+                commandType = "ReserveEvidenceUpload",
+                targetType = "FinanceBankStatementIntake",
+                targetId = command.targetId,
+                requestFingerprint = command.fingerprint(),
+                correlationId = correlationId,
+            ),
+        ) {
+            val currentAccount = port.loadApprovedAccount(bankAccountId)
+            if (currentAccount != account ||
+                !port.canReserve(actorIdentityId, account)
+            ) throw ProductApiException(
+                "OBJECT_NOT_VISIBLE", "Current bank source changed.", HttpStatus.NOT_FOUND,
+            )
+            persistence.insertFinanceBankStatementReservation(
+                FinanceBankStatementEvidenceReservationInsert(
+                    evidenceId = evidenceId,
+                    uploadSessionId = uploadSessionId,
+                    operationId = command.operationId,
+                    objectKey = spec.objectKey,
+                    organizationId = account.organizationId,
+                    bankProposalId = command.targetId,
+                    contentType = command.contentType,
+                    originalFileName = command.originalFileName,
+                    sizeBytes = command.sizeBytes,
+                    sha256 = command.sha256,
+                    capturedAt = command.capturedAt,
+                    clientOccurredAt = command.clientOccurredAt,
+                    capturedByUserId = actorIdentityId,
+                    uploadExpiresAt = expires,
+                    createdAt = now,
+                ),
+            )
+            audit.append(
+                AuditEventRecord(
+                    actorUserId = actorIdentityId,
+                    action = "EVIDENCE_UPLOAD_RESERVED",
+                    targetType = "Evidence",
+                    targetId = evidenceId,
+                    newStateRef = "evidence:RESERVED",
+                    occurredAt = now,
+                    correlationId = correlationId,
+                    reason = "FINANCE_BANK_STATEMENT_INTAKE_RESERVE",
+                    configRevisionRefsJson =
+                        """{"targetType":"FINANCE_BANK_STATEMENT_INTAKE"}""",
+                ),
+            )
+            IdempotentCommandOutcome(resultCode = "EVIDENCE_RESERVED")
+        }
+        val reservation = persistence.findReservationByOperationId(command.operationId)
+            ?: throw ProductApiException(
+                "EVIDENCE_RESERVATION_UNAVAILABLE",
+                "Finance bank Evidence reservation unavailable.",
+                HttpStatus.SERVICE_UNAVAILABLE, retryable = true,
+            )
+        if (reservation.targetType != "FINANCE_BANK_STATEMENT_INTAKE" ||
+            reservation.organizationId != account.organizationId ||
+            reservation.targetId != command.targetId ||
+            reservation.capturedByUserId != actorIdentityId ||
+            reservation.sha256 != command.sha256 ||
+            reservation.sizeBytes != command.sizeBytes
+        ) throw ProductApiException(
+            "OBJECT_NOT_VISIBLE", "Finance bank Evidence mismatch.", HttpStatus.NOT_FOUND,
+        )
+        if (!clock.instant().isBefore(reservation.uploadExpiresAt)) {
+            throw ProductApiException(
+                "EVIDENCE_UPLOAD_SESSION_EXPIRED",
+                "Finance bank upload session expired.",
+                HttpStatus.CONFLICT,
+            )
+        }
+        val signed = runCatching {
+            storage.createUploadTarget(reservation.toStorageSpec())
+        }.getOrElse {
+            throw ProductApiException(
+                "EVIDENCE_STORAGE_UNAVAILABLE",
+                "Private bank Evidence storage is unavailable.",
+                HttpStatus.SERVICE_UNAVAILABLE, retryable = true,
+            )
+        }
+        val expiry = if (signed.expiresAt.isBefore(reservation.uploadExpiresAt))
+            signed.expiresAt else reservation.uploadExpiresAt
+        return ReserveEvidenceUploadResponse(
+            evidence = reservation.toMetadata(),
+            upload = EvidenceUploadTargetResponse(
+                uploadUrl = signed.uploadUrl,
+                requiredHeaders = signed.requiredHeaders,
+                expiresAt = expiry.toString(),
+                expectedSizeBytes = reservation.sizeBytes,
+            ),
+            correlationId = correlationId,
+            replayed = execution.replayed,
+        )
+    }
+
     private fun reserveFinanceExpenseReceipt(
         actorIdentityId: UUID,
         correlationId: String,
