@@ -170,6 +170,7 @@ fun ExecutiveHomeSection(
                 "هذا المصدر غير متاح أو لا يطابق نطاق القراءة المعتمد؛ لا نعرض عناصره.",
                 color = MaterialTheme.colorScheme.error,
             )
+        }
 
         HorizontalDivider()
 
@@ -252,6 +253,7 @@ fun ExecutiveHomeSection(
                 "هذا المصدر غير متاح أو لا يطابق نطاق القراءة المعتمد؛ لا نعرض عناصره.",
                 color = MaterialTheme.colorScheme.error,
             )
+        }
 
         HorizontalDivider()
 
@@ -286,6 +288,7 @@ fun ExecutiveHomeSection(
                 "هذا المصدر غير متاح أو لا يطابق نطاق القراءة المعتمد؛ لا نعرض عناصره.",
                 color = MaterialTheme.colorScheme.error,
             )
+        }
 
         HorizontalDivider()
 
