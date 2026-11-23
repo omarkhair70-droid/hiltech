@@ -14,7 +14,7 @@ fun servicePurchaseOrderStillAvailable(
  * Calendar-aware invoice date preflight, independent of platform date APIs.
  * Formatted but impossible dates must not trigger the native evidence picker.
  */
-fun serviceInvoiceDateIsReal(date: String): Boolean {
+fun servicePurchaseDateIsReal(date: String): Boolean {
     if (!Regex("\\d{4}-\\d{2}-\\d{2}").matches(date)) return false
     val year = date.substring(0, 4).toInt()
     val month = date.substring(5, 7).toInt()
@@ -42,7 +42,7 @@ fun serviceInvoiceInputIsWellFormed(
 ): Boolean {
     val money = Regex("^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$")
     return reference.trim().length in 2..96 &&
-        serviceInvoiceDateIsReal(date) &&
+        servicePurchaseDateIsReal(date) &&
         Regex("[A-Z]{3}").matches(currency) &&
         money.matches(amount) &&
         money.matches(tax)
