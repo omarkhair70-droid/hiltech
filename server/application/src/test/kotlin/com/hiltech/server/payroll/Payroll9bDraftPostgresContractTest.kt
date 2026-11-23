@@ -469,7 +469,30 @@ class Payroll9bDraftPostgresContractTest {
             ) AND NOT tgisinternal
             """.trimIndent(), Int::class.java,
         ))
-        assertThrows<Exception> {
+        val lateLineError = assertThrows<Exception> {
+            jdbc.update(
+                """
+                INSERT INTO payroll_run_employee_line (
+                    id, run_version_id, payroll_period_id, employee_snapshot_id,
+                    employee_id, source_fingerprint, currency, gross,
+                    deductions, reimbursements, net
+                )
+                SELECT ?, run_version_id, payroll_period_id, employee_snapshot_id,
+                       employee_id, source_fingerprint, currency, gross,
+                       deductions, reimbursements, net
+                FROM payroll_run_employee_line
+                WHERE run_version_id = ?
+                LIMIT 1
+                """.trimIndent(),
+                UUID.randomUUID(), publishedRunId,
+            )
+        }
+        // This must be the RELEASE guard, not just a duplicate employee
+        // unique-key error: BEFORE INSERT triggers run first.
+        assertTrue(generateSequence(lateLineError as Throwable?) { it.cause }.any {
+            it.message?.contains("Cannot append an employee to a released payroll run") == true
+        })
+        val lateComponentError = assertThrows<Exception> {
             jdbc.update(
                 """
                 INSERT INTO payroll_run_component_ref (
@@ -489,6 +512,9 @@ class Payroll9bDraftPostgresContractTest {
                 UUID.randomUUID(), UUID.randomUUID(), publishedRunId,
             )
         }
+        assertTrue(generateSequence(lateComponentError as Throwable?) { it.cause }.any {
+            it.message?.contains("Cannot append a component to a released payroll run") == true
+        })
         // A direct SQL attempt cannot release an obsolete generation even
         // with a current routine policy and a legitimate organization user.
         assertThrows<Exception> {
