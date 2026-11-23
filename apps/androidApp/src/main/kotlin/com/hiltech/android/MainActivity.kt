@@ -36,6 +36,7 @@ import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.executive.executiveNativeWorkspace
 import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
+import com.hiltech.shared.core.payroll.payrollAdminReadNativeWorkspace
 import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
 import com.hiltech.shared.core.service.handoverReadNativeWorkspace
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
@@ -148,6 +149,14 @@ class MainActivity : ComponentActivity() {
                         if (BuildConfig.HILTECH_OWN_PAYSLIPS_ENABLED) {
                             add(ownPayslipNativeWorkspace(
                                 client = hiltechApplication.payrollOwnApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_PAYROLL_ADMIN_READ_ENABLED) {
+                            add(payrollAdminReadNativeWorkspace(
+                                client = hiltechApplication.payrollAdminApi,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
