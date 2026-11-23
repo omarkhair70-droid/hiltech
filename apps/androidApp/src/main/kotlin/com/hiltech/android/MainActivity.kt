@@ -38,6 +38,7 @@ import com.hiltech.shared.core.executive.executiveNativeWorkspace
 import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
 import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
 import com.hiltech.shared.core.service.handoverReadNativeWorkspace
+import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
@@ -165,6 +166,14 @@ class MainActivity : ComponentActivity() {
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_FINANCE_INVOICE_READ_ENABLED) {
+                            add(supplierInvoiceFinanceReadWorkspace(
+                                client = hiltechApplication.supplierInvoiceFinanceApi,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                                newOperationId = { UUID.randomUUID().toString() },
                             ))
                         }
                     }
