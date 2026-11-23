@@ -31,9 +31,15 @@ class FinanceGlPeriodCloseApprovedPostgresContractTest {
         val migrations=System.getenv("HILTECH_MIGRATIONS_PATH")
             ?: "database/migrations"
         val ap=System.getenv("HILTECH_AP_LEDGER_SQL")
-            ?: "database/phase8/pending_ap_ledger_posting.sql"
+            ?: Path.of(
+                System.getenv("HILTECH_REPO_ROOT") ?: ".",
+                "database/phase8/pending_ap_ledger_posting.sql",
+            ).toString()
         val close=System.getenv("HILTECH_GL_CLOSE_SQL")
-            ?: "database/phase8/pending_gl_period_close.sql"
+            ?: Path.of(
+                System.getenv("HILTECH_REPO_ROOT") ?: ".",
+                "database/phase8/pending_gl_period_close.sql",
+            ).toString()
         Flyway.configure().dataSource(url,user,password)
             .locations("filesystem:$migrations").load().migrate()
         DriverManager.getConnection(url,user,password).use { connection ->

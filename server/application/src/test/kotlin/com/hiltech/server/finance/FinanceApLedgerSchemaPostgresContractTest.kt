@@ -33,7 +33,10 @@ class FinanceApLedgerSchemaPostgresContractTest {
         Flyway.configure().dataSource(url, user, pass)
             .locations("filesystem:$migrations").load().migrate()
         val schema = System.getenv("HILTECH_AP_LEDGER_SQL")
-            ?: "database/phase8/pending_ap_ledger_posting.sql"
+            ?: Path.of(
+                System.getenv("HILTECH_REPO_ROOT") ?: ".",
+                "database/phase8/pending_ap_ledger_posting.sql",
+            ).toString()
         val ddl = Files.readString(Path.of(schema))
         assertTrue(ddl.contains("finance_ap_posted_journal"))
         assertTrue(ddl.contains("approval_decision"))
