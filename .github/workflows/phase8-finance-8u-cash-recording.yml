@@ -46,6 +46,8 @@ jobs:
         run: |
           ./gradlew :server:application:test \
             --tests com.hiltech.server.finance.FinanceCashAllocationPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceCashVoidPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceCashVoidReviewVersionTest \
             --tests com.hiltech.server.finance.FinanceEmployeeFundingPostgresContractTest \
             --tests com.hiltech.server.finance.FinanceEmployeeFundingOriginTest \
             --tests com.hiltech.server.finance.FinanceEmployeeSettlementReviewVersionTest \
@@ -67,6 +69,7 @@ jobs:
         run: |
           ./gradlew :shared:core:desktopTest \
             --tests com.hiltech.shared.core.finance.FinanceCashAllocationApiClientTest \
+            --tests com.hiltech.shared.core.finance.FinanceCashVoidApiClientTest \
             --tests com.hiltech.shared.core.finance.FinanceBankStatementIntakeApiClientTest \
             --tests com.hiltech.shared.core.finance.FinanceEmployeeMoneyApiClientTest \
             --tests com.hiltech.shared.core.finance.FinanceExpenseReimbursementApiClientTest \
