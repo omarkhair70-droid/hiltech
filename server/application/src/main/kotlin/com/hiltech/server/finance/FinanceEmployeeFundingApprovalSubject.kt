@@ -186,7 +186,7 @@ class FinanceEmployeeFundingApprovalSubject(
         ) ?: BigDecimal.ZERO
         val cashUsed=jdbc.queryForObject(
             """SELECT coalesce(sum(allocated_amount),0)
-               FROM finance_cash_allocation_record
+               FROM finance_cash_allocation_effective
                WHERE organization_id=? AND bank_statement_line_id=?""",
             BigDecimal::class.java,org,row.bankLineId,
         ) ?: BigDecimal.ZERO
