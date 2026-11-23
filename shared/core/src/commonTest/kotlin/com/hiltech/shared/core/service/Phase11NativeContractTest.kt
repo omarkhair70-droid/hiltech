@@ -70,10 +70,10 @@ class Phase11NativeContractTest {
             installation)
         assertEquals("INVESTIGATING", event.resultingState)
         assertEquals("INTERNAL_ONLY", event.visibility)
-        assertEquals(
-            listOf("/v1/projects/$project/service-tickets/$ticket/case/events" to operation),
-            captured,
-        )
+        assertEquals(1, captured.size)
+        assertEquals("/v1/projects/$project/service-tickets/$ticket/case/events",
+            captured.single().first)
+        assertEquals(operation, captured.single().second)
         assertFailsWith<IllegalArgumentException> {
             client.record(project, ticket,
                 SupportCaseRecordDto("invalid-id", 0, "REOPENED", "reason"), installation)

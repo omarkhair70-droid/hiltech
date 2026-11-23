@@ -18,6 +18,7 @@ import com.hiltech.server.work.WorkAssignmentSourceAuthorityPort
 import com.hiltech.server.work.WorkPersistencePort
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
@@ -354,14 +355,14 @@ class JdbcMaintenanceVisitStore(private val jdbc: JdbcTemplate) {
 }
 
 @Service
-class MaintenanceVisitService(
+class MaintenanceVisitService @Autowired constructor(
     private val projects: ProjectsPersistencePort,
     private val authorization: ProjectAuthorizationPort,
     private val work: WorkPersistencePort,
     private val sourceAssignment: WorkAssignmentSourceAuthorityPort,
     private val assignedAuthority: WorkAssignmentAuthorizationPort,
     @Value("\${hiltech.phase11.maintenance.assigned-findings.enabled:false}")
-    private val assignedFieldFindingsEnabled: Boolean = false,
+    private val assignedFieldFindingsEnabled: Boolean,
     private val store: JdbcMaintenanceVisitStore,
     private val commands: IdempotentCommandExecutor,
     private val audit: AuditEventWriter,
