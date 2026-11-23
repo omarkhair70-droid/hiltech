@@ -24,6 +24,7 @@ data class FinanceExpenseDocumentationSnapshot(
     val amount: String,
     val currency: String,
     val verifiedEvidenceIds: List<UUID>,
+    val policyVersion: Int,
     val sourceVersion: Long,
 )
 
@@ -188,6 +189,7 @@ class FinanceExpenseDocumentationApprovalSubject(
             amount = first.amount.toPlainString(),
             currency = first.currency,
             verifiedEvidenceIds = rows.map { it.evidenceId },
+            policyVersion = policy.versionNumber,
             sourceVersion = version,
         )
     }
