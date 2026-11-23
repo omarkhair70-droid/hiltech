@@ -170,6 +170,31 @@ class ExecutiveOperationalBriefTest {
     }
 
     @Test
+    fun unknownProducerStatusAndMissingHealthTimestampFailClosed() {
+        val brief = buildExecutiveOperationalBrief(snapshot(
+            needs = ExecutiveSectionDto(
+                "FUTURE_UNKNOWN_STATE", listOf(decision(1)), "INBOX_WORK_QUEUE",
+                partial = false,
+            ),
+            projects = ExecutiveSectionDto(
+                "PARTIAL", listOf(project("UNAVAILABLE").copy(healthAsOf = null)),
+                "PROJECTS_AND_PROJECT_HEALTH", partial = true,
+            ),
+            assets = ExecutiveSectionDto(
+                "FUTURE_UNKNOWN_STATE", listOf(asset(1)), "ASSET_SERVICE_QUEUE",
+                partial = false,
+            ),
+        ))
+        assertTrue(brief.lanes[0].entries.isEmpty())
+        assertTrue(brief.lanes[2].entries.isEmpty())
+        assertTrue(brief.lanes[0].incomplete)
+        assertTrue(brief.lanes[2].incomplete)
+        assertEquals(ExecutiveBriefPriority.UNVERIFIED, brief.lanes[1].entries.single().priority)
+        // Project modification time cannot stand in for a source health evaluation.
+        assertNull(brief.lanes[1].entries.single().observedAt)
+    }
+
+    @Test
     fun briefCannotRequestUnboundedItems() {
         assertFailsWith<IllegalArgumentException> {
             buildExecutiveOperationalBrief(snapshot(), maxPerLane = 0)
