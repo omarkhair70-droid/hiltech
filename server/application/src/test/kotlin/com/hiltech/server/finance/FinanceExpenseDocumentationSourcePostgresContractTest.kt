@@ -162,7 +162,7 @@ class FinanceExpenseDocumentationSourcePostgresContractTest {
                 val initial = requireNotNull(subject.current(org, expense))
                 assertNotNull(initial)
                 assertEquals(listOf(receiptOne), initial.verifiedEvidenceIds)
-                assertEquals("150", initial.amount)
+                assertEquals(0, java.math.BigDecimal("150").compareTo(java.math.BigDecimal(initial.amount)))
                 val original = ApprovalSubjectRef(
                     org, FINANCE_EXPENSE_DOCUMENTATION_REVIEW_SUBJECT,
                     expense, initial.sourceVersion,
