@@ -21,6 +21,10 @@ import com.hiltech.shared.core.local.buildHiltechLocalDatabase
 import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
 import com.hiltech.shared.core.payroll.Payroll9aApiClient
 import com.hiltech.shared.core.payroll.Payroll9b9cApiClient
+import com.hiltech.shared.core.service.SupportDeskApiClient
+import com.hiltech.shared.core.service.SupportTimeApiClient
+import com.hiltech.shared.core.service.WarrantyCoverageReadinessApiClient
+import com.hiltech.shared.core.service.MaintenanceAgendaApiClient
 import com.hiltech.shared.core.service.HandoverApiClient
 import com.hiltech.shared.core.projects.ProjectsApiClient
 import com.hiltech.shared.core.commercial.CommercialApiClient
@@ -123,6 +127,10 @@ class HiltechApplication : Application() {
     val commercialApi by lazy { CommercialApiClient(productApi) }
     val readProjectsApi by lazy { ProjectsApiClient(productApi) }
     val handoverApi by lazy { HandoverApiClient(productApi) }
+    val supportServiceApi by lazy { SupportDeskApiClient(productApi) }
+    val supportTimeApi by lazy { SupportTimeApiClient(productApi) }
+    val warrantyReadinessApi by lazy { WarrantyCoverageReadinessApiClient(productApi) }
+    val maintenanceAgendaApi by lazy { MaintenanceAgendaApiClient(productApi) }
     val servicePurchaseNeedApi by lazy { ServicePurchaseNeedApiClient(productApi) }
     val serviceSupplierSourcingApi by lazy { ServiceSupplierSourcingApiClient(productApi) }
     val supplierMasterDataApi by lazy { SupplierMasterDataApiClient(productApi) }
