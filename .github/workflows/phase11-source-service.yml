@@ -69,6 +69,7 @@ jobs:
             --tests com.hiltech.server.service.ServiceContractSourcePolicyTest \
             --tests com.hiltech.server.service.MaintenanceTicketFollowupPolicyTest \
             --tests com.hiltech.server.service.MaintenanceDraftPolicyTest \
+            --tests com.hiltech.server.service.MaintenanceReviewPolicyTest \
             --no-configuration-cache --console=plain
 
       - name: Verify canonical migrations against disposable PostgreSQL
@@ -88,7 +89,8 @@ jobs:
             database/pending/phase11/11B2_support_triage.sql \
             database/pending/phase11/11B3_support_case_workflow.sql \
             database/pending/phase11/11C_maintenance_visits.sql \
-            database/pending/phase11/11C2_maintenance_ticket_followups.sql; do
+            database/pending/phase11/11C2_maintenance_ticket_followups.sql \
+            database/pending/phase11/11C3_maintenance_technical_review.sql; do
             psql -h localhost -U hiltech -d hiltech -v ON_ERROR_STOP=1 -f "$sql"
           done
           psql -h localhost -U hiltech -d hiltech -v ON_ERROR_STOP=1 \

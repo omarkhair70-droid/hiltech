@@ -259,6 +259,21 @@ VALUES('a11a11a1-0000-4000-8000-000000000037',
        'a11a11a1-0000-4000-8000-000000000003',
        'READY','INTERNAL','INTERNAL_ONLY',now());
 
+-- Canonical source visit review starts without pretending the WorkOrder was accepted.
+INSERT INTO service_maintenance_review_event (
+  id,visit_id,organization_id,project_id,work_order_id,
+  event_number,event_type,resulting_state,source_work_version,
+  reason,source_operation_id,recorded_by_user_id,recorded_at)
+VALUES('a11a11a1-0000-4000-8000-000000000079',
+       'a11a11a1-0000-4000-8000-000000000019',
+       'a11a11a1-0000-4000-8000-000000000001',
+       'a11a11a1-0000-4000-8000-000000000004',
+       'a11a11a1-0000-4000-8000-000000000007',
+       1,'REVIEW_STARTED','REVIEWING',2,
+       'Source-anchored internal inspection check',
+       'a11a11a1-0000-4000-8000-000000000080',
+       'a11a11a1-0000-4000-8000-000000000003',now());
+
 DO $$
 DECLARE
  ticket_count integer;
@@ -266,6 +281,33 @@ BEGIN
  SELECT count(*) INTO ticket_count FROM service_support_case_event
   WHERE ticket_id='a11a11a1-0000-4000-8000-000000000008';
  IF ticket_count<>2 THEN RAISE EXCEPTION 'Expected two genuine valid support events'; END IF;
+ -- A manager may not forge an internally completed visit from IN_PROGRESS work.
+ BEGIN
+  INSERT INTO service_maintenance_review_event(
+    id,visit_id,organization_id,project_id,work_order_id,
+    event_number,event_type,resulting_state,source_work_version,
+    evidence_id,reason,source_operation_id,recorded_by_user_id,recorded_at)
+  VALUES('a11a11a1-0000-4000-8000-000000000081',
+         'a11a11a1-0000-4000-8000-000000000019',
+         'a11a11a1-0000-4000-8000-000000000001',
+         'a11a11a1-0000-4000-8000-000000000004',
+         'a11a11a1-0000-4000-8000-000000000007',
+         2,'INTERNAL_TECHNICAL_COMPLETION','COMPLETED_INTERNAL',2,
+         'a11a11a1-0000-4000-8000-000000000030',
+         'Attempt to forge completed inspection',
+         'a11a11a1-0000-4000-8000-000000000082',
+         'a11a11a1-0000-4000-8000-000000000003',now());
+  RAISE EXCEPTION 'INVALID: unaccepted work completed a technical review';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS source work acceptance mandatory for visit completion';
+ END;
+ BEGIN
+  UPDATE service_maintenance_review_event SET reason='Forged change'
+   WHERE id='a11a11a1-0000-4000-8000-000000000079';
+  RAISE EXCEPTION 'INVALID: changed immutable technical review';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS technical review history immutable';
+ END;
 
  -- The immutable intake row stays OPEN, but the support ticket READ projection
  -- must reflect the latest case event. Checking the same correlated source
