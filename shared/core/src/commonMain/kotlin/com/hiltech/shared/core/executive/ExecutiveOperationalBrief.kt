@@ -84,8 +84,11 @@ fun buildExecutiveOperationalBrief(
                     kind = ExecutiveBriefKind.PROJECT_RISK,
                     title = project.projectCode + " · " + project.name,
                     detail = "صحة المشروع: " + project.healthState +
-                        if (project.reasonCodes.isEmpty()) "" else
-                            " · أسباب المصدر: " + project.reasonCodes.joinToString("، "),
+                        (if (project.reasonCodes.isEmpty()) "" else
+                            " · أسباب المصدر: " + project.reasonCodes.joinToString("، ")) +
+                        (project.signals.firstOrNull()?.let { signal ->
+                            " · إشارة المصدر: " + signal.code + " — " + signal.summary
+                        } ?: ""),
                     priority = priority,
                     sourceType = project.reference.sourceType,
                     sourceId = project.projectId,
@@ -104,7 +107,9 @@ fun buildExecutiveOperationalBrief(
                 title = asset.assetCode + (asset.name?.let { " · " + it } ?: ""),
                 detail = "الإتاحة: " + asset.availabilityState +
                     " · المعايرة: " + asset.calibrationStatus +
-                    " · الصيانة: " + asset.maintenanceStatus,
+                    " · الصيانة: " + asset.maintenanceStatus +
+                    (if (asset.reasonCodes.isEmpty()) "" else
+                        " · أسباب المصدر: " + asset.reasonCodes.joinToString("، ")),
                 // The asset service queue itself defines exception membership;
                 // do not invent a criticality score across source domains.
                 priority = ExecutiveBriefPriority.ACTION_VISIBLE,
