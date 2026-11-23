@@ -6,7 +6,7 @@ CREATE VIEW finance_ap_ar_source_balance AS
 WITH cash_used AS (
  SELECT organization_id,source_kind,source_journal_id,
         sum(allocated_amount) AS allocated_amount
- FROM finance_cash_allocation_record
+ FROM finance_cash_allocation_effective
  GROUP BY organization_id,source_kind,source_journal_id
 )
 SELECT j.organization_id, 'AP'::varchar(2) AS source_kind,
