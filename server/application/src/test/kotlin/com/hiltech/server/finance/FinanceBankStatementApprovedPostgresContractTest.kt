@@ -136,7 +136,11 @@ class FinanceBankStatementApprovedPostgresContractTest {
          VALUES(?,?,?,1,?,?,'CREDIT','EGP',?,?)""",
       UUID.randomUUID(),org,proposal,line.externalTransactionId,
       line.bookedOn,line.amount,line.originalLineSha256)
+    // Validate the prepared proposal while its line set is complete.
+    // Restore deferred checking before importing the statement header: its
+    // exact bank lines are inserted afterwards in the SAME transaction.
     c.createStatement().use {it.execute("SET CONSTRAINTS ALL IMMEDIATE")}
+    c.createStatement().use {it.execute("SET CONSTRAINTS ALL DEFERRED")}
     jdbc.update(
       """INSERT INTO approval_authority_binding(
            id,organization_id,authority_key,principal_type,
