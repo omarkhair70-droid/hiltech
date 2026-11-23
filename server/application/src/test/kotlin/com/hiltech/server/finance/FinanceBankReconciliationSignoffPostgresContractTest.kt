@@ -53,6 +53,8 @@ class FinanceBankReconciliationSignoffPostgresContractTest {
        val counters=jdbc.queryForObject(
          "SELECT count(*) FROM finance_bank_reconciliation_status",Long::class.java)
        assertEquals(0L,counters)
+       val forgedSavepoint=c.setSavepoint()
+       try {
        assertThrows(SQLException::class.java){
          c.prepareStatement(
            """INSERT INTO finance_bank_reconciliation_proposal(
@@ -69,6 +71,7 @@ class FinanceBankReconciliationSignoffPostgresContractTest {
            st.executeUpdate()
          }
        }
+       } finally { c.rollback(forgedSavepoint) }
        assertEquals(0L,jdbc.queryForObject(
          "SELECT count(*) FROM finance_bank_reconciliation_record",Long::class.java))
        assertTrue(jdbc.queryForObject(
