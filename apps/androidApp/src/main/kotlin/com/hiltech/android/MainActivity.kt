@@ -45,6 +45,7 @@ import com.hiltech.shared.core.service.serviceOperationsReadNativeWorkspace
 import com.hiltech.shared.core.finance.financeEvidenceReadNativeWorkspace
 import com.hiltech.shared.core.finance.financeBankCsvIntakeNativeWorkspace
 import com.hiltech.shared.core.finance.financeAllocationOperatorWorkspace
+import com.hiltech.shared.core.finance.financeCompletionOperatorWorkspace
 import com.hiltech.shared.core.finance.FinanceBankCsvSelectedFile
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
@@ -263,6 +264,13 @@ class MainActivity : ComponentActivity() {
                             ))
                         }
                         if (BuildConfig.HILTECH_FINANCE_REVIEW_PREPARE_ENABLED) {
+                            add(financeCompletionOperatorWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                                apis = hiltechApplication.financeEvidenceReadApis,
+                                newOperationId = { UUID.randomUUID().toString() },
+                            ))
                             add(financeAllocationOperatorWorkspace(
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,

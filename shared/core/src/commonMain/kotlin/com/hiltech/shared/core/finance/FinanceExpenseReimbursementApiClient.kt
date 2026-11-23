@@ -4,6 +4,7 @@ import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 @Serializable
@@ -60,6 +61,14 @@ class FinanceExpenseReimbursementApiClient(
         org:String,proposal:String,operation:String,installation:String,
     ):FinanceExpenseReimbursementReceiptDto =
         command(org,proposal,operation,installation,"record")
+    suspend fun operatorQueue(org:String,installation:String):List<FinanceExpenseReimbursementReceiptDto> =
+        api.request(
+            method=HttpMethod.Get,
+            path="/v1/finance/organizations/"+uuid(org)+"/expense-reimbursements/operator-queue",
+            options=HiltechRequestOptions(installationId=installation),
+            decode={json.decodeFromString(ListSerializer(FinanceExpenseReimbursementReceiptDto.serializer()),it)},
+        )
+
     suspend fun status(
         org:String,proposal:String,installation:String,
     ):FinanceExpenseReimbursementReceiptDto=api.request(
