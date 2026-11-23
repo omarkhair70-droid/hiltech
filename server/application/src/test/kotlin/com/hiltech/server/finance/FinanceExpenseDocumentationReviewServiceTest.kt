@@ -112,6 +112,15 @@ class FinanceExpenseDocumentationReviewServiceTest {
         Mockito.`when`(employeeDrafts.expense(actor, org, draft)).thenReturn(own())
         Mockito.`when`(subject.current(org, draft)).thenReturn(source())
         // Unexpected NO_APPROVAL_REQUIRED engine result (e.g., policy changed).
+        Mockito.`when`(engine.requestException(
+            actor, operationId,
+            ApprovalSubjectRef(org, FINANCE_EXPENSE_DOCUMENTATION_REVIEW_SUBJECT, draft, 70001L),
+            policy, "FINANCE_EXPENSE_RECEIPT_DOCUMENTATION_REVIEW",
+            null, "review-test", false,
+        )).thenReturn(ApprovalRequestResult(
+            approvalRequired = false, approvalRequestId = null, state = null,
+            policyKey = policy, policyVersion = 3, authorityKey = null, replayed = false,
+        ))
         assertThrows<ProductApiException> {
             service(true).request(actor, org, draft, operationId, "review-test")
         }
