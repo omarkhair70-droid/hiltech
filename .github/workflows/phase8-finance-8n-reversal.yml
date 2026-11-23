@@ -49,3 +49,7 @@ jobs:
             --tests com.hiltech.server.finance.FinanceApReversalReviewVersionTest \
             --tests com.hiltech.server.finance.FinanceApReversalPostgresContractTest \
             --no-daemon --stacktrace
+      - name: Compile Windows and Android Finance API clients
+        run: |
+          ./gradlew :apps:desktopApp:compileKotlin :apps:androidApp:assembleDebug \
+            --no-daemon --console=plain
