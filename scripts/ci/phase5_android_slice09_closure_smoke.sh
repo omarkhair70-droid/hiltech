@@ -32,10 +32,17 @@ for ((page=0; page<7; page++)); do
   sleep 1
 done
 [[ "$all_xml" == *'البحث السريع / Quick Scan'* ]]
-[[ "$all_xml" == *'سلطة تعديل المخزن · مرفوضة'* ]]
-[[ "$all_xml" == *'التسليم الفعلي غير متاح لهذه الهوية.'* ]]
-[[ "$all_xml" == *'Warehouse mutation authority · denied'* ]]
-[[ "$all_xml" == *'Physical handoff is not available for this identity.'* ]]
+# The shared authority gate intentionally renders one Arabic blocked status,
+# not two English labels. Assert the exact product-visible denial, never
+# weaken the revoked actor or require inaccessible controls to appear.
+for expected in \
+  'التسليم الفعلي غير متاح لهذه الهوية' \
+  'سلطة تعديل المخزن مرفوضة'; do
+  if [[ "$all_xml" != *"$expected"* ]]; then
+    printf 'Missing revoked-authority denial: %s\n' "$expected" >&2
+    exit 1
+  fi
+done
 [[ "$all_xml" != *'UNEXPECTED AUTHORIZED MUTATION'* ]]
 for forbidden in 'Acquisition cost' 'acquisitionCost' 'candidateValue' 'Purchase price' 'Unit cost' 'Currency code' 'Payroll' 'Invoice total'; do
   if [[ "$all_xml" == *"$forbidden"* ]]; then

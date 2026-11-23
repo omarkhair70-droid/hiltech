@@ -7,7 +7,6 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
@@ -20,6 +19,10 @@ import com.hiltech.shared.core.warehouse.AssetTagLookupDto
 import com.hiltech.shared.core.warehouse.StockItemDto
 
 class WarehouseQuickScanEvidenceActivity : ComponentActivity() {
+    // Persist the UI evidence fixture across shell slot disposal/recomposition.
+    // The result must still render in the real Quick Scan Compose controls.
+    private var quickScanState by mutableStateOf(WarehouseQuickScanState())
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val actor = "99999999-9999-4999-8999-999999999999"
@@ -33,7 +36,6 @@ class WarehouseQuickScanEvidenceActivity : ComponentActivity() {
         }
         val content = ComposeView(this).apply {
             setContent {
-                var state by remember { mutableStateOf(WarehouseQuickScanState()) }
                 HiltechShell(
                     state = HiltechShellState.SignedIn(
                         identity = IdentityBootstrapDto(
@@ -46,11 +48,12 @@ class WarehouseQuickScanEvidenceActivity : ComponentActivity() {
                     ),
                     warehouseOperator = {
                         WarehouseQuickScanControls(
-                            state = state,
+                            state = quickScanState,
                             busy = false,
                             onAssetTagLookup = { code ->
                                 check(code == "synthetic-current-tag")
-                                state = state.copy(
+                                quickScanState = quickScanState.copy(
+                                    resolvedTagQuery = code,
                                     assetTagResult = AssetTagLookupDto(
                                         assetCode = "SYNTH-PASSPORT",
                                         name = "Synthetic calibration instrument",
@@ -65,7 +68,8 @@ class WarehouseQuickScanEvidenceActivity : ComponentActivity() {
                             },
                             onAssetSearch = { query ->
                                 check(query == "SYNTH-PASSPORT")
-                                state = state.copy(
+                                quickScanState = quickScanState.copy(
+                                    assetSearchResultQuery = query,
                                     assetSearchResults = listOf(
                                         AssetIdentityDto(
                                             id = assetId,
@@ -88,7 +92,8 @@ class WarehouseQuickScanEvidenceActivity : ComponentActivity() {
                             },
                             onStockSearch = { query ->
                                 check(query == "SYNTH-PART-01")
-                                state = state.copy(
+                                quickScanState = quickScanState.copy(
+                                    stockSearchResultQuery = query,
                                     stockSearchResults = listOf(
                                         StockItemDto(
                                             id = stockId,

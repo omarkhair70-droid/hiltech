@@ -21,6 +21,7 @@ class WarehouseClosureEvidenceActivity : ComponentActivity() {
         setContent {
             val safeState = remember {
                 WarehouseQuickScanState(
+                    resolvedTagQuery = "synthetic-safe-tag",
                     assetTagResult = AssetTagLookupDto(
                         assetCode = "SYNTH-SAFE-ASSET",
                         name = "Synthetic safe asset",
@@ -47,6 +48,7 @@ class WarehouseClosureEvidenceActivity : ComponentActivity() {
                     WarehouseQuickScanControls(
                         state = safeState,
                         busy = true,
+                        initialTag = "synthetic-safe-tag",
                         onAssetTagLookup = {},
                         onAssetSearch = {},
                         onStockSearch = {},

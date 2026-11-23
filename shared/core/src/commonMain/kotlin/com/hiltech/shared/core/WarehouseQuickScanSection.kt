@@ -97,8 +97,11 @@ fun WarehouseQuickScanControls(
     onStockInputChanged: () -> Unit = {},
     onOpenCanonicalAsset: ((String) -> Unit)? = null,
     onOpenCanonicalStock: ((String) -> Unit)? = null,
+    // Render a previously resolved canonical lookup in an explicitly read-only
+    // view (e.g. revoked permissions) without weakening query-result matching.
+    initialTag: String = "",
 ) {
-    var tag by remember { mutableStateOf("") }
+    var tag by remember(initialTag) { mutableStateOf(initialTag) }
     var assetSearch by remember { mutableStateOf("") }
     var stockSearch by remember { mutableStateOf("") }
     val validTag = Regex("[A-Za-z0-9_-]{1,128}").matches(tag.trim())
