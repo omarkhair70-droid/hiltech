@@ -30,3 +30,11 @@ signed hash/version unit test, native HTTP contract, independent PG guards,
 positive approved split-collection regression and company-authenticated
 operator E2E in unified staging. A green compile does not establish the last
 two; never silently claim production close.
+
+## Source completeness amendment (V0098)
+Matching includes effective AP/AR allocations, recorded bank-funded employee
+advances/imprest, bank-return settlements, and personally paid expense
+reimbursements. An imprest receipt-only settlement has no bank line and
+must not count toward bank reconciliation. Signed statements block all
+five bank-writing source tables, even when a delayed writer races a signoff.
+This change corrects a genuine original-scope omission, not a new module.

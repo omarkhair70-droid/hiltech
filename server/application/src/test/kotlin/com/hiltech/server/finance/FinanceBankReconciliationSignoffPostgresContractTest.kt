@@ -50,6 +50,28 @@ class FinanceBankReconciliationSignoffPostgresContractTest {
        assertTrue(guard.contains("FINANCE_BANK_RECONCILIATION"))
        assertTrue(guard.contains("approval_decision"))
        assertTrue(guard.contains("signed_evidence_id"))
+       val snapshotSql=jdbc.queryForObject(
+         """SELECT definition FROM pg_views
+            WHERE schemaname='public'
+              AND viewname='finance_bank_reconciliation_snapshot'""",
+         String::class.java) ?: error("Missing unified bank source")
+       for(source in listOf(
+         "finance_cash_allocation_effective",
+         "finance_employee_funding_record",
+         "finance_employee_settlement_record",
+         "finance_expense_reimbursement_record",
+       )) assertTrue(snapshotSql.contains(source),
+         "Missing accepted bank event in signoff snapshot: $source")
+       for(table in listOf(
+         "finance_employee_funding_record",
+         "finance_employee_settlement_record",
+         "finance_expense_reimbursement_record",
+       )) assertTrue(jdbc.queryForObject(
+         """SELECT EXISTS(SELECT 1 FROM pg_trigger
+            WHERE tgrelid=to_regclass(?) AND
+              tgname LIKE 'finance_bank_reconciliation_no_late_%')""",
+         Boolean::class.java,table)==true,
+         "Signed statement must block late $table")
        val counters=jdbc.queryForObject(
          "SELECT count(*) FROM finance_bank_reconciliation_status",Long::class.java)
        assertEquals(0L,counters)
