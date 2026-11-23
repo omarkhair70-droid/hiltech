@@ -33,6 +33,11 @@ BEGIN
      opportunity_code,title,created_by,created_at,updated_at)
   VALUES(opportunity,company,client,actor,'RFQ',
          'SYNTHETIC-'||opportunity,'Synthetic quotation integration',actor,now(),now());
+  INSERT INTO commercial_tender_revision
+    (id,organization_id,opportunity_id,revision_number,tender_type,
+     reference_number,received_at,submission_state,created_by,created_at)
+  VALUES(gen_random_uuid(),company,opportunity,1,'RFQ',
+         'SYNTHETIC-RFQ-1',now(),'RECEIVED',actor,now());
   INSERT INTO commercial_scope_version
     (id,organization_id,opportunity_id,version_number,description,inclusions,
      exclusions,assumptions,technical_constraints,client_responsibilities,created_by,created_at)
@@ -165,6 +170,15 @@ BEGIN
   UPDATE commercial_opportunity
     SET state='AWARDED',version=version+1,updated_at=now()
     WHERE id=opportunity;
+  INSERT INTO commercial_tender_revision
+    (id,organization_id,opportunity_id,revision_number,tender_type,
+     reference_number,received_at,submission_state,created_by,created_at)
+  VALUES(gen_random_uuid(),company,opportunity,2,'RFQ',
+         'SYNTHETIC-RFQ-1',now(),'AWARDED',actor,now());
+  IF (SELECT count(*) FROM commercial_tender_revision
+      WHERE opportunity_id=opportunity AND submission_state='AWARDED')<>1 THEN
+    RAISE EXCEPTION 'Canonical tender award must produce one terminal revision';
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM commercial_opportunity
                  WHERE id=opportunity AND state='AWARDED') THEN
     RAISE EXCEPTION 'Canonical award handoff failed to close opportunity';

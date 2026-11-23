@@ -55,6 +55,19 @@ BEGIN
   END IF;
  END;
 
+ BEGIN
+  INSERT INTO commercial_tender_revision
+    (id,organization_id,opportunity_id,revision_number,tender_type,
+     received_at,submission_state,created_by,created_at)
+  VALUES(gen_random_uuid(),company_a,opportunity,99,'RFQ',now(),'AWARDED',actor,now());
+  RAISE EXCEPTION 'EXPECTED_FAKE_TENDER_AWARD_BLOCK_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%Tender award requires a canonical won Project%' THEN
+   RAISE EXCEPTION 'Tender falsely claimed to be awarded: %',error_message;
+  END IF;
+ END;
+
  INSERT INTO commercial_tender_revision
   (id,organization_id,opportunity_id,revision_number,tender_type,received_at,created_by,created_at)
  VALUES(gen_random_uuid(),company_a,opportunity,1,'RFQ',now(),actor,now());

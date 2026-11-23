@@ -18,7 +18,7 @@ expected = {
 assert set(tables) == expected and len(tables) == len(expected), tables
 for kind, values in (("views", views), ("functions", functions), ("triggers", triggers)):
     assert len(values) == len(set(values)), f"duplicate {kind}: {values}"
-assert len(functions) == 8 and len(triggers) >= 15
+assert len(functions) == 9 and len(triggers) >= 16
 assert sql.count("LANGUAGE plpgsql AS $$") == sql.count("END $$;")
 assert "LANGUAGE plpgsql AS $\n" not in sql
 assert "END $;" not in sql

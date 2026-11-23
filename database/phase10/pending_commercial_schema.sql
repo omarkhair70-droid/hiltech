@@ -631,6 +631,22 @@ CREATE TRIGGER trg_commercial_handoff_valid BEFORE INSERT
   ON commercial_project_handoff FOR EACH ROW
   EXECUTE FUNCTION commercial_guard_handoff_insert();
 
+CREATE FUNCTION commercial_guard_tender_award_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.submission_state='AWARDED' AND NOT EXISTS (
+   SELECT 1 FROM commercial_opportunity o
+   JOIN commercial_project_handoff h ON h.opportunity_id=o.id
+     AND h.organization_id=o.organization_id
+   WHERE o.id=NEW.opportunity_id
+     AND o.organization_id=NEW.organization_id
+     AND o.state='AWARDED'
+ ) THEN RAISE EXCEPTION 'Tender award requires a canonical won Project'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER trg_commercial_tender_award_guard BEFORE INSERT
+  ON commercial_tender_revision FOR EACH ROW
+  EXECUTE FUNCTION commercial_guard_tender_award_insert();
+
 CREATE TRIGGER trg_commercial_opportunity_state BEFORE INSERT OR UPDATE
   ON commercial_opportunity FOR EACH ROW
   EXECUTE FUNCTION commercial_guard_opportunity_state();

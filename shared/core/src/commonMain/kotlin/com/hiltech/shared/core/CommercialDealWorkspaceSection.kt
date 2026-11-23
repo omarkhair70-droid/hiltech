@@ -199,7 +199,7 @@ private fun CommercialDiscoveryPanel(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            listOf("RECEIVED","PREPARING","SUBMITTED","WITHDRAWN","LOST","AWARDED").forEach { status ->
+            listOf("RECEIVED","PREPARING","SUBMITTED","WITHDRAWN","LOST").forEach { status ->
                 OutlinedButton(onClick={tenderStatus=status},enabled=status!=tenderStatus){Text(status)}
             }
         }

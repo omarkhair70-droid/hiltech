@@ -238,7 +238,7 @@ class CommercialService(
         open(op(id,actor,"SALES_WRITE"))
         if (r.tenderType !in setOf("TENDER","RFQ","RFP","OTHER"))
             throw commercialError("COMMERCIAL_TENDER_TYPE","Invalid tender type.",HttpStatus.BAD_REQUEST)
-        if (r.submissionState !in setOf("RECEIVED","PREPARING","SUBMITTED","WITHDRAWN","LOST","AWARDED"))
+        if (r.submissionState !in setOf("RECEIVED","PREPARING","SUBMITTED","WITHDRAWN","LOST"))
             throw commercialError("COMMERCIAL_TENDER_STATUS","Unsupported tender status.",HttpStatus.BAD_REQUEST)
         val received = timestamp(r.receivedAt).atOffset(ZoneOffset.UTC)
         val deadline = r.submissionDeadline?.let(::timestamp)?.atOffset(ZoneOffset.UTC)
@@ -786,6 +786,28 @@ class CommercialService(
                 "UPDATE commercial_opportunity SET state='AWARDED',version=version+1,updated_at=? WHERE id=?",
                 now(),id,
             )
+            // Tender AWARDED history is generated only from a real, verified,
+            // successfully linked Project. A Sales user cannot self-assert this.
+            val lastTender = jdbc.queryForList(
+                """SELECT tender_type,reference_number,received_at,submission_deadline,
+                          clarification_deadline,source_channel
+                   FROM commercial_tender_revision
+                   WHERE opportunity_id=? ORDER BY revision_number DESC LIMIT 1""",id,
+            ).firstOrNull()
+            if (lastTender != null) {
+                jdbc.update(
+                    """INSERT INTO commercial_tender_revision
+                       (id,organization_id,opportunity_id,revision_number,tender_type,
+                        reference_number,received_at,submission_deadline,clarification_deadline,
+                        source_channel,submission_state,created_by,created_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,'AWARDED',?,?)""",
+                    this.id("tender-award",id),locked["organization_id"],id,
+                    next("commercial_tender_revision",id),
+                    lastTender["tender_type"],lastTender["reference_number"],lastTender["received_at"],
+                    lastTender["submission_deadline"],lastTender["clarification_deadline"],
+                    lastTender["source_channel"],actor,now(),
+                )
+            }
             audit(actor,"COMMERCIAL_CONVERTED_TO_PROJECT",id,"AWARDED",correlation)
         }
         return result(id,replay,"AWARDED",correlation)
