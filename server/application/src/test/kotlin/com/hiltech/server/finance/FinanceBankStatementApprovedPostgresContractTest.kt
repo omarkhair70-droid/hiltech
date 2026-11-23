@@ -3,6 +3,7 @@ package com.hiltech.server.finance
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.springframework.jdbc.core.JdbcTemplate
@@ -177,6 +178,32 @@ class FinanceBankStatementApprovedPostgresContractTest {
          VALUES(?,?,?,?,'APPROVE',?,101,?)""",
       UUID.randomUUID(),approval,assignment,reviewer,
       imported.minusMinutes(30),UUID.randomUUID())
+    val headerChecks=jdbc.queryForMap(
+      """
+      SELECT p.account_id=? AS account_matches,
+             p.statement_sha256=? AS statement_matches,
+             p.statement_lines_sha256=? AS lines_match,
+             p.statement_evidence_id=? AS evidence_matches,
+             p.date_start=? AS start_matches,
+             p.date_end=? AS end_matches,
+             p.opening_balance=? AS opening_matches,
+             p.closing_balance=? AS closing_matches,
+             p.expected_line_count=1 AS count_matches,
+             p.prepared_by_user_id<>? AS actor_distinct,
+             a.state='APPROVED' AS account_approved,
+             a.currency='EGP' AS currency_matches
+      FROM finance_bank_statement_intake_proposal p
+      JOIN finance_bank_account_register a
+        ON a.id=p.account_id AND a.organization_id=p.organization_id
+      WHERE p.id=? AND p.organization_id=?
+      """.trimIndent(),
+      account,sha,digest,evidence,
+      source.statementStart,source.statementEnd,
+      source.openingBalance,source.closingBalance,
+      importer,proposal,org,
+    )
+    assertTrue(headerChecks.values.all{it==true},
+       "BANK_HEADER_SOURCE_DRIFT: $headerChecks")
     val intake=UUID.randomUUID()
     assertEquals(1,jdbc.update(
       """INSERT INTO finance_bank_statement_intake(
