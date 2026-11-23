@@ -8,6 +8,9 @@ import com.hiltech.server.platform.ProductApiException
 import java.util.UUID
 import java.math.BigDecimal
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.springframework.jdbc.core.JdbcTemplate
+import java.time.Clock
 
 class CommercialContractShapeTest {
     @Test
@@ -21,6 +24,15 @@ class CommercialContractShapeTest {
                 "vendor" in name || "internal" in name)
         }
         assertTrue("totalprice" in publicFields)
+    }
+
+    @Test
+    fun disabledCommercialDocumentTargetDoesNotQueryMissingSchema() {
+        val jdbc = JdbcTemplate() // Intentionally NO datasource and no Phase10 migration.
+        val access = CommercialAccess(jdbc, Clock.systemUTC(), false)
+        val target = JdbcCommercialEvidenceTarget(jdbc, access, false)
+        assertNull(target.loadTarget("COMMERCIAL_CONTRACT", UUID.randomUUID()))
+        assertNull(target.loadTarget("COMMERCIAL_CLIENT_PO", UUID.randomUUID()))
     }
 
     @Test
