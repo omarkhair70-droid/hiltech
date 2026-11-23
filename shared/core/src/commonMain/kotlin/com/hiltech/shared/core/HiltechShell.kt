@@ -267,6 +267,9 @@ fun HiltechShell(
     onTakeEvidencePhoto: (String) -> Unit = {},
     warehouseOperator: @Composable () -> Unit = {},
     procurementOperator: @Composable () -> Unit = {},
+    // Presentation-only host presence; not an authorization grant.
+    warehouseOperatorVisible: Boolean = false,
+    procurementOperatorVisible: Boolean = false,
 ) {
     MaterialTheme {
         // Never inherit a different actor's previous desktop/mobile scroll
@@ -284,6 +287,7 @@ fun HiltechShell(
         val fieldWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val peopleWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val warehouseWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
+        val procurementWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val projectWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val shellNavigationScope = rememberCoroutineScope()
         Column(
@@ -364,7 +368,8 @@ fun HiltechShell(
                     // This is a scroll shortcut, not a permission grant, route
                     // impersonation or an additional backend/source-of-truth.
                     if (state.field != null || state.people != null ||
-                        state.warehouse != null || state.projects != null
+                        state.warehouse != null || warehouseOperatorVisible ||
+                        procurementOperatorVisible || state.projects != null
                     ) {
                         Text("مساحات العمل / Workspaces", style = MaterialTheme.typography.titleMedium)
                         Row(
@@ -376,10 +381,15 @@ fun HiltechShell(
                                     shellNavigationScope.launch { fieldWorkspaceRequester.bringIntoView() }
                                 }) { Text("شغلي اليوم") }
                             }
-                            if (state.warehouse != null) {
+                            if (state.warehouse != null || warehouseOperatorVisible) {
                                 OutlinedButton(onClick = {
                                     shellNavigationScope.launch { warehouseWorkspaceRequester.bringIntoView() }
                                 }) { Text("المخزن") }
+                            }
+                            if (procurementOperatorVisible) {
+                                OutlinedButton(onClick = {
+                                    shellNavigationScope.launch { procurementWorkspaceRequester.bringIntoView() }
+                                }) { Text("المشتريات") }
                             }
                             if (state.projects != null) {
                                 OutlinedButton(onClick = {
@@ -584,7 +594,13 @@ fun HiltechShell(
                     }
                     // Host applications mount procurement only with an explicit,
                     // default-OFF feature flag. Never show it during offline mode.
-                    procurementOperator()
+                    Column {
+                        Spacer(
+                            Modifier.fillMaxWidth().height(1.dp)
+                                .bringIntoViewRequester(procurementWorkspaceRequester),
+                        )
+                        procurementOperator()
+                    }
 
                     state.warehouse?.let { warehouse ->
                         WarehouseSetupSection(
