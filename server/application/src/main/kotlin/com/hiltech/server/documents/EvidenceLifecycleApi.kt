@@ -99,6 +99,10 @@ data class EvidenceDownloadTargetResponse(
 
 fun interface EvidenceStorageAccessPort {
     fun current(): EvidenceObjectStoragePort?
+
+    /** Bounded server-only private bytes; consumers must verify actor/scope/hash. */
+    fun readRestrictedObject(objectKey: String, maxBytes: Long): ByteArray? =
+        current()?.readRestrictedObject(objectKey, maxBytes)
 }
 
 @Component
