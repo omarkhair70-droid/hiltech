@@ -13,6 +13,7 @@ data class FinanceBankIntakeLineDto(
     val flow:String,
     val amount:String,
     val originalLineSha256:String,
+    val currency:String?=null,
 )
 @Serializable
 data class FinanceBankIntakePrepareDto(
@@ -25,6 +26,18 @@ data class FinanceBankIntakePrepareDto(
     val openingBalance:String,
     val closingBalance:String,
     val lines:List<FinanceBankIntakeLineDto>,
+)
+@Serializable
+data class FinanceBankCsvIntakePrepareDto(
+    val operationId:String,
+    val bankAccountId:String,
+    val statementEvidenceId:String,
+    val statementSha256:String,
+    val periodStart:String,
+    val periodEnd:String,
+    val openingBalance:String,
+    val closingBalance:String,
+    val csvUtf8Base64:String,
 )
 @Serializable
 data class FinanceBankIntakeOperationDto(val operationId:String)
@@ -70,6 +83,27 @@ class FinanceBankStatementIntakeApiClient(
                 installationId=installation,idempotencyKey=operation),
             requestBody=json.encodeToString(
                 FinanceBankIntakePrepareDto.serializer(),request),
+            decode={json.decodeFromString(
+                FinanceBankIntakeReceiptDto.serializer(),it)},
+        )
+    }
+    /** Canonical uploaded CSV only; server checks exact finalized Evidence SHA-256. */
+    suspend fun prepareCsv(
+        org:String,request:FinanceBankCsvIntakePrepareDto,installation:String,
+    ):FinanceBankIntakeReceiptDto {
+        require(request.csvUtf8Base64.isNotBlank() &&
+            request.csvUtf8Base64.length<=((2*1024*1024+2)/3)*4+4)
+        require(request.statementSha256.matches(Regex("^[a-f0-9]{64}$")))
+        val id=uuid(request.operationId)
+        uuid(request.bankAccountId)
+        uuid(request.statementEvidenceId)
+        return api.request(
+            method=HttpMethod.Post,
+            path=base(org)+"/bank-statement-intakes/prepare-csv",
+            options=HiltechRequestOptions(
+                installationId=installation,idempotencyKey=id),
+            requestBody=json.encodeToString(
+                FinanceBankCsvIntakePrepareDto.serializer(),request),
             decode={json.decodeFromString(
                 FinanceBankIntakeReceiptDto.serializer(),it)},
         )
