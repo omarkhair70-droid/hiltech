@@ -136,7 +136,8 @@ class FinanceApJournalPostingService(
         ).singleOrNull() ?: unavailable()
         val today = LocalDate.ofInstant(now, ZoneOffset.UTC)
         if (period.first != "OPEN" ||
-            today.isBefore(period.second) || today.isAfter(period.third)) unavailable()
+            today.isBefore(period.second) || today.isAfter(period.third) ||
+            periodHasClose(org,req.fiscalPeriodId)) unavailable()
 
         val lines = req.lines.map { cmd ->
             val chart = jdbc.query(
@@ -428,6 +429,21 @@ class FinanceApJournalPostingService(
             org,candidate,
         ).singleOrNull() ?: stale()
         if(!purchases.lockOrder(po,org)) stale()
+    }
+
+    private fun periodHasClose(org: UUID,periodId: UUID): Boolean {
+        if (jdbc.queryForObject(
+                "SELECT to_regclass('public.finance_gl_period_close') IS NOT NULL",
+                Boolean::class.java,
+            ) != true) return false
+        return jdbc.queryForObject(
+            """
+            SELECT EXISTS(
+                SELECT 1 FROM public.finance_gl_period_close
+                WHERE organization_id=? AND period_id=?
+            )
+            """.trimIndent(),Boolean::class.java,org,periodId,
+        ) == true
     }
 
     private fun readPosted(
