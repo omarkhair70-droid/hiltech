@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - "ux/128-native-route-integration-p7to13-20261123"
+  pull_request:
+    branches:
+      - "integration/phase7to11-native-executive13ab-20261123"
   workflow_dispatch:
 
 permissions:
