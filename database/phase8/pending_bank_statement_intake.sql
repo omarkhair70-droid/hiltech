@@ -88,6 +88,7 @@ CREATE TABLE finance_bank_statement_intake_line (
  original_line_sha256 char(64) NOT NULL CHECK(original_line_sha256 ~ '^[a-f0-9]{64}$'),
  UNIQUE(organization_id,account_id,external_transaction_id),
  UNIQUE(organization_id,intake_id,id),
+ UNIQUE(id,organization_id),
  UNIQUE(intake_id,original_line_sha256),
  FOREIGN KEY(intake_id,organization_id)
   REFERENCES finance_bank_statement_intake(id,organization_id) ON DELETE RESTRICT,
