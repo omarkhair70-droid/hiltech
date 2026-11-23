@@ -49,6 +49,11 @@ jobs:
             --tests com.hiltech.server.finance.FinanceArJournalPostgresContractTest \
             --tests com.hiltech.server.finance.FinanceArInvoiceIssuanceRulesTest \
             --no-daemon --stacktrace
+      - name: Verify typed Windows Android Finance AR client
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests com.hiltech.shared.core.finance.FinanceArJournalPostingApiClientTest \
+            --no-daemon --console=plain
       - name: Prove native Finance API compilation
         run: |
           ./gradlew :apps:desktopApp:compileKotlin :apps:androidApp:assembleDebug \
