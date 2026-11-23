@@ -3,6 +3,7 @@ package com.hiltech.server.finance
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalRequestResult
 import com.hiltech.server.approval.ApprovalRequestState
+import com.hiltech.server.approval.ApprovalSubjectStatus
 import com.hiltech.server.approval.ApprovalSubjectRef
 import com.hiltech.server.platform.ProductApiException
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -132,4 +133,43 @@ class FinanceExpenseDocumentationReviewServiceTest {
             null, "review-test", false,
         )
     }
+    @Test fun retryingSameReadyReceiptReturnsExistingPendingReviewWithoutCreatingAnother() {
+        Mockito.`when`(employeeDrafts.expense(actor, org, draft)).thenReturn(own())
+        Mockito.`when`(subject.current(org, draft)).thenReturn(source())
+        val reviewRef = ApprovalSubjectRef(
+            org, FINANCE_EXPENSE_DOCUMENTATION_REVIEW_SUBJECT, draft, 70001L,
+        )
+        val existingId = UUID.randomUUID()
+        Mockito.`when`(engine.subjectStatus(reviewRef, policy)).thenReturn(
+            ApprovalSubjectStatus(
+                existingId, ApprovalRequestState.PENDING, 70001L, policy,
+            ),
+        )
+        val result = service(true).request(actor, org, draft, operationId, "review-test")
+        assertTrue(result.existingReview)
+        assertFalse(result.replayed)
+        assertEquals(existingId, result.documentationReviewRequestId)
+        assertEquals(3, result.policyVersion)
+        Mockito.verify(engine).subjectStatus(reviewRef, policy)
+        Mockito.verifyNoMoreInteractions(engine)
+    }
+
+    @Test fun unchangedFinalizedDocumentationCannotBeResubmitted() {
+        Mockito.`when`(employeeDrafts.expense(actor, org, draft)).thenReturn(own())
+        Mockito.`when`(subject.current(org, draft)).thenReturn(source())
+        val reviewRef = ApprovalSubjectRef(
+            org, FINANCE_EXPENSE_DOCUMENTATION_REVIEW_SUBJECT, draft, 70001L,
+        )
+        Mockito.`when`(engine.subjectStatus(reviewRef, policy)).thenReturn(
+            ApprovalSubjectStatus(
+                UUID.randomUUID(), ApprovalRequestState.APPROVED, 70001L, policy,
+            ),
+        )
+        assertThrows<ProductApiException> {
+            service(true).request(actor, org, draft, operationId, "review-test")
+        }
+        Mockito.verify(engine).subjectStatus(reviewRef, policy)
+        Mockito.verifyNoMoreInteractions(engine)
+    }
+
 }
