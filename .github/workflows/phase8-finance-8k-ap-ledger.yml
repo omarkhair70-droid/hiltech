@@ -55,6 +55,15 @@ jobs:
             --tests com.hiltech.server.finance.FinanceSupplierAccountingReviewServiceTest \
             --tests com.hiltech.server.finance.FinanceClientAwardSourcePostgresContractTest \
             --no-daemon --console=plain
+      - name: Expose exact test failures from PostgreSQL/JUnit
+        if: failure()
+        run: |
+          for file in server/application/build/test-results/test/TEST-*FinanceAp*.xml; do
+            if [ -f "$file" ]; then
+              echo "FAILED TEST REPORT: $file"
+              grep -n -A 28 -B 2 '<failure' "$file" | head -110 || true
+            fi
+          done
       - name: Finance canonical native client regression
         run: |
           ./gradlew :shared:core:desktopTest \
