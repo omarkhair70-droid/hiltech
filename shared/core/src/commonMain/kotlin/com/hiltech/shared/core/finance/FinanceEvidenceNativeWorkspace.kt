@@ -26,9 +26,9 @@ import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceApiClient
 import kotlinx.coroutines.CancellationException
 
 /**
- * Only the original Phase8 typed GET transports are offered to native users.
- * No prepare, approve, issue, post, record, settle, pay, export or bank operation.
- * This screen is a source-evidence reader, NOT a complete Finance operations UI.
+ * Original Finance transports. Read-only evidence remains the default.
+ * Separate independent-review preparation is available only behind its own
+ * default-OFF native host flag. No posting, issuance, payments or bank writes.
  */
 class FinanceEvidenceReadApis(api: HiltechApiClient) {
     val apEvidence = FinanceApLedgerEvidenceReportApiClient(api)
@@ -265,6 +265,8 @@ fun financeEvidenceReadNativeWorkspace(
     organizationId: String,
     installationId: String,
     apis: FinanceEvidenceReadApis,
+    reviewPreparationEnabled: Boolean = false,
+    newOperationId: () -> String = { error("Finance review preparation disabled") },
 ): NativeOperationalWorkspace = NativeOperationalWorkspace(
     id = "finance-evidence-read",
     label = "المراجعة المالية",
@@ -400,6 +402,16 @@ fun financeEvidenceReadNativeWorkspace(
                     Text("هذه أول " + current.queryLimit +
                         " مجموعة فقط، وليست ميزان مراجعة كاملًا.")
                 }
+            }
+
+            if (reviewPreparationEnabled) {
+                FinanceReviewPreparationSection(
+                    identityId = identityId,
+                    organizationId = organizationId,
+                    installationId = installationId,
+                    apis = apis,
+                    newOperationId = newOperationId,
+                )
             }
 
             Text("تتبّع عملية برقم مصدرها", style = MaterialTheme.typography.titleSmall)
