@@ -1,5 +1,7 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.DropdownMenu
@@ -10,12 +12,15 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -137,6 +142,30 @@ private fun PhysicalOperatorWorkspace(
     var stocktakeDrillId by remember(warehouse) { mutableStateOf<String?>(null) }
     var stocktakeDrillGeneration by remember(warehouse) { mutableStateOf(0L) }
     var workResourceDrillContext by remember(warehouse) { mutableStateOf<String?>(null) }
+
+    // The shell owns scrolling; quick scan opens the actual existing detail
+    // without introducing a separate list or a second vertical scroll owner.
+    val scanAssetDetailRequester = remember(warehouse) { BringIntoViewRequester() }
+    val scanStockDetailRequester = remember(warehouse) { BringIntoViewRequester() }
+    var requestedScanAssetId by remember(warehouse) { mutableStateOf<String?>(null) }
+    var requestedScanStockId by remember(warehouse) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(requestedScanAssetId, assetState.selected?.identity?.id) {
+        val id = requestedScanAssetId ?: return@LaunchedEffect
+        if (assetState.selected?.identity?.id == id) {
+            withFrameNanos { }
+            scanAssetDetailRequester.bringIntoView()
+            requestedScanAssetId = null
+        }
+    }
+    LaunchedEffect(requestedScanStockId, stockState.selected?.id) {
+        val id = requestedScanStockId ?: return@LaunchedEffect
+        if (stockState.selected?.id == id) {
+            withFrameNanos { }
+            scanStockDetailRequester.bringIntoView()
+            requestedScanStockId = null
+        }
+    }
 
     suspend fun afterConfirmedReceipt(refresh: suspend () -> Unit) {
         refreshWarning = null
@@ -317,6 +346,22 @@ private fun PhysicalOperatorWorkspace(
         installationId = installationId,
         busy = busy,
         runTask = runTask,
+        onOpenCanonicalAsset = { id ->
+            runTask {
+                assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null)
+                loadAsset(id) // source checks warehouse; server revalidates actor authority
+                requestedScanAssetId = id
+            }
+        },
+        onOpenCanonicalStock = { id ->
+            runTask {
+                stockState = stockState.copy(
+                    selected = null, issued = null, issuedWarehouseId = null, balances = emptyList(),
+                )
+                loadStock(id) // authoritative SKU/balances in current warehouse
+                requestedScanStockId = id
+            }
+        },
     )
 
     Text("الرئيسية / Warehouse Home", style = MaterialTheme.typography.titleMedium)
@@ -475,7 +520,10 @@ private fun PhysicalOperatorWorkspace(
         }, enabled = !busy) { Text("تحميل المزيد من الأصول / Load more assets") }
     }
     assetState.selected?.let { passport ->
-        Text("${passport.identity.assetCode} · ${passport.identity.condition}")
+        Text(
+            "${passport.identity.assetCode} · ${passport.identity.condition}",
+            modifier = Modifier.bringIntoViewRequester(scanAssetDetailRequester),
+        )
         passport.custody?.let { custody ->
             Text("Custody · ${custody.employeeCode ?: custody.locationCode ?: "Unavailable"}")
             custody.expectedReturnAt?.let { Text("Expected return · $it") }
@@ -514,7 +562,10 @@ private fun PhysicalOperatorWorkspace(
         }, enabled = !busy) { Text("تحميل المزيد من المخزون / Load more stock") }
     }
     stockState.selected?.let { item ->
-        Text("${item.itemCode} · ${item.name}")
+        Text(
+            "${item.itemCode} · ${item.name}",
+            modifier = Modifier.bringIntoViewRequester(scanStockDetailRequester),
+        )
         Text("المتاح فعليًا في المخزن / On hand in this Warehouse", style = MaterialTheme.typography.titleMedium)
         stockState.balances.forEach { Text("${it.locationCode} · ${it.onHandQuantity} ${item.baseUnitCode}") }
         StockStorageTransfer(item, stockState.copy(loading = busy), warehouse, ::stockAction)
