@@ -17,6 +17,8 @@ data class ReserveEvidenceUploadRequestDto(
     val capturedAt: String,
     val clientOccurredAt: String? = null,
     val supersedesEvidenceId: String? = null,
+    val bankIntakeOperationId: String? = null,
+    val bankAccountId: String? = null,
 )
 
 @Serializable
