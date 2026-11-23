@@ -203,13 +203,22 @@ class FinanceBankStatementApprovedPostgresContractTest {
     val save=c.setSavepoint()
     try {
       val invalid=assertThrows(SQLException::class.java) {
-        jdbc.update(
+        c.prepareStatement(
           """INSERT INTO finance_bank_statement_intake_line(
                id,organization_id,intake_id,account_id,external_transaction_id,
                booked_on,flow,currency,amount,original_line_sha256)
-             VALUES(?,?,?,?,?,?,'CREDIT','EGP',?,?)""",
-          UUID.randomUUID(),org,intake,account,"BANK-INVENTED-TRANSFER",
-          line.bookedOn,BigDecimal("5.000000"),"c".repeat(64))
+             VALUES(?,?,?,?,?,?,'CREDIT','EGP',?,?)"""
+        ).use {ps->
+          ps.setObject(1,UUID.randomUUID())
+          ps.setObject(2,org)
+          ps.setObject(3,intake)
+          ps.setObject(4,account)
+          ps.setString(5,"BANK-INVENTED-TRANSFER")
+          ps.setObject(6,line.bookedOn)
+          ps.setBigDecimal(7,BigDecimal("5.000000"))
+          ps.setString(8,"c".repeat(64))
+          ps.executeUpdate()
+        }
       }
       assertEquals("23514",invalid.sqlState)
     } finally {c.rollback(save)}
