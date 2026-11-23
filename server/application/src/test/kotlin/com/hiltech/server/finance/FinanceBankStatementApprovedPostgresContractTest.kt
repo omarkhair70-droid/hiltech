@@ -136,7 +136,14 @@ class FinanceBankStatementApprovedPostgresContractTest {
          VALUES(?,?,?,1,?,?,'CREDIT','EGP',?,?)""",
       UUID.randomUUID(),org,proposal,line.externalTransactionId,
       line.bookedOn,line.amount,line.originalLineSha256)
-    c.createStatement().use {it.execute("SET CONSTRAINTS ALL IMMEDIATE")}
+    // Verify the prepared statement and its immutable lines together.
+    // SET CONSTRAINTS ALL IMMEDIATE stays active for the transaction until
+    // explicitly reset. The recorded header and lines MUST be inserted as
+    // one atomic unit before their deferred completion guard is checked.
+    c.createStatement().use {
+      it.execute("SET CONSTRAINTS ALL IMMEDIATE")
+      it.execute("SET CONSTRAINTS ALL DEFERRED")
+    }
     jdbc.update(
       """INSERT INTO approval_authority_binding(
            id,organization_id,authority_key,principal_type,
