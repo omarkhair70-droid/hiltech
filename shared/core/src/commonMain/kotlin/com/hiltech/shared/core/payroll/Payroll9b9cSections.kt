@@ -97,14 +97,19 @@ fun PayrollRunReviewSection(
                     Text("الحالة: " + when (finance.status) {
                         "PAID" -> "مؤكد بالكامل من المالية"
                         "PARTIALLY_PAID" -> "صرف جزئي"
+                        "NO_PAYMENT_REQUIRED" -> "لا توجد مبالغ تحتاج تحويلًا"
                         "REQUIRES_REVIEW" -> "مراجعة نتائج الصرف مطلوبة"
                         "NOT_RELEASED" -> "لم يُعتمد التسليم للمالية"
                         "FINANCE_NOT_CONNECTED" -> "مصدر نتيجة المالية غير متصل"
                         else -> "لم يُنفّذ صرف مؤكد"
                     })
-                    Text("مؤكد " + finance.settledCount +
-                        " | لم يكتمل " + finance.unresolvedCount +
-                        " من " + finance.employeeCount)
+                    val noTransferCount = finance.employeeOutcomes.count {
+                        it.outcome == "NOT_APPLICABLE"
+                    }
+                    Text("تحويلات مؤكدة " + finance.settledCount +
+                        " | لم تكتمل " + finance.unresolvedCount +
+                        " | لا تحتاج تحويلًا " + noTransferCount +
+                        " | إجمالي الموظفين " + finance.employeeCount)
                     finance.employeeOutcomes.forEach { person ->
                         val label = run.lines.firstOrNull {
                             it.employeeId == person.employeeId
@@ -114,6 +119,8 @@ fun PayrollRunReviewSection(
                             "FAILED" -> "فشل"
                             "RETURNED" -> "مرتجع"
                             "PENDING" -> "معلّق"
+                            "UNKNOWN" -> "نتيجة التحويل غير محسومة"
+                            "NOT_APPLICABLE" -> "لا يوجد مبلغ مطلوب تحويله"
                             else -> "غير معروف"
                         })
                     }
@@ -162,6 +169,8 @@ fun OwnPayslipSection(
                             "FAILED" -> "فشل الصرف"
                             "RETURNED" -> "عاد التحويل"
                             "PENDING" -> "قيد التنفيذ"
+                            "UNKNOWN" -> "نتيجة التحويل غير محسومة"
+                            "NOT_APPLICABLE" -> "لا يوجد مبلغ مطلوب تحويله"
                             else -> "غير مؤكدة — قيد المراجعة"
                         })
                     }
@@ -246,16 +255,28 @@ fun PayrollFinalPayReviewSection(
                                 "تعليمات المالية لا تطابق صافي المستحقات"
                             "FINAL_PAY_PAYMENT_NOT_CONFIRMED" ->
                                 "التحويل لم يتأكد نجاحه من المالية"
+                            "FINAL_PAY_FINANCE_UNEXPECTED_EVENT" ->
+                                "نتيجة مالية ظهرت رغم عدم وجود أي تحويل مطلوب"
                             else -> "تحتاج مراجعة المصدر: " + blocker
                         })
                     }
+                } else if (report.paymentStatus == "NO_PAYMENT_REQUIRED") {
+                    Text("المستحقات النهائية مُراجعة، ولا يوجد مبلغ يحتاج إلى تحويل.")
                 } else {
                     Text("مصادر المستحقات ونتيجة الصرف مؤكدة للمراجعة النهائية.")
                 }
                 report.frozenNet?.let { net ->
                     Text("الصافي المسجل: " + net + " " + (report.currency ?: ""))
                 }
-                Text("حالة الصرف: " + (report.paymentStatus ?: "لم تتأكد المالية من الصرف"))
+                Text("حالة الصرف: " + when (report.paymentStatus) {
+                    "NO_PAYMENT_REQUIRED" -> "لا يوجد مبلغ مطلوب تحويله"
+                    "SUCCESS" -> "تم التأكيد من المالية"
+                    "FAILED" -> "فشل الصرف"
+                    "RETURNED" -> "عاد التحويل"
+                    "PENDING" -> "قيد التنفيذ"
+                    "UNKNOWN" -> "نتيجة التحويل غير محسومة"
+                    else -> "لم تتأكد المالية من الصرف"
+                })
                 OutlinedButton(
                     onClick = { onOpenOffboardingCase(report.offboardingCaseId) },
                 ) {
