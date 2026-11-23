@@ -2796,6 +2796,24 @@ fun main() {
                     }
                 },
                 procurementOperator = {
+                    if (System.getenv("HILTECH_SERVICE_PURCHASES_UI_ENABLED")
+                            ?.equals("true", ignoreCase = true) == true
+                    ) {
+                        val signed = shellState.value as? HiltechShellState.SignedIn
+                        val identity = signed?.identity
+                        val organization = identity?.organizations?.firstOrNull { it.primary }
+                            ?: identity?.organizations?.firstOrNull()
+                        if (identity != null && organization != null) {
+                            androidx.compose.runtime.key(
+                                identity.identityId, organization.organizationId, "service-purchases",
+                            ) {
+                                DesktopServicePurchaseSections(
+                                    runtime = runtime,
+                                    organizationId = organization.organizationId,
+                                )
+                            }
+                        }
+                    }
                     if (System.getenv("HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED")
                             ?.equals("true", ignoreCase = true) == true
                     ) {
