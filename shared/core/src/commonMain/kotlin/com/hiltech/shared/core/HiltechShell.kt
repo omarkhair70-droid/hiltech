@@ -1,5 +1,8 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,11 +22,13 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.IdentitySecuritySnapshot
 import com.hiltech.shared.core.people.EmployeeDetailDto
@@ -273,6 +278,11 @@ fun HiltechShell(
             else -> "public"
         }
         val scopedShellScroll = key(shellScrollScope) { rememberScrollState() }
+        val fieldWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
+        val peopleWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
+        val warehouseWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
+        val projectWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
+        val shellNavigationScope = rememberCoroutineScope()
         Column(
             modifier =
                 Modifier
@@ -346,6 +356,40 @@ fun HiltechShell(
                         "Your workspace only exposes actions authorized " +
                             "for this identity and context.",
                     )
+
+                    // Navigate to the real already-mounted Compose workspaces.
+                    // This is a scroll shortcut, not a permission grant, route
+                    // impersonation or an additional backend/source-of-truth.
+                    if (state.field != null || state.people != null ||
+                        state.warehouse != null || state.projects != null
+                    ) {
+                        Text("مساحات العمل / Workspaces", style = MaterialTheme.typography.titleMedium)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (state.field != null) {
+                                OutlinedButton(onClick = {
+                                    shellNavigationScope.launch { fieldWorkspaceRequester.bringIntoView() }
+                                }) { Text("شغلي اليوم") }
+                            }
+                            if (state.warehouse != null) {
+                                OutlinedButton(onClick = {
+                                    shellNavigationScope.launch { warehouseWorkspaceRequester.bringIntoView() }
+                                }) { Text("المخزن") }
+                            }
+                            if (state.projects != null) {
+                                OutlinedButton(onClick = {
+                                    shellNavigationScope.launch { projectWorkspaceRequester.bringIntoView() }
+                                }) { Text("المشاريع") }
+                            }
+                            if (state.people != null) {
+                                OutlinedButton(onClick = {
+                                    shellNavigationScope.launch { peopleWorkspaceRequester.bringIntoView() }
+                                }) { Text("الأفراد") }
+                            }
+                        }
+                    }
 
                     state.onboarding
                         ?.takeIf {
@@ -465,6 +509,7 @@ fun HiltechShell(
                     }
 
                     state.people?.let { people ->
+                        Column(Modifier.bringIntoViewRequester(peopleWorkspaceRequester)) {
                         PeopleSection(
                             state = people,
                             onRefresh =
@@ -484,11 +529,13 @@ fun HiltechShell(
                             onCreateEmployee =
                                 onCreateEmployee,
                         )
+                        }
                     }
 
                     state.assetLookup?.let { AssetTagLookupSection(it, onLookupAssetTag) }
 
                     state.field?.let {
+                        Column(Modifier.bringIntoViewRequester(fieldWorkspaceRequester)) {
                         AssignedWorkSection(
                             state = it,
                             onRefresh =
@@ -517,9 +564,12 @@ fun HiltechShell(
                             onCompactFocusChanged = onFieldFocusChanged,
                             compactBackRequest = fieldBackRequest,
                         )
+                        }
                     }
 
-                    warehouseOperator()
+                    Column(Modifier.bringIntoViewRequester(warehouseWorkspaceRequester)) {
+                        warehouseOperator()
+                    }
                     // Host applications mount procurement only with an explicit,
                     // default-OFF feature flag. Never show it during offline mode.
                     procurementOperator()
@@ -542,6 +592,7 @@ fun HiltechShell(
                     }
 
                     state.projects?.let {
+                        Column(Modifier.bringIntoViewRequester(projectWorkspaceRequester)) {
                         ProjectControlSection(
                             reservationPort = reservationPort,
                             state = it,
@@ -570,6 +621,7 @@ fun HiltechShell(
                             onProjectCommandCenterAction =
                                 onProjectCommandCenterAction,
                         )
+                        }
                     }
 
                     state.onboarding
