@@ -57,6 +57,26 @@ fun resolveExecutiveDestination(reference: ExecutiveSourceReferenceDto): Executi
     return null
 }
 
+/**
+ * Health signals originate from a project source snapshot, and their own
+ * source ID may be a WorkOrder/Milestone/Blocker rather than a Project ID.
+ * Pin signal drill-through to the displayed enclosing project, instead of
+ * trusting any unrelated project ID embedded in a server-provided path.
+ *
+ * Source-owned Project Health still independently rechecks read permission.
+ */
+fun resolveExecutiveProjectSignalDestination(
+    reference: ExecutiveSourceReferenceDto,
+    enclosingProjectId: String,
+): ExecutiveDestination? {
+    if (canonicalExecutiveUuid(enclosingProjectId) == null) return null
+    val target = resolveExecutiveDestination(reference) ?: return null
+    return target.takeIf {
+        it.kind == ExecutiveDestinationKind.PROJECT_HEALTH &&
+            it.entityId == enclosingProjectId
+    }
+}
+
 private fun canonicalExecutiveUuid(value: String): String? {
     val isCanonical = Regex(
         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
