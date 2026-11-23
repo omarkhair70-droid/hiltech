@@ -124,6 +124,13 @@ BEGIN
     project_id,created_by,created_at)
   VALUES(opportunity,company,quote_id,contract_id,po_id,project_id,actor,now());
 
+  UPDATE commercial_opportunity
+    SET state='AWARDED',version=version+1,updated_at=now()
+    WHERE id=opportunity;
+  IF NOT EXISTS (SELECT 1 FROM commercial_opportunity
+                 WHERE id=opportunity AND state='AWARDED') THEN
+    RAISE EXCEPTION 'Canonical award handoff failed to close opportunity';
+  END IF;
   IF NOT EXISTS(SELECT 1 FROM commercial_finance_award_source
                 WHERE opportunity_id=opportunity AND project_id=project_id
                   AND contract_id=contract_id AND client_po_id=po_id

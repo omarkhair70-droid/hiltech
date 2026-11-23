@@ -28,6 +28,18 @@ BEGIN
   (id,organization_id,client_organization_id,owner_user_id,source,opportunity_code,
    title,state,created_by,created_at,updated_at)
  VALUES(opportunity,company_a,client_a,actor,'RFQ','PHASE10_TEST_OPP','Synthetic commercial test','OPEN',actor,now(),now());
+ -- A synthetic operator cannot mark a deal AWARDED without real handoff.
+ BEGIN
+  UPDATE commercial_opportunity SET state='AWARDED',version=version+1,updated_at=now()
+  WHERE id=opportunity;
+  RAISE EXCEPTION 'EXPECTED_FAKE_AWARD_GUARD_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%Award requires the canonical Project handoff first%' THEN
+   RAISE EXCEPTION 'Direct no-handoff opportunity AWARDED was accepted: %',error_message;
+  END IF;
+ END;
+
  INSERT INTO commercial_tender_revision
   (id,organization_id,opportunity_id,revision_number,tender_type,received_at,created_by,created_at)
  VALUES(gen_random_uuid(),company_a,opportunity,1,'RFQ',now(),actor,now());
