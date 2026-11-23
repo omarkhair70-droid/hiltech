@@ -6,6 +6,15 @@ import kotlin.test.assertTrue
 
 class ServicePurchaseFormPresentationTest {
     @Test
+    fun revokedOrBusyServiceNeedNeverOffersAnActionEvenWithCachedPermission() {
+        assertTrue(serviceNeedActionEnabled(sourceCurrent = true, permittedBySource = true, busy = false))
+        assertFalse(serviceNeedActionEnabled(sourceCurrent = false, permittedBySource = true, busy = false))
+        assertFalse(serviceNeedActionEnabled(sourceCurrent = true, permittedBySource = false, busy = false))
+        assertFalse(serviceNeedActionEnabled(sourceCurrent = true, permittedBySource = true, busy = true))
+        assertFalse(serviceNeedActionEnabled(sourceCurrent = false, permittedBySource = false, busy = true))
+    }
+
+    @Test
     fun selectedOrderIsRevokedWhenCurrentSourceListChanges() {
         assertTrue(servicePurchaseOrderStillAvailable("order-1", listOf("order-1", "order-2")))
         assertFalse(servicePurchaseOrderStillAvailable("order-1", listOf("order-2")))
