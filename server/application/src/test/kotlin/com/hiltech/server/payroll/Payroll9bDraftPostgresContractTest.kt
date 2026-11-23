@@ -484,7 +484,7 @@ class Payroll9bDraftPostgresContractTest {
                 WHERE run_version_id = ?
                 LIMIT 1
                 """.trimIndent(),
-                UUID.randomUUID(), publishedRunId,
+                UUID.randomUUID(), currentSubject.subjectId,
             )
         }
         // This must be the RELEASE guard, not just a duplicate employee
@@ -509,7 +509,7 @@ class Payroll9bDraftPostgresContractTest {
                 WHERE line.run_version_id = ?
                 LIMIT 1
                 """.trimIndent(),
-                UUID.randomUUID(), UUID.randomUUID(), publishedRunId,
+                UUID.randomUUID(), UUID.randomUUID(), currentSubject.subjectId,
             )
         }
         assertTrue(generateSequence(lateComponentError as Throwable?) { it.cause }.any {
