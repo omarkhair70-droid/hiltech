@@ -44,6 +44,9 @@ val servicePurchasesUiEnabled = providers
 val executiveHomeUiEnabled = providers
     .gradleProperty("hiltech.executiveHomeEnabled")
     .getOrElse("false") == "true"
+val ownPayslipsUiEnabled = providers
+    .gradleProperty("hiltech.ownPayslipsEnabled")
+    .getOrElse("false") == "true"
 
 plugins {
     id("com.hiltech.base")
@@ -135,6 +138,11 @@ android {
             "boolean",
             "HILTECH_EXECUTIVE_HOME_ENABLED",
             executiveHomeUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_OWN_PAYSLIPS_ENABLED",
+            ownPayslipsUiEnabled.toString(),
         )
     }
 
