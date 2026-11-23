@@ -70,6 +70,7 @@ jobs:
             --tests com.hiltech.server.service.MaintenanceTicketFollowupPolicyTest \
             --tests com.hiltech.server.service.MaintenanceDraftPolicyTest \
             --tests com.hiltech.server.service.MaintenanceReviewPolicyTest \
+            --tests com.hiltech.server.service.MaintenanceAgendaPolicyTest \
             --no-configuration-cache --console=plain
 
       - name: Verify canonical migrations against disposable PostgreSQL

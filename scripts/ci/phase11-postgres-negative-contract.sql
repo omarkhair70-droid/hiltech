@@ -596,6 +596,66 @@ BEGIN
  EXCEPTION WHEN check_violation THEN
   RAISE NOTICE 'PASS client context mismatch rejected';
  END;
+ -- Positive complement: canonical WorkOrder is now technically accepted,
+ -- with an actual required COMPLETE checklist and same-visit READY Evidence.
+ -- All fixture changes are rolled back; no HILTECH project data is mutated.
+ INSERT INTO work_checklist_item_instance (
+    id,work_order_id,item_key,label,required,sort_order,
+    completion_state,completed_at,completed_by
+ ) VALUES (
+    'a11a11a1-0000-4000-8000-000000000085',
+    'a11a11a1-0000-4000-8000-000000000007',
+    'CI_VISIT_REQUIRED','Synthetic required inspection proof',true,1,
+    'COMPLETE',now(),'a11a11a1-0000-4000-8000-000000000003'
+ );
+ UPDATE work_order
+    SET lifecycle_state='ACCEPTED',accepted_at=now(),updated_at=now(),version=version+1
+  WHERE id='a11a11a1-0000-4000-8000-000000000007'
+    AND lifecycle_state='IN_PROGRESS' AND version=2;
+ IF NOT FOUND THEN
+    RAISE EXCEPTION 'Positive maintenance fixture must advance accepted source work';
+ END IF;
+ INSERT INTO service_maintenance_review_event (
+    id,visit_id,organization_id,project_id,work_order_id,
+    event_number,event_type,resulting_state,source_work_version,
+    evidence_id,reason,source_operation_id,recorded_by_user_id,recorded_at
+ ) VALUES (
+    'a11a11a1-0000-4000-8000-000000000086',
+    'a11a11a1-0000-4000-8000-000000000019',
+    'a11a11a1-0000-4000-8000-000000000001',
+    'a11a11a1-0000-4000-8000-000000000004',
+    'a11a11a1-0000-4000-8000-000000000007',
+    2,'INTERNAL_TECHNICAL_COMPLETION','COMPLETED_INTERNAL',3,
+    'a11a11a1-0000-4000-8000-000000000030',
+    'Actual required checklist, source acceptance and READY visit evidence',
+    'a11a11a1-0000-4000-8000-000000000087',
+    'a11a11a1-0000-4000-8000-000000000003',now()
+ );
+ IF (SELECT resulting_state FROM service_maintenance_review_event
+      WHERE id='a11a11a1-0000-4000-8000-000000000086') IS DISTINCT FROM 'COMPLETED_INTERNAL'
+ THEN
+    RAISE EXCEPTION 'Expected source-proven technical completion event';
+ END IF;
+ RAISE NOTICE 'PASS canonical accepted WorkOrder and checklist plus READY evidence confirms internal maintenance review';
+
+ -- Post-completion rechecks remain sequenced, never overwriting the earlier proof.
+ INSERT INTO service_maintenance_review_event (
+    id,visit_id,organization_id,project_id,work_order_id,
+    event_number,event_type,resulting_state,source_work_version,
+    reason,source_operation_id,recorded_by_user_id,recorded_at
+ ) VALUES (
+    'a11a11a1-0000-4000-8000-000000000088',
+    'a11a11a1-0000-4000-8000-000000000019',
+    'a11a11a1-0000-4000-8000-000000000001',
+    'a11a11a1-0000-4000-8000-000000000004',
+    'a11a11a1-0000-4000-8000-000000000007',
+    3,'RECHECK_REQUESTED','RECHECK_REQUIRED',3,
+    'Inspector explicitly requests a new technical review',
+    'a11a11a1-0000-4000-8000-000000000089',
+    'a11a11a1-0000-4000-8000-000000000003',now()
+ );
+ RAISE NOTICE 'PASS maintenance recheck event is append-only';
+
  RAISE NOTICE 'PHASE11_SOURCE_NEGATIVE_PROOFS_PASS';
 END;
 $$;
