@@ -76,3 +76,43 @@ transfer. Stacked on 8T, 8S, 8Q, 8P and original AP journal.
    mounts native screens and runs role-scoped Windows+Android staging E2E.
 
 All feature switches remain OFF. No outbound payment or invoice sending.
+
+## Employee funding and settlement implementation (8U extension)
+
+The draft branches now also contain:
+- `pending_employee_funding.sql`: independent company funding approval, original
+  employee draft policy-approval binding, immutable funded event and observed
+  bank debit, row locks and shared cash-allocation cap.
+- `pending_employee_settlement.sql`: separate independent approval and
+  append-only recovery / custody receipt / custody cash return, explicit
+  evidence target and bank credit when actual cash is returned, plus shared
+  capacity guards across AP/AR, employee funding and employee returns.
+- `FinanceEmployeeFundingService` and `FinanceEmployeeSettlementService`
+  expose company-scoped prepare → review → record endpoints; separate
+  `ApprovalSubjectVersionSource` providers revalidate actual source,
+  reviewer, policy and remaining balances.
+- `FinanceEmployeeMoneyApiClient` typed KMP transport and native mock tests,
+  with bankTransferInitiated/payrollDeductionInitiated always false.
+- Dedicated PostgreSQL anti-forgery contract and deterministic review drift
+  tests; the latest build must pass before this can be marked ready.
+
+**Still not acceptance-ready:** no positive approved employee bank funding /
+concurrent settlement test has run; no verified company evidence upload target
+registry exposed in UX, no separate GL recognition for employee cash custody
+or employee loan, no personal expense reimbursement posting, no Phase9 signed
+payroll deduction integration, no canonical CSV bank parsing or signed
+reconciliation event. Feature flags start OFF and no bank transfer is initiated.
+
+Feature gates:
+- `hiltech.finance.employee-funding.enabled`
+- `hiltech.finance.employee-funding.policy-key`
+- `hiltech.finance.employee-funding.preparer-authority-key`
+- `hiltech.finance.employee-funding.operator-authority-key`
+- `hiltech.finance.employee-settlement.enabled`
+- `hiltech.finance.employee-settlement.policy-key`
+- `hiltech.finance.employee-settlement.preparer-authority-key`
+- `hiltech.finance.employee-settlement.operator-authority-key`
+
+**Do not merge into production or enable these flags** until company financing,
+repayment/custody policy, tax/GL rules, evidence permissions, positive end-to-end
+PostgreSQL tests and DevOps globally numbered migrations have all passed.
