@@ -150,7 +150,18 @@ class FinanceCashboxOpeningService(
   actor:UUID,org:UUID,id:UUID,operation:UUID,correlation:String,
  ):FinanceCashboxReceipt {
    authority(actor,org,"hiltech.finance.cashbox.preparer-authority-key")
-   historic(org,id)?.let{return it.copy(replayed=true)}
+   historic(org,id)?.let{past->
+      val original=jdbc.query(
+        """SELECT activation_operation_id,created_by_user_id
+           FROM finance_cashbox_register
+           WHERE id=? AND organization_id=?""",
+        {rs,_ ->rs.getObject("activation_operation_id",UUID::class.java) to
+           rs.getObject("created_by_user_id",UUID::class.java)},
+        id,org,
+      ).singleOrNull() ?:stale()
+      if(original.first!=operation || original.second!=actor)unavailable()
+      return past.copy(replayed=true)
+   }
    val s=subject.current(org,id) ?:stale()
    if(s.preparedBy!=actor)unavailable()
    val ref=ApprovalSubjectRef(org,FINANCE_CASHBOX_OPENING_SUBJECT,id,s.version)
@@ -170,10 +181,10 @@ class FinanceCashboxOpeningService(
              id,organization_id,cashbox_code,currency,custodian_user_id,
              approved_company_reference,opening_balance,status,
              opening_approval_request_id,opening_proposal_id,
-             created_by_user_id,created_at)
-            VALUES(?,?,?,?,?,?,0,'ACTIVE',?,?,?,?)""",
+             activation_operation_id,created_by_user_id,created_at)
+            VALUES(?,?,?,?,?,?,0,'ACTIVE',?,?,?,?,?)""",
          id,org,s.code,s.currency,s.custodian,s.companyReference,
-         approved.approvalRequestId,id,actor,
+         approved.approvalRequestId,id,operation,actor,
          clock.instant().atOffset(ZoneOffset.UTC))==1)
       audit.append(AuditEventRecord(
          actorUserId=actor,action="FINANCE_CASHBOX_OPENED",
