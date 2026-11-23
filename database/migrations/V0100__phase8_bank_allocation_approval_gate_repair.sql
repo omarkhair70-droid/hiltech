@@ -126,4 +126,5 @@ BEGIN
    RAISE EXCEPTION 'Independent original-bound bank allocation approval required'
      USING ERRCODE='23514';
  END IF;
-
+ RETURN NEW;
+END; $$;
