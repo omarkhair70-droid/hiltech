@@ -266,3 +266,58 @@ fun PayrollFinalPayReviewSection(
         }
     }
 }
+
+
+/**
+ * Finance REVIEW handoff only. The host must supply an authenticated Payroll
+ * reviewer and a connected Finance intake source before showing this action.
+ * Does not say "paid", initiate bank execution or display bank account data.
+ */
+@Composable
+fun PayrollFinanceReviewHandoffSection(
+    runVersionId: String,
+    released: Boolean,
+    payrollReviewerAuthorized: Boolean,
+    financeIntakeAvailable: Boolean,
+    loading: Boolean,
+    errorCode: String?,
+    outcome: PayrollFinanceHandoffResultDto?,
+    onHandoff: (String) -> Unit,
+    onOpenFinance: () -> Unit,
+) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.verticalScroll(rememberScrollState()),
+        ) {
+            Text("تسليم كشف المرتبات للمالية", style = MaterialTheme.typography.titleMedium)
+            Text("تسليم دفعة للمراجعة والاعتمادات المالية، وليس تحويل فلوس.")
+            if (loading) CircularProgressIndicator()
+            errorCode?.let { Text("تعذر تسليم الدفعة: " + it) }
+            if (outcome == null) {
+                if (released && payrollReviewerAuthorized && financeIntakeAvailable &&
+                    runVersionId.isNotBlank() && !loading
+                ) {
+                    Button(onClick = { onHandoff(runVersionId) }) {
+                        Text("إرسال الدفعة المعتمدة للمراجعة المالية")
+                    }
+                } else {
+                    Text("التسليم غير متاح حتى يتم اعتماد كشف المرتبات وتوصيل المالية.")
+                }
+            } else {
+                Text("حالة الدفعة: " + when (outcome.state) {
+                    "REVIEW_REQUIRED" -> "في انتظار مراجعة المالية"
+                    else -> "تحتاج مراجعة"
+                })
+                Text("عدد الموظفين: " + outcome.employeeCount)
+                Text("مبالغ تستلزم تحويل: " + outcome.transferCandidates)
+                Text("صافي الدفعة: " + outcome.payableTotal + " " + outcome.currency)
+                Text("مرجع الدفعة: " + outcome.financeReviewBatchId)
+                OutlinedButton(onClick = onOpenFinance) {
+                    Text("فتح مراجعة المالية")
+                }
+                Text("التحويل البنكي الفعلي يتم فقط من النظام المالي بعد اعتماده.")
+            }
+        }
+    }
+}

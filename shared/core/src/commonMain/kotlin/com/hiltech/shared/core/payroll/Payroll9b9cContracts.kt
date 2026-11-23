@@ -110,6 +110,23 @@ data class PayrollReleaseResultDto(
 )
 
 @Serializable
+data class PayrollFinanceHandoffRequestDto(val operationId: String)
+
+@Serializable
+data class PayrollFinanceHandoffResultDto(
+    val financeReviewBatchId: String,
+    val runVersionId: String,
+    val state: String,
+    val manifestSha256: String,
+    val currency: String,
+    val payableTotal: String,
+    val employeeCount: Int,
+    val transferCandidates: Int,
+    val bankExecutionAvailable: Boolean = false,
+    val replayed: Boolean,
+)
+
+@Serializable
 data class PayrollFinalPayReadinessDto(
     val offboardingCaseId: String,
     val employeeId: String,

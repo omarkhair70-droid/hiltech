@@ -107,6 +107,25 @@ class Payroll9b9cApiClient(
             decode = { json.decodeFromString(PayrollReleaseResultDto.serializer(), it) },
         )
 
+    suspend fun handoffToFinanceReview(
+        runVersionId: String,
+        operationId: String,
+        installationId: String,
+    ): PayrollFinanceHandoffResultDto =
+        api.request(
+            method = HttpMethod.Post,
+            path = "/v1/payroll/runs/" + runVersionId + "/finance-review-handoffs",
+            options = HiltechRequestOptions(
+                installationId = installationId,
+                idempotencyKey = operationId,
+            ),
+            requestBody = json.encodeToString(
+                PayrollFinanceHandoffRequestDto.serializer(),
+                PayrollFinanceHandoffRequestDto(operationId),
+            ),
+            decode = { json.decodeFromString(PayrollFinanceHandoffResultDto.serializer(), it) },
+        )
+
     suspend fun finalPayReadiness(
         offboardingCaseId: String,
         installationId: String,
