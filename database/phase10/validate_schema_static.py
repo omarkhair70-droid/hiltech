@@ -45,5 +45,11 @@ assert "Tender award requires a canonical won Project" in sql
 assert "Commercial opportunity must begin as OPEN" in sql
 assert "CREATE TABLE commercial_project_handoff" in sql
 assert "V006" not in sql[:300], "Do not use a provisional migration version"
+# Catch truncated PL/pgSQL dollar-delimiters in the disposable positive test
+# before wasting a PostgreSQL CI run.
+positive = (Path(__file__).parent / "commercial_positive_contract.sql").read_text()
+assert "BEGIN;\nDO $\n<<phase10_fixture>>\nDECLARE" in positive
+assert "END $;\nROLLBACK;" in positive
+assert "BEGIN;\nDO $\n" not in positive
 print(f"Commercial SQL static contract PASS: {len(tables)} tables, "
       f"{len(views)} views, {len(functions)} functions, {len(triggers)} triggers")
