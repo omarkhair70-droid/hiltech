@@ -50,6 +50,8 @@ data class FinanceCashAllocationReceipt(
     val cashAllocatedToAccountingSource:Boolean=false,
     val moneyTransferredByHiltech:Boolean=false,
     val bankReconciled:Boolean=false,
+    val allocationCorrected:Boolean=false,
+    val correctionRecordId:UUID?=null,
 )
 private data class FinanceCashSourceRow(
     val amount:BigDecimal,val currency:String,val hash:String,
@@ -299,17 +301,30 @@ class FinanceCashAllocationService(
     }
     private fun historic(org:UUID,id:UUID):FinanceCashAllocationReceipt? =
         jdbc.query(
-            """SELECT id,source_kind,source_journal_id,bank_statement_line_id,
-               allocated_amount,currency,approval_request_id
-               FROM finance_cash_allocation_record
-               WHERE organization_id=? AND proposal_id=?""",
-            {rs,_ ->receipt(id,org,rs.getString("source_kind"),
-                rs.getObject("source_journal_id",UUID::class.java),
-                rs.getObject("bank_statement_line_id",UUID::class.java),
-                rs.getBigDecimal("allocated_amount"),rs.getString("currency"),
-                "RECORDED",
-                approval=rs.getObject("approval_request_id",UUID::class.java),
-                recorded=rs.getObject("id",UUID::class.java))},org,id,
+            """
+            SELECT r.id,r.source_kind,r.source_journal_id,
+               r.bank_statement_line_id,r.allocated_amount,r.currency,
+               r.approval_request_id,v.id AS correction_id
+            FROM finance_cash_allocation_record r
+            LEFT JOIN finance_cash_allocation_void_record v
+              ON v.original_record_id=r.id AND v.organization_id=r.organization_id
+            WHERE r.organization_id=? AND r.proposal_id=?
+            """.trimIndent(),
+            {rs,_ ->
+                val correction=rs.getObject("correction_id",UUID::class.java)
+                receipt(id,org,rs.getString("source_kind"),
+                    rs.getObject("source_journal_id",UUID::class.java),
+                    rs.getObject("bank_statement_line_id",UUID::class.java),
+                    rs.getBigDecimal("allocated_amount"),rs.getString("currency"),
+                    if(correction==null)"RECORDED" else "CORRECTED",
+                    approval=rs.getObject("approval_request_id",UUID::class.java),
+                    recorded=rs.getObject("id",UUID::class.java),
+                ).copy(
+                    allocationCorrected=correction!=null,
+                    correctionRecordId=correction,
+                    cashAllocatedToAccountingSource=correction==null,
+                )
+            },org,id,
         ).singleOrNull()
     private fun receipt(
         s:FinanceCashVerifiedProposal,state:String,approval:UUID?=null,
