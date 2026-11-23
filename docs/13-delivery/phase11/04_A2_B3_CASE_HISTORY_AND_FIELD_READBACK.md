@@ -32,3 +32,9 @@ Company-approved true handover completeness and client acceptance authority; ver
 - The P11A `service_handover_item_validate` trigger now verifies the source revision and work/doc organization match, exact Evidence, existence of its WorkDocumentRevisionRelease, approved decision if `APPROVAL_REQUEST`, latest revision sequence, and lack of superseding READY Evidence. An unapproved revision cannot be injected directly into a frozen package by bypassing the REST service.
 - The disposable PostgreSQL script creates a real WorkDocument/Revision with READY Work Evidence but **intentionally no release** and expects direct handover-package-item insert to fail. This is a negative fixture, not a fabricated client-approved document.
 - The test service uses PostgreSQL 18.7 (published Docker Official Image) instead of the older 18.6 patch series. Running CI and asserting its pass is still required; changing the container tag alone is not a PASS.
+
+
+## No forged external handover state (2026-11-23)
+- P11A `service_handover_package_version.state` is now restricted by the PostgreSQL schema to **DRAFT only**, not merely the backend controller. A direct INSERT pretending an `ISSUED`, `CLIENT_ACCEPTED` or `INTERNAL_APPROVED` package is rejected at the DB boundary.
+- Internal technical review is represented by its separate immutable `service_handover_review_event` ledger. No client signature, publication, delivery confirmation or acceptance is asserted by that ledger.
+- The disposable PostgreSQL negative script creates an attempted `CLIENT_ACCEPTED` package row and requires a `check_violation`. Any later legitimate client-issuance/acceptance implementation must introduce a separately reviewed, authorized state transition and schema migration rather than changing a magic state text in this draft.

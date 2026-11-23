@@ -396,6 +396,24 @@ BEGIN
   RAISE NOTICE 'PASS handover review event timestamp guard';
  END;
 
+ -- No direct SQL writer may forge client-issued or client-accepted package state.
+ BEGIN
+  INSERT INTO service_handover_package_version(
+    id,package_id,organization_id,project_id,version_number,
+    state,created_operation_id,project_version_at_snapshot,source_digest,
+    blockers_json,created_by,created_at)
+  VALUES('a11a11a1-0000-4000-8000-000000000075',
+         'a11a11a1-0000-4000-8000-000000000014',
+         'a11a11a1-0000-4000-8000-000000000001',
+         'a11a11a1-0000-4000-8000-000000000004',
+         2,'CLIENT_ACCEPTED',
+         'a11a11a1-0000-4000-8000-000000000076',1,repeat('a',64),
+         '[]'::jsonb,'a11a11a1-0000-4000-8000-000000000003',now());
+  RAISE EXCEPTION 'INVALID: client acceptance forged without real authority';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS fake client-accepted snapshot rejected';
+ END;
+
  -- No direct SQL insert may smuggle an unreleased document into handover.
  BEGIN
   INSERT INTO service_handover_package_item(

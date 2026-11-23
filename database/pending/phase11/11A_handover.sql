@@ -20,9 +20,11 @@ CREATE TABLE service_handover_package_version (
     organization_id uuid NOT NULL,
     project_id uuid NOT NULL,
     version_number integer NOT NULL CHECK (version_number > 0),
+    -- Phase11 creates INTERNAL draft snapshots only. Later client issue,
+    -- signature and acceptance require their own authoritative migrations,
+    -- approval/evidence policy and explicit consent — not a state string.
     state varchar(32) NOT NULL DEFAULT 'DRAFT'
-        CHECK (state IN ('DRAFT', 'INTERNAL_REVIEW', 'INTERNAL_APPROVED',
-                        'ISSUED', 'CLIENT_ACCEPTED', 'REJECTED')),
+        CHECK (state = 'DRAFT'),
     created_operation_id uuid NOT NULL UNIQUE,
     project_version_at_snapshot bigint NOT NULL CHECK (project_version_at_snapshot > 0),
     source_digest char(64) NOT NULL CHECK (source_digest ~ '^[0-9a-f]{64}$'),
