@@ -245,6 +245,22 @@ class Phase11NativeContractTest {
     }
 
     @Test
+    fun fieldOnlyUserNeverReceivesSupportFollowupWriteControl() {
+        assertFalse(MaintenanceNativePermissions.mayOfferFollowup(
+            managerAuthorized = false, alreadyLinked = false,
+        ))
+        assertFalse(MaintenanceNativePermissions.mayOfferFollowup(
+            managerAuthorized = false, alreadyLinked = true,
+        ))
+        assertFalse(MaintenanceNativePermissions.mayOfferFollowup(
+            managerAuthorized = true, alreadyLinked = true,
+        ))
+        assertTrue(MaintenanceNativePermissions.mayOfferFollowup(
+            managerAuthorized = true, alreadyLinked = false,
+        ))
+    }
+
+    @Test
     fun maintenanceSourceStatusDoesNotMisrepresentVisitAsCompleted() = runBlocking {
         val http = HttpClient(MockEngine { request ->
             assertEquals(HttpMethod.Get, request.method)

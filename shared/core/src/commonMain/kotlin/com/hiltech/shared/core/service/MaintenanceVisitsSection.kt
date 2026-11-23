@@ -30,6 +30,7 @@ data class MaintenanceUiState(
     val loading: Boolean = false,
     val projectName: String = "",
     val canDraftVisit: Boolean = false,
+    val canLinkSupportFollowups: Boolean = false,
     val workChoices: List<MaintenanceWorkChoice> = emptyList(),
     val visits: List<MaintenanceVisitDto> = emptyList(),
     val selectedVisit: MaintenanceVisitDto? = null,
@@ -40,6 +41,12 @@ data class MaintenanceUiState(
     val readyEvidence: List<MaintenanceReadyEvidenceDto> = emptyList(),
     val errorMessage: String? = null,
 )
+
+/** Do not expose support triage/ticket linking in a technician-only view. */
+object MaintenanceNativePermissions {
+    fun mayOfferFollowup(managerAuthorized: Boolean, alreadyLinked: Boolean) =
+        managerAuthorized && !alreadyLinked
+}
 
 /**
  * Native cross-platform feature section. Integration must supply authenticated
@@ -61,7 +68,7 @@ fun MaintenanceVisitsSection(
     ) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var selectedWorkId by remember { mutableStateOf<String?>(null) }
+    var selectedWorkId by remember(state.projectName) { mutableStateOf<String?>(null) }
     var proposedAt by remember { mutableStateOf("") }
     var evidenceId by remember(state.selectedVisit?.visitId) { mutableStateOf("") }
     var findingType by remember(state.selectedVisit?.visitId) { mutableStateOf("") }
@@ -163,7 +170,9 @@ fun MaintenanceVisitsSection(
                 if (linked != null) {
                     Text("Follow-up: existing support ticket " + linked.ticketId.take(8),
                         style = MaterialTheme.typography.bodySmall)
-                } else {
+                } else if (MaintenanceNativePermissions.mayOfferFollowup(
+                    state.canLinkSupportFollowups, alreadyLinked = false,
+                )) {
                     OutlinedButton(
                         enabled = !state.loading,
                         onClick = {
@@ -174,9 +183,10 @@ fun MaintenanceVisitsSection(
                 }
             }
             val toLink = state.findings.firstOrNull { it.findingId == selectedFindingId }
-            if (toLink != null && state.findingTicketLinks.none {
-                    it.findingId == toLink.findingId
-                }) {
+            if (toLink != null && MaintenanceNativePermissions.mayOfferFollowup(
+                    state.canLinkSupportFollowups,
+                    state.findingTicketLinks.any { it.findingId == toLink.findingId },
+                )) {
                 Text("Follow-up for " + toLink.findingTypeCode,
                     style = MaterialTheme.typography.titleMedium)
                 Text("Choose a real open support ticket in this same project. " +

@@ -46,3 +46,11 @@ The Phase 11 field-finding read/write API now reuses the authoritative WorkAssig
 - A visit's evidence eligibility begins at `GREATEST(visit.created_at, visit.planned_for)`. This prevents a future scheduled visit from being declared performed today using images captured after the proposal but before the visit appointment. The server's source-status `canRecordInternalFinding`, eligible evidence list/count, and write gate share the same rule; the SQL finding source trigger independently rejects both pre-appointment evidence and a premature finding timestamp.
 - The disposable negative fixture now tests a future visit with otherwise READY same-WorkOrder evidence captured today (must reject), as well as an old photo from before the visit draft. A same-day planned visit with valid policy-backed IN_PROGRESS WorkOrder and current READY evidence remains the positive fixture.
 - This is a source-integrity fix, **not** evidence that CI ran. Full backend/DB/native tests must pass on the exact final commit before integration.
+
+
+## Explicit UI boundary for support follow-up (manager versus technician)
+- A field technician may view source WorkOrder findings when the real assignment/OpenFGA grant exists, but **must not** see a control that writes the separate SupportDesk ticket-follow-up record.
+- `MaintenanceUiState.canLinkSupportFollowups` defaults **false** and is independently passed by a manager-authorized host. It is intentionally separate from `canDraftVisit` and `sourceStatus.canRecordInternalFinding`.
+- `MaintenanceNativePermissions.mayOfferFollowup` refuses both unapproved users and any finding already linked to a support ticket; the commonTest suite exercises those cases.
+- Server authority remains the mandatory source of truth: `MaintenanceTicketFollowupService` checks active Project management authority on GET and POST, again inside the idempotent write. UI does not grant permission.
+- Selecting a new project clears any remembered WorkOrder choice in the Compose UI rather than allowing a stale cross-project item from a previous screen to remain selected.
