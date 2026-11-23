@@ -18,7 +18,7 @@ fun executiveNativeWorkspace(
     organizationId: String,
     installationId: String,
     authorityRevisionKey: String,
-    onOpenProject: (String) -> Unit,
+    onOpenProject: ((String) -> Unit)? = null,
 ): NativeOperationalWorkspace = NativeOperationalWorkspace(
     id = "executive-home",
     label = "الإدارة / Mohamed Home",
@@ -41,12 +41,12 @@ fun executiveNativeWorkspace(
             installationId = installationId,
             authorityRevisionKey = authorityRevisionKey,
             onOpenSource = { destination ->
-                if (executiveNativeProjectDestination(destination)) {
+                if (onOpenProject != null && executiveNativeProjectDestination(destination)) {
                     onOpenProject(destination.entityId)
                     exit()
                 }
             },
-            canOpenDestination = ::executiveNativeProjectDestination,
+            canOpenDestination = { onOpenProject != null && executiveNativeProjectDestination(it) },
         )
     },
 )
