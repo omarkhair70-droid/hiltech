@@ -1,0 +1,62 @@
+name: Phase 8 8K immutable AP journal rules and schema
+
+on:
+  push:
+    branches:
+      - "phase8/finance-8k-ap-ledger-posting-20261123"
+  pull_request:
+    branches:
+      - "phase8/finance-8j-client-award-source-readiness-20261123"
+
+permissions:
+  contents: read
+concurrency:
+  group: finance8k-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  accounting-ledger-source:
+    name: Exact double-entry, tax evidence, immutable PostgreSQL AP schema
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_DB: hiltech
+          POSTGRES_USER: hiltech
+          POSTGRES_PASSWORD: hiltech
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hiltech -d hiltech"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+      - name: Verify exact AP balancing, company chart and no unsupported tax inference
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
+          HILTECH_DB_USER: hiltech
+          HILTECH_DB_PASSWORD: hiltech
+          HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+          HILTECH_AP_LEDGER_SQL: ${{ github.workspace }}/database/phase8/pending_ap_ledger_posting.sql
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.finance.FinanceApLedgerRulesTest \
+            --tests com.hiltech.server.finance.FinanceApLedgerSchemaPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceSupplierAccountingReviewServiceTest \
+            --tests com.hiltech.server.finance.FinanceClientAwardSourcePostgresContractTest \
+            --no-daemon --console=plain
+      - name: Finance canonical native client regression
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests com.hiltech.shared.core.finance.FinanceClientAwardSourceApiClientTest \
+            --tests com.hiltech.shared.core.finance.FinanceSupplierAccountingReviewApiClientTest \
+            --no-daemon --console=plain
