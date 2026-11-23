@@ -64,7 +64,14 @@ fun ExecutiveOperationalBriefSection(
                 brief.lanes.forEach { lane ->
                     HorizontalDivider()
                     Text(lane.label, style = MaterialTheme.typography.titleSmall)
-                    if (lane.sourceStatus == "UNAVAILABLE") {
+                    lane.sourceAsOf?.let { at ->
+                        Text(
+                            "وقت لقطة المصدر: " + at,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (lane.sourceStatus !in setOf("CURRENT", "PARTIAL")) {
                         Text(
                             "مصدر هذه البيانات غير متاح حاليًا؛ لا نعرض نتائج محفوظة أو صفرًا مفترضًا.",
                             color = MaterialTheme.colorScheme.error,
@@ -79,6 +86,19 @@ fun ExecutiveOperationalBriefSection(
                         lane.entries.forEach { item ->
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(item.title, style = MaterialTheme.typography.bodyLarge)
+                                if (item.priority == ExecutiveBriefPriority.SOURCE_CRITICAL) {
+                                    Text(
+                                        "حرج وفق تقييم المصدر",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                } else if (item.priority == ExecutiveBriefPriority.UNVERIFIED) {
+                                    Text(
+                                        "حالة المصدر غير مؤكدة",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                                 Text(item.detail, style = MaterialTheme.typography.bodyMedium)
                                 Text(
                                     "المصدر: " + item.sourceType + " / " + item.sourceId +
