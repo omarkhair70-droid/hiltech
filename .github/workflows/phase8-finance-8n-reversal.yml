@@ -42,6 +42,7 @@ jobs:
           HILTECH_DB_USER: hiltech
           HILTECH_DB_PASSWORD: hiltech
           HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+          HILTECH_REPO_ROOT: ${{ github.workspace }}
         run: |
           ./gradlew :server:application:test \
             --tests com.hiltech.server.finance.FinanceApReversalRulesTest \
