@@ -109,7 +109,7 @@ class FinanceApLedgerRulesTest {
     }
 
     @Test fun cannotInferPostingOnZeroOrFractionalExcessOrNegative() {
-        for (gross in listOf("0", "-25", "100.0000001")) {
+        for (gross in listOf("0", "-25", "100.0000001", "1234567890123456789")) {
             assertThrows(IllegalArgumentException::class.java) {
                 FinanceApLedgerRules.validate(plan(amount = gross))
             }
