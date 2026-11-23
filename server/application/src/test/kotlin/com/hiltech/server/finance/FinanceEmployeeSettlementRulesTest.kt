@@ -40,14 +40,30 @@ class FinanceEmployeeSettlementRulesTest {
         FinanceEmployeeSettlementRules.validate(base.copy(
             action=FinanceEmployeeSettlementAction.IMPREST_CASH_RETURN_CONFIRMED,
             recoveryMethod="CONFIRMED_BANK_CREDIT",
+            settlementBankTransactionId=UUID.randomUUID(),
+            settlementBankEvidenceSha256="c".repeat(64),
         ))
     }
     @Test fun advanceIsNotAnImprestAndNoAutomaticDeduction() {
         val advance=base.copy(kind=FinanceEmployeeSettlementKind.EMPLOYEE_ADVANCE,
             action=FinanceEmployeeSettlementAction.ADVANCE_RECOVERY_CONFIRMED,
-            recoveryMethod="CONFIRMED_BANK_CREDIT")
+            recoveryMethod="CONFIRMED_BANK_CREDIT",
+            settlementBankTransactionId=UUID.randomUUID(),
+            settlementBankEvidenceSha256="c".repeat(64))
         FinanceEmployeeSettlementRules.validate(advance)
         rejects(advance.copy(recoveryMethod="AUTOMATIC_PAYROLL_DEDUCTION"))
+        rejects(advance.copy(settlementBankTransactionId=null))
+        rejects(advance.copy(settlementBankEvidenceSha256=null))
+        FinanceEmployeeSettlementRules.validate(advance.copy(
+            recoveryMethod="SEPARATELY_APPROVED_PAYROLL_DEDUCTION",
+            settlementBankTransactionId=null,settlementBankEvidenceSha256=null,
+            approvedPayrollDeductionEventId=UUID.randomUUID(),
+        ))
+        rejects(advance.copy(
+            recoveryMethod="SEPARATELY_APPROVED_PAYROLL_DEDUCTION",
+            settlementBankTransactionId=null,settlementBankEvidenceSha256=null,
+            approvedPayrollDeductionEventId=null,
+        ))
         rejects(advance.copy(action=
             FinanceEmployeeSettlementAction.IMPREST_RECEIPTS_ACCEPTED))
     }
@@ -62,8 +78,11 @@ class FinanceEmployeeSettlementRulesTest {
     }
     @Test fun reimbursedExpenseNeedsConfirmedBankDebitNotLoan() {
         val paid=base.copy(kind=FinanceEmployeeSettlementKind.EXPENSE_REIMBURSEMENT,
-            action=FinanceEmployeeSettlementAction.REIMBURSEMENT_CONFIRMED)
+            action=FinanceEmployeeSettlementAction.REIMBURSEMENT_CONFIRMED,
+            settlementBankTransactionId=UUID.randomUUID(),
+            settlementBankEvidenceSha256="d".repeat(64))
         FinanceEmployeeSettlementRules.validate(paid)
         rejects(paid.copy(recoveryMethod="SEPARATELY_APPROVED_PAYROLL_DEDUCTION"))
+        rejects(paid.copy(settlementBankTransactionId=null))
     }
 }
