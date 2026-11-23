@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(33, result.migrationsExecuted) // V0034–V0066, including two Finance migrations
+        assertEquals(37, result.migrationsExecuted) // V0034-V0070, including Finance and Payroll
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
