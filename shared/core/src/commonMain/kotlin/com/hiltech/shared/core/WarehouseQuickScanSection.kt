@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,6 +39,9 @@ fun WarehouseQuickScanSection(
     installationId: String,
     busy: Boolean,
     runTask: (suspend () -> Unit) -> Unit,
+    // Only the operator workspace can open a source-authorized canonical detail.
+    onOpenCanonicalAsset: ((String) -> Unit)? = null,
+    onOpenCanonicalStock: ((String) -> Unit)? = null,
 ) {
     var state by remember(warehouseId, organizationId, installationId) {
         mutableStateOf(WarehouseQuickScanState())
@@ -45,6 +49,8 @@ fun WarehouseQuickScanSection(
     WarehouseQuickScanControls(
         state = state,
         busy = busy,
+        onOpenCanonicalAsset = onOpenCanonicalAsset,
+        onOpenCanonicalStock = onOpenCanonicalStock,
         onTagInputChanged = {
             state = state.copy(assetTagResult = null, resolvedTagQuery = null)
         },
@@ -89,6 +95,8 @@ fun WarehouseQuickScanControls(
     onTagInputChanged: () -> Unit = {},
     onAssetInputChanged: () -> Unit = {},
     onStockInputChanged: () -> Unit = {},
+    onOpenCanonicalAsset: ((String) -> Unit)? = null,
+    onOpenCanonicalStock: ((String) -> Unit)? = null,
 ) {
     var tag by remember { mutableStateOf("") }
     var assetSearch by remember { mutableStateOf("") }
@@ -126,6 +134,13 @@ fun WarehouseQuickScanControls(
             Text(result.typeName + " · " + result.condition.name)
             result.locationCode?.let { Text("Location · $it") }
             result.employeeCode?.let { Text("Custodian · $it") }
+            result.assetId?.let { id ->
+                if (onOpenCanonicalAsset != null) {
+                    OutlinedButton(onClick = { onOpenCanonicalAsset(id) }, enabled = !busy) {
+                        Text("فتح جواز الأصل المصرح به / Open asset passport")
+                    }
+                }
+            }
         }
 
         OutlinedTextField(
@@ -149,7 +164,13 @@ fun WarehouseQuickScanControls(
             warehouseScanResultMatchesQuery(assetSearch, state.assetSearchResultQuery)
         }.orEmpty()
         visibleAssetSearchResults.forEach { asset ->
-            Text("Asset result · " + asset.assetCode + " · " + asset.id)
+            if (onOpenCanonicalAsset != null) {
+                OutlinedButton(onClick = { onOpenCanonicalAsset(asset.id) }, enabled = !busy) {
+                    Text("فتح الأصل · " + asset.assetCode)
+                }
+            } else {
+                Text("Asset result · " + asset.assetCode + " · " + asset.id)
+            }
         }
         val scannedAssetId = visibleTagResult?.assetId
         if (scannedAssetId != null && visibleAssetSearchResults.any { it.id == scannedAssetId }) {
@@ -177,7 +198,13 @@ fun WarehouseQuickScanControls(
             warehouseScanResultMatchesQuery(stockSearch, state.stockSearchResultQuery)
         }.orEmpty()
         visibleStockSearchResults.forEach { item ->
-            Text("Stock canonical · " + item.id + " · " + item.itemCode)
+            if (onOpenCanonicalStock != null) {
+                OutlinedButton(onClick = { onOpenCanonicalStock(item.id) }, enabled = !busy) {
+                    Text("فتح الصنف · " + item.itemCode)
+                }
+            } else {
+                Text("Stock canonical · " + item.id + " · " + item.itemCode)
+            }
             item.partNumber?.let { Text("Part number · $it") }
         }
         Text("Supplier barcode mapping · unavailable — no authoritative mapping configured.")
