@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest
 import org.springframework.core.env.Environment
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Service
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -121,7 +122,7 @@ class FinanceClientAwardSourceService(
             ORDER BY s.opportunity_id
             LIMIT 101
         """.trimIndent()
-        val mapper = org.springframework.jdbc.core.RowMapper<FinanceClientAwardSourceRow> { rs, _ ->
+        val mapper = RowMapper<FinanceClientAwardSourceRow> { rs, _ ->
             val organizationId = rs.getObject("organization_id", UUID::class.java)
             val opportunity = rs.getObject("opportunity_id", UUID::class.java)
             val project = rs.getObject("project_id", UUID::class.java)
