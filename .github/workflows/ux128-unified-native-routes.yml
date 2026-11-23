@@ -35,4 +35,4 @@ jobs:
           ./gradlew :shared:core:desktopTest \
             :apps:desktopApp:compileKotlin \
             :apps:androidApp:assembleDebug \
-            --no-daemon --console=plain
+            --no-configuration-cache --no-daemon --console=plain
