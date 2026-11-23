@@ -50,23 +50,17 @@ class Payroll9cRunFinanceStatusService(
             ?: return pending(run, "FINANCE_NOT_CONNECTED", false, true)
 
         val expected = financePort.expectedPayments(org, runVersionId)
-        val lines = run.lines.associateBy { UUID.fromString(it.employeeId) }
-        if (expected.size != lines.size ||
-            lines.size != run.lines.size ||
-            expected.map { it.employeeId }.toSet() != lines.keys
-        ) {
-            Payroll9aPolicy.fail("PAYROLL_FINANCE_BATCH_INCOMPLETE", HttpStatus.CONFLICT)
-        }
-        for (payment in expected) {
-            val line = lines[payment.employeeId]
-                ?: Payroll9aPolicy.fail("PAYROLL_FINANCE_BATCH_INCOMPLETE", HttpStatus.CONFLICT)
-            if (payment.organizationId != org || payment.runVersionId != runVersionId ||
-                payment.currency != line.currency ||
-                payment.amount.compareTo(BigDecimal(line.net)) != 0
-            ) {
-                Payroll9aPolicy.fail("PAYROLL_FINANCE_NET_MISMATCH", HttpStatus.CONFLICT)
-            }
-        }
+        Payroll9cExpectedBatchGuard.validate(
+            org, runVersionId,
+            run.lines.map {
+                PayrollFrozenPaymentLine(
+                    employeeId = UUID.fromString(it.employeeId),
+                    net = BigDecimal(it.net),
+                    currency = it.currency,
+                )
+            },
+            expected,
+        )
         val reconciled = Payroll9cReconciler.reconcile(
             org, runVersionId, expected,
             financePort.paymentEvents(org, runVersionId),

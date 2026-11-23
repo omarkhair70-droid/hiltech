@@ -291,6 +291,45 @@ class Payroll9b9cDomainTest {
     )
 
     @Test
+    fun everyFinanceInstructionMustMatchEntireFrozenRunEvenForPrivatePayslips() {
+        val first = expected()
+        val other = expected(UUID.randomUUID())
+        val frozen = listOf(
+            PayrollFrozenPaymentLine(first.employeeId, BigDecimal("100.00"), "EGP"),
+            PayrollFrozenPaymentLine(other.employeeId, BigDecimal("100.00"), "EGP"),
+        )
+        Payroll9cExpectedBatchGuard.validate(org, runId, frozen, listOf(first, other))
+        assertThrows<ProductApiException> {
+            Payroll9cExpectedBatchGuard.validate(org, runId, frozen, listOf(first))
+        }
+        assertThrows<ProductApiException> {
+            Payroll9cExpectedBatchGuard.validate(
+                org, runId, frozen, listOf(first, other.copy(financeInstructionId = first.financeInstructionId)),
+            )
+        }
+        assertThrows<ProductApiException> {
+            Payroll9cExpectedBatchGuard.validate(
+                org, runId, frozen, listOf(first, other.copy(amount = BigDecimal("101.00"))),
+            )
+        }
+        assertThrows<ProductApiException> {
+            Payroll9cExpectedBatchGuard.validate(
+                org, runId, frozen, listOf(first, other.copy(currency = "USD")),
+            )
+        }
+        assertThrows<ProductApiException> {
+            Payroll9cExpectedBatchGuard.validate(
+                org, runId, frozen, listOf(first, other.copy(organizationId = UUID.randomUUID())),
+            )
+        }
+        assertThrows<ProductApiException> {
+            Payroll9cExpectedBatchGuard.validate(
+                org, runId, frozen, listOf(first, other.copy(financeInstructionVersion = 0)),
+            )
+        }
+    }
+
+    @Test
     fun partialAndUnknownFinanceTransfersNeverMarkWholePayrollPaid() {
         val first = expected()
         val second = expected(UUID.randomUUID())

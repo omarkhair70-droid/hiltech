@@ -126,14 +126,13 @@ class Payroll9cPayslipService(
                 return@mapNotNull null
             }
             val expected = financePort.expectedPayments(organizationId, row.runId)
-            // Missing Finance reference is NOT proof that cash was paid.
-            val ownInstruction = expected.singleOrNull { it.employeeId == employee.employeeId }
-                ?: return@mapNotNull null
-            if (ownInstruction.organizationId != organizationId ||
-                ownInstruction.runVersionId != row.runId ||
-                ownInstruction.amount.compareTo(row.net) != 0 ||
-                ownInstruction.currency != row.currency
-            ) return@mapNotNull null
+            // No Finance batch at all is not evidence of payment.
+            if (expected.isEmpty()) return@mapNotNull null
+            // A self-only payslip must not trust an incomplete batch while
+            // the admin run-status endpoint would correctly reject it.
+            Payroll9cExpectedBatchGuard.validateAgainstDatabase(
+                jdbc, organizationId, row.runId, expected,
+            )
             val events = financePort.paymentEvents(organizationId, row.runId)
             val reconciliation = Payroll9cReconciler.reconcile(
                 organizationId, row.runId, expected, events,

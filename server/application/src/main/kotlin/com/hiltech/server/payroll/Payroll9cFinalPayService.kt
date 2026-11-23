@@ -180,12 +180,17 @@ class Payroll9cFinalPayService(
                     // Validate the Finance batch without ever marking anything
                     // paid merely because a payment was prepared.
                     val expected = financePort.expectedPayments(case.organizationId, run.runId)
-                    val own = expected.singleOrNull { it.employeeId == case.employeeId }
-                    if (own == null || own.organizationId != case.organizationId ||
-                        own.runVersionId != run.runId ||
-                        own.amount.compareTo(run.net) != 0 ||
-                        own.currency != run.currency
-                    ) {
+                    // Incomplete coworker instructions or mismatched frozen
+                    // totals also invalidate this employee's final-pay batch.
+                    val fullyMatched = try {
+                        Payroll9cExpectedBatchGuard.validateAgainstDatabase(
+                            jdbc, case.organizationId, run.runId, expected,
+                        )
+                        true
+                    } catch (_: com.hiltech.server.platform.ProductApiException) {
+                        false
+                    }
+                    if (!fullyMatched) {
                         blockers += "FINAL_PAY_FINANCE_INSTRUCTION_NOT_MATCHED"
                     } else {
                         val result = Payroll9cReconciler.reconcile(
