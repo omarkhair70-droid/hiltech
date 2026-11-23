@@ -331,10 +331,11 @@ private fun ServiceInvoicePane(
                     label={Text("قيمة الخدمة")},enabled=!busy)
                 OutlinedTextField(value=tax,onValueChange={tax=it},
                     label={Text("قيمة الضريبة")},enabled=!busy)
+                val nonNegativeMoney=Regex("^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$")
                 val valid=invoiceNumber.trim().length in 2..96 &&
                     Regex("\\d{4}-\\d{2}-\\d{2}").matches(invoiceDate) &&
-                    Regex("[A-Z]{3}").matches(currency)&&amount.toDoubleOrNull()?.let{it>=0}==true&&
-                    tax.toDoubleOrNull()?.let{it>=0}==true
+                    Regex("[A-Z]{3}").matches(currency) &&
+                    nonNegativeMoney.matches(amount) && nonNegativeMoney.matches(tax)
                 OutlinedButton(enabled=!busy&&valid,onClick={
                     busy=true;error=null
                     val capturedReference=invoiceNumber.trim()
@@ -353,6 +354,7 @@ private fun ServiceInvoicePane(
                                 operation(),slot.slotId,uploaded.evidenceId,uploaded.sha256,
                                 capturedReference,capturedDate,capturedCurrency,capturedAmount,capturedTax),install)
                             invoices=api.invoices(org,install)
+                            match=null
                             selectedInvoiceOrderId=null
                             invoiceNumber="";invoiceDate="";currency="";amount="";tax=""
                             confirmation="تم تسجيل الفاتورة الأصلية؛ لم يتم دفعها."
@@ -366,7 +368,10 @@ private fun ServiceInvoicePane(
                     busy=true;error=null;match=null
                     scope.launch {
                         try {match=api.preview(inv.invoiceId,install)}
-                        catch(e:Exception){error=e.message?:"Cannot compute current match."}
+                        catch(e:Exception){
+                            match=null
+                            error=e.message?:"Cannot compute current match."
+                        }
                         finally{busy=false}
                     }
                 }) {
@@ -387,7 +392,10 @@ private fun ServiceInvoicePane(
                                 RecordServiceInvoiceMatchDto(
                                     operation(),preview.sourceSha256),install)
                             confirmation="Immutable invoice check recorded."
-                        } catch(e:Exception){error=e.message?:"Invoice sources changed."}
+                        } catch(e:Exception){
+                            match=null
+                            error=e.message?:"Invoice sources changed."
+                        }
                         finally{busy=false}
                     }
                 }){Text("Record invoice match result")}
@@ -399,8 +407,12 @@ private fun ServiceInvoicePane(
                                 api.financeReviewHandoff(preview.invoiceId,
                                     HandOffServiceInvoiceDto(
                                         operation(),requireNotNull(preview.matchEventId)),install)
-                                confirmation="Sent to Finance review queue; no payable or payment created."
-                            }catch(e:Exception){error=e.message?:"Review-only Finance handoff refused."}
+                                match=null
+                                confirmation="أُتيحت الفاتورة للمراجعة المالية فقط؛ لم يُنشأ صرف أو دفع."
+                            }catch(e:Exception){
+                                match=null
+                                error=e.message?:"Review-only Finance handoff refused."
+                            }
                             finally{busy=false}
                         }
                     }){Text("Make available for Finance review")}
