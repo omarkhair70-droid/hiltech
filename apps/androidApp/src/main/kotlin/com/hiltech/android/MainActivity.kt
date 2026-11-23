@@ -165,6 +165,7 @@ class MainActivity : ComponentActivity() {
                                 api = hiltechApplication.warehouseApi,
                                 organizationId = organization.organizationId,
                                 installationId = hiltechApplication.installationId,
+                                operatorScopeKey = identity.identityId,
                                 operationId = { fields ->
                                     val payload = (listOf(identity.identityId, hiltechApplication.installationId) + fields)
                                         .joinToString("") { value -> value?.toString()?.let { "${it.length}:$it" } ?: "-1:" }
