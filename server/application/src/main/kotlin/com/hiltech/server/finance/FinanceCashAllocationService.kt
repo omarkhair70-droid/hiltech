@@ -57,6 +57,9 @@ private data class FinanceCashSourceRow(
 private data class FinanceCashBankRow(
     val amount:BigDecimal,val currency:String,val flow:String,
     val statementHash:String,
+    val bankAccountId:UUID,
+    val externalTransactionId:String,
+    val bookedOn:java.time.LocalDate,
 )
 
 /** Audited recording of an already occurred, independently reviewed bank movement. */
@@ -110,43 +113,28 @@ class FinanceCashAllocationService(
             Boolean::class.java,org,sourceJournal,
         )==true)stale()
         val bank=jdbc.query(
-            """SELECT l.amount,l.currency,l.flow,h.statement_sha256
+            """SELECT l.amount,l.currency,l.flow,h.statement_sha256,
+                 l.account_id,l.external_transaction_id,l.booked_on
                FROM finance_bank_statement_intake_line l
                JOIN finance_bank_statement_intake h
                  ON h.id=l.intake_id AND h.organization_id=l.organization_id
                WHERE l.id=? AND l.organization_id=?""",
             {rs,_ ->FinanceCashBankRow(
                 rs.getBigDecimal("amount"),rs.getString("currency"),
-                rs.getString("flow"),rs.getString("statement_sha256"))},
+                rs.getString("flow"),rs.getString("statement_sha256"),
+                rs.getObject("account_id",UUID::class.java),
+                rs.getString("external_transaction_id"),
+                rs.getDate("booked_on").toLocalDate())},
             request.bankStatementLineId,org,
         ).singleOrNull() ?: stale()
         if(bank.currency!=source.currency ||
             bank.flow!=if(kind=="AR")"CREDIT" else "DEBIT")unavailable()
-        val validated=runCatching {
-            FinanceCashAllocationRules.validate(FinanceCashAllocationPlan(
-                organizationId=org,sourceId=sourceJournal,
-                sourceKind=if(kind=="AR")
-                    FinanceCashSourceKind.CUSTOMER_RECEIVABLE
-                else FinanceCashSourceKind.SUPPLIER_PAYABLE,
-                sourcePostAmount=source.amount,sourceRecognized=true,
-                sourceCurrency=source.currency,
-                bankAccountId=UUID(0,0),
-                bankTransactionId=request.bankStatementLineId,
-                externalBankTransactionId="SOURCE-BOUND-IN-STMT",
-                bankVerifiedSourceSha256=bank.statementHash,
-                bankEvidenceFinalized=true,
-                bankTransactionAmount=bank.amount,
-                bankFlow=if(bank.flow=="CREDIT")FinanceBankFlow.CREDIT
-                    else FinanceBankFlow.DEBIT,
-                bankCurrency=bank.currency,
-                bankValueDate=java.time.LocalDate.ofInstant(
-                    now,java.time.ZoneOffset.UTC),
-                allocationAmount=amount,
-                priorSourceAllocated=BigDecimal.ZERO,
-                priorBankAllocated=BigDecimal.ZERO,
-                separateApprovalConfirmed=true,
-            ))
-        }.getOrNull() ?: unavailable()
+        // This is a proposal only, NOT an approved or recorded payment.
+        // Never synthesize bank IDs, dates or an approval boolean at preflight.
+        if(amount.signum()<=0 || amount.stripTrailingZeros().scale()>6 ||
+            amount>source.amount || amount>bank.amount ||
+            bank.externalTransactionId.trim().length !in 5..180 ||
+            bank.statementHash.length!=64)unavailable()
         val version=FinanceCashReviewVersion.derive(
             org,kind,sourceJournal,request.bankStatementLineId,
             source.hash,bank.statementHash,source.currency,
@@ -158,8 +146,9 @@ class FinanceCashAllocationService(
         )
         val fingerprint=IdempotencyKeyContract.fingerprint(
             listOf(org,kind,sourceJournal,request.bankStatementLineId,
-                source.hash,bank.statementHash,validated.fingerprintSha256,
-                version,reason).joinToString("|"),
+                source.hash,bank.statementHash,
+                bank.bankAccountId,bank.externalTransactionId,
+                bank.bookedOn,amount,version,reason).joinToString("|"),
         )
         val outcome=idempotency.execute(IdempotentCommandSpec(
             request.operationId,actor,"FINANCE_CASH_ALLOCATION_PROPOSED",
