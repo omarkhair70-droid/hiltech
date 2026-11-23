@@ -307,6 +307,31 @@ fun FinanceReviewPreparationSection(
     var requestingReview by remember(identityId, organizationId, installationId, kind) {
         mutableStateOf(false)
     }
+    var refreshRevision by remember(identityId, organizationId, installationId, kind) {
+        mutableIntStateOf(0)
+    }
+    var refreshing by remember(identityId, organizationId, installationId, kind) {
+        mutableStateOf(false)
+    }
+
+    // Explicit refresh reconciles an uncertain timeout without repeating POST.
+    LaunchedEffect(identityId, organizationId, installationId, kind, refreshRevision) {
+        if (refreshRevision == 0) return@LaunchedEffect
+        val current = prepared ?: return@LaunchedEffect
+        refreshing = true
+        error = null
+        try {
+            prepared = financeReadReviewProposal(
+                apis, kind, organizationId, current.id, installationId,
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            error = "تعذر تحديث حالة هذا الطلب من المصدر. لم نفترض أنه تم اعتماده."
+        } finally {
+            refreshing = false
+        }
+    }
 
     LaunchedEffect(identityId, organizationId, installationId, kind, attempt, runRevision) {
         val frozen = attempt ?: return@LaunchedEffect
@@ -376,6 +401,8 @@ fun FinanceReviewPreparationSection(
                 }
             }
         }
+        Text("1. المصدر   ←   2. تجهيز المقترح   ←   3. طلب مراجعة مستقلة",
+            style = MaterialTheme.typography.labelMedium)
         Text(kind.label, style = MaterialTheme.typography.titleSmall)
         val existing = kind == FinanceReviewKind.BANK_STATEMENT_REVIEW ||
             kind == FinanceReviewKind.INVOICE_ISSUANCE_REVIEW
@@ -484,7 +511,13 @@ fun FinanceReviewPreparationSection(
             current.approvalRequestId?.let {
                 Text("رقم طلب المراجعة المستقلة: " + it)
             }
-            if (!requestingReview &&
+            OutlinedButton(
+                enabled = !preparing && !requestingReview && !refreshing,
+                onClick = { refreshRevision += 1 },
+            ) {
+                Text(if (refreshing) "جارٍ تحديث الحالة…" else "تحديث حالة الطلب من المصدر")
+            }
+            if (!requestingReview && !refreshing &&
                 financeReviewCanRequest(current.state, current.approvalRequestId)
             ) {
                 OutlinedButton(onClick = {
@@ -498,7 +531,7 @@ fun FinanceReviewPreparationSection(
                     Text("إعادة المحاولة بنفس عملية المراجعة")
                 }
             }
-            OutlinedButton(enabled = !preparing && !requestingReview, onClick = {
+            OutlinedButton(enabled = !preparing && !requestingReview && !refreshing, onClick = {
                 draft = FinanceReviewDraft(sourceKind = draft.sourceKind)
                 resetForFormChange()
             }) { Text("طلب جديد / إغلاق النتيجة الحالية") }
