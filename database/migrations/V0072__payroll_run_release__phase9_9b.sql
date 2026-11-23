@@ -146,10 +146,10 @@ BEGIN
     -- Serialize direct writers with the application's period-locked release
     -- transaction so an insert racing with release cannot slip through.
     PERFORM 1
-    FROM payroll_period period
-    JOIN payroll_run_version run ON run.payroll_period_id = period.id
-    WHERE run.id = NEW.run_version_id
-    FOR UPDATE OF period;
+    FROM payroll_period pp
+    JOIN payroll_run_version rv ON rv.payroll_period_id = pp.id
+    WHERE rv.id = NEW.run_version_id
+    FOR UPDATE OF pp;
     IF EXISTS (
         SELECT 1 FROM payroll_run_release published
         WHERE published.run_version_id = NEW.run_version_id
@@ -168,11 +168,11 @@ CREATE FUNCTION payroll_9b_reject_late_run_component() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
     PERFORM 1
-    FROM payroll_period period
-    JOIN payroll_run_version run ON run.payroll_period_id = period.id
-    JOIN payroll_run_employee_line line ON line.run_version_id = run.id
-    WHERE line.id = NEW.run_employee_line_id
-    FOR UPDATE OF period;
+    FROM payroll_period pp
+    JOIN payroll_run_version rv ON rv.payroll_period_id = pp.id
+    JOIN payroll_run_employee_line child ON child.run_version_id = rv.id
+    WHERE child.id = NEW.run_employee_line_id
+    FOR UPDATE OF pp;
     IF EXISTS (
         SELECT 1
         FROM payroll_run_employee_line line
