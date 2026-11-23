@@ -21,6 +21,7 @@ import com.hiltech.shared.core.executive.ExecutiveHomeDto
 import com.hiltech.shared.core.executive.ExecutiveSectionDto
 import com.hiltech.shared.core.executive.ExecutiveSourceReferenceDto
 import com.hiltech.shared.core.executive.resolveExecutiveDestination
+import com.hiltech.shared.core.executive.resolveExecutiveProjectSignalDestination
 import com.hiltech.shared.core.executive.executiveSnapshotMatchesSession
 import com.hiltech.shared.core.executive.orderExecutiveProjectsByHealth
 import com.hiltech.shared.core.executive.executiveVisiblePulse
@@ -195,6 +196,14 @@ fun ExecutiveHomeSection(
                                     " · آخر رصد " + signal.lastObservedAt,
                                 style = MaterialTheme.typography.labelSmall,
                             )
+                            val healthDestination = resolveExecutiveProjectSignalDestination(
+                                signal.reference, project.projectId,
+                            )
+                            if (healthDestination != null) {
+                                OutlinedButton(onClick = { onOpenSource(healthDestination) }) {
+                                    Text("راجع سبب الخطر في المشروع")
+                                }
+                            }
                         }
                         if (project.reasonCodes.isNotEmpty()) {
                             Text(
