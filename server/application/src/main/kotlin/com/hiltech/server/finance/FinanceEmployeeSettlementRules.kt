@@ -73,7 +73,13 @@ object FinanceEmployeeSettlementRules {
                 require(p.action==FinanceEmployeeSettlementAction.REIMBURSEMENT_CONFIRMED) {
                     "EXPENSE_REIMBURSEMENT_IS_NOT_A_LOAN_OR_CUSTODY"
                 }
-                confirmedFunding(p)
+                // Employee paid the merchant with personal money.
+                // No prior company funding is needed or allowed here.
+                require(!p.approvedFundingRecorded &&
+                    p.sourceBankTransactionId==null &&
+                    p.sourceBankEvidenceSha256==null) {
+                    "PERSONAL_EXPENSE_MUST_NOT_INVENT_EARLIER_COMPANY_FUNDING"
+                }
                 require(p.recoveryMethod==null &&
                     p.approvedPayrollDeductionEventId==null) {
                     "EXPENSE_IS_NOT_PAYROLL_LOAN_RECOVERY"
