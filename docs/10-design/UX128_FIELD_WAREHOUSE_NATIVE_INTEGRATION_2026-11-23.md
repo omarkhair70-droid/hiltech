@@ -43,3 +43,12 @@ Warehouse operator selection, busy/error and visible warehouse directory are key
 - `WarehouseQuickScanQueryTest` adds negative tests for replaced codes, missing query, blank query and exact matching. This test is now part of the full shared native CI gate.
 
 **Proof remains open:** These are source changes only until exact-head Gradle tests, Android APK, Windows compile and real actor/device checks pass. In particular verify scan → detail on Android, wrong-warehouse asset ID, revoked identity while the drill is open, stale selection on re-login and Back/scroll visibility on real devices.
+
+## 2026-11-23 — Native shell workspace navigation
+
+The existing signed-in `HiltechShell` previously stacked Identity/Sessions, People, Field, Warehouse and Projects in one long vertical page. It now exposes a compact horizontally scrollable Arabic-first **Workspaces** jump row near the signed-in identity heading. It opens exactly the existing source-bound Compose sections for `Today`, `Warehouse`, `Projects` and `People` via Compose `BringIntoViewRequester`; no new screen, duplicate state, API, permission or separate scroll owner.
+
+- Each shortcut appears only when the matching source section state is present in the authenticated shell. This is availability to navigate, **never** authority to mutate; the server enforces permissions and role revocation.
+- Actual sections have small, width-measured 1dp scroll anchors, so clicking a shortcut targets the start of the section rather than a huge multi-screen Column. Existing native back and focused WorkOrder logic is unchanged.
+- Current identity/org scopes the shell scroll state; user and organization switches do not inherit previous operator scroll positions.
+- This is a bounded navigation improvement, **not** a claim of final role-adaptive multi-pane information architecture or company-specific acceptance. Real Android TalkBack, font scaling, hardware Back and Windows pointer/keyboard smoke remain OPEN.
