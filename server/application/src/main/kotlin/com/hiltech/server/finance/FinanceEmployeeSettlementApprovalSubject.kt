@@ -179,7 +179,7 @@ class FinanceEmployeeSettlementApprovalSubject(
         if(fundingBank.flow!="DEBIT" || fundingBank.currency!=row.currency)
             return null
         val bank=if(row.bankLine==null)null else bank(org,row.bankLine)
-            ?: return null
+        if(row.bankLine!=null && bank==null)return null
         if(row.action=="IMPREST_RECEIPTS_ACCEPTED") {
             if(row.bankLine!=null)return null
         } else {
