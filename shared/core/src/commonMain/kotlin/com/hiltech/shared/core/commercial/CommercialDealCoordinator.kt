@@ -46,6 +46,16 @@ class CommercialDealCoordinator(
                 ),
                 installationId,
             )
+            is CommercialDealAction.CloseOpportunity -> api.closeOpportunity(
+                action.opportunityId,
+                CommercialCloseOpportunityDto(
+                    operationId = operationId,
+                    baseVersion = action.baseVersion,
+                    state = action.state,
+                    reason = action.reason.trim(),
+                ),
+                installationId,
+            )
             is CommercialDealAction.ScheduleVisit -> api.visit(
                 action.opportunityId,PlanCommercialVisitDto(
                     operationId=operationId,scheduledAt=action.scheduledAt,

@@ -60,6 +60,12 @@ sealed interface CommercialDealAction {
                               val receivedAt: String, val referenceNumber: String,
                               val submissionDeadline: String, val clarificationDeadline: String,
                               val sourceChannel: String, val submissionState: String = "RECEIVED") : CommercialDealAction
+    data class CloseOpportunity(
+        val opportunityId: String,
+        val baseVersion: Long,
+        val state: String,
+        val reason: String,
+    ) : CommercialDealAction
     data class ScheduleVisit(val opportunityId: String, val purpose: String,
                              val scheduledAt: String, val siteId: String? = null) : CommercialDealAction
     data class CompleteVisit(val visitId: String, val baseVersion: Long,
@@ -238,6 +244,32 @@ private fun CommercialDiscoveryPanel(
             Button(enabled=notes.isNotBlank(),
                 onClick={onAction(CommercialDealAction.CompleteVisit(
                     visit.id,visit.version,notes))}) { Text("Complete and retain visit findings") }
+        }
+    }
+    if (canWrite && op.state in setOf("OPEN", "QUALIFIED")) {
+        Text("Close this opportunity with a recorded reason")
+        var closureReason by remember(op.id) { mutableStateOf("") }
+        var closureState by remember(op.id) { mutableStateOf("LOST") }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf("LOST","WITHDRAWN").forEach { option ->
+                OutlinedButton(
+                    enabled = closureState != option,
+                    onClick = { closureState = option },
+                ) { Text(option) }
+            }
+        }
+        OutlinedTextField(
+            value = closureReason,
+            onValueChange = { closureReason = it },
+            label = { Text("Recorded loss / withdrawal reason") },
+        )
+        Button(
+            enabled = closureReason.trim().isNotEmpty(),
+            onClick = { onAction(CommercialDealAction.CloseOpportunity(
+                op.id, op.version, closureState, closureReason.trim(),
+            )) },
+        ) {
+            Text("Close opportunity as " + closureState)
         }
     }
     if (canWrite && op.state == "OPEN") {

@@ -256,6 +256,13 @@ data class PlanCommercialVisitDto(
     val notes: String? = null,
 )
 @Serializable
+data class CommercialCloseOpportunityDto(
+    val operationId: String,
+    val baseVersion: Long,
+    val state: String,
+    val reason: String,
+)
+@Serializable
 data class CommercialApprovalCommandDto(val operationId: String)
 @Serializable
 data class CommercialCommandResultDto(
@@ -331,6 +338,14 @@ class CommercialApiClient(
             "/v1/commercial/opportunities", request.operationId, installationId,
             json.encodeToString(CreateCommercialOpportunityDto.serializer(), request),
         )
+
+    suspend fun closeOpportunity(
+        opportunityId: String, request: CommercialCloseOpportunityDto, installationId: String,
+    ) = command(
+        "/v1/commercial/opportunities/" + opportunityId + "/close",
+        request.operationId, installationId,
+        json.encodeToString(CommercialCloseOpportunityDto.serializer(), request),
+    )
 
     suspend fun visit(opportunityId: String, request: PlanCommercialVisitDto, installationId: String) =
         command(
