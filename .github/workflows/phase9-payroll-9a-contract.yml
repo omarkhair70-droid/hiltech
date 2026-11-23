@@ -2,7 +2,7 @@ name: Phase 9 - Payroll 9A-9C policy, source, release, native
 
 on:
   push:
-    branches: ["integration/phase7-finance8i-native-ux-payroll9-20261123", "integration/phase7-finance8i-native-payroll9-sales10-20261123"]
+    branches: ["integration/phase7-finance8i-native-ux-payroll9-20261123", "integration/phase7-finance8i-native-payroll9-sales10-20261123, integration/phase7-finance8i-native-payroll-sales10-service11-20261123"]
   pull_request:
     paths:
       - ".github/workflows/phase9-payroll-9a-contract.yml"

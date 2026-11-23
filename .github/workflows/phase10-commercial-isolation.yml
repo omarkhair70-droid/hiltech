@@ -2,7 +2,7 @@ name: Phase 10 — Commercial isolation and native contracts
 
 on:
   push:
-    branches: ["integration/phase7-finance8i-native-payroll9-sales10-20261123"]
+    branches: ["integration/phase7-finance8i-native-payroll9-sales10-20261123, integration/phase7-finance8i-native-payroll-sales10-service11-20261123"]
   pull_request:
     paths:
       - "database/phase10/**"

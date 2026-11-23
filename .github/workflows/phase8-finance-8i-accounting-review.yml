@@ -8,6 +8,7 @@ on:
       - "integration/phase7-finance8i-native-ux-20261123"
       - "integration/phase7-finance8i-native-ux-payroll9-20261123"
       - "integration/phase7-finance8i-native-payroll9-sales10-20261123"
+      - "integration/phase7-finance8i-native-payroll-sales10-service11-20261123"
   pull_request:
     branches:
       - "phase8/finance-8h-advance-imprest-policy-review-20261123"

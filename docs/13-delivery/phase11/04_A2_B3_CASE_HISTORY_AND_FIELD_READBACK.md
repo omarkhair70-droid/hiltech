@@ -1,0 +1,47 @@
+# Phase 11 A2/B3/C — internal review, verified support resolution, field evidence
+
+Owner branch phase11/handover-service-20261122, PR #167. All code remains DRAFT, OFF, unmerged and undeployed.
+
+## Handover internal review (A2)
+Frozen handover package versions use actual WorkOrder lifecycle AND version, required DOCUMENT satisfaction AND version, current approved Evidence revision/digest and Project version. Source changes invalidate further review work on a stale draft. An append-only review ledger allows CHECK_STARTED, FINDING_RECORDED, RECHECK_REQUESTED, with idempotent audited management-only transactions and strict sequence/FK/source constraints. It does not approve or issue to clients; client authority and sharing policy are still unavailable. Standalone KMP client and native section are included, not yet mounted in global shells.
+
+## Support case lifecycle (B3)
+Original service_support_ticket OPEN event is immutable; a separate source-bound event ledger tracks OPEN, INVESTIGATING, RESOLVED_INTERNAL and CLOSED_INTERNAL and permits later REOPENED. Work links point to canonical existing WorkOrders; internal resolution needs linked accepted/closed real WorkOrder and READY Evidence from that exact WorkOrder and organization, verified in service AND DB trigger. Source-project manager auth, DB ticket row lock, expected latest event number, idempotency, immutable reasons and audit. Internal closure is NOT client acceptance, warranty, SLA, Finance or external communication. Standalone shared KMP API + Compose UI are included.
+
+## Maintenance source readback (C)
+Visit proposals still point to original WorkOrder. Manager read endpoints expose current lifecycle/version, required checklist completion and READY Evidence count plus actual READY Evidence choices, without object storage keys or filenames. Field findings can be recorded during source IN_PROGRESS/BLOCKED/SUBMITTED_FOR_REVIEW/REWORK_REQUIRED/ACCEPTED/CLOSED; cannot record while only DRAFT/PLANNED/ASSIGNED/CANCELLED. Existing Evidence must be READY and work-scoped. No claim that the visit itself is completed, no auto-recurring plan, extra WorkOrder, new asset, procurement order or payment.
+
+## Strict staged SQL ordering (DevOps assigns unique Flyway numbers)
+- database/pending/phase11/11A_handover.sql
+- database/pending/phase11/11A2_handover_internal_review.sql
+- database/pending/phase11/11B_support_internal.sql
+- database/pending/phase11/11B2_support_triage.sql
+- database/pending/phase11/11B3_support_case_workflow.sql
+- database/pending/phase11/11C_maintenance_visits.sql
+- database/pending/phase11/11C2_maintenance_ticket_followups.sql
+
+## Dedicated CI contract
+.github/workflows/phase11-source-service.yml: exact-head focused server policy test classes; canonical database migration contract on disposable PostgreSQL; ordered staging DDL plus scripts/ci/phase11-schema-source-check.sql verifying FKs, source triggers and immutability; shared native Desktop tests/compile and Android debug assembly.
+Successful earlier local focused Gradle run ONLY applied to 150e5989 before A2/B3/C changes. Treat new workflow as unverified until latest-head run completes. No staging/production flag activation.
+
+## Full completion gates
+Company-approved true handover completeness and client acceptance authority; verified and signed immutable P10 award evidence plus actual service/coverage/SLA/renewal terms; real field WorkOrder execution and signed-off technical checks; P7 parts procurement and P8 invoices linked through their own approved authorities; shared-shell Windows/Android authenticated role tests including revocation and cross-tenant; clean/upgrade PostgreSQL with invalid states, retries and concurrency; DevOps/Coolify restore/release gates. None is inferred from free text, invented prices/durations or a generated project document.
+
+
+## 11A handover source guard against unreleased revisions (2026-11-23)
+- The Handover source query excludes a READY Evidence record superseded by another READY Evidence, even if the WorkDocumentRevision has previously been approved.
+- The P11A `service_handover_item_validate` trigger now verifies the source revision and work/doc organization match, exact Evidence, existence of its WorkDocumentRevisionRelease, approved decision if `APPROVAL_REQUEST`, latest revision sequence, and lack of superseding READY Evidence. An unapproved revision cannot be injected directly into a frozen package by bypassing the REST service.
+- The disposable PostgreSQL script creates a real WorkDocument/Revision with READY Work Evidence but **intentionally no release** and expects direct handover-package-item insert to fail. This is a negative fixture, not a fabricated client-approved document.
+- The test service uses PostgreSQL 18.7 (published Docker Official Image) instead of the older 18.6 patch series. Running CI and asserting its pass is still required; changing the container tag alone is not a PASS.
+
+
+## No forged external handover state (2026-11-23)
+- P11A `service_handover_package_version.state` is now restricted by the PostgreSQL schema to **DRAFT only**, not merely the backend controller. A direct INSERT pretending an `ISSUED`, `CLIENT_ACCEPTED` or `INTERNAL_APPROVED` package is rejected at the DB boundary.
+- Internal technical review is represented by its separate immutable `service_handover_review_event` ledger. No client signature, publication, delivery confirmation or acceptance is asserted by that ledger.
+- The disposable PostgreSQL negative script creates an attempted `CLIENT_ACCEPTED` package row and requires a `check_violation`. Any later legitimate client-issuance/acceptance implementation must introduce a separately reviewed, authorized state transition and schema migration rather than changing a magic state text in this draft.
+
+
+## Long-running ledger and source-state read repair (2026-11-23)
+- Support ticket remains OPEN as an immutable intake event, but internalCaseState derives from the newest B3 case event. The single-ticket SQL query and list now share this projection; the Compose PM Service Desk displays both independently. Disposable PostgreSQL verifies the source-derived INVESTIGATING state.
+- Case, triage and handover-review history GETs select the newest 500 events but return those selected events in chronological order. Former ORDER BY event_number LIMIT 500 omitted all new events after 500. Full cursor-based audit pagination remains an integration concern; the immutable database retains every event.
+- Triage now requires a real current desk owner to release, forbids duplicate assignment to the same Employee, and still permits a different active Employee to be reassigned with an explicit reason. Checks are in the service and SQL source trigger. No invented employee, SLA or field dispatch.

@@ -86,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(38, result.migrationsExecuted) // V0034-V0071, including Finance, Payroll and Commercial
+        assertEquals(46, result.migrationsExecuted) // V0034-V0079, including Phase11 service sources
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
