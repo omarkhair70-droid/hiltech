@@ -167,6 +167,43 @@ class CommercialNativeContractTest {
     }
 
     @Test
+    fun lossAndWithdrawalCommandsKeepExactVersionAndReason() = runBlocking {
+        val operationId = "11111111-1111-4111-8111-111111111111"
+        val opportunityId = "22222222-2222-4222-8222-222222222222"
+        val bodies = mutableListOf<String>()
+        val routes = mutableListOf<String>()
+        val http = HttpClient(MockEngine { request ->
+            routes += request.url.encodedPath
+            assertEquals(operationId, request.headers["Idempotency-Key"])
+            bodies += (request.body as? TextContent)?.text.orEmpty()
+            respond(
+                """{"id":"$opportunityId","state":"WITHDRAWN","replayed":false,"correlationId":"test"}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType,"application/json"),
+            )
+        })
+        val coordinator = CommercialDealCoordinator(
+            CommercialApiClient(HiltechApiClient(
+                http, "https://api.hiltech.test",
+                accessTokenProvider={"test-token"},
+                correlationIdProvider={"test"},
+            )),
+            "33333333-3333-4333-8333-333333333333",
+        )
+        coordinator.dispatch(CommercialDealAction.CloseOpportunity(
+            opportunityId=opportunityId,
+            baseVersion=7L,
+            state="WITHDRAWN",
+            reason="Client cancelled the tender",
+        ),operationId)
+        assertEquals(listOf("/v1/commercial/opportunities/$opportunityId/close"),routes)
+        val payload=bodies.single()
+        assertTrue(payload.contains("\"baseVersion\":7"))
+        assertTrue(payload.contains("\"state\":\"WITHDRAWN\""))
+        assertTrue(payload.contains("\"reason\":\"Client cancelled the tender\""))
+        http.close()
+    }
+
+    @Test
     fun authorizedDealDetailCanBeDecodedWithoutCostingProjection() {
         val response = """
         {
