@@ -267,6 +267,8 @@ fun HiltechShell(
     onTakeEvidencePhoto: (String) -> Unit = {},
     warehouseOperator: @Composable () -> Unit = {},
     procurementOperator: @Composable () -> Unit = {},
+    // Only source-authorized, default-OFF modules are supplied by native hosts.
+    operationalWorkspaces: List<NativeOperationalWorkspace> = emptyList(),
 ) {
     MaterialTheme {
         // Never inherit a different actor's previous desktop/mobile scroll
@@ -392,6 +394,20 @@ fun HiltechShell(
                                 }) { Text("الأفراد") }
                             }
                         }
+                    }
+
+                    // Phase 8–13 panels live in independent bounded native
+                    // roots: never nest their root vertical scrollers here.
+                    // Sign-in and current source-granted eligibility are both
+                    // required; a tab never grants server-side authority.
+                    if (primary != null && operationalWorkspaces.isNotEmpty()) {
+                        NativeOperationalWorkspaceHub(
+                            scopeKey = state.identity.identityId + ":" + primary.organizationId,
+                            authorityRevisionKey =
+                                state.identity.identityVersion.toString() + ":" +
+                                    primary.membershipVersion.toString(),
+                            workspaces = operationalWorkspaces,
+                        )
                     }
 
                     state.onboarding
