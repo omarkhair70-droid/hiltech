@@ -304,6 +304,7 @@ BEGIN
    OR a.requester_user_id<>p.prepared_by_user_id
    OR a.requester_user_id=NEW.recorded_by_user_id
    OR a.requester_user_id=original_proposal.prepared_by_user_id
+   OR a.requester_user_id=original.recorded_by_user_id
    OR a.completed_at IS NULL OR a.completed_at>NEW.recorded_at
    OR NOT EXISTS(
       SELECT 1 FROM approval_decision d
