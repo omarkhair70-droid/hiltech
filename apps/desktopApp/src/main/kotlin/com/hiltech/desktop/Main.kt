@@ -6,6 +6,10 @@ import com.hiltech.shared.core.StockAction
 import com.hiltech.shared.core.StockInventoryState
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.hiltech.shared.core.HiltechOnboardingState
@@ -2734,8 +2738,15 @@ fun main() {
             },
             title = "HILTECH",
         ) {
+            val navigationIdentity = (shellState.value as? HiltechShellState.SignedIn)?.identity
+            val navigationOrganization = navigationIdentity?.organizations?.firstOrNull { it.primary }
+                ?: navigationIdentity?.organizations?.firstOrNull()
+            val nativeProjectScope = navigationIdentity?.identityId.orEmpty() + ":" +
+                navigationOrganization?.organizationId.orEmpty()
+            var executiveProjectFocus by remember(nativeProjectScope) { mutableIntStateOf(0) }
             HiltechShell(
                 state = shellState.value,
+                projectFocusRequest = executiveProjectFocus,
                 operationalWorkspaces = (shellState.value as? HiltechShellState.SignedIn)?.let { signed ->
                     val org = signed.identity.organizations.firstOrNull { it.primary }
                         ?: signed.identity.organizations.firstOrNull()
@@ -2751,7 +2762,11 @@ fun main() {
                                 authorityRevisionKey =
                                     signed.identity.identityVersion.toString() + ":" +
                                         org.membershipVersion.toString(),
-                                onOpenProject = ::selectProject,
+                                onOpenProject = { projectId ->
+                                    // Original Projects API performs its own authorization.
+                                    selectProject(projectId)
+                                    executiveProjectFocus += 1
+                                },
                             ))
                         }
                         if (System.getenv("HILTECH_OWN_PAYSLIPS_UI_ENABLED")
