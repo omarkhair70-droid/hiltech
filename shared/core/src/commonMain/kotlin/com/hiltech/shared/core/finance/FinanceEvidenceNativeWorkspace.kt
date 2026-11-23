@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.NativeOperationalWorkspace
 import com.hiltech.shared.core.network.HiltechApiClient
+import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceApiClient
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -31,6 +32,7 @@ import kotlinx.coroutines.CancellationException
  */
 class FinanceEvidenceReadApis(api: HiltechApiClient) {
     val apEvidence = FinanceApLedgerEvidenceReportApiClient(api)
+    val supplierInvoices = SupplierInvoiceFinanceApiClient(api)
     val bankIntake = FinanceBankStatementIntakeApiClient(api)
     val reconciliation = FinanceBankReconciliationSignoffApiClient(api)
     val allocation = FinanceCashAllocationApiClient(api)
@@ -76,8 +78,8 @@ fun financeReadSourceMatches(
     actualOrganizationId: String,
     requestedObjectId: String,
     actualObjectId: String,
-): Boolean = requestedOrganizationId == actualOrganizationId &&
-    requestedObjectId == actualObjectId &&
+): Boolean = requestedOrganizationId.equals(actualOrganizationId, ignoreCase = true) &&
+    requestedObjectId.equals(actualObjectId, ignoreCase = true) &&
     requestedOrganizationId.isNotBlank() && requestedObjectId.isNotBlank()
 
 fun financeLookupIdIsUuid(value: String): Boolean = Regex(
@@ -177,7 +179,7 @@ suspend fun financeReadSourceSnapshot(
             val r = apis.apJournal.status(organizationId, objectId, installationId)
             // This Phase8K receipt is keyed by original proposal ID, without an
             // organization field. Endpoint itself is source/actor/organization scoped.
-            check(r.proposalId == objectId) { "FINANCE_PROPOSAL_CHANGED" }
+            check(r.proposalId.equals(objectId, ignoreCase = true)) { "FINANCE_PROPOSAL_CHANGED" }
             FinanceSourceSnapshot("قيد المورد", r.state, listOf(
                 "قيمة الفاتورة: " + r.invoiceAmount + " " + r.currency,
                 "التزام محاسبي معترف به: " + yesNo(r.recognizedAccountsPayable),
@@ -267,10 +269,24 @@ fun financeEvidenceReadNativeWorkspace(
     id = "finance-evidence-read",
     label = "المراجعة المالية",
     canReadSource = {
-        // Authorization comes from the original authenticated Finance endpoint,
-        // not a local role string, flag, or the mere presence of a proposal UUID.
-        val source = apis.apEvidence.get(organizationId, installationId)
-        source.organizationId == organizationId
+        // Two existing source-owned read permissions may reveal the workspace.
+        // Each detailed GET still checks its own domain policy on the server.
+        val apAllowed = try {
+            apis.apEvidence.get(organizationId, installationId)
+                .organizationId.equals(organizationId, ignoreCase = true)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
+        if (apAllowed) true else try {
+            apis.supplierInvoices.list(organizationId, installationId)
+            true // even an empty list proves this original current-org GET succeeded
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
     },
     hostOwnsScroll = false,
     content = { _ ->
@@ -389,15 +405,35 @@ fun financeEvidenceReadNativeWorkspace(
             Text("تتبّع عملية برقم مصدرها", style = MaterialTheme.typography.titleSmall)
             Text("اختر نوع السجل، ثم أدخل UUID أصليًا معروفًا من العملية. كل قراءة تعيد التحقق من صلاحية السيرفر الحالية.",
                 style = MaterialTheme.typography.bodySmall)
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                FinanceReadKind.entries.forEach { kind ->
-                    OutlinedButton(
-                        enabled = kind != lookupKind,
-                        onClick = { lookupKind = kind },
-                    ) { Text(kind.label) }
+            listOf(
+                "البنك والتخصيص" to listOf(
+                    FinanceReadKind.BANK_INTAKE, FinanceReadKind.BANK_RECONCILIATION,
+                    FinanceReadKind.BANK_ALLOCATION, FinanceReadKind.BANK_ALLOCATION_CORRECTION,
+                ),
+                "الخزنة الفعلية" to listOf(
+                    FinanceReadKind.CASHBOX, FinanceReadKind.CASH_VOUCHER,
+                    FinanceReadKind.CASH_COUNT,
+                ),
+                "فواتير ودفاتر الموردين والعملاء" to listOf(
+                    FinanceReadKind.AP_JOURNAL, FinanceReadKind.AR_CANDIDATE,
+                    FinanceReadKind.AR_INVOICE, FinanceReadKind.AR_JOURNAL,
+                ),
+                "الموظفون والإقفال" to listOf(
+                    FinanceReadKind.EMPLOYEE_FUNDING, FinanceReadKind.EMPLOYEE_SETTLEMENT,
+                    FinanceReadKind.EMPLOYEE_REIMBURSEMENT, FinanceReadKind.PERIOD_CLOSE,
+                ),
+            ).forEach { (group, kinds) ->
+                Text(group, style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    kinds.forEach { kind ->
+                        OutlinedButton(
+                            enabled = kind != lookupKind,
+                            onClick = { lookupKind = kind },
+                        ) { Text(kind.label) }
+                    }
                 }
             }
             if (lookupKind == null) {
