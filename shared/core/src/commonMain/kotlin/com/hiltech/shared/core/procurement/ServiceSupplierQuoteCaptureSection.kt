@@ -122,10 +122,10 @@ fun ServiceSupplierQuoteCaptureSection(
                         } catch (e: Exception) { error = e.message ?: "Service sourcing source changed." }
                         finally { busy = false }
                     }
-                }) { Text("Source · " + need.specification.take(75)) }
+                }) { Text("طلب · " + need.specification.take(75)) }
             }
             rfqId?.let { activeRfq ->
-                Text("RFQ " + activeRfq.take(8), style = MaterialTheme.typography.bodySmall)
+                Text("طلب عروض RFQ " + activeRfq.take(8), style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(
                     value = supplierSearch, onValueChange = {
                         if (it != supplierSearch) {
@@ -202,20 +202,20 @@ fun ServiceSupplierQuoteCaptureSection(
                         " · الأهلية الفعلية يعيد السيرفر فحصها عند التسجيل.")
                 }
                 OutlinedTextField(value = reference, onValueChange = { reference = it },
-                    label = { Text("Supplier's original quote reference") }, enabled = !busy)
+                    label = { Text("رقم عرض السعر الأصلي عند المورد") }, enabled = !busy)
                 OutlinedTextField(value = revision, onValueChange = { revision = it },
-                    label = { Text("Quote revision number") }, enabled = !busy)
+                    label = { Text("رقم مراجعة عرض السعر") }, enabled = !busy)
                 OutlinedTextField(value = currency, onValueChange = { currency = it.uppercase() },
                     label = { Text("Currency") }, enabled = !busy)
                 OutlinedTextField(value = amount, onValueChange = { amount = it },
-                    label = { Text("Service amount") }, enabled = !busy)
+                    label = { Text("قيمة الخدمة") }, enabled = !busy)
                 OutlinedTextField(value = tax, onValueChange = { tax = it },
-                    label = { Text("Tax amount") }, enabled = !busy)
+                    label = { Text("الضريبة") }, enabled = !busy)
                 OutlinedTextField(value = terms, onValueChange = { terms = it },
-                    label = { Text("Actual supplier service terms") },
+                    label = { Text("شروط تقديم الخدمة كما وردت من المورد") },
                     modifier = Modifier.fillMaxWidth(), enabled = !busy)
                 OutlinedTextField(value = validUntil, onValueChange = { validUntil = it },
-                    label = { Text("Valid until (YYYY-MM-DD, optional)") }, enabled = !busy)
+                    label = { Text("صلاحية العرض حتى YYYY-MM-DD (اختياري)") }, enabled = !busy)
                 val valid = selectedSupplier?.let { current ->
                     visibleSuppliers.any { it.supplierOrganizationId == current.supplierOrganizationId }
                 } == true &&
@@ -293,7 +293,7 @@ fun ServiceSupplierQuoteCaptureSection(
                 }) { Text("اختيار ملف العرض الأصلي وتسجيله") }
                 comparison.forEach { quote ->
                     Text(quote.quoteReference + " · " + quote.currency + " " + quote.totalAmount +
-                        " · " + (if (quote.sourceCurrent) "Current" else "Source changed"),
+                        " · " + (if (quote.sourceCurrent) "ساري المصدر" else "تغير المصدر"),
                         style = MaterialTheme.typography.bodySmall)
                 }
                 confirmation?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
