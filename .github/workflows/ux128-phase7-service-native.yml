@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "ux/128-phase7-service-native-journey-20261123"
+      - "integration/hiltech-closeout-github-20261123"
   pull_request:
     branches:
       - "phase7/s07c-service-order-approval-20261123"

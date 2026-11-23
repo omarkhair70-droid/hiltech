@@ -2,7 +2,7 @@ name: Phase 11 — source-bound service contracts
 
 on:
   push:
-    branches: ["integration/phase7-finance8i-native-payroll-sales10-service11-20261123", "integration/phase7to11-native-executive13ab-20261123"]
+    branches: ["integration/phase7-finance8i-native-payroll-sales10-service11-20261123", "integration/phase7to11-native-executive13ab-20261123", "integration/hiltech-closeout-github-20261123"]
   pull_request:
     paths:
       - ".github/workflows/phase11-source-service.yml"
@@ -84,15 +84,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Exact bytes of all original eight source scripts are retained in Flyway V0072-V0079.
+          # Exact bytes of all original nine source scripts are retained in Flyway V0072-V0080.
           cmp -s database/pending/phase11/11A_handover.sql database/migrations/V0072__phase11_11A_handover.sql
           cmp -s database/pending/phase11/11A2_handover_internal_review.sql database/migrations/V0073__phase11_11A2_handover_internal_review.sql
           cmp -s database/pending/phase11/11B_support_internal.sql database/migrations/V0074__phase11_11B_support_internal.sql
           cmp -s database/pending/phase11/11B2_support_triage.sql database/migrations/V0075__phase11_11B2_support_triage.sql
           cmp -s database/pending/phase11/11B3_support_case_workflow.sql database/migrations/V0076__phase11_11B3_support_case_workflow.sql
-          cmp -s database/pending/phase11/11C_maintenance_visits.sql database/migrations/V0077__phase11_11C_maintenance_visits.sql
-          cmp -s database/pending/phase11/11C2_maintenance_ticket_followups.sql database/migrations/V0078__phase11_11C2_maintenance_ticket_followups.sql
-          cmp -s database/pending/phase11/11C3_maintenance_technical_review.sql database/migrations/V0079__phase11_11C3_maintenance_technical_review.sql
+          cmp -s database/pending/phase11/11B4_support_internal_time.sql database/migrations/V0077__phase11_11B4_support_internal_time.sql
+          cmp -s database/pending/phase11/11C_maintenance_visits.sql database/migrations/V0078__phase11_11C_maintenance_visits.sql
+          cmp -s database/pending/phase11/11C2_maintenance_ticket_followups.sql database/migrations/V0079__phase11_11C2_maintenance_ticket_followups.sql
+          cmp -s database/pending/phase11/11C3_maintenance_technical_review.sql database/migrations/V0080__phase11_11C3_maintenance_technical_review.sql
           # DatabaseMigrationContractTest already applied all numbered SQL to this disposable PostgreSQL.
           psql -h localhost -U hiltech -d hiltech -v ON_ERROR_STOP=1 -f scripts/ci/phase11-schema-source-check.sql
           psql -h localhost -U hiltech -d hiltech -v ON_ERROR_STOP=1 -f scripts/ci/phase11-postgres-negative-contract.sql
