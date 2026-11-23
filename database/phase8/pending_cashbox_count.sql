@@ -136,6 +136,7 @@ BEGIN
     AND e.sha256=u.expected_sha256 AND e.size_bytes=u.expected_size_bytes
     AND e.object_key_ref IS NOT NULL
     AND e.client_visibility_mode='INTERNAL_ONLY'
+    AND e.classification_code='HIGHLY_RESTRICTED'
  ) THEN
   RAISE EXCEPTION 'Signed, finalized count evidence must belong to this proposal'
    USING ERRCODE='23514';
