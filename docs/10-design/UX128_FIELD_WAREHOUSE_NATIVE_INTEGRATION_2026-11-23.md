@@ -66,8 +66,10 @@ The existing Warehouse source-connected Quick Scan now has an explicit **Back to
   default `false`. It **does not** treat them as authorization grants.
 - Warehouse jump now appears when the authenticated host actually mounts the
   physical Warehouse operator, even if `state.warehouse` (the separate
-  warehouse-setup view) is absent. This fixes the warehouse-only operator not
-  seeing a native shortcut. Source warehouse permissions still revalidate.
+  warehouse-setup view) is absent. It targets the real physical operator when
+  present; otherwise, when only the warehouse setup is available, it targets
+  the **actual WarehouseSetupSection anchor** rather than an empty operator
+  slot. Source warehouse permissions still revalidate.
 - The newly added Procurement jump scrolls to the actual existing
   `procurementOperator()` content with a tiny measured anchor in the one
   host-owned vertical scroll, rather than forcing staff to traverse the entire
