@@ -7,6 +7,7 @@ import com.hiltech.server.approval.ApprovalPrincipalType
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.IdempotentCommandExecutor
 import com.hiltech.server.platform.ProductApiException
+import com.hiltech.server.procurement.PurchaseOrderIssuePersistence
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
@@ -20,6 +21,7 @@ import java.util.UUID
 
 class FinanceApJournalPostingServiceTest {
     private val jdbc=Mockito.mock(JdbcTemplate::class.java)
+    private val purchases=Mockito.mock(PurchaseOrderIssuePersistence::class.java)
     private val source=Mockito.mock(FinanceSupplierAccountingApprovalSubject::class.java)
     private val subject=Mockito.mock(FinanceApJournalPostingApprovalSubject::class.java)
     private val approval=Mockito.mock(ApprovalPersistencePort::class.java)
@@ -37,7 +39,7 @@ class FinanceApJournalPostingServiceTest {
     private val prepKey="FINANCE_AP_PREPARER"
 
     private fun service()=FinanceApJournalPostingService(
-        jdbc,source,subject,approval,engine,commands,audit,clock,
+        jdbc,purchases,source,subject,approval,engine,commands,audit,clock,
         StandardEnvironment().apply {
             propertySources.addFirst(MapPropertySource("posting-test",mapOf(
                 "hiltech.finance.ap-posting.preparer-authority-key" to prepKey,
@@ -66,7 +68,7 @@ class FinanceApJournalPostingServiceTest {
         assertThrows(ProductApiException::class.java) {
             service().post(actor,org,proposal,operation,"test")
         }
-        Mockito.verifyNoInteractions(jdbc,source,engine,commands,audit,approval)
+        Mockito.verifyNoInteractions(jdbc,purchases,source,engine,commands,audit,approval)
     }
 
     @Test fun enabledPostingWithoutActualCompanyFinanceBindingFailsBeforeLedgerAccess() {
@@ -77,7 +79,7 @@ class FinanceApJournalPostingServiceTest {
         Mockito.verify(approval).isActiveOrganizationMember(
             org,actor,clock.instant(),
         )
-        Mockito.verifyNoInteractions(jdbc,source,engine,commands,audit)
+        Mockito.verifyNoInteractions(jdbc,purchases,source,engine,commands,audit)
     }
 
     @Test fun eligiblePreparerWithUnreviewedSupplierInvoiceCannotProposeGLPosting() {
@@ -100,6 +102,6 @@ class FinanceApJournalPostingServiceTest {
             service().propose(actor,org,candidate,proposalRequest(),"test")
         }
         Mockito.verify(source).current(org,candidate)
-        Mockito.verifyNoInteractions(jdbc,engine,commands,audit)
+        Mockito.verifyNoInteractions(jdbc,purchases,engine,commands,audit)
     }
 }
