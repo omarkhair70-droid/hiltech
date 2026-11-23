@@ -327,24 +327,6 @@ class FinanceMixedBankCashPostgresContractTest {
          it.execute("SET CONSTRAINTS ALL IMMEDIATE")
          it.execute("SET CONSTRAINTS ALL DEFERRED")
        }
-       // Transaction-local diagnostic, always rolled back with this fixture.
-       // Original bank contract remains enforced; no policy or production change.
-       val originalBankGuard=jdbc.queryForObject(
-         """SELECT pg_get_functiondef(
-           'finance_cash_allocation_record_guard()'::regprocedure)""",
-         String::class.java) ?: error("Cannot read original Finance guard")
-       val oldRaise="RAISE EXCEPTION 'Independent original-bound bank allocation approval required'"
-       check(originalBankGuard.contains(oldRaise))
-       val debugBankGuard=originalBankGuard.replace(oldRaise,
-         """RAISE EXCEPTION 'DB_ALLOC_GATE actualActor=% preparedActor=% requester=% approvalId=%
-           approvedSubject=% proposalId=% pId=% approvedState=% approvedPolicy=%
-           proposalPolicy=% approvedAt=% recordedAt=% reviewerActor=%',
-           NEW.recorded_by_user_id,p.prepared_by_user_id,a.requester_user_id,
-           NEW.approval_request_id,a.subject_id,NEW.proposal_id,p.id,
-           a.state,a.policy_key,p.policy_key,a.completed_at,NEW.recorded_at,
-           (SELECT d.actor_user_id FROM approval_decision d
-            WHERE d.approval_request_id=a.id LIMIT 1)""")
-       jdbc.execute(debugBankGuard)
        // Approved bank allocation of 100 against exact posted AR 150.
        val allocationPolicy="FINANCE_AP_AR_CASH_ALLOCATION"
        fun recordBankAllocation(bankLine:UUID,amount:BigDecimal,recordBy:UUID):UUID {
