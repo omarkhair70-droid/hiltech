@@ -21,6 +21,7 @@ data class FinanceExpenseDocumentationReviewReceiptDto(
     val policyKey: String,
     val policyVersion: Int,
     val replayed: Boolean,
+    val existingReview: Boolean = false,
     val expenseApproved: Boolean = false,
     val payableRecognized: Boolean = false,
     val reimbursementAuthorized: Boolean = false,
