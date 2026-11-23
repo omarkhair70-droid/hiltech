@@ -2728,6 +2728,22 @@ fun main() {
         ) {
             HiltechShell(
                 state = shellState.value,
+                warehouseOperatorVisible =
+                    (shellState.value as? HiltechShellState.SignedIn)
+                        ?.identity?.organizations?.isNotEmpty() == true,
+                procurementOperatorVisible = listOf(
+                    "HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED",
+                    "HILTECH_SUPPLIER_SOURCING_UI_ENABLED",
+                    "HILTECH_PO_ISSUER_UI_ENABLED",
+                    "HILTECH_PO_SUPPLIER_COMMUNICATION_UI_ENABLED",
+                    "HILTECH_ASSET_PURCHASE_NEEDS_ENABLED",
+                    "HILTECH_OFFICE_STOCK_NEEDS_ENABLED",
+                    "HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED",
+                    "HILTECH_PO_WAREHOUSE_INTAKE_UI_ENABLED",
+                    "HILTECH_SUPPLIER_INVOICE_FINANCE_UI_ENABLED",
+                ).any { flag ->
+                    System.getenv(flag)?.equals("true", ignoreCase = true) == true
+                },
                 onSignIn = { signIn(false) },
                 onSignOut = ::signOut,
                 onRetry = { signIn(false) },
