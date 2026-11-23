@@ -239,6 +239,8 @@ fun HiltechShell(
     onProjectCommandCenterAction: (ProjectCommandCenterUiAction) -> Unit = {},
     onRefreshFieldWork: () -> Unit = {},
     onSelectFieldWork: (String) -> Unit = {},
+    onFieldFocusChanged: (Boolean) -> Unit = {},
+    fieldBackRequest: Int = 0,
     onRefreshPersonalIssuedStock: (String) -> Unit = {},
     showPersonalIssuedStock: Boolean = false,
     onQueueMaterialUsage: (com.hiltech.shared.core.work.FieldPersonalIssuedStockLineDto, String) -> Unit = { _, _ -> },
@@ -501,6 +503,8 @@ fun HiltechShell(
                             focusScopeKey = primary?.organizationId?.let { organizationId ->
                                 "${state.identity.identityId}:$organizationId"
                             }.orEmpty(),
+                            onCompactFocusChanged = onFieldFocusChanged,
+                            compactBackRequest = fieldBackRequest,
                         )
                     }
 
