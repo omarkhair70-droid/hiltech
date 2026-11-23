@@ -1,6 +1,7 @@
 package com.hiltech.server.finance
 
 import org.flywaydb.core.Flyway
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -49,8 +50,11 @@ class FinanceApArBalancePostgresContractTest {
     val src=jdbc.queryForObject(
       """SELECT definition FROM pg_views WHERE schemaname='public'
          AND viewname='finance_ap_ar_source_balance'""",String::class.java)
-    assertTrue(src?.contains("finance_cash_allocation_record")==true)
-    assertTrue(src?.contains("finance_ap_journal_reversal")==true)
+    // Only effective allocations count after an independently approved
+    // immutable whole-allocation correction; raw records overstate cash used.
+    assertTrue(src?.contains("finance_cash_allocation_effective")==true)
+    assertFalse(src?.contains("FROM finance_cash_allocation_record")==true)
+    assertTrue(src?.contains("finance_ap_journal_reversal")==true
     assertTrue(src?.contains("finance_ar_posted_journal")==true)
     assertNotNull(jdbc.queryForObject(
       "SELECT to_regclass('public.finance_bank_allocation_exception')",
