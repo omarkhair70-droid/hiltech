@@ -15,10 +15,12 @@ All financial execution, payroll bank transfer, supplier/client sending, company
 | P9 restricted Payroll review | Android + Windows | Payroll9aApiClient list/detail, server authorization | Read-only periods, source exceptions. No create/capture/approve/pay | HR current-role UAT OPEN |
 | P10 commercial | Android + Windows | CommercialApiClient opportunities/detail | Source-owned Workbench/Deal read, no private cost, release, award or send | Company Sales UAT OPEN |
 | P11 handover | Android + Windows | Projects list + per-project Handover readiness/latest | Read-only evidence/package, no invented acceptance or warranty | Project Manager UAT OPEN |
-| P11 support/maintenance | Source components now integrated by DevOps from #167 | Support, agenda, internal-time and warranty readiness source | Separate live contract/role adapter still needed; **not** certified as user-visible E2E | OPEN |
+| P11 support/maintenance | Android + Windows bounded source-gated specialist workspace (default OFF) | Original Support tickets, warranty readiness, internal timing, proposed maintenance agenda APIs | Existing Phase11 Sections rendered read-only; no ticket mutation, contract SLA/warranty approval, visit dispatch or client send | Source/device role UAT OPEN |
 | P13 Executive | Android + Windows | ExecutiveApiClient current actor/org echoed home, original Projects detail | Source-trusted Home/Brief. Windows original Project drill-through scroll focus; unsupported destinations hidden | Manager device UAT OPEN |
 
 P8J–P8P, Payroll payment, statutory invoice issuance, banking, live contractual SLA/warranty activation and company-wide fiscal close are not implied by UI mounting. Phase12 hardware-dependent controls are outside this release.
+
+- **P11 Support/maintenance native route is newly mounted in UX #218** behind `hiltech.serviceOperationsReadEnabled=false` (Android) / `HILTECH_SERVICE_OPERATIONS_READ_UI_ENABLED` (Windows, absent by default). Per-project support read preflight and per-ticket source GET must succeed. The UI consumes original Phase11 components but records no writes. Real source availability and signed-in actor acceptance remain unproven; this is not contractual warranty or SLA activation.
 
 ## CI contract (exact candidate SHA)
 
