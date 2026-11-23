@@ -36,6 +36,7 @@ data class FinanceBankIntakeLineRequest(
     val flow:FinanceBankFlow,
     val amount:String,
     val originalLineSha256:String,
+    val currency:String?=null,
 )
 data class FinanceBankIntakePrepareRequest(
     val operationId:UUID,
@@ -122,6 +123,9 @@ class FinanceBankStatementIntakeService(
         val closing=runCatching{BigDecimal(request.closingBalance)}
             .getOrNull() ?: unavailable()
         val lines=request.lines.map {
+            // A structured file must not silently become the registered
+            // bank account currency when its original row says otherwise.
+            if(it.currency!=null && it.currency!=bank.currency)unavailable()
             FinanceBankIntakeSourceLine(
                 it.externalTransactionId.trim(),it.bookedOn,it.flow,
                 bank.currency,
