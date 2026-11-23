@@ -21,6 +21,13 @@ class CommercialDealCoordinator(
     private val api: CommercialApiClient,
     private val installationId: String,
 ) {
+    /** Reuse the same authenticated company-scoped client for the whole Sales desk. */
+    suspend fun loadOpportunities(organizationId: String): List<CommercialOpportunityDto> =
+        api.opportunities(organizationId, installationId)
+
+    suspend fun createOpportunity(request: CreateCommercialOpportunityDto): CommercialCommandResultDto =
+        api.createOpportunity(request, installationId)
+
     suspend fun loadOpportunity(opportunityId: String): CommercialDealDetailDto =
         api.detail(opportunityId, installationId)
 
