@@ -15,6 +15,27 @@ dump_ui () {
   adb shell cat /sdcard/hiltech-phase4-slice06-window.xml | tr -d ''
 }
 
+tap_visible_ui_text () {
+  local TARGET="$1" LIMIT="${2:-45}" START XML COORDS
+  START="$(date +%s)"
+  while true; do
+    XML="$(dump_ui || true)"
+    COORDS="$(printf '%s' "$XML" | python3 scripts/ci/android_uiautomator_clickable_center.py "$TARGET" 2>/dev/null || true)"
+    if [ -n "$COORDS" ]; then
+      adb shell input tap $COORDS >/dev/null
+      sleep 2
+      return 0
+    fi
+    if [ $(($(date +%s) - START)) -ge "$LIMIT" ]; then
+      echo "Timed out locating clickable UI text: $TARGET"
+      echo "$XML"
+      return 1
+    fi
+    adb shell input swipe 540 1900 540 650 300 >/dev/null || true
+    sleep 1
+  done
+}
+
 wait_for_text () {
   local EXPECTED="$1"
   local LIMIT="$2"
@@ -72,18 +93,23 @@ render_mode () {
   adb shell am start -W -n "$ACTIVITY" --es mode "$MODE"     >/tmp/hiltech-phase4-slice06-start.out
   cat /tmp/hiltech-phase4-slice06-start.out
 
+  if [ "$MODE" = "today" ] || [ "$MODE" = "cached" ] || [ "$MODE" = "revoked" ]; then
+    tap_visible_ui_text "شغلي اليوم" 45
+  fi
   wait_for_text "$EXPECTED" 30
   adb exec-out screencap -p > "$REPORT_DIR/$OUTPUT"
   test -s "$REPORT_DIR/$OUTPUT"
 }
 
 render_mode "today" "شغلي اليوم" "android-today-rtl.png"
-wait_for_text "التنفيذ يبدأ في Phase 6" 10
+scroll_until_text "السياق جاهز للمراجعة — التنفيذ بصلاحياتك الحالية فقط" 30
 
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$ACTIVITY" --es mode "detail" \
   >/tmp/hiltech-phase4-slice06-start.out
 cat /tmp/hiltech-phase4-slice06-start.out
+tap_visible_ui_text "شغلي اليوم" 45
+tap_visible_ui_text "WO-2026-010" 45
 wait_for_text "تفاصيل الشغل" 30
 scroll_until_text "التقاط/رفع Evidence من الموبايل مش متاح في Slice 06" 30
 scroll_until_text "SOURCE_PENDING_PHASE5" 30
@@ -92,6 +118,7 @@ test -s "$REPORT_DIR/android-job-bundle-blocked.png"
 scroll_until_text "القراءة فقط. أوامر التنفيذ" 30
 
 render_mode "cached" "نسخة محفوظة بدون اتصال" "android-offline-today-cached.png"
+tap_visible_ui_text "WO-2026-010" 45
 scroll_until_text "نسخة محفوظة للقراءة فقط" 30
 adb exec-out screencap -p > "$REPORT_DIR/android-offline-bundle-cached.png"
 test -s "$REPORT_DIR/android-offline-bundle-cached.png"

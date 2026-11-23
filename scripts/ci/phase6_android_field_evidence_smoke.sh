@@ -15,6 +15,27 @@ dump_ui () {
   adb shell cat /sdcard/hiltech-phase6-s03.xml | tr -d '\r'
 }
 
+tap_visible_ui_text () {
+  local TARGET="$1" LIMIT="${2:-45}" START XML COORDS
+  START="$(date +%s)"
+  while true; do
+    XML="$(dump_ui || true)"
+    COORDS="$(printf '%s' "$XML" | python3 scripts/ci/android_uiautomator_clickable_center.py "$TARGET" 2>/dev/null || true)"
+    if [ -n "$COORDS" ]; then
+      adb shell input tap $COORDS >/dev/null
+      sleep 2
+      return 0
+    fi
+    if [ $(($(date +%s) - START)) -ge "$LIMIT" ]; then
+      echo "Timed out locating clickable UI text: $TARGET"
+      echo "$XML"
+      return 1
+    fi
+    adb shell input swipe 540 1900 540 650 300 >/dev/null || true
+    sleep 1
+  done
+}
+
 await_marker () {
   local marker="$1" started
   started="$(date +%s)"
@@ -71,6 +92,10 @@ capture_verified_marker "PHASE6_S03_EVIDENCE_SAVED_LOCAL_READY" "$REPORT/01-priv
 
 # New Android process, real Room v3 and app-private photo bytes survive.
 open_mode evidence-persisted
+# The unified native shell starts in actor-scoped Workspaces. Open the genuine
+# Field/Today card and its selected WorkOrder before checking persisted Evidence.
+tap_visible_ui_text "شغلي اليوم" 45
+tap_visible_ui_text "WO-2026-010" 45
 capture_verified_marker "محفوظ على الجهاز: LOCAL_READY" "$REPORT/02-room-evidence-process-restart.png"
 
 # Deliberately corrupt private image bytes: verification must fail, no fake READY.
