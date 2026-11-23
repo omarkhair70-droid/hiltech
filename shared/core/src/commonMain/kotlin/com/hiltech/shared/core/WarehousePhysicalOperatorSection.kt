@@ -1,7 +1,12 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -10,15 +15,22 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.HiltechOperationalTheme
+import com.hiltech.shared.core.design.HiltechSectionHeading
+import com.hiltech.shared.core.design.HiltechStateTag
+import com.hiltech.shared.core.design.HiltechStateTone
 import com.hiltech.shared.core.network.HiltechApiException
 import com.hiltech.shared.core.warehouse.*
 import kotlinx.coroutines.CancellationException
@@ -35,12 +47,21 @@ fun WarehousePhysicalOperatorSection(
     organizationId: String,
     installationId: String,
     operationId: (List<Any?>) -> String,
+    // Caller must pass current actor for reliable cache/state isolation when
+    // people switch roles or accounts within the same organization.
+    operatorScopeKey: String = "",
 ) {
     val scope = rememberCoroutineScope()
-    var warehouses by remember(organizationId) { mutableStateOf<List<WarehouseDto>?>(null) }
-    var warehouseId by remember(organizationId) { mutableStateOf<String?>(null) }
-    var busy by remember(organizationId) { mutableStateOf(false) }
-    var message by remember(organizationId) { mutableStateOf<String?>(null) }
+    var warehouses by remember(organizationId, installationId, operatorScopeKey) {
+        mutableStateOf<List<WarehouseDto>?>(null)
+    }
+    var warehouseId by remember(organizationId, installationId, operatorScopeKey) {
+        mutableStateOf<String?>(null)
+    }
+    var busy by remember(organizationId, installationId, operatorScopeKey) { mutableStateOf(false) }
+    var message by remember(organizationId, installationId, operatorScopeKey) {
+        mutableStateOf<String?>(null)
+    }
 
     fun runTask(action: suspend () -> Unit) {
         if (busy) return
@@ -62,9 +83,13 @@ fun WarehousePhysicalOperatorSection(
     }
 
     WarehouseArabicFirstFrame {
+        HiltechOperationalTheme {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("عمليات المخزن / Warehouse physical operations", style = MaterialTheme.typography.titleLarge)
-        Text("أونلاين فقط · سجّل التسليم والمرتجع والاستهلاك الفعلي / Online only.")
+        HiltechSectionHeading(
+            index = "WAREHOUSE / PHYSICAL",
+            title = "عمليات المخزن",
+            subtitle = "أونلاين فقط · التسليم والمرتجع والاستهلاك الفعلي بإذن السيرفر.",
+        )
         OutlinedButton({
             runTask {
                 warehouses = null
@@ -72,15 +97,18 @@ fun WarehousePhysicalOperatorSection(
                 warehouses = api.warehouses(organizationId, installationId).items.filter { it.active }
             }
         }, enabled = !busy) { Text(if (busy) "جاري التنفيذ… / Working…" else "تحميل المخازن المتاحة / Load accessible warehouses") }
-        message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        message?.let { HiltechStateTag(it, HiltechStateTone.BLOCKED) }
         val options = warehouses ?: return@Column
-        if (options.isEmpty()) Text("لا توجد مخازن فعالة متاحة / No accessible active warehouses.")
+        if (options.isEmpty()) {
+            HiltechStateTag("لا توجد مخازن فعالة متاحة لهذه الهوية.", HiltechStateTone.ATTENTION)
+        }
         OperatorChoice("المخزن / Warehouse", warehouseId, options.map { it.warehouseId to "${it.code} · ${it.name}" }, !busy) {
             warehouseId = it
         }
         val facility = warehouseId ?: return@Column
-        key(facility) {
+        key(facility, organizationId, installationId, operatorScopeKey) {
             PhysicalOperatorWorkspace(api, facility, organizationId, installationId, operationId, busy, ::runTask)
+        }
         }
         }
     }
@@ -117,6 +145,32 @@ private fun PhysicalOperatorWorkspace(
     var stocktakeDrillId by remember(warehouse) { mutableStateOf<String?>(null) }
     var stocktakeDrillGeneration by remember(warehouse) { mutableStateOf(0L) }
     var workResourceDrillContext by remember(warehouse) { mutableStateOf<String?>(null) }
+
+    // The shell owns scrolling; quick scan opens the actual existing detail
+    // without introducing a separate list or a second vertical scroll owner.
+    val scanAssetDetailRequester = remember(warehouse) { BringIntoViewRequester() }
+    val quickScanReturnRequester = remember(warehouse) { BringIntoViewRequester() }
+    val quickScanNavigationScope = rememberCoroutineScope()
+    val scanStockDetailRequester = remember(warehouse) { BringIntoViewRequester() }
+    var requestedScanAssetId by remember(warehouse) { mutableStateOf<String?>(null) }
+    var requestedScanStockId by remember(warehouse) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(requestedScanAssetId, assetState.selected?.identity?.id) {
+        val id = requestedScanAssetId ?: return@LaunchedEffect
+        if (assetState.selected?.identity?.id == id) {
+            withFrameNanos { }
+            scanAssetDetailRequester.bringIntoView()
+            requestedScanAssetId = null
+        }
+    }
+    LaunchedEffect(requestedScanStockId, stockState.selected?.id) {
+        val id = requestedScanStockId ?: return@LaunchedEffect
+        if (stockState.selected?.id == id) {
+            withFrameNanos { }
+            scanStockDetailRequester.bringIntoView()
+            requestedScanStockId = null
+        }
+    }
 
     suspend fun afterConfirmedReceipt(refresh: suspend () -> Unit) {
         refreshWarning = null
@@ -290,6 +344,7 @@ private fun PhysicalOperatorWorkspace(
         }
     }
 
+    Spacer(Modifier.fillMaxWidth().height(1.dp).bringIntoViewRequester(quickScanReturnRequester))
     WarehouseQuickScanSection(
         api = api,
         warehouseId = warehouse,
@@ -297,6 +352,22 @@ private fun PhysicalOperatorWorkspace(
         installationId = installationId,
         busy = busy,
         runTask = runTask,
+        onOpenCanonicalAsset = { id ->
+            runTask {
+                assetState = assetState.copy(selected = null, movements = emptyList(), serviceDetail = null)
+                loadAsset(id) // source checks warehouse; server revalidates actor authority
+                requestedScanAssetId = id
+            }
+        },
+        onOpenCanonicalStock = { id ->
+            runTask {
+                stockState = stockState.copy(
+                    selected = null, issued = null, issuedWarehouseId = null, balances = emptyList(),
+                )
+                loadStock(id) // authoritative SKU/balances in current warehouse
+                requestedScanStockId = id
+            }
+        },
     )
 
     Text("الرئيسية / Warehouse Home", style = MaterialTheme.typography.titleMedium)
@@ -359,8 +430,12 @@ private fun PhysicalOperatorWorkspace(
     }
     workResourceDrillContext?.let { Text("مورد أمر العمل / Resource drill · $it") }
 
-    receipt?.let { Text("آخر إيصال مؤكد / Last confirmed server receipt · $it") }
-    refreshWarning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    receipt?.let {
+        HiltechStateTag("سجّل السيرفر العملية · $it", HiltechStateTone.CURRENT)
+    }
+    refreshWarning?.let {
+        HiltechStateTag("الإيصال مؤكد، لكن عرض البيانات لم يتحدث: $it", HiltechStateTone.ATTENTION)
+    }
     ReceivingOperatorSection(
         api = api,
         warehouse = warehouse,
@@ -451,6 +526,13 @@ private fun PhysicalOperatorWorkspace(
         }, enabled = !busy) { Text("تحميل المزيد من الأصول / Load more assets") }
     }
     assetState.selected?.let { passport ->
+        OutlinedButton(
+            modifier = Modifier.bringIntoViewRequester(scanAssetDetailRequester),
+            enabled = !busy,
+            onClick = {
+                quickScanNavigationScope.launch { quickScanReturnRequester.bringIntoView() }
+            },
+        ) { Text("الرجوع للبحث السريع / Back to scan") }
         Text("${passport.identity.assetCode} · ${passport.identity.condition}")
         passport.custody?.let { custody ->
             Text("Custody · ${custody.employeeCode ?: custody.locationCode ?: "Unavailable"}")
@@ -490,6 +572,13 @@ private fun PhysicalOperatorWorkspace(
         }, enabled = !busy) { Text("تحميل المزيد من المخزون / Load more stock") }
     }
     stockState.selected?.let { item ->
+        OutlinedButton(
+            modifier = Modifier.bringIntoViewRequester(scanStockDetailRequester),
+            enabled = !busy,
+            onClick = {
+                quickScanNavigationScope.launch { quickScanReturnRequester.bringIntoView() }
+            },
+        ) { Text("الرجوع للبحث السريع / Back to scan") }
         Text("${item.itemCode} · ${item.name}")
         Text("المتاح فعليًا في المخزن / On hand in this Warehouse", style = MaterialTheme.typography.titleMedium)
         stockState.balances.forEach { Text("${it.locationCode} · ${it.onHandQuantity} ${item.baseUnitCode}") }
@@ -512,8 +601,10 @@ fun WarehousePhysicalHandoffAuthorityGate(
     if (canOperate) {
         authorizedContent()
     } else {
-        Text("التسليم الفعلي غير متاح لهذه الهوية. · Physical handoff is not available for this identity.")
-        Text("سلطة تعديل المخزن · مرفوضة · Warehouse mutation authority · denied", color = MaterialTheme.colorScheme.error)
+        HiltechStateTag(
+            "التسليم الفعلي غير متاح لهذه الهوية · سلطة تعديل المخزن مرفوضة.",
+            HiltechStateTone.BLOCKED,
+        )
     }
 }
 

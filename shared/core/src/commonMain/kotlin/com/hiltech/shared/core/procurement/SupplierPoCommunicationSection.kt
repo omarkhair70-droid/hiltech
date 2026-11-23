@@ -2,7 +2,8 @@ package com.hiltech.shared.core.procurement
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Card
+import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.HiltechSectionHeading
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -33,8 +34,7 @@ fun SupplierPoCommunicationSection(
     var rows by remember(organizationId) { mutableStateOf<List<PurchaseOrderLifecycleSummaryDto>>(emptyList()) }
     var error by remember(organizationId) { mutableStateOf<String?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Supplier dispatch / acknowledgement evidence",
-            style = MaterialTheme.typography.titleMedium)
+        HiltechSectionHeading("PROCUREMENT / SUPPLIER CONTACT", "Supplier communication evidence", "Records verified externally; HILTECH does not send supplier messages.")
         Text("Only record a communication verified outside HILTECH using a real provider reference. This screen never sends a PO to a supplier.",
             style = MaterialTheme.typography.bodySmall)
         OutlinedButton(enabled = !busy, onClick = {
@@ -80,7 +80,7 @@ private fun SupplierPoCommunicationAction(
     var channel by remember(order.id) { mutableStateOf("EMAIL") }
     var menu by remember(order.id) { mutableStateOf(false) }
     var pendingOperation by remember(order.id) { mutableStateOf<String?>(null) }
-    Card {
+    HiltechPanel {
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(order.code + " · " + order.supplierDispatchState,
                 style = MaterialTheme.typography.titleSmall)

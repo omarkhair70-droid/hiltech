@@ -19,9 +19,11 @@ import android.os.Bundle
 import com.hiltech.android.field.PendingEvidenceCapture
 import com.hiltech.android.field.PendingEvidenceCaptureState
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.hiltech.android.identity.AndroidIdentityRuntime
@@ -113,6 +115,11 @@ class MainActivity : ComponentActivity() {
         )
 
         setContent {
+            var fieldFocused by remember { mutableStateOf(false) }
+            var fieldBackRequest by remember { mutableStateOf(0) }
+            BackHandler(enabled = fieldFocused) {
+                fieldBackRequest += 1
+            }
             HiltechShell(
                 state = shellState,
                 onSignIn = ::startSignIn,
@@ -130,6 +137,15 @@ class MainActivity : ComponentActivity() {
                     ::refreshFieldWork,
                 onSelectFieldWork =
                     ::selectFieldWork,
+                onFieldFocusChanged = { focused -> fieldFocused = focused },
+                fieldBackRequest = fieldBackRequest,
+                warehouseOperatorVisible =
+                    (shellState as? HiltechShellState.SignedIn)?.identity?.organizations?.isNotEmpty() == true,
+                procurementOperatorVisible =
+                    (BuildConfig.HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED &&
+                        (shellState as? HiltechShellState.SignedIn)?.field?.selectedWorkOrderId != null) ||
+                    (BuildConfig.HILTECH_SUPPLIER_INVOICE_FINANCE_ENABLED &&
+                        (shellState as? HiltechShellState.SignedIn)?.identity?.organizations?.isNotEmpty() == true),
                 onRefreshPersonalIssuedStock =
                     ::refreshPersonalIssuedStockSelected,
                 showPersonalIssuedStock = BuildConfig.HILTECH_PERSONAL_ISSUED_STOCK_ENABLED,
@@ -156,6 +172,7 @@ class MainActivity : ComponentActivity() {
                                 api = hiltechApplication.warehouseApi,
                                 organizationId = organization.organizationId,
                                 installationId = hiltechApplication.installationId,
+                                operatorScopeKey = identity.identityId,
                                 operationId = { fields ->
                                     val payload = (listOf(identity.identityId, hiltechApplication.installationId) + fields)
                                         .joinToString("") { value -> value?.toString()?.let { "${it.length}:$it" } ?: "-1:" }
