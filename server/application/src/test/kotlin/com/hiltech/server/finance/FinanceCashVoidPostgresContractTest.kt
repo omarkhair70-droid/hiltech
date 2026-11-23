@@ -91,8 +91,8 @@ class FinanceCashVoidPostgresContractTest {
           recorded_at,correlation_id)
         VALUES(?,?,?,?,?,'AR',?,?,30,'EGP',?,?,now(),?)""",
       ).use{ps->
-        for(i in 1..10)ps.setObject(i,UUID.randomUUID())
-        ps.setString(11,"FAKE-CASH-CORRECTION")
+        for(i in 1..9)ps.setObject(i,UUID.randomUUID())
+        ps.setString(10,"FAKE-CASH-CORRECTION")
         ps.executeUpdate()
       }
     }
