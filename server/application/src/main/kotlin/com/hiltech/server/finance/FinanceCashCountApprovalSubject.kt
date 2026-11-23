@@ -40,6 +40,9 @@ data class FinanceCashCountVerified(
  val policyKey:String,val policyVersion:Int,val custodian:UUID,
 )
 
+private data class FinanceCashCountRow(
+ val snapshot:FinanceCashCountVerified,val preparedBy:UUID,val boxCurrency:String,
+)
 @Component
 class FinanceCashCountApprovalSubject(
  private val jdbc:JdbcTemplate,
@@ -80,7 +83,7 @@ class FinanceCashCountApprovalSubject(
         JOIN finance_cashbox_register b
           ON b.id=p.cashbox_id AND b.organization_id=p.organization_id
         WHERE p.id=? AND p.organization_id=? AND b.status='ACTIVE'""",
-     {rs,_ -> FinanceCashCountVerified(
+     {rs,_ -> FinanceCashCountRow(FinanceCashCountVerified(
        rs.getObject("id",UUID::class.java),org,
        rs.getObject("cashbox_id",UUID::class.java),
        rs.getString("currency"),rs.getDate("counted_on").toLocalDate(),
@@ -88,14 +91,14 @@ class FinanceCashCountApprovalSubject(
        rs.getLong("ledger_voucher_count"),rs.getString("count_reference"),
        rs.getLong("subject_version"),rs.getString("policy_key"),
        policy.versionNumber,
-       rs.getObject("custodian_user_id",UUID::class.java))
-       to (rs.getObject("prepared_by_user_id",UUID::class.java)
-           to rs.getString("box_currency"))
+       rs.getObject("custodian_user_id",UUID::class.java)),
+       rs.getObject("prepared_by_user_id",UUID::class.java),
+       rs.getString("box_currency"))
      },id,org).singleOrNull() ?:return null
-   val s=p.first
-   val prepared=p.second.first
+   val s=p.snapshot
+   val prepared=p.preparedBy
    if(s.policyKey!=key || s.custodian!=prepared ||
-      s.currency!=p.second.second ||
+      s.currency!=p.boxCurrency ||
       !approvals.isActiveOrganizationMember(org,prepared,now) ||
       approvals.actorMatchesAuthority(prepared,reviewer,now))
      return null
