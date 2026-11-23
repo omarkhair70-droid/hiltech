@@ -35,6 +35,7 @@ class FinanceApArBalancePostgresContractTest {
         "database/phase8/pending_ar_journal_posting.sql",
         "database/phase8/pending_bank_statement_intake.sql",
         "database/phase8/pending_ap_ar_cash_allocation.sql",
+        "database/phase8/pending_cashbox_vouchers.sql",
         "database/phase8/pending_ap_ar_source_balance.sql",
         "database/phase8/pending_bank_reconciliation_exceptions.sql",
       ).forEach {stmt.execute(Files.readString(root.resolve(it)))}
@@ -50,6 +51,7 @@ class FinanceApArBalancePostgresContractTest {
       """SELECT definition FROM pg_views WHERE schemaname='public'
          AND viewname='finance_ap_ar_source_balance'""",String::class.java)
     assertTrue(src?.contains("finance_cash_allocation_effective")==true)
+    assertTrue(src?.contains("finance_cash_voucher_record")==true)
     assertTrue(src?.contains("finance_ap_journal_reversal")==true)
     assertTrue(src?.contains("finance_ar_posted_journal")==true)
     assertNotNull(jdbc.queryForObject(
