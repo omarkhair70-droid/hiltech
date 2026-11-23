@@ -117,7 +117,7 @@ class FinanceClientAwardSourceService(
                 s.quote_revision,s.quote_record_version,
                 s.contract_id,s.client_po_id,s.total_price,
                 s.currency,s.payment_terms
-            FROM commercial_finance_award_source s
+            FROM public.commercial_finance_award_source s
             WHERE $where
             ORDER BY s.opportunity_id
             LIMIT 101
