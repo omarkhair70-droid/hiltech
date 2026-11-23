@@ -134,6 +134,27 @@ data class FinanceExpenseReceiptEvidenceReservationInsert(
     val createdAt: Instant,
 )
 
+data class CommercialEvidenceReservationInsert(
+    val evidenceId: UUID,
+    val uploadSessionId: UUID,
+    val operationId: UUID,
+    val organizationId: UUID,
+    val targetType: String,
+    val targetId: UUID,
+    val evidenceTypeCode: String,
+    val objectKey: String,
+    val contentType: String,
+    val originalFileName: String?,
+    val sizeBytes: Long,
+    val sha256: String,
+    val capturedAt: Instant,
+    val clientOccurredAt: Instant?,
+    val capturedByUserId: UUID,
+    val securityScanClass: String,
+    val uploadExpiresAt: Instant,
+    val createdAt: Instant,
+)
+
 data class EvidenceReservationRecord(
     val evidenceId: UUID,
     val uploadSessionId: UUID,
@@ -241,6 +262,12 @@ interface EvidencePersistencePort {
         value: FinanceExpenseReceiptEvidenceReservationInsert,
     ) {
         throw UnsupportedOperationException("Finance receipt Evidence target not configured.")
+    }
+
+    fun insertCommercialReservation(
+        value: CommercialEvidenceReservationInsert,
+    ) {
+        throw UnsupportedOperationException("Commercial Evidence requires an explicitly implemented canonical persistence adapter.")
     }
 
     fun findReservationByOperationId(
