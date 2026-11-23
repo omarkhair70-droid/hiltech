@@ -48,6 +48,7 @@ import com.hiltech.shared.core.identity.auth.InMemoryOidcTokenStore
 import com.hiltech.shared.core.identity.auth.NativeOidcConfig
 import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.identity.auth.NativeOidcSessionManager
+import com.hiltech.shared.core.payroll.Payroll9b9cApiClient
 import com.hiltech.shared.core.executive.ExecutiveApiClient
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.procurement.PurchaseRequirementApiClient
@@ -251,6 +252,7 @@ class DesktopIdentityRuntime(
     internal val assetPurchaseNeedApi = AssetPurchaseNeedApiClient(productApi)
     internal val supplierSourcingApi = SupplierSourcingApiClient(productApi)
     internal val executiveApi = ExecutiveApiClient(productApi)
+    internal val payrollOwnApi = Payroll9b9cApiClient(productApi)
     internal val servicePurchaseNeedApi = ServicePurchaseNeedApiClient(productApi)
     internal val serviceSupplierSourcingApi = ServiceSupplierSourcingApiClient(productApi)
     internal val supplierMasterDataApi = SupplierMasterDataApiClient(productApi)
