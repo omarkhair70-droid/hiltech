@@ -219,7 +219,9 @@ private fun ServiceAcceptancePane(
                         (if(order.accepted)" · مقبول" else " · بانتظار الفحص"))
                 }
             }
-            val selectedOrder=orders.firstOrNull{it.orderId==selectedDeliveryOrderId}
+            val selectedOrder=selectedDeliveryOrderId
+                ?.takeIf { servicePurchaseOrderStillAvailable(it, orders.map { row -> row.orderId }) }
+                ?.let { id -> orders.firstOrNull { row -> row.orderId == id } }
             selectedOrder?.let { order ->
                 Text("الفحص الحالي للأمر "+order.orderId.take(8),style=MaterialTheme.typography.titleSmall)
                 OutlinedTextField(value=notes,onValueChange={notes=it},
@@ -317,7 +319,9 @@ private fun ServiceInvoicePane(
                         order.supplierOrganizationId.take(8))
                 }
             }
-            val selectedOrder=orders.firstOrNull{it.orderId==selectedInvoiceOrderId}
+            val selectedOrder=selectedInvoiceOrderId
+                ?.takeIf { servicePurchaseOrderStillAvailable(it, orders.map { row -> row.orderId }) }
+                ?.let { id -> orders.firstOrNull { row -> row.orderId == id } }
             selectedOrder?.let { order ->
                 Text("فاتورة أمر الخدمة "+order.orderId.take(8),
                     style=MaterialTheme.typography.titleSmall)
