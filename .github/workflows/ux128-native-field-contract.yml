@@ -11,6 +11,7 @@ on:
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/FieldSourcePresentation.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/HiltechShell.kt"
       - "apps/androidApp/src/main/kotlin/com/hiltech/android/MainActivity.kt"
+      - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/Main.kt"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/FieldSourcePresentationTest.kt"
   pull_request:
     paths:
@@ -20,6 +21,7 @@ on:
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/FieldSourcePresentation.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/HiltechShell.kt"
       - "apps/androidApp/src/main/kotlin/com/hiltech/android/MainActivity.kt"
+      - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/Main.kt"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/FieldSourcePresentationTest.kt"
   workflow_dispatch:
 
