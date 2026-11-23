@@ -371,7 +371,7 @@ BEFORE INSERT ON finance_ap_posted_journal_line FOR EACH ROW
 EXECUTE FUNCTION finance_ap_posted_line_guard();
 
 CREATE FUNCTION finance_ap_posted_complete_guard()
-RETURNS trigger LANGUAGE plpgsql AS $
+RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
  j finance_ap_posted_journal%ROWTYPE;
  totals record;
