@@ -343,6 +343,36 @@ class FinanceMixedBankCashPostgresContractTest {
            "SIGNED-RECEIPT-MATCH",creator,t.plusHours(4))
          val review=approval("FINANCE_AP_AR_CASH_ALLOCATION",
            prepared,404,allocationPolicy,creator)
+         val approvalFlags=jdbc.queryForMap(
+           """SELECT a.state AS approval_state,
+             a.subject_type AS approval_subject_type,
+             (a.subject_id=?) AS subject_matches,
+             (a.subject_version=404) AS version_matches,
+             (a.policy_key=?) AS policy_matches,
+             (a.requester_user_id=?) AS requester_matches,
+             (a.requester_user_id<>?) AS independent_recorder,
+             (a.completed_at IS NOT NULL AND a.completed_at<=?) AS completed_before_record,
+             EXISTS(SELECT 1 FROM approval_decision d
+               WHERE d.approval_request_id=a.id AND d.decision='APPROVE'
+               AND d.subject_version=a.subject_version
+               AND d.actor_user_id<>a.requester_user_id
+               AND d.actor_user_id<>?) AS independent_decision,
+             EXISTS(SELECT 1 FROM approval_policy_version v
+               WHERE v.organization_id=? AND v.policy_key=a.policy_key
+               AND v.version_number=a.policy_version
+               AND v.lifecycle_state='ACTIVE' AND v.approval_required=true
+               AND v.step_mode='SINGLE'
+               AND v.effective_from<=?
+               AND (v.effective_to IS NULL OR v.effective_to>?)) AS active_policy
+             FROM approval_request a WHERE a.id=? AND a.organization_id=?""",
+           prepared,allocationPolicy,creator,recordBy,t.plusHours(5),
+           recordBy,org,t.plusHours(5),t.plusHours(5),review,org)
+         check(approvalFlags["approval_state"]=="APPROVED" &&
+           approvalFlags["approval_subject_type"]=="FINANCE_AP_AR_CASH_ALLOCATION" &&
+           listOf("subject_matches","version_matches","policy_matches",
+            "requester_matches","independent_recorder","completed_before_record",
+            "independent_decision","active_policy").all{approvalFlags[it]==true}
+         ){"Mixed bank allocation approval proof failed: $approvalFlags"}
          val record=UUID.randomUUID()
          insert("""INSERT INTO finance_cash_allocation_record(
            id,operation_id,organization_id,proposal_id,source_kind,
