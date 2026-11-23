@@ -63,14 +63,14 @@ private fun ServiceBuyerAndIssuerPane(
     org:String,install:String,operation:()->String,
 ) {
     val scope=rememberCoroutineScope()
-    var busy by remember(org) {mutableStateOf(false)}
-    var error by remember(org) {mutableStateOf<String?>(null)}
-    var needs by remember(org) {mutableStateOf<List<ServiceEligibleNeedDto>>(emptyList())}
-    var quotes by remember(org) {mutableStateOf<List<ServiceSupplierQuoteDto>>(emptyList())}
-    var currentRfq by remember(org) {mutableStateOf<String?>(null)}
-    var selected by remember(org) {mutableStateOf<ServiceOrderCandidateDto?>(null)}
-    var queue by remember(org) {mutableStateOf<List<ServiceOrderCandidateDto>>(emptyList())}
-    var confirmation by remember(org) {mutableStateOf<String?>(null)}
+    var busy by remember(org,install) {mutableStateOf(false)}
+    var error by remember(org,install) {mutableStateOf<String?>(null)}
+    var needs by remember(org,install) {mutableStateOf<List<ServiceEligibleNeedDto>>(emptyList())}
+    var quotes by remember(org,install) {mutableStateOf<List<ServiceSupplierQuoteDto>>(emptyList())}
+    var currentRfq by remember(org,install) {mutableStateOf<String?>(null)}
+    var selected by remember(org,install) {mutableStateOf<ServiceOrderCandidateDto?>(null)}
+    var queue by remember(org,install) {mutableStateOf<List<ServiceOrderCandidateDto>>(emptyList())}
+    var confirmation by remember(org,install) {mutableStateOf<String?>(null)}
 
     Card(modifier=Modifier.fillMaxWidth()) {
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -181,13 +181,13 @@ private fun ServiceAcceptancePane(
     uploadFile:suspend (String,ServicePurchaseDocumentSlotDto)->EvidenceMetadataDto,
 ) {
     val scope=rememberCoroutineScope()
-    var busy by remember(org){mutableStateOf(false)}
-    var error by remember(org){mutableStateOf<String?>(null)}
-    var confirmation by remember(org){mutableStateOf<String?>(null)}
+    var busy by remember(org,install){mutableStateOf(false)}
+    var error by remember(org,install){mutableStateOf<String?>(null)}
+    var confirmation by remember(org,install){mutableStateOf<String?>(null)}
     var orders by remember(org,install){mutableStateOf<List<ServiceWorkOrderDto>>(emptyList())}
     var selectedDeliveryOrderId by remember(org,install){mutableStateOf<String?>(null)}
     var notes by remember(org,install){mutableStateOf("")}
-    var outcome by remember(org){mutableStateOf("ACCEPTED")}
+    var outcome by remember(org,install){mutableStateOf("ACCEPTED")}
     Card(modifier=Modifier.fillMaxWidth()) {
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Text("إثبات تنفيذ الخدمة / Delivery review",style=MaterialTheme.typography.titleMedium)
@@ -271,18 +271,18 @@ private fun ServiceInvoicePane(
     uploadFile:suspend (String,ServicePurchaseDocumentSlotDto)->EvidenceMetadataDto,
 ) {
     val scope=rememberCoroutineScope()
-    var busy by remember(org){mutableStateOf(false)}
-    var error by remember(org){mutableStateOf<String?>(null)}
-    var confirmation by remember(org){mutableStateOf<String?>(null)}
+    var busy by remember(org,install){mutableStateOf(false)}
+    var error by remember(org,install){mutableStateOf<String?>(null)}
+    var confirmation by remember(org,install){mutableStateOf<String?>(null)}
     var orders by remember(org,install){mutableStateOf<List<ServiceWorkOrderDto>>(emptyList())}
     var selectedInvoiceOrderId by remember(org,install){mutableStateOf<String?>(null)}
     var invoices by remember(org,install){mutableStateOf<List<ServiceInvoiceDto>>(emptyList())}
-    var invoiceNumber by remember(org){mutableStateOf("")}
-    var invoiceDate by remember(org){mutableStateOf("")}
-    var currency by remember(org){mutableStateOf("")}
-    var amount by remember(org){mutableStateOf("")}
-    var tax by remember(org){mutableStateOf("")}
-    var match by remember(org){mutableStateOf<ServiceInvoiceMatchDto?>(null)}
+    var invoiceNumber by remember(org,install){mutableStateOf("")}
+    var invoiceDate by remember(org,install){mutableStateOf("")}
+    var currency by remember(org,install){mutableStateOf("")}
+    var amount by remember(org,install){mutableStateOf("")}
+    var tax by remember(org,install){mutableStateOf("")}
+    var match by remember(org,install){mutableStateOf<ServiceInvoiceMatchDto?>(null)}
 
     Card(modifier=Modifier.fillMaxWidth()) {
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
