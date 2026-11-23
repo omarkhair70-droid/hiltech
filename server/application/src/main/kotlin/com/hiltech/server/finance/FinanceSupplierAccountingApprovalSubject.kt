@@ -4,6 +4,7 @@ import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalSubjectRef
 import com.hiltech.server.approval.ApprovalSubjectVersionSource
+import com.hiltech.server.procurement.SupplierInvoiceMatchingService
 import org.springframework.core.env.Environment
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -61,6 +62,7 @@ private data class SupplierAccountingSourceRow(
 class FinanceSupplierAccountingApprovalSubject(
     private val jdbc: JdbcTemplate,
     private val approvals: ApprovalPersistencePort,
+    private val invoiceMatches: SupplierInvoiceMatchingService,
     private val environment: Environment,
     private val clock: Clock,
 ) : ApprovalSubjectVersionSource {
@@ -193,6 +195,17 @@ class FinanceSupplierAccountingApprovalSubject(
         val row = rows.singleOrNull() ?: return null
         if (!approvals.isActiveOrganizationMember(org, row.createdByUserId, now) ||
             approvals.actorMatchesAuthority(row.createdByUserId, authority, now)) return null
+        // The latest saved MATCHED event can become stale if receiving and
+        // warehouse evidence changes without a new recorded match. Recompute
+        // canonical P7 three-way match at decision time, not just submission.
+        // Revoked original Finance matcher access fails closed too.
+        val fresh = runCatching {
+            invoiceMatches.preview(row.createdByUserId, row.supplierInvoiceId)
+        }.getOrNull() ?: return null
+        if (fresh.resultCode != "MATCHED" ||
+            fresh.invoiceId != row.supplierInvoiceId ||
+            fresh.purchaseOrderId != row.purchaseOrderId ||
+            fresh.sourceSha256 != row.sourceSha256) return null
         val fingerprint = listOf(
             "phase8-supplier-accounting-review-v1", org, row.candidateId,
             row.supplierOrganizationId, row.supplierInvoiceId, row.invoiceEvidenceId,
