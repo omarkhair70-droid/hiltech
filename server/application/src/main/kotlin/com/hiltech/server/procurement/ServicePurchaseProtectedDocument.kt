@@ -72,15 +72,15 @@ class ServicePurchaseProtectedDocumentService @org.springframework.beans.factory
         val prefix="org/"+row.organizationId+"/evidence/"+row.evidenceId+"/objects/"
         if(!row.objectKey.startsWith(prefix) ||
             runCatching {UUID.fromString(row.objectKey.removePrefix(prefix))}.isFailure) hidden()
-        val storage=storageAccess.current()?:hidden()
-        val bytes=try {
-            storage.readRestrictedObject(row.objectKey,row.expectedSizeBytes)
+        val delivered=try {
+            storageAccess.readRestrictedObject(row.objectKey,row.expectedSizeBytes)
         } catch (_:Exception) {
             throw ProductApiException(
                 "SERVICE_DOCUMENT_STORAGE_UNAVAILABLE",
                 "Protected service document is temporarily unavailable.",
                 HttpStatus.SERVICE_UNAVAILABLE)
         }
+        val bytes=delivered?:hidden()
         if(bytes.size.toLong()!=row.expectedSizeBytes ||
             !MessageDigest.isEqual(MessageDigest.getInstance("SHA-256").digest(bytes),
                 shaBytes(row.expectedSha256)) || !validMagic(bytes,row.contentType))hidden()
