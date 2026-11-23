@@ -41,8 +41,8 @@ class FinanceGlPeriodCloseApprovedPostgresContractTest {
             val jdbc=JdbcTemplate(SingleConnectionDataSource(connection,true))
             try {
                 connection.createStatement().use { st ->
-                    st.execute(Files.readString(Path.of(ap)))
-                    st.execute(Files.readString(Path.of(close)))
+                    st.execute(FinancePendingSql.read(Path.of(ap)))
+                    st.execute(FinancePendingSql.read(Path.of(close)))
                 }
                 val org=UUID.randomUUID()
                 val period=UUID.randomUUID()

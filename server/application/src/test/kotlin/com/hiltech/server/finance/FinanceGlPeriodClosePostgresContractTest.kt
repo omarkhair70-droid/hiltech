@@ -37,8 +37,8 @@ class FinanceGlPeriodClosePostgresContractTest {
             val jdbc=JdbcTemplate(SingleConnectionDataSource(connection,true))
             try {
                 connection.createStatement().use { statement ->
-                    statement.execute(Files.readString(Path.of(apSql)))
-                    statement.execute(Files.readString(Path.of(periodSql)))
+                    statement.execute(FinancePendingSql.read(Path.of(apSql)))
+                    statement.execute(FinancePendingSql.read(Path.of(periodSql)))
                 }
                 assertNotNull(jdbc.queryForObject(
                     "SELECT to_regclass('public.finance_gl_period_close')",

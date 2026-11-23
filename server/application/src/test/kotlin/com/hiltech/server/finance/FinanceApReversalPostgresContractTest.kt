@@ -39,7 +39,7 @@ class FinanceApReversalPostgresContractTest {
                     "database/phase8/pending_ap_journal_reversal.sql",
                 )) {
                     connection.createStatement().use {
-                        it.execute(Files.readString(Path.of(file)))
+                        it.execute(FinancePendingSql.read(Path.of(file)))
                     }
                 }
                 for (table in listOf(

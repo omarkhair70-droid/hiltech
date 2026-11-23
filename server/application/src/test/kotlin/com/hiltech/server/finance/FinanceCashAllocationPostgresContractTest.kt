@@ -37,7 +37,7 @@ class FinanceCashAllocationPostgresContractTest {
                         "database/phase8/pending_ar_journal_posting.sql",
                         "database/phase8/pending_bank_statement_intake.sql",
                         "database/phase8/pending_ap_ar_cash_allocation.sql",
-                    ).forEach {stmt.execute(Files.readString(root.resolve(it)))}
+                    ).forEach {stmt.execute(FinancePendingSql.read(root.resolve(it)))}
                 }
                 val jdbc=JdbcTemplate(SingleConnectionDataSource(c,true))
                 for(table in listOf(

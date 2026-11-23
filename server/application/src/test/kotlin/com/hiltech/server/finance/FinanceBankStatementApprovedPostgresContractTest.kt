@@ -34,9 +34,9 @@ class FinanceBankStatementApprovedPostgresContractTest {
    val jdbc=JdbcTemplate(SingleConnectionDataSource(c,true))
    try {
     c.createStatement().use {stmt->
-      stmt.execute(Files.readString(root.resolve(
+      stmt.execute(FinancePendingSql.read(root.resolve(
         "database/phase8/pending_ap_ledger_posting.sql")))
-      stmt.execute(Files.readString(root.resolve(
+      stmt.execute(FinancePendingSql.read(root.resolve(
         "database/phase8/pending_bank_statement_intake.sql")))
     }
     val org=UUID.randomUUID()

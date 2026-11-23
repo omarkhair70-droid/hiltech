@@ -40,7 +40,7 @@ class FinanceExpenseReimbursementPostgresContractTest {
         "database/phase8/pending_employee_funding.sql",
         "database/phase8/pending_employee_settlement.sql",
         "database/phase8/pending_expense_reimbursement.sql",
-      ).forEach{stmt.execute(Files.readString(root.resolve(it)))}
+      ).forEach{stmt.execute(FinancePendingSql.read(root.resolve(it)))}
     }
     val jdbc=JdbcTemplate(SingleConnectionDataSource(c,true))
     for(table in listOf(

@@ -38,7 +38,7 @@ class FinanceApArBalancePostgresContractTest {
         "database/phase8/pending_cashbox_vouchers.sql",
         "database/phase8/pending_ap_ar_source_balance.sql",
         "database/phase8/pending_bank_reconciliation_exceptions.sql",
-      ).forEach {stmt.execute(Files.readString(root.resolve(it)))}
+      ).forEach {stmt.execute(FinancePendingSql.read(root.resolve(it)))}
     }
     val jdbc=JdbcTemplate(SingleConnectionDataSource(c,true))
     assertNotNull(jdbc.queryForObject(

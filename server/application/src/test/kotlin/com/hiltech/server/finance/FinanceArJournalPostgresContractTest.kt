@@ -42,7 +42,7 @@ class FinanceArJournalPostgresContractTest {
                         "database/phase8/pending_ar_invoice_candidate.sql",
                         "database/phase8/pending_ar_issued_invoice.sql",
                         "database/phase8/pending_ar_journal_posting.sql",
-                    )) statement.execute(Files.readString(root.resolve(file)))
+                    )) statement.execute(FinancePendingSql.read(root.resolve(file)))
                 }
                 for(table in listOf(
                     "finance_ar_posting_proposal",

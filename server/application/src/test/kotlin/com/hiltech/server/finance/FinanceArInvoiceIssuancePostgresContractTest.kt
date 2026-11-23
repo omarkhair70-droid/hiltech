@@ -34,7 +34,7 @@ class FinanceArInvoiceIssuancePostgresContractTest {
                     "database/phase8/pending_ar_issued_invoice.sql",
                 )
                 connection.createStatement().use { statement ->
-                    ddl.forEach { statement.execute(Files.readString(root.resolve(it))) }
+                    ddl.forEach { statement.execute(FinancePendingSql.read(root.resolve(it))) }
                 }
                 val jdbc=JdbcTemplate(SingleConnectionDataSource(connection,true))
                 for (table in listOf(

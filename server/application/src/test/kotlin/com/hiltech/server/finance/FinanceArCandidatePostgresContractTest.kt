@@ -29,10 +29,10 @@ class FinanceArCandidatePostgresContractTest {
             c.autoCommit=false
             try {
                 c.createStatement().use {
-                    it.execute(Files.readString(root.resolve(
+                    it.execute(FinancePendingSql.read(root.resolve(
                         "database/phase8/pending_ap_ledger_posting.sql",
                     )))
-                    it.execute(Files.readString(root.resolve(
+                    it.execute(FinancePendingSql.read(root.resolve(
                         "database/phase8/pending_ar_invoice_candidate.sql",
                     )))
                 }

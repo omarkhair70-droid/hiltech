@@ -39,7 +39,7 @@ class FinanceProjectSourceReportPostgresContractTest {
         "database/phase8/pending_employee_settlement.sql",
         "database/phase8/pending_expense_reimbursement.sql",
         "database/phase8/pending_project_finance_sources.sql",
-      ).forEach{stmt.execute(Files.readString(root.resolve(it)))}
+      ).forEach{stmt.execute(FinancePendingSql.read(root.resolve(it)))}
     }
     val jdbc=JdbcTemplate(SingleConnectionDataSource(c,true))
     assertNotNull(jdbc.queryForObject(

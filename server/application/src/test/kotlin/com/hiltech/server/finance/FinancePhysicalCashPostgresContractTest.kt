@@ -43,7 +43,7 @@ class FinancePhysicalCashPostgresContractTest {
         "database/phase8/pending_bank_statement_intake.sql",
         "database/phase8/pending_ap_ar_cash_allocation.sql",
         "database/phase8/pending_cashbox_vouchers.sql",
-      ).forEach{stmt.execute(Files.readString(root.resolve(it)))}
+      ).forEach{stmt.execute(FinancePendingSql.read(root.resolve(it)))}
     }
     val jdbc=JdbcTemplate(SingleConnectionDataSource(c,true))
     val org=UUID.randomUUID()

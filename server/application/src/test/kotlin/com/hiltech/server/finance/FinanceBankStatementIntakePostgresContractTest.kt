@@ -28,9 +28,9 @@ class FinanceBankStatementIntakePostgresContractTest {
    c.autoCommit=false
    try {
     c.createStatement().use {s->
-      s.execute(Files.readString(root.resolve(
+      s.execute(FinancePendingSql.read(root.resolve(
           "database/phase8/pending_ap_ledger_posting.sql")))
-      s.execute(Files.readString(root.resolve(
+      s.execute(FinancePendingSql.read(root.resolve(
           "database/phase8/pending_bank_statement_intake.sql")))
     }
     val jdbc=JdbcTemplate(SingleConnectionDataSource(c,true))
