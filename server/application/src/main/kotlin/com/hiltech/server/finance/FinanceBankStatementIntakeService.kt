@@ -355,8 +355,13 @@ class FinanceBankStatementIntakeService(
             replayed=outcome.replayed)
     }
     fun status(actor:UUID,org:UUID,proposal:UUID):FinanceBankIntakeReceipt {
-        authority(actor,org,
+        // The original independent operator must read the approved proposal
+        // before invoking record; READ does not inherit preparer permission.
+        val preparer = sourceRoleAllowed(actor,org,
             "hiltech.finance.bank-statement-intake.preparer-authority-key")
+        val operator = sourceRoleAllowed(actor,org,
+            "hiltech.finance.bank-statement-intake.operator-authority-key")
+        if (!preparer && !operator) unavailable()
         historical(org,proposal)?.let{return it}
         val snap=subject.current(org,proposal) ?: stale()
         val status=engine.subjectStatus(
@@ -394,6 +399,14 @@ class FinanceBankStatementIntakeService(
         approvalRequestId=approval,intakeId=intake,replayed=replayed,
         internalBankStatementRecorded=intake!=null,
     )
+    private fun sourceRoleAllowed(actor:UUID,org:UUID,setting:String):Boolean =
+        try {
+            authority(actor,org,setting)
+            true
+        } catch (_: ProductApiException) {
+            false
+        }
+
     private fun authority(actor:UUID,org:UUID,setting:String){
         if(!subject.enabled())unavailable()
         val key=environment.getProperty(setting,"").trim()
