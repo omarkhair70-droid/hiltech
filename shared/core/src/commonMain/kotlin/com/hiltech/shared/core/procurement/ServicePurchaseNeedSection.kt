@@ -34,38 +34,50 @@ fun ServicePurchaseNeedSection(
     var selected by remember(organizationId, installationId) { mutableStateOf<ServicePurchaseTeamDto?>(null) }
     var showTeams by remember(organizationId, installationId) { mutableStateOf(false) }
     var needs by remember(organizationId, installationId) { mutableStateOf<List<ServicePurchaseNeedDto>>(emptyList()) }
+    var teamsLoaded by remember(organizationId, installationId) { mutableStateOf(false) }
+    var needsLoaded by remember(organizationId, installationId) { mutableStateOf(false) }
+    var confirmation by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
     var spec by remember(organizationId, installationId) { mutableStateOf("") }
     var acceptance by remember(organizationId, installationId) { mutableStateOf("") }
     var why by remember(organizationId, installationId) { mutableStateOf("") }
     var pendingCreate by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("External service requests",style = MaterialTheme.typography.titleLarge)
-        Text("Non-stock services are reviewed independently. A technically ready request is not a supplier order, completed service or finance approval.",
+        Text("طلبات الخدمات الخارجية / Service requests",style = MaterialTheme.typography.titleLarge)
+        Text("الخدمات خارج المخزون تمر بمراجعة فنية مستقلة؛ جاهزية الطلب لا تعني إصدار أمر للمورد أو إثبات تنفيذ أو اعتماد مالي.",
             style = MaterialTheme.typography.bodySmall)
         OutlinedButton(enabled = !loading,onClick = {
-            loading=true
-            error=null
+            loading=true;error=null;confirmation=null
+            // Revocation/failed refresh must not retain old team actions.
+            teams=emptyList();selected=null;showTeams=false;needs=emptyList()
+            teamsLoaded=false;needsLoaded=false
+            spec="";acceptance="";why="";pendingCreate=null
             scope.launch {
-                try { teams=api.teams(organizationId,installationId) }
-                catch(e:Exception) { error=e.message ?: "Team permission unavailable." }
+                try {
+                    teams=api.teams(organizationId,installationId)
+                    teamsLoaded=true
+                } catch(e:Exception) { error=e.message ?: "Team permission unavailable." }
                 finally { loading=false }
             }
-        }) { Text("Load authorized teams") }
+        }) { Text("تحميل الفرق المتاحة لي") }
+        if(teamsLoaded && teams.isEmpty()) Text("لا توجد فرق مخوّل لك العمل عليها حاليًا.")
         OutlinedButton(enabled = !loading && teams.isNotEmpty(),onClick = {showTeams=true}) {
-            Text(selected?.name ?: "Select my current company team")
+            Text(selected?.name ?: "اختار الفريق الحالي")
         }
         DropdownMenu(expanded=showTeams,onDismissRequest={showTeams=false}) {
             teams.forEach { team ->
                 DropdownMenuItem(text={ Text(team.name) },onClick={
-                    showTeams=false
-                    selected=team
-                    needs=emptyList()
-                    pendingCreate=null
+                    showTeams=false;error=null;confirmation=null
+                    if(selected?.id!=team.id) {
+                        spec="";acceptance="";why="";pendingCreate=null
+                    }
+                    selected=team;needs=emptyList();needsLoaded=false
                     loading=true
                     scope.launch {
-                        try { needs=api.list(team.id,installationId) }
-                        catch(e:Exception) { error=e.message ?: "Unable to read service requests." }
+                        try {
+                            needs=api.list(team.id,installationId)
+                            needsLoaded=true
+                        } catch(e:Exception) { error=e.message ?: "Unable to read service requests." }
                         finally { loading=false }
                     }
                 })
@@ -73,8 +85,8 @@ fun ServicePurchaseNeedSection(
         }
         val team=selected
         if(team!=null) {
-            Text(if(team.canRequest) "Can request an external service" else
-                "Authorized independent reviewer",
+            Text(if(team.canRequest) "مسموح لي بإنشاء طلب خدمة" else
+                "مراجعة فنية مستقلة وفق صلاحيات الفريق",
                 style=MaterialTheme.typography.bodySmall)
             if(team.canRequest) {
                 OutlinedTextField(value=spec,onValueChange={
@@ -102,28 +114,40 @@ fun ServicePurchaseNeedSection(
                                 ),installationId)
                                 pendingCreate=null
                                 spec="";acceptance="";why=""
-                                needs=api.list(team.id,installationId)
+                                confirmation="تم حفظ مسودة طلب الخدمة؛ لم تُرسل للمورد."
+                                needs=emptyList();needsLoaded=false
+                                try {
+                                    needs=api.list(team.id,installationId)
+                                    needsLoaded=true
+                                } catch(e:Exception) {
+                                    error="تم حفظ المسودة، لكن تعذر تحديث القائمة؛ أعد تحميل الطلبات."
+                                }
                             } catch(e:Exception) {
                                 error=e.message ?: "Could not save service need; verify current team."
                             } finally { loading=false }
                         }
                     }
-                ) { Text(if(loading) "Saving…" else "Create service request draft") }
+                ) { Text(if(loading) "جارٍ الحفظ…" else "حفظ مسودة طلب خدمة") }
             }
             OutlinedButton(enabled=!loading,onClick={
                 loading=true;error=null
+                needs=emptyList();needsLoaded=false
                 scope.launch {
-                    try { needs=api.list(team.id,installationId) }
-                    catch(e:Exception) { error=e.message ?: "Unable to refresh service requests." }
+                    try {
+                        needs=api.list(team.id,installationId)
+                        needsLoaded=true
+                    } catch(e:Exception) { error=e.message ?: "Unable to refresh service requests." }
                     finally { loading=false }
                 }
-            }) { Text("Refresh service requests") }
+            }) { Text("تحديث طلبات الفريق") }
+            if(needsLoaded && needs.isEmpty()) Text("لا توجد طلبات خدمة حالية لهذا الفريق.")
             needs.forEach { need ->
                 ServicePurchaseNeedCard(need,api,installationId,newOperationId) { changed ->
                     needs=needs.map { if(it.id==changed.id) changed else it }
                 }
             }
         }
+        confirmation?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
     }
 }
