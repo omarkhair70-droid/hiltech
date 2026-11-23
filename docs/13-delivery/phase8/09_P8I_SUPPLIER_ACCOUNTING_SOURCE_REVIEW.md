@@ -30,3 +30,6 @@ Status: **Draft** — real Accounting *documentation and source* review, **not p
 - Canonical Finance8A/8B provisional migration ordering versus Phase7 #174 migration V0061 and shared package test remain DevOps-owned. No new migration in 8I.
 - Integration proof must reverify full real P7 matching -> Finance candidate -> Finance request -> assigned reviewer approve/reject/change -> original Finance reviewer result; test source invalidation and cross-org denial on connected P7 stack. The standalone tests are **not** a full live integration.
 - No production activation/merge until gates pass; all monetary actions remain off.
+
+## Updated decision-time match guard
+The subject source does **not** trust only the latest persisted P7 `MATCHED` revision. It also recomputes `SupplierInvoiceMatchingService.preview` under the original authorized Finance matcher identity on every source/current check, including ApprovalEngine decision-time checks. A changed warehouse receipt/discrepancy/source hash, missing source authority or mismatched PO/invoice causes the accounting review to become stale even when an old match event remains latest. The update needs real P7/warehouse integration evidence on staging before activation.
