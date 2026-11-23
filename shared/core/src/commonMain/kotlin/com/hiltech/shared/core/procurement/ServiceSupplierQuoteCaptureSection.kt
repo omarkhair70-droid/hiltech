@@ -34,28 +34,31 @@ fun ServiceSupplierQuoteCaptureSection(
     pickQuoteFile: suspend () -> ServiceSelectedFile?,
 ) {
     val scope = rememberCoroutineScope()
-    var busy by remember(organizationId) { mutableStateOf(false) }
-    var error by remember(organizationId) { mutableStateOf<String?>(null) }
-    var confirmation by remember(organizationId) { mutableStateOf<String?>(null) }
-    var eligible by remember(organizationId) { mutableStateOf<List<ServiceEligibleNeedDto>>(emptyList()) }
-    var rfqId by remember(organizationId) { mutableStateOf<String?>(null) }
-    var supplierSearch by remember(organizationId) { mutableStateOf("") }
-    var suppliers by remember(organizationId) { mutableStateOf<List<SupplierRegistryCandidateDto>>(emptyList()) }
-    var selectedSupplier by remember(organizationId) { mutableStateOf<SupplierRegistryCandidateDto?>(null) }
-    var reference by remember(organizationId) { mutableStateOf("") }
-    var revision by remember(organizationId) { mutableStateOf("1") }
-    var currency by remember(organizationId) { mutableStateOf("EGP") }
-    var amount by remember(organizationId) { mutableStateOf("") }
-    var tax by remember(organizationId) { mutableStateOf("0") }
-    var terms by remember(organizationId) { mutableStateOf("") }
-    var validUntil by remember(organizationId) { mutableStateOf("") }
-    var comparison by remember(organizationId) { mutableStateOf<List<ServiceSupplierQuoteDto>>(emptyList()) }
+    var busy by remember(organizationId, installationId) { mutableStateOf(false) }
+    var error by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
+    var confirmation by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
+    var eligible by remember(organizationId, installationId) { mutableStateOf<List<ServiceEligibleNeedDto>>(emptyList()) }
+    var rfqId by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
+    var supplierSearch by remember(organizationId, installationId) { mutableStateOf("") }
+    var suppliers by remember(organizationId, installationId) { mutableStateOf<List<SupplierRegistryCandidateDto>>(emptyList()) }
+    var supplierResultsQuery by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
+    var supplierResultsRfq by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
+    var supplierSearchGeneration by remember(organizationId, installationId) { mutableStateOf(0L) }
+    var selectedSupplier by remember(organizationId, installationId) { mutableStateOf<SupplierRegistryCandidateDto?>(null) }
+    var reference by remember(organizationId, installationId) { mutableStateOf("") }
+    var revision by remember(organizationId, installationId) { mutableStateOf("1") }
+    var currency by remember(organizationId, installationId) { mutableStateOf("EGP") }
+    var amount by remember(organizationId, installationId) { mutableStateOf("") }
+    var tax by remember(organizationId, installationId) { mutableStateOf("0") }
+    var terms by remember(organizationId, installationId) { mutableStateOf("") }
+    var validUntil by remember(organizationId, installationId) { mutableStateOf("") }
+    var comparison by remember(organizationId, installationId) { mutableStateOf<List<ServiceSupplierQuoteDto>>(emptyList()) }
     val money = Regex("^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$")
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Supplier quotes for external services", style = MaterialTheme.typography.titleMedium)
-            Text("Upload the original supplier PDF/image. All supplier and document permissions are enforced by the server.",
+            Text("عروض موردي الخدمات / Service quotes", style = MaterialTheme.typography.titleMedium)
+            Text("المصدر الأصلي PDF أو صورة. تسجيل العرض لا يعني إرساله للمورد أو الموافقة عليه. الصلاحيات من السيرفر فقط.",
                 style = MaterialTheme.typography.bodySmall)
             OutlinedButton(enabled = !busy, onClick = {
                 busy = true; error = null
@@ -76,6 +79,11 @@ fun ServiceSupplierQuoteCaptureSection(
                                 installationId,
                             ).rfq.id
                             comparison = sourcing.comparison(requireNotNull(rfqId), installationId)
+                            supplierSearchGeneration++
+                            supplierSearch = ""
+                            suppliers = emptyList()
+                            supplierResultsQuery = null
+                            supplierResultsRfq = null
                             selectedSupplier = null
                         } catch (e: Exception) { error = e.message ?: "Service sourcing source changed." }
                         finally { busy = false }
@@ -85,24 +93,64 @@ fun ServiceSupplierQuoteCaptureSection(
             rfqId?.let { activeRfq ->
                 Text("RFQ " + activeRfq.take(8), style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(
-                    value = supplierSearch, onValueChange = { supplierSearch = it; selectedSupplier = null },
-                    label = { Text("Find a real registered supplier by name") },
+                    value = supplierSearch, onValueChange = {
+                        if (it != supplierSearch) {
+                            supplierSearch = it
+                            supplierSearchGeneration++
+                            suppliers = emptyList()
+                            supplierResultsQuery = null
+                            supplierResultsRfq = null
+                            selectedSupplier = null
+                        }
+                    },
+                    label = { Text("ابحث عن مورد مسجل بالاسم / Registered supplier") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedButton(enabled = !busy && supplierSearch.trim().length in 2..80,
                     onClick = {
+                        val query = supplierSearch.trim()
+                        val originRfq = activeRfq
+                        supplierSearchGeneration++
+                        val generation = supplierSearchGeneration
+                        suppliers = emptyList()
+                        supplierResultsQuery = null
+                        supplierResultsRfq = null
+                        selectedSupplier = null
                         busy = true; error = null
                         scope.launch {
                             try {
-                                suppliers = supplierRegistry.search(
-                                    organizationId, supplierSearch.trim(), installationId)
+                                val results = supplierRegistry.search(
+                                    organizationId, query, installationId)
+                                if (serviceSupplierSearchResponseIsCurrent(
+                                        currentGeneration = supplierSearchGeneration,
+                                        responseGeneration = generation,
+                                        input = supplierSearch,
+                                        submittedQuery = query,
+                                        activeRfqId = rfqId,
+                                        responseRfqId = originRfq,
+                                    )
+                                ) {
+                                    suppliers = results
+                                    supplierResultsQuery = query
+                                    supplierResultsRfq = originRfq
+                                }
                             } catch (e: Exception) {
-                                error = e.message ?: "Supplier directory unavailable."
+                                if (supplierSearchGeneration == generation) {
+                                    error = e.message ?: "Supplier directory unavailable."
+                                }
                             } finally { busy = false }
                         }
                     },
-                ) { Text("Search company supplier registry") }
-                suppliers.forEach { supplier ->
+                ) { Text("بحث في سجل الموردين / Search suppliers") }
+                val visibleSuppliers = suppliers.takeIf {
+                    serviceSupplierResultsBelongToCurrentQuery(
+                        input = supplierSearch,
+                        submittedQuery = supplierResultsQuery,
+                        activeRfqId = activeRfq,
+                        resultRfqId = supplierResultsRfq,
+                    )
+                }.orEmpty()
+                visibleSuppliers.forEach { supplier ->
                     OutlinedButton(enabled = !busy, onClick = { selectedSupplier = supplier }) {
                         Text((if (selectedSupplier?.supplierOrganizationId == supplier.supplierOrganizationId) "✓ " else "") +
                             supplier.displayName + " · " + supplier.supplierStatus)
