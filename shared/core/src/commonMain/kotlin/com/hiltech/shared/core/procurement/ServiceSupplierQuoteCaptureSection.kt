@@ -62,6 +62,15 @@ fun ServiceSupplierQuoteCaptureSection(
                 style = MaterialTheme.typography.bodySmall)
             OutlinedButton(enabled = !busy, onClick = {
                 busy = true; error = null
+                // Denied/failed refresh must not leave an old RFQ selectable.
+                eligible = emptyList()
+                rfqId = null
+                comparison = emptyList()
+                selectedSupplier = null
+                supplierSearchGeneration++
+                suppliers = emptyList()
+                supplierResultsQuery = null
+                supplierResultsRfq = null
                 scope.launch {
                     try { eligible = sourcing.eligibleNeeds(organizationId, installationId) }
                     catch (e: Exception) { error = e.message ?: "No sourcing permission." }
@@ -70,21 +79,35 @@ fun ServiceSupplierQuoteCaptureSection(
             }) { Text("Load technically reviewed service needs") }
             eligible.forEach { need ->
                 OutlinedButton(enabled = !busy && need.sourceCurrent, onClick = {
-                    busy = true; error = null
+                    busy = true; error = null; confirmation = null
+                    // Revoke the old selection *before* network access: if
+                    // source loading fails, no previous supplier can be sent
+                    // against a different RFQ.
+                    supplierSearchGeneration++
+                    rfqId = null
+                    comparison = emptyList()
+                    supplierSearch = ""
+                    suppliers = emptyList()
+                    supplierResultsQuery = null
+                    supplierResultsRfq = null
+                    selectedSupplier = null
+                    reference = ""
+                    revision = "1"
+                    currency = "EGP"
+                    amount = ""
+                    tax = "0"
+                    terms = ""
+                    validUntil = ""
                     scope.launch {
                         try {
-                            rfqId = need.rfqId ?: sourcing.open(
+                            val nextRfq = need.rfqId ?: sourcing.open(
                                 need.needId,
                                 OpenServiceRfqDto(newOperationId(), need.needVersion),
                                 installationId,
                             ).rfq.id
-                            comparison = sourcing.comparison(requireNotNull(rfqId), installationId)
-                            supplierSearchGeneration++
-                            supplierSearch = ""
-                            suppliers = emptyList()
-                            supplierResultsQuery = null
-                            supplierResultsRfq = null
-                            selectedSupplier = null
+                            val freshComparison = sourcing.comparison(nextRfq, installationId)
+                            rfqId = nextRfq
+                            comparison = freshComparison
                         } catch (e: Exception) { error = e.message ?: "Service sourcing source changed." }
                         finally { busy = false }
                     }
