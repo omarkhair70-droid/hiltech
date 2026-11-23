@@ -184,63 +184,79 @@ private fun ServiceAcceptancePane(
     var busy by remember(org){mutableStateOf(false)}
     var error by remember(org){mutableStateOf<String?>(null)}
     var confirmation by remember(org){mutableStateOf<String?>(null)}
-    var orders by remember(org){mutableStateOf<List<ServiceWorkOrderDto>>(emptyList())}
-    var notes by remember(org){mutableStateOf("")}
+    var orders by remember(org,install){mutableStateOf<List<ServiceWorkOrderDto>>(emptyList())}
+    var selectedDeliveryOrderId by remember(org,install){mutableStateOf<String?>(null)}
+    var notes by remember(org,install){mutableStateOf("")}
     var outcome by remember(org){mutableStateOf("ACCEPTED")}
     Card(modifier=Modifier.fillMaxWidth()) {
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text("Was the service actually completed?",style=MaterialTheme.typography.titleMedium)
+            Text("إثبات تنفيذ الخدمة / Delivery review",style=MaterialTheme.typography.titleMedium)
+            Text("اختار أمر الخدمة أولًا. الملاحظات ونتيجة الفحص مرتبطة بالأمر المختار فقط.",
+                style=MaterialTheme.typography.bodySmall)
             OutlinedButton(enabled=!busy,onClick={
                 busy=true;error=null
+                selectedDeliveryOrderId=null;orders=emptyList()
+                notes="";outcome="ACCEPTED"
                 scope.launch {
                     try {orders=api.deliveryOrders(org,install)}
                     catch(e:Exception){error=e.message?:"Service reviewer is not authorized."}
                     finally{busy=false}
                 }
-            }){Text("My service delivery reviews")}
-            OutlinedTextField(value=notes,onValueChange={notes=it},
-                label={Text("What was checked, accepted or needs rework")},
-                modifier=Modifier.fillMaxWidth())
-            listOf("ACCEPTED","NEEDS_REWORK","REJECTED").forEach { choice ->
-                OutlinedButton(enabled=!busy,onClick={outcome=choice}) {
-                    Text((if(outcome==choice)"✓ " else "")+when(choice) {
-                        "ACCEPTED"->"Accepted"
-                        "NEEDS_REWORK"->"Needs rework"
-                        else->"Rejected"
-                    })
+            }){Text("تحميل أوامر الخدمات المصرح بمراجعتها")}
+            orders.forEach { order ->
+                OutlinedButton(enabled=!busy,onClick={
+                    if(selectedDeliveryOrderId!=order.orderId) {
+                        selectedDeliveryOrderId=order.orderId
+                        notes="";outcome="ACCEPTED";error=null;confirmation=null
+                    }
+                }) {
+                    Text((if(selectedDeliveryOrderId==order.orderId)"✓ " else "")+
+                        "أمر "+order.orderId.take(8)+" · مورد "+order.supplierOrganizationId.take(8)+
+                        (if(order.accepted)" · مقبول" else " · بانتظار الفحص"))
                 }
             }
-            orders.forEach { order ->
-                Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                    Text("Service "+order.orderId.take(8)+" · Supplier "+
-                        order.supplierOrganizationId.take(8)+
-                        (if(order.accepted)" · Accepted" else " · Awaiting review"))
-                    OutlinedButton(enabled=!busy&&notes.trim().length in 12..1000,
-                        onClick={
-                        busy=true;error=null
-                        scope.launch {
-                            try {
-                                val slot=api.documentSlot(order.orderId,
-                                    CreateServicePurchaseDocumentSlotDto(operation(),"DELIVERY"),
-                                    install)
-                                // Native host picks REAL bytes, calls existing
-                                // EvidenceApiClient upload/finalize, then returns READY metadata.
-                                val uploaded=uploadFile("DELIVERY",slot)
-                                require(uploaded.targetType=="SERVICE_PURCHASE_DOCUMENT" &&
-                                    uploaded.targetId==slot.slotId &&
-                                    uploaded.storageState=="READY")
-                                api.reviewDelivery(order.orderId,
-                                    RecordServiceDeliveryDto(operation(),slot.slotId,
-                                        uploaded.evidenceId,uploaded.sha256,outcome,notes.trim()),
-                                    install)
-                                orders=api.deliveryOrders(org,install)
-                                confirmation="Service review recorded from actual finalized evidence."
-                                notes=""
-                            } catch(e:Exception){error=e.message?:"Delivery review is incomplete."}
-                            finally{busy=false}
-                        }
-                    }) {Text("Upload proof and record service result")}
+            val selectedOrder=orders.firstOrNull{it.orderId==selectedDeliveryOrderId}
+            selectedOrder?.let { order ->
+                Text("الفحص الحالي للأمر "+order.orderId.take(8),style=MaterialTheme.typography.titleSmall)
+                OutlinedTextField(value=notes,onValueChange={notes=it},
+                    label={Text("ما تم فحصه أو قبوله أو المطلوب إعادة عمله")},
+                    modifier=Modifier.fillMaxWidth(),enabled=!busy)
+                listOf("ACCEPTED","NEEDS_REWORK","REJECTED").forEach { choice ->
+                    OutlinedButton(enabled=!busy,onClick={outcome=choice}) {
+                        Text((if(outcome==choice)"✓ " else "")+when(choice) {
+                            "ACCEPTED"->"مقبول"
+                            "NEEDS_REWORK"->"إعادة عمل"
+                            else->"مرفوض"
+                        })
+                    }
                 }
+                OutlinedButton(enabled=!busy&&notes.trim().length in 12..1000,
+                    onClick={
+                    busy=true;error=null
+                    val selectedOutcome=outcome
+                    val selectedNotes=notes.trim()
+                    scope.launch {
+                        try {
+                            val slot=api.documentSlot(order.orderId,
+                                CreateServicePurchaseDocumentSlotDto(operation(),"DELIVERY"),
+                                install)
+                            // Existing native host delivers true READY Evidence bytes.
+                            val uploaded=uploadFile("DELIVERY",slot)
+                            require(uploaded.targetType=="SERVICE_PURCHASE_DOCUMENT" &&
+                                uploaded.targetId==slot.slotId &&
+                                uploaded.storageState=="READY")
+                            api.reviewDelivery(order.orderId,
+                                RecordServiceDeliveryDto(operation(),slot.slotId,
+                                    uploaded.evidenceId,uploaded.sha256,selectedOutcome,selectedNotes),
+                                install)
+                            orders=api.deliveryOrders(org,install)
+                            selectedDeliveryOrderId=null
+                            confirmation="تم تسجيل الفحص مع المستند الأصلي؛ لا يعني دفع فاتورة."
+                            notes=""
+                        } catch(e:Exception){error=e.message?:"Delivery review is incomplete."}
+                        finally{busy=false}
+                    }
+                }) {Text("اختيار مستند إثبات التنفيذ وتسجيل النتيجة")}
             }
             confirmation?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
             error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
