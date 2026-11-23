@@ -37,15 +37,15 @@ class ServicePurchaseFormPresentationTest {
 
     @Test
     fun invoiceDateMustExistOnGregorianCalendarIncludingLeapYears() {
-        assertTrue(serviceInvoiceDateIsReal("2028-02-29"))
-        assertTrue(serviceInvoiceDateIsReal("2000-02-29"))
-        assertFalse(serviceInvoiceDateIsReal("2026-02-29"))
-        assertFalse(serviceInvoiceDateIsReal("1900-02-29"))
-        assertFalse(serviceInvoiceDateIsReal("2026-04-31"))
-        assertFalse(serviceInvoiceDateIsReal("2026-13-01"))
-        assertFalse(serviceInvoiceDateIsReal("2026-00-10"))
-        assertFalse(serviceInvoiceDateIsReal("0000-01-01"))
-        assertFalse(serviceInvoiceDateIsReal("2026-11-00"))
+        assertTrue(servicePurchaseDateIsReal("2028-02-29"))
+        assertTrue(servicePurchaseDateIsReal("2000-02-29"))
+        assertFalse(servicePurchaseDateIsReal("2026-02-29"))
+        assertFalse(servicePurchaseDateIsReal("1900-02-29"))
+        assertFalse(servicePurchaseDateIsReal("2026-04-31"))
+        assertFalse(servicePurchaseDateIsReal("2026-13-01"))
+        assertFalse(servicePurchaseDateIsReal("2026-00-10"))
+        assertFalse(servicePurchaseDateIsReal("0000-01-01"))
+        assertFalse(servicePurchaseDateIsReal("2026-11-00"))
         assertFalse(serviceInvoiceInputIsWellFormed("INV-123", "2026-02-29", "EGP", "100", "0"))
         assertTrue(serviceInvoiceInputIsWellFormed("INV-123", "2028-02-29", "EGP", "100", "0"))
     }
