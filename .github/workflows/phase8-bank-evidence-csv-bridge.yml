@@ -4,8 +4,10 @@ on:
   push:
     branches:
       - "phase8/bank-evidence-csv-bridge-20261124"
+      - "ux/finance-bank-csv-native-20261124"
   pull_request:
     branches:
+      - "phase8/bank-evidence-csv-bridge-20261124"
       - "integration/hiltech-finance-v0100-payroll-bridge-20261123"
   workflow_dispatch:
 
