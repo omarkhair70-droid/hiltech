@@ -68,6 +68,11 @@ class CommercialAwardDocumentCoordinatorTest {
                         headersOf(HttpHeaders.ContentType, "application/json"),
                     )
                 }
+                "/v1/evidence/$evidenceId" -> {
+                    assertEquals(HttpMethod.Get,req.method)
+                    respond(metadata("READY"),HttpStatusCode.OK,
+                        headersOf(HttpHeaders.ContentType,"application/json"))
+                }
                 "/v1/commercial/contracts/$contractId/confirm-signed" -> {
                     assertEquals(confirmId,req.headers["Idempotency-Key"])
                     respond(
@@ -103,19 +108,23 @@ class CommercialAwardDocumentCoordinatorTest {
         assertEquals("RESERVED",reservation.evidence.storageState)
         val ready=coordinator.uploadAndFinalize(input,reservation)
         assertEquals("READY",ready.storageState)
+        val recovered = coordinator.readyFromMetadata(input,evidenceId)
+        assertEquals(ready.evidenceId,recovered.evidenceId)
         assertFailsWith<IllegalArgumentException> {
             coordinator.confirm(input,ready.copy(storageState="QUARANTINED"))
         }
-        assertEquals("SIGNED",coordinator.confirm(input,ready).state)
+        assertEquals("SIGNED",coordinator.confirm(input,recovered).state)
         assertEquals(listOf(
             "/v1/evidence/reservations","/upload",
             "/v1/evidence/$evidenceId/finalize",
+            "/v1/evidence/$evidenceId",
             "/v1/commercial/contracts/$contractId/confirm-signed",
         ),requests.map{it.first})
         assertEquals(reserveId,requests[0].second)
         assertNull(requests[1].second)
         assertEquals(finalizeId,requests[2].second)
-        assertEquals(confirmId,requests[3].second)
+        assertNull(requests[3].second)
+        assertEquals(confirmId,requests[4].second)
         http.close()
     }
 }
