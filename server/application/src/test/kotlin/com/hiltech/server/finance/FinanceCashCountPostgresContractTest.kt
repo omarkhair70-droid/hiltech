@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.SingleConnectionDataSource
 import java.math.BigDecimal
@@ -239,7 +240,7 @@ class FinanceCashCountPostgresContractTest {
       BigDecimal::class.java,org,countRecord)?.compareTo(observed))
     val staleSnapshot=c.setSavepoint()
     try {
-      assertThrows(SQLException::class.java) {
+      assertThrows(DataIntegrityViolationException::class.java) {
         jdbc.update(
           """INSERT INTO finance_cash_count_proposal(
              id,operation_id,organization_id,cashbox_id,currency,counted_on,
@@ -253,7 +254,7 @@ class FinanceCashCountPostgresContractTest {
     } finally {c.rollback(staleSnapshot)}
     val changedRecord=c.setSavepoint()
     try {
-      assertThrows(SQLException::class.java) {
+      assertThrows(DataIntegrityViolationException::class.java) {
         jdbc.update("UPDATE finance_cash_count_record SET recorded_at=? WHERE id=?",
           t0.plusHours(7),countRecord)
       }
