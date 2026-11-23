@@ -3,6 +3,7 @@ package com.hiltech.server.procurement
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.warehouse.ReceivingRecordView
 import com.hiltech.server.warehouse.ReceivingSourceType
+import com.hiltech.server.warehouse.PoReceivingPolicyPort
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
@@ -27,8 +28,8 @@ class ProcurementPoReceivingGuard @Autowired constructor(
     private val orders: PurchaseOrderIssuePersistence,
     @Value("\${hiltech.procurement.po-receiving.enabled:false}")
     private val enabled: Boolean = false,
-) {
-    fun linkNewRecord(
+) : PoReceivingPolicyPort {
+    override fun linkNewRecord(
         recordId: UUID,
         organizationId: UUID,
         destinationId: UUID,
@@ -57,9 +58,9 @@ class ProcurementPoReceivingGuard @Autowired constructor(
     }
 
     /** Only new verified PO receipts are governed; legacy free-text PO refs remain unchanged while feature is off. */
-    fun isGovernedPo(record: ReceivingRecordView): Boolean = bound(record) != null
+    override fun isGovernedPo(record: ReceivingRecordView): Boolean = bound(record) != null
 
-    fun requireStockLine(
+    override fun requireStockLine(
         record: ReceivingRecordView,
         stockItemId: UUID,
         unitCode: String,
@@ -77,7 +78,7 @@ class ProcurementPoReceivingGuard @Autowired constructor(
      * receiving records for the same order therefore cannot both pass capacity.
      * This is called before canonical StockLedgerPersistence.appendReceiving.
      */
-    fun requireStockReceipt(
+    override fun requireStockReceipt(
         record: ReceivingRecordView,
         stockItemId: UUID,
         unitCode: String,
@@ -105,7 +106,7 @@ class ProcurementPoReceivingGuard @Autowired constructor(
      * Only security-verified private Evidence attached to this exact canonical
      * receiving record may release a governed PO receiving for completion.
      */
-    fun requireReadyDeliveryNote(record: ReceivingRecordView) {
+    override fun requireReadyDeliveryNote(record: ReceivingRecordView) {
         if (bound(record) == null) return
         val ready = jdbc.queryForObject(
             """
@@ -131,11 +132,11 @@ class ProcurementPoReceivingGuard @Autowired constructor(
         )
     }
 
-    fun requireStockOnly(record: ReceivingRecordView) {
+    override fun requireStockOnly(record: ReceivingRecordView) {
         if (bound(record) != null) invalid()
     }
 
-    fun requireBoundCurrent(record: ReceivingRecordView) {
+    override fun requireBoundCurrent(record: ReceivingRecordView) {
         bound(record)
     }
 
