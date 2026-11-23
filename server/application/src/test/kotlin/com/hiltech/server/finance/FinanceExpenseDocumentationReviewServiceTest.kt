@@ -52,6 +52,7 @@ class FinanceExpenseDocumentationReviewServiceTest {
         createdByUserId = creator, employeeId = employee,
         amount = "125.50", currency = "EGP",
         verifiedEvidenceIds = listOf(receipt),
+        policyVersion = 3,
         sourceVersion = 70001L,
     )
 
