@@ -49,6 +49,11 @@ jobs:
             --tests com.hiltech.server.finance.FinanceArInvoiceIssuancePostgresContractTest \
             --tests com.hiltech.server.finance.FinanceArInvoiceCandidateRulesTest \
             --no-daemon --stacktrace
+      - name: Verify KMP native invoice issuance transport contract
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests com.hiltech.shared.core.finance.FinanceArInvoiceIssuanceApiClientTest \
+            --no-daemon --console=plain
       - name: Prove Windows and Android Kotlin compilation
         run: |
           ./gradlew :apps:desktopApp:compileKotlin :apps:androidApp:assembleDebug \
