@@ -32,3 +32,14 @@
 Warehouse operator selection, busy/error and visible warehouse directory are keyed by `organizationId + installationId + operatorScopeKey`; the physical workspace key also contains that scope. Both Android `MainActivity` and Windows `Main.kt` pass the actual signed-in `identityId`, so a role/account switch within the same organization cannot reuse the previous operator's remembered warehouse view. This only isolates UI state; the backend remains authoritative for every read and mutation.
 
 **No CI green claim.** The current HEAD must pass the exact-head native workflow, and a real identity-switch / role-revocation check remains necessary.
+
+## 2026-11-23 — Quick Scan source-linked drill-through
+
+- `WarehouseQuickScanSection.kt` now invalidates the previous resolved AssetTag, asset search or stock search result as soon as the corresponding input changes or a fresh lookup begins. It also binds **every displayed result to the exact nonblank query actually submitted** to the server. A failed second lookup cannot leave the first item looking like the second.
+- Source-connected `onOpenCanonicalAsset` / `onOpenCanonicalStock` actions appear only when the parent supplies a real destination. They route through `PhysicalOperatorWorkspace.loadAsset/loadStock`, not a parallel gallery, synthetic detail, or unchecked local inventory record.
+- For an AssetTag, the source must provide a canonical `assetId`; an asset passport must actually belong to the selected warehouse before the detail opens. Server permissions and all existing mutation controls still revalidate independently.
+- The existing shell remains the only vertical-scroll owner. After a successful canonical detail fetch, Compose `BringIntoViewRequester` moves toward that same asset or stock detail so the user does not have to hunt for it in the long workspace.
+- The shell's scroll state is now keyed by current identity and current organization; a different signed-in actor or offline-only session cannot inherit the prior account's long-page scroll position.
+- `WarehouseQuickScanQueryTest` adds negative tests for replaced codes, missing query, blank query and exact matching. This test is now part of the full shared native CI gate.
+
+**Proof remains open:** These are source changes only until exact-head Gradle tests, Android APK, Windows compile and real actor/device checks pass. In particular verify scan → detail on Android, wrong-warehouse asset ID, revoked identity while the drill is open, stale selection on re-login and Back/scroll visibility on real devices.
