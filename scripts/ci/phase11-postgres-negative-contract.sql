@@ -223,6 +223,64 @@ BEGIN
   RAISE NOTICE 'PASS pre-visit evidence rejected';
  END;
 
+ -- A legitimate event type with a backdated timestamp must not rewrite the timeline.
+ BEGIN
+  INSERT INTO service_support_case_event(
+     id,ticket_id,organization_id,project_id,event_number,
+     event_type,resulting_state,work_order_id,reason,source_operation_id,
+     recorded_by_user_id,recorded_at)
+  VALUES('a11a11a1-0000-4000-8000-000000000041',
+         'a11a11a1-0000-4000-8000-000000000008',
+         'a11a11a1-0000-4000-8000-000000000001',
+         'a11a11a1-0000-4000-8000-000000000004',
+         3,'WORK_ORDER_LINKED','INVESTIGATING',
+         'a11a11a1-0000-4000-8000-000000000007',
+         'Attempted historical rewrite',
+         'a11a11a1-0000-4000-8000-000000000042',
+         'a11a11a1-0000-4000-8000-000000000003',
+         now()-interval '1 day');
+  RAISE EXCEPTION 'INVALID: backdated support event accepted';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS support event timestamp monotonicity';
+ END;
+
+ -- B2 standalone triage must not skip its append-only event sequence.
+ BEGIN
+  INSERT INTO service_support_triage_event(
+     id,ticket_id,organization_id,project_id,event_number,
+     event_type,reason,source_operation_id,created_by_user_id,created_at)
+  VALUES('a11a11a1-0000-4000-8000-000000000043',
+         'a11a11a1-0000-4000-8000-000000000008',
+         'a11a11a1-0000-4000-8000-000000000001',
+         'a11a11a1-0000-4000-8000-000000000004',
+         3,'OWNER_RELEASED','Forged skipped assignment history',
+         'a11a11a1-0000-4000-8000-000000000044',
+         'a11a11a1-0000-4000-8000-000000000003',now());
+  RAISE EXCEPTION 'INVALID: triage event number skipped without detection';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS triage event sequence guard';
+ END;
+
+ -- Valid review event, but it cannot pretend to predate its source package.
+ BEGIN
+  INSERT INTO service_handover_review_event(
+    id,package_version_id,organization_id,project_id,event_number,
+    event_type,review_state,source_digest,reason,
+    created_by_user_id,created_at,operation_id)
+  VALUES('a11a11a1-0000-4000-8000-000000000045',
+         'a11a11a1-0000-4000-8000-000000000015',
+         'a11a11a1-0000-4000-8000-000000000001',
+         'a11a11a1-0000-4000-8000-000000000004',
+         2,'FINDING_RECORDED','FINDINGS_RECORDED',repeat('a',64),
+         'Attempted backdated technical check',
+         'a11a11a1-0000-4000-8000-000000000003',
+         now()-interval '1 day',
+         'a11a11a1-0000-4000-8000-000000000046');
+  RAISE EXCEPTION 'INVALID: handover review history backdated';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS handover review event timestamp guard';
+ END;
+
  -- Cannot falsely close a still-investigating ticket.
  BEGIN
   INSERT INTO service_support_case_event(

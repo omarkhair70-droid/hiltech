@@ -42,3 +42,10 @@ New shared native KMP API + Compose `ServiceContractSourceSection`, plus a Hando
 - READY Evidence for resolution must be captured after the latest REOPENED event (or ticket opening if never reopened). This is enforced both by SQL source trigger and JDBC evidence selection; native source choices no longer expose previous-attempt proof.
 - PostgreSQL source trigger also rejects a newly linked CANCELLED WorkOrder. Source work acceptance remains governed by the canonical Phase 4/6 lifecycle.
 - Fixed a blocking `DO $` typo in the synthetic PostgreSQL negative proof; it now uses the valid `DO $$ ... $$;` syntax.
+
+
+## Direct-PostgreSQL chronological hardening
+- Service case events now require the next event number and a server timestamp no earlier than the ticket's opening or preceding event (and not implausibly in the future); a direct SQL writer cannot backdate a REOPENED or source-link record to recycle previous evidence.
+- The newest WorkOrder link and source evidence age are evaluated **after** the latest REOPENED. Old links remain historical, but cannot prove the current remedy attempt.
+- Support triage events use the same locked ticket and enforce strictly next event sequence and monotonic timestamp at SQL level. Triage writes to resolved/closed internal cases are blocked even if the service API is bypassed.
+- Handover internal-review events must occur after their immutable package creation and prior review event. Database negative fixtures explicitly exercise backdating and skipped sequence, not only application-policy unit tests.

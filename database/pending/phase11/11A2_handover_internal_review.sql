@@ -35,11 +35,13 @@ DECLARE
   current_digest char(64);
   source_package uuid;
   source_version integer;
+  package_created_at timestamptz;
   previous_state text;
   previous_number integer;
+  previous_at timestamptz;
 BEGIN
-  SELECT source_digest,package_id,version_number
-    INTO current_digest,source_package,source_version
+  SELECT source_digest,package_id,version_number,created_at
+    INTO current_digest,source_package,source_version,package_created_at
     FROM service_handover_package_version
     WHERE id=NEW.package_version_id AND organization_id=NEW.organization_id
       AND project_id=NEW.project_id AND state='DRAFT' FOR UPDATE;
@@ -54,11 +56,17 @@ BEGIN
     RAISE EXCEPTION 'Use latest handover draft for new internal review'
       USING ERRCODE='23514';
   END IF;
-  SELECT event_number,review_state INTO previous_number,previous_state
+  SELECT event_number,review_state,created_at
+    INTO previous_number,previous_state,previous_at
     FROM service_handover_review_event
     WHERE package_version_id=NEW.package_version_id
     ORDER BY event_number DESC LIMIT 1;
   previous_number:=COALESCE(previous_number,0);
+  IF NEW.created_at < COALESCE(previous_at,package_created_at)
+     OR NEW.created_at > now() + interval '5 minutes' THEN
+    RAISE EXCEPTION 'Handover review timestamp not monotonic'
+      USING ERRCODE='23514';
+  END IF;
   IF NEW.event_number<>previous_number+1 OR NOT (
       (NEW.event_type='CHECK_STARTED' AND previous_number=0
         AND NEW.review_state='CHECKING')

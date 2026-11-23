@@ -46,24 +46,32 @@ LANGUAGE plpgsql AS $$
 DECLARE
  previous_state text;
  previous_number integer;
+ previous_at timestamptz;
+ ticket_opened_at timestamptz;
  current_link uuid;
  source_state text;
 BEGIN
   -- Explicit row lock: two independent SQL writers cannot race the same ticket.
-  PERFORM 1 FROM service_support_ticket
+  SELECT created_at INTO ticket_opened_at FROM service_support_ticket
     WHERE id=NEW.ticket_id AND organization_id=NEW.organization_id
       AND project_id=NEW.project_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Support case must belong to its source ticket'
       USING ERRCODE='23514';
   END IF;
-  SELECT event_number,resulting_state INTO previous_number,previous_state
+  SELECT event_number,resulting_state,recorded_at
+    INTO previous_number,previous_state,previous_at
     FROM service_support_case_event
     WHERE ticket_id=NEW.ticket_id ORDER BY event_number DESC LIMIT 1;
   previous_number:=COALESCE(previous_number,0);
   previous_state:=COALESCE(previous_state,'OPEN');
   IF NEW.event_number <> previous_number+1 THEN
     RAISE EXCEPTION 'Support case event sequence stale' USING ERRCODE='23514';
+  END IF;
+  IF NEW.recorded_at < COALESCE(previous_at,ticket_opened_at)
+     OR NEW.recorded_at > now() + interval '5 minutes' THEN
+    RAISE EXCEPTION 'Support event timestamp outside monotonic server source history'
+      USING ERRCODE='23514';
   END IF;
   IF NOT (
     (NEW.event_type='INVESTIGATION_STARTED' AND previous_state='OPEN'
@@ -95,6 +103,10 @@ BEGIN
   IF NEW.event_type='RESOLUTION_RECORDED' THEN
     SELECT work_order_id INTO current_link FROM service_support_case_event
       WHERE ticket_id=NEW.ticket_id AND event_type='WORK_ORDER_LINKED'
+        AND event_number > COALESCE(
+          (SELECT MAX(event_number) FROM service_support_case_event
+           WHERE ticket_id=NEW.ticket_id AND event_type='REOPENED'),0
+        )
       ORDER BY event_number DESC LIMIT 1;
     IF current_link IS DISTINCT FROM NEW.work_order_id THEN
       RAISE EXCEPTION 'Resolve only against linked existing WorkOrder'
@@ -115,7 +127,12 @@ BEGIN
         AND e.work_order_id=NEW.work_order_id AND e.target_type='WORK_ORDER'
         AND e.target_id=NEW.work_order_id AND e.storage_state='READY'
         -- An old installation photo is not proof of fixing a later complaint.
-        AND e.captured_at >= ticket.created_at
+        AND e.captured_at >= COALESCE(
+          (SELECT MAX(reopened.recorded_at)
+             FROM service_support_case_event reopened
+            WHERE reopened.ticket_id=NEW.ticket_id
+              AND reopened.event_type='REOPENED'),ticket.created_at
+        )
         AND NOT EXISTS(
           SELECT 1 FROM evidence replacement
            WHERE replacement.supersedes_evidence_id=e.id
@@ -145,12 +162,24 @@ CREATE FUNCTION service_triage_case_state_gate() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
  latest_state text;
+ latest_number integer;
+ previous_at timestamptz;
+ ticket_opened_at timestamptz;
 BEGIN
- PERFORM 1 FROM service_support_ticket
+ SELECT created_at INTO ticket_opened_at FROM service_support_ticket
   WHERE id=NEW.ticket_id AND project_id=NEW.project_id
     AND organization_id=NEW.organization_id FOR UPDATE;
  IF NOT FOUND THEN
    RAISE EXCEPTION 'Triage ticket/project source unavailable' USING ERRCODE='23514';
+ END IF;
+ SELECT event_number,created_at INTO latest_number,previous_at
+  FROM service_support_triage_event
+  WHERE ticket_id=NEW.ticket_id ORDER BY event_number DESC LIMIT 1;
+ IF NEW.event_number <> COALESCE(latest_number,0)+1
+    OR NEW.created_at < COALESCE(previous_at,ticket_opened_at)
+    OR NEW.created_at > now() + interval '5 minutes' THEN
+   RAISE EXCEPTION 'Triage event requires next sequence and monotonic source time'
+      USING ERRCODE='23514';
  END IF;
  SELECT resulting_state INTO latest_state FROM service_support_case_event
   WHERE ticket_id=NEW.ticket_id ORDER BY event_number DESC LIMIT 1;
