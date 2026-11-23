@@ -37,6 +37,7 @@ import com.hiltech.shared.core.finance.financeEvidenceReadNativeWorkspace
 import com.hiltech.shared.core.finance.financeBankCsvIntakeNativeWorkspace
 import com.hiltech.shared.core.finance.financeAllocationOperatorWorkspace
 import com.hiltech.shared.core.finance.financeCompletionOperatorWorkspace
+import com.hiltech.shared.core.finance.financeCashboxOpeningWorkspace
 import com.hiltech.shared.core.finance.FinanceBankCsvSelectedFile
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
@@ -2833,6 +2834,13 @@ fun main() {
                         if (System.getenv("HILTECH_FINANCE_REVIEW_PREPARE_UI_ENABLED")
                                 ?.equals("true", ignoreCase = true) == true
                         ) {
+                            add(financeCashboxOpeningWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                api = runtime.financeEvidenceReadApis.cash,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                            ))
                             add(financeCompletionOperatorWorkspace(
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
