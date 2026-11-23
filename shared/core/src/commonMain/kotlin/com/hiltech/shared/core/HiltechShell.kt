@@ -15,6 +15,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -260,13 +261,23 @@ fun HiltechShell(
     procurementOperator: @Composable () -> Unit = {},
 ) {
     MaterialTheme {
+        // Never inherit a different actor's previous desktop/mobile scroll
+        // position when signing out, switching org or restoring offline read.
+        val shellScrollScope = when (state) {
+            is HiltechShellState.SignedIn -> {
+                val orgId = state.identity.organizations.firstOrNull { it.primary }
+                    ?.organizationId ?: state.identity.organizations.firstOrNull()?.organizationId
+                "signed:${state.identity.identityId}:${orgId.orEmpty()}"
+            }
+            is HiltechShellState.OfflineFieldReadOnly -> "offline:${state.identityId}"
+            else -> "public"
+        }
+        val scopedShellScroll = key(shellScrollScope) { rememberScrollState() }
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(
-                        rememberScrollState(),
-                    )
+                    .verticalScroll(scopedShellScroll)
                     .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
