@@ -40,6 +40,7 @@ import com.hiltech.shared.core.payroll.payrollAdminReadNativeWorkspace
 import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
 import com.hiltech.shared.core.service.handoverReadNativeWorkspace
 import com.hiltech.shared.core.service.serviceOperationsReadNativeWorkspace
+import com.hiltech.shared.core.finance.financeEvidenceReadNativeWorkspace
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
 import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
@@ -190,6 +191,14 @@ class MainActivity : ComponentActivity() {
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_FINANCE_EVIDENCE_READ_ENABLED) {
+                            add(financeEvidenceReadNativeWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                                apis = hiltechApplication.financeEvidenceReadApis,
                             ))
                         }
                         if (BuildConfig.HILTECH_FINANCE_INVOICE_READ_ENABLED) {
