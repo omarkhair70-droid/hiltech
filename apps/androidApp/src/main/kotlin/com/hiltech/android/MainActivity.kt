@@ -39,6 +39,8 @@ import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
 import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
 import com.hiltech.shared.core.service.handoverReadNativeWorkspace
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
+import com.hiltech.shared.core.NativeOperationalWorkspace
+import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
@@ -176,6 +178,32 @@ class MainActivity : ComponentActivity() {
                                 newOperationId = { UUID.randomUUID().toString() },
                             ))
                         }
+                        if (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED &&
+                            BuildConfig.HILTECH_SERVICE_PURCHASES_WORKSPACE_ENABLED
+                        ) {
+                            add(NativeOperationalWorkspace(
+                                id = "service-purchasing",
+                                label = "مشتريات الخدمات",
+                                canReadSource = {
+                                    servicePurchaseAnyCurrentSourceVisible(
+                                        needs = hiltechApplication.servicePurchaseNeedApi,
+                                        sourcing = hiltechApplication.serviceSupplierSourcingApi,
+                                        orders = hiltechApplication.serviceOrderAndInvoiceApi,
+                                        organizationId = org.organizationId,
+                                        installationId = hiltechApplication.installationId,
+                                    )
+                                },
+                                hostOwnsScroll = true,
+                                content = { _ ->
+                                    key(signed.identity.identityId, org.organizationId, "service-purchases") {
+                                        AndroidServicePurchaseSections(
+                                            application = hiltechApplication,
+                                            organizationId = org.organizationId,
+                                        )
+                                    }
+                                },
+                            ))
+                        }
                     }
                 } ?: emptyList(),
                 onSignIn = ::startSignIn,
@@ -273,7 +301,9 @@ class MainActivity : ComponentActivity() {
                     }
                 },
                 procurementOperator = {
-                    if (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED) {
+                    if (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED &&
+                        !BuildConfig.HILTECH_SERVICE_PURCHASES_WORKSPACE_ENABLED
+                    ) {
                         val signed = shellState as? HiltechShellState.SignedIn
                         val identity = signed?.identity
                         val organization = identity?.organizations?.firstOrNull { it.primary }
