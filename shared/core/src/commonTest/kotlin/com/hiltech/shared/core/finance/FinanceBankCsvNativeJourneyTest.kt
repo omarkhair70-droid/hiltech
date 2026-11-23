@@ -4,6 +4,7 @@ import com.hiltech.shared.core.evidence.EvidenceApiClient
 import com.hiltech.shared.core.network.HiltechApiClient
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -42,7 +43,7 @@ class FinanceBankCsvNativeJourneyTest {
         "classificationCode":"HIGHLY_RESTRICTED",
         "clientVisibilityMode":"INTERNAL_ONLY","evidenceVersion":1}
     """.trimIndent()
-    private fun ok(body: String) = respond(
+    private fun MockRequestHandleScope.ok(body: String) = respond(
         body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"),
     )
     private fun uploader(
