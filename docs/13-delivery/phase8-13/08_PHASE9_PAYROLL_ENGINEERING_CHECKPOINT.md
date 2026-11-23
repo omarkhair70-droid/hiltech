@@ -257,3 +257,73 @@ consecutive Flyway numbers and staging acceptance remain mandatory.
 The exact-head GitHub CI gate is required for all of these tests. The
 repository-wide queue has been congested, and an earlier queued run is
 not a green result for this commit.
+
+
+## November 23 — Phase 9 ↔ Phase 8: real Finance review handoff
+
+**Implementation on PR #166:** \`Payroll9cFinanceHandoffService\` and the
+OFF-by-default POST
+\`/v1/payroll/runs/{runId}/finance-review-handoffs\`
+(\`hiltech.payroll.finance-handoff-enabled=false\` by default).
+
+This is a genuine, authenticated, idempotency-keyed **review intake contract**
+for the Finance owner, **not an executable payment**:
+
+- Caller must be a current Payroll REVIEW principal. The exact payroll
+  release must still be currently publishable under the organization's
+  ApprovalEngine policy. A payroll period row lock serializes this handoff
+  with later draft generations and correction releases.
+- The immutable manifest binds organization, period, run version, durable
+  release ID, active source fingerprint, approval policy key/version, caller,
+  operation ID, whole employee population, frozen per-employee net, currency,
+  transfer candidacy, total and SHA-256 digest.
+- All employees are included; **zero-net** employees remain in the audit
+  population but are not transfer candidates. Duplicate employee/snapshot
+  identifiers, wrong net total, negative amount, mixed currency, noncurrent
+  run and no positive payable amount fail closed.
+- Finance must implement
+  \`PayrollFinanceReviewIntakePort.acceptForReview(manifest)\` in its own
+  module, **inside the same database transaction**. It must enforce one
+  canonical Finance review batch per (organization, payroll run), and
+  identical \`operationId\` replay while rejecting different keys/changed
+  source. The Payroll module NEVER creates Finance instructions or ledger
+  entries and NEVER invokes bank providers.
+- Only a \`REVIEW_REQUIRED\` receipt with exact manifest digest, run,
+  release, operation, amounts, employee count and
+  \`bankExecutionAvailable=false\` is accepted.
+  A fabricated \`PAID\` or bank-executable receipt is rejected.
+- KMP/Compose Windows and Android share a typed, request-keyed API client
+  and an Arabic review section. The host must explicitly supply actual
+  capabilities/Finance availability before the review-handoff button can
+  be shown. Neither native global shell is mounted from this payroll branch.
+- \`Payroll9cFinanceHandoffTest\` tests totals, order-independent hash,
+  zero-net handling, duplicate lines, stale or forged receipts, and no
+  fabricated bank execution. The existing PostgreSQL contract adds a
+  synthetic Finance intake to exercise exact company release, missing
+  Finance adapter blocking, reviewer authorization, and idempotent replay.
+  These are contract tests **not evidence of a live bank/payment network**.
+
+### What enabling cash disbursement still requires (Finance-owned)
+
+The latest Phase8 Finance PR #179 is source-bound **payment preflight only**;
+#180 contains a pure \`FinanceBankResultRules\` reducer. Neither provides a
+persisted bank-validated payment instruction, exact account/beneficiary
+authority, signatory approval, external payment execution or provider result
+source. The payroll-side Finance intake interface intentionally has no
+implementation while those facts remain absent. An environment flag on its
+own cannot make that missing infrastructure real.
+
+The correct progression is: company-recognized payroll liability and
+signed HR/time/Finance wage input → exact Payroll release → Finance review
+intake and bank-beneficiary checks → Finance-authorized, versioned
+payment instructions and dual-control execution → provider-backed
+SUCCESS/FAILED/UNKNOWN/RETURNED evidence → reconciliation and own payslips.
+
+A blank or UNKNOWN result must never be treated as PAID; never retry an
+unknown banking outcome blindly. Neither payroll nor this handoff can
+release real funds by flipping a feature flag.
+
+**Release status:** PR remains Draft, these switches default OFF,
+V0070–V0073 migration IDs are provisional, and only exact-head CI success
+may certify the implementation. Team must approve the real Finance
+integration and verify staging before production.
