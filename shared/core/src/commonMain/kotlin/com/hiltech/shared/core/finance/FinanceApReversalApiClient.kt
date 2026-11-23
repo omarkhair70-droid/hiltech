@@ -86,12 +86,12 @@ class FinanceApReversalApiClient(
         ) },
     )
     private suspend fun command(
-        org:String,id:String,operation:String,installation:String,action:String,
+        organizationId:String,id:String,operation:String,installation:String,action:String,
     ):FinanceApReversalReceiptDto {
         require(action=="post" || action=="request-approval")
         return api.request(
             method=HttpMethod.Post,
-            path=org(org)+"/ap-reversal-proposals/"+uuid(id)+"/"+action,
+            path=org(organizationId)+"/ap-reversal-proposals/"+uuid(id)+"/"+action,
             options=HiltechRequestOptions(
                 installationId=installation,idempotencyKey=uuid(operation),
             ),
