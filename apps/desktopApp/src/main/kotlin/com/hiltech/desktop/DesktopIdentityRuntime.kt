@@ -58,6 +58,8 @@ import com.hiltech.shared.core.service.HandoverApiClient
 import com.hiltech.shared.core.commercial.CommercialApiClient
 import com.hiltech.shared.core.executive.ExecutiveApiClient
 import com.hiltech.shared.core.finance.FinanceEvidenceReadApis
+import com.hiltech.shared.core.finance.FinanceBankCsvEvidenceUploader
+import com.hiltech.shared.core.finance.FinanceBankStatementIntakeApiClient
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.procurement.PurchaseRequirementApiClient
 import com.hiltech.shared.core.procurement.WarehouseReplenishmentApiClient
@@ -281,6 +283,10 @@ class DesktopIdentityRuntime(
     internal val purchaseOrderIssueApi = PurchaseOrderIssueApiClient(productApi)
     internal val supplierInvoiceFinanceApi = SupplierInvoiceFinanceApiClient(productApi)
     internal val financeEvidenceReadApis = FinanceEvidenceReadApis(productApi)
+    internal val financeBankIntakeApi = FinanceBankStatementIntakeApiClient(productApi)
+    internal val financeBankCsvUploader = FinanceBankCsvEvidenceUploader(
+        EvidenceApiClient(productApi, httpClient), financeBankIntakeApi,
+    )
     internal val supplierPoCommunicationApi = SupplierPoCommunicationApiClient(productApi)
     internal val supplierInvoiceDocumentUploader = SupplierInvoiceDocumentUploader(
         supplierInvoiceFinanceApi, EvidenceApiClient(productApi, httpClient),
