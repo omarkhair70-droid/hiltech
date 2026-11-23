@@ -3,7 +3,7 @@
 -- A successful run confirms schema contract, not server/OIDC/native acceptance.
 -- All data is rolled back. Never run this against production.
 BEGIN;
-DO $
+DO $$
 <<phase10_fixture>>
 DECLARE
   company uuid := gen_random_uuid();
