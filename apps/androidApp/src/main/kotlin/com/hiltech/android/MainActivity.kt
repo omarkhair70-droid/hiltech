@@ -199,6 +199,8 @@ class MainActivity : ComponentActivity() {
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
                                 apis = hiltechApplication.financeEvidenceReadApis,
+                                reviewPreparationEnabled = BuildConfig.HILTECH_FINANCE_REVIEW_PREPARE_ENABLED,
+                                newOperationId = { UUID.randomUUID().toString() },
                             ))
                         }
                         if (BuildConfig.HILTECH_FINANCE_INVOICE_READ_ENABLED) {
