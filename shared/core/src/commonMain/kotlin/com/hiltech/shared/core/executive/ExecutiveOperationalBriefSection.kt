@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 fun ExecutiveOperationalBriefSection(
     home: ExecutiveHomeDto,
     onOpenSource: (ExecutiveDestination) -> Unit,
+    canOpenDestination: (ExecutiveDestination) -> Boolean = { true },
 ) {
     val brief = remember(home) { buildExecutiveOperationalBrief(home) }
     var expanded by remember(home.viewerIdentityId, home.organizationId, home.correlationId, home.asOf) {
@@ -107,7 +108,7 @@ fun ExecutiveOperationalBriefSection(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                item.destination?.let { destination ->
+                                item.destination?.takeIf(canOpenDestination)?.let { destination ->
                                     OutlinedButton(onClick = { onOpenSource(destination) }) {
                                         Text("راجع في النظام الأصلي")
                                     }
