@@ -139,6 +139,14 @@ fun AssignedWorkSection(
         ) {
             val wide =
                 maxWidth >= 760.dp
+            // Clear compact focus when the adaptive layout becomes wide;
+            // rotating back must not revive a previous focused route.
+            LaunchedEffect(focusScopeKey, wide) {
+                if (wide && focusedWorkOrderId != null) {
+                    focusedWorkOrderId = null
+                    returnAnchorId = null
+                }
+            }
             LaunchedEffect(focusScopeKey, wide, focusedWorkOrderId, todayIds) {
                 onCompactFocusChanged(
                     !wide && focusScopeKey.isNotBlank() &&
@@ -233,6 +241,7 @@ fun AssignedWorkSection(
                                 if (compactFocus && fieldFocusStillAssigned(id, todayIds)) {
                                     focusedWorkOrderId = id
                                     returnAnchorId = null
+                                    onCompactFocusChanged(true)
                                 }
                                 onSelectWork(id)
                             },
@@ -246,6 +255,7 @@ fun AssignedWorkSection(
                             onClick = {
                                 returnAnchorId = focusedId
                                 focusedWorkOrderId = null
+                                onCompactFocusChanged(false)
                             },
                         ) { Text("الرجوع لشغلي اليوم") }
                         if (visibleBundle?.workOrderId != focusedId) {
