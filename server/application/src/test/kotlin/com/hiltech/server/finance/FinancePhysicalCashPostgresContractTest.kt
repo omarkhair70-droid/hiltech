@@ -56,8 +56,9 @@ class FinancePhysicalCashPostgresContractTest {
     val authority="FINANCE_CASHBOX_MANAGER"
     val code="CASH_${box.toString().take(8)}"
     val reference="COMPANY-CASH-ACCOUNT-2026"
+    val bindingId=UUID.randomUUID()
     val version=FinanceCashboxOpeningVersion.derive(
-      org,code,"EGP",custodian,reference,1,UUID.randomUUID(),1)
+      org,code,"EGP",custodian,reference,1,bindingId,1)
     val t0=OffsetDateTime.parse("2026-11-22T09:00:00Z")
     val accepted=t0.plusHours(1)
     val opened=t0.plusHours(2)
@@ -97,7 +98,7 @@ class FinancePhysicalCashPostgresContractTest {
            id,organization_id,authority_key,principal_type,
            principal_user_id,effective_from,active,created_by_user_id,created_at)
          VALUES(?,?,?,'USER',?,?,true,?,?)""",
-      UUID.randomUUID(),org,authority,reviewer,t0,preparer,t0)
+      bindingId,org,authority,reviewer,t0,preparer,t0)
     jdbc.update(
       """INSERT INTO approval_policy_version(
           id,organization_id,policy_key,version_number,lifecycle_state,
