@@ -1,0 +1,71 @@
+name: Phase 8 8J client awarded-project Finance source truth
+
+on:
+  push:
+    branches:
+      - "phase8/finance-8j-client-award-source-readiness-20261123"
+  pull_request:
+    branches:
+      - "phase8/finance-8i-supplier-accounting-review-20261123"
+
+concurrency:
+  group: finance8j-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  finance-client-award-read:
+    name: Finance source authenticity and native UNKNOWN receivables safeguards
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_DB: hiltech
+          POSTGRES_USER: hiltech
+          POSTGRES_PASSWORD: hiltech
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hiltech -d hiltech"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+      - name: Verify exact Finance source truth and cumulative seller/employee review contracts
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
+          HILTECH_DB_USER: hiltech
+          HILTECH_DB_PASSWORD: hiltech
+          HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.finance.FinanceClientAwardSourceServiceTest \
+            --tests com.hiltech.server.finance.FinanceClientAwardSourcePostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceSupplierAccountingReviewServiceTest \
+            --tests com.hiltech.server.finance.FinanceSupplierAccountingApprovalSubjectTest \
+            --tests com.hiltech.server.finance.FinancePayableCandidateServiceTest \
+            --tests com.hiltech.server.finance.FinancePaymentPreflightServiceTest \
+            --tests com.hiltech.server.finance.FinanceExpenseDocumentationSourcePostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceMoneyDraftPolicySourcePostgresContractTest \
+            --no-daemon --console=plain
+      - name: Prove native Finance source-only data contracts
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests com.hiltech.shared.core.finance.FinanceClientAwardSourceApiClientTest \
+            --tests com.hiltech.shared.core.finance.FinanceSupplierAccountingReviewApiClientTest \
+            --tests com.hiltech.shared.core.finance.FinanceMoneyPolicyReviewApiClientTest \
+            --no-daemon --console=plain
+      - name: Compile native Windows/Android Finance read-only projection
+        run: |
+          ./gradlew :apps:desktopApp:compileKotlin :apps:androidApp:assembleDebug \
+            --no-daemon --console=plain

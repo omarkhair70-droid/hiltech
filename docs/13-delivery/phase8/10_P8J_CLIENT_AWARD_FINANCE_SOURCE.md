@@ -1,0 +1,24 @@
+# Phase 8J — truthful Commercial award -> Finance client source (NO receivable yet)
+
+Date: 2026-11-23
+**Status:** Engineering Draft; source read only, feature OFF by default, no Finance money/ledger mutation.
+
+## Why this vertical exists
+Phase10 Sales PR #170 publishes exactly one canonical SQL view `commercial_finance_award_source` from real `commercial_project_handoff` and RELEASED `commercial_quote_version`. The view carries organization/opportunity/project, customer organization, quote revision/record version, signed-contract ID, verified Client-PO ID, exact sell total/currency and payment terms. This **is not** a customer tax invoice, payment milestone, receivable journal, due-date schedule or customer payment. Never guess installments from a sales quote.
+
+## Implemented on Finance branch
+- `FinanceClientAwardSourceService` reads **only** P10's exact published view, not private Sales costing or a manually entered project/customer total. The view's presence is detected with `to_regclass('public.commercial_finance_award_source')` because Phase10's SQL is in `database/phase10/pending_commercial_schema.sql`, not yet merged/numbered in the Finance branch.
+- Current company Finance authority required through canonical `ApprovalPersistencePort`: active membership plus a real company `finance.receivables.sales-award-source-review-authority-key` binding. No fallback to Sales/Project admin, no new seeded role. Feature flag `hiltech.finance.receivables.sales-award-source-readiness.enabled=false` by default.
+- Protected `GET /v1/finance/organizations/{orgId}/client-award-sources` lists up to 100 records and **explicitly reports 101+ truncation**; no computed company-wide amount.
+- Protected `GET /v1/finance/organizations/{orgId}/client-award-sources/{opportunityId}` returns one exact current source, never another company. Source includes SHA256 fingerprint of real IDs, quote revision/version, terms, currency and exact amount to support subsequent Finance-only approval/booking source-version gates.
+- If P10's view is absent, the result is `sourceAvailable=false`, `sourceStatus=COMMERCIAL_FINANCE_AWARD_SOURCE_NOT_INTEGRATED`, and null receivable/revenue/collections totals. **Empty missing source never means the company's customer balance is zero.**
+- Rows explicitly set `customerInvoiceIssued=false`, `receivableRecognized=false`, `billingMilestonesVerified=false`, `taxTreatmentVerified=false`, `amountDueOrOverdueKnown=false`, `cashCollected=false`, `cashReconciled=false`. Source presence is not authority to send a client invoice.
+- Typed KMP Finance GET list/detail client and mountable Compose read-only native section for authorized Windows/Android Finance users. No create/send/update/issue/collect UI exists in this PR.
+- Unit tests exercise default-OFF, missing/revoked Finance authority, missing P10 view, null financial totals; PostgreSQL test creates a **synthetic view fixture only in a rollback transaction** with exact P10 published column names to prove Finance query mapping, 101-item truncation, stable source fingerprint and no fake AR; KMP MockEngine proves actual authenticated GET endpoints with precise decimal strings and no monetary status.
+
+## Integration ownership and evidence limits
+- #170 Phase10's `commercial_finance_award_source` is currently **only in its independent unnumbered migration**. Tests on this isolated Finance branch do **not** prove live P10 signed contract/legal signature, commercial company policy, real Client PO Evidence or a real converted project. The synthetic PostgreSQL fixture is never production data.
+- DevOps must integrate Phase10's protected source and Commercial Evidence with Finance after canonical Flyway sequencing; Phase7 #174 V0061 and Finance8A #164 V0061 remain in collision. No cross-lane commercial SQL writes, no invented P10 migration, and no merging into main by Finance owner.
+- Actual full-path acceptance: real signed contract/verified Client PO -> quote RELEASED -> approved Sales award/project handoff -> Finance authority-scoped source -> independent billable milestone & tax/legal approval -> source-unique immutable invoice issuance -> accounting receivable posting -> confirmed customer payment & bank reconciliation.
+- The real Phase10 source does not contain independently recognized **billable milestones**, VAT/tax details or issued invoice numbers; Finance cannot safely infer them and must obtain appropriate verified canonical sources/policies before creating ledger entries. No automatic client contact, invoice email, receivable journal or receipt posting.
+- Exact-head CI must pass real PostgreSQL source-view mapping and parent P8A–8I regression plus native builds. Actual integrated P10 + Finance dual-authority smoke, client cross-org denial and source-revision freshness still to be run with DevOps.
