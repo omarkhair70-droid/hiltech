@@ -53,8 +53,14 @@ CREATE INDEX idx_commercial_opportunities ON commercial_opportunity (organizatio
 
 -- SQL callers cannot fabricate an award or reopen a terminal deal.
 -- Only exact transition paths used by CommercialService are allowed.
-CREATE FUNCTION commercial_guard_opportunity_state() RETURNS trigger LANGUAGE plpgsql AS $
+CREATE FUNCTION commercial_guard_opportunity_state() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+ IF TG_OP='INSERT' THEN
+   IF NEW.state<>'OPEN' OR NEW.version<>1 OR NEW.closed_reason IS NOT NULL THEN
+     RAISE EXCEPTION 'Commercial opportunity must begin as OPEN';
+   END IF;
+   RETURN NEW;
+ END IF;
  IF ROW(NEW.id,NEW.organization_id,NEW.client_organization_id,
         NEW.owner_user_id,NEW.source,NEW.opportunity_code,NEW.created_by,NEW.created_at)
     IS DISTINCT FROM
@@ -72,7 +78,7 @@ BEGIN
    WHERE h.opportunity_id=OLD.id AND h.organization_id=OLD.organization_id
  ) THEN RAISE EXCEPTION 'Award requires the canonical Project handoff first'; END IF;
  RETURN NEW;
-END $;
+END $$;
 -- CREATE TRIGGER is deliberately after commercial_project_handoff exists below.
 
 -- Qualification is evidence of a real discovery decision; never a guessed score.
@@ -624,6 +630,6 @@ CREATE TRIGGER trg_commercial_handoff_valid BEFORE INSERT
   ON commercial_project_handoff FOR EACH ROW
   EXECUTE FUNCTION commercial_guard_handoff_insert();
 
-CREATE TRIGGER trg_commercial_opportunity_state BEFORE UPDATE
+CREATE TRIGGER trg_commercial_opportunity_state BEFORE INSERT OR UPDATE
   ON commercial_opportunity FOR EACH ROW
   EXECUTE FUNCTION commercial_guard_opportunity_state();
