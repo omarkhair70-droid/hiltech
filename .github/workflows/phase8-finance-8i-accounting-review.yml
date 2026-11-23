@@ -5,6 +5,7 @@ on:
     branches:
       - "phase8/finance-8i-supplier-accounting-review-20261123"
       - "integration/phase7-finance8i-20261123"
+      - "integration/phase7-finance8i-native-ux-20261123"
   pull_request:
     branches:
       - "phase8/finance-8h-advance-imprest-policy-review-20261123"
