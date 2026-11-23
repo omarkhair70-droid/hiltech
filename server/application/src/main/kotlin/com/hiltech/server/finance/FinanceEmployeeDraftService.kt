@@ -87,6 +87,8 @@ class FinanceEmployeeDraftService(
     private val environment: Environment,
 ) {
     fun expenses(actor: UUID, org: UUID) = list(actor, org, FinanceDraftKind.EXPENSE)
+    fun expense(actor: UUID, org: UUID, id: UUID): FinanceEmployeeDraftView =
+        detail(actor, org, FinanceDraftKind.EXPENSE, id)
     fun advances(actor: UUID, org: UUID) = list(actor, org, FinanceDraftKind.ADVANCE)
     fun imprests(actor: UUID, org: UUID) = list(actor, org, FinanceDraftKind.IMPREST)
 
