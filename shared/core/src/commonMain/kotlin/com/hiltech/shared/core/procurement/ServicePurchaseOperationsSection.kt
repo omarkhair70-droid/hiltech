@@ -66,10 +66,12 @@ private fun ServiceBuyerAndIssuerPane(
     var busy by remember(org,install) {mutableStateOf(false)}
     var error by remember(org,install) {mutableStateOf<String?>(null)}
     var needs by remember(org,install) {mutableStateOf<List<ServiceEligibleNeedDto>>(emptyList())}
+    var needsLoaded by remember(org,install) {mutableStateOf(false)}
     var quotes by remember(org,install) {mutableStateOf<List<ServiceSupplierQuoteDto>>(emptyList())}
     var currentRfq by remember(org,install) {mutableStateOf<String?>(null)}
     var selected by remember(org,install) {mutableStateOf<ServiceOrderCandidateDto?>(null)}
     var queue by remember(org,install) {mutableStateOf<List<ServiceOrderCandidateDto>>(emptyList())}
+    var queueLoaded by remember(org,install) {mutableStateOf(false)}
     var pendingIssueId by remember(org,install) {mutableStateOf<String?>(null)}
     var confirmation by remember(org,install) {mutableStateOf<String?>(null)}
 
@@ -79,13 +81,18 @@ private fun ServiceBuyerAndIssuerPane(
             OutlinedButton(enabled=!busy,onClick={
                 busy=true;error=null;confirmation=null
                 // Permission/source reload revokes previous buyer actions immediately.
-                needs=emptyList();quotes=emptyList();currentRfq=null;selected=null;queue=emptyList();pendingIssueId=null
+                needs=emptyList();needsLoaded=false;quotes=emptyList();currentRfq=null
+                selected=null;queue=emptyList();queueLoaded=false;pendingIssueId=null
                 scope.launch {
-                    try {needs=sourcing.eligibleNeeds(org,install)}
+                    try {
+                        needs=sourcing.eligibleNeeds(org,install)
+                        needsLoaded=true
+                    }
                     catch(e:Exception){error=e.message?:"Buyer authorization is unavailable."}
                     finally {busy=false}
                 }
             }){Text("طلبات الخدمات الجاهزة للشراء")}
+            if(needsLoaded && needs.isEmpty()) Text("لا توجد طلبات خدمات جاهزة للشراء حاليًا.")
             needs.forEach { need ->
                 OutlinedButton(enabled=!busy&&need.sourceCurrent,onClick={
                     busy=true;error=null;confirmation=null
@@ -142,13 +149,17 @@ private fun ServiceBuyerAndIssuerPane(
                 Text("حالة الاعتماد: "+(candidate.approvalState?:"لم يُطلب بعد"))
             }
             OutlinedButton(enabled=!busy,onClick={
-                busy=true;error=null;queue=emptyList();pendingIssueId=null
+                busy=true;error=null;queue=emptyList();pendingIssueId=null;queueLoaded=false
                 scope.launch {
-                    try {queue=api.queue(org,install)}
+                    try {
+                        queue=api.queue(org,install)
+                        queueLoaded=true
+                    }
                     catch(e:Exception){error=e.message?:"Service order issue permission unavailable."}
                     finally {busy=false}
                 }
             }){Text("أوامر الخدمات المصرح بإصدارها")}
+            if(queueLoaded && queue.isEmpty()) Text("لا توجد أوامر خدمات معتمدة وجاهزة للإصدار.")
             queue.forEach { candidate ->
                 Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
                     Text("Supplier "+candidate.supplierOrganizationId.take(8)+
@@ -187,6 +198,7 @@ private fun ServiceBuyerAndIssuerPane(
                     }
                 }
             }
+            if(busy) Text("جارٍ التحقق من البيانات والصلاحيات…")
             confirmation?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
             error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
         }
@@ -204,6 +216,7 @@ private fun ServiceAcceptancePane(
     var error by remember(org,install){mutableStateOf<String?>(null)}
     var confirmation by remember(org,install){mutableStateOf<String?>(null)}
     var orders by remember(org,install){mutableStateOf<List<ServiceWorkOrderDto>>(emptyList())}
+    var deliveryOrdersLoaded by remember(org,install){mutableStateOf(false)}
     var selectedDeliveryOrderId by remember(org,install){mutableStateOf<String?>(null)}
     var notes by remember(org,install){mutableStateOf("")}
     var outcome by remember(org,install){mutableStateOf("ACCEPTED")}
@@ -213,15 +226,21 @@ private fun ServiceAcceptancePane(
             Text("اختار أمر الخدمة أولًا. الملاحظات ونتيجة الفحص مرتبطة بالأمر المختار فقط.",
                 style=MaterialTheme.typography.bodySmall)
             OutlinedButton(enabled=!busy,onClick={
-                busy=true;error=null
-                selectedDeliveryOrderId=null;orders=emptyList()
+                busy=true;error=null;confirmation=null
+                selectedDeliveryOrderId=null;orders=emptyList();deliveryOrdersLoaded=false
                 notes="";outcome="ACCEPTED"
                 scope.launch {
-                    try {orders=api.deliveryOrders(org,install)}
+                    try {
+                        orders=api.deliveryOrders(org,install)
+                        deliveryOrdersLoaded=true
+                    }
                     catch(e:Exception){error=e.message?:"Service reviewer is not authorized."}
                     finally{busy=false}
                 }
             }){Text("تحميل أوامر الخدمات المصرح بمراجعتها")}
+            if(deliveryOrdersLoaded && orders.isEmpty()) {
+                Text("لا توجد أوامر خدمات متاحة لمراجعة التنفيذ حاليًا.")
+            }
             orders.forEach { order ->
                 OutlinedButton(enabled=!busy,onClick={
                     if(selectedDeliveryOrderId!=order.orderId) {
@@ -298,6 +317,7 @@ private fun ServiceInvoicePane(
     var orders by remember(org,install){mutableStateOf<List<ServiceWorkOrderDto>>(emptyList())}
     var selectedInvoiceOrderId by remember(org,install){mutableStateOf<String?>(null)}
     var invoices by remember(org,install){mutableStateOf<List<ServiceInvoiceDto>>(emptyList())}
+    var invoiceSourcesLoaded by remember(org,install){mutableStateOf(false)}
     var invoiceNumber by remember(org,install){mutableStateOf("")}
     var invoiceDate by remember(org,install){mutableStateOf("")}
     var currency by remember(org,install){mutableStateOf("")}
@@ -311,16 +331,22 @@ private fun ServiceInvoicePane(
             Text("اختار أمر خدمة واحدًا وأدخل فاتورته الأصلية. المطابقة تتيح المراجعة المالية فقط ولا تصرف أي مبلغ.",
                 style=MaterialTheme.typography.bodySmall)
             OutlinedButton(enabled=!busy,onClick={
-                busy=true;error=null;match=null
+                busy=true;error=null;match=null;confirmation=null
                 orders=emptyList();invoices=emptyList();selectedInvoiceOrderId=null
+                invoiceSourcesLoaded=false
                 scope.launch {
                     try {
-                        orders=api.invoiceOrders(org,install)
-                        invoices=api.invoices(org,install)
+                        val currentOrders=api.invoiceOrders(org,install)
+                        val currentInvoices=api.invoices(org,install)
+                        orders=currentOrders;invoices=currentInvoices
+                        invoiceSourcesLoaded=true
                     } catch(e:Exception){error=e.message?:"Finance permission unavailable."}
                     finally{busy=false}
                 }
             }){Text("تحميل أوامر الخدمات والفواتير الحالية")}
+            if(invoiceSourcesLoaded && orders.isEmpty()) {
+                Text("لا توجد أوامر خدمات متاحة لإضافة فاتورة حاليًا.")
+            }
             orders.forEach { order ->
                 OutlinedButton(enabled=!busy,onClick={
                     if(selectedInvoiceOrderId!=order.orderId) {
@@ -383,6 +409,9 @@ private fun ServiceInvoicePane(
                         finally{busy=false}
                     }
                 }) {Text("اختيار مستند الفاتورة وتسجيله للأمر المحدد")}
+            }
+            if(invoiceSourcesLoaded && invoices.isEmpty()) {
+                Text("لا توجد فواتير خدمات مسجلة للمراجعة حاليًا.")
             }
             invoices.forEach { inv ->
                 OutlinedButton(enabled=!busy,onClick={
