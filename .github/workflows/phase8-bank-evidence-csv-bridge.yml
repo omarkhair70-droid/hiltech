@@ -1,0 +1,38 @@
+name: Phase8 bank CSV Evidence lifecycle / source-bound native contract
+
+on:
+  push:
+    branches:
+      - "phase8/bank-evidence-csv-bridge-20261124"
+  pull_request:
+    branches:
+      - "integration/hiltech-finance-v0100-payroll-bridge-20261123"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finance-bank-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  canonical-bank-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+      - name: Verify exact-source bank CSV, common KMP and server compilation
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.finance.FinanceBankCsvParserTest \
+            --tests com.hiltech.server.finance.FinanceBankIntakeEvidenceBindingTest \
+            :shared:core:desktopTest \
+            :apps:desktopApp:compileKotlin \
+            :apps:androidApp:assembleDebug \
+            --no-configuration-cache --no-daemon --console=plain
