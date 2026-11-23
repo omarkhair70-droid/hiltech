@@ -374,7 +374,20 @@ class FinanceCashAllocationService(
         val b=all.filter {
             it["bank_statement_line_id"]==bank
         }.fold(BigDecimal.ZERO){a,v->a.add(v["allocated_amount"] as BigDecimal)}
-        return s+proposed>sourceAmount || b+proposed>bankAmount
+        // A posted customer/supplier invoice can be settled partly in a
+        // company cashbox and partly by bank: never advertise the same
+        // remaining invoice balance twice.
+        val cashboxInstalled=jdbc.queryForObject(
+            "SELECT to_regclass('public.finance_cash_voucher_record') IS NOT NULL",
+            Boolean::class.java,
+        )==true
+        val usedPhysical=if(cashboxInstalled) jdbc.queryForObject(
+            """SELECT COALESCE(SUM(amount),0)
+               FROM finance_cash_voucher_record
+               WHERE organization_id=? AND source_kind=? AND source_journal_id=?""",
+            BigDecimal::class.java,org,kind,journal,
+        ) ?: BigDecimal.ZERO else BigDecimal.ZERO
+        return s+usedPhysical+proposed>sourceAmount || b+proposed>bankAmount
     }
     private fun authority(actor:UUID,org:UUID,property:String){
         if(!subject.enabled())unavailable()
