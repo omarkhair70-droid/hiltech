@@ -85,9 +85,8 @@ class SupplierQuoteProtectedDocumentService @Autowired constructor(
         if (!recorded.objectKey.startsWith(prefix) ||
             runCatching { UUID.fromString(recorded.objectKey.removePrefix(prefix)) }.isFailure
         ) unavailable()
-        val storage = storageAccess.current() ?: unavailable()
-        val bytes = try {
-            storage.readRestrictedObject(recorded.objectKey, recorded.expectedSizeBytes)
+        val delivered = try {
+            storageAccess.readRestrictedObject(recorded.objectKey, recorded.expectedSizeBytes)
         } catch (_: Exception) {
             throw ProductApiException(
                 "SUPPLIER_DOCUMENT_DELIVERY_UNAVAILABLE",
@@ -95,6 +94,7 @@ class SupplierQuoteProtectedDocumentService @Autowired constructor(
                 HttpStatus.SERVICE_UNAVAILABLE,
             )
         }
+        val bytes = delivered ?: unavailable()
         if (bytes.size.toLong() != recorded.expectedSizeBytes ||
             !MessageDigest.isEqual(
                 MessageDigest.getInstance("SHA-256").digest(bytes),
