@@ -27,13 +27,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 enum class FinanceCompletionKind(val label: String, val terminal: String) {
-    AR_INVOICE("إصدار فاتورة عميل","issuedInvoiceId"),
-    AP_JOURNAL("ترحيل قيد المورد","postedJournalId"),
-    AR_JOURNAL("ترحيل قيد العميل","postedJournalId"),
-    FUNDING("تسجيل سلفة أو عهدة","fundingRecordId"),
-    SETTLEMENT("تسجيل تسوية موظف","settlementRecordId"),
-    REIMBURSEMENT("تسجيل رد مصروف","reimbursementRecordId"),
-    PERIOD_CLOSE("إقفال فترة محاسبية","periodClosureId"),
+    AR_INVOICE("إصدار فاتورة عميل","RECORDED"),
+    AP_JOURNAL("ترحيل قيد المورد","POSTED_ACCOUNTS_PAYABLE"),
+    AR_JOURNAL("ترحيل قيد العميل","POSTED_ACCOUNTS_RECEIVABLE"),
+    FUNDING("تسجيل سلفة أو عهدة","RECORDED"),
+    SETTLEMENT("تسجيل تسوية موظف","RECORDED"),
+    REIMBURSEMENT("تسجيل رد مصروف","RECORDED"),
+    PERIOD_CLOSE("إقفال فترة محاسبية","CLOSED"),
 }
 
 /** Facts are from typed authoritative receipts, never editable client balances. */
