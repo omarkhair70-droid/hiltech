@@ -82,9 +82,13 @@ fun NativeOperationalWorkspaceHub(
         mutableStateOf<String?>(null)
     }
     var checking by remember(scopeKey, authorityRevisionKey) { mutableStateOf(true) }
+    var accessMessage by remember(scopeKey, authorityRevisionKey) {
+        mutableStateOf<String?>(null)
+    }
 
     LaunchedEffect(scopeKey, authorityRevisionKey, eligible.map { it.id }, revision) {
         checking = true
+        accessMessage = null
         granted.clear()
         for (workspace in eligible) {
             val allowed = try {
@@ -111,6 +115,8 @@ fun NativeOperationalWorkspaceHub(
         }
         granted[requested] = allowed
         selectedId = if (allowed) requested else null
+        accessMessage = if (allowed) null else
+            "تعذر تأكيد الصلاحية الحالية لهذه المساحة؛ راجع حسابك أو حدّث المصادر."
         pendingOpen = null
     }
 
@@ -127,17 +133,31 @@ fun NativeOperationalWorkspaceHub(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             visible.forEach { workspace ->
-                OutlinedButton(onClick = {
+                OutlinedButton(enabled = !checking && pendingOpen == null, onClick = {
                     // A current source read is mandatory even if the button
                     // was visible from an earlier successful read.
                     selectedId = null
                     pendingOpen = workspace.id
                 }) { Text(workspace.label) }
             }
-            OutlinedButton(enabled = !checking, onClick = { selectedId = null; revision += 1 }) {
+            OutlinedButton(enabled = !checking && pendingOpen == null, onClick = {
+                selectedId = null
+                pendingOpen = null
+                accessMessage = null
+                revision += 1
+            }) {
                 Text(if (checking) "جارٍ التحقق" else "تحديث الصلاحيات")
             }
         }
+        when {
+            checking || pendingOpen != null ->
+                Text("جارٍ التحقق من المساحات والصلاحيات الحالية…",
+                    style = MaterialTheme.typography.bodySmall)
+            visible.isEmpty() ->
+                Text("لا توجد مساحات متخصصة متاحة لهذا الحساب الآن؛ يمكن تحديث المصدر.",
+                    style = MaterialTheme.typography.bodySmall)
+        }
+        accessMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
 
     if (selected != null) {
