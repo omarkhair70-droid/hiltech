@@ -28,6 +28,8 @@ import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
 import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
 import com.hiltech.shared.core.service.handoverReadNativeWorkspace
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
+import com.hiltech.shared.core.NativeOperationalWorkspace
+import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
@@ -2792,6 +2794,36 @@ fun main() {
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
                             ))
                         }
+                        if (System.getenv("HILTECH_SERVICE_PURCHASES_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true &&
+                            System.getenv("HILTECH_SERVICE_PURCHASES_WORKSPACE_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(NativeOperationalWorkspace(
+                                id = "service-purchasing",
+                                label = "مشتريات الخدمات",
+                                canReadSource = {
+                                    servicePurchaseAnyCurrentSourceVisible(
+                                        needs = runtime.servicePurchaseNeedApi,
+                                        sourcing = runtime.serviceSupplierSourcingApi,
+                                        orders = runtime.serviceOrderAndInvoiceApi,
+                                        organizationId = org.organizationId,
+                                        installationId = runtime.physicalWarehouseInstallationId,
+                                    )
+                                },
+                                hostOwnsScroll = true,
+                                content = { _ ->
+                                    androidx.compose.runtime.key(
+                                        signed.identity.identityId, org.organizationId, "service-purchases",
+                                    ) {
+                                        DesktopServicePurchaseSections(
+                                            runtime = runtime,
+                                            organizationId = org.organizationId,
+                                        )
+                                    }
+                                },
+                            ))
+                        }
                     }
                 } ?: emptyList(),
                 onSignIn = { signIn(false) },
@@ -2864,7 +2896,9 @@ fun main() {
                 },
                 procurementOperator = {
                     if (System.getenv("HILTECH_SERVICE_PURCHASES_UI_ENABLED")
-                            ?.equals("true", ignoreCase = true) == true
+                            ?.equals("true", ignoreCase = true) == true &&
+                        System.getenv("HILTECH_SERVICE_PURCHASES_WORKSPACE_UI_ENABLED")
+                            ?.equals("true", ignoreCase = true) != true
                     ) {
                         val signed = shellState.value as? HiltechShellState.SignedIn
                         val identity = signed?.identity
