@@ -54,6 +54,7 @@ jobs:
             --tests com.hiltech.server.finance.FinanceEmployeeReviewServiceTest \
             --tests com.hiltech.server.finance.FinanceMoneyDraftPolicyApprovalSubjectTest \
             --tests com.hiltech.server.finance.FinanceMoneyDraftPolicyReviewServiceTest \
+            --tests com.hiltech.server.finance.FinanceMoneyDraftPolicySourcePostgresContractTest \
             --tests com.hiltech.server.finance.FinanceExpenseDocumentationStatusServiceTest \
             --tests com.hiltech.server.finance.FinanceExpenseDocumentationReviewServiceTest \
             --tests com.hiltech.server.finance.FinanceExpenseDocumentationSourcePostgresContractTest \
