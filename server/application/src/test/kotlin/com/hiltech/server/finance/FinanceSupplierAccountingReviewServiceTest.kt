@@ -70,7 +70,7 @@ class FinanceSupplierAccountingReviewServiceTest {
         policyKey = policyKey, policyVersion = 3,
     )
 
-    private fun setup(current: Boolean = true) {
+    private fun setup(current: Boolean = true): ApprovalAuthorityBindingSnapshot {
         Mockito.`when`(sources.detail(actor, candidate)).thenReturn(candidate(current))
         Mockito.`when`(snapshot.current(org, candidate)).thenReturn(source())
         Mockito.`when`(authority.loadActivePolicy(org, policyKey, time))
@@ -90,6 +90,7 @@ class FinanceSupplierAccountingReviewServiceTest {
             .thenReturn(binding)
         Mockito.`when`(authority.isActiveOrganizationMember(org, actor, time))
             .thenReturn(true)
+        return binding
     }
 
     @Test fun matchedSourceMustStillBeCurrentToBeginAccountingReview() {
@@ -174,10 +175,11 @@ class FinanceSupplierAccountingReviewServiceTest {
     }
 
     @Test fun requesterWhoIsTheCurrentAccountingApproverCannotSelfSubmit() {
-        setup()
-        Mockito.`when`(authority.actorMatchesAuthority(
-            Mockito.eq(actor), Mockito.any(), Mockito.eq(time),
-        )).thenReturn(true)
+        val binding = setup()
+        // Do not use Mockito.any() for a Kotlin non-null authority data
+        // class: it returns null and throws before stubbing the method.
+        Mockito.`when`(authority.actorMatchesAuthority(actor, binding, time))
+            .thenReturn(true)
         assertThrows<ProductApiException> {
             service().request(actor, candidate, op, "test")
         }
