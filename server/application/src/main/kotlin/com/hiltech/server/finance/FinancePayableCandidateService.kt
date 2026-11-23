@@ -43,6 +43,7 @@ data class SupplierPayableCandidateView(
     val supplierOrganizationId: UUID, val invoiceNumber: String,
     val amount: String, val currency: String, val sourceSha256: String,
     val state: String, val sourceCurrent: Boolean, val replayed: Boolean = false,
+    val organizationId: UUID? = null,
 )
 private data class SupplierSource(
     val handoffId: UUID, val org: UUID, val invoiceId: UUID, val poId: UUID,
@@ -134,6 +135,7 @@ class FinancePayableCandidateService(
             row.sha, row.state,
             source != null && source.org == row.org &&
                 source.invoiceId == row.invoiceId && isCurrent(actor, source),
+            organizationId = row.org,
         )
     }
 
