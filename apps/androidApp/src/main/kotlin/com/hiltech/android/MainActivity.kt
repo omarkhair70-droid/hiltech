@@ -207,6 +207,20 @@ class MainActivity : ComponentActivity() {
                     }
                 },
                 procurementOperator = {
+                    if (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED) {
+                        val signed = shellState as? HiltechShellState.SignedIn
+                        val identity = signed?.identity
+                        val organization = identity?.organizations?.firstOrNull { it.primary }
+                            ?: identity?.organizations?.firstOrNull()
+                        if (identity != null && organization != null) {
+                            key(identity.identityId, organization.organizationId, "service-purchases") {
+                                AndroidServicePurchaseSections(
+                                    application = hiltechApplication,
+                                    organizationId = organization.organizationId,
+                                )
+                            }
+                        }
+                    }
                     if (BuildConfig.HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED) {
                         val signed = shellState as? HiltechShellState.SignedIn
                         val identity = signed?.identity
