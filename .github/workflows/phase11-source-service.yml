@@ -66,6 +66,7 @@ jobs:
             --tests com.hiltech.server.service.SupportDeskFieldRulesTest \
             --tests com.hiltech.server.service.SupportTriagePolicyTest \
             --tests com.hiltech.server.service.SupportCasePolicyTest \
+            --tests com.hiltech.server.service.SupportTimePolicyTest \
             --tests com.hiltech.server.service.ServiceContractSourcePolicyTest \
             --tests com.hiltech.server.service.MaintenanceTicketFollowupPolicyTest \
             --tests com.hiltech.server.service.MaintenanceDraftPolicyTest \
@@ -89,6 +90,7 @@ jobs:
             database/pending/phase11/11B_support_internal.sql \
             database/pending/phase11/11B2_support_triage.sql \
             database/pending/phase11/11B3_support_case_workflow.sql \
+            database/pending/phase11/11B4_support_internal_time.sql \
             database/pending/phase11/11C_maintenance_visits.sql \
             database/pending/phase11/11C2_maintenance_ticket_followups.sql \
             database/pending/phase11/11C3_maintenance_technical_review.sql; do

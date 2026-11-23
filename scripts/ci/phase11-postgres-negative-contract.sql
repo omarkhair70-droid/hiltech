@@ -274,6 +274,18 @@ VALUES('a11a11a1-0000-4000-8000-000000000079',
        'a11a11a1-0000-4000-8000-000000000080',
        'a11a11a1-0000-4000-8000-000000000003',now());
 
+-- Real source-bound internal observations, not customer response or SLA pause.
+INSERT INTO service_support_time_event (
+  id,ticket_id,organization_id,project_id,event_number,event_type,
+  reason,source_operation_id,recorded_by_user_id,recorded_at)
+VALUES ('a11a11a1-0000-4000-8000-000000000090','a11a11a1-0000-4000-8000-000000000008','a11a11a1-0000-4000-8000-000000000001','a11a11a1-0000-4000-8000-000000000004',1,
+  'INTERNAL_ATTENTION_RECORDED','Manager reviewed the original case','a11a11a1-0000-4000-8000-000000000091','a11a11a1-0000-4000-8000-000000000003',now());
+INSERT INTO service_support_time_event (
+  id,ticket_id,organization_id,project_id,event_number,event_type,
+  reason,source_operation_id,recorded_by_user_id,recorded_at)
+VALUES ('a11a11a1-0000-4000-8000-000000000092','a11a11a1-0000-4000-8000-000000000008','a11a11a1-0000-4000-8000-000000000001','a11a11a1-0000-4000-8000-000000000004',2,
+  'INTERNAL_HOLD_STARTED','Missing engineering evidence for investigation','a11a11a1-0000-4000-8000-000000000093','a11a11a1-0000-4000-8000-000000000003',now());
+
 DO $$
 DECLARE
  ticket_count integer;
@@ -281,6 +293,23 @@ BEGIN
  SELECT count(*) INTO ticket_count FROM service_support_case_event
   WHERE ticket_id='a11a11a1-0000-4000-8000-000000000008';
  IF ticket_count<>2 THEN RAISE EXCEPTION 'Expected two genuine valid support events'; END IF;
+ -- No duplicated hold, and timing is immutable even for direct SQL writes.
+ BEGIN
+INSERT INTO service_support_time_event (
+  id,ticket_id,organization_id,project_id,event_number,event_type,
+  reason,source_operation_id,recorded_by_user_id,recorded_at)
+VALUES ('a11a11a1-0000-4000-8000-000000000098','a11a11a1-0000-4000-8000-000000000008','a11a11a1-0000-4000-8000-000000000001','a11a11a1-0000-4000-8000-000000000004',3,
+  'INTERNAL_HOLD_STARTED','Forged duplicate internal hold','a11a11a1-0000-4000-8000-000000000099','a11a11a1-0000-4000-8000-000000000003',now());
+  RAISE EXCEPTION 'INVALID: duplicate internal hold accepted';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS duplicate active hold rejected';
+ END;
+ BEGIN
+  UPDATE service_support_time_event SET reason='Forged approval' WHERE id='a11a11a1-0000-4000-8000-000000000090';
+  RAISE EXCEPTION 'INVALID: editable internal time history';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS internal time ledger immutable';
+ END;
  -- A manager may not forge an internally completed visit from IN_PROGRESS work.
  BEGIN
   INSERT INTO service_maintenance_review_event(
@@ -655,6 +684,32 @@ BEGIN
     'a11a11a1-0000-4000-8000-000000000003',now()
  );
  RAISE NOTICE 'PASS maintenance recheck event is append-only';
+
+ -- After WorkOrder ACCEPTED and READY Evidence, active hold STILL blocks resolution.
+ BEGIN
+INSERT INTO service_support_case_event(
+  id,ticket_id,organization_id,project_id,event_number,event_type,
+  resulting_state,work_order_id,evidence_id,reason,source_operation_id,
+  recorded_by_user_id,recorded_at)
+VALUES ('a11a11a1-0000-4000-8000-000000000096','a11a11a1-0000-4000-8000-000000000008','a11a11a1-0000-4000-8000-000000000001','a11a11a1-0000-4000-8000-000000000004',3,'RESOLUTION_RECORDED',
+ 'RESOLVED_INTERNAL','a11a11a1-0000-4000-8000-000000000007','a11a11a1-0000-4000-8000-000000000030','Unapproved resolution during active internal hold','a11a11a1-0000-4000-8000-000000000097','a11a11a1-0000-4000-8000-000000000003',now());
+  RAISE EXCEPTION 'INVALID: resolution ignored active internal hold';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS active internal hold blocks support resolution';
+ END;
+ -- Close the internal hold first; resolution is then governed by canonical Work Evidence.
+INSERT INTO service_support_time_event (
+  id,ticket_id,organization_id,project_id,event_number,event_type,
+  reason,source_operation_id,recorded_by_user_id,recorded_at)
+VALUES ('a11a11a1-0000-4000-8000-000000000094','a11a11a1-0000-4000-8000-000000000008','a11a11a1-0000-4000-8000-000000000001','a11a11a1-0000-4000-8000-000000000004',3,
+  'INTERNAL_HOLD_ENDED','Engineering evidence reviewed and internal hold ended','a11a11a1-0000-4000-8000-000000000095','a11a11a1-0000-4000-8000-000000000003',now());
+INSERT INTO service_support_case_event(
+  id,ticket_id,organization_id,project_id,event_number,event_type,
+  resulting_state,work_order_id,evidence_id,reason,source_operation_id,
+  recorded_by_user_id,recorded_at)
+VALUES ('a11a11a1-0000-4000-8000-000000000096','a11a11a1-0000-4000-8000-000000000008','a11a11a1-0000-4000-8000-000000000001','a11a11a1-0000-4000-8000-000000000004',3,'RESOLUTION_RECORDED',
+ 'RESOLVED_INTERNAL','a11a11a1-0000-4000-8000-000000000007','a11a11a1-0000-4000-8000-000000000030','Canonical accepted work and READY evidence after internal hold ended','a11a11a1-0000-4000-8000-000000000097','a11a11a1-0000-4000-8000-000000000003',now());
+ RAISE NOTICE 'PASS support resolution after recorded hold end and canonical work acceptance';
 
  RAISE NOTICE 'PHASE11_SOURCE_NEGATIVE_PROOFS_PASS';
 END;

@@ -15,10 +15,11 @@ BEGIN
       'service_support_ticket','service_support_internal_note',
       'service_support_triage_event','service_support_case_event',
       'service_maintenance_visit_plan','service_maintenance_finding',
-      'service_maintenance_ticket_followup','service_maintenance_review_event'
+      'service_maintenance_ticket_followup','service_maintenance_review_event',
+      'service_support_time_event'
    );
- IF tables_found<>12 THEN
-   RAISE EXCEPTION 'Expected twelve Phase11 service tables, got %',tables_found;
+ IF tables_found<>13 THEN
+   RAISE EXCEPTION 'Expected thirteen Phase11 service tables, got %',tables_found;
  END IF;
  SELECT count(*) INTO immutability_gates FROM pg_trigger tr
  JOIN pg_class c ON c.oid=tr.tgrelid
@@ -28,9 +29,10 @@ BEGIN
       'service_support_ticket','service_support_internal_note',
       'service_support_triage_event','service_support_case_event',
       'service_maintenance_visit_plan','service_maintenance_finding',
-      'service_maintenance_ticket_followup','service_maintenance_review_event'
+      'service_maintenance_ticket_followup','service_maintenance_review_event',
+      'service_support_time_event'
  ) AND tr.tgname ~ '(immutable|no_truncate)';
- IF immutability_gates<24 THEN
+ IF immutability_gates<26 THEN
    RAISE EXCEPTION 'Insufficient append-only mutation gates: %',immutability_gates;
  END IF;
  SELECT count(*) INTO source_gates FROM pg_trigger tr
@@ -39,9 +41,10 @@ BEGIN
        'service_handover_package_item','service_handover_review_event',
        'service_support_ticket','service_support_triage_event',
        'service_support_case_event','service_maintenance_finding',
-       'service_maintenance_ticket_followup','service_maintenance_review_event'
+       'service_maintenance_ticket_followup','service_maintenance_review_event',
+       'service_support_time_event'
  ) AND tr.tgname ~ '(source|owner|evidence)';
- IF source_gates<9 THEN
+ IF source_gates<10 THEN
    RAISE EXCEPTION 'Insufficient source validation gates: %',source_gates;
  END IF;
  IF NOT EXISTS (
@@ -67,6 +70,12 @@ BEGIN
     WHERE conname='fk_maintenance_review_visit' AND contype='f'
  ) THEN
    RAISE EXCEPTION 'Missing technical review to canonical maintenance visit composite FK';
+ END IF;
+ IF NOT EXISTS (
+   SELECT 1 FROM pg_constraint
+    WHERE conname='fk_support_time_ticket' AND contype='f'
+ ) THEN
+   RAISE EXCEPTION 'Missing internal time observation to original support ticket composite FK';
  END IF;
  IF NOT EXISTS (
    SELECT 1 FROM pg_constraint
