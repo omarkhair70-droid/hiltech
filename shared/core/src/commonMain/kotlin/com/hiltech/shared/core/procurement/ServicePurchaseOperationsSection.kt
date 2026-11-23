@@ -122,7 +122,7 @@ private fun ServiceBuyerAndIssuerPane(
                                     CreateServiceOrderCandidateDto(operation(),rfq,quote.id),
                                     install).candidate
                                 selected=candidate
-                                confirmation="Supplier offer selected; request approval next."
+                                confirmation="تم اختيار عرض المورد للمراجعة؛ الخطوة التالية طلب اعتماد الشركة."
                             } catch(e:Exception){error=e.message?:"Offer selection unavailable."}
                             finally{busy=false}
                         }
@@ -167,7 +167,7 @@ private fun ServiceBuyerAndIssuerPane(
             if(queueLoaded && queue.isEmpty()) Text("لا توجد أوامر خدمات معتمدة وجاهزة للإصدار.")
             queue.forEach { candidate ->
                 Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                    Text("Supplier "+candidate.supplierOrganizationId.take(8)+
+                    Text("المورد "+candidate.supplierOrganizationId.take(8)+
                         " · "+candidate.currency+" "+candidate.totalAmount+
                         " · "+(candidate.approvalState?:"PENDING"))
                     val mayIssue=!busy&&candidate.sourceCurrent&&candidate.approvalState=="APPROVED"
@@ -309,6 +309,7 @@ private fun ServiceAcceptancePane(
                     }
                 }) {Text("اختيار مستند إثبات التنفيذ وتسجيل النتيجة")}
             }
+            if(busy) Text("جارٍ التحقق من أوامر الخدمات والمستندات…")
             confirmation?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
             error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
         }
@@ -443,11 +444,11 @@ private fun ServiceInvoicePane(
                     }
                 }) {
                     Text(inv.invoiceNumber+" · "+inv.currency+" "+inv.totalAmount+
-                        " · Review")
+                        " · مراجعة المطابقة")
                 }
             }
             match?.let { preview ->
-                Text("Service invoice result: "+preview.resultCode)
+                Text("نتيجة مطابقة فاتورة الخدمة: "+preview.resultCode)
                 Text(preview.expectedCurrency+" "+preview.expectedTotal+
                     " vs "+preview.invoicedCurrency+" "+preview.invoicedTotal,
                     style=MaterialTheme.typography.bodySmall)
@@ -458,14 +459,14 @@ private fun ServiceInvoicePane(
                             match=api.recordMatch(preview.invoiceId,
                                 RecordServiceInvoiceMatchDto(
                                     operation(),preview.sourceSha256),install)
-                            confirmation="Immutable invoice check recorded."
+                            confirmation="تم حفظ نتيجة مطابقة الفاتورة بسجل موثق؛ لم يتم صرف مبلغ."
                         } catch(e:Exception){
                             match=null
                             error=e.message?:"Invoice sources changed."
                         }
                         finally{busy=false}
                     }
-                }){Text("Record invoice match result")}
+                }){Text("تسجيل نتيجة مطابقة الفاتورة")}
                 if(preview.resultCode=="MATCHED" && preview.matchEventId!=null) {
                     OutlinedButton(enabled=!busy,onClick={
                         busy=true;error=null
@@ -482,9 +483,10 @@ private fun ServiceInvoicePane(
                             }
                             finally{busy=false}
                         }
-                    }){Text("Make available for Finance review")}
+                    }){Text("إتاحة الفاتورة للمراجعة المالية فقط")}
                 }
             }
+            if(busy) Text("جارٍ التحقق من الفواتير ومصادر المطابقة…")
             confirmation?.let{Text(it,style=MaterialTheme.typography.bodySmall)}
             error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
         }
