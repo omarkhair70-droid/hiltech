@@ -26,6 +26,13 @@ import com.hiltech.shared.core.NativeOperationalWorkspace
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+private data class BankCsvPreparedTerms(
+    val start: String,
+    val end: String,
+    val opening: String,
+    val closing: String,
+)
+
 private data class BankCsvNativeSelection(
     val accountId: String,
     val bankIntakeOperationId: String,
@@ -36,7 +43,7 @@ private data class BankCsvNativeSelection(
 )
 
 fun financeBankMoneyIsValid(value: String): Boolean =
-    Regex("^(0|[1-9][0-9]{0,23})(\\.[0-9]{1,6})?$").matches(value)
+    Regex("^(0|[1-9][0-9]{0,17})(\\.[0-9]{1,6})?$").matches(value)
 
 fun financeBankDateRangeIsValid(start: String, end: String): Boolean =
     Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(start) &&
@@ -102,6 +109,8 @@ private fun FinanceBankCsvIntakeSection(
     var periodEnd by remember { mutableStateOf("") }
     var openingBalance by remember { mutableStateOf("") }
     var closingBalance by remember { mutableStateOf("") }
+    // Keep exact command body frozen across timeouts/idempotent retries.
+    var preparedTerms by remember { mutableStateOf<BankCsvPreparedTerms?>(null) }
     var existingProposal by remember { mutableStateOf("") }
     var reviewOperation by remember { mutableStateOf<String?>(null) }
     var recordOperation by remember { mutableStateOf<String?>(null) }
@@ -177,6 +186,7 @@ private fun FinanceBankCsvIntakeSection(
                         // reservations, PDF/CSV bytes, idempotency or receipts.
                         selection = null
                         verified = null
+                        preparedTerms = null
                         receipt = null
                         reviewOperation = null
                         recordOperation = null
@@ -207,6 +217,7 @@ private fun FinanceBankCsvIntakeSection(
                         newOperationId(), newOperationId(), file,
                     )
                     verified = null
+                    preparedTerms = null
                     receipt = null
                     reviewOperation = null
                     recordOperation = null
@@ -227,28 +238,28 @@ private fun FinanceBankCsvIntakeSection(
                 onValueChange = { periodStart = it.trim(); receipt = null },
                 label = { Text("بداية الكشف YYYY-MM-DD") },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
-                enabled = busy == null && receipt == null,
+                enabled = busy == null && receipt == null && preparedTerms == null,
             )
             OutlinedTextField(
                 value = periodEnd,
                 onValueChange = { periodEnd = it.trim(); receipt = null },
                 label = { Text("نهاية الكشف YYYY-MM-DD") },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
-                enabled = busy == null && receipt == null,
+                enabled = busy == null && receipt == null && preparedTerms == null,
             )
             OutlinedTextField(
                 value = openingBalance,
                 onValueChange = { openingBalance = it.trim(); receipt = null },
                 label = { Text("الرصيد الافتتاحي " + bank.currency) },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
-                enabled = busy == null && receipt == null,
+                enabled = busy == null && receipt == null && preparedTerms == null,
             )
             OutlinedTextField(
                 value = closingBalance,
                 onValueChange = { closingBalance = it.trim(); receipt = null },
                 label = { Text("الرصيد الختامي " + bank.currency) },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
-                enabled = busy == null && receipt == null,
+                enabled = busy == null && receipt == null && preparedTerms == null,
             )
             val valid = financeBankDateRangeIsValid(periodStart, periodEnd) &&
                 financeBankMoneyIsValid(openingBalance) &&
@@ -285,10 +296,13 @@ private fun FinanceBankCsvIntakeSection(
                             val selected = requireNotNull(selection)
                             val bound = requireNotNull(verified)
                             check(selected.accountId == bank.id)
+                            val terms = preparedTerms ?: BankCsvPreparedTerms(
+                                periodStart, periodEnd, openingBalance, closingBalance,
+                            ).also { preparedTerms = it }
                             verifyReceipt(
                                 uploader.prepareSource(
-                                    bound, selected.file, periodStart, periodEnd,
-                                    openingBalance, closingBalance, installationId,
+                                    bound, selected.file, terms.start, terms.end,
+                                    terms.opening, terms.closing, installationId,
                                 ), selected.proposalId,
                             )
                         }
@@ -306,7 +320,14 @@ private fun FinanceBankCsvIntakeSection(
             style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(
             value = existingProposal,
-            onValueChange = { existingProposal = it.trim() },
+            onValueChange = {
+                existingProposal = it.trim()
+                if (receipt?.proposalId != existingProposal) {
+                    receipt = null
+                    reviewOperation = null
+                    recordOperation = null
+                }
+            },
             label = { Text("معرّف طلب الكشف (UUID)") },
             singleLine = true, modifier = Modifier.fillMaxWidth(),
         )
@@ -380,6 +401,21 @@ private fun FinanceBankCsvIntakeSection(
                     )
                 }
             }) { Text("تحديث حالة الطلب من المصدر") }
+        }
+        if (selection != null || preparedTerms != null) {
+            OutlinedButton(enabled = busy == null, onClick = {
+                selection = null
+                verified = null
+                preparedTerms = null
+                receipt = null
+                reviewOperation = null
+                recordOperation = null
+                periodStart = ""
+                periodEnd = ""
+                openingBalance = ""
+                closingBalance = ""
+                error = null
+            }) { Text("استيراد جديد / تعديل بيانات كشف بعد محاولة سابقة") }
         }
         error?.let {
             Text(it, color = MaterialTheme.colorScheme.error)
