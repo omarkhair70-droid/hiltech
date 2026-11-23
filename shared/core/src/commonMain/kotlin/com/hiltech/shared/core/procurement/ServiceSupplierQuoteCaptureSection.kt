@@ -136,7 +136,7 @@ fun ServiceSupplierQuoteCaptureSection(
                     scope.launch {
                         try {
                             val file = pickQuoteFile()
-                                ?: error("Document selection cancelled; no supplier quote recorded.")
+                                ?: throw IllegalStateException("Document selection cancelled; no supplier quote recorded.")
                             val result = uploader.uploadAndRecord(
                                 rfqId = activeRfq,
                                 supplierOrganizationId = requireNotNull(selectedSupplier).supplierOrganizationId,
