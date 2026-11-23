@@ -50,6 +50,7 @@ jobs:
         run: |
           ./gradlew :server:application:test \
             --tests com.hiltech.server.finance.FinanceApLedgerRulesTest \
+            --tests com.hiltech.server.finance.FinanceApJournalPostingServiceTest \
             --tests com.hiltech.server.finance.FinanceApLedgerSchemaPostgresContractTest \
             --tests com.hiltech.server.finance.FinanceSupplierAccountingReviewServiceTest \
             --tests com.hiltech.server.finance.FinanceClientAwardSourcePostgresContractTest \
@@ -59,4 +60,5 @@ jobs:
           ./gradlew :shared:core:desktopTest \
             --tests com.hiltech.shared.core.finance.FinanceClientAwardSourceApiClientTest \
             --tests com.hiltech.shared.core.finance.FinanceSupplierAccountingReviewApiClientTest \
+            --tests com.hiltech.shared.core.finance.FinanceApJournalPostingApiClientTest \
             --no-daemon --console=plain
