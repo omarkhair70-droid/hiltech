@@ -1,6 +1,7 @@
 package com.hiltech.server.finance
 
 import com.hiltech.server.approval.ApprovalEngineService
+import com.hiltech.server.approval.ApprovalRequestState
 import com.hiltech.server.approval.ApprovalSubjectRef
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.IdempotencyKeyContract
@@ -27,6 +28,7 @@ data class ExpenseDocumentationReviewReceipt(
     val policyKey: String,
     val policyVersion: Int,
     val replayed: Boolean,
+    val existingReview: Boolean = false,
     val expenseApproved: Boolean = false,
     val payableRecognized: Boolean = false,
     val reimbursementAuthorized: Boolean = false,
@@ -77,15 +79,37 @@ class FinanceExpenseDocumentationReviewService(
             BigDecimal(ownDraft.amount).compareTo(BigDecimal(snapshot.amount)) != 0
         ) unavailable()
 
+        val reviewSubject = ApprovalSubjectRef(
+            organizationId = org,
+            subjectType = FINANCE_EXPENSE_DOCUMENTATION_REVIEW_SUBJECT,
+            subjectId = expenseDraftId,
+            subjectVersion = snapshot.sourceVersion,
+        )
+        // Canonical approval_request has UNIQUE(subject, version, policy).
+        // A second HTTP attempt returns the existing pending request rather
+        // than producing duplicate reviewer work or a synthetic approval.
+        val existing = approvalEngine.subjectStatus(reviewSubject, key)
+        if (existing != null) {
+            if (existing.state != ApprovalRequestState.PENDING ||
+                existing.subjectVersion != snapshot.sourceVersion ||
+                existing.policyKey != key) unavailable()
+            return ExpenseDocumentationReviewReceipt(
+                expenseDraftId = expenseDraftId,
+                sourceVersion = snapshot.sourceVersion,
+                verifiedReceiptEvidenceIds = snapshot.verifiedEvidenceIds,
+                documentationReviewRequestId = existing.approvalRequestId,
+                documentationReviewState = existing.state.name,
+                policyKey = key,
+                policyVersion = snapshot.policyVersion,
+                replayed = false,
+                existingReview = true,
+            )
+        }
+
         val result = approvalEngine.requestException(
             actorUserId = actor,
             operationId = operationId,
-            subject = ApprovalSubjectRef(
-                organizationId = org,
-                subjectType = FINANCE_EXPENSE_DOCUMENTATION_REVIEW_SUBJECT,
-                subjectId = expenseDraftId,
-                subjectVersion = snapshot.sourceVersion,
-            ),
+            subject = reviewSubject,
             policyKey = key,
             reasonCode = "FINANCE_EXPENSE_RECEIPT_DOCUMENTATION_REVIEW",
             safeReasonSummary = null,
