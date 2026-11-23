@@ -2834,6 +2834,10 @@ fun main() {
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
                                 apis = runtime.financeEvidenceReadApis,
+                                reviewPreparationEnabled = System.getenv(
+                                    "HILTECH_FINANCE_REVIEW_PREPARE_UI_ENABLED"
+                                )?.equals("true", ignoreCase = true) == true,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
                             ))
                         }
                         if (System.getenv("HILTECH_FINANCE_INVOICE_READ_UI_ENABLED")
