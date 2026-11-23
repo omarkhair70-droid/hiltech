@@ -54,7 +54,7 @@ BEGIN
     WHERE id=NEW.period_id AND organization_id=NEW.organization_id
     FOR UPDATE;
   IF NOT FOUND OR p.state<>'OPEN'
-    OR NEW.closed_at::date<p.date_start
+    OR NEW.closed_at::date<=p.date_end
     OR EXISTS(SELECT 1 FROM finance_gl_period_close
          WHERE period_id=NEW.period_id AND organization_id=NEW.organization_id) THEN
       RAISE EXCEPTION 'Finance period missing or already closed'
