@@ -121,6 +121,9 @@ class FinanceGlPeriodCloseApprovalSubject(
 
     fun enabled(): Boolean = environment.getProperty(
         "hiltech.finance.gl-period-close.enabled",Boolean::class.java,false,
+    ) && environment.getProperty(
+        "hiltech.finance.gl-period-close.full-ledger-ready.enabled",
+        Boolean::class.java,false,
     )
 
     private data class SourceRow(
