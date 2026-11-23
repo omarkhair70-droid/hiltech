@@ -38,11 +38,12 @@ fun PayrollRunReviewSection(
     onRequestApproval: (String) -> Unit,
     onReleaseForFinanceReview: (String) -> Unit,
     onRefresh: () -> Unit,
+    hostOwnsVerticalScroll: Boolean = false,
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.verticalScroll(rememberScrollState()),
+            modifier = if (hostOwnsVerticalScroll) Modifier else Modifier.verticalScroll(rememberScrollState()),
         ) {
             Text("مراجعة المرتبات", style = MaterialTheme.typography.titleMedium)
             Text("أرقام من مصادر موثقة فقط؛ هذه ليست خطوة اعتماد أو صرف.")
@@ -142,11 +143,12 @@ data class OwnPayslipUiState(
 fun OwnPayslipSection(
     state: OwnPayslipUiState,
     onRefresh: () -> Unit,
+    hostOwnsVerticalScroll: Boolean = false,
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.verticalScroll(rememberScrollState()),
+            modifier = if (hostOwnsVerticalScroll) Modifier else Modifier.verticalScroll(rememberScrollState()),
         ) {
             Text("كشوف مرتباتي", style = MaterialTheme.typography.titleMedium)
             Text("يتم عرض كشوفك المعتمدة المرتبطة بحسابك فقط.")
@@ -188,11 +190,12 @@ fun PayrollRunHistorySection(
     loading: Boolean,
     onOpenRun: (String) -> Unit,
     onRefresh: () -> Unit,
+    hostOwnsVerticalScroll: Boolean = false,
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.verticalScroll(rememberScrollState()),
+            modifier = if (hostOwnsVerticalScroll) Modifier else Modifier.verticalScroll(rememberScrollState()),
         ) {
             Text("سجل نسخ المرتبات", style = MaterialTheme.typography.titleMedium)
             OutlinedButton(onClick = onRefresh) { Text("تحديث") }
@@ -222,11 +225,12 @@ fun PayrollFinalPayReviewSection(
     errorCode: String?,
     onOpenOffboardingCase: (String) -> Unit,
     onRefresh: () -> Unit,
+    hostOwnsVerticalScroll: Boolean = false,
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.verticalScroll(rememberScrollState()),
+            modifier = if (hostOwnsVerticalScroll) Modifier else Modifier.verticalScroll(rememberScrollState()),
         ) {
             Text("مستحقات نهاية الخدمة", style = MaterialTheme.typography.titleMedium)
             Text("مراجعة ملف خروج الموظف من مصدره الأصلي.")
@@ -305,11 +309,12 @@ fun PayrollFinanceReviewHandoffSection(
     outcome: PayrollFinanceHandoffResultDto?,
     onHandoff: (String) -> Unit,
     onOpenFinance: () -> Unit,
+    hostOwnsVerticalScroll: Boolean = false,
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.verticalScroll(rememberScrollState()),
+            modifier = if (hostOwnsVerticalScroll) Modifier else Modifier.verticalScroll(rememberScrollState()),
         ) {
             Text("تسليم كشف المرتبات للمالية", style = MaterialTheme.typography.titleMedium)
             Text("تسليم دفعة للمراجعة والاعتمادات المالية، وليس تحويل فلوس.")
