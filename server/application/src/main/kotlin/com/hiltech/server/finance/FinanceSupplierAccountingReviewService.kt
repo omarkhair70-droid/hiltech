@@ -114,7 +114,7 @@ class FinanceSupplierAccountingReviewService(
         val snapshot = source.current(org, candidateId) ?: unavailable()
         if (snapshot.candidateId != candidate.id ||
             snapshot.supplierInvoiceId != candidate.invoiceId ||
-            snapshot.supplierOrganizationId != candidate.supplierId ||
+            snapshot.supplierOrganizationId != candidate.supplierOrganizationId ||
             snapshot.invoiceNumber != candidate.invoiceNumber ||
             snapshot.currency != candidate.currency ||
             snapshot.sourceSha256 != candidate.sourceSha256 ||
