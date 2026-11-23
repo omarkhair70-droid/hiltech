@@ -120,6 +120,20 @@ BEGIN
         USING ERRCODE='23514';
     END IF;
   END IF;
+  -- A supplier AP with a signed physical cash payment cannot be reversed
+  -- as unpaid. A separate cash accounting/period adjustment is required.
+  IF to_regclass('public.finance_cash_voucher_record') IS NOT NULL THEN
+    IF EXISTS(
+      SELECT 1 FROM finance_cash_voucher_record c
+      WHERE c.organization_id=NEW.organization_id
+        AND c.source_kind='AP'
+        AND c.source_journal_id=NEW.original_journal_id
+        AND c.direction='PAYMENT'
+    ) THEN
+       RAISE EXCEPTION 'Physical supplier cash payment blocks full AP reversal'
+         USING ERRCODE='23514';
+    END IF;
+  END IF;
   -- Same lock order as original AP posting and period closure.
   SELECT * INTO p FROM finance_gl_period
     WHERE id=NEW.target_period_id AND organization_id=NEW.organization_id FOR UPDATE;
