@@ -26,6 +26,7 @@ CREATE TABLE finance_bank_statement_intake_proposal (
  account_id uuid NOT NULL,
  statement_evidence_id uuid NOT NULL REFERENCES evidence(id) ON DELETE RESTRICT,
  statement_sha256 char(64) NOT NULL CHECK(statement_sha256 ~ '^[a-f0-9]{64}$'),
+ statement_lines_sha256 char(64) NOT NULL CHECK(statement_lines_sha256 ~ '^[a-f0-9]{64}$'),
  date_start date NOT NULL,
  date_end date NOT NULL,
  opening_balance numeric(24,6) NOT NULL,
@@ -53,6 +54,7 @@ CREATE TABLE finance_bank_statement_intake (
  account_id uuid NOT NULL,
  approval_request_id uuid NOT NULL REFERENCES approval_request(id) ON DELETE RESTRICT,
  statement_sha256 char(64) NOT NULL,
+ statement_lines_sha256 char(64) NOT NULL CHECK(statement_lines_sha256 ~ '^[a-f0-9]{64}$'),
  statement_evidence_id uuid NOT NULL REFERENCES evidence(id) ON DELETE RESTRICT,
  currency char(3) NOT NULL CHECK(currency ~ '^[A-Z]{3}$'),
  date_start date NOT NULL,
@@ -105,6 +107,7 @@ BEGIN
  IF p.id IS NULL OR a.id IS NULL OR a.state<>'APPROVED'
    OR p.account_id<>NEW.account_id
    OR p.statement_sha256<>NEW.statement_sha256
+   OR p.statement_lines_sha256<>NEW.statement_lines_sha256
    OR p.statement_evidence_id<>NEW.statement_evidence_id
    OR p.date_start<>NEW.date_start OR p.date_end<>NEW.date_end
    OR p.opening_balance<>NEW.opening_balance
@@ -186,6 +189,7 @@ RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE h finance_bank_statement_intake%ROWTYPE;
         n bigint;
         balance numeric(24,6);
+        actual_lines_sha256 char(64);
         target uuid;
 BEGIN
  IF TG_TABLE_NAME='finance_bank_statement_intake' THEN target:=NEW.id;
@@ -194,7 +198,14 @@ BEGIN
  IF h.id IS NULL THEN RETURN NULL; END IF;
  SELECT count(*),coalesce(sum(CASE WHEN flow='CREDIT' THEN amount ELSE -amount END),0)
  INTO n,balance FROM finance_bank_statement_intake_line WHERE intake_id=h.id;
+ SELECT encode(sha256(convert_to(COALESCE(
+   string_agg(concat_ws(':',
+       external_transaction_id,booked_on::text,flow,currency,
+       amount::text,original_line_sha256),'|' ORDER BY external_transaction_id),
+   'EMPTY'),'UTF8')),'hex') INTO actual_lines_sha256
+ FROM finance_bank_statement_intake_line WHERE intake_id=h.id;
  IF n<>h.expected_line_count OR
+    actual_lines_sha256<>h.statement_lines_sha256 OR
     h.opening_balance+balance<>h.closing_balance THEN
   RAISE EXCEPTION 'Bank statement count and balances must tie exactly'
     USING ERRCODE='23514';
