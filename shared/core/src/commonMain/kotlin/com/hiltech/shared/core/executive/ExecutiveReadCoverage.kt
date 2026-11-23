@@ -29,15 +29,17 @@ fun executiveReadCoverage(home: ExecutiveHomeDto): List<ExecutiveCoverageLine> {
         section: ExecutiveSectionDto<T>,
         expectedSource: String,
         extraCaveats: List<String> = emptyList(),
+        scopeTrusted: Boolean = true,
     ): ExecutiveCoverageLine {
         val validStatus = section.status == "CURRENT" || section.status == "PARTIAL"
         val expected = section.source == expectedSource
-        val available = validStatus && expected
+        val available = executiveSectionTrusted(section, expectedSource) && scopeTrusted
         val bounded = section.partial || section.status == "PARTIAL" || section.nextCursor != null
         val caveats = buildList {
             if (section.status == "UNAVAILABLE") add("المصدر غير متاح الآن، وليس صفرًا.")
             else if (!validStatus) add("حالة المصدر غير معروفة؛ يلزم مراجعة العقد.")
             if (!expected) add("هوية المصدر لا تطابق العقد المتوقع.")
+            if (!scopeTrusted) add("نطاق البيانات لا يطابق صلاحية القراءة المعتمدة.")
             if (bounded) add("القراءة محدودة وقد توجد عناصر خارج النافذة الحالية.")
             if (section.unavailableReason != null) add("كود نقص المصدر: " + section.unavailableReason)
             addAll(extraCaveats)
@@ -92,9 +94,12 @@ fun executiveReadCoverage(home: ExecutiveHomeDto): List<ExecutiveCoverageLine> {
     }
 
     return buildList {
-        add(line("قرارات المستخدم", home.needsYou, "INBOX_WORK_QUEUE", inboxCaveats))
-        add(line("صحة المشاريع", home.projects, "PROJECTS_AND_PROJECT_HEALTH", projectCaveats))
-        add(line("استثناءات المعدات", home.assetExceptions, "ASSET_SERVICE_QUEUE", assetCaveats))
+        add(line(
+            "قرارات المستخدم", home.needsYou, EXECUTIVE_INBOX_SOURCE, inboxCaveats,
+            scopeTrusted = home.needsYouScope == EXECUTIVE_ACTOR_SCOPE,
+        ))
+        add(line("صحة المشاريع", home.projects, EXECUTIVE_PROJECT_SOURCE, projectCaveats))
+        add(line("استثناءات المعدات", home.assetExceptions, EXECUTIVE_ASSET_SOURCE, assetCaveats))
         // Pending source domains are disclosures, never a source outage or
         // evidence of a healthy/empty domain.
         home.pendingDomains.distinctBy { it.domain }.forEach { pending ->
