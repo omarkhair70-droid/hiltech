@@ -56,6 +56,7 @@ jobs:
             --tests com.hiltech.server.finance.FinanceBankStatementApprovedPostgresContractTest \
             --tests com.hiltech.server.finance.FinanceExpenseReimbursementPostgresContractTest \
             --tests com.hiltech.server.finance.FinanceExpenseReimbursementVersionTest \
+            --tests com.hiltech.server.finance.FinanceBankCsvParserTest \
             --tests com.hiltech.server.finance.FinanceApArBalancePostgresContractTest \
             --tests com.hiltech.server.finance.FinanceBankStatementReviewVersionTest \
             --tests com.hiltech.server.finance.FinanceCashAllocationRulesTest \
