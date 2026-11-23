@@ -29,6 +29,7 @@ class FinanceApReversalPostgresContractTest {
         val migrations = System.getenv("HILTECH_MIGRATIONS_PATH") ?: "database/migrations"
         Flyway.configure().dataSource(url,user,pass)
             .locations("filesystem:$migrations").load().migrate()
+        val root=Path.of(System.getenv("HILTECH_REPO_ROOT") ?: ".").toAbsolutePath()
         DriverManager.getConnection(url,user,pass).use { connection ->
             connection.autoCommit=false
             val jdbc=JdbcTemplate(SingleConnectionDataSource(connection,true))
@@ -39,7 +40,7 @@ class FinanceApReversalPostgresContractTest {
                     "database/phase8/pending_ap_journal_reversal.sql",
                 )) {
                     connection.createStatement().use {
-                        it.execute(Files.readString(Path.of(file)))
+                        it.execute(Files.readString(root.resolve(file)))
                     }
                 }
                 for (table in listOf(
@@ -51,7 +52,7 @@ class FinanceApReversalPostgresContractTest {
                         "SELECT to_regclass('public.$table')",String::class.java,
                     ))
                 }
-                val ddl=Files.readString(Path.of(
+                val ddl=Files.readString(root.resolve(
                     "database/phase8/pending_ap_journal_reversal.sql",
                 ))
                 assertTrue(ddl.contains("finance_ap_reversal_insert_guard"))
