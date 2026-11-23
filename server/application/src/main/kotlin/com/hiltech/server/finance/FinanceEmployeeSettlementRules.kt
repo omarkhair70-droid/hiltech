@@ -40,6 +40,9 @@ data class FinanceEmployeeSettlementPlan(
     val previouslySettled: BigDecimal,
     val independentReviewerApproved: Boolean,
     val recoveryMethod: String?,
+    val settlementBankTransactionId: UUID? = null,
+    val settlementBankEvidenceSha256: String? = null,
+    val approvedPayrollDeductionEventId: UUID? = null,
 )
 data class FinanceEmployeeSettlementValidation(
     val kind: FinanceEmployeeSettlementKind,
@@ -71,9 +74,11 @@ object FinanceEmployeeSettlementRules {
                     "EXPENSE_REIMBURSEMENT_IS_NOT_A_LOAN_OR_CUSTODY"
                 }
                 confirmedFunding(p)
-                require(p.recoveryMethod==null) {
+                require(p.recoveryMethod==null &&
+                    p.approvedPayrollDeductionEventId==null) {
                     "EXPENSE_IS_NOT_PAYROLL_LOAN_RECOVERY"
                 }
+                verifiedSettlementBank(p)
             }
             FinanceEmployeeSettlementKind.EMPLOYEE_ADVANCE -> {
                 require(p.action==FinanceEmployeeSettlementAction.ADVANCE_RECOVERY_CONFIRMED) {
@@ -83,6 +88,18 @@ object FinanceEmployeeSettlementRules {
                 require(p.recoveryMethod in setOf(
                     "CONFIRMED_BANK_CREDIT","SEPARATELY_APPROVED_PAYROLL_DEDUCTION"
                 )) { "NO_AUTOMATIC_PAYROLL_DEDUCTION" }
+                if(p.recoveryMethod=="CONFIRMED_BANK_CREDIT") {
+                    verifiedSettlementBank(p)
+                    require(p.approvedPayrollDeductionEventId==null) {
+                        "BANK_RECOVERY_CANNOT_DOUBLE_COUNT_PAYROLL"
+                    }
+                } else {
+                    require(p.approvedPayrollDeductionEventId!=null &&
+                        p.settlementBankTransactionId==null &&
+                        p.settlementBankEvidenceSha256==null) {
+                        "SIGNED_PAYROLL_DEDUCTION_SOURCE_REQUIRED"
+                    }
+                }
             }
             FinanceEmployeeSettlementKind.FINANCIAL_IMPREST -> {
                 require(p.action in setOf(
@@ -94,8 +111,15 @@ object FinanceEmployeeSettlementRules {
                     require(p.recoveryMethod=="CONFIRMED_BANK_CREDIT") {
                         "IMPREST_CASH_RETURN_REQUIRES_BANK_RECEIPT"
                     }
-                else require(p.recoveryMethod==null) {
+                if(p.action==FinanceEmployeeSettlementAction.IMPREST_CASH_RETURN_CONFIRMED)
+                    verifiedSettlementBank(p)
+                else require(p.recoveryMethod==null &&
+                    p.settlementBankTransactionId==null &&
+                    p.settlementBankEvidenceSha256==null) {
                     "IMPREST_RECEIPTS_DO_NOT_IMPLY_CASH_MOVEMENT"
+                }
+                require(p.approvedPayrollDeductionEventId==null) {
+                    "IMPREST_IS_NOT_PERSONAL_PAYROLL_DEBT"
                 }
             }
         }
@@ -104,6 +128,9 @@ object FinanceEmployeeSettlementRules {
             p.financeDraftId,p.kind,p.action,p.currency,p.settlementOperationId,
             p.settlementEvidenceId,p.sourceBankTransactionId,p.sourceBankEvidenceSha256,
             p.recoveryMethod ?: "-",
+            p.settlementBankTransactionId ?: "-",
+            p.settlementBankEvidenceSha256 ?: "-",
+            p.approvedPayrollDeductionEventId ?: "-",
             p.sourceAmount.stripTrailingZeros().toPlainString(),
             p.settlementAmount.stripTrailingZeros().toPlainString(),
             p.previouslySettled.stripTrailingZeros().toPlainString(),
@@ -119,6 +146,12 @@ object FinanceEmployeeSettlementRules {
             approvalSubjectVersion=(ByteBuffer.wrap(sha,0,8).long and Long.MAX_VALUE)
                 .coerceAtLeast(1L),
         )
+    }
+    private fun verifiedSettlementBank(p:FinanceEmployeeSettlementPlan) {
+        require(p.settlementBankTransactionId!=null &&
+            p.settlementBankEvidenceSha256?.matches(Regex("^[a-f0-9]{64}$"))==true) {
+            "SETTLEMENT_NEEDS_SEPARATE_CONFIRMED_BANK_MOVEMENT"
+        }
     }
     private fun confirmedFunding(p:FinanceEmployeeSettlementPlan) {
         require(p.approvedFundingRecorded && p.sourceBankTransactionId!=null &&
