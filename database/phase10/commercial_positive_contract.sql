@@ -3,7 +3,8 @@
 -- A successful run confirms schema contract, not server/OIDC/native acceptance.
 -- All data is rolled back. Never run this against production.
 BEGIN;
-DO $$
+DO $
+<<phase10_fixture>>
 DECLARE
   company uuid := gen_random_uuid();
   client uuid := gen_random_uuid();
@@ -74,8 +75,8 @@ BEGIN
          'COMMERCIAL_QUOTE_RELEASE',1,actor,'APPROVED','COMMERCIAL_QUOTE_REVIEW',now(),now());
   UPDATE commercial_quote_version SET state='RELEASED',released_at=now(),version=version+1
   WHERE id=quote_id;
-  IF NOT EXISTS (SELECT 1 FROM commercial_released_client_quote
-                 WHERE quote_id=quote_id AND total_price=40) THEN
+  IF NOT EXISTS (SELECT 1 FROM commercial_released_client_quote AS released
+                 WHERE released.quote_id=phase10_fixture.quote_id AND released.total_price=40) THEN
     RAISE EXCEPTION 'Exact approved quote was not released to customer projection';
   END IF;
   INSERT INTO commercial_contract
@@ -183,18 +184,18 @@ BEGIN
                  WHERE id=opportunity AND state='AWARDED') THEN
     RAISE EXCEPTION 'Canonical award handoff failed to close opportunity';
   END IF;
-  IF NOT EXISTS(SELECT 1 FROM commercial_finance_award_source
-                WHERE opportunity_id=opportunity AND project_id=project_id
-                  AND contract_id=contract_id AND client_po_id=po_id
+  IF NOT EXISTS(SELECT 1 FROM commercial_finance_award_source AS finance
+                WHERE finance.opportunity_id=opportunity AND finance.project_id=phase10_fixture.project_id
+                  AND finance.contract_id=phase10_fixture.contract_id AND finance.client_po_id=po_id
                   AND quote_revision=1 AND total_price=40) THEN
     RAISE EXCEPTION 'Finance source handoff was not complete';
   END IF;
-  IF NOT EXISTS(SELECT 1 FROM commercial_project_scope_source
-                WHERE project_id=project_id AND scope_version_id=scope_id) THEN
+  IF NOT EXISTS(SELECT 1 FROM commercial_project_scope_source AS scope
+                WHERE scope.project_id=phase10_fixture.project_id AND scope.scope_version_id=scope_id) THEN
     RAISE EXCEPTION 'Project source scope reference missing';
   END IF;
-  IF NOT EXISTS(SELECT 1 FROM commercial_support_contract_source
-                WHERE project_id=project_id AND signed_evidence_id=contract_file) THEN
+  IF NOT EXISTS(SELECT 1 FROM commercial_support_contract_source AS support
+                WHERE support.project_id=phase10_fixture.project_id AND support.signed_evidence_id=contract_file) THEN
     RAISE EXCEPTION 'Support contract source reference missing';
   END IF;
   IF (SELECT count(*) FROM commercial_project_handoff WHERE opportunity_id=opportunity)<>1 THEN
