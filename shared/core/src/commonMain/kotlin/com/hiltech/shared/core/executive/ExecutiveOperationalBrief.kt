@@ -50,7 +50,7 @@ fun buildExecutiveOperationalBrief(
     require(maxPerLane in 1..10) { "A bounded number of preview items is required." }
 
     val needs = home.needsYou
-    val needsEntries = if (needs.status !in setOf("CURRENT", "PARTIAL")) emptyList() else
+    val needsEntries = if (!executiveDecisionsTrusted(home)) emptyList() else
         needs.items.map { item ->
             ExecutiveBriefEntry(
                 kind = ExecutiveBriefKind.NEEDS_YOU,
@@ -66,7 +66,7 @@ fun buildExecutiveOperationalBrief(
         }
 
     val projects = home.projects
-    val projectEntries = if (projects.status !in setOf("CURRENT", "PARTIAL")) emptyList() else
+    val projectEntries = if (!executiveSectionTrusted(projects, EXECUTIVE_PROJECT_SOURCE)) emptyList() else
         orderExecutiveProjectsByHealth(projects.items)
             .filter { it.healthState != "HEALTHY" || it.signals.isNotEmpty() }
             .map { project ->
@@ -100,7 +100,7 @@ fun buildExecutiveOperationalBrief(
             }
 
     val assets = home.assetExceptions
-    val assetEntries = if (assets.status !in setOf("CURRENT", "PARTIAL")) emptyList() else
+    val assetEntries = if (!executiveSectionTrusted(assets, EXECUTIVE_ASSET_SOURCE)) emptyList() else
         assets.items.map { asset ->
             ExecutiveBriefEntry(
                 kind = ExecutiveBriefKind.ASSET_SERVICE,
@@ -125,25 +125,39 @@ fun buildExecutiveOperationalBrief(
         kind: ExecutiveBriefKind,
         label: String,
         source: ExecutiveSectionDto<*>,
+        expectedSource: String,
         visible: List<ExecutiveBriefEntry>,
-    ) = ExecutiveBriefLane(
-        kind = kind,
-        label = label,
-        entries = visible.take(maxPerLane),
-        sourceStatus = source.status,
-        incomplete = source.partial || source.status != "CURRENT",
-        extraVisibleItems = visible.size > maxPerLane,
-        sourceAsOf = source.sourceAsOf,
-        missingReason = source.unavailableReason,
-    )
+        additionalScopeTrusted: Boolean = true,
+    ): ExecutiveBriefLane {
+        val trusted = executiveSectionTrusted(source, expectedSource) && additionalScopeTrusted
+        return ExecutiveBriefLane(
+            kind = kind,
+            label = label,
+            entries = if (trusted) visible.take(maxPerLane) else emptyList(),
+            sourceStatus = if (trusted) source.status else "UNAVAILABLE",
+            incomplete = !trusted || source.partial || source.status != "CURRENT",
+            extraVisibleItems = trusted && visible.size > maxPerLane,
+            sourceAsOf = if (trusted) source.sourceAsOf else null,
+            missingReason = if (trusted) source.unavailableReason else "UNTRUSTED_SOURCE_OR_SCOPE",
+        )
+    }
 
     return ExecutiveOperationalBrief(
         assembledAt = home.asOf,
         needsYouScope = home.needsYouScope,
         lanes = listOf(
-            lane(ExecutiveBriefKind.NEEDS_YOU, "قراراتك الظاهرة", needs, needsEntries),
-            lane(ExecutiveBriefKind.PROJECT_RISK, "مخاطر المشاريع الظاهرة", projects, projectEntries),
-            lane(ExecutiveBriefKind.ASSET_SERVICE, "استثناءات المعدات الظاهرة", assets, assetEntries),
+            lane(
+                ExecutiveBriefKind.NEEDS_YOU, "قراراتك الظاهرة", needs, EXECUTIVE_INBOX_SOURCE,
+                needsEntries, additionalScopeTrusted = home.needsYouScope == EXECUTIVE_ACTOR_SCOPE,
+            ),
+            lane(
+                ExecutiveBriefKind.PROJECT_RISK, "مخاطر المشاريع الظاهرة",
+                projects, EXECUTIVE_PROJECT_SOURCE, projectEntries,
+            ),
+            lane(
+                ExecutiveBriefKind.ASSET_SERVICE, "استثناءات المعدات الظاهرة",
+                assets, EXECUTIVE_ASSET_SOURCE, assetEntries,
+            ),
         ),
     )
 }
