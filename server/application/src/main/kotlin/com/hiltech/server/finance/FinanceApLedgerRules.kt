@@ -1,6 +1,7 @@
 package com.hiltech.server.finance
 
 import java.math.BigDecimal
+import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -48,6 +49,7 @@ data class FinanceApLedgerValidation(
     val creditTotal: String,
     val lineCount: Int,
     val fingerprintSha256: String,
+    val approvalSubjectVersion: Long,
 )
 
 object FinanceApLedgerRules {
@@ -139,6 +141,10 @@ object FinanceApLedgerRules {
             creditTotal = credit.toPlainString(),
             lineCount = plan.lines.size,
             fingerprintSha256 = sha,
+            approvalSubjectVersion =
+                (ByteBuffer.wrap(MessageDigest.getInstance("SHA-256")
+                    .digest(canonical.toByteArray(Charsets.UTF_8)), 0, 8).long
+                    and Long.MAX_VALUE).coerceAtLeast(1L),
         )
     }
 
