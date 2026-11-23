@@ -35,6 +35,7 @@ class FinanceApJournalPostingServiceTest {
     private val proposal=UUID.randomUUID()
     private val operation=UUID.randomUUID()
     private val account=UUID.randomUUID()
+    private val payableAccount=UUID.randomUUID()
     private val period=UUID.randomUUID()
     private val prepKey="FINANCE_AP_PREPARER"
 
@@ -55,6 +56,7 @@ class FinanceApJournalPostingServiceTest {
         accountingTaxDisposition="TAX_REVIEWED_NO_RECOVERABLE_TAX",
         lines=listOf(
             FinanceApJournalLineCommand(account,FinanceJournalSide.DEBIT,"125.00"),
+            FinanceApJournalLineCommand(payableAccount,FinanceJournalSide.CREDIT,"125.00"),
         ),
     )
 
