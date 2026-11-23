@@ -53,6 +53,7 @@ class WarehouseQuickScanEvidenceActivity : ComponentActivity() {
                             onAssetTagLookup = { code ->
                                 check(code == "synthetic-current-tag")
                                 quickScanState = quickScanState.copy(
+                                    resolvedTagQuery = code,
                                     assetTagResult = AssetTagLookupDto(
                                         assetCode = "SYNTH-PASSPORT",
                                         name = "Synthetic calibration instrument",
@@ -68,6 +69,7 @@ class WarehouseQuickScanEvidenceActivity : ComponentActivity() {
                             onAssetSearch = { query ->
                                 check(query == "SYNTH-PASSPORT")
                                 quickScanState = quickScanState.copy(
+                                    assetSearchResultQuery = query,
                                     assetSearchResults = listOf(
                                         AssetIdentityDto(
                                             id = assetId,
@@ -91,6 +93,7 @@ class WarehouseQuickScanEvidenceActivity : ComponentActivity() {
                             onStockSearch = { query ->
                                 check(query == "SYNTH-PART-01")
                                 quickScanState = quickScanState.copy(
+                                    stockSearchResultQuery = query,
                                     stockSearchResults = listOf(
                                         StockItemDto(
                                             id = stockId,
