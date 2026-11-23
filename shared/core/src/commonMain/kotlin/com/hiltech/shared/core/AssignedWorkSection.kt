@@ -15,6 +15,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
@@ -93,6 +94,9 @@ fun AssignedWorkSection(
     // Nonblank only for an authenticated identity + organization host scope.
     // Offline unverified identity keeps the original read-only presentation.
     focusScopeKey: String = "",
+    onCompactFocusChanged: (Boolean) -> Unit = {},
+    // The Android host increments this when System Back is pressed in focus.
+    compactBackRequest: Int = 0,
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -111,6 +115,17 @@ fun AssignedWorkSection(
         var focusedWorkOrderId by remember(focusScopeKey) { mutableStateOf<String?>(null) }
         var returnAnchorId by remember(focusScopeKey) { mutableStateOf<String?>(null) }
         // The shared host owns scrolling. No nested scroll state is created.
+        DisposableEffect(focusScopeKey) {
+            onDispose { onCompactFocusChanged(false) }
+        }
+        LaunchedEffect(focusScopeKey, compactBackRequest) {
+            if (compactBackRequest > 0 && focusScopeKey.isNotBlank() &&
+                fieldFocusStillAssigned(focusedWorkOrderId, todayIds)
+            ) {
+                returnAnchorId = focusedWorkOrderId
+                focusedWorkOrderId = null
+            }
+        }
         LaunchedEffect(focusScopeKey, focusedWorkOrderId, todayIds) {
             if (focusedWorkOrderId != null &&
                 !fieldFocusStillAssigned(focusedWorkOrderId, todayIds)
@@ -124,6 +139,12 @@ fun AssignedWorkSection(
         ) {
             val wide =
                 maxWidth >= 760.dp
+            LaunchedEffect(focusScopeKey, wide, focusedWorkOrderId, todayIds) {
+                onCompactFocusChanged(
+                    !wide && focusScopeKey.isNotBlank() &&
+                        fieldFocusStillAssigned(focusedWorkOrderId, todayIds)
+                )
+            }
             if (wide) {
                 Row(
                     modifier =
