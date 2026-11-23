@@ -30,6 +30,25 @@ class ExecutiveNavigationTest {
     }
 
     @Test
+    fun aHealthSignalCannotDeepLinkIntoAnUnrelatedProject() {
+        val signal = ExecutiveSourceReferenceDto(
+            "PROJECTS", "WORK_ORDER", id, 3, "/v1/projects/$other/health",
+        )
+        // A signal's source UUID can be a work-order ID, but its navigable
+        // health project UUID must match its actual enclosing project.
+        assertEquals(
+            ExecutiveDestination(ExecutiveDestinationKind.PROJECT_HEALTH, other),
+            resolveExecutiveProjectSignalDestination(signal, other),
+        )
+        assertNull(resolveExecutiveProjectSignalDestination(signal, id))
+        assertNull(resolveExecutiveProjectSignalDestination(signal, "not-a-uuid"))
+        assertNull(resolveExecutiveProjectSignalDestination(
+            ExecutiveSourceReferenceDto("PROJECTS", "PROJECT", other, 1, "/v1/projects/$other"),
+            other,
+        ))
+    }
+
+    @Test
     fun rejectsMismatchedIdsUnknownDomainsAndExternalPaths() {
         listOf(
             ExecutiveSourceReferenceDto("INBOX", "APPROVAL_REQUEST", id, 2, "/v1/approvals/$other"),
