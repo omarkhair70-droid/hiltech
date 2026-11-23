@@ -59,15 +59,15 @@ BEGIN
           AND grant_row.identity_id = NEW.released_by_user_id
           AND grant_row.capability = 'REVIEW'
           AND grant_row.active = true
-          AND grant_row.valid_from <= NEW.released_at
+          AND grant_row.valid_from <= statement_timestamp()
           AND (grant_row.valid_until IS NULL OR
-               grant_row.valid_until >= NEW.released_at)
+               grant_row.valid_until >= statement_timestamp())
           AND principal.status = 'ACTIVE'
           AND org.status = 'ACTIVE'
           AND membership.state = 'ACTIVE'
-          AND membership.valid_from <= NEW.released_at
+          AND membership.valid_from <= statement_timestamp()
           AND (membership.valid_until IS NULL OR
-               membership.valid_until >= NEW.released_at)
+               membership.valid_until >= statement_timestamp())
     ) THEN
         RAISE EXCEPTION 'Current payroll reviewer authority and membership required';
     END IF;
@@ -96,8 +96,13 @@ BEGIN
           AND p.policy_key = NEW.policy_key
           AND p.version_number = NEW.policy_version
           AND p.lifecycle_state = 'ACTIVE'
+          -- Both the recorded event instant AND the live database
+          -- statement time must be inside the currently active company policy.
+          -- A backdated insert must never resurrect an expired policy.
           AND p.effective_from <= NEW.released_at
           AND (p.effective_to IS NULL OR p.effective_to > NEW.released_at)
+          AND p.effective_from <= statement_timestamp()
+          AND (p.effective_to IS NULL OR p.effective_to > statement_timestamp())
           AND (
               (NEW.decision_path = 'ROUTINE_AUTHORIZED' AND
                p.approval_required = false AND p.step_mode = 'NO_APPROVAL_REQUIRED')

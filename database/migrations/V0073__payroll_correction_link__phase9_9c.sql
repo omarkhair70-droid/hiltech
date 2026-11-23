@@ -65,15 +65,15 @@ BEGIN
           AND grant_row.identity_id = NEW.recorded_by_user_id
           AND grant_row.capability = 'REVIEW'
           AND grant_row.active = true
-          AND grant_row.valid_from <= NEW.recorded_at
+          AND grant_row.valid_from <= statement_timestamp()
           AND (grant_row.valid_until IS NULL OR
-               grant_row.valid_until >= NEW.recorded_at)
+               grant_row.valid_until >= statement_timestamp())
           AND principal.status = 'ACTIVE'
           AND org.status = 'ACTIVE'
           AND membership.state = 'ACTIVE'
-          AND membership.valid_from <= NEW.recorded_at
+          AND membership.valid_from <= statement_timestamp()
           AND (membership.valid_until IS NULL OR
-               membership.valid_until >= NEW.recorded_at)
+               membership.valid_until >= statement_timestamp())
     ) THEN
         RAISE EXCEPTION 'Current payroll reviewer authority and membership required';
     END IF;

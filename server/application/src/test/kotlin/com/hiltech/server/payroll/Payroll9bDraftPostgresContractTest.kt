@@ -113,7 +113,7 @@ class Payroll9bDraftPostgresContractTest {
                 state, valid_from
             ) VALUES (?, ?, ?, 'EMPLOYEE', 'ACTIVE', ?)
             """.trimIndent(),
-            membership, org, actor, at.minusSeconds(30).atOffset(ZoneOffset.UTC),
+            membership, org, actor, time.minusDays(1),
         )
         val permission = object : Payroll9aAuthorityPort {
             override fun canRead(actorId: UUID, organizationId: UUID) =
@@ -340,7 +340,7 @@ class Payroll9bDraftPostgresContractTest {
             ) VALUES (?, ?, ?, 'EMPLOYEE', 'ACTIVE', ?)
             """.trimIndent(),
             UUID.randomUUID(), org, userWithoutPayrollGrant,
-            time.minusDays(1),
+            time.minusDays(2),
         )
         // A direct DB write using a valid active company user still cannot
         // create a payroll release without the separately approved REVIEW grant.
@@ -357,6 +357,35 @@ class Payroll9bDraftPostgresContractTest {
                 UUID.randomUUID(), UUID.randomUUID(), org,
                 UUID.fromString(newer.first.runVersionId),
                 newer.first.sourceFingerprint, userWithoutPayrollGrant, time,
+            )
+        }
+        // DB evaluates reviewer authorization at real execution time,
+        // not at a caller-chosen historical event timestamp. Expired
+        // grants must not be resurrected by backdating released_at.
+        jdbc.update(
+            """
+            INSERT INTO payroll_authority_binding (
+                id, organization_id, identity_id, capability,
+                valid_from, valid_until, active, source_approval_ref, created_at
+            ) VALUES (?, ?, ?, 'REVIEW', ?, ?, true, 'SYNTHETIC_EXPIRED_REVIEW', ?)
+            """.trimIndent(),
+            UUID.randomUUID(), org, userWithoutPayrollGrant,
+            time.minusDays(2), time.minusDays(1), time,
+        )
+        assertThrows<Exception> {
+            jdbc.update(
+                """
+                INSERT INTO payroll_run_release (
+                    id, operation_id, organization_id, run_version_id,
+                    run_source_fingerprint, policy_key, policy_version,
+                    decision_path, released_by_user_id, released_at
+                ) VALUES (?, ?, ?, ?, ?, 'PAYROLL_REVIEW_TEST', 1,
+                          'ROUTINE_AUTHORIZED', ?, ?)
+                """.trimIndent(),
+                UUID.randomUUID(), UUID.randomUUID(), org,
+                UUID.fromString(newer.first.runVersionId),
+                newer.first.sourceFingerprint, userWithoutPayrollGrant,
+                time.minusDays(1).minusSeconds(1),
             )
         }
         val releaseOperation = UUID.randomUUID()
