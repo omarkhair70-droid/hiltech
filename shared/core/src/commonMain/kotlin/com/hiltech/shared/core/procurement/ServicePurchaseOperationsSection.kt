@@ -274,8 +274,9 @@ private fun ServiceInvoicePane(
     var busy by remember(org){mutableStateOf(false)}
     var error by remember(org){mutableStateOf<String?>(null)}
     var confirmation by remember(org){mutableStateOf<String?>(null)}
-    var orders by remember(org){mutableStateOf<List<ServiceWorkOrderDto>>(emptyList())}
-    var invoices by remember(org){mutableStateOf<List<ServiceInvoiceDto>>(emptyList())}
+    var orders by remember(org,install){mutableStateOf<List<ServiceWorkOrderDto>>(emptyList())}
+    var selectedInvoiceOrderId by remember(org,install){mutableStateOf<String?>(null)}
+    var invoices by remember(org,install){mutableStateOf<List<ServiceInvoiceDto>>(emptyList())}
     var invoiceNumber by remember(org){mutableStateOf("")}
     var invoiceDate by remember(org){mutableStateOf("")}
     var currency by remember(org){mutableStateOf("")}
@@ -285,11 +286,12 @@ private fun ServiceInvoicePane(
 
     Card(modifier=Modifier.fillMaxWidth()) {
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text("Supplier invoice check",style=MaterialTheme.typography.titleMedium)
-            Text("Only an accepted service and matching original invoice can be handed to Finance. No payment is issued.",
+            Text("فحص فاتورة المورد / Supplier invoice review",style=MaterialTheme.typography.titleMedium)
+            Text("اختار أمر خدمة واحدًا وأدخل فاتورته الأصلية. المطابقة تتيح المراجعة المالية فقط ولا تصرف أي مبلغ.",
                 style=MaterialTheme.typography.bodySmall)
             OutlinedButton(enabled=!busy,onClick={
-                busy=true;error=null
+                busy=true;error=null;match=null
+                orders=emptyList();invoices=emptyList();selectedInvoiceOrderId=null
                 scope.launch {
                     try {
                         orders=api.invoiceOrders(org,install)
@@ -297,24 +299,45 @@ private fun ServiceInvoicePane(
                     } catch(e:Exception){error=e.message?:"Finance permission unavailable."}
                     finally{busy=false}
                 }
-            }){Text("Load current service orders and invoices")}
-            OutlinedTextField(value=invoiceNumber,onValueChange={invoiceNumber=it},
-                label={Text("Supplier invoice reference")})
-            OutlinedTextField(value=invoiceDate,onValueChange={invoiceDate=it},
-                label={Text("Invoice date (YYYY-MM-DD)")})
-            OutlinedTextField(value=currency,onValueChange={currency=it.uppercase()},
-                label={Text("Currency (EGP, USD...)")})
-            OutlinedTextField(value=amount,onValueChange={amount=it},
-                label={Text("Supplier service amount")})
-            OutlinedTextField(value=tax,onValueChange={tax=it},
-                label={Text("Tax shown on invoice")})
-            val valid=invoiceNumber.trim().length in 2..96 &&
-                Regex("\\d{4}-\\d{2}-\\d{2}").matches(invoiceDate) &&
-                Regex("[A-Z]{3}").matches(currency)&&amount.toDoubleOrNull()?.let{it>=0}==true&&
-                tax.toDoubleOrNull()?.let{it>=0}==true
+            }){Text("تحميل أوامر الخدمات والفواتير الحالية")}
             orders.forEach { order ->
+                OutlinedButton(enabled=!busy,onClick={
+                    if(selectedInvoiceOrderId!=order.orderId) {
+                        selectedInvoiceOrderId=order.orderId
+                        invoiceNumber="";invoiceDate="";currency="";amount="";tax=""
+                        match=null;error=null;confirmation=null
+                    }
+                }) {
+                    Text((if(selectedInvoiceOrderId==order.orderId)"✓ " else "")+
+                        "اختيار أمر خدمة "+order.orderId.take(8)+" · مورد "+
+                        order.supplierOrganizationId.take(8))
+                }
+            }
+            val selectedOrder=orders.firstOrNull{it.orderId==selectedInvoiceOrderId}
+            selectedOrder?.let { order ->
+                Text("فاتورة أمر الخدمة "+order.orderId.take(8),
+                    style=MaterialTheme.typography.titleSmall)
+                OutlinedTextField(value=invoiceNumber,onValueChange={invoiceNumber=it},
+                    label={Text("رقم فاتورة المورد")},enabled=!busy)
+                OutlinedTextField(value=invoiceDate,onValueChange={invoiceDate=it},
+                    label={Text("تاريخ الفاتورة YYYY-MM-DD")},enabled=!busy)
+                OutlinedTextField(value=currency,onValueChange={currency=it.uppercase()},
+                    label={Text("العملة EGP / USD ...")},enabled=!busy)
+                OutlinedTextField(value=amount,onValueChange={amount=it},
+                    label={Text("قيمة الخدمة")},enabled=!busy)
+                OutlinedTextField(value=tax,onValueChange={tax=it},
+                    label={Text("قيمة الضريبة")},enabled=!busy)
+                val valid=invoiceNumber.trim().length in 2..96 &&
+                    Regex("\\d{4}-\\d{2}-\\d{2}").matches(invoiceDate) &&
+                    Regex("[A-Z]{3}").matches(currency)&&amount.toDoubleOrNull()?.let{it>=0}==true&&
+                    tax.toDoubleOrNull()?.let{it>=0}==true
                 OutlinedButton(enabled=!busy&&valid,onClick={
                     busy=true;error=null
+                    val capturedReference=invoiceNumber.trim()
+                    val capturedDate=invoiceDate
+                    val capturedCurrency=currency
+                    val capturedAmount=amount
+                    val capturedTax=tax
                     scope.launch {
                         try {
                             val slot=api.documentSlot(order.orderId,
@@ -324,17 +347,19 @@ private fun ServiceInvoicePane(
                                 uploaded.targetId==slot.slotId&&uploaded.storageState=="READY")
                             api.captureInvoice(order.orderId,CaptureServiceInvoiceDto(
                                 operation(),slot.slotId,uploaded.evidenceId,uploaded.sha256,
-                                invoiceNumber.trim(),invoiceDate,currency,amount,tax),install)
+                                capturedReference,capturedDate,capturedCurrency,capturedAmount,capturedTax),install)
                             invoices=api.invoices(org,install)
-                            confirmation="Actual supplier invoice captured, not paid."
+                            selectedInvoiceOrderId=null
+                            invoiceNumber="";invoiceDate="";currency="";amount="";tax=""
+                            confirmation="تم تسجيل الفاتورة الأصلية؛ لم يتم دفعها."
                         } catch(e:Exception){error=e.message?:"Invoice evidence is missing or invalid."}
                         finally{busy=false}
                     }
-                }) {Text("Upload invoice for service "+order.orderId.take(8))}
+                }) {Text("اختيار مستند الفاتورة وتسجيله للأمر المحدد")}
             }
             invoices.forEach { inv ->
                 OutlinedButton(enabled=!busy,onClick={
-                    busy=true;error=null
+                    busy=true;error=null;match=null
                     scope.launch {
                         try {match=api.preview(inv.invoiceId,install)}
                         catch(e:Exception){error=e.message?:"Cannot compute current match."}
