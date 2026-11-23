@@ -445,6 +445,90 @@ class Payroll9bDraftPostgresContractTest {
         assertFalse(realPublication.canPublish(
             UUID.randomUUID(), currentSubject.subjectId, newer.first.sourceFingerprint,
         ))
+        // Finance's canonical REVIEW INTAKE is still unimplemented in real
+        // 8C. The test substitutes a synthetic in-transaction accepting port
+        // and verifies exact payout-manifest integrity and replay semantics.
+        val reviewPublisher = StaticListableBeanFactory(
+            mapOf("approvedRelease" to realPublication),
+        ).getBeanProvider(PayrollRunPublicationPort::class.java)
+        val noFinanceHandoff = Payroll9cFinanceHandoffService(
+            jdbc, service, permission, reviewPublisher,
+            StaticListableBeanFactory().getBeanProvider(
+                PayrollFinanceReviewIntakePort::class.java,
+            ),
+            AuditEventWriter.NOOP, clock,
+        )
+        assertThrows<ProductApiException> {
+            tx.execute {
+                noFinanceHandoff.handoff(
+                    actor, publishedRunId, UUID.randomUUID(), "synthetic-finance-handoff",
+                )
+            }
+        }
+        val acceptedOperations = mutableMapOf<UUID, PayrollFinanceReviewReceipt>()
+        var acceptedManifest: PayrollFinanceReviewManifest? = null
+        val reviewIntake = object : PayrollFinanceReviewIntakePort {
+            override fun acceptForReview(
+                manifest: PayrollFinanceReviewManifest,
+            ): PayrollFinanceReviewReceipt {
+                acceptedManifest = manifest
+                val prior = acceptedOperations[manifest.operationId]
+                if (prior != null) {
+                    assertEquals(prior.manifestSha256, manifest.manifestSha256)
+                    return prior.copy(replayed = true)
+                }
+                val receipt = PayrollFinanceReviewReceipt(
+                    organizationId = manifest.organizationId,
+                    runVersionId = manifest.runVersionId,
+                    releaseId = manifest.releaseId,
+                    operationId = manifest.operationId,
+                    financeReviewBatchId = UUID.randomUUID(),
+                    manifestSha256 = manifest.manifestSha256,
+                    currency = manifest.currency,
+                    payableTotal = manifest.payableTotal,
+                    lineCount = manifest.lines.size,
+                    positiveTransferCount = manifest.positiveTransferCount,
+                    state = "REVIEW_REQUIRED",
+                    replayed = false,
+                )
+                acceptedOperations[manifest.operationId] = receipt
+                return receipt
+            }
+        }
+        val financeReviewHandoff = Payroll9cFinanceHandoffService(
+            jdbc, service, permission, reviewPublisher,
+            StaticListableBeanFactory(mapOf("syntheticFinanceIntake" to reviewIntake))
+                .getBeanProvider(PayrollFinanceReviewIntakePort::class.java),
+            AuditEventWriter.NOOP, clock,
+        )
+        val handoffOperation = UUID.randomUUID()
+        val handoff = tx.execute {
+            financeReviewHandoff.handoff(
+                actor, publishedRunId, handoffOperation, "synthetic-finance-handoff",
+            )
+        }!!
+        assertEquals("REVIEW_REQUIRED", handoff.state)
+        assertFalse(handoff.bankExecutionAvailable)
+        assertFalse(handoff.replayed)
+        assertEquals(1, handoff.employeeCount)
+        assertEquals(1, handoff.transferCandidates)
+        assertEquals(newer.first.sourceFingerprint, acceptedManifest?.runSourceFingerprint)
+        assertEquals(newer.first.net, acceptedManifest?.payableTotal?.toPlainString())
+        assertTrue(tx.execute {
+            financeReviewHandoff.handoff(
+                actor, publishedRunId, handoffOperation, "synthetic-finance-handoff",
+            )
+        }!!.replayed)
+        assertEquals(1, acceptedOperations.size)
+        assertThrows<ProductApiException> {
+            tx.execute {
+                financeReviewHandoff.handoff(
+                    UUID.randomUUID(), publishedRunId, UUID.randomUUID(),
+                    "synthetic-finance-handoff",
+                )
+            }
+        }
+
         decisionVersion = 2
         assertFalse(realPublication.canPublish(
             org, currentSubject.subjectId, newer.first.sourceFingerprint,
