@@ -38,6 +38,7 @@ class FinanceCashVoidPostgresContractTest {
         "database/phase8/pending_ar_journal_posting.sql",
         "database/phase8/pending_bank_statement_intake.sql",
         "database/phase8/pending_ap_ar_cash_allocation.sql",
+        "database/phase8/pending_cashbox_vouchers.sql",
         "database/phase8/pending_employee_funding.sql",
         "database/phase8/pending_employee_settlement.sql",
         "database/phase8/pending_expense_reimbursement.sql",
