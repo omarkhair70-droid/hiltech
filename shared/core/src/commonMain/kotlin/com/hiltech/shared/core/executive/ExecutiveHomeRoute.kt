@@ -30,6 +30,7 @@ fun ExecutiveHomeRoute(
     // authority update even when identity and company IDs do not change.
     authorityRevisionKey: String = "",
     onOpenSource: (ExecutiveDestination) -> Unit,
+    canOpenDestination: (ExecutiveDestination) -> Boolean = { true },
 ) {
     var refreshVersion by remember(
         client,
@@ -98,5 +99,6 @@ fun ExecutiveHomeRoute(
         loadError = loadError,
         onRefresh = { refreshVersion += 1 },
         onOpenSource = onOpenSource,
+        canOpenDestination = canOpenDestination,
     )
 }
