@@ -354,3 +354,72 @@ integration and verify staging before production.
   provisioned; flags stay OFF, PR remains Draft. DevOps owns global shell
   mounting, migration renumbering and staging proof; Finance owns payment
   execution.
+
+
+## 2026-11-23 — exact-head engineering pass and integration exit gates
+
+**Source evidence at the actual latest branch HEAD:** commit
+`51cc0791a95a0d2ca1160dd1418765467a91f1e1`, full isolated Phase9
+GitHub Actions [run 45101657858](https://github.com/omarkhair70-droid/hiltech/actions/runs/45101657858)
+**SUCCESS**. Both `payroll-9a-postgres` (Flyway, 9A–9C contract and
+negative tests, server) and `payroll-9a-native` (Android debug build,
+shared Kotlin tests and Windows/Desktop compile) completed successfully.
+PR #166 is still **Draft and unmerged**. No real payroll amounts, cash
+disbursement or production pilot was tested.
+
+### Hardening covered by that pass
+
+- 9A period and 9B run draft idempotency replay belongs to the
+  original preparer, even when another authorized employee guesses/reuses
+  the same operation ID.
+- Policy and approved-source references cannot inject the `|`, LF or CR
+  delimiters used in source fingerprints. Policy/evidence revisions require
+  a new digest; ambiguous approval evidence is rejected rather than hashed.
+- Finance review manifest normalizes employee/snapshot identifiers as UUIDs,
+  rejecting duplicate identifiers with alternative textual casing.
+- V0072 PostgreSQL trigger guards reject any later INSERT of employee
+  payroll lines or component refs into a **released** payroll version,
+  with a `payroll_period` lock serializing direct writes against release.
+  Contract tests verify the specific trigger error rather than merely
+  observing a unique constraint. V0070–V0073 PL/pgSQL quotes were checked.
+- Earlier zero-net/EGP-only integrity changes and native Arabic statuses
+  were already included: no fake bank instruction or claim of paid on a
+  zero-net employee, and frozen line currencies must match their run.
+
+### Signed-off boundary of the Phase9 **isolated engineering** work
+
+`SUCCESS` means the source-code/tests at the specific SHA above passed.
+It does **not** mean the company's end-to-end Payroll feature is installed,
+enabled, deployed, financially approved, populated, or ready for real payouts.
+
+Remaining work owned by other lanes or requiring company evidence:
+
+1. **Company + HR + accountant:** source-of-truth confirmation for RF-010
+   (still `UNKNOWN` in `docs/01-reality/REALITY_FACTS_REGISTER.md`).
+   Approved compensation records, allowances/overtime/absence, statutory
+   calculation and rounding rules, current permissions and authorized
+   payroll administrator/reviewer must be supplied as signed, versioned
+   facts, not synthetic values or hard-coded Egyptian tax assumptions.
+2. **Finance Phase8:** canonical approved advance-deduction and
+   reimbursement coverage; atomic payroll Finance review intake
+   implementing `PayrollFinanceReviewIntakePort`; exact beneficiary,
+   bank/signer authority and provider-backed, immutable payment outcomes.
+   Review approval is NOT cash movement.
+3. **UX + integrator:** mount existing Payroll Compose sections and typed
+   API clients within both real Windows/Android shells and scoped
+   navigation. Validate role/revocation behavior, accessibility, offline
+   secrecy, error/empty states, and real device evidence.
+4. **DevOps:** assign final contiguous Flyway versions instead of
+   provisional V0070–73, preserve release-sealing SQL triggers, integrate
+   Phase7/Finance/Payroll/other lanes without overwriting each other's
+   migrations, run combined PostgreSQL/native/staging and rollback checks.
+5. **Company operator acceptance:** use approved, authorized source
+   fixtures and actual operator accounts; prove period → source snapshots
+   → draft → review/release → **Finance review intake** → versioned
+   payment evidence → self-only payslip/final-pay. Do not label anything
+   `PAID` before authoritative Finance `SUCCESS`.
+
+No feature flags are activated, no bank transfer is attempted, and no
+migration is merged to `main`. The isolated Payroll lane can hand its
+current engineering candidate to DevOps for integration; operational
+closure requires the gates above.
