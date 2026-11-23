@@ -138,7 +138,12 @@ fun buildExecutiveOperationalBrief(
             incomplete = !trusted || source.partial || source.status != "CURRENT",
             extraVisibleItems = trusted && visible.size > maxPerLane,
             sourceAsOf = if (trusted) source.sourceAsOf else null,
-            missingReason = if (trusted) source.unavailableReason else "UNTRUSTED_SOURCE_OR_SCOPE",
+            missingReason = when {
+                trusted -> source.unavailableReason
+                !additionalScopeTrusted || source.source != expectedSource ->
+                    "UNTRUSTED_SOURCE_OR_SCOPE"
+                else -> source.unavailableReason ?: "SOURCE_READ_UNAVAILABLE"
+            },
         )
     }
 
