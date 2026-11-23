@@ -49,10 +49,10 @@ class FinanceBankStatementIntakePostgresContractTest {
           ) VALUES(?,?,?,?,?,?,?,?,'EGP',
             DATE '2026-11-01',DATE '2026-11-30',100,150,1,?,now(),?)"""
       ).use {st->
-        for(i in listOf(1,2,3,4,5,6,8,15))
+        for(i in listOf(1,2,3,4,5,6,8,9))
           st.setObject(i,UUID.randomUUID())
         st.setString(7,"a".repeat(64))
-        st.setString(16,"FAKE-BANK-STATEMENT")
+        st.setString(10,"FAKE-BANK-STATEMENT")
         st.executeUpdate()
       }
     }
