@@ -212,10 +212,16 @@ class FinanceBankStatementApprovedPostgresContractTest {
            statement_evidence_id,currency,date_start,date_end,opening_balance,
            closing_balance,expected_line_count,imported_by_user_id,
            imported_at,correlation_id)
-         VALUES(?,?,?,?,?,?,?,?,?,'EGP',?,?,?,?,1,?,?,'bank-fixture')""",
-      intake,UUID.randomUUID(),org,proposal,account,approval,sha,digest,evidence,
-      source.statementStart,source.statementEnd,source.openingBalance,
-      source.closingBalance,importer,imported))
+         SELECT ?,?,p.organization_id,p.id,p.account_id,?,
+           p.statement_sha256,p.statement_lines_sha256,
+           p.statement_evidence_id,a.currency,p.date_start,p.date_end,
+           p.opening_balance,p.closing_balance,p.expected_line_count,
+           ?,?,'bank-fixture'
+         FROM finance_bank_statement_intake_proposal p
+         JOIN finance_bank_account_register a
+           ON a.id=p.account_id AND a.organization_id=p.organization_id
+         WHERE p.id=? AND p.organization_id=? AND a.state='APPROVED'""",
+      intake,UUID.randomUUID(),approval,importer,imported,proposal,org))
     assertEquals(1,jdbc.update(
       """INSERT INTO finance_bank_statement_intake_line(
            id,organization_id,intake_id,account_id,external_transaction_id,
