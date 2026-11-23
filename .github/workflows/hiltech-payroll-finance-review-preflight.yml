@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - integration/hiltech-payroll-finance-review-intake-20261123
+      - integration/hiltech-finance-v0100-payroll-bridge-20261123
   workflow_dispatch:
 
 permissions:

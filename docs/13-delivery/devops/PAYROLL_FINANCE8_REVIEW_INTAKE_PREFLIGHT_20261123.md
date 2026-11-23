@@ -1,6 +1,6 @@
 # HILTECH P9 → Finance8 immutable review intake — isolated preflight
 
-Date: 2026-11-23. Branch: `integration/hiltech-payroll-finance-review-intake-20261123`, based on Finance8U integration #230 at `3be796e8`. **DRAFT / NO COMPANY ACTIVATION.**
+Date: 2026-11-23. Original branch: `integration/hiltech-payroll-finance-review-intake-20261123`, based on #230 `3be796e8`. **Updated isolated Finance V0100 bridge**: `integration/hiltech-finance-v0100-payroll-bridge-20261123`, based on Finance unified RC PR #235 head `27263ccdbce5d00b56eb6e920ab33cc17610ceda`, with the two original source/test commits cherry-picked cleanly; no owner files overwritten. **DRAFT / NO COMPANY ACTIVATION.**
 
 ## Actual gap closed at engineering-candidate level
 
