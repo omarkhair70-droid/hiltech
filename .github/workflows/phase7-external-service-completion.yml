@@ -65,7 +65,16 @@ jobs:
             --tests com.hiltech.server.procurement.ServiceSourcingPostgresIntegrationTest \
             --tests com.hiltech.server.documents.persistence.ServiceRestrictedEvidenceReservationTest \
             --no-daemon --console=plain
-      - name: Compile Windows and Android actual clients
+      - name: Full backend unit and Spring Modulith architecture verification
+        env:
+          HILTECH_DB_CONTRACT_TEST: "0"
         run: |
-          ./gradlew :apps:desktopApp:compileKotlin :apps:androidApp:assembleDebug \
+          # PostgreSQL versioned-upgrade contract runs in the previous step on
+          # a fresh disposable DB. Other server/Modulith tests must still run,
+          # without rerunning the V0033 baseline against already-migrated SQL.
+          ./gradlew :server:application:test --rerun-tasks \
             --no-daemon --console=plain
+      - name: Compile Android APK, Windows desktop and shared native tests
+        run: |
+          ./gradlew :shared:core:desktopTest :apps:desktopApp:compileKotlin \
+            :apps:androidApp:assembleDebug --no-daemon --console=plain
