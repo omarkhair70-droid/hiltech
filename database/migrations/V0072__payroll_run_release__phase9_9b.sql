@@ -141,7 +141,7 @@ CREATE TRIGGER payroll_9b_release_insert_validate
 -- after the payroll run has been released. Seal both direct SQL INSERT paths.
 -- Draft construction remains valid before release within its transaction.
 CREATE FUNCTION payroll_9b_reject_late_run_line() RETURNS trigger
-LANGUAGE plpgsql AS $
+LANGUAGE plpgsql AS $$
 BEGIN
     -- Serialize direct writers with the application's period-locked release
     -- transaction so an insert racing with release cannot slip through.
@@ -165,7 +165,7 @@ CREATE TRIGGER payroll_9b_line_no_insert_after_release
     EXECUTE FUNCTION payroll_9b_reject_late_run_line();
 
 CREATE FUNCTION payroll_9b_reject_late_run_component() RETURNS trigger
-LANGUAGE plpgsql AS $
+LANGUAGE plpgsql AS $$
 BEGIN
     PERFORM 1
     FROM payroll_period period
