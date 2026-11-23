@@ -70,7 +70,7 @@ class FinanceSupplierAccountingReviewServiceTest {
         policyKey = policyKey, policyVersion = 3,
     )
 
-    private fun setup(current: Boolean = true) {
+    private fun setup(current: Boolean = true): ApprovalAuthorityBindingSnapshot {
         Mockito.`when`(sources.detail(actor, candidate)).thenReturn(candidate(current))
         Mockito.`when`(snapshot.current(org, candidate)).thenReturn(source())
         Mockito.`when`(authority.loadActivePolicy(org, policyKey, time))
@@ -90,6 +90,7 @@ class FinanceSupplierAccountingReviewServiceTest {
             .thenReturn(binding)
         Mockito.`when`(authority.isActiveOrganizationMember(org, actor, time))
             .thenReturn(true)
+        return binding
     }
 
     @Test fun matchedSourceMustStillBeCurrentToBeginAccountingReview() {
@@ -174,10 +175,10 @@ class FinanceSupplierAccountingReviewServiceTest {
     }
 
     @Test fun requesterWhoIsTheCurrentAccountingApproverCannotSelfSubmit() {
-        setup()
-        Mockito.`when`(authority.actorMatchesAuthority(
-            actor, authority.resolveCurrentAuthority(org, reviewerKey, time)!!, time,
-        )).thenReturn(true)
+        val binding = setup()
+        // Use the actual bounded authority to test self-approval rejection.
+        Mockito.`when`(authority.actorMatchesAuthority(actor, binding, time))
+            .thenReturn(true)
         assertThrows<ProductApiException> {
             service().request(actor, candidate, op, "test")
         }
