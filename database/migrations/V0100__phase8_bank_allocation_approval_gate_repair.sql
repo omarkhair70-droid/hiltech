@@ -86,7 +86,7 @@ BEGIN
   RAISE EXCEPTION 'Source, bank or employee funding cannot be over-allocated'
     USING ERRCODE='23514';
  END IF;
- SELECT * INTO a FROM approval_reque -- All policy, separation and decision checks must belong to the
+ -- All policy, separation and decision checks must belong to the
  -- same exact approved request. Avoid PL/pgSQL record/SQL alias ambiguity
  -- in nested EXISTS during the actual BEFORE INSERT trigger.
  IF NOT EXISTS (
