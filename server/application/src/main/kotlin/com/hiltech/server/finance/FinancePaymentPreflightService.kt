@@ -41,6 +41,8 @@ data class FinancePaymentPreflightReport(
     val observedAt: String,
     val sourceType: String = "P7_MATCHED_SUPPLIER_INVOICE_TO_P8A_REVIEW_CANDIDATE",
     val rows: List<FinancePaymentPreflightRow>,
+    val sourceQueryLimit: Int = 100,
+    val possibleUnreturnedSources: Boolean = false,
     val paymentInstructionEnabled: Boolean = false,
     val approvalEnabled: Boolean = false,
     val bankExecutionEnabled: Boolean = false,
@@ -64,6 +66,8 @@ data class FinanceCandidatePulse(
     val observedAt: String,
     val dataSemantics: String = "UNPOSTED_REVIEW_CANDIDATES_ONLY_NO_ACTUAL_FINANCIAL_POSITION",
     val sourceItems: Int,
+    val sourceQueryLimit: Int = 100,
+    val possibleUnreturnedSources: Boolean = false,
     val groupsByCurrency: List<FinanceCandidatePulseByCurrency>,
     val actualBankBalanceKnown: Boolean = false,
     val reconciliationAvailable: Boolean = false,
@@ -85,6 +89,7 @@ class FinancePaymentPreflightService(
             organizationId = org,
             observedAt = clock.instant().toString(),
             rows = candidates.map(::preflight),
+            possibleUnreturnedSources = candidates.size >= 100,
         )
     }
 
@@ -110,6 +115,7 @@ class FinancePaymentPreflightService(
             organizationId = org,
             observedAt = clock.instant().toString(),
             sourceItems = candidates.size,
+            possibleUnreturnedSources = candidates.size >= 100,
             groupsByCurrency = groups,
         )
     }
