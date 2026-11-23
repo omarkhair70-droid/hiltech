@@ -140,8 +140,13 @@ private fun ServiceBuyerAndIssuerPane(
                         try {
                             api.requestApproval(candidate.id,
                                 ServiceOrderApprovalRequestDto(operation()),install)
-                            selected=api.candidate(candidate.id,install)
-                            confirmation="Approval requested in the existing HILTECH approvals system."
+                            confirmation="تم طلب الاعتماد في نظام HILTECH؛ لم يُصدر أمر خدمة بعد."
+                            selected=null
+                            try {
+                                selected=api.candidate(candidate.id,install)
+                            } catch(refreshError:Exception) {
+                                error="تم طلب الاعتماد، لكن تعذر تحديث حالته؛ أعد فتح الطلب."
+                            }
                         } catch(e:Exception){error=e.message?:"Approval not available."}
                         finally {busy=false}
                     }
@@ -289,10 +294,16 @@ private fun ServiceAcceptancePane(
                                 RecordServiceDeliveryDto(operation(),slot.slotId,
                                     uploaded.evidenceId,uploaded.sha256,selectedOutcome,selectedNotes),
                                 install)
-                            orders=api.deliveryOrders(org,install)
                             selectedDeliveryOrderId=null
                             confirmation="تم تسجيل الفحص مع المستند الأصلي؛ لا يعني دفع فاتورة."
                             notes=""
+                            orders=emptyList();deliveryOrdersLoaded=false
+                            try {
+                                orders=api.deliveryOrders(org,install)
+                                deliveryOrdersLoaded=true
+                            } catch(refreshError:Exception) {
+                                error="تم تسجيل فحص الخدمة، لكن تحديث الأوامر فشل؛ أعد تحميل القائمة."
+                            }
                         } catch(e:Exception){error=e.message?:"Delivery review is incomplete."}
                         finally{busy=false}
                     }
@@ -400,11 +411,17 @@ private fun ServiceInvoicePane(
                             api.captureInvoice(order.orderId,CaptureServiceInvoiceDto(
                                 operation(),slot.slotId,uploaded.evidenceId,uploaded.sha256,
                                 capturedReference,capturedDate,capturedCurrency,capturedAmount,capturedTax),install)
-                            invoices=api.invoices(org,install)
                             match=null
                             selectedInvoiceOrderId=null
                             invoiceNumber="";invoiceDate="";currency="";amount="";tax=""
                             confirmation="تم تسجيل الفاتورة الأصلية؛ لم يتم دفعها."
+                            invoices=emptyList();invoiceSourcesLoaded=false
+                            try {
+                                invoices=api.invoices(org,install)
+                                invoiceSourcesLoaded=true
+                            } catch(refreshError:Exception) {
+                                error="تم تسجيل فاتورة الخدمة، لكن تعذر تحديث القائمة؛ أعد تحميل المصدر."
+                            }
                         } catch(e:Exception){error=e.message?:"Invoice evidence is missing or invalid."}
                         finally{busy=false}
                     }
