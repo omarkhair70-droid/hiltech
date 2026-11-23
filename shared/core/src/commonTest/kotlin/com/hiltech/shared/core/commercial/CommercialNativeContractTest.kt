@@ -13,6 +13,9 @@ import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -111,10 +114,22 @@ class CommercialNativeContractTest {
         assertEquals("PRIVATE",result.state)
         assertEquals("/v1/commercial/opportunities/$opportunityId/boqs",events.single().first)
         val body = events.single().second
-        assertTrue(body.contains("\"quantity\":0.2500"))
-        assertTrue(body.contains("\"internalUnitCost\":12.1250"))
-        assertTrue(body.contains("\"sellUnitPrice\":20.5000"))
-        assertFalse(body.contains("\"quantity\":\"0.2500\""))
+        // kotlinx.serialization may remove insignificant trailing zeroes when
+        // encoding a JSON number. What matters is that no decimal is converted
+        // into a quoted string, rounded via Double, or changed in value.
+        val jsonLine = Json.parseToJsonElement(body).jsonObject
+            .getValue("lines").jsonArray.single().jsonObject
+        fun assertExactJsonNumber(field: String, expected: String) {
+            val numeric = jsonLine.getValue(field).jsonPrimitive
+            assertFalse(numeric.isString, "$field must be a JSON number: $body")
+            val actual = numeric.content
+            assertTrue(validCommercialDecimal(actual), "$field is not an exact commercial decimal: $body")
+            fun canonical(value: String) = value.trimEnd('0').trimEnd('.')
+            assertEquals(canonical(expected), canonical(actual), "$field exact value changed: $body")
+        }
+        assertExactJsonNumber("quantity", "0.2500")
+        assertExactJsonNumber("internalUnitCost", "12.1250")
+        assertExactJsonNumber("sellUnitPrice", "20.5000")
         http.close()
     }
 
