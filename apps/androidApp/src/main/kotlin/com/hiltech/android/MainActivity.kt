@@ -34,6 +34,13 @@ import com.hiltech.shared.core.work.FieldEngineeringTestCaptureDto
 import com.hiltech.shared.core.work.FieldPersonalIssuedStockLineDto
 import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
+import com.hiltech.shared.core.executive.executiveNativeWorkspace
+import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
+import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
+import com.hiltech.shared.core.service.handoverReadNativeWorkspace
+import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
+import com.hiltech.shared.core.NativeOperationalWorkspace
+import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
@@ -122,6 +129,83 @@ class MainActivity : ComponentActivity() {
             }
             HiltechShell(
                 state = shellState,
+                operationalWorkspaces = (shellState as? HiltechShellState.SignedIn)?.let { signed ->
+                    val org = signed.identity.organizations.firstOrNull { it.primary }
+                        ?: signed.identity.organizations.firstOrNull()
+                    if (org == null) emptyList() else buildList {
+                        if (BuildConfig.HILTECH_EXECUTIVE_HOME_ENABLED) {
+                            add(executiveNativeWorkspace(
+                                client = hiltechApplication.executiveApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                                authorityRevisionKey =
+                                    signed.identity.identityVersion.toString() + ":" +
+                                        org.membershipVersion.toString(),
+                                // Android original Projects detail route not mounted yet.
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_OWN_PAYSLIPS_ENABLED) {
+                            add(ownPayslipNativeWorkspace(
+                                client = hiltechApplication.payrollOwnApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_COMMERCIAL_READ_ENABLED) {
+                            add(commercialReadNativeWorkspace(
+                                client = hiltechApplication.commercialApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_HANDOVER_READ_ENABLED) {
+                            add(handoverReadNativeWorkspace(
+                                projects = hiltechApplication.readProjectsApi,
+                                handover = hiltechApplication.handoverApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_FINANCE_INVOICE_READ_ENABLED) {
+                            add(supplierInvoiceFinanceReadWorkspace(
+                                client = hiltechApplication.supplierInvoiceFinanceApi,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                                newOperationId = { UUID.randomUUID().toString() },
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED &&
+                            BuildConfig.HILTECH_SERVICE_PURCHASES_WORKSPACE_ENABLED
+                        ) {
+                            add(NativeOperationalWorkspace(
+                                id = "service-purchasing",
+                                label = "مشتريات الخدمات",
+                                canReadSource = {
+                                    servicePurchaseAnyCurrentSourceVisible(
+                                        needs = hiltechApplication.servicePurchaseNeedApi,
+                                        sourcing = hiltechApplication.serviceSupplierSourcingApi,
+                                        orders = hiltechApplication.serviceOrderAndInvoiceApi,
+                                        organizationId = org.organizationId,
+                                        installationId = hiltechApplication.installationId,
+                                    )
+                                },
+                                hostOwnsScroll = true,
+                                content = { _ ->
+                                    key(signed.identity.identityId, org.organizationId, "service-purchases") {
+                                        AndroidServicePurchaseSections(
+                                            application = hiltechApplication,
+                                            organizationId = org.organizationId,
+                                        )
+                                    }
+                                },
+                            ))
+                        }
+                    }
+                } ?: emptyList(),
                 onSignIn = ::startSignIn,
                 onSignOut = ::signOut,
                 onRetry = ::restoreOrSignIn,
@@ -217,7 +301,9 @@ class MainActivity : ComponentActivity() {
                     }
                 },
                 procurementOperator = {
-                    if (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED) {
+                    if (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED &&
+                        !BuildConfig.HILTECH_SERVICE_PURCHASES_WORKSPACE_ENABLED
+                    ) {
                         val signed = shellState as? HiltechShellState.SignedIn
                         val identity = signed?.identity
                         val organization = identity?.organizations?.firstOrNull { it.primary }

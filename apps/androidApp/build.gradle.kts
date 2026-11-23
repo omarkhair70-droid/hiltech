@@ -40,6 +40,25 @@ val supplierInvoiceFinanceUiEnabled = providers
 val servicePurchasesUiEnabled = providers
     .gradleProperty("hiltech.servicePurchasesEnabled")
     .getOrElse("false") == "true"
+// Read-only source projection; never enabled for production by default.
+val executiveHomeUiEnabled = providers
+    .gradleProperty("hiltech.executiveHomeEnabled")
+    .getOrElse("false") == "true"
+val ownPayslipsUiEnabled = providers
+    .gradleProperty("hiltech.ownPayslipsEnabled")
+    .getOrElse("false") == "true"
+val commercialReadUiEnabled = providers
+    .gradleProperty("hiltech.commercialReadEnabled")
+    .getOrElse("false") == "true"
+val handoverReadUiEnabled = providers
+    .gradleProperty("hiltech.handoverReadEnabled")
+    .getOrElse("false") == "true"
+val financeInvoiceReadUiEnabled = providers
+    .gradleProperty("hiltech.financeInvoiceReadEnabled")
+    .getOrElse("false") == "true"
+val servicePurchasesWorkspaceUiEnabled = providers
+    .gradleProperty("hiltech.servicePurchasesWorkspaceEnabled")
+    .getOrElse("false") == "true"
 
 plugins {
     id("com.hiltech.base")
@@ -126,6 +145,36 @@ android {
             "boolean",
             "HILTECH_SERVICE_PURCHASES_ENABLED",
             servicePurchasesUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_EXECUTIVE_HOME_ENABLED",
+            executiveHomeUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_OWN_PAYSLIPS_ENABLED",
+            ownPayslipsUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_COMMERCIAL_READ_ENABLED",
+            commercialReadUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_HANDOVER_READ_ENABLED",
+            handoverReadUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_FINANCE_INVOICE_READ_ENABLED",
+            financeInvoiceReadUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_SERVICE_PURCHASES_WORKSPACE_ENABLED",
+            servicePurchasesWorkspaceUiEnabled.toString(),
         )
     }
 

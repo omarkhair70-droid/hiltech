@@ -26,6 +26,7 @@ fun SupplierInvoiceFinanceSection(
     newOperationId: () -> String,
     documentUploader: SupplierInvoiceDocumentUploader? = null,
     pickInvoiceFile: (suspend () -> SupplierInvoiceSelectedFile?)? = null,
+    readOnly: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     var busy by remember(organizationId) { mutableStateOf(false) }
@@ -41,7 +42,7 @@ fun SupplierInvoiceFinanceSection(
                 "no payable or payment is generated.",
             style = MaterialTheme.typography.bodySmall,
         )
-        if (documentUploader != null && pickInvoiceFile != null) {
+        if (!readOnly && documentUploader != null && pickInvoiceFile != null) {
             SupplierInvoiceCaptureSection(
                 api, documentUploader, pickInvoiceFile, organizationId, installationId,
                 newOperationId, onCaptured = {
@@ -76,7 +77,7 @@ fun SupplierInvoiceFinanceSection(
             Text("No verified supplier invoices available for review.")
         }
         invoices.forEach { invoice ->
-            SupplierInvoiceReviewRow(api, invoice, installationId, newOperationId)
+            SupplierInvoiceReviewRow(api, invoice, installationId, newOperationId, readOnly)
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
@@ -88,6 +89,7 @@ private fun SupplierInvoiceReviewRow(
     invoice: SupplierInvoiceDto,
     installationId: String,
     newOperationId: () -> String,
+    readOnly: Boolean,
 ) {
     val scope = rememberCoroutineScope()
     var busy by remember(invoice.id) { mutableStateOf(false) }
@@ -132,7 +134,7 @@ private fun SupplierInvoiceReviewRow(
                     " · price variance " + preview.priceVariance +
                     " · tax variance " + preview.taxVariance,
                     style = MaterialTheme.typography.bodySmall)
-                if (matched == null) {
+                if (!readOnly && matched == null) {
                     OutlinedButton(enabled = !busy, onClick = {
                         busy = true
                         error = null
@@ -158,7 +160,7 @@ private fun SupplierInvoiceReviewRow(
             }
             matched?.let { result ->
                 Text("Recorded review " + (result.revision ?: 0L) + " · " + result.resultCode)
-                if (result.resultCode == "MATCHED" && result.matchEventId != null &&
+                if (!readOnly && result.resultCode == "MATCHED" && result.matchEventId != null &&
                     handoff == null
                 ) {
                     if (!confirmHandoff) {

@@ -23,6 +23,13 @@ import com.hiltech.shared.core.procurement.PurchaseOrderIssuerSection
 import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceSection
 import com.hiltech.shared.core.procurement.SupplierPoCommunicationSection
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeSection
+import com.hiltech.shared.core.executive.executiveNativeWorkspace
+import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
+import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
+import com.hiltech.shared.core.service.handoverReadNativeWorkspace
+import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
+import com.hiltech.shared.core.NativeOperationalWorkspace
+import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
@@ -2728,6 +2735,97 @@ fun main() {
         ) {
             HiltechShell(
                 state = shellState.value,
+                operationalWorkspaces = (shellState.value as? HiltechShellState.SignedIn)?.let { signed ->
+                    val org = signed.identity.organizations.firstOrNull { it.primary }
+                        ?: signed.identity.organizations.firstOrNull()
+                    if (org == null) emptyList() else buildList {
+                        if (System.getenv("HILTECH_EXECUTIVE_HOME_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(executiveNativeWorkspace(
+                                client = runtime.executiveApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                authorityRevisionKey =
+                                    signed.identity.identityVersion.toString() + ":" +
+                                        org.membershipVersion.toString(),
+                                onOpenProject = ::selectProject,
+                            ))
+                        }
+                        if (System.getenv("HILTECH_OWN_PAYSLIPS_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(ownPayslipNativeWorkspace(
+                                client = runtime.payrollOwnApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                            ))
+                        }
+                        if (System.getenv("HILTECH_COMMERCIAL_READ_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(commercialReadNativeWorkspace(
+                                client = runtime.commercialApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                            ))
+                        }
+                        if (System.getenv("HILTECH_HANDOVER_READ_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(handoverReadNativeWorkspace(
+                                projects = runtime.readProjectsApi,
+                                handover = runtime.handoverApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                            ))
+                        }
+                        if (System.getenv("HILTECH_FINANCE_INVOICE_READ_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(supplierInvoiceFinanceReadWorkspace(
+                                client = runtime.supplierInvoiceFinanceApi,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                            ))
+                        }
+                        if (System.getenv("HILTECH_SERVICE_PURCHASES_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true &&
+                            System.getenv("HILTECH_SERVICE_PURCHASES_WORKSPACE_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(NativeOperationalWorkspace(
+                                id = "service-purchasing",
+                                label = "مشتريات الخدمات",
+                                canReadSource = {
+                                    servicePurchaseAnyCurrentSourceVisible(
+                                        needs = runtime.servicePurchaseNeedApi,
+                                        sourcing = runtime.serviceSupplierSourcingApi,
+                                        orders = runtime.serviceOrderAndInvoiceApi,
+                                        organizationId = org.organizationId,
+                                        installationId = runtime.physicalWarehouseInstallationId,
+                                    )
+                                },
+                                hostOwnsScroll = true,
+                                content = { _ ->
+                                    androidx.compose.runtime.key(
+                                        signed.identity.identityId, org.organizationId, "service-purchases",
+                                    ) {
+                                        DesktopServicePurchaseSections(
+                                            runtime = runtime,
+                                            organizationId = org.organizationId,
+                                        )
+                                    }
+                                },
+                            ))
+                        }
+                    }
+                } ?: emptyList(),
                 onSignIn = { signIn(false) },
                 onSignOut = ::signOut,
                 onRetry = { signIn(false) },
@@ -2798,7 +2896,9 @@ fun main() {
                 },
                 procurementOperator = {
                     if (System.getenv("HILTECH_SERVICE_PURCHASES_UI_ENABLED")
-                            ?.equals("true", ignoreCase = true) == true
+                            ?.equals("true", ignoreCase = true) == true &&
+                        System.getenv("HILTECH_SERVICE_PURCHASES_WORKSPACE_UI_ENABLED")
+                            ?.equals("true", ignoreCase = true) != true
                     ) {
                         val signed = shellState.value as? HiltechShellState.SignedIn
                         val identity = signed?.identity

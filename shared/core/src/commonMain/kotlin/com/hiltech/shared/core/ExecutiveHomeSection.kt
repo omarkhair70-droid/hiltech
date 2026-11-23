@@ -44,6 +44,7 @@ fun ExecutiveHomeSection(
     loadError: String?,
     onRefresh: () -> Unit,
     onOpenSource: (ExecutiveDestination) -> Unit,
+    canOpenDestination: (ExecutiveDestination) -> Boolean = { true },
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -137,6 +138,7 @@ fun ExecutiveHomeSection(
         ExecutiveOperationalBriefSection(
             home = home,
             onOpenSource = onOpenSource,
+            canOpenDestination = canOpenDestination,
         )
 
         ExecutiveSectionHeader(
@@ -158,6 +160,7 @@ fun ExecutiveHomeSection(
                     actionLabel = "افتح القرار",
                     reference = item.reference,
                     onOpenSource = onOpenSource,
+                    canOpenDestination = canOpenDestination,
                 )
             }
         }
@@ -208,7 +211,7 @@ fun ExecutiveHomeSection(
                             val healthDestination = resolveExecutiveProjectSignalDestination(
                                 signal.reference, project.projectId,
                             )
-                            if (healthDestination != null) {
+                            if (healthDestination != null && canOpenDestination(healthDestination)) {
                                 OutlinedButton(onClick = { onOpenSource(healthDestination) }) {
                                     Text("راجع سبب الخطر في المشروع")
                                 }
@@ -227,7 +230,7 @@ fun ExecutiveHomeSection(
                             style = MaterialTheme.typography.labelSmall,
                         )
                         val destination = resolveExecutiveDestination(project.reference)
-                        if (destination != null) {
+                        if (destination != null && canOpenDestination(destination)) {
                             OutlinedButton(onClick = { onOpenSource(destination) }) {
                                 Text("افتح المشروع")
                             }
@@ -264,6 +267,7 @@ fun ExecutiveHomeSection(
                     actionLabel = "افتح حالة المعدة",
                     reference = item.reference,
                     onOpenSource = onOpenSource,
+                    canOpenDestination = canOpenDestination,
                 )
             }
         }
@@ -339,6 +343,7 @@ private fun ExecutiveSourceCard(
     actionLabel: String,
     reference: ExecutiveSourceReferenceDto,
     onOpenSource: (ExecutiveDestination) -> Unit,
+    canOpenDestination: (ExecutiveDestination) -> Boolean = { true },
 ) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -353,7 +358,7 @@ private fun ExecutiveSourceCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val destination = resolveExecutiveDestination(reference)
-            if (destination != null) {
+            if (destination != null && canOpenDestination(destination)) {
                 OutlinedButton(onClick = { onOpenSource(destination) }) {
                     Text(actionLabel)
                 }
