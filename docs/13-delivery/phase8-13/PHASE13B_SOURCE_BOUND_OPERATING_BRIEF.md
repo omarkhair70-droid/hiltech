@@ -55,3 +55,12 @@ Digest delivery / scheduled mail / escalation is **not enabled**. Before impleme
 **DevOps**: merge sequencing, database migration ownership, native shell integration, real-user/role tests, feature flag, stage rollout/rollback.
 
 **Design lane**: styling of existing Compose components without removing provenance, unknown/partial states, original-source navigation or required checks.
+
+## 13B trust/coverage review — 23 November 2026
+
+- `executiveReadCoverage(home)` exposes **only** what the authenticated, bounded source reply proves: source name/status, visible-window item count, explicit partial/cursor, source as-of when actually supplied, and the reason for unknown/unavailable.
+- Unknown producer status and unexpected source identity are treated as unavailable, without displaying counts or timestamps from the mismatched response. `CURRENT` means the producer returned a current window, **not that every underlying record meets a freshness SLA**.
+- Actor-wide Inbox scope is flagged even when the window is complete; Project Health always has a portfolio-completeness warning because the producer limits records before source access filtering. Unknown/unavailable project health and health records without observation time are flagged.
+- P8/9/10/11/12 appear as **AWAITING_SOURCE_CONTRACT**, not zero, outage or implemented. Their actual draft operations are not financial/payment/HR executive read authority.
+- The operational brief exposes **ما الذي لا نعرفه عن البيانات؟** on demand, without another API request or persistent cache. All details are reset with the current executive snapshot and subject to the same actor/org/session guard and feature flag.
+- `ExecutiveReadCoverageTest` proves partial false with a cursor, unknown producer, mismatched source name, actor-wide scope, source unavailability, unknown health and missing health-as-of. This is a provenance audit, **not** a company-wide count or a real-time event feed.
