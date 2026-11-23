@@ -327,3 +327,30 @@ release real funds by flipping a feature flag.
 V0070–V0073 migration IDs are provisional, and only exact-head CI success
 may certify the implementation. Team must approve the real Finance
 integration and verify staging before production.
+
+
+## November 23 — exact-head CI pass and zero-net financial integrity
+
+- Phase 9 isolated full 9A–9C exact-head workflow run
+  [45093711726](https://github.com/omarkhair70-droid/hiltech/actions/runs/45093711726)
+  completed **SUCCESS** at commit `7edd390c2db6be919c1fd1e450c592aaa5104de9`.
+  PostgreSQL migration/integration and Android/Windows native checks both
+  succeeded; V0072/V0073 PL/pgSQL dollar-quote errors were repaired.
+- Post-green follow-up corrects **zero-net payroll semantics**: a frozen
+  employee with net 0 remains on the immutable run and receives a
+  `NOT_APPLICABLE` payment status, never a synthetic zero bank instruction.
+  Finance batch coverage is exact only for strictly positive frozen net
+  employees, while all frozen employees still participate in validation.
+  An all-zero approved payroll reports `NO_PAYMENT_REQUIRED` with zero
+  transfers; unexpected external Finance events remain a hard failure.
+- Finance review manifest may contain zero transfer candidates without
+  lying that cash was sent; final-pay review distinguishes
+  `NO_PAYMENT_REQUIRED_FOR_CLEARANCE_REVIEW` from a confirmed payment.
+- New negative tests cover missing positive instructions, forbidden zero
+  instructions and all-zero review population. **These follow-up changes
+  need their own exact-head CI**; the earlier green run does not certify
+  later commits.
+- No company wage, tax, attendance, bank or beneficiary source was
+  provisioned; flags stay OFF, PR remains Draft. DevOps owns global shell
+  mounting, migration renumbering and staging proof; Finance owns payment
+  execution.
