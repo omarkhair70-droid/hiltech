@@ -110,10 +110,7 @@ class FinanceBankStatementIntakeService(
             request.bankAccountId,org,
         ).singleOrNull() ?: unavailable()
         if(bank.state!="APPROVED")unavailable()
-        val id=UUID.nameUUIDFromBytes(
-            "hiltech:bank-statement-intake:${request.operationId}"
-                .toByteArray(Charsets.UTF_8),
-        )
+        val id=FinanceBankIntakeEvidenceBinding.proposalId(request.operationId)
         // An evidence UUID, by itself, is NOT proof of an authentic statement.
         if(!subject.evidenceReady(
             org,id,request.statementEvidenceId,request.statementSha256,
