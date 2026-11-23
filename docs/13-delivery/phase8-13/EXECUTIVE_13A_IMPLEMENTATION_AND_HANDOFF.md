@@ -68,3 +68,10 @@ Reference: PR #161, \`06_PHASE13_EXECUTIVE.md\`; canonical \`docs/13-delivery/IM
 - Regression tests in `ExecutiveNavigationTest` prove valid source types and project binding, and reject incorrect parent, bad UUID, forged source type and external paths.
 - On the DevOps-owned integrated Windows/Android route, test: open a project health signal -> authorized original Project Health view; switch organization or revoke role -> destination's original ACL refuses access. Do not issue a cross-domain write or cache the decision.
 - Earlier Green CI on `57a233d` is not evidence for newer source edits; check the **exact current head**. Concurrent GitHub workflow `cancel-in-progress` can cancel superseded runs, which is not a PASS or test failure.
+
+## Authority-revision native route protection — 23 November 2026
+
+- The shared native `ExecutiveHomeRoute` now accepts `authorityRevisionKey: String = ""`. The authenticated host should supply its source-backed role/team/organization access generation or session revision. When this key changes, Compose resets the executive result and error states, cancels the old read, and fetches again even if user/organization/installation identifiers are unchanged.
+- This input does **not** grant or weaken any authority. It is a presentation invalidation key only. The server checks membership+OpenFGA before **and after** the aggregation, and each original producer checks current source authorization.
+- The host must still unmount on sign-out, clear saved executive state on revocation and map `onOpenSource` to the authenticated original source screen. **Never assume an unchanged revision key proves permission** or use this screen as an offline copy.
+- Source-risk CTA now uses `resolveExecutiveProjectSignalDestination` to bind WorkOrder/Milestone/Blocker health references to the enclosing displayed project. A mismatched project ID is non-navigable. Exact-source navigation is covered by `ExecutiveNavigationTest`.
