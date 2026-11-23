@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/ux128-native-field-contract.yml"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/AssignedWorkSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehousePhysicalOperatorSection.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/FieldSourcePresentation.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/HiltechShell.kt"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/FieldSourcePresentationTest.kt"
@@ -14,6 +15,7 @@ on:
     paths:
       - ".github/workflows/ux128-native-field-contract.yml"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/AssignedWorkSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehousePhysicalOperatorSection.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/FieldSourcePresentation.kt"
       - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/HiltechShell.kt"
       - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/FieldSourcePresentationTest.kt"
