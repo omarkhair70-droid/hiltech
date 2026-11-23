@@ -176,7 +176,7 @@ class FinanceSupplierAccountingReviewServiceTest {
     @Test fun requesterWhoIsTheCurrentAccountingApproverCannotSelfSubmit() {
         setup()
         Mockito.`when`(authority.actorMatchesAuthority(
-            Mockito.eq(actor), Mockito.any(), Mockito.eq(time),
+            actor, authority.resolveCurrentAuthority(org, reviewerKey, time)!!, time,
         )).thenReturn(true)
         assertThrows<ProductApiException> {
             service().request(actor, candidate, op, "test")
