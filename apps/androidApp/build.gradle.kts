@@ -40,6 +40,10 @@ val supplierInvoiceFinanceUiEnabled = providers
 val servicePurchasesUiEnabled = providers
     .gradleProperty("hiltech.servicePurchasesEnabled")
     .getOrElse("false") == "true"
+// Read-only source projection; never enabled for production by default.
+val executiveHomeUiEnabled = providers
+    .gradleProperty("hiltech.executiveHomeEnabled")
+    .getOrElse("false") == "true"
 
 plugins {
     id("com.hiltech.base")
@@ -126,6 +130,11 @@ android {
             "boolean",
             "HILTECH_SERVICE_PURCHASES_ENABLED",
             servicePurchasesUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_EXECUTIVE_HOME_ENABLED",
+            executiveHomeUiEnabled.toString(),
         )
     }
 
