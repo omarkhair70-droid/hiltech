@@ -238,6 +238,7 @@ CREATE FUNCTION finance_cash_allocation_void_guard()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE p finance_cash_allocation_void_proposal%ROWTYPE;
         original finance_cash_allocation_record%ROWTYPE;
+        original_proposal finance_cash_allocation_proposal%ROWTYPE;
         a approval_request%ROWTYPE;
         original_gl_period uuid;
         fiscal finance_gl_period%ROWTYPE;
@@ -270,6 +271,8 @@ BEGIN
   WHERE id=NEW.bank_statement_line_id AND organization_id=NEW.organization_id FOR UPDATE;
  SELECT * INTO original FROM finance_cash_allocation_record
   WHERE id=NEW.original_record_id AND organization_id=NEW.organization_id FOR UPDATE;
+ SELECT * INTO original_proposal FROM finance_cash_allocation_proposal
+  WHERE id=original.proposal_id AND organization_id=original.organization_id;
  SELECT h.statement_sha256 INTO bank_hash FROM finance_bank_statement_intake h
   WHERE h.id=bank.intake_id AND h.organization_id=bank.organization_id;
  IF original.id IS NULL OR original.source_kind<>p.source_kind
@@ -279,6 +282,7 @@ BEGIN
    OR bank.id IS NULL OR bank.currency<>p.currency
    OR ledger_hash IS DISTINCT FROM p.source_ledger_sha256
    OR bank_hash IS DISTINCT FROM p.bank_statement_sha256
+   OR original_proposal.id IS NULL
    OR original.recorded_at>NEW.recorded_at THEN
   RAISE EXCEPTION 'Original verified accounting match changed'
    USING ERRCODE='23514';
@@ -299,7 +303,7 @@ BEGIN
    OR a.policy_key<>p.policy_key
    OR a.requester_user_id<>p.prepared_by_user_id
    OR a.requester_user_id=NEW.recorded_by_user_id
-   OR a.requester_user_id=original.prepared_by_user_id
+   OR a.requester_user_id=original_proposal.prepared_by_user_id
    OR a.completed_at IS NULL OR a.completed_at>NEW.recorded_at
    OR NOT EXISTS(
       SELECT 1 FROM approval_decision d
@@ -307,7 +311,7 @@ BEGIN
         AND d.subject_version=a.subject_version
         AND d.actor_user_id<>a.requester_user_id
         AND d.actor_user_id<>NEW.recorded_by_user_id
-        AND d.actor_user_id<>original.prepared_by_user_id
+        AND d.actor_user_id<>original_proposal.prepared_by_user_id
         AND d.actor_user_id<>original.recorded_by_user_id)
    OR NOT EXISTS(
       SELECT 1 FROM approval_policy_version v
