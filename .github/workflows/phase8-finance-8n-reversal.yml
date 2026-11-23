@@ -45,5 +45,6 @@ jobs:
         run: |
           ./gradlew :server:application:test \
             --tests com.hiltech.server.finance.FinanceApReversalRulesTest \
+            --tests com.hiltech.server.finance.FinanceApReversalReviewVersionTest \
             --tests com.hiltech.server.finance.FinanceApReversalPostgresContractTest \
             --no-daemon --stacktrace
