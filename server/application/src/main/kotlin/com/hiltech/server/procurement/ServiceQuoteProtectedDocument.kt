@@ -82,14 +82,14 @@ class ServiceQuoteProtectedDocumentService @org.springframework.beans.factory.an
         val prefix="org/"+src.org+"/evidence/"+src.evidence+"/objects/"
         if(!e.objectKey.startsWith(prefix) ||
             runCatching {UUID.fromString(e.objectKey.removePrefix(prefix))}.isFailure) hidden()
-        val storage=storageAccess.current()?:hidden()
-        val bytes=try {
-            storage.readRestrictedObject(e.objectKey,e.expectedSizeBytes)
+        val delivered=try {
+            storageAccess.readRestrictedObject(e.objectKey,e.expectedSizeBytes)
         } catch (_:Exception) {
             throw ProductApiException("SERVICE_QUOTE_STORAGE_UNAVAILABLE",
                 "Protected service quote is temporarily unavailable.",
                 HttpStatus.SERVICE_UNAVAILABLE)
         }
+        val bytes=delivered?:hidden()
         if(bytes.size.toLong()!=e.expectedSizeBytes ||
             !MessageDigest.isEqual(MessageDigest.getInstance("SHA-256").digest(bytes),
                 toBytes(src.sha)) || !magic(bytes,e.contentType)) hidden()
