@@ -792,5 +792,56 @@ class Payroll9bDraftPostgresContractTest {
                 service.create(periodId, UUID.randomUUID(), actor, "p9b-test")
             }
         }
+
+        // Direct PostgreSQL proof: even a privileged writer cannot append
+        // an USD line to an EGP payroll run. Use a fresh synthetic run so a
+        // duplicate-employee-line constraint cannot mask the currency FK.
+        val currencyProbeRun = UUID.randomUUID()
+        assertEquals(1, jdbc.update(
+            """
+            INSERT INTO payroll_run_version (
+                id, operation_id, request_fingerprint, organization_id,
+                payroll_period_id, generation, policy_version_id, policy_version,
+                currency, source_fingerprint, gross, deductions, reimbursements,
+                net, state, created_by_user_id, created_at
+            )
+            SELECT ?, ?, request_fingerprint, organization_id, payroll_period_id,
+                   generation + 1, policy_version_id, policy_version, currency,
+                   source_fingerprint, gross, deductions, reimbursements, net,
+                   state, created_by_user_id, created_at
+            FROM payroll_run_version WHERE id = ?
+            """.trimIndent(),
+            currencyProbeRun, UUID.randomUUID(), correctedRun,
+        ))
+        assertThrows<Exception> {
+            jdbc.update(
+                """
+                INSERT INTO payroll_run_employee_line (
+                    id, run_version_id, payroll_period_id, employee_snapshot_id,
+                    employee_id, source_fingerprint, currency, gross,
+                    deductions, reimbursements, net
+                )
+                SELECT ?, ?, payroll_period_id, employee_snapshot_id,
+                       employee_id, source_fingerprint, 'USD', gross,
+                       deductions, reimbursements, net
+                FROM payroll_run_employee_line WHERE run_version_id = ?
+                """.trimIndent(),
+                UUID.randomUUID(), currencyProbeRun, correctedRun,
+            )
+        }
+        assertEquals(1, jdbc.update(
+            """
+            INSERT INTO payroll_run_employee_line (
+                id, run_version_id, payroll_period_id, employee_snapshot_id,
+                employee_id, source_fingerprint, currency, gross,
+                deductions, reimbursements, net
+            )
+            SELECT ?, ?, payroll_period_id, employee_snapshot_id,
+                   employee_id, source_fingerprint, currency, gross,
+                   deductions, reimbursements, net
+            FROM payroll_run_employee_line WHERE run_version_id = ?
+            """.trimIndent(),
+            UUID.randomUUID(), currencyProbeRun, correctedRun,
+        ))
     }
 }
