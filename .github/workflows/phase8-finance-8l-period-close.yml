@@ -51,6 +51,7 @@ jobs:
         run: |
           ./gradlew :server:application:test \
             --tests com.hiltech.server.finance.FinanceGlPeriodClosePostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceGlPeriodCloseApprovedPostgresContractTest \
             --tests com.hiltech.server.finance.FinanceGlPeriodCloseServiceTest \
             --tests com.hiltech.server.finance.FinanceGlPeriodCloseApprovalSubjectTest \
             --tests com.hiltech.server.finance.FinanceApLedgerRulesTest \
