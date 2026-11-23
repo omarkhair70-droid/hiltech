@@ -90,7 +90,11 @@ class FinanceEmployeeDraftService(
     fun expense(actor: UUID, org: UUID, id: UUID): FinanceEmployeeDraftView =
         detail(actor, org, FinanceDraftKind.EXPENSE, id)
     fun advances(actor: UUID, org: UUID) = list(actor, org, FinanceDraftKind.ADVANCE)
+    fun advance(actor: UUID, org: UUID, id: UUID): FinanceEmployeeDraftView =
+        detail(actor, org, FinanceDraftKind.ADVANCE, id)
     fun imprests(actor: UUID, org: UUID) = list(actor, org, FinanceDraftKind.IMPREST)
+    fun imprest(actor: UUID, org: UUID, id: UUID): FinanceEmployeeDraftView =
+        detail(actor, org, FinanceDraftKind.IMPREST, id)
 
     fun createExpense(
         actor: UUID, org: UUID, correlation: String, idempotencyKey: String?,
