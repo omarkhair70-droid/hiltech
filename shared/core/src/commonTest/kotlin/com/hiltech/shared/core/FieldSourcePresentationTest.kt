@@ -63,4 +63,22 @@ class FieldSourcePresentationTest {
             todayWorkOrderIds = listOf("work-3", "work-2", "work-1"),
         ))
     }
+    @Test
+    fun focusIsClearedAfterRemovalAndDoesNotReopenOnLaterRegrant() {
+        var focusedId: String? = "work-2"
+        assertTrue(fieldFocusStillAssigned(focusedId, listOf("work-1", "work-2")))
+        if (!fieldFocusStillAssigned(focusedId, listOf("work-1"))) {
+            focusedId = null
+        }
+        assertFalse(fieldFocusStillAssigned(focusedId, listOf("work-1", "work-2")))
+    }
+
+    @Test
+    fun focusIgnoresReorderingButRejectsBlankAndOtherAssignments() {
+        assertTrue(fieldFocusStillAssigned("work-2", listOf("work-3", "work-2", "work-1")))
+        assertFalse(fieldFocusStillAssigned("work-4", listOf("work-3", "work-2")))
+        assertFalse(fieldFocusStillAssigned(null, listOf("work-2")))
+        assertFalse(fieldFocusStillAssigned("", listOf("work-2")))
+    }
+
 }
