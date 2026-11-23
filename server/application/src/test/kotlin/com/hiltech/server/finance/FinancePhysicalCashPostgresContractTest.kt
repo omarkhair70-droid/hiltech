@@ -140,10 +140,10 @@ class FinancePhysicalCashPostgresContractTest {
           id,organization_id,cashbox_code,currency,custodian_user_id,
           approved_company_reference,opening_balance,status,
           opening_approval_request_id,opening_proposal_id,
-          created_by_user_id,created_at)
-         VALUES(?,?,?,?,?,?,0,'ACTIVE',?,?,?,?)""",
+          activation_operation_id,created_by_user_id,created_at)
+         VALUES(?,?,?,?,?,?,0,'ACTIVE',?,?,?,?,?)""",
       box,org,code,"EGP",custodian,reference,
-      approval,box,preparer,opened))
+      approval,box,UUID.randomUUID(),preparer,opened))
     val cash=jdbc.queryForObject(
        """SELECT cash_on_hand FROM finance_cashbox_balance
           WHERE organization_id=? AND cashbox_id=?""",
