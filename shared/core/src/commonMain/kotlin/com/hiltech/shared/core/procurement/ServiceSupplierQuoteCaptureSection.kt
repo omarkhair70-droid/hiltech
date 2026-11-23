@@ -128,6 +128,7 @@ fun ServiceSupplierQuoteCaptureSection(
                     },
                     label = { Text("ابحث عن مورد مسجل بالاسم / Registered supplier") },
                     modifier = Modifier.fillMaxWidth(),
+                    enabled = !busy,
                 )
                 OutlinedButton(enabled = !busy && supplierSearch.trim().length in 2..80,
                     onClick = {
@@ -181,21 +182,23 @@ fun ServiceSupplierQuoteCaptureSection(
                 }
                 selectedSupplier?.let { Text("Selected verified supplier · " + it.displayName) }
                 OutlinedTextField(value = reference, onValueChange = { reference = it },
-                    label = { Text("Supplier's original quote reference") })
+                    label = { Text("Supplier's original quote reference") }, enabled = !busy)
                 OutlinedTextField(value = revision, onValueChange = { revision = it },
-                    label = { Text("Quote revision number") })
+                    label = { Text("Quote revision number") }, enabled = !busy)
                 OutlinedTextField(value = currency, onValueChange = { currency = it.uppercase() },
-                    label = { Text("Currency") })
+                    label = { Text("Currency") }, enabled = !busy)
                 OutlinedTextField(value = amount, onValueChange = { amount = it },
-                    label = { Text("Service amount") })
+                    label = { Text("Service amount") }, enabled = !busy)
                 OutlinedTextField(value = tax, onValueChange = { tax = it },
-                    label = { Text("Tax amount") })
+                    label = { Text("Tax amount") }, enabled = !busy)
                 OutlinedTextField(value = terms, onValueChange = { terms = it },
                     label = { Text("Actual supplier service terms") },
-                    modifier = Modifier.fillMaxWidth())
+                    modifier = Modifier.fillMaxWidth(), enabled = !busy)
                 OutlinedTextField(value = validUntil, onValueChange = { validUntil = it },
-                    label = { Text("Valid until (YYYY-MM-DD, optional)") })
-                val valid = selectedSupplier != null &&
+                    label = { Text("Valid until (YYYY-MM-DD, optional)") }, enabled = !busy)
+                val valid = selectedSupplier?.let { current ->
+                    visibleSuppliers.any { it.supplierOrganizationId == current.supplierOrganizationId }
+                } == true &&
                     reference.trim().length in 2..96 &&
                     (revision.toIntOrNull()?.let { it >= 1 } == true) &&
                     Regex("[A-Z]{3}").matches(currency) &&
@@ -203,20 +206,34 @@ fun ServiceSupplierQuoteCaptureSection(
                     terms.trim().length in 12..2000 &&
                     (validUntil.isBlank() || Regex("\\d{4}-\\d{2}-\\d{2}").matches(validUntil))
                 OutlinedButton(enabled = !busy && valid, onClick = {
+                    // The native picker suspends. Freeze the selected actual
+                    // server-source context and form before opening it.
+                    val chosenSupplierId = requireNotNull(selectedSupplier).supplierOrganizationId
+                    val chosenQueryGeneration = supplierSearchGeneration
+                    val chosenReference = reference.trim()
+                    val chosenRevision = requireNotNull(revision.toIntOrNull())
+                    val chosenCurrency = currency
+                    val chosenAmount = amount
+                    val chosenTax = tax
+                    val chosenTerms = terms.trim()
+                    val chosenValidUntil = validUntil.ifBlank { null }
                     busy = true; error = null; confirmation = null
                     scope.launch {
                         try {
                             val file = pickQuoteFile()
                                 ?: throw IllegalStateException("Document selection cancelled; no supplier quote recorded.")
+                            check(rfqId == activeRfq && supplierSearchGeneration == chosenQueryGeneration &&
+                                selectedSupplier?.supplierOrganizationId == chosenSupplierId
+                            ) { "Supplier source changed while choosing the document; please select it again." }
                             val result = uploader.uploadAndRecord(
                                 rfqId = activeRfq,
-                                supplierOrganizationId = requireNotNull(selectedSupplier).supplierOrganizationId,
+                                supplierOrganizationId = chosenSupplierId,
                                 installationId = installationId,
-                                supplierQuoteReference = reference.trim(),
-                                revisionNumber = requireNotNull(revision.toIntOrNull()),
-                                currency = currency,
-                                serviceAmount = amount, taxAmount = tax,
-                                serviceTerms = terms.trim(), validUntil = validUntil.ifBlank { null },
+                                supplierQuoteReference = chosenReference,
+                                revisionNumber = chosenRevision,
+                                currency = chosenCurrency,
+                                serviceAmount = chosenAmount, taxAmount = chosenTax,
+                                serviceTerms = chosenTerms, validUntil = chosenValidUntil,
                                 contentType = file.contentType, originalFileName = file.originalFileName,
                                 fileBytes = file.bytes, fileSha256 = file.sha256,
                                 capturedAt = file.capturedAt,
