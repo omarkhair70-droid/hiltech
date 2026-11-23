@@ -258,6 +258,11 @@ class JdbcHandoverSource(
                AND e.target_type = 'WORK_ORDER'
                AND e.target_id = d.work_order_id
                AND e.storage_state = 'READY'
+               AND NOT EXISTS(
+                   SELECT 1 FROM evidence superseding
+                    WHERE superseding.supersedes_evidence_id = e.id
+                      AND superseding.storage_state = 'READY'
+               )
                AND (rel.release_mode = 'NO_APPROVAL_REQUIRED'
                     OR (rel.release_mode = 'APPROVAL_REQUEST' AND ar.state = 'APPROVED'))
                AND NOT EXISTS (

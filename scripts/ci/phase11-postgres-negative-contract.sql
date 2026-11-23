@@ -199,6 +199,26 @@ VALUES('a11a11a1-0000-4000-8000-000000000030',
        'SITE_PHOTO','image/jpeg',128,repeat('b',64),now(),
        'a11a11a1-0000-4000-8000-000000000003',
        'READY','INTERNAL','INTERNAL_ONLY',now());
+-- A real WorkDocument and READY Evidence exist, but there is deliberately
+-- NO approved WorkDocumentRevisionRelease: it must NOT enter handover.
+INSERT INTO work_document(
+    id,organization_id,work_order_id,requirement_key,
+    document_code,title,approval_policy_key,created_by_user_id,created_at)
+VALUES('a11a11a1-0000-4000-8000-000000000072',
+       'a11a11a1-0000-4000-8000-000000000001',
+       'a11a11a1-0000-4000-8000-000000000007',
+       'AS_BUILT','P11_CI_AS_BUILT','Synthetic unreleased handover document',
+       'P11_TEST_APPROVAL','a11a11a1-0000-4000-8000-000000000003',now());
+INSERT INTO work_document_revision(
+    id,organization_id,work_order_id,document_id,revision_sequence,
+    revision_label,evidence_id,created_by_user_id,created_at)
+VALUES('a11a11a1-0000-4000-8000-000000000073',
+       'a11a11a1-0000-4000-8000-000000000001',
+       'a11a11a1-0000-4000-8000-000000000007',
+       'a11a11a1-0000-4000-8000-000000000072',1,'R1',
+       'a11a11a1-0000-4000-8000-000000000030',
+       'a11a11a1-0000-4000-8000-000000000003',now());
+
 INSERT INTO service_maintenance_finding(
   id,visit_id,organization_id,project_id,work_order_id,
   finding_type_code,severity_code,description,evidence_id,
@@ -374,6 +394,25 @@ BEGIN
   RAISE EXCEPTION 'INVALID: handover review history backdated';
  EXCEPTION WHEN check_violation THEN
   RAISE NOTICE 'PASS handover review event timestamp guard';
+ END;
+
+ -- No direct SQL insert may smuggle an unreleased document into handover.
+ BEGIN
+  INSERT INTO service_handover_package_item(
+   id,package_version_id,organization_id,project_id,work_order_id,
+   document_id,revision_id,evidence_id,source_sha256)
+  VALUES('a11a11a1-0000-4000-8000-000000000074',
+         'a11a11a1-0000-4000-8000-000000000015',
+         'a11a11a1-0000-4000-8000-000000000001',
+         'a11a11a1-0000-4000-8000-000000000004',
+         'a11a11a1-0000-4000-8000-000000000007',
+         'a11a11a1-0000-4000-8000-000000000072',
+         'a11a11a1-0000-4000-8000-000000000073',
+         'a11a11a1-0000-4000-8000-000000000030',
+         repeat('b',64));
+  RAISE EXCEPTION 'INVALID: unapproved WorkDocument frozen into handover';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS unreleased handover revision rejected by DB';
  END;
 
  -- Cannot falsely close a still-investigating ticket.

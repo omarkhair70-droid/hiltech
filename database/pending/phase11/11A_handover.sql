@@ -116,12 +116,45 @@ BEGIN
         RAISE EXCEPTION 'Evidence must be READY in the same work and organization'
             USING ERRCODE = '23514';
     END IF;
+    -- The API and the database must agree: only latest released revisions
+    -- may be frozen into an internal handover package. A foreign insert
+    -- cannot smuggle a pending/unapproved revision into the record.
     IF NOT EXISTS (
-        SELECT 1 FROM work_document_revision r
-        WHERE r.id = NEW.revision_id
-          AND r.evidence_id = NEW.evidence_id
+        SELECT 1
+          FROM work_document_revision r
+          JOIN work_document d
+            ON d.id=r.document_id
+           AND d.organization_id=r.organization_id
+           AND d.work_order_id=r.work_order_id
+          JOIN work_document_revision_release release
+            ON release.revision_id=r.id
+           AND release.document_id=r.document_id
+           AND release.work_order_id=r.work_order_id
+           AND release.organization_id=r.organization_id
+          LEFT JOIN approval_request approval
+            ON approval.id=release.approval_request_id
+         WHERE r.id = NEW.revision_id
+           AND r.document_id = NEW.document_id
+           AND r.work_order_id = NEW.work_order_id
+           AND r.organization_id = NEW.organization_id
+           AND r.evidence_id = NEW.evidence_id
+           AND (
+             release.release_mode='NO_APPROVAL_REQUIRED'
+             OR (release.release_mode='APPROVAL_REQUEST'
+                 AND approval.state='APPROVED')
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM work_document_revision newer
+              WHERE newer.document_id=r.document_id
+                AND newer.revision_sequence>r.revision_sequence
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM evidence replacement
+              WHERE replacement.supersedes_evidence_id=NEW.evidence_id
+                AND replacement.storage_state='READY'
+           )
     ) THEN
-        RAISE EXCEPTION 'Revision evidence mismatch'
+        RAISE EXCEPTION 'Handover item requires latest released revision and current READY Evidence'
             USING ERRCODE = '23514';
     END IF;
     RETURN NEW;

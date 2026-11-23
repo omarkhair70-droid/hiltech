@@ -25,3 +25,10 @@ Successful earlier local focused Gradle run ONLY applied to 150e5989 before A2/B
 
 ## Full completion gates
 Company-approved true handover completeness and client acceptance authority; verified and signed immutable P10 award evidence plus actual service/coverage/SLA/renewal terms; real field WorkOrder execution and signed-off technical checks; P7 parts procurement and P8 invoices linked through their own approved authorities; shared-shell Windows/Android authenticated role tests including revocation and cross-tenant; clean/upgrade PostgreSQL with invalid states, retries and concurrency; DevOps/Coolify restore/release gates. None is inferred from free text, invented prices/durations or a generated project document.
+
+
+## 11A handover source guard against unreleased revisions (2026-11-23)
+- The Handover source query excludes a READY Evidence record superseded by another READY Evidence, even if the WorkDocumentRevision has previously been approved.
+- The P11A `service_handover_item_validate` trigger now verifies the source revision and work/doc organization match, exact Evidence, existence of its WorkDocumentRevisionRelease, approved decision if `APPROVAL_REQUEST`, latest revision sequence, and lack of superseding READY Evidence. An unapproved revision cannot be injected directly into a frozen package by bypassing the REST service.
+- The disposable PostgreSQL script creates a real WorkDocument/Revision with READY Work Evidence but **intentionally no release** and expects direct handover-package-item insert to fail. This is a negative fixture, not a fabricated client-approved document.
+- The test service uses PostgreSQL 18.7 (published Docker Official Image) instead of the older 18.6 patch series. Running CI and asserting its pass is still required; changing the container tag alone is not a PASS.
