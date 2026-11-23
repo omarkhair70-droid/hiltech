@@ -67,3 +67,36 @@ This is a **stacked Draft PR**, not a merge to main or live rollout.
   `ServicePurchaseNativeJourney`; verify newer shared shell from UX #171
   and preserve every module owner API/permission guard. Do not independently
   merge child PR to main.
+
+## 2026-11-23 — Final source-state and action-safety refinement
+
+The native source journey now also protects the **meaning of operation receipts**:
+
+- Buyer source refresh immediately clears old eligible needs, RFQ quotes, selected candidate, issue queue and pending issuer confirmation. A denied/revoked refresh does not leave the prior list actionable. All three buyer states distinguish **not loaded**, **loaded empty**, and **server error**.
+- **Internal service-order issuance** requires a separate, explicit amount/currency/supplier confirmation after clicking `Review issuance`. The confirmation is cleared on source refresh and before server mutation. An issued internal order never claims external supplier communication.
+- Draft teams are revalidated when the authorized team list is refreshed, old source actions disappear immediately, and a different team clears previous team fields. Service needs distinguish loaded-empty from an unrequested list.
+- The UI never represents a source mutation as failed just because its **subsequent reload failed**. Successful need creation, supplier quote recording, approval request, delivery review and invoice capture now present a distinct confirmed receipt and a separate refresh-warning path. This matters for preventing users from retrying a successfully recorded command with a new idempotency key.
+- On quote file selection, mutable form fields are disabled; supplier, RFQ, generation and decimal/form values are frozen at the click. After a confirmed quote record, the draft is cleared to prevent accidental duplicate submission. A new RFQ erases stale supplier selection before the network request begins.
+- Delivery proof and invoice capture use only the explicitly selected order from the currently authorized source list. `ServicePurchaseFormPresentationTest` covers revoked IDs and `NaN`, `Infinity`, negative, exponent, overly precise or malformed decimal invoice input. Invoice match result is hidden on failed preview, failed record, successful Finance handoff, or unsuccessful handoff; it cannot be mistaken for payment.
+- Busy, loaded-empty and source-error feedback are visible in Arabic-first presentation. Technical source names/status codes are retained when they carry meaning.
+
+### Acceptance matrix (not yet signed off)
+
+| Scenario | Expected observation | Gate |
+|---|---|---|
+| Buyer opens a reviewed service request then changes source | Old supplier comparison and candidate disappear before fetch | Native role UAT |
+| Supplier search is edited during slow response | Prior search and any previously selected supplier stay hidden | Pure regression + device |
+| Different RFQ / user / organization after quote selection | Quote form cannot act on old source | Pure regression + real account |
+| User cancels native PDF/image picker | No fake Evidence or supplier quote is recorded | Device |
+| Quote registered; comparison refresh subsequently fails | Receipt still confirms recorded quote; warning requests refresh | Device/backend evidence |
+| Reviewer chooses service A, then B | Notes and outcome of A do not become B's | Source-selection regression + device |
+| Reviewer records service result; list refresh fails | Confirmation says recorded; no false save-failed result | Device |
+| Issuer sees approved order | Explicit supplier + currency + total review before issuing | Device/role |
+| Invoice entered for one order then order changes | Previous values and match preview reset | Pure regression + device |
+| Finance match/hand-off fails | No stale matched action, no claim that money moved | Device |
+| Employee with no grant or revoked grant | Source-empty/denied feedback; mutation remains server-blocked | Real account |
+| RTL, 200% text, keyboard / Android System Back | Navigable, readable, no invisible controls | Manual visual QA |
+
+**Automation boundary:** GitHub-hosted shared tests + native builds are authoritative only for source compilation/pure regressions. Remote physical Windows testing was attempted but **Desktop Commander usage is exhausted for the month**, so no actual Windows operator acceptance was performed. It must not be described as green. Android device, real actor and integrated staging gates are likewise open.
+
+**DevOps preservation rule:** Do not replace current Phase7 service native source files with older shell variants. Use the authenticated default-OFF Android/Windows host mounts from #181 plus `ServicePurchaseNativeJourney.kt`, `ServicePurchaseOperationsSection.kt`, `ServiceSupplierQuoteCaptureSection.kt`, `ServicePurchaseNeedSection.kt` and pure guards/tests from this #199 child, then reconcile newer UX shell/workspace work from #171. Run merged-head Android/Windows/shared/server/PostgreSQL tests before enabling any flag.
