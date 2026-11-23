@@ -66,12 +66,18 @@ BEGIN
     RAISE EXCEPTION 'Field finding requires executed source work'
       USING ERRCODE = '23514';
   END IF;
-  SELECT created_at INTO proposed_visit_created_at
+  -- An observation of a scheduled visit cannot predate the planned visit.
+  SELECT GREATEST(created_at, planned_for) INTO proposed_visit_created_at
     FROM service_maintenance_visit_plan
    WHERE id = NEW.visit_id AND organization_id = NEW.organization_id
      AND project_id = NEW.project_id AND work_order_id = NEW.work_order_id;
   IF proposed_visit_created_at IS NULL THEN
     RAISE EXCEPTION 'Original visit source missing' USING ERRCODE = '23514';
+  END IF;
+  IF NEW.created_at < proposed_visit_created_at
+     OR NEW.created_at > now() + interval '5 minutes' THEN
+    RAISE EXCEPTION 'Finding must be recorded on or after planned visit, in server time'
+      USING ERRCODE = '23514';
   END IF;
   IF NOT EXISTS(
     SELECT 1 FROM evidence e WHERE e.id = NEW.evidence_id

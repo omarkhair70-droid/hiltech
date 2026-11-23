@@ -221,7 +221,7 @@ fun MaintenanceVisitsSection(
                     "/" + status.requiredChecklistTotal +
                     " · READY Evidence " + status.readyWorkEvidenceCount)
                 if (!status.canRecordInternalFinding) {
-                    Text("Field findings unavailable before actual execution or after cancellation.",
+                    Text("Finding unavailable: the visit has not started, source work is not in an execution state, or your work permission is missing.",
                         color = MaterialTheme.colorScheme.error)
                 }
                 Text("Visit completion not confirmed · Coverage " + status.contractCoverageState,

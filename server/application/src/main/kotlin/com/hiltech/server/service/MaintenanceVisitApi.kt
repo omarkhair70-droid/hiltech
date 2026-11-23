@@ -154,6 +154,8 @@ object MaintenanceDraftPolicy {
 
     fun plannedForIsFuture(plannedFor: Instant, at: Instant) = plannedFor.isAfter(at)
 
+    fun visitWindowStarted(plannedFor: Instant, at: Instant) = !at.isBefore(plannedFor)
+
     // This is validation of user-supplied type/severity, NOT a severity-to-SLA map.
     fun code(raw: String): String = SupportDeskFieldRules.code(raw)
 }
@@ -416,8 +418,9 @@ class MaintenanceVisitService(
                 it.required && it.completionState != "COMPLETE" &&
                     it.completionState != "NOT_APPLICABLE"
             },
-            store.readyEvidenceCount(project.organizationId, current.workOrderId, visit.createdAt),
+            store.readyEvidenceCount(project.organizationId, current.workOrderId, maxOf(visit.createdAt, visit.plannedFor)),
             MaintenanceDraftPolicy.canRecordEvidenceFinding(current.lifecycleState) &&
+                MaintenanceDraftPolicy.visitWindowStarted(visit.plannedFor, clock.instant()) &&
                 (authorization.canManageProject(actor, project) ||
                  assignedFieldActor(actor, current.workOrderId, forWrite = true)),
         )
@@ -433,7 +436,7 @@ class MaintenanceVisitService(
             projectId, visit.workOrderId, actor, forWrite = false,
         )
         val source = matchingWork(project, visit.workOrderId)
-        return store.readyEvidenceChoices(project.organizationId, source.workOrderId, visit.createdAt)
+        return store.readyEvidenceChoices(project.organizationId, source.workOrderId, maxOf(visit.createdAt, visit.plannedFor))
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -523,8 +526,10 @@ class MaintenanceVisitService(
             val currentWork = matchingWork(fresh, currentVisit.workOrderId)
             if (!MaintenanceDraftPolicy.canRecordEvidenceFinding(currentWork.lifecycleState))
                 maintenanceError("FINDING_WORK_NOT_ACCEPTED", HttpStatus.CONFLICT)
+            if (!MaintenanceDraftPolicy.visitWindowStarted(currentVisit.plannedFor, clock.instant()))
+                maintenanceError("VISIT_PLANNED_TIME_NOT_REACHED", HttpStatus.CONFLICT)
             if (!store.readyWorkEvidence(evidenceId, fresh.organizationId, currentWork.workOrderId,
-                    currentVisit.createdAt))
+                    maxOf(currentVisit.createdAt, currentVisit.plannedFor)))
                 maintenanceError("FINDING_EVIDENCE_NOT_READY", HttpStatus.CONFLICT)
             val at = clock.instant()
             store.insertFinding(

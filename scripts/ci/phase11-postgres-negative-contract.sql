@@ -13,7 +13,7 @@ INSERT INTO project(id,organization_id,project_code,name,client_organization_id,
     lifecycle_state,source_type,created_at,created_by,updated_at)
 VALUES('a11a11a1-0000-4000-8000-000000000004',
        'a11a11a1-0000-4000-8000-000000000001','P11-CI-PROJECT','CI Project',
-       'a11a11a1-0000-4000-8000-000000000002','DRAFT','INTERNAL',
+       'a11a11a1-0000-4000-8000-000000000002','ACTIVE','INTERNAL',
        now(),'a11a11a1-0000-4000-8000-000000000003',now());
 INSERT INTO site(id,organization_id,client_organization_id,site_code,name,status,
     created_at,created_by,updated_at)
@@ -35,8 +35,69 @@ VALUES('a11a11a1-0000-4000-8000-000000000007',
        'a11a11a1-0000-4000-8000-000000000004',
        'a11a11a1-0000-4000-8000-000000000005',
        'a11a11a1-0000-4000-8000-000000000006',
-       'P11-CI-WORK','Synthetic source WorkOrder','IN_PROGRESS','NOT_EVALUATED',
+       'P11-CI-WORK','Synthetic source WorkOrder','DRAFT','NOT_EVALUATED',
        'NORMAL',1,now(),'a11a11a1-0000-4000-8000-000000000003',now());
+
+-- Establish the actual V0005/V0023 policy-binding and instruction pointers
+-- before using a non-DRAFT WorkOrder lifecycle. All fixture rows roll back.
+INSERT INTO config_revision (
+ id,scope_type,scope_organization_id,family,code,name,
+ lifecycle_state,revision_number,created_at,created_by,activated_at,activated_by)
+VALUES
+ ('a11a11a1-0000-4000-8000-000000000050','SYSTEM',NULL,'work-types',
+  'P11_CI_TYPE','Synthetic work type','ACTIVE',1,now(),
+  'a11a11a1-0000-4000-8000-000000000003',now(),
+  'a11a11a1-0000-4000-8000-000000000003'),
+ ('a11a11a1-0000-4000-8000-000000000051','SYSTEM',NULL,'assignment-policies',
+  'P11_CI_ASSIGNMENT','Synthetic assignment','ACTIVE',1,now(),
+  'a11a11a1-0000-4000-8000-000000000003',now(),
+  'a11a11a1-0000-4000-8000-000000000003'),
+ ('a11a11a1-0000-4000-8000-000000000052','SYSTEM',NULL,'readiness-policies',
+  'P11_CI_READINESS','Synthetic readiness','ACTIVE',1,now(),
+  'a11a11a1-0000-4000-8000-000000000003',now(),
+  'a11a11a1-0000-4000-8000-000000000003'),
+ ('a11a11a1-0000-4000-8000-000000000053','SYSTEM',NULL,'evidence-policies',
+  'P11_CI_EVIDENCE','Synthetic evidence','ACTIVE',1,now(),
+  'a11a11a1-0000-4000-8000-000000000003',now(),
+  'a11a11a1-0000-4000-8000-000000000003'),
+ ('a11a11a1-0000-4000-8000-000000000054','SYSTEM',NULL,'review-policies',
+  'P11_CI_REVIEW','Synthetic review','ACTIVE',1,now(),
+  'a11a11a1-0000-4000-8000-000000000003',now(),
+  'a11a11a1-0000-4000-8000-000000000003');
+
+INSERT INTO work_policy_binding (
+ id,work_order_id,binding_revision,
+ work_type_definition_id,work_type_revision,
+ assignment_policy_id,assignment_policy_revision,
+ readiness_policy_id,readiness_policy_revision,
+ evidence_policy_id,evidence_policy_revision,
+ review_policy_id,review_policy_revision,
+ binding_created_at,binding_created_by)
+VALUES (
+ 'a11a11a1-0000-4000-8000-000000000055',
+ 'a11a11a1-0000-4000-8000-000000000007',1,
+ 'a11a11a1-0000-4000-8000-000000000050',1,
+ 'a11a11a1-0000-4000-8000-000000000051',1,
+ 'a11a11a1-0000-4000-8000-000000000052',1,
+ 'a11a11a1-0000-4000-8000-000000000053',1,
+ 'a11a11a1-0000-4000-8000-000000000054',1,
+ now(),'a11a11a1-0000-4000-8000-000000000003'
+);
+INSERT INTO work_instruction_revision (
+ id,work_order_id,instruction_revision,payload_schema_version,
+ structured_payload_json,created_at,created_by,correlation_id)
+VALUES (
+ 'a11a11a1-0000-4000-8000-000000000056',
+ 'a11a11a1-0000-4000-8000-000000000007',1,1,'{}'::jsonb,
+ now(),'a11a11a1-0000-4000-8000-000000000003',
+ 'p11-disposable-database-contract'
+);
+UPDATE work_order SET
+ current_policy_binding_id='a11a11a1-0000-4000-8000-000000000055',
+ current_instruction_revision_id='a11a11a1-0000-4000-8000-000000000056',
+ lifecycle_state='IN_PROGRESS',readiness_state='READY',updated_at=now(),
+ version=version+1
+WHERE id='a11a11a1-0000-4000-8000-000000000007';
 
 INSERT INTO service_support_ticket(
     id,organization_id,project_id,client_organization_id,
@@ -109,7 +170,21 @@ VALUES('a11a11a1-0000-4000-8000-000000000019',
        'a11a11a1-0000-4000-8000-000000000004',
        'a11a11a1-0000-4000-8000-000000000007',
        'a11a11a1-0000-4000-8000-000000000005',
-       now()+interval '1 day',1,'a11a11a1-0000-4000-8000-000000000020',
+       now(),2,'a11a11a1-0000-4000-8000-000000000020',
+       'a11a11a1-0000-4000-8000-000000000003',now());
+
+-- Deliberately FUTURE visit: source Evidence captured today cannot satisfy it.
+INSERT INTO service_maintenance_visit_plan(
+    id,organization_id,project_id,work_order_id,site_id,
+    planned_for,work_order_version_at_plan,
+    source_operation_id,created_by_user_id,created_at)
+VALUES('a11a11a1-0000-4000-8000-000000000047',
+       'a11a11a1-0000-4000-8000-000000000001',
+       'a11a11a1-0000-4000-8000-000000000004',
+       'a11a11a1-0000-4000-8000-000000000007',
+       'a11a11a1-0000-4000-8000-000000000005',
+       now()+interval '1 day',2,
+       'a11a11a1-0000-4000-8000-000000000048',
        'a11a11a1-0000-4000-8000-000000000003',now());
 
 -- Synthetic READY Work Evidence and a finding on the same project/site.
@@ -201,6 +276,26 @@ BEGIN
   RAISE EXCEPTION 'INVALID: immutable maintenance follow-up edited';
  EXCEPTION WHEN check_violation THEN
   RAISE NOTICE 'PASS follow-up history immutability';
+ END;
+
+ -- Cannot file a future visit using today's Work Evidence.
+ BEGIN
+  INSERT INTO service_maintenance_finding(
+   id,visit_id,organization_id,project_id,work_order_id,
+   finding_type_code,severity_code,description,evidence_id,
+   source_operation_id,created_by_user_id,created_at)
+  VALUES('a11a11a1-0000-4000-8000-000000000049',
+         'a11a11a1-0000-4000-8000-000000000047',
+         'a11a11a1-0000-4000-8000-000000000001',
+         'a11a11a1-0000-4000-8000-000000000004',
+         'a11a11a1-0000-4000-8000-000000000007',
+         'DEFECT','HIGH','Attempted early inspection for tomorrow',
+         'a11a11a1-0000-4000-8000-000000000030',
+         'a11a11a1-0000-4000-8000-000000000061',
+         'a11a11a1-0000-4000-8000-000000000003',now());
+  RAISE EXCEPTION 'INVALID: future visit accepted today';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS planned visit time is enforced';
  END;
 
  -- Cannot file an old WorkOrder photo as evidence from this new visit.

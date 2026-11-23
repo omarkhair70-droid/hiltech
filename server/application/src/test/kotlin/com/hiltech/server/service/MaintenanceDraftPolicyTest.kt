@@ -51,6 +51,18 @@ class MaintenanceDraftPolicyTest {
     }
 
     @Test
+    fun recordedVisitEvidenceCannotPredateScheduledService() {
+        val planned = Instant.parse("2026-11-23T10:00:00Z")
+        assertFalse(MaintenanceDraftPolicy.visitWindowStarted(
+            planned, planned.minusSeconds(1),
+        ))
+        assertTrue(MaintenanceDraftPolicy.visitWindowStarted(planned, planned))
+        assertTrue(MaintenanceDraftPolicy.visitWindowStarted(
+            planned, planned.plusSeconds(1),
+        ))
+    }
+
+    @Test
     fun plannedDateMustBeExplicitlyInFuture() {
         val now = Instant.parse("2026-11-23T10:00:00Z")
         assertFalse(MaintenanceDraftPolicy.plannedForIsFuture(now, now))
