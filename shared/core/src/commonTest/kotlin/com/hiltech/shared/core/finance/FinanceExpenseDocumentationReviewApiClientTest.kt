@@ -81,4 +81,43 @@ class FinanceExpenseDocumentationReviewApiClientTest {
         }
         assertEquals(0, called)
     }
+    @Test fun currentEmployeeReadsRealDecisionStateWithoutPaymentRights() = runBlocking {
+        var requests = 0
+        val http = HttpClient(MockEngine { call ->
+            assertEquals("GET", call.method.value)
+            assertEquals(
+                "/v1/finance/me/organizations/$org/expenses/$draft/documentation-review",
+                call.url.encodedPath,
+            )
+            assertEquals("Bearer employee-token", call.headers[HttpHeaders.Authorization])
+            requests++
+            respond(
+                """
+                {"expenseDraftId":"$draft","sourceVersion":928372,
+                 "verifiedReceiptCount":1,"documentationReviewRequestId":"$approvalId",
+                 "documentationReviewState":"APPROVED","policyKey":"EMPLOYEE_EXPENSE_DOCUMENTATION",
+                 "currentSource":true,"expenseApproved":false,
+                 "payableRecognized":false,"reimbursementAuthorized":false,
+                 "cashMovementRecorded":false}
+                """.trimIndent(),
+                HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        })
+        val api = HiltechApiClient(
+            http, "https://finance.hiltech.test",
+            accessTokenProvider = { "employee-token" },
+            correlationIdProvider = { "documentation-contract" },
+        )
+        val outcome = FinanceExpenseDocumentationReviewApiClient(api)
+            .status(org, draft, installation)
+        assertEquals(1, requests)
+        assertEquals("APPROVED", outcome.documentationReviewState)
+        assertEquals(1, outcome.verifiedReceiptCount)
+        assertFalse(outcome.expenseApproved)
+        assertFalse(outcome.payableRecognized)
+        assertFalse(outcome.reimbursementAuthorized)
+        assertFalse(outcome.cashMovementRecorded)
+    }
+
 }
