@@ -232,3 +232,28 @@ consecutive Flyway numbers and staging acceptance remain mandatory.
 - Latest exact-head CI must complete successfully before declaring this PR
   green; queuing/pending is not approval. No global shell, real bank source
   or real HILTECH wage input is claimed as connected.
+
+
+### November 23 continuation — uniform full Finance batch attestation
+
+- New `Payroll9cExpectedBatchGuard` checks that a Finance transfer
+  instruction exists for **every** frozen payroll employee line, exactly
+  once per employee and instruction, with exact organization/run identity,
+  instruction version, currency and frozen net. Missing coworkers or a
+  forged extra instruction are no longer accepted on an employee's
+  self-payslip path just because their own amount matched.
+- Admin run reconciliation, private own payslips and the case-linked
+  final-pay status now share the exact same batch validation. This is
+  read-only verification and does not produce payment instructions.
+- `Payroll9b9cDomainTest` adds missing-employee, duplicate instruction,
+  wrong amount, currency, organization and instruction-version cases.
+- `Payroll9bDraftPostgresContractTest` now validates that both private
+  payslips and Payroll reviewers reject a Finance batch whose frozen
+  amount/version changes despite an older SUCCESS event.
+- The company-specific source adapter remains disconnected until Finance
+  has authoritative, versioned transfer contracts. No user-visible
+  sibling-pay or bank account information is returned by the validator.
+
+The exact-head GitHub CI gate is required for all of these tests. The
+repository-wide queue has been congested, and an earlier queued run is
+not a green result for this commit.
