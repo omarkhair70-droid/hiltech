@@ -59,3 +59,12 @@ Reference: PR #161, \`06_PHASE13_EXECUTIVE.md\`; canonical \`docs/13-delivery/IM
 - Asset service queue queries select stable warehouse order and stop once the 30-card read window is full; unknown/unread warehouses remain `PARTIAL`. This avoids needless repeated producer queries without inventing a full company count.
 - Changed partial and `CURRENT` UI copy to avoid implying global completeness, a fixed refresh SLA, or proven absence of incidents.
 - All prior baseline Phase13 GitHub Actions on `57a233dc21ae0f74c68b4541eb07faf89111d1e2` finished SUCCESS, including source/controller/architecture/shared tests and Android+Windows compilation. **Newer commits above are NOT considered verified until their exact-head CI succeeds.**
+
+## Source-risk drill-through + integration proof — 23 November 2026
+
+- Actual Project Health signal kinds in current source implementation are `WORK_ORDER`, `MILESTONE`, and `WORK_BLOCKER`. Only these may produce `PROJECT_HEALTH` navigation. Payroll, Finance and unknown types cannot masquerade as a project signal.
+- A signal's `sourceId` is **its actual WorkOrder/Milestone/Blocker**, not its Project ID. Use `resolveExecutiveProjectSignalDestination(signal.reference, project.projectId)` to ensure the health navigation target is exactly the enclosing project. Do not copy the UUID from the raw path into arbitrary client-side navigation.
+- Native `ExecutiveHomeSection` renders a **راجع سبب الخطر في المشروع** source-action only when this resolver approves. The destination belongs to the original Project Health module which must reauthorize the current actor; neither source metadata nor this surface confers decision authority.
+- Regression tests in `ExecutiveNavigationTest` prove valid source types and project binding, and reject incorrect parent, bad UUID, forged source type and external paths.
+- On the DevOps-owned integrated Windows/Android route, test: open a project health signal -> authorized original Project Health view; switch organization or revoke role -> destination's original ACL refuses access. Do not issue a cross-domain write or cache the decision.
+- Earlier Green CI on `57a233d` is not evidence for newer source edits; check the **exact current head**. Concurrent GitHub workflow `cancel-in-progress` can cancel superseded runs, which is not a PASS or test failure.
