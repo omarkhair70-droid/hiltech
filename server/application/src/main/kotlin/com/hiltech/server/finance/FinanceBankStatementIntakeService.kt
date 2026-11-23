@@ -416,6 +416,7 @@ class FinanceBankStatementIntakeService(
 @RestController
 class FinanceBankStatementIntakeController(
     private val intake:FinanceBankStatementIntakeService,
+    private val environment:Environment,
 ) {
     @PostMapping("/v1/finance/organizations/{orgId}/bank-statement-intakes/prepare")
     fun prepare(http:HttpServletRequest,@PathVariable orgId:UUID,
@@ -423,6 +424,17 @@ class FinanceBankStatementIntakeController(
     ):FinanceBankIntakeReceipt {
         val ctx=HiltechRequestContext.current(http)
         IdempotencyKeyContract.requireMatches(ctx.idempotencyKey,body.operationId)
+        // Plain manually entered rows cannot cryptographically prove that
+        // their values came from the protected uploaded statement bytes.
+        // Canonical CSV/byte-matched intake is the safe default.
+        if(!environment.getProperty(
+                "hiltech.finance.bank-statement-intake.manual-entry-enabled",
+                Boolean::class.java,false,
+            )) throw ProductApiException(
+                "FINANCE_BANK_MANUAL_INTAKE_DISABLED",
+                "Upload a canonical verified bank CSV instead of unbound manual rows.",
+                HttpStatus.NOT_FOUND,
+            )
         return intake.prepare(actor(http),orgId,body,ctx.correlationId)
     }
     @PostMapping("/v1/finance/organizations/{orgId}/bank-statement-intakes/{id}/request-review")
