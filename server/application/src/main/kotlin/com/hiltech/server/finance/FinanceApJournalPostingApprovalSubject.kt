@@ -34,6 +34,27 @@ data class FinanceApPostingVerifiedSnapshot(
     val lines: List<FinanceApLedgerLine>,
 )
 
+/** Shared proposal/decision exact fingerprint; never a default approver. */
+object FinanceApPostingReviewVersion {
+    fun derive(
+        checked: FinanceApLedgerValidation,
+        policyVersion: Int,
+        authorityId: UUID,
+        authorityVersion: Long,
+        documentReviewApprovalId: UUID,
+    ): Long {
+        require(policyVersion >= 1 && authorityVersion >= 1)
+        val material = listOf(
+            checked.fingerprintSha256, checked.approvalSubjectVersion,
+            policyVersion, authorityId, authorityVersion, documentReviewApprovalId,
+        ).joinToString("|")
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(material.toByteArray(Charsets.UTF_8))
+        return (ByteBuffer.wrap(digest, 0, 8).long and Long.MAX_VALUE)
+            .coerceAtLeast(1L)
+    }
+}
+
 private data class FinanceApProposalSourceRow(
     val proposalId: UUID,
     val org: UUID,
@@ -212,16 +233,10 @@ class FinanceApJournalPostingApprovalSubject(
         val checked = runCatching { FinanceApLedgerRules.validate(plan) }
             .getOrNull() ?: return null
         if (checked.fingerprintSha256 != first.ledgerFingerprintSha256) return null
-        val versionMaterial = listOf(
-            checked.fingerprintSha256,
-            checked.approvalSubjectVersion,
-            policy.versionNumber,authority.id,authority.version,
+        val finalVersion = FinanceApPostingReviewVersion.derive(
+            checked, policy.versionNumber, authority.id, authority.version,
             original.requestId,
-        ).joinToString("|")
-        val hash = MessageDigest.getInstance("SHA-256")
-            .digest(versionMaterial.toByteArray(Charsets.UTF_8))
-        val finalVersion = (ByteBuffer.wrap(hash,0,8).long and Long.MAX_VALUE)
-            .coerceAtLeast(1L)
+        )
         if (finalVersion != first.ledgerSourceVersion) return null
         return FinanceApPostingVerifiedSnapshot(
             proposalId = proposalId,
