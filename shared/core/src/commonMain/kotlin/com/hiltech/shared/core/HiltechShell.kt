@@ -6,6 +6,8 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -509,7 +511,10 @@ fun HiltechShell(
                     }
 
                     state.people?.let { people ->
-                        Column(Modifier.bringIntoViewRequester(peopleWorkspaceRequester)) {
+                        Column {
+                        // Tiny source-present anchor: scroll to section start,
+                        // never try to bring a multi-screen Column in view.
+                        Spacer(Modifier.height(1.dp).bringIntoViewRequester(peopleWorkspaceRequester))
                         PeopleSection(
                             state = people,
                             onRefresh =
@@ -535,7 +540,10 @@ fun HiltechShell(
                     state.assetLookup?.let { AssetTagLookupSection(it, onLookupAssetTag) }
 
                     state.field?.let {
-                        Column(Modifier.bringIntoViewRequester(fieldWorkspaceRequester)) {
+                        Column {
+                        // Tiny source-present anchor: scroll to section start,
+                        // never try to bring a multi-screen Column in view.
+                        Spacer(Modifier.height(1.dp).bringIntoViewRequester(fieldWorkspaceRequester))
                         AssignedWorkSection(
                             state = it,
                             onRefresh =
@@ -567,7 +575,10 @@ fun HiltechShell(
                         }
                     }
 
-                    Column(Modifier.bringIntoViewRequester(warehouseWorkspaceRequester)) {
+                    Column {
+                        // Tiny source-present anchor: scroll to section start,
+                        // never try to bring a multi-screen Column in view.
+                        Spacer(Modifier.height(1.dp).bringIntoViewRequester(warehouseWorkspaceRequester))
                         warehouseOperator()
                     }
                     // Host applications mount procurement only with an explicit,
@@ -592,7 +603,10 @@ fun HiltechShell(
                     }
 
                     state.projects?.let {
-                        Column(Modifier.bringIntoViewRequester(projectWorkspaceRequester)) {
+                        Column {
+                        // Tiny source-present anchor: scroll to section start,
+                        // never try to bring a multi-screen Column in view.
+                        Spacer(Modifier.height(1.dp).bringIntoViewRequester(projectWorkspaceRequester))
                         ProjectControlSection(
                             reservationPort = reservationPort,
                             state = it,
