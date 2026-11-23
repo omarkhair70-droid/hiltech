@@ -486,7 +486,7 @@ class Payroll9bDraftPostgresContractTest {
                 WHERE line.run_version_id = ?
                 LIMIT 1
                 """.trimIndent(),
-                UUID.randomUUID(), UUID.randomUUID(), publishedRunId,
+                UUID.randomUUID(), UUID.randomUUID(), UUID.fromString(newer.first.runVersionId),
             )
         }
         // A direct SQL attempt cannot release an obsolete generation even
