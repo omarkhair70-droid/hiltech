@@ -37,6 +37,9 @@ val poWarehouseIntakeUiEnabled = providers
 val supplierInvoiceFinanceUiEnabled = providers
     .gradleProperty("hiltech.supplierInvoiceFinanceEnabled")
     .getOrElse("false") == "true"
+val servicePurchasesUiEnabled = providers
+    .gradleProperty("hiltech.servicePurchasesEnabled")
+    .getOrElse("false") == "true"
 
 plugins {
     id("com.hiltech.base")
@@ -118,6 +121,11 @@ android {
             "boolean",
             "HILTECH_SUPPLIER_INVOICE_FINANCE_ENABLED",
             supplierInvoiceFinanceUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_SERVICE_PURCHASES_ENABLED",
+            servicePurchasesUiEnabled.toString(),
         )
     }
 

@@ -27,6 +27,11 @@ import com.hiltech.shared.core.procurement.AssetPurchaseNeedApiClient
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeApiClient
 import com.hiltech.shared.core.procurement.PoReceivingDeliveryNoteUploader
 import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceApiClient
+import com.hiltech.shared.core.procurement.ServicePurchaseNeedApiClient
+import com.hiltech.shared.core.procurement.ServiceSupplierSourcingApiClient
+import com.hiltech.shared.core.procurement.ServiceSupplierQuoteUploader
+import com.hiltech.shared.core.procurement.ServiceOrderAndInvoiceApiClient
+import com.hiltech.shared.core.procurement.SupplierMasterDataApiClient
 import com.hiltech.shared.core.work.WorkApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
 import com.hiltech.shared.core.people.HrDocumentsApiClient
@@ -106,6 +111,11 @@ class HiltechApplication : Application() {
     val assetPurchaseNeedApi by lazy { AssetPurchaseNeedApiClient(productApi) }
     val poWarehouseIntakeApi by lazy { PoWarehouseIntakeApiClient(productApi) }
     val supplierInvoiceFinanceApi by lazy { SupplierInvoiceFinanceApiClient(productApi) }
+    val servicePurchaseNeedApi by lazy { ServicePurchaseNeedApiClient(productApi) }
+    val serviceSupplierSourcingApi by lazy { ServiceSupplierSourcingApiClient(productApi) }
+    val supplierMasterDataApi by lazy { SupplierMasterDataApiClient(productApi) }
+    val serviceOrderAndInvoiceApi by lazy { ServiceOrderAndInvoiceApiClient(productApi, evidenceApi) }
+    val serviceSupplierQuoteUploader by lazy { ServiceSupplierQuoteUploader(serviceSupplierSourcingApi, evidenceApi) }
     val procurementWorkApi by lazy { WorkApiClient(productApi) }
 
     val fieldAssignedWorkApi:
