@@ -285,6 +285,20 @@ class FinanceApJournalPostingService(
         correlation: String,
     ): FinanceApPostingReceipt {
         requireAuthority(actor,org,"hiltech.finance.ap-posting.operator-authority-key")
+        // A timed-out successful POST may be replayed after receiving/period
+        // changes. Return its immutable posted receipt, never submit twice.
+        readPosted(org,proposalId)?.let { historic ->
+            val poster=jdbc.queryForObject(
+                "SELECT posted_by_user_id FROM finance_ap_posted_journal WHERE id=?",
+                UUID::class.java,historic.postedJournalId,
+            )
+            val originalOperation=jdbc.queryForObject(
+                "SELECT operation_id FROM finance_ap_posted_journal WHERE id=?",
+                UUID::class.java,historic.postedJournalId,
+            )
+            if (poster!=actor || originalOperation!=operation) unavailable()
+            return historic.copy(replayed=true)
+        }
         val snapshot=postingSubject.current(org,proposalId) ?: stale()
         if (snapshot.requesterUserId==actor) unavailable()
         val ref=ApprovalSubjectRef(
@@ -373,6 +387,9 @@ class FinanceApJournalPostingService(
 
     fun status(actor: UUID,org: UUID,proposalId: UUID): FinanceApPostingReceipt {
         requireAuthority(actor,org,"hiltech.finance.ap-posting.preparer-authority-key")
+        // Historical posted AP remains recognized even when the underlying
+        // supplier source later changes. That is not payment or a new booking.
+        readPosted(org,proposalId)?.let { return it }
         val snapshot=postingSubject.current(org,proposalId) ?: stale()
         val ref=ApprovalSubjectRef(
             org,FINANCE_AP_JOURNAL_POSTING_SUBJECT,
@@ -393,6 +410,34 @@ class FinanceApJournalPostingService(
             reviewId=review?.approvalRequestId,journalId=posted,
         )
     }
+
+    private fun readPosted(
+        org: UUID,proposalId: UUID,
+    ): FinanceApPostingReceipt? = jdbc.query(
+        """
+        SELECT j.id AS journal_id,j.payable_candidate_id,
+           j.journal_posting_approval_id,
+           j.ledger_fingerprint_sha256,j.currency,j.gross_amount,
+           p.ledger_subject_version
+        FROM finance_ap_posted_journal j
+        JOIN finance_ap_posting_proposal p
+          ON p.id=j.proposal_id AND p.organization_id=j.organization_id
+        WHERE j.organization_id=? AND j.proposal_id=?
+        """.trimIndent(),
+        { rs, _ ->
+            receipt(
+                proposalId=proposalId,
+                candidateId=rs.getObject("payable_candidate_id",UUID::class.java),
+                sourceVersion=rs.getLong("ledger_subject_version"),
+                sha=rs.getString("ledger_fingerprint_sha256"),
+                amount=rs.getBigDecimal("gross_amount"),
+                currency=rs.getString("currency"),
+                state="POSTED_ACCOUNTS_PAYABLE",
+                reviewId=rs.getObject("journal_posting_approval_id",UUID::class.java),
+                journalId=rs.getObject("journal_id",UUID::class.java),
+            )
+        },org,proposalId,
+    ).singleOrNull()
 
     private fun requireAuthority(
         actor: UUID,org: UUID,setting: String,
