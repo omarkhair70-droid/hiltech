@@ -28,3 +28,14 @@ fun serviceInvoiceInputIsWellFormed(
         money.matches(amount) &&
         money.matches(tax)
 }
+
+/**
+ * A cached source action must never remain clickable after its originating
+ * team / service need becomes stale, even if the old DTO retained a can* flag.
+ * This is UI fail-closed behavior; the Phase 7 server is still authoritative.
+ */
+fun serviceNeedActionEnabled(
+    sourceCurrent: Boolean,
+    permittedBySource: Boolean,
+    busy: Boolean,
+): Boolean = sourceCurrent && permittedBySource && !busy
