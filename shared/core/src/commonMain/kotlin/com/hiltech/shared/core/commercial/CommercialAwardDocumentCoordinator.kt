@@ -66,8 +66,8 @@ class CommercialAwardDocumentCoordinator(
     suspend fun reserve(input: CommercialAwardDocumentUpload): ReserveEvidenceUploadResponseDto {
         val response = evidence.reserve(commercialEvidenceRequest(input), installationId)
         validateMetadata(input, response.evidence)
-        require(response.evidence.storageState == "RESERVED") {
-            "Existing Evidence is already finalized or invalid; inspect metadata before retry."
+        require(response.evidence.storageState in setOf("RESERVED", "READY")) {
+            "Evidence reservation is neither uploadable nor verified READY."
         }
         return response
     }
@@ -77,6 +77,10 @@ class CommercialAwardDocumentCoordinator(
         reservation: ReserveEvidenceUploadResponseDto,
     ): EvidenceMetadataDto {
         validateMetadata(input, reservation.evidence)
+        if (reservation.evidence.storageState == "READY") return reservation.evidence
+        require(reservation.evidence.storageState == "RESERVED") {
+            "Evidence cannot be uploaded from a terminal or quarantined state."
+        }
         evidence.uploadBytes(reservation.upload, input.contentType, input.bytes)
         val finalized = evidence.finalize(
             reservation.evidence.evidenceId,
@@ -93,6 +97,19 @@ class CommercialAwardDocumentCoordinator(
             "Document is not a verified READY Evidence; no contract/PO confirmation is permitted."
         }
         return finalized.evidence
+    }
+
+    /** Recover a finalized reservation after a process restart or expired upload link. */
+    suspend fun readyFromMetadata(
+        input: CommercialAwardDocumentUpload,
+        persistedEvidenceId: String,
+    ): EvidenceMetadataDto {
+        val record = evidence.metadata(persistedEvidenceId, installationId)
+        validateMetadata(input, record)
+        require(record.storageState == "READY") {
+            "Persisted commercial Evidence is not READY; confirmation remains blocked."
+        }
+        return record
     }
 
     suspend fun confirm(
