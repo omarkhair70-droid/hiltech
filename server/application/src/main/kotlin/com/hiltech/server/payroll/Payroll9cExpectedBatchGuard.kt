@@ -28,7 +28,9 @@ object Payroll9cExpectedBatchGuard {
         // Zero-net employees must remain in the frozen payroll population,
         // but must never generate a fictitious payment instruction.
         val transferLines = frozenLines.filter { it.net.signum() > 0 }
+        val currencies = frozenLines.map { it.currency }.toSet()
         if (frozenLines.isEmpty() || expected.size != transferLines.size ||
+            currencies.size != 1 || !Regex("^[A-Z]{3}$").matches(frozenLines.first().currency) ||
             frozenLines.any { it.net.signum() < 0 } ||
             frozenLines.map { it.employeeId }.toSet().size != frozenLines.size ||
             expected.map { it.employeeId }.toSet().size != expected.size ||

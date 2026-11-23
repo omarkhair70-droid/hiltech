@@ -33,6 +33,12 @@ CREATE TABLE payroll_run_version (
 );
 CREATE INDEX idx_payroll_run_period ON payroll_run_version(payroll_period_id, generation DESC);
 
+-- Bind every frozen employee line to the run's exact currency at the
+-- PostgreSQL FK boundary. A valid but different currency (e.g. USD on
+-- an EGP run) must never be inserted even by a direct SQL writer.
+ALTER TABLE payroll_run_version
+    ADD CONSTRAINT uq_payroll_run_id_currency UNIQUE (id, currency);
+
 -- The employee ID in a run line must be the employee of its snapshot;
 -- prohibit cross-employee substitution at the database layer, not only service.
 ALTER TABLE payroll_employee_input_snapshot
@@ -55,6 +61,8 @@ CREATE TABLE payroll_run_employee_line (
     UNIQUE (run_version_id, employee_snapshot_id),
     CONSTRAINT fk_payroll_line_run_period FOREIGN KEY (run_version_id, payroll_period_id)
         REFERENCES payroll_run_version(id, payroll_period_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_payroll_line_run_currency FOREIGN KEY (run_version_id, currency)
+        REFERENCES payroll_run_version(id, currency) ON DELETE RESTRICT,
     CONSTRAINT fk_payroll_line_snapshot_period_employee
         FOREIGN KEY (employee_snapshot_id, payroll_period_id, employee_id)
         REFERENCES payroll_employee_input_snapshot(id, payroll_period_id, employee_id)

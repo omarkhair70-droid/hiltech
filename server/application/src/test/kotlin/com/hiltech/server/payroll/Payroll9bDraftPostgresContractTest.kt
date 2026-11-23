@@ -40,6 +40,18 @@ class Payroll9bDraftPostgresContractTest {
         val datasource = DriverManagerDataSource(url, username, password)
         val jdbc = JdbcTemplate(datasource)
         val tx = TransactionTemplate(DataSourceTransactionManager(datasource))
+        // A line with the wrong currency must be impossible to persist
+        // even before Payroll/Finance application guards execute.
+        assertTrue(jdbc.queryForObject(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'fk_payroll_line_run_currency'
+                  AND contype = 'f'
+            )
+            """.trimIndent(),
+            Boolean::class.java,
+        ) == true)
         val at = Instant.parse("2026-11-23T12:00:00Z")
         val clock = Clock.fixed(at, ZoneOffset.UTC)
         val actor = UUID.randomUUID()

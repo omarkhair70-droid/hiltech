@@ -350,6 +350,23 @@ class Payroll9b9cDomainTest {
         Payroll9cExpectedBatchGuard.validate(org, runId, zeroOnly, emptyList())
         assertThrows<ProductApiException> {
             Payroll9cExpectedBatchGuard.validate(
+                org, runId,
+                listOf(
+                    PayrollFrozenPaymentLine(paid.employeeId, BigDecimal("100"), "EGP"),
+                    PayrollFrozenPaymentLine(zero, BigDecimal.ZERO, "USD"),
+                ),
+                listOf(paid),
+            )
+        }
+        assertThrows<ProductApiException> {
+            Payroll9cExpectedBatchGuard.validate(
+                org, runId,
+                listOf(PayrollFrozenPaymentLine(zero, BigDecimal.ZERO, "BAD!")),
+                emptyList(),
+            )
+        }
+        assertThrows<ProductApiException> {
+            Payroll9cExpectedBatchGuard.validate(
                 org, runId, listOf(PayrollFrozenPaymentLine(zero, BigDecimal("-1"), "EGP")),
                 emptyList(),
             )
