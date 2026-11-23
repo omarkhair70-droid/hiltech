@@ -32,6 +32,7 @@ import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
 import com.hiltech.shared.core.payroll.payrollAdminReadNativeWorkspace
 import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
 import com.hiltech.shared.core.service.handoverReadNativeWorkspace
+import com.hiltech.shared.core.service.serviceOperationsReadNativeWorkspace
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
 import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
@@ -2805,6 +2806,20 @@ fun main() {
                             add(handoverReadNativeWorkspace(
                                 projects = runtime.readProjectsApi,
                                 handover = runtime.handoverApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                            ))
+                        }
+                        if (System.getenv("HILTECH_SERVICE_OPERATIONS_READ_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(serviceOperationsReadNativeWorkspace(
+                                projects = runtime.readProjectsApi,
+                                ticketsApi = runtime.supportServiceApi,
+                                warrantyApi = runtime.warrantyReadinessApi,
+                                timeApi = runtime.supportTimeApi,
+                                agendaApi = runtime.maintenanceAgendaApi,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
