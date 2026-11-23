@@ -727,3 +727,34 @@ EXECUTE FUNCTION finance_ap_reject_snapshot_mutation();
 -- P8L fiscal close snapshot currently aggregates only original AP events.
 -- Do not deploy reversal posting until close source and its approved snapshot
 -- include reversal events consistently, with tests for concurrent close/post.
+
+-- Extend P8L's source-truthful fiscal snapshot to include reversal events.
+-- Replacing the existing view preserves its schema but changes the SHA-256
+-- whenever either original postings OR append-only reversals change.
+CREATE OR REPLACE VIEW finance_gl_period_close_source AS
+SELECT p.id AS period_id,p.organization_id,p.date_start,p.date_end,p.state,
+       events.journal_count,
+       encode(sha256(convert_to(
+         concat_ws('|','FINANCE_GL_PERIOD_CLOSE_SOURCE_V2',
+           p.id::text,p.organization_id::text,p.date_start::text,
+           p.date_end::text,p.state,events.journal_count::text,
+           coalesce(events.event_fingerprints,'EMPTY')
+         ),'UTF8')),'hex') AS snapshot_sha256
+FROM finance_gl_period p
+CROSS JOIN LATERAL (
+    SELECT count(*)::bigint AS journal_count,
+           string_agg(e.fingerprint,'|' ORDER BY e.fingerprint) AS event_fingerprints
+    FROM (
+      SELECT concat_ws(':','AP',j.id::text,
+               j.payable_candidate_id::text,j.gross_amount::text,
+               j.currency,j.ledger_fingerprint_sha256) AS fingerprint
+      FROM finance_ap_posted_journal j
+      WHERE j.organization_id=p.organization_id AND j.fiscal_period_id=p.id
+      UNION ALL
+      SELECT concat_ws(':','REVERSAL',r.id::text,
+               r.original_journal_id::text,r.gross_amount::text,
+               r.currency,r.source_ledger_fingerprint_sha256)
+      FROM finance_ap_journal_reversal r
+      WHERE r.organization_id=p.organization_id AND r.target_period_id=p.id
+    ) e
+) events;
