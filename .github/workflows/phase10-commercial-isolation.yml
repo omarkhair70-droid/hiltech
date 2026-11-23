@@ -1,6 +1,8 @@
 name: Phase 10 — Commercial isolation and native contracts
 
 on:
+  push:
+    branches: ["integration/phase7-finance8i-native-payroll9-sales10-20261123"]
   pull_request:
     paths:
       - "database/phase10/**"
@@ -70,13 +72,12 @@ jobs:
             --tests com.hiltech.server.DatabaseMigrationContractTest \
             --tests com.hiltech.server.commercial.CommercialContractShapeTest \
             --no-configuration-cache --console=plain
-      - name: Prove unnumbered isolation schema in disposable PostgreSQL
+      - name: Prove canonical migrated V0071 schema and commercial positive/negative contracts
         run: |
           docker run --rm --network host \
             -v "$PWD":/repo -e PGPASSWORD=hiltech postgres:18.6 \
             psql -h 127.0.0.1 -U hiltech -d hiltech \
             -v ON_ERROR_STOP=1 \
-            -f /repo/database/phase10/pending_commercial_schema.sql \
             -f /repo/database/phase10/commercial_schema_assertions.sql \
             -f /repo/database/phase10/commercial_negative_contract.sql \
             -f /repo/database/phase10/commercial_positive_contract.sql
