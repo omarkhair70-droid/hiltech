@@ -58,3 +58,30 @@ The existing signed-in `HiltechShell` previously stacked Identity/Sessions, Peop
 The existing Warehouse source-connected Quick Scan now has an explicit **Back to scan** action on the actual Asset Passport or Stock detail. The action uses the existing shell vertical scroll and a tiny measured anchor before `WarehouseQuickScanSection`; it never clears the signed-in actor's input or starts another warehouse request. The forward entry anchor is attached to this Back action so the user can find both the canonical detail and the return control after opening a result. This only navigates within an already authorized detail; no ledger mutation, supplier mapping, or new role authority is introduced.
 
 **Device gate open:** Verify field ergonomics and focus restoration after rescanning on real Android, screen rotation, large text, and dense Windows layout.
+
+## 2026-11-23 — Source-present Procurement and Warehouse jump targets
+
+- The shared signed-in `HiltechShell` workspace row now accepts **presentation-only**
+  `warehouseOperatorVisible` and `procurementOperatorVisible` host facts, both
+  default `false`. It **does not** treat them as authorization grants.
+- Warehouse jump now appears when the authenticated host actually mounts the
+  physical Warehouse operator, even if `state.warehouse` (the separate
+  warehouse-setup view) is absent. This fixes the warehouse-only operator not
+  seeing a native shortcut. Source warehouse permissions still revalidate.
+- The newly added Procurement jump scrolls to the actual existing
+  `procurementOperator()` content with a tiny measured anchor in the one
+  host-owned vertical scroll, rather than forcing staff to traverse the entire
+  Company shell to find procurement.
+- Android passes host presence from the existing guarded purchase-requirement
+  selected WorkOrder or supplier-invoice Finance feature mount. Windows passes
+  presence only when its actual documented procurement/sourcing/PO/invoice
+  feature flags are set; both remain hidden outside verified sign-in.
+- **DevOps bridge for newer P7 source #181 and UX #199:** When merging the
+  default-OFF `HILTECH_SERVICE_PURCHASES_ENABLED` Android and
+  `HILTECH_SERVICE_PURCHASES_UI_ENABLED` Windows service mounts, include
+  those existing flags in `procurementOperatorVisible` as well, so the
+  source-connected five-step service journey has a visible entry. Never set
+  these flags ON merely to show navigation.
+- No new backend read, API, source data or permission. Final integrated
+  Android/Windows visual test, 200% scaling, navigation to actual module,
+  denied-source state and focus-return remain open until combined source UAT.
