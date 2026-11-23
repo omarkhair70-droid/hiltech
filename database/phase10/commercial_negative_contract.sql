@@ -124,7 +124,7 @@ BEGIN
    version_number,quote_code,currency,total_price,payment_terms,delivery_terms,exclusions,
    validity_date,created_by,created_at)
  VALUES(quote_id,company_a,opportunity,client_a,scope_id,boq_id,1,'PHASE10_Q_TEST',
-   'EGP',40.0000,'Synthetic terms','Synthetic delivery','N/A',date '2026-12-01',actor,now());
+   'EGP',40.0000,'Synthetic terms','Synthetic delivery','N/A',CURRENT_DATE+30,actor,now());
  INSERT INTO commercial_quote_line
   (id,quote_version_id,line_code,description,quantity,unit,unit_price)
  VALUES(gen_random_uuid(),quote_id,'T1','Synthetic client line',2,'hour',20.0000);
@@ -191,7 +191,7 @@ BEGIN
    (id,organization_id,opportunity_id,contract_id,client_po_number,issued_on,
     amount,currency,created_by,created_at)
   VALUES(po_id,company_a,second_opportunity,contract_id,'PHASE10_BAD_PO',
-         date '2026-11-23',40.0000,'EGP',actor,now());
+         CURRENT_DATE,40.0000,'EGP',actor,now());
   RAISE EXCEPTION 'EXPECTED_CROSS_OPPORTUNITY_PO_DENIAL_MISSING';
  EXCEPTION WHEN foreign_key_violation THEN
   RAISE NOTICE 'PHASE10_CROSS_OPPORTUNITY_CONTRACT_PO_DENIED';
@@ -201,7 +201,7 @@ BEGIN
   (id,organization_id,opportunity_id,contract_id,client_po_number,issued_on,
    amount,currency,created_by,created_at)
  VALUES(po_id,company_a,opportunity,contract_id,'PHASE10_VALID_PO_DRAFT',
-        date '2026-11-23',40.0000,'EGP',actor,now());
+        CURRENT_DATE,40.0000,'EGP',actor,now());
  BEGIN
   UPDATE commercial_client_po SET verified=true WHERE id=po_id;
   RAISE EXCEPTION 'EXPECTED_PO_EVIDENCE_BLOCK_MISSING';
@@ -240,7 +240,7 @@ BEGIN
     version_number,quote_code,currency,total_price,payment_terms,delivery_terms,exclusions,
     validity_date,state,released_at,created_by,created_at)
   VALUES (gen_random_uuid(),company_a,opportunity,client_a,scope_id,boq_id,
-          99,'FORGED-RELEASE','EGP',40,'fake','fake','fake',date '2026-12-01',
+          99,'FORGED-RELEASE','EGP',40,'fake','fake','fake',CURRENT_DATE+30,
           'RELEASED',now(),actor,now());
   RAISE EXCEPTION 'EXPECTED_FAKE_QUOTE_INSERT_BLOCK_MISSING';
  EXCEPTION WHEN OTHERS THEN
@@ -269,7 +269,7 @@ BEGIN
    (id,organization_id,opportunity_id,contract_id,client_po_number,issued_on,
     amount,currency,verified,evidence_id,created_by,created_at)
   VALUES(gen_random_uuid(),company_a,opportunity,contract_id,'FAKE-PO',
-         date '2026-11-23',40,'EGP',true,gen_random_uuid(),actor,now());
+         CURRENT_DATE,40,'EGP',true,gen_random_uuid(),actor,now());
   RAISE EXCEPTION 'EXPECTED_FAKE_VERIFIED_PO_INSERT_BLOCK_MISSING';
  EXCEPTION WHEN OTHERS THEN
   GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
