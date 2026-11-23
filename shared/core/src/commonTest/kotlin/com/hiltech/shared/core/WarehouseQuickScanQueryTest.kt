@@ -25,5 +25,6 @@ class WarehouseQuickScanQueryTest {
         assertFalse(warehouseScanResultMatchesQuery("", "ASSET_012"))
         assertFalse(warehouseScanResultMatchesQuery("  ", "ITEM-001"))
         assertFalse(warehouseScanResultMatchesQuery("", null))
+        assertFalse(warehouseScanResultMatchesQuery("", ""))
     }
 }
