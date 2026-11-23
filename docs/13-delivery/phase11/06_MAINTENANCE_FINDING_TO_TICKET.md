@@ -27,3 +27,15 @@ Do not merge/enable before latest exact-head GitHub workflow verifies Kotlin ser
 - The dedicated disposable PostgreSQL negative test now creates one historical READY source photo and rejects attempting to use it for a new visit; positive same-visit field evidence remains accepted, with no claim that the visit itself is completed.
 - The server reads canonical Work and checklist/Evidence metadata in repeatable-read source snapshots so source status and counters are not mixed across in-flight field updates.
 - Case resolution uses an accepted original WorkOrder row lock and attempts after REOPENED demand fresh source link and new READY evidence. Triage after internal case close is also guarded in SQL.
+
+
+## Technician Android capability — guarded opt-in
+The Phase 11 field-finding read/write API now reuses the authoritative WorkAssignmentSourceAuthorityPort and WorkAssignmentAuthorizationPort from Phase4/6. It does not create a TECHNICIAN role or bypass real OpenFGA.
+
+- HILTECH Project Managers retain current management permissions: draft visit/work choices, view all visits, record finding.
+- When **both** `hiltech.phase11.maintenance.enabled=true` and the separate `hiltech.phase11.maintenance.assigned-findings.enabled=true` are explicitly authorized in staging, an active assigned WorkOrder participant may list/read only visits whose underlying WorkOrder they can `can_view`.
+- Recording a finding requires current active assignment AND the existing WorkOrder relation `can_submit_completion`; the server checks again inside the transaction after idempotency precheck and source Work row lock. Revoked membership and missing OpenFGA fail closed.
+- The source-status response's `canRecordInternalFinding` now combines Work lifecycle **and current actor authority**; a view-only field user gets false and no record button.
+- Native `MaintenanceUiState.canDraftVisit` defaults false. Only the host's manager-authorized project UI may set it true, preventing draft creation controls on a field-only visit view. The existing Field Evidence/WorkOrder lifecycle remains authoritative for capture, checklist, test and acceptance.
+- The assigned findings toggle remains OFF by default and requires a HILTECH authority decision on mapping the existing `can_submit_completion` permission to the internal P11 finding action. No role/policy approvals are inferred. Negative policy tests verify disabled, revoked and OpenFGA-denied states.
+- **Integration gate:** Verify an actual assigned technician account on Android (live assignment, `can_view`, `can_submit_completion`), then revoke assignment/device and confirm both new write and historical replay are denied. Test PM, technician and unrelated role/organization across Windows/Android, before enabling either flag.

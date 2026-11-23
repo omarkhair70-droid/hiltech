@@ -29,6 +29,7 @@ data class MaintenanceWorkChoice(
 data class MaintenanceUiState(
     val loading: Boolean = false,
     val projectName: String = "",
+    val canDraftVisit: Boolean = false,
     val workChoices: List<MaintenanceWorkChoice> = emptyList(),
     val visits: List<MaintenanceVisitDto> = emptyList(),
     val selectedVisit: MaintenanceVisitDto? = null,
@@ -78,8 +79,8 @@ fun MaintenanceVisitsSection(
         Text("Maintenance visits", style = MaterialTheme.typography.titleLarge)
         if (state.projectName.isNotBlank()) Text(state.projectName)
         Text(
-            "Draft visit proposals linked to real WorkOrders. No confirmed visit, " +
-                "contract coverage, parts order or service commitment is created.",
+            "Existing WorkOrders own field execution. A maintenance visit stays a proposal " +
+                "until approved; no contract coverage, parts order, or external commitment is created.",
             style = MaterialTheme.typography.bodySmall,
         )
         OutlinedButton(onClick = onRefresh, enabled = !state.loading) {
@@ -90,6 +91,7 @@ fun MaintenanceVisitsSection(
             Text("Cannot load maintenance: " + it, color = MaterialTheme.colorScheme.error)
         }
 
+        if (state.canDraftVisit) {
         Text("Choose existing work", style = MaterialTheme.typography.titleMedium)
         state.workChoices.forEach { choice ->
             OutlinedButton(
@@ -118,6 +120,7 @@ fun MaintenanceVisitsSection(
                 }
             },
         ) { Text("Save internal visit draft") }
+        }
 
         Text("Visit plans", style = MaterialTheme.typography.titleMedium)
         state.visits.forEach { visit ->

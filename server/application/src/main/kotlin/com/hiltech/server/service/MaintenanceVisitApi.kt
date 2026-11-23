@@ -13,9 +13,12 @@ import com.hiltech.server.projects.ProjectSnapshot
 import com.hiltech.server.projects.ProjectsPersistencePort
 import com.hiltech.server.work.WorkOrderLifecycle
 import com.hiltech.server.work.WorkOrderSnapshot
+import com.hiltech.server.work.WorkAssignmentAuthorizationPort
+import com.hiltech.server.work.WorkAssignmentSourceAuthorityPort
 import com.hiltech.server.work.WorkPersistencePort
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
@@ -144,6 +147,10 @@ object MaintenanceDraftPolicy {
             WorkOrderLifecycle.SUBMITTED_FOR_REVIEW, WorkOrderLifecycle.REWORK_REQUIRED,
             WorkOrderLifecycle.ACCEPTED, WorkOrderLifecycle.CLOSED,
         )
+
+    fun assignedFindingAllowed(
+        featureEnabled: Boolean, assignedNow: Boolean, workPermissionGranted: Boolean,
+    ) = featureEnabled && assignedNow && workPermissionGranted
 
     fun plannedForIsFuture(plannedFor: Instant, at: Instant) = plannedFor.isAfter(at)
 
@@ -349,6 +356,10 @@ class MaintenanceVisitService(
     private val projects: ProjectsPersistencePort,
     private val authorization: ProjectAuthorizationPort,
     private val work: WorkPersistencePort,
+    private val sourceAssignment: WorkAssignmentSourceAuthorityPort,
+    private val assignedAuthority: WorkAssignmentAuthorizationPort,
+    @Value("\${hiltech.phase11.maintenance.assigned-findings.enabled:false}")
+    private val assignedFieldFindingsEnabled: Boolean = false,
     private val store: JdbcMaintenanceVisitStore,
     private val commands: IdempotentCommandExecutor,
     private val audit: AuditEventWriter,
@@ -373,17 +384,28 @@ class MaintenanceVisitService(
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun visits(projectId: UUID, actor: UUID): List<MaintenanceVisitDto> {
-        manageProject(projectId, actor)
-        return store.visits(projectId).map { it.asDto(false) }
+        val project = projects.project(projectId, clock.instant())
+            ?: maintenanceError("VISIT_PROJECT_NOT_FOUND", HttpStatus.NOT_FOUND)
+        val manager = authorization.canManageProject(actor, project)
+        if (!manager && !assignedFieldFindingsEnabled)
+            maintenanceError("VISIT_PROJECT_NOT_FOUND", HttpStatus.NOT_FOUND)
+        val eligible = store.visits(projectId).filter {
+            manager || assignedFieldActor(actor, it.workOrderId, forWrite = false)
+        }
+        if (!manager && eligible.isEmpty())
+            maintenanceError("VISIT_PROJECT_NOT_FOUND", HttpStatus.NOT_FOUND)
+        return eligible.map { it.asDto(false) }
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun sourceStatus(
         projectId: UUID, visitId: UUID, actor: UUID,
     ): MaintenanceSourceStatusDto {
-        val project = manageProject(projectId, actor)
         val visit = store.visit(visitId, projectId)
             ?: maintenanceError("VISIT_NOT_FOUND", HttpStatus.NOT_FOUND)
+        val project = authorizedFieldProject(
+            projectId, visit.workOrderId, actor, forWrite = false,
+        )
         val current = matchingWork(project, visit.workOrderId)
         val checklist = store.checklist(current.workOrderId)
         return MaintenanceSourceStatusDto(
@@ -395,7 +417,9 @@ class MaintenanceVisitService(
                     it.completionState != "NOT_APPLICABLE"
             },
             store.readyEvidenceCount(project.organizationId, current.workOrderId, visit.createdAt),
-            MaintenanceDraftPolicy.canRecordEvidenceFinding(current.lifecycleState),
+            MaintenanceDraftPolicy.canRecordEvidenceFinding(current.lifecycleState) &&
+                (authorization.canManageProject(actor, project) ||
+                 assignedFieldActor(actor, current.workOrderId, forWrite = true)),
         )
     }
 
@@ -403,17 +427,20 @@ class MaintenanceVisitService(
     fun readyEvidenceChoices(
         projectId: UUID, visitId: UUID, actor: UUID,
     ): List<MaintenanceReadyEvidenceDto> {
-        val project = manageProject(projectId, actor)
         val visit = store.visit(visitId, projectId)
             ?: maintenanceError("VISIT_NOT_FOUND", HttpStatus.NOT_FOUND)
+        val project = authorizedFieldProject(
+            projectId, visit.workOrderId, actor, forWrite = false,
+        )
         val source = matchingWork(project, visit.workOrderId)
         return store.readyEvidenceChoices(project.organizationId, source.workOrderId, visit.createdAt)
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     fun findings(projectId: UUID, visitId: UUID, actor: UUID): List<MaintenanceFindingDto> {
-        manageProject(projectId, actor)
-        store.visit(visitId, projectId) ?: maintenanceError("VISIT_NOT_FOUND", HttpStatus.NOT_FOUND)
+        val visit = store.visit(visitId, projectId)
+            ?: maintenanceError("VISIT_NOT_FOUND", HttpStatus.NOT_FOUND)
+        authorizedFieldProject(projectId, visit.workOrderId, actor, forWrite = false)
         return store.findings(visitId)
     }
 
@@ -471,9 +498,9 @@ class MaintenanceVisitService(
         val typeCode = MaintenanceDraftPolicy.code(type)
         val severityCode = MaintenanceDraftPolicy.code(severity)
         val description = SupportDeskFieldRules.text(rawDescription, 8000)
-        val project = manageProject(projectId, actor)
         val visit = store.visit(visitId, projectId)
             ?: maintenanceError("VISIT_NOT_FOUND", HttpStatus.NOT_FOUND)
+        authorizedFieldProject(projectId, visit.workOrderId, actor, forWrite = true)
         val findingId = maintenanceUuid("maintenance-finding:" + operation)
         val result = commands.execute(
             IdempotentCommandSpec(
@@ -486,9 +513,11 @@ class MaintenanceVisitService(
                 ), correlationId = correlationId,
             ),
         ) {
-            val fresh = manageProject(projectId, actor)
             val currentVisit = store.visit(visitId, projectId)
                 ?: maintenanceError("VISIT_NOT_FOUND", HttpStatus.NOT_FOUND)
+            val fresh = authorizedFieldProject(
+                projectId, currentVisit.workOrderId, actor, forWrite = true,
+            )
             if (!store.lockWorkOrder(currentVisit.workOrderId))
                 maintenanceError("FINDING_WORK_NOT_FOUND", HttpStatus.NOT_FOUND)
             val currentWork = matchingWork(fresh, currentVisit.workOrderId)
@@ -513,6 +542,35 @@ class MaintenanceVisitService(
         return (store.finding(findingId, visitId)
             ?: maintenanceError("FINDING_NOT_FOUND", HttpStatus.CONFLICT))
             .copy(duplicateReplay = result.replayed)
+    }
+
+    private fun assignedFieldActor(
+        actor: UUID, workOrderId: UUID, forWrite: Boolean,
+    ): Boolean {
+        if (!assignedFieldFindingsEnabled) return false
+        val at = clock.instant()
+        val assigned = sourceAssignment.isCurrentAssignedUser(actor, workOrderId, at)
+        if (!assigned) return false
+        val permitted = assignedAuthority.canUseAssignedWork(
+            actor, workOrderId, if (forWrite) "can_submit_completion" else "can_view",
+        )
+        return MaintenanceDraftPolicy.assignedFindingAllowed(
+            assignedFieldFindingsEnabled, assigned, permitted,
+        )
+    }
+
+    private fun authorizedFieldProject(
+        projectId: UUID, workOrderId: UUID, actor: UUID, forWrite: Boolean,
+    ): ProjectSnapshot {
+        val project = projects.project(projectId, clock.instant())
+            ?: maintenanceError("VISIT_PROJECT_NOT_FOUND", HttpStatus.NOT_FOUND)
+        val order = work.workOrder(workOrderId)
+            ?: maintenanceError("VISIT_WORK_NOT_FOUND", HttpStatus.NOT_FOUND)
+        if (order.organizationId != project.organizationId || order.projectId != projectId ||
+            (!authorization.canManageProject(actor, project) &&
+             !assignedFieldActor(actor, workOrderId, forWrite)))
+            maintenanceError("VISIT_PROJECT_NOT_FOUND", HttpStatus.NOT_FOUND)
+        return project
     }
 
     private fun manageProject(projectId: UUID, actor: UUID): ProjectSnapshot {

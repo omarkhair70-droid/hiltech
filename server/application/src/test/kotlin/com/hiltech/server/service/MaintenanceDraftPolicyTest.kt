@@ -35,6 +35,22 @@ class MaintenanceDraftPolicyTest {
     }
 
     @Test
+    fun assignedFieldFindingRequiresExplicitFlagLiveSourceAndOpenFgaAuthority() {
+        assertFalse(MaintenanceDraftPolicy.assignedFindingAllowed(
+            featureEnabled = false, assignedNow = true, workPermissionGranted = true,
+        ))
+        assertFalse(MaintenanceDraftPolicy.assignedFindingAllowed(
+            featureEnabled = true, assignedNow = false, workPermissionGranted = true,
+        ))
+        assertFalse(MaintenanceDraftPolicy.assignedFindingAllowed(
+            featureEnabled = true, assignedNow = true, workPermissionGranted = false,
+        ))
+        assertTrue(MaintenanceDraftPolicy.assignedFindingAllowed(
+            featureEnabled = true, assignedNow = true, workPermissionGranted = true,
+        ))
+    }
+
+    @Test
     fun plannedDateMustBeExplicitlyInFuture() {
         val now = Instant.parse("2026-11-23T10:00:00Z")
         assertFalse(MaintenanceDraftPolicy.plannedForIsFuture(now, now))
