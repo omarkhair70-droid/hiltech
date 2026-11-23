@@ -265,6 +265,22 @@ fun ServiceSupplierQuoteCaptureSection(
                             confirmation = "تم تسجيل عرض المورد الأصلي " +
                                 result.recorded.quote.id.take(8) +
                                 " · لم يتم إرساله أو ترسيته تلقائيًا."
+                            // Do not leave a successfully recorded original quote
+                            // ready to submit again with a fresh operation ID.
+                            selectedSupplier = null
+                            supplierSearch = ""
+                            suppliers = emptyList()
+                            supplierResultsQuery = null
+                            supplierResultsRfq = null
+                            supplierSearchLoaded = false
+                            supplierSearchGeneration++
+                            reference = ""
+                            revision = "1"
+                            currency = "EGP"
+                            amount = ""
+                            tax = "0"
+                            terms = ""
+                            validUntil = ""
                             try {
                                 comparison = sourcing.comparison(activeRfq, installationId)
                             } catch (refreshError: Exception) {
