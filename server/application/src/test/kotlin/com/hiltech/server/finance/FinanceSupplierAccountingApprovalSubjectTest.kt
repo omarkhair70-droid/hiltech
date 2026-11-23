@@ -4,6 +4,7 @@ import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalPolicySnapshot
 import com.hiltech.server.approval.ApprovalSubjectRef
+import com.hiltech.server.procurement.SupplierInvoiceMatchingService
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -20,6 +21,7 @@ import java.util.UUID
 class FinanceSupplierAccountingApprovalSubjectTest {
     private val jdbc = Mockito.mock(JdbcTemplate::class.java)
     private val approvals = Mockito.mock(ApprovalPersistencePort::class.java)
+    private val matches = Mockito.mock(SupplierInvoiceMatchingService::class.java)
     private val org = UUID.randomUUID()
     private val candidate = UUID.randomUUID()
     private val clock = Clock.fixed(
@@ -38,7 +40,7 @@ class FinanceSupplierAccountingApprovalSubjectTest {
             "hiltech.finance.payable-candidates.enabled" to candidates,
             "hiltech.finance.supplier-accounting-review.policy-key" to policyKey,
         )))
-        return FinanceSupplierAccountingApprovalSubject(jdbc, approvals, env, clock)
+        return FinanceSupplierAccountingApprovalSubject(jdbc, approvals, matches, env, clock)
     }
 
     @Test fun financeCompanyAccountingReviewIsOffUntilP8APayableSourceEnabled() {
@@ -49,7 +51,7 @@ class FinanceSupplierAccountingApprovalSubjectTest {
         assertFalse(service.isCurrent(ApprovalSubjectRef(
             org, FINANCE_SUPPLIER_ACCOUNTING_REVIEW_SUBJECT, candidate, 1,
         )))
-        Mockito.verifyNoInteractions(jdbc, approvals)
+        Mockito.verifyNoInteractions(jdbc, approvals, matches)
     }
 
     @Test fun enabledReviewStillCannotReadInvoicesWithoutP8ASourceGate() {
@@ -66,7 +68,7 @@ class FinanceSupplierAccountingApprovalSubjectTest {
     @Test fun canonicalCompanyPolicyIsRequiredBeforeAnySourceCanBeReviewed() {
         assertNull(source(enabled = true, candidates = true).current(org, candidate))
         Mockito.verify(approvals).loadActivePolicy(org, key, clock.instant())
-        Mockito.verifyNoInteractions(jdbc)
+        Mockito.verifyNoInteractions(jdbc, matches)
     }
 
     @Test fun noApprovalRequiredPolicyCannotConfirmSupplierAccountingReview() {
