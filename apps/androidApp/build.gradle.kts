@@ -50,6 +50,9 @@ val ownPayslipsUiEnabled = providers
 val commercialReadUiEnabled = providers
     .gradleProperty("hiltech.commercialReadEnabled")
     .getOrElse("false") == "true"
+val handoverReadUiEnabled = providers
+    .gradleProperty("hiltech.handoverReadEnabled")
+    .getOrElse("false") == "true"
 
 plugins {
     id("com.hiltech.base")
@@ -151,6 +154,11 @@ android {
             "boolean",
             "HILTECH_COMMERCIAL_READ_ENABLED",
             commercialReadUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_HANDOVER_READ_ENABLED",
+            handoverReadUiEnabled.toString(),
         )
     }
 
