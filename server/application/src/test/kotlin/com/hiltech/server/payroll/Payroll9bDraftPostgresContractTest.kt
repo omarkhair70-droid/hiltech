@@ -1,6 +1,9 @@
 package com.hiltech.server.payroll
 
 import com.hiltech.server.approval.ApprovalSubjectRef
+import com.hiltech.server.finance.FinancePayrollReviewIntakeAdapter
+import java.nio.file.Files
+import java.nio.file.Path
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.people.JdbcPeoplePersistence
@@ -619,6 +622,57 @@ class Payroll9bDraftPostgresContractTest {
             )
         }!!.replayed)
         assertEquals(1, acceptedOperations.size)
+
+        // Real Finance module bridge, not the in-memory Payroll test fake.
+        // Pending DDL is applied ONLY on the disposable contract database.
+        val sqlRelative = "database/phase8/pending_payroll_review_intake.sql"
+        val sqlPath = listOf(
+            System.getenv("HILTECH_REPO_ROOT") ?: ".",
+            "../..", "../../..",
+        ).map { Path.of(it).toAbsolutePath().normalize().resolve(sqlRelative) }
+            .firstOrNull { Files.isRegularFile(it) }
+            ?: error("Finance Payroll review integration SQL not found")
+        jdbc.execute(Files.readString(sqlPath))
+        val realFinanceIntake = FinancePayrollReviewIntakeAdapter(jdbc)
+        val realHandoff = Payroll9cFinanceHandoffService(
+            jdbc, service, permission, reviewPublisher,
+            StaticListableBeanFactory(mapOf("financeReviewIntake" to realFinanceIntake))
+                .getBeanProvider(PayrollFinanceReviewIntakePort::class.java),
+            AuditEventWriter.NOOP, clock,
+        )
+        val financeOperation = UUID.randomUUID()
+        val review = tx.execute {
+            realHandoff.handoff(actor, currentSubject.subjectId, financeOperation, "real-finance-review")
+        }!!
+        assertEquals("REVIEW_REQUIRED", review.state)
+        assertFalse(review.bankExecutionAvailable)
+        assertFalse(review.replayed)
+        assertEquals(1L, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM finance_payroll_review_batch WHERE organization_id=? AND run_version_id=?",
+            Long::class.java, org, currentSubject.subjectId,
+        ))
+        val reviewedAgain = tx.execute {
+            realHandoff.handoff(actor, currentSubject.subjectId, financeOperation, "real-finance-review")
+        }!!
+        assertEquals(review.financeReviewBatchId, reviewedAgain.financeReviewBatchId)
+        assertTrue(reviewedAgain.replayed)
+        // One exact run may never be handed off with a second operation/hash.
+        assertThrows<ProductApiException> {
+            tx.execute {
+                realHandoff.handoff(actor, currentSubject.subjectId, UUID.randomUUID(), "conflicting-finance-review")
+            }
+        }
+        assertThrows<ProductApiException> {
+            tx.execute {
+                realFinanceIntake.acceptForReview(
+                    requireNotNull(acceptedManifest).copy(organizationId = UUID.randomUUID()),
+                )
+            }
+        }
+        assertEquals(0L, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM finance_payroll_review_batch WHERE bank_execution_available=true",
+            Long::class.java,
+        ))
         assertThrows<ProductApiException> {
             tx.execute {
                 financeReviewHandoff.handoff(
