@@ -29,6 +29,21 @@ data class FinanceExpenseDocumentationReviewReceiptDto(
     val cashMovementRecorded: Boolean = false,
 )
 
+@Serializable
+data class FinanceExpenseDocumentationReviewStatusDto(
+    val expenseDraftId: String,
+    val sourceVersion: Long,
+    val verifiedReceiptCount: Int,
+    val documentationReviewRequestId: String? = null,
+    val documentationReviewState: String,
+    val policyKey: String,
+    val currentSource: Boolean = true,
+    val expenseApproved: Boolean = false,
+    val payableRecognized: Boolean = false,
+    val reimbursementAuthorized: Boolean = false,
+    val cashMovementRecorded: Boolean = false,
+)
+
 /** Existing ApprovalEngine request only. No endpoint for finance payout. */
 class FinanceExpenseDocumentationReviewApiClient(
     private val api: HiltechApiClient,
@@ -59,6 +74,23 @@ class FinanceExpenseDocumentationReviewApiClient(
             },
         )
     }
+
+    suspend fun status(
+        organizationId: String,
+        expenseDraftId: String,
+        installationId: String,
+    ): FinanceExpenseDocumentationReviewStatusDto =
+        api.request(
+            method = HttpMethod.Get,
+            path = "/v1/finance/me/organizations/" + uuid(organizationId) +
+                "/expenses/" + uuid(expenseDraftId) + "/documentation-review",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = {
+                json.decodeFromString(
+                    FinanceExpenseDocumentationReviewStatusDto.serializer(), it,
+                )
+            },
+        )
 
     private fun uuid(value: String): String {
         require(Regex(
