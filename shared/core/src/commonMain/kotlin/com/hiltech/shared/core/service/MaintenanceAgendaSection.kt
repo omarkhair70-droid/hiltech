@@ -38,6 +38,7 @@ fun MaintenancePlanningAgendaSection(
     onQuery: (fromUtc: String, toUtc: String) -> Unit,
     onOpenVisit: (visitId: String) -> Unit,
     modifier: Modifier = Modifier,
+    canOpenVisit: Boolean = true,
 ) {
     var from by remember(state.projectId) { mutableStateOf(state.agenda?.from ?: "") }
     var to by remember(state.projectId) { mutableStateOf(state.agenda?.to ?: "") }
@@ -87,8 +88,10 @@ fun MaintenancePlanningAgendaSection(
                     Text("Technical review: " + entry.reviewState)
                     Text("Contract schedule: not approved · Coverage: unverified",
                         style = MaterialTheme.typography.bodySmall)
-                    OutlinedButton(onClick = { onOpenVisit(entry.visitId) }) {
-                        Text("Open source visit and technical review")
+                    if (canOpenVisit) {
+                        OutlinedButton(onClick = { onOpenVisit(entry.visitId) }) {
+                            Text("Open source visit and technical review")
+                        }
                     }
                 }
             }
