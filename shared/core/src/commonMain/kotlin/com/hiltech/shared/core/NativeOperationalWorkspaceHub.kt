@@ -42,7 +42,7 @@ data class NativeOperationalWorkspace(
     val label: String,
     val canReadSource: suspend () -> Boolean,
     val hostOwnsScroll: Boolean = false,
-    val content: @Composable () -> Unit,
+    val content: @Composable (onExit: () -> Unit) -> Unit,
 )
 
 /** A flag or successful sign-in alone must never reveal a restricted route. */
@@ -161,10 +161,10 @@ fun NativeOperationalWorkspaceHub(
                         key(scopeKey, selected.id) {
                             if (selected.hostOwnsScroll) {
                                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                                    selected.content()
+                                    selected.content { selectedId = null }
                                 }
                             } else {
-                                selected.content()
+                                selected.content { selectedId = null }
                             }
                         }
                     }
