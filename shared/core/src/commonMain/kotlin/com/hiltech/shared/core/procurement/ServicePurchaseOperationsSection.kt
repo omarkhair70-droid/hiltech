@@ -416,12 +416,17 @@ private fun ServiceInvoicePane(
                             selectedInvoiceOrderId=null
                             invoiceNumber="";invoiceDate="";currency="";amount="";tax=""
                             confirmation="تم تسجيل الفاتورة الأصلية؛ لم يتم دفعها."
-                            invoices=emptyList();invoiceSourcesLoaded=false
+                            // The invoice can change order eligibility. Never keep
+                            // the previously loaded order actions clickable after
+                            // successful capture, including on refresh failure.
+                            orders=emptyList();invoices=emptyList();invoiceSourcesLoaded=false
                             try {
-                                invoices=api.invoices(org,install)
+                                val refreshedOrders=api.invoiceOrders(org,install)
+                                val refreshedInvoices=api.invoices(org,install)
+                                orders=refreshedOrders;invoices=refreshedInvoices
                                 invoiceSourcesLoaded=true
                             } catch(refreshError:Exception) {
-                                error="تم تسجيل فاتورة الخدمة، لكن تعذر تحديث القائمة؛ أعد تحميل المصدر."
+                                error="تم تسجيل فاتورة الخدمة، لكن تعذر تحديث الأوامر والفواتير؛ أعد تحميل المصدر."
                             }
                         } catch(e:Exception){error=e.message?:"Invoice evidence is missing or invalid."}
                         finally{busy=false}
