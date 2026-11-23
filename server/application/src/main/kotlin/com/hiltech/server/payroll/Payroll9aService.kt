@@ -33,6 +33,7 @@ private data class PeriodRow(
     val operationId: UUID,
     val fingerprint: String,
     val organizationId: UUID,
+    val createdByUserId: UUID,
     val code: String,
     val start: LocalDate,
     val end: LocalDate,
@@ -155,7 +156,9 @@ class Payroll9aService(
         }
         val stored = periodByOperation(normalized.operationId)
             ?: Payroll9aPolicy.fail("PAYROLL_PERIOD_NOT_FOUND", HttpStatus.NOT_FOUND)
-        if (stored.organizationId != normalized.organizationId || stored.fingerprint != fingerprint) {
+        if (stored.organizationId != normalized.organizationId ||
+            stored.createdByUserId != actorId || stored.fingerprint != fingerprint
+        ) {
             Payroll9aPolicy.fail("PAYROLL_IDEMPOTENCY_CONFLICT", HttpStatus.CONFLICT)
         }
         if (inserted) {
@@ -569,7 +572,8 @@ class Payroll9aService(
             """
             SELECT id, operation_id, request_fingerprint, organization_id,
                    period_code, start_date, end_date, cutoff_date,
-                   target_payment_date, state, version, snapshot_at
+                   target_payment_date, state, version, snapshot_at,
+                   created_by_user_id
             FROM payroll_period WHERE
             """.trimIndent() + " " + column + (if (lock) " FOR UPDATE" else ""),
             { rs: ResultSet, _ ->
@@ -578,6 +582,7 @@ class Payroll9aService(
                     operationId = rs.getObject("operation_id", UUID::class.java),
                     fingerprint = rs.getString("request_fingerprint"),
                     organizationId = rs.getObject("organization_id", UUID::class.java),
+                    createdByUserId = rs.getObject("created_by_user_id", UUID::class.java),
                     code = rs.getString("period_code"),
                     start = rs.getObject("start_date", LocalDate::class.java),
                     end = rs.getObject("end_date", LocalDate::class.java),

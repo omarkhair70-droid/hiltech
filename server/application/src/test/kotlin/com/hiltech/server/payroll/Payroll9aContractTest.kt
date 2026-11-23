@@ -179,6 +179,26 @@ class Payroll9aContractTest {
         assertEquals("OPEN", created.first.period.state)
         val replay = transaction.execute { service.create(actor, command, "payroll-test") }!!
         assertTrue(replay.second)
+        // A second authorized Payroll preparer cannot hijack the same
+        // request ID as an idempotent replay of another user's command.
+        val secondPreparer = UUID.randomUUID()
+        jdbc.update(
+            "INSERT INTO user_identity (id, auth_provider, auth_subject, status, primary_organization_id, created_at) " +
+                "VALUES (?, 'payroll-test', ?, 'ACTIVE', ?, ?)",
+            secondPreparer, secondPreparer.toString(), orgOne, at.atOffset(ZoneOffset.UTC),
+        )
+        val dualAuthority = object : Payroll9aAuthorityPort {
+            override fun canRead(actorId: UUID, organizationId: UUID) =
+                organizationId == orgOne && actorId in setOf(actor, secondPreparer)
+            override fun canPrepare(actorId: UUID, organizationId: UUID) =
+                canRead(actorId, organizationId)
+            override fun canReview(actorId: UUID, organizationId: UUID) =
+                canRead(actorId, organizationId)
+        }
+        val otherService = Payroll9aService(jdbc, dualAuthority, AuditEventWriter.NOOP, clock)
+        assertThrows<ProductApiException> {
+            transaction.execute { otherService.create(secondPreparer, command, "payroll-peer-replay") }
+        }
         assertThrows<ProductApiException> {
             transaction.execute {
                 service.create(actor, command.copy(endDate = LocalDate.parse("2026-11-29")), "payroll-test")

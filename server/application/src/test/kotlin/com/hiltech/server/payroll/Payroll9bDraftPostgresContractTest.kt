@@ -218,6 +218,34 @@ class Payroll9bDraftPostgresContractTest {
         val again = tx.execute { service.create(periodId, operation, actor, "p9b-test") }!!
         assertTrue(again.second)
         assertEquals(first.first.runVersionId, again.first.runVersionId)
+        val secondPreparer = UUID.randomUUID()
+        jdbc.update(
+            "INSERT INTO user_identity (id, auth_provider, auth_subject, status, primary_organization_id, created_at) " +
+                "VALUES (?, 'payroll-test', ?, 'ACTIVE', ?, ?)",
+            secondPreparer, secondPreparer.toString(), org, time,
+        )
+        jdbc.update(
+            "INSERT INTO organization_membership (id, organization_id, user_identity_id, membership_type, state, valid_from) " +
+                "VALUES (?, ?, ?, 'EMPLOYEE', 'ACTIVE', ?)",
+            UUID.randomUUID(), org, secondPreparer, time.minusDays(1),
+        )
+        val dualAuthority = object : Payroll9aAuthorityPort {
+            override fun canRead(actorId: UUID, organizationId: UUID) =
+                organizationId == org && actorId in setOf(actor, secondPreparer)
+            override fun canPrepare(actorId: UUID, organizationId: UUID) =
+                canRead(actorId, organizationId)
+            override fun canReview(actorId: UUID, organizationId: UUID) =
+                canRead(actorId, organizationId)
+        }
+        val otherPeriods = Payroll9aService(jdbc, dualAuthority, AuditEventWriter.NOOP, clock)
+        val otherDrafts = Payroll9bDraftService(
+            jdbc, otherPeriods, dualAuthority,
+            factory.getBeanProvider(PayrollApprovedInputSourcePort::class.java),
+            AuditEventWriter.NOOP, clock,
+        )
+        assertThrows<ProductApiException> {
+            tx.execute { otherDrafts.create(periodId, operation, secondPreparer, "payroll-peer-replay") }
+        }
         assertThrows<ProductApiException> {
             service.read(UUID.randomUUID(), UUID.fromString(first.first.runVersionId))
         }

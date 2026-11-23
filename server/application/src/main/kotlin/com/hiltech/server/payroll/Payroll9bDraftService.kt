@@ -73,6 +73,7 @@ private data class DraftRunPersisted(
     val operationId: UUID,
     val organizationId: UUID,
     val periodId: UUID,
+    val createdByUserId: UUID,
     val generation: Int,
     val fingerprint: String,
     val currency: String,
@@ -116,7 +117,9 @@ class Payroll9bDraftService(
         ) ?: Payroll9aPolicy.fail("PAYROLL_PERIOD_NOT_FOUND", HttpStatus.NOT_FOUND)
         val prior = loadByOperation(operationId)
         if (prior != null) {
-            if (prior.organizationId != orgId || prior.periodId != periodId) {
+            if (prior.organizationId != orgId || prior.periodId != periodId ||
+                prior.createdByUserId != actorUserId
+            ) {
                 Payroll9aPolicy.fail("PAYROLL_IDEMPOTENCY_CONFLICT", HttpStatus.CONFLICT)
             }
             return present(prior) to true
@@ -325,7 +328,7 @@ class Payroll9bDraftService(
         jdbc.query(
             """
             SELECT id, operation_id, organization_id, payroll_period_id,
-                   generation, source_fingerprint, currency, gross, deductions,
+                   created_by_user_id, generation, source_fingerprint, currency, gross, deductions,
                    reimbursements, net, state
             FROM payroll_run_version WHERE
             """.trimIndent() + " " + column + " = ?",
@@ -335,6 +338,7 @@ class Payroll9bDraftService(
                     operationId = rs.getObject("operation_id", UUID::class.java),
                     organizationId = rs.getObject("organization_id", UUID::class.java),
                     periodId = rs.getObject("payroll_period_id", UUID::class.java),
+                    createdByUserId = rs.getObject("created_by_user_id", UUID::class.java),
                     generation = rs.getInt("generation"),
                     fingerprint = rs.getString("source_fingerprint"),
                     currency = rs.getString("currency"),
