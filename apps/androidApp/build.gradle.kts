@@ -56,6 +56,9 @@ val handoverReadUiEnabled = providers
 val financeInvoiceReadUiEnabled = providers
     .gradleProperty("hiltech.financeInvoiceReadEnabled")
     .getOrElse("false") == "true"
+val servicePurchasesWorkspaceUiEnabled = providers
+    .gradleProperty("hiltech.servicePurchasesWorkspaceEnabled")
+    .getOrElse("false") == "true"
 
 plugins {
     id("com.hiltech.base")
@@ -167,6 +170,11 @@ android {
             "boolean",
             "HILTECH_FINANCE_INVOICE_READ_ENABLED",
             financeInvoiceReadUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_SERVICE_PURCHASES_WORKSPACE_ENABLED",
+            servicePurchasesWorkspaceUiEnabled.toString(),
         )
     }
 
