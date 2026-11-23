@@ -326,3 +326,39 @@ EXECUTE FUNCTION finance_ap_reject_snapshot_mutation();
 
 -- P8L close snapshot V2 currently covers only AP and AP reversals.
 -- MUST add AR events to signed closure snapshot before allowing postings.
+
+-- Phase 8Q extends the immutable close source with AR journals. Same period
+-- row locks are shared across AP, AP reversals, AR, and fiscal close.
+CREATE OR REPLACE VIEW finance_gl_period_close_source AS
+SELECT p.id AS period_id,p.organization_id,p.date_start,p.date_end,p.state,
+       e.journal_count,
+       encode(sha256(convert_to(
+          concat_ws('|','FINANCE_GL_PERIOD_CLOSE_SOURCE_V3',
+             p.id::text,p.organization_id::text,p.date_start::text,
+             p.date_end::text,p.state,e.journal_count::text,
+             COALESCE(e.event_fingerprints,'EMPTY')
+          ),'UTF8')),'hex') AS snapshot_sha256
+FROM finance_gl_period p
+CROSS JOIN LATERAL (
+    SELECT COUNT(*)::bigint AS journal_count,
+           string_agg(x.fingerprint,'|' ORDER BY x.fingerprint) AS event_fingerprints
+    FROM (
+      SELECT concat_ws(':','AP',j.id::text,
+        j.payable_candidate_id::text,j.gross_amount::text,
+        j.currency,j.ledger_fingerprint_sha256) AS fingerprint
+      FROM finance_ap_posted_journal j
+      WHERE j.organization_id=p.organization_id AND j.fiscal_period_id=p.id
+      UNION ALL
+      SELECT concat_ws(':','AP_REV',r.id::text,
+        r.original_journal_id::text,r.gross_amount::text,
+        r.currency,r.source_ledger_fingerprint_sha256)
+      FROM finance_ap_journal_reversal r
+      WHERE r.organization_id=p.organization_id AND r.target_period_id=p.id
+      UNION ALL
+      SELECT concat_ws(':','AR',a.id::text,
+        a.issued_invoice_id::text,a.gross_amount::text,
+        a.currency,a.ledger_fingerprint_sha256)
+      FROM finance_ar_posted_journal a
+      WHERE a.organization_id=p.organization_id AND a.fiscal_period_id=p.id
+    ) x
+) e;
