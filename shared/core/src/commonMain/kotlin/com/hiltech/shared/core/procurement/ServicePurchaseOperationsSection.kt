@@ -2,6 +2,8 @@ package com.hiltech.shared.core.procurement
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -36,13 +38,20 @@ fun ServicePurchaseOperationsSection(
     installationId:String,
     newOperationId:()->String,
     uploadFile:suspend (documentKind:String,slot:ServicePurchaseDocumentSlotDto)->EvidenceMetadataDto,
+    buyerAnchor: Modifier = Modifier,
+    deliveryAnchor: Modifier = Modifier,
+    invoiceAnchor: Modifier = Modifier,
 ) {
     Column(verticalArrangement=Arrangement.spacedBy(14.dp)) {
-        Text("External services",style=MaterialTheme.typography.titleLarge)
-        Text("Request → supplier quote → approval → delivery → invoice review.",
+        Text("مسار تنفيذ الخدمات / Service lifecycle",style=MaterialTheme.typography.titleLarge)
+        Text("طلب الخدمة ← عروض الموردين ← الاعتماد ← إثبات التنفيذ ← مراجعة الفاتورة.",
             style=MaterialTheme.typography.bodySmall)
+        // Anchors are small measurable targets; the shell owns vertical scroll.
+        Spacer(Modifier.fillMaxWidth().height(1.dp).then(buyerAnchor))
         ServiceBuyerAndIssuerPane(sourcing,api,organizationId,installationId,newOperationId)
+        Spacer(Modifier.fillMaxWidth().height(1.dp).then(deliveryAnchor))
         ServiceAcceptancePane(api,organizationId,installationId,newOperationId,uploadFile)
+        Spacer(Modifier.fillMaxWidth().height(1.dp).then(invoiceAnchor))
         ServiceInvoicePane(api,organizationId,installationId,newOperationId,uploadFile)
     }
 }
