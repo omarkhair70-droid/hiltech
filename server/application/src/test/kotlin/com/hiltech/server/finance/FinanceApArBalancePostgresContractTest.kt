@@ -54,7 +54,7 @@ class FinanceApArBalancePostgresContractTest {
     // immutable whole-allocation correction; raw records overstate cash used.
     assertTrue(src?.contains("finance_cash_allocation_effective")==true)
     assertFalse(src?.contains("FROM finance_cash_allocation_record")==true)
-    assertTrue(src?.contains("finance_ap_journal_reversal")==true
+    assertTrue(src?.contains("finance_ap_journal_reversal")==true)
     assertTrue(src?.contains("finance_ar_posted_journal")==true)
     assertNotNull(jdbc.queryForObject(
       "SELECT to_regclass('public.finance_bank_allocation_exception')",
