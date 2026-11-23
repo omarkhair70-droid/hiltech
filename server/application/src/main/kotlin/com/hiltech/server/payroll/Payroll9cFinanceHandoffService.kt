@@ -106,6 +106,17 @@ object PayrollFinanceReviewManifestPolicy {
             run.lines.map { it.employeeId }.toSet().size != run.lines.size ||
             run.lines.map { it.snapshotId }.toSet().size != run.lines.size
         ) Payroll9aPolicy.fail("PAYROLL_FINANCE_MANIFEST_INVALID", HttpStatus.CONFLICT)
+        // The normal server DTO uses canonical UUID strings, but the
+        // manifest policy must also reject alias spellings (e.g. uppercase
+        // versus lowercase) that resolve to the *same* employee/snapshot.
+        val snapshotIds = run.lines.map { line ->
+            runCatching { UUID.fromString(line.snapshotId) }.getOrElse {
+                Payroll9aPolicy.fail("PAYROLL_FINANCE_SNAPSHOT_INVALID", HttpStatus.CONFLICT)
+            }
+        }
+        if (snapshotIds.toSet().size != snapshotIds.size) {
+            Payroll9aPolicy.fail("PAYROLL_FINANCE_DUPLICATE_SNAPSHOT", HttpStatus.CONFLICT)
+        }
         val lines = run.lines.map { line ->
             val net = runCatching { BigDecimal(line.net) }.getOrElse {
                 Payroll9aPolicy.fail("PAYROLL_FINANCE_NET_INVALID", HttpStatus.CONFLICT)
@@ -122,6 +133,9 @@ object PayrollFinanceReviewManifestPolicy {
                 requiresTransfer = net.signum() > 0,
             )
         }.sortedBy { it.employeeId.toString() }
+        if (lines.map { it.employeeId }.toSet().size != lines.size) {
+            Payroll9aPolicy.fail("PAYROLL_FINANCE_DUPLICATE_EMPLOYEE", HttpStatus.CONFLICT)
+        }
         val total = lines.fold(BigDecimal.ZERO) { acc, line -> acc.add(line.net) }
         val frozen = runCatching { BigDecimal(run.net) }.getOrElse {
             Payroll9aPolicy.fail("PAYROLL_FINANCE_NET_INVALID", HttpStatus.CONFLICT)

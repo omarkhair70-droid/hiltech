@@ -104,6 +104,27 @@ class Payroll9cFinanceHandoffTest {
         assertThrows<ProductApiException> {
             manifest(run(lines = listOf(one, one), net = "200.00"))
         }
+        // Text spelling differs, but the two lines refer to one UUID.
+        assertThrows<ProductApiException> {
+            manifest(run(lines = listOf(
+                one,
+                one.copy(
+                    employeeId = one.employeeId.uppercase(),
+                    snapshotId = UUID.randomUUID().toString(),
+                ),
+            ), net = "200.00"))
+        }
+        assertThrows<ProductApiException> {
+            manifest(run(lines = listOf(
+                one,
+                two.copy(snapshotId = one.snapshotId.uppercase()),
+            )))
+        }
+        assertThrows<ProductApiException> {
+            manifest(run(lines = listOf(
+                one, two.copy(snapshotId = "not-a-uuid"),
+            )))
+        }
         assertThrows<ProductApiException> {
             manifest(run(lines = listOf(one, two.copy(currency = "USD"))))
         }
