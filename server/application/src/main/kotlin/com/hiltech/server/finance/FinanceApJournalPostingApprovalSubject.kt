@@ -183,6 +183,9 @@ class FinanceApJournalPostingApprovalSubject(
         )
         if (rows.size !in 2..32) return null
         val first = rows.first()
+        // Append-only period close invalidates old pending AP approvals,
+        // even though the immutable base finance_gl_period.state stays OPEN.
+        if (periodHasClose(org,first.periodId)) return null
         if (first.policyKey != key || first.org != org ||
             rows.any {
                 it.proposalId != proposalId || it.candidateId != first.candidateId ||
@@ -254,6 +257,21 @@ class FinanceApJournalPostingApprovalSubject(
             currency = first.currency,
             lines = rows.map { it.line },
         )
+    }
+
+    private fun periodHasClose(org: UUID, periodId: UUID): Boolean {
+        if (jdbc.queryForObject(
+                "SELECT to_regclass('public.finance_gl_period_close') IS NOT NULL",
+                Boolean::class.java,
+            ) != true) return false
+        return jdbc.queryForObject(
+            """
+            SELECT EXISTS(
+                SELECT 1 FROM public.finance_gl_period_close
+                WHERE organization_id=? AND period_id=?
+            )
+            """.trimIndent(),Boolean::class.java,org,periodId,
+        ) == true
     }
 
     fun policyKey(): String? = environment.getProperty(
