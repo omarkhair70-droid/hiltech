@@ -135,3 +135,44 @@ $$;
 CREATE TRIGGER payroll_9b_release_insert_validate
     BEFORE INSERT ON payroll_run_release FOR EACH ROW
     EXECUTE FUNCTION payroll_9b_release_insert_guard();
+
+
+-- An immutable row is still corruptible if a new child can be appended
+-- after the payroll run has been released. Seal both direct SQL INSERT paths.
+-- Draft construction remains valid before release within its transaction.
+CREATE FUNCTION payroll_9b_reject_late_run_line() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM payroll_run_release published
+        WHERE published.run_version_id = NEW.run_version_id
+    ) THEN
+        RAISE EXCEPTION 'Cannot append an employee to a released payroll run';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER payroll_9b_line_no_insert_after_release
+    BEFORE INSERT ON payroll_run_employee_line FOR EACH ROW
+    EXECUTE FUNCTION payroll_9b_reject_late_run_line();
+
+CREATE FUNCTION payroll_9b_reject_late_run_component() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM payroll_run_employee_line line
+        JOIN payroll_run_release published
+          ON published.run_version_id = line.run_version_id
+        WHERE line.id = NEW.run_employee_line_id
+    ) THEN
+        RAISE EXCEPTION 'Cannot append a component to a released payroll run';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER payroll_9b_component_no_insert_after_release
+    BEFORE INSERT ON payroll_run_component_ref FOR EACH ROW
+    EXECUTE FUNCTION payroll_9b_reject_late_run_component();

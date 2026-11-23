@@ -456,6 +456,39 @@ class Payroll9bDraftPostgresContractTest {
                 UUID.fromString(released.releaseId),
             )
         }
+        // Neither a newly added employee line nor a newly added component
+        // may be appended after the exact payroll run has been released.
+        // The component test chooses a new source ID to avoid a false
+        // positive from the existing duplicate-component UNIQUE constraint.
+        assertEquals(2, jdbc.queryForObject(
+            """
+            SELECT count(*) FROM pg_trigger
+            WHERE tgname IN (
+                'payroll_9b_line_no_insert_after_release',
+                'payroll_9b_component_no_insert_after_release'
+            ) AND NOT tgisinternal
+            """.trimIndent(), Int::class.java,
+        ))
+        assertThrows<Exception> {
+            jdbc.update(
+                """
+                INSERT INTO payroll_run_component_ref (
+                    id, run_employee_line_id, component_code, component_kind,
+                    source_domain, source_id, source_version, source_approval_ref, amount
+                )
+                SELECT ?, existing.run_employee_line_id, existing.component_code,
+                       existing.component_kind, existing.source_domain, ?,
+                       existing.source_version, existing.source_approval_ref,
+                       existing.amount
+                FROM payroll_run_component_ref existing
+                JOIN payroll_run_employee_line line
+                  ON line.id = existing.run_employee_line_id
+                WHERE line.run_version_id = ?
+                LIMIT 1
+                """.trimIndent(),
+                UUID.randomUUID(), UUID.randomUUID(), publishedRunId,
+            )
+        }
         // A direct SQL attempt cannot release an obsolete generation even
         // with a current routine policy and a legitimate organization user.
         assertThrows<Exception> {
