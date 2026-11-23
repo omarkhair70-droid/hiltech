@@ -188,18 +188,50 @@ BEGIN
  WHERE id=NEW.proposal_id AND organization_id=NEW.organization_id;
  SELECT * INTO a FROM finance_bank_account_register
  WHERE id=NEW.account_id AND organization_id=NEW.organization_id;
- IF p.id IS NULL OR a.id IS NULL OR a.state<>'APPROVED'
-   OR p.account_id<>NEW.account_id
-   OR p.statement_sha256<>NEW.statement_sha256
-   OR p.statement_lines_sha256<>NEW.statement_lines_sha256
-   OR p.statement_evidence_id<>NEW.statement_evidence_id
-   OR p.date_start<>NEW.date_start OR p.date_end<>NEW.date_end
-   OR p.opening_balance<>NEW.opening_balance
-   OR p.closing_balance<>NEW.closing_balance
-   OR p.expected_line_count<>NEW.expected_line_count
-   OR p.prepared_by_user_id=NEW.imported_by_user_id
-   OR a.currency<>NEW.currency THEN
-   RAISE EXCEPTION 'Imported bank statement must equal independently reviewed source'
+ IF p.id IS NULL THEN
+   RAISE EXCEPTION 'Approved bank statement proposal missing'
+     USING ERRCODE='23514';
+ END IF;
+ IF a.id IS NULL OR a.state<>'APPROVED' THEN
+   RAISE EXCEPTION 'Company bank account is not approved'
+     USING ERRCODE='23514';
+ END IF;
+ IF p.account_id IS DISTINCT FROM NEW.account_id THEN
+   RAISE EXCEPTION 'Approved bank source account mismatch'
+     USING ERRCODE='23514';
+ END IF;
+ IF p.statement_sha256 IS DISTINCT FROM NEW.statement_sha256 THEN
+   RAISE EXCEPTION 'Approved bank statement document SHA mismatch'
+     USING ERRCODE='23514';
+ END IF;
+ IF p.statement_lines_sha256 IS DISTINCT FROM NEW.statement_lines_sha256 THEN
+   RAISE EXCEPTION 'Approved bank statement line SHA mismatch'
+     USING ERRCODE='23514';
+ END IF;
+ IF p.statement_evidence_id IS DISTINCT FROM NEW.statement_evidence_id THEN
+   RAISE EXCEPTION 'Approved bank evidence reference mismatch'
+     USING ERRCODE='23514';
+ END IF;
+ IF p.date_start IS DISTINCT FROM NEW.date_start
+   OR p.date_end IS DISTINCT FROM NEW.date_end THEN
+   RAISE EXCEPTION 'Approved bank statement period mismatch'
+     USING ERRCODE='23514';
+ END IF;
+ IF p.opening_balance IS DISTINCT FROM NEW.opening_balance
+   OR p.closing_balance IS DISTINCT FROM NEW.closing_balance THEN
+   RAISE EXCEPTION 'Approved bank opening or closing amount mismatch'
+     USING ERRCODE='23514';
+ END IF;
+ IF p.expected_line_count IS DISTINCT FROM NEW.expected_line_count THEN
+   RAISE EXCEPTION 'Approved bank statement line count mismatch'
+     USING ERRCODE='23514';
+ END IF;
+ IF p.prepared_by_user_id=NEW.imported_by_user_id THEN
+   RAISE EXCEPTION 'Bank statement requires separate preparer and importer'
+     USING ERRCODE='23514';
+ END IF;
+ IF a.currency IS DISTINCT FROM NEW.currency THEN
+   RAISE EXCEPTION 'Approved bank account currency mismatch'
      USING ERRCODE='23514';
  END IF;
  SELECT * INTO r FROM approval_request
