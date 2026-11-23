@@ -49,6 +49,13 @@ data class FinanceBankIntakePrepareRequest(
     val closingBalance:String,
     val lines:List<FinanceBankIntakeLineRequest>,
 )
+data class FinanceBankApprovedAccountView(
+    val id:UUID,
+    val bankName:String,
+    val maskedAccountReference:String,
+    val currency:String,
+    val state:String,
+)
 data class FinanceBankIntakeOperation(val operationId:UUID)
 data class FinanceBankIntakeReceipt(
     val proposalId:UUID,val organizationId:UUID,
@@ -354,6 +361,30 @@ class FinanceBankStatementIntakeService(
             approval=approved.approvalRequestId,intake=id,
             replayed=outcome.replayed)
     }
+    /** Native role-scoped bank selection; never return raw account details. */
+    fun listApprovedAccounts(
+        actor:UUID,org:UUID,
+    ):List<FinanceBankApprovedAccountView> {
+        val preparer = sourceRoleAllowed(actor,org,
+            "hiltech.finance.bank-statement-intake.preparer-authority-key")
+        val operator = sourceRoleAllowed(actor,org,
+            "hiltech.finance.bank-statement-intake.operator-authority-key")
+        if (!preparer && !operator) unavailable()
+        return jdbc.query(
+            """SELECT id,bank_name,masked_account_reference,currency,state
+               FROM finance_bank_account_register
+               WHERE organization_id=? AND state='APPROVED'
+               ORDER BY bank_name,id""".trimIndent(),
+            { rs,_ -> FinanceBankApprovedAccountView(
+                rs.getObject("id",UUID::class.java),
+                rs.getString("bank_name"),
+                rs.getString("masked_account_reference"),
+                rs.getString("currency"),
+                rs.getString("state"),
+            ) },org,
+        )
+    }
+
     fun status(actor:UUID,org:UUID,proposal:UUID):FinanceBankIntakeReceipt {
         // The original independent operator must read the approved proposal
         // before invoking record; READ does not inherit preparer permission.
@@ -434,6 +465,12 @@ class FinanceBankStatementIntakeController(
     private val intake:FinanceBankStatementIntakeService,
     private val environment:Environment,
 ) {
+    @GetMapping("/v1/finance/organizations/{orgId}/bank-accounts")
+    fun approvedBankAccounts(
+        http:HttpServletRequest,@PathVariable orgId:UUID,
+    ):List<FinanceBankApprovedAccountView> =
+        intake.listApprovedAccounts(actor(http),orgId)
+
     @PostMapping("/v1/finance/organizations/{orgId}/bank-statement-intakes/prepare")
     fun prepare(http:HttpServletRequest,@PathVariable orgId:UUID,
         @RequestBody body:FinanceBankIntakePrepareRequest,
