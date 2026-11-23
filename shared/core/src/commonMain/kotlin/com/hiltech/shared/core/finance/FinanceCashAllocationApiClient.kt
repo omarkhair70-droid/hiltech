@@ -4,6 +4,7 @@ import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 @Serializable
@@ -78,6 +79,13 @@ class FinanceCashAllocationApiClient(
     ):FinanceCashAllocationReceiptDto=command(
         org,proposal,operation,installation,"record",
     )
+    suspend fun operatorQueue(org:String,installation:String):List<FinanceCashAllocationReceiptDto> =
+        api.request(
+            method=HttpMethod.Get,
+            path=base(org)+"/cash-allocation-proposals/operator-queue",
+            options=HiltechRequestOptions(installationId=installation),
+            decode={json.decodeFromString(ListSerializer(FinanceCashAllocationReceiptDto.serializer()),it)},
+        )
     suspend fun status(
         org:String,proposal:String,installation:String,
     ):FinanceCashAllocationReceiptDto=api.request(
