@@ -26,6 +26,11 @@ import com.hiltech.shared.core.executive.executiveSnapshotMatchesSession
 import com.hiltech.shared.core.executive.orderExecutiveProjectsByHealth
 import com.hiltech.shared.core.executive.executiveVisiblePulse
 import com.hiltech.shared.core.executive.ExecutivePulseState
+import com.hiltech.shared.core.executive.ExecutiveOperationalBriefSection
+import com.hiltech.shared.core.executive.executiveSectionTrusted
+import com.hiltech.shared.core.executive.executiveDecisionsTrusted
+import com.hiltech.shared.core.executive.EXECUTIVE_PROJECT_SOURCE
+import com.hiltech.shared.core.executive.EXECUTIVE_ASSET_SOURCE
 
 /**
  * Native Windows + Android executive surface. Stateless by design:
@@ -130,12 +135,21 @@ fun ExecutiveHomeSection(
             }
         }
 
+        // Phase 13B: optional source-bound operating brief over this already
+        // validated snapshot; no extra endpoint, cache, digest delivery or
+        // cross-tenant access.
+        ExecutiveOperationalBriefSection(
+            home = home,
+            onOpenSource = onOpenSource,
+        )
+
         ExecutiveSectionHeader(
             "يحتاج قرارك",
             home.needsYou,
             "هذه قائمة قرارات الشخص المسجل عبر عضوياته المصرح بها؛ ليست إجمالي الشركة.",
+            trusted = executiveDecisionsTrusted(home),
         )
-        if (home.needsYou.status != "UNAVAILABLE") {
+        if (executiveDecisionsTrusted(home)) {
             if (home.needsYou.items.isEmpty()) {
                 EmptyExecutiveSection()
             }
@@ -151,6 +165,11 @@ fun ExecutiveHomeSection(
                     onOpenSource = onOpenSource,
                 )
             }
+        } else {
+            Text(
+                "هذا المصدر غير متاح أو لا يطابق نطاق القراءة المعتمد؛ لا نعرض عناصره.",
+                color = MaterialTheme.colorScheme.error,
+            )
         }
 
         HorizontalDivider()
@@ -159,8 +178,9 @@ fun ExecutiveHomeSection(
             "المشاريع والصحة التشغيلية",
             home.projects,
             "المشاريع المتاحة لك، مرتبة وفق حالة الصحة المسجلة في المصدر: الحرجة أولًا. UNKNOWN لا تعني سليمًا، والنافذة ليست إجمالي الشركة.",
+            trusted = executiveSectionTrusted(home.projects, EXECUTIVE_PROJECT_SOURCE),
         )
-        if (home.projects.status != "UNAVAILABLE") {
+        if (executiveSectionTrusted(home.projects, EXECUTIVE_PROJECT_SOURCE)) {
             if (home.projects.items.isEmpty()) {
                 EmptyExecutiveSection()
             }
@@ -228,6 +248,11 @@ fun ExecutiveHomeSection(
                     }
                 }
             }
+        } else {
+            Text(
+                "هذا المصدر غير متاح أو لا يطابق نطاق القراءة المعتمد؛ لا نعرض عناصره.",
+                color = MaterialTheme.colorScheme.error,
+            )
         }
 
         HorizontalDivider()
@@ -236,8 +261,9 @@ fun ExecutiveHomeSection(
             "استثناءات المعدات",
             home.assetExceptions,
             "قائمة الخدمة الحالية للمخازن المسموح برؤيتها فقط؛ ليست رصيدًا أو إجماليًا.",
+            trusted = executiveSectionTrusted(home.assetExceptions, EXECUTIVE_ASSET_SOURCE),
         )
-        if (home.assetExceptions.status != "UNAVAILABLE") {
+        if (executiveSectionTrusted(home.assetExceptions, EXECUTIVE_ASSET_SOURCE)) {
             if (home.assetExceptions.items.isEmpty()) {
                 EmptyExecutiveSection()
             }
@@ -257,6 +283,11 @@ fun ExecutiveHomeSection(
                     onOpenSource = onOpenSource,
                 )
             }
+        } else {
+            Text(
+                "هذا المصدر غير متاح أو لا يطابق نطاق القراءة المعتمد؛ لا نعرض عناصره.",
+                color = MaterialTheme.colorScheme.error,
+            )
         }
 
         HorizontalDivider()
@@ -281,18 +312,20 @@ private fun ExecutiveSectionHeader(
     title: String,
     section: ExecutiveSectionDto<*>,
     explanation: String,
+    trusted: Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(title, style = MaterialTheme.typography.titleLarge)
         Text(explanation, style = MaterialTheme.typography.bodySmall)
         Text(
-            "المصدر " + section.source + " · " + when (section.status) {
-                "CURRENT" -> "استجاب المصدر لنافذة القراءة؛ حداثة كل سجل موضحة بوقته"
-                "PARTIAL" -> "قراءة جزئية — لا تفسرها كإجمالي"
+            "المصدر " + section.source + " · " + when {
+                !trusted -> "العقد أو النطاق غير مطابق — البيانات محجوبة"
+                section.status == "CURRENT" -> "استجاب المصدر لنافذة القراءة؛ حداثة كل سجل موضحة بوقته"
+                section.status == "PARTIAL" -> "قراءة جزئية — لا تفسرها كإجمالي"
                 else -> "المصدر غير متاح — لا توجد قيمة صفرية مفترضة"
             },
             style = MaterialTheme.typography.labelMedium,
-            color = if (section.status == "UNAVAILABLE") MaterialTheme.colorScheme.error
+            color = if (!trusted) MaterialTheme.colorScheme.error
                 else MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (section.sourceAsOf != null) {
