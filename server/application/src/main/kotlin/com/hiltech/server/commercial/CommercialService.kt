@@ -247,7 +247,8 @@ class CommercialService(
             throw commercialError("COMMERCIAL_DEADLINE","Clarification after submission.",HttpStatus.BAD_REQUEST)
         val target = this.id("tender",key)
         val replay = execute(key,actor,"COMMERCIAL_TENDER_REVISION",target,"$id|$r",correlation) {
-            val parent = op(id,actor,"SALES_WRITE");open(parent);lockOpportunity(id)
+            lockOpportunity(id)
+            val parent = op(id,actor,"SALES_WRITE");open(parent)
             jdbc.update(
                 """INSERT INTO commercial_tender_revision
                    (id,organization_id,opportunity_id,revision_number,tender_type,reference_number,
@@ -331,7 +332,8 @@ class CommercialService(
         val description = required(r.description,10000)
         val target = this.id("scope",key)
         val replay = execute(key,actor,"COMMERCIAL_SCOPE_CREATE",target,"$id|$r",correlation) {
-            val parent = op(id,actor,"SALES_WRITE");open(parent);lockOpportunity(id)
+            lockOpportunity(id)
+            val parent = op(id,actor,"SALES_WRITE");open(parent)
             jdbc.update(
                 """INSERT INTO commercial_scope_version
                    (id,organization_id,opportunity_id,version_number,description,inclusions,exclusions,
@@ -365,7 +367,8 @@ class CommercialService(
         }
         val target = this.id("boq",key)
         val replay = execute(key,actor,"COMMERCIAL_BOQ_CREATE",target,"$id|$r",correlation) {
-            open(op(id,actor,"SALES_WRITE"));access.require(actor,company,"SALES_COST_VIEW");lockOpportunity(id)
+            lockOpportunity(id)
+            open(op(id,actor,"SALES_WRITE"));access.require(actor,company,"SALES_COST_VIEW")
             row("""SELECT id FROM commercial_scope_version
                    WHERE id=? AND opportunity_id=? AND organization_id=?""",scopeId,id,company)
             jdbc.update(
@@ -405,7 +408,8 @@ class CommercialService(
         val delivery = required(r.deliveryTerms,10000)
         val target = this.id("quote",key)
         val replay = execute(key,actor,"COMMERCIAL_QUOTE_DRAFT",target,"$id|$r",correlation) {
-            val parent = op(id,actor,"SALES_WRITE");open(parent);lockOpportunity(id)
+            lockOpportunity(id)
+            val parent = op(id,actor,"SALES_WRITE");open(parent)
             val boq = row(
                 """SELECT scope_version_id,currency FROM commercial_boq_version
                    WHERE id=? AND opportunity_id=? AND organization_id=?
