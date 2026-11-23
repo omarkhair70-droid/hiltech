@@ -28,7 +28,7 @@ fun executiveVisiblePulse(home: ExecutiveHomeDto): List<ExecutivePulseItem> {
     val assets = home.assetExceptions
 
     val decisionsState = when {
-        decisions.status == "UNAVAILABLE" -> ExecutivePulseState.SOURCE_UNAVAILABLE
+        !executiveDecisionsTrusted(home) -> ExecutivePulseState.SOURCE_UNAVAILABLE
         decisions.items.isNotEmpty() -> ExecutivePulseState.ATTENTION_VISIBLE
         decisions.partial || decisions.status != "CURRENT" -> ExecutivePulseState.UNVERIFIED
         else -> ExecutivePulseState.WINDOW_EMPTY
@@ -36,7 +36,7 @@ fun executiveVisiblePulse(home: ExecutiveHomeDto): List<ExecutivePulseItem> {
 
     val projectStates = projects.items.map { it.healthState }
     val projectState = when {
-        projects.status == "UNAVAILABLE" -> ExecutivePulseState.SOURCE_UNAVAILABLE
+        !executiveSectionTrusted(projects, EXECUTIVE_PROJECT_SOURCE) -> ExecutivePulseState.SOURCE_UNAVAILABLE
         "CRITICAL" in projectStates -> ExecutivePulseState.CRITICAL_VISIBLE
         "ON_HOLD" in projectStates || "ATTENTION" in projectStates -> ExecutivePulseState.ATTENTION_VISIBLE
         projectStates.any { it != "HEALTHY" } || projects.partial || projects.status != "CURRENT" ->
@@ -45,7 +45,7 @@ fun executiveVisiblePulse(home: ExecutiveHomeDto): List<ExecutivePulseItem> {
     }
 
     val assetState = when {
-        assets.status == "UNAVAILABLE" -> ExecutivePulseState.SOURCE_UNAVAILABLE
+        !executiveSectionTrusted(assets, EXECUTIVE_ASSET_SOURCE) -> ExecutivePulseState.SOURCE_UNAVAILABLE
         assets.items.isNotEmpty() -> ExecutivePulseState.ATTENTION_VISIBLE
         assets.partial || assets.status != "CURRENT" -> ExecutivePulseState.UNVERIFIED
         else -> ExecutivePulseState.WINDOW_EMPTY
@@ -61,7 +61,7 @@ fun executiveVisiblePulse(home: ExecutiveHomeDto): List<ExecutivePulseItem> {
                 ExecutivePulseState.UNVERIFIED -> "القراءة جزئية؛ لا يمكن الجزم باكتمال القرارات."
                 else -> "لا توجد قرارات ظاهرة في نافذة القراءة الحالية."
             },
-            incomplete = decisions.partial || decisions.status != "CURRENT",
+            incomplete = decisions.partial || decisions.status != "CURRENT" || !executiveDecisionsTrusted(home),
         ),
         ExecutivePulseItem(
             label = "صحة المشاريع",
@@ -74,6 +74,7 @@ fun executiveVisiblePulse(home: ExecutiveHomeDto): List<ExecutivePulseItem> {
                 else -> "لم تظهر مشكلة في نافذة المشاريع المقروءة."
             },
             incomplete = projects.partial || projects.status != "CURRENT" ||
+                !executiveSectionTrusted(projects, EXECUTIVE_PROJECT_SOURCE) ||
                 projectStates.any { it != "HEALTHY" && it != "CRITICAL" && it != "ON_HOLD" && it != "ATTENTION" },
         ),
         ExecutivePulseItem(
@@ -85,7 +86,8 @@ fun executiveVisiblePulse(home: ExecutiveHomeDto): List<ExecutivePulseItem> {
                 ExecutivePulseState.UNVERIFIED -> "بيانات المعدات غير مكتملة؛ لا يمكن إثبات خلوها من الاستثناءات."
                 else -> "لا توجد استثناءات ظاهرة في نافذة المعدات الحالية."
             },
-            incomplete = assets.partial || assets.status != "CURRENT",
+            incomplete = assets.partial || assets.status != "CURRENT" ||
+                !executiveSectionTrusted(assets, EXECUTIVE_ASSET_SOURCE),
         ),
     )
 }
