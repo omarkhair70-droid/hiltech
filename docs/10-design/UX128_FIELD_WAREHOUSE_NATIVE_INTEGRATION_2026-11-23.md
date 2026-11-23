@@ -26,3 +26,9 @@
 3. Review warehouse scan → resource → permitted action → receipt/history with live source-bound DTOs and test stale scan/permission changes.
 4. After DevOps integrates latest domain branches, mount and review P8 Finance, P9 payroll, P10 Sales, P11 Service and P13 Executive using their source-owned APIs and permissions. Keep business logic with source owners.
 5. After all core modules through P13 are present, conduct final per-role and cross-platform design/a11y/performance pass. 
+
+## 2026-11-23 — Actor isolation hardening
+
+Warehouse operator selection, busy/error and visible warehouse directory are keyed by `organizationId + installationId + operatorScopeKey`; the physical workspace key also contains that scope. Both Android `MainActivity` and Windows `Main.kt` pass the actual signed-in `identityId`, so a role/account switch within the same organization cannot reuse the previous operator's remembered warehouse view. This only isolates UI state; the backend remains authoritative for every read and mutation.
+
+**No CI green claim.** The current HEAD must pass the exact-head native workflow, and a real identity-switch / role-revocation check remains necessary.
