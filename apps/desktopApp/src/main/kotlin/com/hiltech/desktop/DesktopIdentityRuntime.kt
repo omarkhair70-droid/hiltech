@@ -50,6 +50,10 @@ import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.identity.auth.NativeOidcSessionManager
 import com.hiltech.shared.core.payroll.Payroll9aApiClient
 import com.hiltech.shared.core.payroll.Payroll9b9cApiClient
+import com.hiltech.shared.core.service.SupportDeskApiClient
+import com.hiltech.shared.core.service.SupportTimeApiClient
+import com.hiltech.shared.core.service.WarrantyCoverageReadinessApiClient
+import com.hiltech.shared.core.service.MaintenanceAgendaApiClient
 import com.hiltech.shared.core.service.HandoverApiClient
 import com.hiltech.shared.core.commercial.CommercialApiClient
 import com.hiltech.shared.core.executive.ExecutiveApiClient
@@ -259,6 +263,10 @@ class DesktopIdentityRuntime(
     internal val payrollAdminApi = Payroll9aApiClient(productApi)
     internal val commercialApi = CommercialApiClient(productApi)
     internal val handoverApi = HandoverApiClient(productApi)
+    internal val supportServiceApi = SupportDeskApiClient(productApi)
+    internal val supportTimeApi = SupportTimeApiClient(productApi)
+    internal val warrantyReadinessApi = WarrantyCoverageReadinessApiClient(productApi)
+    internal val maintenanceAgendaApi = MaintenanceAgendaApiClient(productApi)
     internal val readProjectsApi: ProjectsApiClient get() = projectsApi
     internal val servicePurchaseNeedApi = ServicePurchaseNeedApiClient(productApi)
     internal val serviceSupplierSourcingApi = ServiceSupplierSourcingApiClient(productApi)

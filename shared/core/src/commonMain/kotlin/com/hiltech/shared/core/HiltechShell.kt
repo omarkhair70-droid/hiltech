@@ -20,6 +20,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
@@ -269,6 +270,9 @@ fun HiltechShell(
     procurementOperator: @Composable () -> Unit = {},
     // Only source-authorized, default-OFF modules are supplied by native hosts.
     operationalWorkspaces: List<NativeOperationalWorkspace> = emptyList(),
+    // Host requests a source-owned Projects workspace focus after selecting
+    // a canonical Executive project, never a new permission or API route.
+    projectFocusRequest: Int = 0,
 ) {
     MaterialTheme {
         // Never inherit a different actor's previous desktop/mobile scroll
@@ -288,6 +292,12 @@ fun HiltechShell(
         val warehouseWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val projectWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val shellNavigationScope = rememberCoroutineScope()
+        val canFocusProjects = state is HiltechShellState.SignedIn && state.projects != null
+        LaunchedEffect(shellScrollScope, projectFocusRequest, canFocusProjects) {
+            if (projectFocusRequest > 0 && canFocusProjects) {
+                projectWorkspaceRequester.bringIntoView()
+            }
+        }
         Column(
             modifier =
                 Modifier

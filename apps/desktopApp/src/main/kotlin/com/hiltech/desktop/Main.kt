@@ -6,6 +6,10 @@ import com.hiltech.shared.core.StockAction
 import com.hiltech.shared.core.StockInventoryState
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.hiltech.shared.core.HiltechOnboardingState
@@ -28,6 +32,7 @@ import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
 import com.hiltech.shared.core.payroll.payrollAdminReadNativeWorkspace
 import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
 import com.hiltech.shared.core.service.handoverReadNativeWorkspace
+import com.hiltech.shared.core.service.serviceOperationsReadNativeWorkspace
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
 import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
@@ -2734,8 +2739,15 @@ fun main() {
             },
             title = "HILTECH",
         ) {
+            val navigationIdentity = (shellState.value as? HiltechShellState.SignedIn)?.identity
+            val navigationOrganization = navigationIdentity?.organizations?.firstOrNull { it.primary }
+                ?: navigationIdentity?.organizations?.firstOrNull()
+            val nativeProjectScope = navigationIdentity?.identityId.orEmpty() + ":" +
+                navigationOrganization?.organizationId.orEmpty()
+            var executiveProjectFocus by remember(nativeProjectScope) { mutableIntStateOf(0) }
             HiltechShell(
                 state = shellState.value,
+                projectFocusRequest = executiveProjectFocus,
                 operationalWorkspaces = (shellState.value as? HiltechShellState.SignedIn)?.let { signed ->
                     val org = signed.identity.organizations.firstOrNull { it.primary }
                         ?: signed.identity.organizations.firstOrNull()
@@ -2751,7 +2763,11 @@ fun main() {
                                 authorityRevisionKey =
                                     signed.identity.identityVersion.toString() + ":" +
                                         org.membershipVersion.toString(),
-                                onOpenProject = ::selectProject,
+                                onOpenProject = { projectId ->
+                                    // Original Projects API performs its own authorization.
+                                    selectProject(projectId)
+                                    executiveProjectFocus += 1
+                                },
                             ))
                         }
                         if (System.getenv("HILTECH_OWN_PAYSLIPS_UI_ENABLED")
@@ -2790,6 +2806,20 @@ fun main() {
                             add(handoverReadNativeWorkspace(
                                 projects = runtime.readProjectsApi,
                                 handover = runtime.handoverApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                            ))
+                        }
+                        if (System.getenv("HILTECH_SERVICE_OPERATIONS_READ_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(serviceOperationsReadNativeWorkspace(
+                                projects = runtime.readProjectsApi,
+                                ticketsApi = runtime.supportServiceApi,
+                                warrantyApi = runtime.warrantyReadinessApi,
+                                timeApi = runtime.supportTimeApi,
+                                agendaApi = runtime.maintenanceAgendaApi,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,

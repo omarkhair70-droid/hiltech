@@ -56,6 +56,9 @@ val commercialReadUiEnabled = providers
 val handoverReadUiEnabled = providers
     .gradleProperty("hiltech.handoverReadEnabled")
     .getOrElse("false") == "true"
+val serviceOperationsReadUiEnabled = providers
+    .gradleProperty("hiltech.serviceOperationsReadEnabled")
+    .getOrElse("false") == "true"
 val financeInvoiceReadUiEnabled = providers
     .gradleProperty("hiltech.financeInvoiceReadEnabled")
     .getOrElse("false") == "true"
@@ -173,6 +176,11 @@ android {
             "boolean",
             "HILTECH_HANDOVER_READ_ENABLED",
             handoverReadUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_SERVICE_OPERATIONS_READ_ENABLED",
+            serviceOperationsReadUiEnabled.toString(),
         )
         buildConfigField(
             "boolean",

@@ -5,9 +5,11 @@ on:
     branches:
       - "ux/128-native-route-integration-p7to13-20261123"
       - "integration/hiltech-closeout-github-20261123"
+      - "ux/128-closeout-delta-on-devops215-20261123"
   pull_request:
     branches:
       - "integration/phase7to11-native-executive13ab-20261123"
+      - "integration/hiltech-closeout-github-20261123"
   workflow_dispatch:
 
 permissions:
@@ -35,4 +37,4 @@ jobs:
           ./gradlew :shared:core:desktopTest \
             :apps:desktopApp:compileKotlin \
             :apps:androidApp:assembleDebug \
-            --no-daemon --console=plain
+            --no-configuration-cache --no-daemon --console=plain
