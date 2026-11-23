@@ -74,36 +74,40 @@ private fun ServiceBuyerAndIssuerPane(
 
     Card(modifier=Modifier.fillMaxWidth()) {
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text("Purchasing and approval",style=MaterialTheme.typography.titleMedium)
+            Text("الشراء والاعتماد / Purchasing & approval",style=MaterialTheme.typography.titleMedium)
             OutlinedButton(enabled=!busy,onClick={
-                busy=true;error=null
+                busy=true;error=null;confirmation=null
+                // Permission/source reload revokes previous buyer actions immediately.
+                needs=emptyList();quotes=emptyList();currentRfq=null;selected=null;queue=emptyList()
                 scope.launch {
                     try {needs=sourcing.eligibleNeeds(org,install)}
                     catch(e:Exception){error=e.message?:"Buyer authorization is unavailable."}
                     finally {busy=false}
                 }
-            }){Text("My approved service requests")}
+            }){Text("طلبات الخدمات الجاهزة للشراء")}
             needs.forEach { need ->
                 OutlinedButton(enabled=!busy&&need.sourceCurrent,onClick={
-                    busy=true;error=null
+                    busy=true;error=null;confirmation=null
+                    currentRfq=null;quotes=emptyList();selected=null
                     scope.launch {
                         try {
                             val rfqId=need.rfqId ?: sourcing.open(
                                 need.needId,OpenServiceRfqDto(operation(),need.needVersion),
                                 install).rfq.id
+                            val sourceQuotes=sourcing.comparison(rfqId,install)
                             currentRfq=rfqId
-                            quotes=sourcing.comparison(rfqId,install)
+                            quotes=sourceQuotes
                         } catch(e:Exception){error=e.message?:"The service source was changed."}
                         finally {busy=false}
                     }
-                }) {Text("Review supplier offers · "+need.specification.take(60))}
+                }) {Text("مراجعة عروض الموردين · "+need.specification.take(60))}
             }
             currentRfq?.let { rfq ->
-                Text("Verified supplier offers",style=MaterialTheme.typography.titleSmall)
-                if(quotes.isEmpty())Text("No verified supplier quotes yet.")
+                Text("العروض المسجلة للمراجعة",style=MaterialTheme.typography.titleSmall)
+                if(quotes.isEmpty())Text("لا توجد عروض موردين حالية لهذا الطلب.")
                 quotes.forEach { quote ->
                     OutlinedButton(enabled=!busy&&quote.sourceCurrent,onClick={
-                        busy=true;error=null
+                        busy=true;error=null;confirmation=null;selected=null
                         scope.launch {
                             try {
                                 val candidate=api.selectQuote(
@@ -115,13 +119,13 @@ private fun ServiceBuyerAndIssuerPane(
                             finally{busy=false}
                         }
                     }) {
-                        Text("Select "+quote.supplierOrganizationId.take(8)+
+                        Text("اختيار عرض · "+quote.supplierOrganizationId.take(8)+
                             " · "+quote.currency+" "+quote.totalAmount)
                     }
                 }
             }
             selected?.let { candidate ->
-                Text("Selected offer · "+candidate.currency+" "+candidate.totalAmount)
+                Text("العرض المختار · "+candidate.currency+" "+candidate.totalAmount)
                 OutlinedButton(enabled=!busy&&candidate.sourceCurrent,onClick={
                     busy=true;error=null
                     scope.launch {
@@ -133,17 +137,17 @@ private fun ServiceBuyerAndIssuerPane(
                         } catch(e:Exception){error=e.message?:"Approval not available."}
                         finally {busy=false}
                     }
-                }) {Text("Request company approval")}
-                Text("Approval: "+(candidate.approvalState?:"Not requested"))
+                }) {Text("طلب اعتماد الشركة")}
+                Text("حالة الاعتماد: "+(candidate.approvalState?:"لم يُطلب بعد"))
             }
             OutlinedButton(enabled=!busy,onClick={
-                busy=true;error=null
+                busy=true;error=null;queue=emptyList()
                 scope.launch {
                     try {queue=api.queue(org,install)}
                     catch(e:Exception){error=e.message?:"Service order issue permission unavailable."}
                     finally {busy=false}
                 }
-            }){Text("My approved service orders to issue")}
+            }){Text("أوامر الخدمات المصرح بإصدارها")}
             queue.forEach { candidate ->
                 Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
                     Text("Supplier "+candidate.supplierOrganizationId.take(8)+
@@ -165,7 +169,7 @@ private fun ServiceBuyerAndIssuerPane(
                                 finally{busy=false}
                             }
                         }
-                    ) {Text("Issue approved internal service order")}
+                    ) {Text("إصدار أمر خدمة داخلي معتمد")}
                 }
             }
             confirmation?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
