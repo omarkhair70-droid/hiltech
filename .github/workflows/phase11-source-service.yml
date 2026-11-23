@@ -68,6 +68,7 @@ jobs:
             --tests com.hiltech.server.service.SupportCasePolicyTest \
             --tests com.hiltech.server.service.SupportTimePolicyTest \
             --tests com.hiltech.server.service.ServiceContractSourcePolicyTest \
+            --tests com.hiltech.server.service.WarrantyCoverageReadinessPolicyTest \
             --tests com.hiltech.server.service.MaintenanceTicketFollowupPolicyTest \
             --tests com.hiltech.server.service.MaintenanceDraftPolicyTest \
             --tests com.hiltech.server.service.MaintenanceReviewPolicyTest \
