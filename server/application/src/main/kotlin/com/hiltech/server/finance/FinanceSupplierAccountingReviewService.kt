@@ -110,7 +110,7 @@ class FinanceSupplierAccountingReviewService(
             !candidate.sourceCurrent) unavailable()
         // Handoff and review-candidate ID are immutable once recorded. Scope
         // comes from the original P8A source; the subject guard rechecks P7.
-        val org = payableCandidates.organizationOfAuthorizedCandidate(actor, candidateId)
+        val org = candidate.organizationId ?: unavailable()
         val snapshot = source.current(org, candidateId) ?: unavailable()
         if (snapshot.candidateId != candidate.id ||
             snapshot.supplierInvoiceId != candidate.invoiceId ||
