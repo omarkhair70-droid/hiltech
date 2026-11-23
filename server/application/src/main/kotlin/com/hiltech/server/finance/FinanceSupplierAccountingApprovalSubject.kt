@@ -150,12 +150,12 @@ class FinanceSupplierAccountingApprovalSubject(
                 AND e.classification_code='HIGHLY_RESTRICTED'
                 AND e.client_visibility_mode='INTERNAL_ONLY'
                 AND e.object_key_ref IS NOT NULL
-            JOIN evidence_upload_session session
-                ON session.evidence_id=e.id
-                AND session.state='READY'
-                AND session.finalized_at IS NOT NULL
-                AND session.expected_sha256=e.sha256
-                AND session.expected_size_bytes=e.size_bytes
+            JOIN evidence_upload_session upload_session
+                ON upload_session.evidence_id=e.id
+                AND upload_session.state='READY'
+                AND upload_session.finalized_at IS NOT NULL
+                AND upload_session.expected_sha256=e.sha256
+                AND upload_session.expected_size_bytes=e.size_bytes
             JOIN organization company
                 ON company.id=c.organization_id
                 AND company.status='ACTIVE'
