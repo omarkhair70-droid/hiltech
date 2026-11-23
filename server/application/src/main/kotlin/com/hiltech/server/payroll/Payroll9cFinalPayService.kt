@@ -193,15 +193,28 @@ class Payroll9cFinalPayService(
                     if (!fullyMatched) {
                         blockers += "FINAL_PAY_FINANCE_INSTRUCTION_NOT_MATCHED"
                     } else {
-                        val result = Payroll9cReconciler.reconcile(
-                            case.organizationId, run.runId, expected,
-                            financePort.paymentEvents(case.organizationId, run.runId),
+                        val events = financePort.paymentEvents(
+                            case.organizationId, run.runId,
                         )
-                        paymentStatus = result.employees.singleOrNull {
-                            it.employeeId == case.employeeId
-                        }?.result?.name
-                        if (paymentStatus != PayrollFinanceOutcome.SUCCESS.name) {
-                            blockers += "FINAL_PAY_PAYMENT_NOT_CONFIRMED"
+                        if (expected.isEmpty() && events.isNotEmpty()) {
+                            blockers += "FINAL_PAY_FINANCE_UNEXPECTED_EVENT"
+                        } else {
+                            // The employee has no bank transfer due when
+                            // frozen net is zero; never label this PAID.
+                            val result = if (expected.isEmpty()) null else
+                                Payroll9cReconciler.reconcile(
+                                    case.organizationId, run.runId, expected, events,
+                                )
+                            paymentStatus = if (run.net.signum() == 0)
+                                "NO_PAYMENT_REQUIRED"
+                            else result?.employees?.singleOrNull {
+                                it.employeeId == case.employeeId
+                            }?.result?.name
+                            if (run.net.signum() > 0 &&
+                                paymentStatus != PayrollFinanceOutcome.SUCCESS.name
+                            ) {
+                                blockers += "FINAL_PAY_PAYMENT_NOT_CONFIRMED"
+                            }
                         }
                     }
                 }
@@ -217,8 +230,12 @@ class Payroll9cFinalPayService(
             payrollClearanceState = payroll?.name,
             financeClearanceState = financial?.name,
             hrClearanceState = hr?.name,
-            status = if (blockers.isEmpty()) "PAYMENT_CONFIRMED_FOR_CLEARANCE_REVIEW"
-                else "REQUIRES_REVIEW",
+            status = when {
+                blockers.isNotEmpty() -> "REQUIRES_REVIEW"
+                paymentStatus == "NO_PAYMENT_REQUIRED" ->
+                    "NO_PAYMENT_REQUIRED_FOR_CLEARANCE_REVIEW"
+                else -> "PAYMENT_CONFIRMED_FOR_CLEARANCE_REVIEW"
+            },
             blockers = blockers,
             releasedRunVersionId = run?.runId?.toString(),
             currency = run?.currency,
