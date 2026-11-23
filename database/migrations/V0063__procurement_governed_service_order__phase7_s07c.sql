@@ -139,6 +139,7 @@ FOR EACH ROW EXECUTE FUNCTION reject_procurement_draft_mutation();
 
 CREATE FUNCTION guard_procurement_service_order() RETURNS trigger
 LANGUAGE plpgsql AS $$
+DECLARE
   candidate procurement_service_order_candidate%ROWTYPE;
   approval approval_request%ROWTYPE;
   policy approval_policy_version%ROWTYPE;
