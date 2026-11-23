@@ -61,6 +61,13 @@ jobs:
             --tests com.hiltech.server.finance.FinanceBankReconciliationSignoffPostgresContractTest \
             --tests com.hiltech.server.finance.FinanceMixedBankCashPostgresContractTest \
             --no-daemon --console=plain --stacktrace
+      - name: Explain synthetic finance test failures
+        if: failure()
+        run: |
+          report="server/application/build/test-results/test/TEST-com.hiltech.server.finance.FinanceMixedBankCashPostgresContractTest.xml"
+          if [ -f "$report" ]; then
+            grep -A3 -m1 '<failure' "$report" | cut -c1-1800 || true
+          fi
       - name: Package unified server
         run: ./gradlew :server:application:bootJar --no-daemon --console=plain
   native-compilation:

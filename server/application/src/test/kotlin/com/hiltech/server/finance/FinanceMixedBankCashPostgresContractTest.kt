@@ -374,6 +374,8 @@ class FinanceMixedBankCashPostgresContractTest {
             "independent_decision","active_policy").all{approvalFlags[it]==true}
          ){"Mixed bank allocation approval proof failed: $approvalFlags"}
          val record=UUID.randomUUID()
+         val attemptSavepoint=connection.setSavepoint()
+         try {
          insert("""INSERT INTO finance_cash_allocation_record(
            id,operation_id,organization_id,proposal_id,source_kind,
            source_journal_id,bank_statement_line_id,approval_request_id,
@@ -382,6 +384,38 @@ class FinanceMixedBankCashPostgresContractTest {
            VALUES(?,?,?,?,'AR',?,?,?,404,?,'EGP',?,?,?,'mixed-bank-match')""",
            record,UUID.randomUUID(),org,prepared,journal,bankLine,review,
            allocationPolicy,amount,recordBy,t.plusHours(5))
+         } catch(ex:DataIntegrityViolationException) {
+           connection.rollback(attemptSavepoint)
+           if(recordBy==allocationRecorder){
+             val actual=jdbc.queryForMap(
+               """SELECT p.prepared_by_user_id AS proposal_preparer,
+                  p.policy_key AS proposal_policy,
+                  p.approval_subject_version AS proposal_version,
+                  a.requester_user_id AS requester,
+                  a.subject_id AS approved_subject,
+                  a.subject_version AS approved_version,
+                  a.policy_key AS approved_policy,
+                  a.state AS approved_state,
+                  a.completed_at AS approved_time,
+                  d.actor_user_id AS decision_actor,
+                  v.effective_from AS policy_effective
+               FROM finance_cash_allocation_proposal p
+               JOIN approval_request a ON a.id=?
+               JOIN approval_decision d ON d.approval_request_id=a.id
+               JOIN approval_policy_version v
+                 ON v.organization_id=a.organization_id
+                  AND v.policy_key=a.policy_key
+                  AND v.version_number=a.policy_version
+               WHERE p.id=? AND p.organization_id=?""",
+               review,prepared,org)
+             throw AssertionError(
+               "Unexpected REAL approved cash allocation rejection: " +
+               "facts=$approvalFlags db=$actual; actor=$recordBy, " +
+               "recordedAt=${t.plusHours(5)}, cause=${ex.mostSpecificCause.message}",
+               ex)
+           }
+           throw ex
+         }
          return record
        }
        val bankAllocation=recordBankAllocation(actualBankIds[0],bank100,allocationRecorder)
