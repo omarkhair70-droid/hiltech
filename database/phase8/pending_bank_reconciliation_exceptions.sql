@@ -4,7 +4,7 @@ CREATE VIEW finance_bank_allocation_exception AS
 WITH assigned AS (
  SELECT organization_id,bank_statement_line_id,
         sum(allocated_amount) AS applied
- FROM finance_cash_allocation_record
+ FROM finance_cash_allocation_effective
  GROUP BY organization_id,bank_statement_line_id
 )
 SELECT b.organization_id,b.intake_id,b.account_id,

@@ -105,6 +105,21 @@ BEGIN
     OR exact_proposal.prepared_by_user_id=NEW.posted_by_user_id THEN
       RAISE EXCEPTION 'Reversal must match immutable reviewed proposal' USING ERRCODE='23514';
   END IF;
+  -- If Phase 8U bank allocation is installed, do not erase a supplier
+  -- liability while an effective bank payment still points to it.
+  -- A prior independently approved cash-match correction must first void
+  -- the erroneous match; cash itself is never automatically refunded.
+  IF to_regclass('public.finance_cash_allocation_effective') IS NOT NULL THEN
+    IF EXISTS(
+      SELECT 1 FROM finance_cash_allocation_effective ca
+      WHERE ca.organization_id=NEW.organization_id
+        AND ca.source_kind='AP'
+        AND ca.source_journal_id=NEW.original_journal_id
+    ) THEN
+      RAISE EXCEPTION 'Cash-linked supplier AP cannot be reversed before approved cash correction'
+        USING ERRCODE='23514';
+    END IF;
+  END IF;
   -- Same lock order as original AP posting and period closure.
   SELECT * INTO p FROM finance_gl_period
     WHERE id=NEW.target_period_id AND organization_id=NEW.organization_id FOR UPDATE;

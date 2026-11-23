@@ -115,7 +115,7 @@ BEGIN
     USING ERRCODE='23514';
  END IF;
  SELECT coalesce(sum(allocated_amount),0) INTO used_cash
- FROM finance_cash_allocation_record
+ FROM finance_cash_allocation_effective
  WHERE organization_id=NEW.organization_id AND bank_statement_line_id=NEW.bank_statement_line_id;
  SELECT coalesce(sum(amount),0) INTO used_funding
  FROM finance_employee_funding_record
@@ -181,7 +181,7 @@ BEGIN
  SELECT amount INTO capacity FROM finance_bank_statement_intake_line
  WHERE id=bank_id AND organization_id=org FOR UPDATE;
  SELECT coalesce(sum(allocated_amount),0) INTO used_cash
- FROM finance_cash_allocation_record
+ FROM finance_cash_allocation_effective
  WHERE organization_id=org AND bank_statement_line_id=bank_id;
  SELECT coalesce(sum(amount),0) INTO used_funding
  FROM finance_employee_funding_record
