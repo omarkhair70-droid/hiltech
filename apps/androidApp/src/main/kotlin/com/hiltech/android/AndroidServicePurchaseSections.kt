@@ -10,9 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import com.hiltech.shared.core.procurement.ServicePurchaseNeedSection
-import com.hiltech.shared.core.procurement.ServiceSupplierQuoteCaptureSection
-import com.hiltech.shared.core.procurement.ServicePurchaseOperationsSection
+import com.hiltech.shared.core.procurement.ServicePurchaseNativeJourney
 import com.hiltech.shared.core.procurement.ServiceSelectedFile
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -71,27 +69,16 @@ fun AndroidServicePurchaseSections(application: HiltechApplication, organization
     }
 
     val op = { UUID.randomUUID().toString() }
-    ServicePurchaseNeedSection(
-        api = application.servicePurchaseNeedApi,
-        organizationId = organizationId,
-        installationId = install,
-        newOperationId = op,
-    )
-    ServiceSupplierQuoteCaptureSection(
+    ServicePurchaseNativeJourney(
+        needApi = application.servicePurchaseNeedApi,
         sourcing = application.serviceSupplierSourcingApi,
         supplierRegistry = application.supplierMasterDataApi,
-        uploader = application.serviceSupplierQuoteUploader,
-        organizationId = organizationId,
-        installationId = install,
-        newOperationId = op,
-        pickQuoteFile = { pickSourceDocument() },
-    )
-    ServicePurchaseOperationsSection(
-        sourcing = application.serviceSupplierSourcingApi,
+        quoteUploader = application.serviceSupplierQuoteUploader,
         api = application.serviceOrderAndInvoiceApi,
         organizationId = organizationId,
         installationId = install,
         newOperationId = op,
+        pickQuoteFile = { pickSourceDocument() },
         uploadFile = { kind, slot ->
             require(slot.documentKind == kind) { "Document source/type mismatch." }
             val file = pickSourceDocument()
