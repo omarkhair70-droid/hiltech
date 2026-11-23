@@ -56,6 +56,7 @@ jobs:
         run: |
           ./gradlew :shared:core:desktopTest \
             --tests com.hiltech.shared.core.finance.FinanceCashAllocationApiClientTest \
+            --tests com.hiltech.shared.core.finance.FinanceBankStatementIntakeApiClientTest \
             --no-daemon --console=plain
       - name: Prove native application integration
         run: |
