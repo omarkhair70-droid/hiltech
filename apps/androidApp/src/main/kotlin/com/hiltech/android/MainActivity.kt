@@ -39,6 +39,7 @@ import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
 import com.hiltech.shared.core.payroll.payrollAdminReadNativeWorkspace
 import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
 import com.hiltech.shared.core.service.handoverReadNativeWorkspace
+import com.hiltech.shared.core.service.serviceOperationsReadNativeWorkspace
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
 import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
@@ -174,6 +175,18 @@ class MainActivity : ComponentActivity() {
                             add(handoverReadNativeWorkspace(
                                 projects = hiltechApplication.readProjectsApi,
                                 handover = hiltechApplication.handoverApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_SERVICE_OPERATIONS_READ_ENABLED) {
+                            add(serviceOperationsReadNativeWorkspace(
+                                projects = hiltechApplication.readProjectsApi,
+                                ticketsApi = hiltechApplication.supportServiceApi,
+                                warrantyApi = hiltechApplication.warrantyReadinessApi,
+                                timeApi = hiltechApplication.supportTimeApi,
+                                agendaApi = hiltechApplication.maintenanceAgendaApi,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
