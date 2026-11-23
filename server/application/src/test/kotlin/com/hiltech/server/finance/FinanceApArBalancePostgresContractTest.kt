@@ -49,7 +49,7 @@ class FinanceApArBalancePostgresContractTest {
     val src=jdbc.queryForObject(
       """SELECT definition FROM pg_views WHERE schemaname='public'
          AND viewname='finance_ap_ar_source_balance'""",String::class.java)
-    assertTrue(src?.contains("finance_cash_allocation_record")==true)
+    assertTrue(src?.contains("finance_cash_allocation_effective")==true)
     assertTrue(src?.contains("finance_ap_journal_reversal")==true)
     assertTrue(src?.contains("finance_ar_posted_journal")==true)
     assertNotNull(jdbc.queryForObject(
