@@ -23,6 +23,7 @@ import com.hiltech.shared.core.procurement.PurchaseOrderIssuerSection
 import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceSection
 import com.hiltech.shared.core.procurement.SupplierPoCommunicationSection
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeSection
+import com.hiltech.shared.core.executive.executiveNativeWorkspace
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
@@ -2728,6 +2729,26 @@ fun main() {
         ) {
             HiltechShell(
                 state = shellState.value,
+                operationalWorkspaces = (shellState.value as? HiltechShellState.SignedIn)?.let { signed ->
+                    val org = signed.identity.organizations.firstOrNull { it.primary }
+                        ?: signed.identity.organizations.firstOrNull()
+                    if (System.getenv("HILTECH_EXECUTIVE_HOME_UI_ENABLED")
+                            ?.equals("true", ignoreCase = true) == true && org != null
+                    ) {
+                        listOf(
+                            executiveNativeWorkspace(
+                                client = runtime.executiveApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                authorityRevisionKey =
+                                    signed.identity.identityVersion.toString() + ":" +
+                                        org.membershipVersion.toString(),
+                                onOpenProject = ::selectProject,
+                            ),
+                        )
+                    } else emptyList()
+                } ?: emptyList(),
                 onSignIn = { signIn(false) },
                 onSignOut = ::signOut,
                 onRetry = { signIn(false) },
