@@ -204,7 +204,7 @@ private fun ServicePurchaseNeedCard(
                     } finally {busy=false}
                 }
             }
-            if(need.canSubmit) OutlinedButton(enabled=!busy,onClick={
+            if(need.canSubmit) OutlinedButton(enabled=serviceNeedActionEnabled(need.sourceCurrent,need.canSubmit,busy),onClick={
                 act("submit"){ op ->
                     api.submit(need.id,ServicePurchaseNeedActionDto(
                         op,need.version),installationId).need
@@ -221,7 +221,7 @@ private fun ServicePurchaseNeedCard(
                 OutlinedTextField(value=reason,onValueChange={
                     reason=it;operation=null
                 },label={Text("سبب الطلب بعد التعديل")},modifier=Modifier.fillMaxWidth())
-                OutlinedButton(enabled=!busy && scopeText.trim().length in 20..2000 &&
+                OutlinedButton(enabled=serviceNeedActionEnabled(need.sourceCurrent,need.canRevise,busy) && scopeText.trim().length in 20..2000 &&
                     criteria.trim().length in 20..2000 && reason.trim().length in 12..500,
                     onClick={
                     act("revise"){ op ->
@@ -231,7 +231,7 @@ private fun ServicePurchaseNeedCard(
                     }
                 }) { Text("حفظ نسخة تعديل موثقة") }
             }
-            if(need.canWithdraw) OutlinedButton(enabled=!busy,onClick={
+            if(need.canWithdraw) OutlinedButton(enabled=serviceNeedActionEnabled(need.sourceCurrent,need.canWithdraw,busy),onClick={
                 act("withdraw"){ op ->
                     api.withdraw(need.id,ServicePurchaseNeedActionDto(
                         op,need.version),installationId).need
@@ -241,19 +241,19 @@ private fun ServicePurchaseNeedCard(
                 OutlinedTextField(value=reviewReason,onValueChange={
                     reviewReason=it;operation=null
                 },label={Text("سبب طلب الاستيضاح أو الرفض")})
-                OutlinedButton(enabled=!busy && need.sourceCurrent,onClick={
+                OutlinedButton(enabled=serviceNeedActionEnabled(need.sourceCurrent,need.canTechnicalReview,busy),onClick={
                     act("ready"){ op ->
                         api.review(need.id,ServicePurchaseNeedReviewDto(
                             op,need.version,"READY_FOR_SOURCING"),installationId).need
                     }
                 }) {Text("جاهز فنيًا — لا يعني موافقة شراء")}
-                OutlinedButton(enabled=!busy && reviewReason.trim().length in 3..500,onClick={
+                OutlinedButton(enabled=serviceNeedActionEnabled(need.sourceCurrent,need.canTechnicalReview,busy) && reviewReason.trim().length in 3..500,onClick={
                     act("needs-info"){ op ->
                         api.review(need.id,ServicePurchaseNeedReviewDto(
                             op,need.version,"NEEDS_INFO",reviewReason.trim()),installationId).need
                     }
                 }) {Text("طلب استيضاح")}
-                OutlinedButton(enabled=!busy && reviewReason.trim().length in 3..500,onClick={
+                OutlinedButton(enabled=serviceNeedActionEnabled(need.sourceCurrent,need.canTechnicalReview,busy) && reviewReason.trim().length in 3..500,onClick={
                     act("reject"){ op ->
                         api.review(need.id,ServicePurchaseNeedReviewDto(
                             op,need.version,"REJECTED",reviewReason.trim()),installationId).need
