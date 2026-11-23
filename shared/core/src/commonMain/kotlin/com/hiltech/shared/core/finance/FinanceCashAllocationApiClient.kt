@@ -112,7 +112,7 @@ class FinanceCashAllocationApiClient(
     private fun base(org:String)="/v1/finance/organizations/"+uuid(org)
     private fun uuid(x:String):String {
         require(Regex(
-            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{8}$",
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
         ).matches(x)) { "Valid UUID required" }
         return x
     }
