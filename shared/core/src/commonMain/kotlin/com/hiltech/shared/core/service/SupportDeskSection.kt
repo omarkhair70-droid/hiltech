@@ -44,6 +44,7 @@ fun InternalSupportDeskSection(
     onOpenTriage: (ticketId: String) -> Unit,
     onAddInternalNote: (String, String) -> Unit,
     modifier: Modifier = Modifier,
+    readOnly: Boolean = false,
 ) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -65,6 +66,7 @@ fun InternalSupportDeskSection(
             Text("Service unavailable: " + it, color = MaterialTheme.colorScheme.error)
         }
 
+        if (!readOnly) {
         Text("New internal ticket", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
             value = title, onValueChange = { title = it }, label = { Text("Issue title") },
@@ -98,6 +100,7 @@ fun InternalSupportDeskSection(
             Text("Record internal ticket")
         }
 
+        }
         Text("Recorded tickets", style = MaterialTheme.typography.titleMedium)
         state.tickets.forEach { ticket ->
             Column(
@@ -113,6 +116,11 @@ fun InternalSupportDeskSection(
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Text("Severity " + ticket.severityCode + " / Priority " + ticket.priorityCode)
+                if (readOnly) {
+                    OutlinedButton(onClick = { onSelectTicket(ticket.ticketId) }) {
+                        Text("Review source ticket")
+                    }
+                } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { onSelectTicket(ticket.ticketId) }) {
                         Text("Private notes")
@@ -123,6 +131,7 @@ fun InternalSupportDeskSection(
                 }
                 OutlinedButton(onClick = { onOpenTriage(ticket.ticketId) }) {
                     Text("Assignment and classification history")
+                }
                 }
             }
         }
@@ -135,6 +144,7 @@ fun InternalSupportDeskSection(
                 Text(entry.body)
                 Text(entry.createdAt, style = MaterialTheme.typography.bodySmall)
             }
+            if (!readOnly) {
             OutlinedTextField(
                 value = note, onValueChange = { note = it },
                 modifier = Modifier.fillMaxWidth(),
@@ -144,6 +154,7 @@ fun InternalSupportDeskSection(
                 enabled = note.isNotBlank() && !state.loading,
                 onClick = { onAddInternalNote(selected.ticketId, note) },
             ) { Text("Save internal note") }
+            }
         }
     }
 }
