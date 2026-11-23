@@ -36,6 +36,7 @@ fun HandoverSection(
     onOpenInternalReview: (packageVersionId: String) -> Unit,
     onOpenServiceContractSource: () -> Unit,
     modifier: Modifier = Modifier,
+    readOnly: Boolean = false,
 ) {
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()).padding(16.dp),
@@ -47,14 +48,16 @@ fun HandoverSection(
             OutlinedButton(onClick = onRefresh, enabled = !state.loading) {
                 Text("Refresh source documents")
             }
-            OutlinedButton(onClick = onOpenServiceContractSource, enabled = !state.loading) {
-                Text("View signed contract source")
-            }
-            Button(
-                onClick = onCreateInternalDraft,
-                enabled = !state.loading && state.readiness != null,
-            ) {
-                Text("Snapshot internal draft")
+            if (!readOnly) {
+                OutlinedButton(onClick = onOpenServiceContractSource, enabled = !state.loading) {
+                    Text("View signed contract source")
+                }
+                Button(
+                    onClick = onCreateInternalDraft,
+                    enabled = !state.loading && state.readiness != null,
+                ) {
+                    Text("Snapshot internal draft")
+                }
             }
         }
         if (state.loading) Text("Checking the current project, work and documents…")
@@ -83,10 +86,12 @@ fun HandoverSection(
         }
 
         state.latestDraft?.let { draft ->
-            OutlinedButton(
-                enabled = !state.loading,
-                onClick = { onOpenInternalReview(draft.packageVersionId) },
-            ) { Text("Open source-linked internal review") }
+            if (!readOnly) {
+                OutlinedButton(
+                    enabled = !state.loading,
+                    onClick = { onOpenInternalReview(draft.packageVersionId) },
+                ) { Text("Open source-linked internal review") }
+            }
             Text("Internal package v" + draft.versionNumber + " · " + draft.state,
                 style = MaterialTheme.typography.titleMedium)
             Text("Captured: " + draft.createdAt)
