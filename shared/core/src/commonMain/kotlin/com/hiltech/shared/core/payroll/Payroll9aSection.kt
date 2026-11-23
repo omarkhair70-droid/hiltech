@@ -43,6 +43,7 @@ fun Payroll9aAdminSection(
     onCreatePeriod: (String, String, String, String, String?) -> Unit,
     onCaptureInputs: (String) -> Unit,
     onReviewException: (String, String, String) -> Unit,
+    hostOwnsVerticalScroll: Boolean = false,
 ) {
     var periodCode by remember { mutableStateOf("") }
     var startDate by remember { mutableStateOf("") }
@@ -54,7 +55,7 @@ fun Payroll9aAdminSection(
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.verticalScroll(rememberScrollState()),
+            modifier = if (hostOwnsVerticalScroll) Modifier else Modifier.verticalScroll(rememberScrollState()),
         ) {
             Text("فترات المرتبات", style = MaterialTheme.typography.titleMedium)
             Text("تحضير ومراجعة المصادر فقط — الحساب والاعتماد والصرف غير متاحين.")
