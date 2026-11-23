@@ -32,16 +32,30 @@ fun WarehouseQuickScanSection(
     busy: Boolean,
     runTask: (suspend () -> Unit) -> Unit,
 ) {
-    var state by remember(warehouseId, organizationId) { mutableStateOf(WarehouseQuickScanState()) }
+    var state by remember(warehouseId, organizationId, installationId) {
+        mutableStateOf(WarehouseQuickScanState())
+    }
     WarehouseQuickScanControls(
         state = state,
         busy = busy,
+        onTagInputChanged = {
+            state = state.copy(assetTagResult = null)
+        },
+        onAssetInputChanged = {
+            state = state.copy(assetSearchResults = emptyList())
+        },
+        onStockInputChanged = {
+            state = state.copy(stockSearchResults = emptyList())
+        },
         onAssetTagLookup = { code ->
+            // Never leave a previous asset's identity on screen if this lookup fails.
+            state = state.copy(assetTagResult = null)
             runTask {
                 state = state.copy(assetTagResult = api.lookupAssetTag(code, installationId))
             }
         },
         onAssetSearch = { query ->
+            state = state.copy(assetSearchResults = emptyList())
             runTask {
                 state = state.copy(
                     assetSearchResults = api.assets(warehouseId, query, null, installationId).take(20),
@@ -49,6 +63,7 @@ fun WarehouseQuickScanSection(
             }
         },
         onStockSearch = { query ->
+            state = state.copy(stockSearchResults = emptyList())
             runTask {
                 state = state.copy(
                     stockSearchResults = api.searchStockItems(organizationId, query, installationId).take(20),
@@ -65,6 +80,9 @@ fun WarehouseQuickScanControls(
     onAssetTagLookup: (String) -> Unit,
     onAssetSearch: (String) -> Unit,
     onStockSearch: (String) -> Unit,
+    onTagInputChanged: () -> Unit = {},
+    onAssetInputChanged: () -> Unit = {},
+    onStockInputChanged: () -> Unit = {},
 ) {
     var tag by remember { mutableStateOf("") }
     var assetSearch by remember { mutableStateOf("") }
@@ -77,7 +95,13 @@ fun WarehouseQuickScanControls(
 
         OutlinedTextField(
             value = tag,
-            onValueChange = { tag = it.take(128) },
+            onValueChange = {
+                val next = it.take(128)
+                if (next != tag) {
+                    tag = next
+                    onTagInputChanged()
+                }
+            },
             label = { Text("AssetTag / كود الأصل") },
             singleLine = true,
             enabled = !busy,
@@ -97,7 +121,13 @@ fun WarehouseQuickScanControls(
 
         OutlinedTextField(
             value = assetSearch,
-            onValueChange = { assetSearch = it.take(160) },
+            onValueChange = {
+                val next = it.take(160)
+                if (next != assetSearch) {
+                    assetSearch = next
+                    onAssetInputChanged()
+                }
+            },
             label = { Text("Asset search / بحث الأصل") },
             singleLine = true,
             enabled = !busy,
@@ -116,7 +146,13 @@ fun WarehouseQuickScanControls(
 
         OutlinedTextField(
             value = stockSearch,
-            onValueChange = { stockSearch = it.take(160) },
+            onValueChange = {
+                val next = it.take(160)
+                if (next != stockSearch) {
+                    stockSearch = next
+                    onStockInputChanged()
+                }
+            },
             label = { Text("Stock code / part number") },
             singleLine = true,
             enabled = !busy,
