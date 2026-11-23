@@ -2,7 +2,7 @@ name: Phase 11 — source-bound service contracts
 
 on:
   push:
-    branches: ["integration/phase7-finance8i-native-payroll-sales10-service11-20261123"]
+    branches: ["integration/phase7-finance8i-native-payroll-sales10-service11-20261123", "integration/phase7to11-native-executive13ab-20261123"]
   pull_request:
     paths:
       - ".github/workflows/phase11-source-service.yml"
