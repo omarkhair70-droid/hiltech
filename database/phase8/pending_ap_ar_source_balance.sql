@@ -3,10 +3,18 @@
 -- bank statement allocations. All values preserve their original currency.
 -- No inferred payroll expenses, VAT rates or exchange rates.
 CREATE VIEW finance_ap_ar_source_balance AS
-WITH cash_used AS (
+WITH recognized_movements AS (
  SELECT organization_id,source_kind,source_journal_id,
-        sum(allocated_amount) AS allocated_amount
+        allocated_amount AS amount
  FROM finance_cash_allocation_effective
+ UNION ALL
+ SELECT organization_id,source_kind,source_journal_id,
+        amount
+ FROM finance_cash_voucher_record
+), cash_used AS (
+ SELECT organization_id,source_kind,source_journal_id,
+        sum(amount) AS allocated_amount
+ FROM recognized_movements
  GROUP BY organization_id,source_kind,source_journal_id
 )
 SELECT j.organization_id, 'AP'::varchar(2) AS source_kind,
