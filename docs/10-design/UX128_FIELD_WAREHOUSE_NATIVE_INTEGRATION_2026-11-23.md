@@ -1,0 +1,28 @@
+# UX-128 — signed-in Field focus + Warehouse status language (2026-11-23)
+
+**Owner lane:** Product / native UX. **PR:** #171. **Base:** Phase 7 S01–S06 combined #163, **not** the latest service-purchasing #181 or the future unified main. **Status:** Draft, not merged, not operator accepted.
+
+## Implementation in real production Compose sources
+
+- `AssignedWorkSection.kt`: on compact signed-in views, an explicit tap opens one currently assigned WorkOrder, rather than leaving the whole Today list above its details. The existing detailed callbacks for queued work, completion, evidence, personal-issued materials, asset lookup and engineering tests remain unchanged; all continue through their established server/queue and permission boundaries.
+- `FieldSourcePresentation.kt` + `FieldSourcePresentationTest.kt`: a presentation-only focus admission predicate requires the current Today projection to contain that WorkOrder. If the assignment disappears, local focus closes; a later regrant never opens it automatically. The earlier selected-bundle identity/current-Today match still separately guards detail rendering.
+- `HiltechShell.kt`: enables focus only with a nonblank verified signed-in identity and current organization key; the offline unverified read-only view keeps the baseline and never gains new actions. One existing shell vertical scroll remains the scroll owner.
+- Android `MainActivity.kt`: a focused WorkOrder intercepts System Back and requests the same in-app return as the visible back button. Android-only system handling is not imported into common Kotlin UI. Desktop and wide layouts retain two-pane Today+details behavior.
+- Returning to Today requests visibility of the **same WorkOrder card by ID**, not its previous row number; reorder must not route to another WorkOrder. No new nested scroll state or new backend/domain/permission path was added.
+- `WarehousePhysicalOperatorSection.kt`: adopts shared operational semantic heading/status labels. Distinguishes a confirmed server receipt from a subsequent refresh failure, unauthorized handoff from a generic error, and absence of accessible warehouses. All Warehouse API operations and guards stay unchanged.
+
+## Verification gates
+
+- GitHub Actions workflow `.github/workflows/ux128-native-field-contract.yml` triggers the exact branch push and PR changes, runs the checked-in `FieldSourcePresentationTest`, compiles Windows shared/desktop, and assembles Android debug. Run **#45094575413** was QUEUED when this report was written. This is not proof of success yet.
+- A successful Gradle compilation is **not** proof of System Back gesture, in-app anchor restoration, TalkBack, Android font scaling, field/warehouse operator experience, or server authorization. These need real-device/simulator and user-role evidence.
+- Test in addition: removed assignment during focus, same-ID regrant, order reorder during focused detail, Back before a bundle loads, network read cache/offline read-only, role change, identity/org change, 200% Arabic text, desktop keyboard focus, screen reader.
+- Current UX #171 is behind the newer Phase7 S07 service-purchasing owner branch #181 and parallel P8–P13 branches. **DevOps** owns exact final merged source SHA, Flyway collisions, shared host route integration, and release proof. Do not replace P7 V0063/V0064 or lift outdated vendor, acceptance, payroll or finance code into UX.
+- All commercial, payroll, finance, maintenance and executive feature flags remain at their existing OFF settings. This change approves no payment, supplier send, or field operation.
+
+## Next bounded product slices
+
+1. Inspect CI and fix any exact-head compile/test defect before proposing review.
+2. Test focused route against one real Android host/device and Windows shell with authenticated current-organization task data; add failure-state screenshot evidence and verify System Back.
+3. Review warehouse scan → resource → permitted action → receipt/history with live source-bound DTOs and test stale scan/permission changes.
+4. After DevOps integrates latest domain branches, mount and review P8 Finance, P9 payroll, P10 Sales, P11 Service and P13 Executive using their source-owned APIs and permissions. Keep business logic with source owners.
+5. After all core modules through P13 are present, conduct final per-role and cross-platform design/a11y/performance pass. 
