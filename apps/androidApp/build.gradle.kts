@@ -47,6 +47,9 @@ val executiveHomeUiEnabled = providers
 val ownPayslipsUiEnabled = providers
     .gradleProperty("hiltech.ownPayslipsEnabled")
     .getOrElse("false") == "true"
+val payrollAdminReadUiEnabled = providers
+    .gradleProperty("hiltech.payrollAdminReadEnabled")
+    .getOrElse("false") == "true"
 val commercialReadUiEnabled = providers
     .gradleProperty("hiltech.commercialReadEnabled")
     .getOrElse("false") == "true"
@@ -155,6 +158,11 @@ android {
             "boolean",
             "HILTECH_OWN_PAYSLIPS_ENABLED",
             ownPayslipsUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_PAYROLL_ADMIN_READ_ENABLED",
+            payrollAdminReadUiEnabled.toString(),
         )
         buildConfigField(
             "boolean",
