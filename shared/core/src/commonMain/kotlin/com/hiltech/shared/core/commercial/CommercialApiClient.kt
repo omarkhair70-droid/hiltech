@@ -233,6 +233,7 @@ data class CommercialTenderRevisionDto(
     val operationId: String,
     val tenderType: String,
     val receivedAt: String,
+    val submissionState: String = "RECEIVED",
     val referenceNumber: String? = null,
     val submissionDeadline: String? = null,
     val clarificationDeadline: String? = null,

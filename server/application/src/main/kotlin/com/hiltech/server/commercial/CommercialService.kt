@@ -238,6 +238,8 @@ class CommercialService(
         open(op(id,actor,"SALES_WRITE"))
         if (r.tenderType !in setOf("TENDER","RFQ","RFP","OTHER"))
             throw commercialError("COMMERCIAL_TENDER_TYPE","Invalid tender type.",HttpStatus.BAD_REQUEST)
+        if (r.submissionState !in setOf("RECEIVED","PREPARING","SUBMITTED","WITHDRAWN","LOST","AWARDED"))
+            throw commercialError("COMMERCIAL_TENDER_STATUS","Unsupported tender status.",HttpStatus.BAD_REQUEST)
         val received = timestamp(r.receivedAt).atOffset(ZoneOffset.UTC)
         val deadline = r.submissionDeadline?.let(::timestamp)?.atOffset(ZoneOffset.UTC)
         val clarification = r.clarificationDeadline?.let(::timestamp)?.atOffset(ZoneOffset.UTC)
@@ -249,11 +251,11 @@ class CommercialService(
             jdbc.update(
                 """INSERT INTO commercial_tender_revision
                    (id,organization_id,opportunity_id,revision_number,tender_type,reference_number,
-                    received_at,submission_deadline,clarification_deadline,source_channel,created_by,created_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    received_at,submission_deadline,clarification_deadline,source_channel,submission_state,created_by,created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 target,parent["organization_id"],id,next("commercial_tender_revision",id,"revision_number"),
                 r.tenderType,nullable(r.referenceNumber,120),received,deadline,clarification,
-                nullable(r.sourceChannel,160),actor,now(),
+                nullable(r.sourceChannel,160),r.submissionState,actor,now(),
             )
             audit(actor,"COMMERCIAL_TENDER_REVISION_CREATED",target,"RECEIVED",correlation)
         }

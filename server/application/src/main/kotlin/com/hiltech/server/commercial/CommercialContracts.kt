@@ -27,6 +27,7 @@ data class CommercialEvidenceConfirmationRequest(
 data class CommercialTenderRequest(
     val operationId: String,
     val tenderType: String,
+    val submissionState: String = "RECEIVED",
     val referenceNumber: String? = null,
     val receivedAt: String,
     val submissionDeadline: String? = null,

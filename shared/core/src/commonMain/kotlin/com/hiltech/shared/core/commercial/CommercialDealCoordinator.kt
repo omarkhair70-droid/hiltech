@@ -38,6 +38,7 @@ class CommercialDealCoordinator(
                 CommercialTenderRevisionDto(
                     operationId=operationId,tenderType=action.tenderType,
                     receivedAt=action.receivedAt,
+                    submissionState=action.submissionState,
                     referenceNumber=action.referenceNumber.takeIf { it.isNotBlank() },
                     submissionDeadline=action.submissionDeadline.takeIf { it.isNotBlank() },
                     clarificationDeadline=action.clarificationDeadline.takeIf { it.isNotBlank() },
@@ -49,6 +50,7 @@ class CommercialDealCoordinator(
                 action.opportunityId,PlanCommercialVisitDto(
                     operationId=operationId,scheduledAt=action.scheduledAt,
                     purpose=action.purpose,
+                    siteId=action.siteId,
                 ),installationId,
             )
             is CommercialDealAction.CompleteVisit -> api.completeVisit(

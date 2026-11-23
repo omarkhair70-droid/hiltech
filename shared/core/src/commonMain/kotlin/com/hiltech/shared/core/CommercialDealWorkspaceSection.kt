@@ -59,9 +59,9 @@ sealed interface CommercialDealAction {
     data class TenderRevision(val opportunityId: String, val tenderType: String,
                               val receivedAt: String, val referenceNumber: String,
                               val submissionDeadline: String, val clarificationDeadline: String,
-                              val sourceChannel: String) : CommercialDealAction
+                              val sourceChannel: String, val submissionState: String = "RECEIVED") : CommercialDealAction
     data class ScheduleVisit(val opportunityId: String, val purpose: String,
-                             val scheduledAt: String) : CommercialDealAction
+                             val scheduledAt: String, val siteId: String? = null) : CommercialDealAction
     data class CompleteVisit(val visitId: String, val baseVersion: Long,
                              val notes: String) : CommercialDealAction
     data class Qualify(val opportunityId: String, val baseVersion: Long,
@@ -176,6 +176,7 @@ private fun CommercialDiscoveryPanel(
     }
     if (canWrite && op.state in setOf("OPEN","QUALIFIED")) {
         var tenderType by remember(op.id) { mutableStateOf("RFQ") }
+        var tenderStatus by remember(op.id) { mutableStateOf("RECEIVED") }
         var tenderRef by remember(op.id) { mutableStateOf("") }
         var tenderReceived by remember(op.id) { mutableStateOf("") }
         var tenderDeadline by remember(op.id) { mutableStateOf("") }
@@ -185,6 +186,15 @@ private fun CommercialDiscoveryPanel(
         Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
             listOf("RFQ","RFP","TENDER","OTHER").forEach { type ->
                 OutlinedButton(onClick={tenderType=type},enabled=type!=tenderType){Text(type)}
+            }
+        }
+        Text("Tender progress (every change creates a new dated revision)")
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            listOf("RECEIVED","PREPARING","SUBMITTED","WITHDRAWN","LOST","AWARDED").forEach { status ->
+                OutlinedButton(onClick={tenderStatus=status},enabled=status!=tenderStatus){Text(status)}
             }
         }
         OutlinedTextField(value=tenderRef,onValueChange={tenderRef=it},label={Text("Tender reference")})
@@ -198,17 +208,20 @@ private fun CommercialDiscoveryPanel(
             label={Text("Official source channel")})
         Button(enabled=tenderReceived.isNotBlank(),
             onClick={onAction(CommercialDealAction.TenderRevision(
-                op.id,tenderType,tenderReceived,tenderRef,tenderDeadline,clarification,sourceChannel))}) {
+                op.id,tenderType,tenderReceived,tenderRef,tenderDeadline,clarification,sourceChannel,tenderStatus))}) {
             Text("Record immutable tender deadline revision")
         }
         var visitPurpose by remember(op.id) { mutableStateOf("") }
         var visitDate by remember(op.id) { mutableStateOf("") }
+        var visitSiteId by remember(op.id) { mutableStateOf("") }
+        OutlinedTextField(value=visitSiteId,onValueChange={visitSiteId=it},
+            label={Text("Existing canonical Site ID (optional)")})
         OutlinedTextField(value=visitPurpose,onValueChange={visitPurpose=it},
             label={Text("Site visit / discovery purpose")})
         OutlinedTextField(value=visitDate,onValueChange={visitDate=it},
             label={Text("Visit scheduled at (ISO-8601 UTC)")})
         Button(enabled=visitPurpose.isNotBlank() && visitDate.isNotBlank(),
-            onClick={onAction(CommercialDealAction.ScheduleVisit(op.id,visitPurpose,visitDate))}) {
+            onClick={onAction(CommercialDealAction.ScheduleVisit(op.id,visitPurpose,visitDate,visitSiteId.takeIf { it.isNotBlank() }))}) {
             Text("Schedule site visit")
         }
     }
