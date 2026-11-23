@@ -19,6 +19,24 @@ val assignedAssetLookupUiEnabled = providers
 val engineeringTestsUiEnabled = providers
     .gradleProperty("hiltech.engineeringTestsEnabled")
     .getOrElse("false") == "true"
+val procurementRequirementsUiEnabled = providers
+    .gradleProperty("hiltech.procurementRequirementsEnabled")
+    .getOrElse("false") == "true"
+val assetPurchaseNeedsUiEnabled = providers
+    .gradleProperty("hiltech.assetPurchaseNeedsEnabled")
+    .getOrElse("false") == "true"
+val officeStockNeedsUiEnabled = providers
+    .gradleProperty("hiltech.officeStockNeedsEnabled")
+    .getOrElse("false") == "true"
+val warehouseReplenishmentUiEnabled = providers
+    .gradleProperty("hiltech.warehouseReplenishmentEnabled")
+    .getOrElse("false") == "true"
+val poWarehouseIntakeUiEnabled = providers
+    .gradleProperty("hiltech.poWarehouseIntakeEnabled")
+    .getOrElse("false") == "true"
+val supplierInvoiceFinanceUiEnabled = providers
+    .gradleProperty("hiltech.supplierInvoiceFinanceEnabled")
+    .getOrElse("false") == "true"
 
 plugins {
     id("com.hiltech.base")
@@ -70,6 +88,36 @@ android {
             "boolean",
             "HILTECH_ENGINEERING_TESTS_ENABLED",
             engineeringTestsUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED",
+            procurementRequirementsUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_ASSET_PURCHASE_NEEDS_ENABLED",
+            assetPurchaseNeedsUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_OFFICE_STOCK_NEEDS_ENABLED",
+            officeStockNeedsUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED",
+            warehouseReplenishmentUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_PO_WAREHOUSE_INTAKE_ENABLED",
+            poWarehouseIntakeUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_SUPPLIER_INVOICE_FINANCE_ENABLED",
+            supplierInvoiceFinanceUiEnabled.toString(),
         )
     }
 

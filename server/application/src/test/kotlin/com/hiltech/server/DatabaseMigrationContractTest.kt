@@ -2,6 +2,7 @@ package com.hiltech.server
 
 import com.hiltech.server.audit.JdbcAuditEventWriter
 import com.hiltech.server.platform.ProductApiException
+import com.hiltech.server.procurement.SupplierSourcingPersistence
 import com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor
 import com.hiltech.server.security.AuthorizationDesiredState
 import com.hiltech.server.security.AuthorizationProjectionIntent
@@ -55,7 +56,7 @@ class DatabaseMigrationContractTest {
     private val migrationPath = System.getenv("HILTECH_MIGRATIONS_PATH") ?: "database/migrations"
 
     @Test
-    fun emptyPostgresMigratesThroughV0033ThenV0038AndRejectsInvalidStates() {
+    fun emptyPostgresMigratesThroughV0033ThenV0042AndRejectsInvalidStates() {
         assumeTrue(enabled)
 
         val priorSliceResult =
@@ -85,7 +86,7 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(5, result.migrationsExecuted)
+        assertEquals(31, result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->
@@ -141,12 +142,622 @@ class DatabaseMigrationContractTest {
                         'work_document',
                         'work_document_revision',
                         'work_document_revision_release',
-                        'work_completion_submission'
+                        'work_completion_submission',
+                        'procurement_purchase_requirement',
+                        'procurement_requirement_transition',
+                        'procurement_supplier_rfq',
+                        'procurement_supplier_quote_evidence',
+                        'procurement_supplier_quote_technical_assessment',
+                        'procurement_supplier_link_event',
+                        'procurement_supplier_quote_document_slot',
+                        'procurement_po_candidate',
+                        'procurement_po_number_counter',
+                        'procurement_purchase_order',
+                        'procurement_po_lifecycle_event',
+                        'procurement_po_delivery_amendment_proposal',
+                        'procurement_po_receiving_link',
+                        'procurement_po_supplier_communication_event',
+                        'procurement_supplier_invoice_document_slot',
+                        'procurement_supplier_invoice_intake',
+                        'procurement_supplier_invoice_match_event',
+                        'procurement_supplier_invoice_finance_handoff',
+                        'procurement_po_supersession_link',
+                        'procurement_po_receiving_rejection_event',
+                        'procurement_service_need',
+                        'procurement_service_need_event',
+                        'procurement_service_rfq',
+                        'procurement_service_quote_document_slot',
+                        'procurement_service_supplier_quote',
+                        'procurement_service_order_candidate',
+                        'procurement_service_order',
+                        'procurement_service_order_supplier_communication',
+                        'procurement_service_document_slot',
+                        'procurement_service_acceptance',
+                        'procurement_service_invoice',
+                        'procurement_service_invoice_match',
+                        'procurement_service_finance_handoff'
                       )
                     """.trimIndent(),
                 )
                 assertTrue(tables.next())
-                assertEquals(66, tables.getInt(1))
+                assertEquals(99, tables.getInt(1))
+
+                // V0050 links canonical Warehouse Receiving to a company-scoped
+                // approved PO without creating another physical stock ledger.
+                val poReceivingForeignKeys = statement.executeQuery(
+                    """
+                    SELECT count(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_po_receiving_link'::regclass
+                      AND conname IN ('fk_po_receipt_record', 'fk_po_receipt_order',
+                          'fk_po_receipt_destination', 'fk_po_receipt_stock')
+                      AND contype = 'f'
+                    """.trimIndent(),
+                )
+                assertTrue(poReceivingForeignKeys.next())
+                assertEquals(4, poReceivingForeignKeys.getInt(1))
+                val poReceivingGuards = statement.executeQuery(
+                    """
+                    SELECT count(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_po_receiving_link'::regclass
+                      AND tgname IN ('procurement_po_receiving_link_insert_guard',
+                          'procurement_po_receiving_link_immutable')
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(poReceivingGuards.next())
+                assertEquals(2, poReceivingGuards.getInt(1))
+
+                // V0051 is an append-only, company-scoped record of external
+                // communication attestations, not an email-sending service.
+                val supplierCommunicationTriggers = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_po_supplier_communication_event'::regclass
+                      AND tgname IN (
+                          'procurement_po_supplier_communication_insert_guard',
+                          'procurement_po_supplier_communication_immutable'
+                      )
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(supplierCommunicationTriggers.next())
+                assertEquals(2, supplierCommunicationTriggers.getInt(1))
+
+                // S05 supplier Invoice/Match/Handoff have immutable histories.
+                val invoiceHistoryTriggers = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger WHERE NOT tgisinternal AND (
+                      (tgrelid='procurement_supplier_invoice_document_slot'::regclass
+                        AND tgname='procurement_supplier_invoice_slot_immutable')
+                      OR (tgrelid='procurement_supplier_invoice_intake'::regclass
+                        AND tgname IN ('procurement_supplier_invoice_intake_insert_guard',
+                          'procurement_supplier_invoice_intake_immutable'))
+                      OR (tgrelid='procurement_supplier_invoice_match_event'::regclass
+                        AND tgname='procurement_supplier_invoice_match_immutable')
+                      OR (tgrelid='procurement_supplier_invoice_finance_handoff'::regclass
+                        AND tgname='procurement_supplier_invoice_finance_handoff_immutable')
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(invoiceHistoryTriggers.next())
+                assertEquals(5, invoiceHistoryTriggers.getInt(1))
+
+                val poReplacementGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='procurement_po_supersession_link'::regclass
+                      AND tgname IN ('procurement_po_supersession_insert_guard',
+                        'procurement_po_supersession_immutable')
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(poReplacementGuards.next())
+                assertEquals(2, poReplacementGuards.getInt(1))
+
+                // V0054 records rejected PO arrivals without inflating the
+                // StockLedger. The canonical Receiving completion function
+                // is upgraded rather than rewriting the old V0032 migration.
+                val rejectionGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='procurement_po_receiving_rejection_event'::regclass
+                      AND tgname IN ('procurement_po_receiving_rejection_insert_guard',
+                        'procurement_po_receiving_rejection_immutable')
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(rejectionGuards.next())
+                assertEquals(2, rejectionGuards.getInt(1))
+
+                val rejectedMovementGuard = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='receiving_line'::regclass
+                      AND tgname='receiving_rejected_po_line_receipt_guard'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(rejectedMovementGuard.next())
+                assertEquals(1, rejectedMovementGuard.getInt(1))
+
+                val fullLineRejectionGuard = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='procurement_po_receiving_rejection_event'::regclass
+                      AND tgname='po_rejection_full_line_guard'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(fullLineRejectionGuard.next())
+                assertEquals(1, fullLineRejectionGuard.getInt(1))
+
+                val foldedInvoiceIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE schemaname='public'
+                      AND tablename='procurement_supplier_invoice_intake'
+                      AND indexname='uq_supplier_invoice_number_casefold'
+                      AND indexdef ILIKE '%lower%'
+                      AND indexdef ILIKE '%btrim%'
+                    """.trimIndent(),
+                )
+                assertTrue(foldedInvoiceIndex.next())
+                assertEquals(1, foldedInvoiceIndex.getInt(1))
+
+                // PO receipts need READY private binary Evidence, not a
+                // free-text deliveryDocumentRef, before final completion.
+                val deliveryNoteGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger WHERE NOT tgisinternal AND (
+                        (tgrelid='evidence'::regclass
+                          AND tgname='po_receiving_note_evidence_insert_guard')
+                        OR (tgrelid='receiving_record'::regclass
+                          AND tgname='po_receiving_close_delivery_note_guard')
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(deliveryNoteGuards.next())
+                assertEquals(2, deliveryNoteGuards.getInt(1))
+                val readyNoteIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename='evidence'
+                      AND indexname='uq_po_receiving_ready_delivery_note'
+                    """.trimIndent(),
+                )
+                assertTrue(readyNoteIndex.next())
+                assertEquals(1, readyNoteIndex.getInt(1))
+
+                // V0058 uses a discriminated and FK-scoped real Warehouse
+                // source, not a fabricated WorkOrder reference.
+                val typedSourceGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid='procurement_purchase_requirement'::regclass
+                      AND conname IN (
+                        'fk_procurement_requirement_warehouse_source',
+                        'ck_procurement_requirement_typed_source'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(typedSourceGuards.next())
+                assertEquals(2, typedSourceGuards.getInt(1))
+                val typedSourceIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename='procurement_purchase_requirement'
+                      AND indexname='idx_procurement_warehouse_demand'
+                    """.trimIndent(),
+                )
+                assertTrue(typedSourceIndex.next())
+                assertEquals(1, typedSourceIndex.getInt(1))
+
+                // V0059 uses a real company-bound Asset / incident or
+                // maintenance source; no synthetic WorkOrder or opaque JSON.
+                val assetDemandConstraints = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid='procurement_purchase_requirement'::regclass
+                      AND conname IN (
+                        'ck_procurement_requirement_typed_source',
+                        'fk_requirement_asset_company',
+                        'fk_requirement_asset_incident',
+                        'fk_requirement_asset_maintenance',
+                        'fk_requirement_asset_delivery_location'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(assetDemandConstraints.next())
+                assertEquals(5, assetDemandConstraints.getInt(1))
+                val assetDemandGuard = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='procurement_purchase_requirement'::regclass
+                      AND tgname='procurement_asset_source_insert_guard'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(assetDemandGuard.next())
+                assertEquals(1, assetDemandGuard.getInt(1))
+                val assetDemandIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename='procurement_purchase_requirement'
+                      AND indexname='idx_procurement_asset_purchase_need'
+                    """.trimIndent(),
+                )
+                assertTrue(assetDemandIndex.next())
+                assertEquals(1, assetDemandIndex.getInt(1))
+                val assetIssueColumns = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema='public'
+                      AND table_name='procurement_purchase_requirement'
+                      AND column_name IN (
+                        'asset_id', 'asset_source_version',
+                        'asset_incident_id', 'asset_maintenance_id',
+                        'asset_issue_version', 'asset_delivery_location_id',
+                        'asset_delivery_location_version'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(assetIssueColumns.next())
+                assertEquals(7, assetIssueColumns.getInt(1))
+
+                // V0060: a real current HILTECH team and company Warehouse
+                // backs stocked office requests, with DB source type and scope.
+                val officeChecks = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid='procurement_purchase_requirement'::regclass
+                      AND conname IN ('ck_procurement_requirement_typed_source',
+                        'fk_procurement_office_need_team',
+                        'fk_procurement_office_need_location')
+                    """.trimIndent(),
+                )
+                assertTrue(officeChecks.next())
+                assertEquals(3, officeChecks.getInt(1))
+                val officeGuard = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='procurement_purchase_requirement'::regclass
+                      AND tgname='procurement_office_stock_source_insert_guard'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(officeGuard.next())
+                assertEquals(1, officeGuard.getInt(1))
+                val officeIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename='procurement_purchase_requirement'
+                      AND indexname='idx_procurement_office_team_needs'
+                    """.trimIndent(),
+                )
+                assertTrue(officeIndex.next())
+                assertEquals(1, officeIndex.getInt(1))
+
+                // V0061–V0062: non-stock services have independent sources,
+                // restricted supplier quote Evidence and immutable snapshots.
+                val serviceGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger WHERE NOT tgisinternal AND (
+                      (tgrelid='procurement_service_need'::regclass
+                        AND tgname IN ('procurement_service_need_root_guard',
+                          'procurement_service_need_immutable'))
+                      OR (tgrelid='procurement_service_need_event'::regclass
+                        AND tgname IN ('procurement_service_need_event_guard',
+                          'procurement_service_need_event_immutable'))
+                      OR (tgrelid='procurement_service_rfq'::regclass
+                        AND tgname IN ('procurement_service_rfq_guard',
+                          'procurement_service_rfq_immutable'))
+                      OR (tgrelid='procurement_service_quote_document_slot'::regclass
+                        AND tgname IN ('procurement_service_quote_slot_guard',
+                          'procurement_service_quote_slot_immutable'))
+                      OR (tgrelid='procurement_service_supplier_quote'::regclass
+                        AND tgname IN ('procurement_service_supplier_quote_guard',
+                          'procurement_service_supplier_quote_immutable'))
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(serviceGuards.next())
+                assertEquals(10, serviceGuards.getInt(1))
+
+                val serviceEvidenceGuard = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid='evidence'::regclass
+                      AND tgname='service_quote_evidence_insert_guard'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(serviceEvidenceGuard.next())
+                assertEquals(1, serviceEvidenceGuard.getInt(1))
+                val serviceEvidenceIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename='evidence'
+                      AND indexname='uq_service_quote_document_evidence_slot'
+                    """.trimIndent(),
+                )
+                assertTrue(serviceEvidenceIndex.next())
+                assertEquals(1, serviceEvidenceIndex.getInt(1))
+
+                val serviceOrderGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE NOT tgisinternal AND (
+                        (tgrelid='procurement_service_order_candidate'::regclass
+                          AND tgname IN ('procurement_service_order_candidate_guard',
+                            'procurement_service_order_candidate_immutable'))
+                        OR (tgrelid='procurement_service_order'::regclass
+                          AND tgname IN ('procurement_service_order_guard',
+                            'procurement_service_order_immutable'))
+                        OR (tgrelid='procurement_service_order_supplier_communication'::regclass
+                          AND tgname IN ('procurement_service_order_supplier_comm_guard',
+                            'procurement_service_order_supplier_comm_immutable'))
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(serviceOrderGuards.next())
+                assertEquals(6, serviceOrderGuards.getInt(1))
+
+                val serviceCompletionGuards = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger WHERE NOT tgisinternal AND (
+                      (tgrelid='procurement_service_document_slot'::regclass
+                        AND tgname='service_document_slot_immutable')
+                      OR (tgrelid='evidence'::regclass
+                        AND tgname='service_purchase_document_evidence_guard')
+                      OR (tgrelid='procurement_service_acceptance'::regclass
+                        AND tgname IN ('procurement_service_acceptance_immutable',
+                          'service_acceptance_evidence_guard'))
+                      OR (tgrelid='procurement_service_invoice'::regclass
+                        AND tgname IN ('procurement_service_invoice_immutable',
+                          'service_invoice_evidence_guard'))
+                      OR (tgrelid='procurement_service_invoice_match'::regclass
+                        AND tgname='procurement_service_invoice_match_immutable')
+                      OR (tgrelid='procurement_service_finance_handoff'::regclass
+                        AND tgname IN ('procurement_service_finance_handoff_immutable',
+                          'procurement_service_finance_handoff_guard'))
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(serviceCompletionGuards.next())
+                assertEquals(9, serviceCompletionGuards.getInt(1))
+
+                // V0041 is an append-only event extension, never a second
+                // mutable root state. Verify real PostgreSQL metadata, not
+                // merely Flyway migration count.
+                val intakeChecks = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_requirement_transition'::regclass
+                      AND conname IN ('ck_procurement_intake_transition',
+                          'ck_procurement_review_reason', 'ck_procurement_revision_snapshot')
+                      AND contype = 'c'
+                    """.trimIndent(),
+                )
+                assertTrue(intakeChecks.next())
+                assertEquals(3, intakeChecks.getInt(1))
+
+                val revisionColumns = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'procurement_requirement_transition'
+                      AND column_name IN (
+                          'spec_quantity','spec_justification','spec_work_version','spec_item_version',
+                          'spec_unit_code','spec_assessment_code','spec_visible_free_quantity','spec_assessed_at'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(revisionColumns.next())
+                assertEquals(8, revisionColumns.getInt(1))
+
+                val immutableHistory = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_requirement_transition'::regclass
+                      AND tgname = 'procurement_requirement_transition_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(immutableHistory.next())
+                assertEquals(1, immutableHistory.getInt(1))
+
+                // S02 supplier terms are immutable restricted evidence. Two
+                // source-linked tables and protected revision uniqueness.
+                val sourcingTriggers = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE NOT tgisinternal AND (
+                        (tgrelid = 'procurement_supplier_rfq'::regclass
+                            AND tgname = 'procurement_supplier_rfq_immutable')
+                        OR (tgrelid = 'procurement_supplier_quote_evidence'::regclass
+                            AND tgname = 'procurement_supplier_quote_evidence_immutable')
+                    )
+                    """.trimIndent(),
+                )
+                assertTrue(sourcingTriggers.next())
+                assertEquals(2, sourcingTriggers.getInt(1))
+                val technicalReviewConstraints = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE (conrelid = 'procurement_supplier_quote_technical_assessment'::regclass
+                           AND conname = 'fk_procurement_technical_assessment_quote_source')
+                       OR (conrelid = 'procurement_supplier_quote_technical_assessment'::regclass
+                           AND conname = 'uq_procurement_quote_technical_review_revision')
+                    """.trimIndent(),
+                )
+                assertTrue(technicalReviewConstraints.next())
+                assertEquals(2, technicalReviewConstraints.getInt(1))
+                val technicalReviewTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_supplier_quote_technical_assessment'::regclass
+                      AND tgname = 'procurement_supplier_quote_technical_assessment_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(technicalReviewTrigger.next())
+                assertEquals(1, technicalReviewTrigger.getInt(1))
+                val supplierLinkTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_supplier_link_event'::regclass
+                      AND tgname = 'procurement_supplier_link_event_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(supplierLinkTrigger.next())
+                assertEquals(1, supplierLinkTrigger.getInt(1))
+                val linkConstraints = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_supplier_link_event'::regclass
+                      AND conname IN (
+                          'uq_procurement_supplier_link_revision',
+                          'ck_procurement_supplier_link_not_self'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(linkConstraints.next())
+                assertEquals(2, linkConstraints.getInt(1))
+                val supplierSlotTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_supplier_quote_document_slot'::regclass
+                      AND tgname = 'procurement_supplier_quote_document_slot_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(supplierSlotTrigger.next())
+                assertEquals(1, supplierSlotTrigger.getInt(1))
+                val candidateTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_po_candidate'::regclass
+                      AND tgname = 'procurement_po_candidate_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(candidateTrigger.next())
+                assertEquals(1, candidateTrigger.getInt(1))
+                val purchaseOrderTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_purchase_order'::regclass
+                      AND tgname = 'procurement_po_number_issue_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(purchaseOrderTrigger.next())
+                assertEquals(1, purchaseOrderTrigger.getInt(1))
+                val lifecycleEventTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_po_lifecycle_event'::regclass
+                      AND tgname = 'procurement_po_lifecycle_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(lifecycleEventTrigger.next())
+                assertEquals(1, lifecycleEventTrigger.getInt(1))
+                val lifecycleOrgFk = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_po_lifecycle_event'::regclass
+                      AND conname IN (
+                        'fk_po_lifecycle_org',
+                        'uq_po_lifecycle_version',
+                        'fk_po_lifecycle_approved_proposal_scope',
+                        'fk_po_lifecycle_approval_request_org',
+                        'fk_po_lifecycle_new_destination_org',
+                        'ck_po_lifecycle_specific_payload',
+                        'ck_po_lifecycle_event_type'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(lifecycleOrgFk.next())
+                assertEquals(7, lifecycleOrgFk.getInt(1))
+                val proposalTrigger = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_trigger
+                    WHERE tgrelid = 'procurement_po_delivery_amendment_proposal'::regclass
+                      AND tgname = 'procurement_po_delivery_proposal_immutable'
+                      AND NOT tgisinternal
+                    """.trimIndent(),
+                )
+                assertTrue(proposalTrigger.next())
+                assertEquals(1, proposalTrigger.getInt(1))
+                val proposalConstraints = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_po_delivery_amendment_proposal'::regclass
+                      AND conname IN (
+                        'fk_po_delivery_proposal_order_org',
+                        'fk_po_delivery_proposal_old_location_org',
+                        'fk_po_delivery_proposal_new_location_org',
+                        'uq_po_delivery_proposal_base',
+                        'ck_po_delivery_changed_destination'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(proposalConstraints.next())
+                assertEquals(5, proposalConstraints.getInt(1))
+                val cancelIndex = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE tablename = 'procurement_po_lifecycle_event'
+                      AND indexname = 'uq_po_lifecycle_one_cancellation'
+                    """.trimIndent(),
+                )
+                assertTrue(cancelIndex.next())
+                assertEquals(1, cancelIndex.getInt(1))
+                val purchaseOrderConstraints = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_purchase_order'::regclass
+                      AND conname IN (
+                        'fk_po_candidate_org',
+                        'fk_po_location_org',
+                        'fk_po_stock_item_org',
+                        'fk_po_approval_policy',
+                        'fk_po_approval_request_org',
+                        'fk_po_issuer_binding_org',
+                        'uq_po_organization_code',
+                        'uq_po_organization_serial'
+                      )
+                    """.trimIndent(),
+                )
+                assertTrue(purchaseOrderConstraints.next())
+                assertEquals(8, purchaseOrderConstraints.getInt(1))
+                val candidateScopedFk = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE conrelid = 'procurement_po_candidate'::regclass
+                      AND conname IN (
+                        'fk_procurement_candidate_rfq_scope',
+                        'fk_procurement_candidate_quote_scope',
+                        'fk_procurement_candidate_requirement_scope',
+                        'fk_procurement_candidate_item_scope'
+                      ) AND contype = 'f'
+                    """.trimIndent(),
+                )
+                assertTrue(candidateScopedFk.next())
+                assertEquals(4, candidateScopedFk.getInt(1))
+                val sourcingUniques = statement.executeQuery(
+                    """
+                    SELECT COUNT(*) FROM pg_constraint
+                    WHERE (conrelid = 'procurement_supplier_rfq'::regclass
+                            AND conname = 'uq_procurement_rfq_source_version')
+                       OR (conrelid = 'procurement_supplier_quote_evidence'::regclass
+                            AND conname = 'uq_procurement_quote_supplier_revision')
+                    """.trimIndent(),
+                )
+                assertTrue(sourcingUniques.next())
+                assertEquals(2, sourcingUniques.getInt(1))
             }
 
             val orgId = UUID.randomUUID()
@@ -182,6 +793,7 @@ class DatabaseMigrationContractTest {
                 ps.executeUpdate()
             }
 
+            verifySupplierLinkLookup(orgId, userId, now.toInstant())
             verifyWarehouseStaging(orgId, userId, now.toInstant())
 
             assertConstraintRejects(connection) {
@@ -774,6 +1386,54 @@ class DatabaseMigrationContractTest {
             inventoryBefore,
             inventoryTables.map { jdbc.queryForObject("SELECT count(*) FROM $it", Long::class.java) },
         )
+    }
+
+    /**
+     * Disposable PostgreSQL integration proof: active organization-scoped
+     * supplier links are visible, then a later INACTIVE event revokes them.
+     */
+    private fun verifySupplierLinkLookup(orgId: UUID, userId: UUID, at: Instant) {
+        val jdbc = JdbcTemplate(DriverManagerDataSource(url, user, password))
+        val supplierId = UUID.randomUUID()
+        jdbc.update(
+            """
+            INSERT INTO organization (
+                id, organization_code, legal_name, display_name,
+                organization_type, status, created_at, version
+            ) VALUES (?, ?, 'Supplier contract fixture', 'Supplier contract fixture',
+                      'SUPPLIER', 'ACTIVE', ?, 1)
+            """.trimIndent(),
+            supplierId, "SUP-TEST-${supplierId.toString().take(12)}",
+            at.atOffset(ZoneOffset.UTC),
+        )
+        val sourcing = SupplierSourcingPersistence(jdbc)
+        assertEquals(false, sourcing.isEligibleSupplier(orgId, supplierId))
+        assertTrue(sourcing.eligibleSuppliers(orgId).isEmpty())
+
+        fun addLink(revision: Int, state: String) {
+            jdbc.update(
+                """
+                INSERT INTO procurement_supplier_link_event (
+                    id, organization_id, supplier_organization_id, revision_number,
+                    state, source_reference, recorded_by_user_id,
+                    recorded_at, correlation_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """.trimIndent(),
+                UUID.randomUUID(), orgId, supplierId, revision,
+                state, "contract-fixture-supplier-link-$revision", userId,
+                at.atOffset(ZoneOffset.UTC), "contract-fixture",
+            )
+        }
+        addLink(1, "ACTIVE")
+        assertEquals(true, sourcing.isEligibleSupplier(orgId, supplierId))
+        val listed = sourcing.eligibleSuppliers(orgId)
+        assertEquals(1, listed.size)
+        assertEquals(supplierId, listed.single().supplierOrganizationId)
+        assertEquals(1, listed.single().relationshipRevision)
+
+        addLink(2, "INACTIVE")
+        assertEquals(false, sourcing.isEligibleSupplier(orgId, supplierId))
+        assertTrue(sourcing.eligibleSuppliers(orgId).isEmpty())
     }
 
     private fun assertConstraintRejects(

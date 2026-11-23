@@ -129,6 +129,13 @@ interface EvidenceObjectStoragePort {
     fun verifyUploadedObject(spec: EvidenceUploadSpec): EvidenceFinalizeVerification
 
     fun createDownloadTarget(objectKey: String): SignedEvidenceDownloadTarget
+
+    /**
+     * Private server-side retrieval only. Never generates a public/signed URL.
+     * Implementations must reject objects above the caller's bounded size.
+     */
+    fun readRestrictedObject(objectKey: String, maxBytes: Long): ByteArray =
+        throw UnsupportedOperationException("Protected evidence delivery is not configured.")
 }
 
 class S3CompatibleEvidenceObjectStorage(
@@ -293,6 +300,31 @@ class S3CompatibleEvidenceObjectStorage(
                 code = "EVIDENCE_STORAGE_UNAVAILABLE",
             )
         }
+
+    override fun readRestrictedObject(objectKey: String, maxBytes: Long): ByteArray {
+        require(objectKey.isNotBlank())
+        require(maxBytes in 1..EvidenceUploadSpec.MAX_EVIDENCE_OBJECT_BYTES)
+        val size = s3.headObject(
+            HeadObjectRequest.builder()
+                .bucket(properties.bucket)
+                .key(objectKey)
+                .build(),
+        ).contentLength()
+        require(size in 1..maxBytes) {
+            "Restricted evidence exceeds its verified size limit."
+        }
+        val bytes = s3.getObjectAsBytes(
+            GetObjectRequest.builder()
+                .bucket(properties.bucket)
+                .key(objectKey)
+                .checksumMode(ChecksumMode.ENABLED)
+                .build(),
+        ).asByteArray()
+        require(bytes.size.toLong() == size) {
+            "Restricted evidence bytes do not match the stored object length."
+        }
+        return bytes
+    }
 
     override fun createDownloadTarget(
         objectKey: String,

@@ -1458,6 +1458,9 @@ class EvidenceLifecyclePostgresOpenFgaS3ContractTest {
                         ): Boolean =
                             false
                     },
+                supplierQuoteDocumentTarget = org.mockito.Mockito.mock(
+                    com.hiltech.server.documents.SupplierQuoteDocumentEvidenceTargetPort::class.java,
+                ),
                 idempotency =
                     idempotency,
                 projectionWriter =

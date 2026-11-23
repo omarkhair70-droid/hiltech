@@ -35,6 +35,11 @@ data class AddReceivingDiscrepancyApiRequest(
     val operationId: UUID, val recordVersion: Long, val lineId: UUID? = null,
     val type: ReceivingDiscrepancyType, val description: String,
 )
+data class RejectPoReceivingStockLineApiRequest(
+    val operationId: UUID, val lineId: UUID,
+    val recordVersion: Long, val lineVersion: Long,
+    val quantity: String, val type: ReceivingDiscrepancyType, val reason: String,
+)
 data class CompleteReceivingApiRequest(val operationId: UUID, val recordVersion: Long)
 
 @RestController
@@ -82,6 +87,17 @@ class ReceivingController(private val service: ReceivingService) {
         @RequestBody body: AddReceivingDiscrepancyApiRequest) =
         service.addDiscrepancy(request.receivingContext(body.operationId), id, AddReceivingDiscrepancyRequest(
             body.recordVersion, body.lineId, body.type, body.description))
+
+    @PostMapping("/v1/receiving/{id}/reject-po-line")
+    fun rejectPoLine(request: HttpServletRequest, @PathVariable id: UUID,
+        @RequestBody body: RejectPoReceivingStockLineApiRequest) =
+        service.rejectPoStockLine(
+            request.receivingContext(body.operationId), id, body.lineId,
+            RejectPoReceivingStockLineRequest(
+                body.recordVersion, body.lineVersion, body.quantity,
+                body.type, body.reason,
+            ),
+        )
 
     @PostMapping("/v1/receiving/{id}/complete")
     fun complete(request: HttpServletRequest, @PathVariable id: UUID, @RequestBody body: CompleteReceivingApiRequest) =

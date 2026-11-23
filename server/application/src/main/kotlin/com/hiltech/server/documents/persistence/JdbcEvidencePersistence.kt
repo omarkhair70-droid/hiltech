@@ -5,6 +5,9 @@ import com.hiltech.server.documents.EvidencePersistencePort
 import com.hiltech.server.documents.EvidenceReservationInsert
 import com.hiltech.server.documents.EvidenceReservationRecord
 import com.hiltech.server.documents.EmployeeDocumentEvidenceReservationInsert
+import com.hiltech.server.documents.SupplierQuoteDocumentEvidenceReservationInsert
+import com.hiltech.server.documents.SupplierInvoiceDocumentEvidenceReservationInsert
+import com.hiltech.server.documents.PoReceivingDeliveryNoteEvidenceReservationInsert
 import com.hiltech.server.documents.WorkOrderEvidencePolicySnapshot
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -354,90 +357,220 @@ class JdbcEvidencePersistence(
 
     override fun insertEmployeeDocumentReservation(
         value: EmployeeDocumentEvidenceReservationInsert,
-    ) {
-        jdbc.update(
-            """
-            INSERT INTO evidence (
-                id,
-                organization_id,
-                target_type,
-                target_id,
-                work_order_id,
-                evidence_requirement_key,
-                evidence_policy_id,
-                evidence_policy_revision,
-                evidence_type_code,
-                content_type,
-                original_file_name,
-                size_bytes,
-                sha256,
-                captured_at,
-                client_occurred_at,
-                captured_by_user_id,
-                source_device_id,
-                instruction_revision,
-                work_order_version_at_capture,
-                storage_state,
-                object_key_ref,
-                finalized_at,
-                classification_code,
-                client_visibility_mode,
-                security_scan_class,
-                supersedes_evidence_id,
-                created_at,
-                version
-            )
-            VALUES (
-                ?, ?,
-                'EMPLOYEE_DOCUMENT',
-                ?, NULL,
-                'EMPLOYEE_DOCUMENT_BINARY',
-                NULL, NULL,
-                ?,
-                ?, ?, ?, ?,
-                ?, ?, ?,
-                NULL,
-                NULL, NULL,
-                'RESERVED',
-                ?,
-                NULL,
-                'HIGHLY_RESTRICTED',
-                'INTERNAL_ONLY',
-                ?,
-                NULL,
-                ?,
-                1
-            )
-            """.trimIndent(),
-            value.evidenceId,
-            value.organizationId,
-            value.employeeDocumentId,
-            value.evidenceTypeCode,
-            value.contentType,
-            value.originalFileName,
-            value.sizeBytes,
-            value.sha256,
-            value.capturedAt.atOffset(
-                ZoneOffset.UTC,
-            ),
-            value.clientOccurredAt
-                ?.atOffset(ZoneOffset.UTC),
-            value.capturedByUserId,
-            value.objectKey,
-            value.securityScanClass,
-            value.createdAt.atOffset(
-                ZoneOffset.UTC,
-            ),
-        )
+    ) = insertRestrictedEvidenceReservation(
+        evidenceId = value.evidenceId,
+        uploadSessionId = value.uploadSessionId,
+        operationId = value.operationId,
+        objectKey = value.objectKey,
+        organizationId = value.organizationId,
+        targetType = "EMPLOYEE_DOCUMENT",
+        targetId = value.employeeDocumentId,
+        requirementKey = "EMPLOYEE_DOCUMENT_BINARY",
+        evidenceTypeCode = value.evidenceTypeCode,
+        contentType = value.contentType,
+        originalFileName = value.originalFileName,
+        sizeBytes = value.sizeBytes,
+        sha256 = value.sha256,
+        capturedAt = value.capturedAt,
+        clientOccurredAt = value.clientOccurredAt,
+        capturedByUserId = value.capturedByUserId,
+        securityScanClass = value.securityScanClass,
+        uploadExpiresAt = value.uploadExpiresAt,
+        createdAt = value.createdAt,
+    )
 
-        insertUploadSession(
+    override fun insertSupplierQuoteDocumentReservation(
+        value: SupplierQuoteDocumentEvidenceReservationInsert,
+    ) = insertRestrictedEvidenceReservation(
+        evidenceId = value.evidenceId,
+        uploadSessionId = value.uploadSessionId,
+        operationId = value.operationId,
+        objectKey = value.objectKey,
+        organizationId = value.organizationId,
+        targetType = "SUPPLIER_QUOTE_DOCUMENT",
+        targetId = value.documentSlotId,
+        requirementKey = "SUPPLIER_QUOTE_BINARY",
+        evidenceTypeCode = "SUPPLIER_QUOTE",
+        contentType = value.contentType,
+        originalFileName = value.originalFileName,
+        sizeBytes = value.sizeBytes,
+        sha256 = value.sha256,
+        capturedAt = value.capturedAt,
+        clientOccurredAt = value.clientOccurredAt,
+        capturedByUserId = value.capturedByUserId,
+        securityScanClass = value.securityScanClass,
+        uploadExpiresAt = value.uploadExpiresAt,
+        createdAt = value.createdAt,
+    )
+
+    override fun insertServiceQuoteDocumentReservation(
+        value: SupplierQuoteDocumentEvidenceReservationInsert,
+    ) = insertRestrictedEvidenceReservation(
+        evidenceId = value.evidenceId,
+        uploadSessionId = value.uploadSessionId,
+        operationId = value.operationId,
+        objectKey = value.objectKey,
+        organizationId = value.organizationId,
+        targetType = "SERVICE_QUOTE_DOCUMENT",
+        targetId = value.documentSlotId,
+        requirementKey = "SERVICE_QUOTE_BINARY",
+        evidenceTypeCode = "SERVICE_QUOTE",
+        contentType = value.contentType,
+        originalFileName = value.originalFileName,
+        sizeBytes = value.sizeBytes,
+        sha256 = value.sha256,
+        capturedAt = value.capturedAt,
+        clientOccurredAt = value.clientOccurredAt,
+        capturedByUserId = value.capturedByUserId,
+        securityScanClass = value.securityScanClass,
+        uploadExpiresAt = value.uploadExpiresAt,
+        createdAt = value.createdAt,
+    )
+
+    override fun insertServicePurchaseDocumentReservation(
+        value: SupplierQuoteDocumentEvidenceReservationInsert,
+        documentKind: String,
+    ) {
+        val expected = when (documentKind) {
+            "DELIVERY" -> "SERVICE_DELIVERY"
+            "INVOICE" -> "SERVICE_INVOICE"
+            else -> throw IllegalArgumentException("Unsupported service purchase document kind")
+        }
+        insertRestrictedEvidenceReservation(
             evidenceId = value.evidenceId,
             uploadSessionId = value.uploadSessionId,
             operationId = value.operationId,
-            sha256 = value.sha256,
+            objectKey = value.objectKey,
+            organizationId = value.organizationId,
+            targetType = "SERVICE_PURCHASE_DOCUMENT",
+            targetId = value.documentSlotId,
+            requirementKey = expected + "_BINARY",
+            evidenceTypeCode = expected,
+            contentType = value.contentType,
+            originalFileName = value.originalFileName,
             sizeBytes = value.sizeBytes,
+            sha256 = value.sha256,
+            capturedAt = value.capturedAt,
+            clientOccurredAt = value.clientOccurredAt,
+            capturedByUserId = value.capturedByUserId,
+            securityScanClass = value.securityScanClass,
             uploadExpiresAt = value.uploadExpiresAt,
             createdAt = value.createdAt,
+        )
+    }
+
+    override fun insertSupplierInvoiceDocumentReservation(
+        value: SupplierInvoiceDocumentEvidenceReservationInsert,
+    ) = insertRestrictedEvidenceReservation(
+        evidenceId = value.evidenceId,
+        uploadSessionId = value.uploadSessionId,
+        operationId = value.operationId,
+        objectKey = value.objectKey,
+        organizationId = value.organizationId,
+        targetType = "SUPPLIER_INVOICE_DOCUMENT",
+        targetId = value.documentSlotId,
+        requirementKey = "SUPPLIER_INVOICE_BINARY",
+        evidenceTypeCode = "SUPPLIER_INVOICE",
+        contentType = value.contentType,
+        originalFileName = value.originalFileName,
+        sizeBytes = value.sizeBytes,
+        sha256 = value.sha256,
+        capturedAt = value.capturedAt,
+        clientOccurredAt = value.clientOccurredAt,
+        capturedByUserId = value.capturedByUserId,
+        securityScanClass = value.securityScanClass,
+        uploadExpiresAt = value.uploadExpiresAt,
+        createdAt = value.createdAt,
+    )
+
+    override fun insertPoReceivingDeliveryNoteReservation(
+        value: PoReceivingDeliveryNoteEvidenceReservationInsert,
+    ) = insertRestrictedEvidenceReservation(
+        evidenceId = value.evidenceId,
+        uploadSessionId = value.uploadSessionId,
+        operationId = value.operationId,
+        objectKey = value.objectKey,
+        organizationId = value.organizationId,
+        targetType = "PO_RECEIVING_DELIVERY_NOTE",
+        targetId = value.receivingRecordId,
+        requirementKey = "PO_DELIVERY_NOTE_BINARY",
+        evidenceTypeCode = "PO_DELIVERY_NOTE",
+        contentType = value.contentType,
+        originalFileName = value.originalFileName,
+        sizeBytes = value.sizeBytes,
+        sha256 = value.sha256,
+        capturedAt = value.capturedAt,
+        clientOccurredAt = value.clientOccurredAt,
+        capturedByUserId = value.capturedByUserId,
+        securityScanClass = value.securityScanClass,
+        uploadExpiresAt = value.uploadExpiresAt,
+        createdAt = value.createdAt,
+    )
+
+    /** Fixed internal classification for sensitive HR and supplier documents. */
+    private fun insertRestrictedEvidenceReservation(
+        evidenceId: UUID,
+        uploadSessionId: UUID,
+        operationId: UUID,
+        objectKey: String,
+        organizationId: UUID,
+        targetType: String,
+        targetId: UUID,
+        requirementKey: String,
+        evidenceTypeCode: String,
+        contentType: String,
+        originalFileName: String?,
+        sizeBytes: Long,
+        sha256: String,
+        capturedAt: Instant,
+        clientOccurredAt: Instant?,
+        capturedByUserId: UUID,
+        securityScanClass: String,
+        uploadExpiresAt: Instant,
+        createdAt: Instant,
+    ) {
+        require(targetType in setOf(
+            "EMPLOYEE_DOCUMENT", "SUPPLIER_QUOTE_DOCUMENT", "SUPPLIER_INVOICE_DOCUMENT",
+            "PO_RECEIVING_DELIVERY_NOTE", "SERVICE_QUOTE_DOCUMENT",
+            "SERVICE_PURCHASE_DOCUMENT",
+        ))
+        jdbc.update(
+            """
+            INSERT INTO evidence (
+                id, organization_id, target_type, target_id, work_order_id,
+                evidence_requirement_key, evidence_policy_id, evidence_policy_revision,
+                evidence_type_code, content_type, original_file_name, size_bytes, sha256,
+                captured_at, client_occurred_at, captured_by_user_id,
+                source_device_id, instruction_revision, work_order_version_at_capture,
+                storage_state, object_key_ref, finalized_at, classification_code,
+                client_visibility_mode, security_scan_class, supersedes_evidence_id,
+                created_at, version
+            ) VALUES (
+                ?, ?, ?, ?, NULL,
+                ?, NULL, NULL,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?,
+                NULL, NULL, NULL,
+                'RESERVED', ?, NULL, 'HIGHLY_RESTRICTED',
+                'INTERNAL_ONLY', ?, NULL,
+                ?, 1
+            )
+            """.trimIndent(),
+            evidenceId, organizationId, targetType, targetId, requirementKey,
+            evidenceTypeCode, contentType, originalFileName, sizeBytes, sha256,
+            capturedAt.atOffset(ZoneOffset.UTC),
+            clientOccurredAt?.atOffset(ZoneOffset.UTC),
+            capturedByUserId, objectKey, securityScanClass,
+            createdAt.atOffset(ZoneOffset.UTC),
+        )
+        insertUploadSession(
+            evidenceId = evidenceId,
+            uploadSessionId = uploadSessionId,
+            operationId = operationId,
+            sha256 = sha256,
+            sizeBytes = sizeBytes,
+            uploadExpiresAt = uploadExpiresAt,
+            createdAt = createdAt,
         )
     }
 
