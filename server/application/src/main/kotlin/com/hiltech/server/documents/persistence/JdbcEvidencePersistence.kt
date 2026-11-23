@@ -8,6 +8,7 @@ import com.hiltech.server.documents.EmployeeDocumentEvidenceReservationInsert
 import com.hiltech.server.documents.SupplierQuoteDocumentEvidenceReservationInsert
 import com.hiltech.server.documents.SupplierInvoiceDocumentEvidenceReservationInsert
 import com.hiltech.server.documents.PoReceivingDeliveryNoteEvidenceReservationInsert
+import com.hiltech.server.documents.FinanceBankStatementEvidenceReservationInsert
 import com.hiltech.server.documents.FinanceExpenseReceiptEvidenceReservationInsert
 import com.hiltech.server.documents.CommercialEvidenceReservationInsert
 import com.hiltech.server.documents.WorkOrderEvidencePolicySnapshot
@@ -509,6 +510,30 @@ class JdbcEvidencePersistence(
         createdAt = value.createdAt,
     )
 
+    override fun insertFinanceBankStatementReservation(
+        value: FinanceBankStatementEvidenceReservationInsert,
+    ) = insertRestrictedEvidenceReservation(
+        evidenceId = value.evidenceId,
+        uploadSessionId = value.uploadSessionId,
+        operationId = value.operationId,
+        objectKey = value.objectKey,
+        organizationId = value.organizationId,
+        targetType = "FINANCE_BANK_STATEMENT_INTAKE",
+        targetId = value.bankProposalId,
+        requirementKey = "FINANCE_BANK_STATEMENT_INTAKE_BINARY",
+        evidenceTypeCode = "FINANCE_BANK_STATEMENT_INTAKE",
+        contentType = value.contentType,
+        originalFileName = value.originalFileName,
+        sizeBytes = value.sizeBytes,
+        sha256 = value.sha256,
+        capturedAt = value.capturedAt,
+        clientOccurredAt = value.clientOccurredAt,
+        capturedByUserId = value.capturedByUserId,
+        securityScanClass = "BANK_CANONICAL_CSV",
+        uploadExpiresAt = value.uploadExpiresAt,
+        createdAt = value.createdAt,
+    )
+
     override fun insertFinanceExpenseReceiptReservation(
         value: FinanceExpenseReceiptEvidenceReservationInsert,
     ) = insertRestrictedEvidenceReservation(
@@ -559,6 +584,7 @@ class JdbcEvidencePersistence(
             "EMPLOYEE_DOCUMENT", "SUPPLIER_QUOTE_DOCUMENT", "SUPPLIER_INVOICE_DOCUMENT",
             "PO_RECEIVING_DELIVERY_NOTE", "SERVICE_QUOTE_DOCUMENT",
             "SERVICE_PURCHASE_DOCUMENT", "FINANCE_EXPENSE_RECEIPT",
+            "FINANCE_BANK_STATEMENT_INTAKE",
         ))
         jdbc.update(
             """
