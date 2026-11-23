@@ -52,3 +52,9 @@ The existing signed-in `HiltechShell` previously stacked Identity/Sessions, Peop
 - Actual sections have small, width-measured 1dp scroll anchors, so clicking a shortcut targets the start of the section rather than a huge multi-screen Column. Existing native back and focused WorkOrder logic is unchanged.
 - Current identity/org scopes the shell scroll state; user and organization switches do not inherit previous operator scroll positions.
 - This is a bounded navigation improvement, **not** a claim of final role-adaptive multi-pane information architecture or company-specific acceptance. Real Android TalkBack, font scaling, hardware Back and Windows pointer/keyboard smoke remain OPEN.
+
+## 2026-11-23 — Scan-to-detail-to-scan return
+
+The existing Warehouse source-connected Quick Scan now has an explicit **Back to scan** action on the actual Asset Passport or Stock detail. The action uses the existing shell vertical scroll and a tiny measured anchor before `WarehouseQuickScanSection`; it never clears the signed-in actor's input or starts another warehouse request. The forward entry anchor is attached to this Back action so the user can find both the canonical detail and the return control after opening a result. This only navigates within an already authorized detail; no ledger mutation, supplier mapping, or new role authority is introduced.
+
+**Device gate open:** Verify field ergonomics and focus restoration after rescanning on real Android, screen rotation, large text, and dense Windows layout.
