@@ -52,6 +52,7 @@ jobs:
           ./gradlew :server:application:test \
             --tests com.hiltech.server.payroll.Payroll9bDraftPostgresContractTest \
             --tests com.hiltech.server.finance.FinancePayrollReviewIntakePolicyTest \
+            --tests com.hiltech.server.commercial.CommercialFinanceServiceSourcePostgresContractTest \
             --rerun-tasks --no-daemon --no-configuration-cache --console=plain
       - name: Only sanitized failing test reports
         if: failure()
