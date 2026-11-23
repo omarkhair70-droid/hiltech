@@ -119,6 +119,53 @@ class CommercialNativeContractTest {
     }
 
     @Test
+    fun tenderSubmissionAndSiteVisitAreMappedToTypedCanonicalEndpoints() = runBlocking {
+        val installation = "11111111-1111-4111-8111-111111111111"
+        val operation = "22222222-2222-4222-8222-222222222222"
+        val opportunity = "33333333-3333-4333-8333-333333333333"
+        val existingSite = "44444444-4444-4444-8444-444444444444"
+        val events = mutableListOf<Pair<String,String>>()
+        val http = HttpClient(MockEngine { req ->
+            assertEquals(operation,req.headers["Idempotency-Key"])
+            val body = (req.body as? TextContent)?.text.orEmpty()
+            events += req.url.encodedPath to body
+            respond(
+                """{"id":"$opportunity","replayed":false,"state":"RECORDED","correlationId":"corr-test"}""",
+                HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"),
+            )
+        })
+        val coordinator = CommercialDealCoordinator(
+            CommercialApiClient(HiltechApiClient(
+                http,"https://api.hiltech.test",
+                accessTokenProvider={"token"},
+                correlationIdProvider={"corr-test"},
+            )),installation,
+        )
+        coordinator.dispatch(
+            CommercialDealAction.TenderRevision(
+                opportunityId=opportunity,tenderType="RFP",
+                receivedAt="2026-11-23T08:00:00Z",
+                referenceNumber="RFP-123",submissionDeadline="2026-12-10T12:00:00Z",
+                clarificationDeadline="",sourceChannel="official-portal",
+                submissionState="SUBMITTED",
+            ),operation,
+        )
+        coordinator.dispatch(
+            CommercialDealAction.ScheduleVisit(
+                opportunityId=opportunity,
+                purpose="Inspect existing fiber pathway",
+                scheduledAt="2026-12-10T08:00:00Z",
+                siteId=existingSite,
+            ),operation,
+        )
+        assertEquals("/v1/commercial/opportunities/$opportunity/tenders",events[0].first)
+        assertTrue(events[0].second.contains("\"submissionState\":\"SUBMITTED\""))
+        assertEquals("/v1/commercial/opportunities/$opportunity/visits",events[1].first)
+        assertTrue(events[1].second.contains("\"siteId\":\"$existingSite\""))
+        http.close()
+    }
+
+    @Test
     fun authorizedDealDetailCanBeDecodedWithoutCostingProjection() {
         val response = """
         {
