@@ -1,0 +1,71 @@
+name: DevOps — inspect all active Phase 7–13 migration branches
+
+on:
+  push:
+    branches: [devops/parallel-lanes-audit-20261123]
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/devops/audit_parallel_migrations.py"
+      - "scripts/devops/test_audit_parallel_migrations.py"
+      - ".github/workflows/devops-parallel-migrations-audit.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hiltech-cross-lane-migration-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnostic:
+    name: Report real open-branch numbering conflicts (NO-GO is expected)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Verify migration audit logic
+        run: python3 -m unittest discover -s scripts/devops -p test_audit_parallel_migrations.py -v
+      - name: Capture currently published domain lane heads
+        shell: bash
+        run: |
+          set -euo pipefail
+          for branch in \
+            phase7/s07c-service-order-approval-20261123 \
+            phase8/finance-8d-result-safety-contract-20261123 \
+            phase9/payroll-snapshot-20261122 \
+            phase10/sales-tenders-commercial-20261122 \
+            phase11/handover-service-20261122 \
+            phase13/executive-control-source-bound-20261122
+          do
+            git fetch --no-tags origin "+refs/heads/$branch:refs/remotes/origin/$branch"
+          done
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+      - name: Print exact SHA inventory and unresolved source migration conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/devops/audit_parallel_migrations.py \
+            --repo . --out build/reports/devops-parallel-audit
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("build/reports/devops-parallel-audit/audit.json")
+          data = json.loads(p.read_text())
+          assert "exact_refs" in data
+          assert len(data["exact_refs"]) == 7
+          print("Source-release readiness:", data["release_ready"])
+          print("Collision versions:", [x["version"] for x in data["conflicts"]])
+          if not data["release_ready"]:
+              print("NO-GO is correct; do not turn off this evidence gate.")
+          PY
+      - name: Retain metadata-only audit evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hiltech-parallel-lanes-migration-audit
+          path: build/reports/devops-parallel-audit/
+          retention-days: 14
+          if-no-files-found: warn
