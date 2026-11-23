@@ -331,11 +331,13 @@ private fun ServiceInvoicePane(
                     label={Text("قيمة الخدمة")},enabled=!busy)
                 OutlinedTextField(value=tax,onValueChange={tax=it},
                     label={Text("قيمة الضريبة")},enabled=!busy)
-                val nonNegativeMoney=Regex("^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$")
-                val valid=invoiceNumber.trim().length in 2..96 &&
-                    Regex("\\d{4}-\\d{2}-\\d{2}").matches(invoiceDate) &&
-                    Regex("[A-Z]{3}").matches(currency) &&
-                    nonNegativeMoney.matches(amount) && nonNegativeMoney.matches(tax)
+                val valid=serviceInvoiceInputIsWellFormed(
+                    reference = invoiceNumber,
+                    date = invoiceDate,
+                    currency = currency,
+                    amount = amount,
+                    tax = tax,
+                )
                 OutlinedButton(enabled=!busy&&valid,onClick={
                     busy=true;error=null
                     val capturedReference=invoiceNumber.trim()
