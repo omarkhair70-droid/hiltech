@@ -114,6 +114,13 @@ class FinanceExpenseDocumentationSourcePostgresContractTest {
                         '${at.minusDays(2).toLocalDate()}','ACTIVE',$date,$date)
                 """)
                 exec("""
+                    INSERT INTO organization_membership(
+                        id,organization_id,user_identity_id,membership_type,
+                        state,valid_from)
+                    VALUES ('${UUID.randomUUID()}','$org','$actor','EMPLOYEE',
+                        'ACTIVE','${at.minusDays(2)}')
+                """)
+                exec("""
                     INSERT INTO finance_expense_claim_draft(
                         id,operation_id,organization_id,employee_id,amount,
                         currency,purpose,merchant,spent_on,created_by_user_id,
