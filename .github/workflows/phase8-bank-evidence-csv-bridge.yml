@@ -34,6 +34,7 @@ jobs:
           ./gradlew :server:application:test \
             --tests com.hiltech.server.finance.FinanceBankCsvParserTest \
             --tests com.hiltech.server.finance.FinanceBankIntakeEvidenceBindingTest \
+            --tests com.hiltech.server.finance.FinanceBankEvidencePersistenceTest \
             :shared:core:desktopTest \
             :apps:desktopApp:compileKotlin \
             :apps:androidApp:assembleDebug \
