@@ -69,6 +69,16 @@ data class ValidatedTriage(
 )
 
 object SupportTriagePolicy {
+    // Classification is a separate event. Owner assignment is a change,
+    // never a fake 'release' or duplicate event when no owner changed.
+    fun ownerChangeAllowed(eventType: String, currentOwner: UUID?, nextOwner: UUID?): Boolean =
+        when (eventType) {
+            "OWNER_ASSIGNED" -> nextOwner != null && nextOwner != currentOwner
+            "OWNER_RELEASED" -> currentOwner != null && nextOwner == null
+            "CLASSIFICATION_RECORDED" -> true
+            else -> false
+        }
+
     fun validate(
         type: String, ownerId: String?, severity: String?, priority: String?, rawReason: String,
     ): ValidatedTriage {
@@ -110,6 +120,19 @@ class JdbcSupportTriageStore(private val jdbc: JdbcTemplate) {
             "SELECT COALESCE(MAX(event_number), 0) FROM service_support_triage_event WHERE ticket_id = ?",
             Int::class.java, ticketId,
         ) ?: 0
+
+    fun currentOwner(ticketId: UUID): UUID? =
+        jdbc.query(
+            """
+            SELECT CASE WHEN event_type='OWNER_ASSIGNED' THEN assignee_employee_id
+                        ELSE NULL END AS current_owner
+              FROM service_support_triage_event
+             WHERE ticket_id=? AND event_type IN ('OWNER_ASSIGNED','OWNER_RELEASED')
+             ORDER BY event_number DESC LIMIT 1
+            """.trimIndent(),
+            { rs, _ -> rs.getObject("current_owner", UUID::class.java) },
+            ticketId,
+        ).singleOrNull()
 
     fun activeEmployee(employeeId: UUID, organizationId: UUID, now: Instant): Boolean =
         jdbc.queryForObject(
@@ -175,8 +198,11 @@ class JdbcSupportTriageStore(private val jdbc: JdbcTemplate) {
     fun events(ticketId: UUID): List<InternalSupportTriageEventDto> {
         val ids = jdbc.query(
             """
-            SELECT id FROM service_support_triage_event
-             WHERE ticket_id = ? ORDER BY event_number LIMIT 500
+            SELECT recent.id FROM (
+                SELECT id, event_number FROM service_support_triage_event
+                 WHERE ticket_id = ? ORDER BY event_number DESC LIMIT 500
+            ) recent
+            ORDER BY recent.event_number ASC
             """.trimIndent(),
             { rs, _ -> rs.getObject("id", UUID::class.java) }, ticketId,
         )
@@ -240,6 +266,10 @@ class SupportTriageService(
             val latest = triage.latestEventNumber(ticketId)
             if (latest != expectedLatest)
                 triageProblem("TRIAGE_EVENT_VERSION_STALE", HttpStatus.CONFLICT)
+            if (!SupportTriagePolicy.ownerChangeAllowed(
+                    payload.eventType, triage.currentOwner(ticketId), payload.ownerEmployeeId,
+                ))
+                triageProblem("TRIAGE_OWNER_TRANSITION_INVALID", HttpStatus.CONFLICT)
             val at = clock.instant()
             val owner = payload.ownerEmployeeId
             if (owner != null && !triage.activeEmployee(owner, current.organizationId, at))

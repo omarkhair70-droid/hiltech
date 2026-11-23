@@ -32,6 +32,16 @@ data class SupportTriageUiState(
 )
 
 /**
+ * A bounded activity feed cannot prove the absence of an owner assigned
+ * before the first loaded event. Never render "No owner" as an invented fact.
+ */
+object SupportTriageRecentOwnerState {
+    fun ownerUnavailableFromWindow(events: List<InternalSupportTriageEventDto>): Boolean =
+        events.firstOrNull()?.eventNumber?.let { it > 1 } == true &&
+            events.none { it.eventType == "OWNER_ASSIGNED" || it.eventType == "OWNER_RELEASED" }
+}
+
+/**
  * A native section for manager-authorized internal classification and desk owner.
  * Host supplies real current ACTIVE employee choices from People; it also creates
  * operation IDs and connects auth/navigation. No client or SLA actions.
@@ -84,7 +94,12 @@ fun SupportTriageSection(
         }
         Text("Desk owner", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Current recorded owner: " + (currentOwner?.take(8) ?: "No owner"),
+            "Current recorded owner: " + when {
+                currentOwner != null -> currentOwner.take(8)
+                SupportTriageRecentOwnerState.ownerUnavailableFromWindow(state.events) ->
+                    "Unknown in recent history; refresh current owner from source"
+                else -> "No owner"
+            },
             style = MaterialTheme.typography.bodySmall,
         )
         if (state.eligibleEmployees.isEmpty()) {
@@ -106,7 +121,8 @@ fun SupportTriageSection(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                enabled = selectedEmployee != null && reason.isNotBlank() && !state.loading,
+                enabled = selectedEmployee != null && selectedEmployee != currentOwner &&
+                    reason.isNotBlank() && !state.loading,
                 onClick = {
                     onRecord("OWNER_ASSIGNED", selectedEmployee, null, null, reason, expected)
                 },

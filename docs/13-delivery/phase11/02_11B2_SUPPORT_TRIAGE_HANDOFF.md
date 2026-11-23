@@ -20,6 +20,14 @@ The UI intentionally does not create employees; it uses People-sourced choices.
 1. Clean + incremental PostgreSQL migrations with sibling PR migration order. Validate FKs, ACTIVE employment trigger, foreign-org rejection, delete/update/truncate immutability, unique event ordering.
 2. Auth: foreign project denied; authorized manager only; revoked manager denied; identity from trusted session, not header.
 3. Idempotency: same operation/payload replay gives original event; reuse with different payload rejected; simultaneous same expected-event-number results one success and one conflict.
-4. Employee: former/preboarding/offboarding rejected; wrong organization rejected; no active employment rejected; OWNER_RELEASED with no employee permitted.
+4. Employee: former/preboarding/offboarding rejected; wrong organization rejected; no active employment rejected. OWNER_RELEASED has no employeeId field, but is legal only if the same ticket has a currently assigned owner. Duplicate assignment to the same Employee is rejected; reassignment to a different ACTIVE Employee remains an audited change.
 5. Assert no SLA, coverage, original ticket state/classification, WorkOrder, procurement, invoice or client notification modified as a side effect.
 6. Wire authenticated native Android and Windows UI journeys on integration-owned shared-shell files and test under real sessions.
+
+
+## Current owner and truthful recent history (2026-11-23)
+- B3 PostgreSQL adds the triage guard after B2: both service and SQL reject OWNER_RELEASED without an existing assigned owner and repeat OWNER_ASSIGNED with the same current owner. A ticket lock serializes owner and case changes.
+- JdbcSupportTriageStore.currentOwner derives the most recent owner assignment or release independently of later classification events. No SLA or workforce WorkOrder assignment is inferred.
+- GET /triage returns the newest 500 events in ascending order within that window; the former oldest-500 behavior hid current activity after long histories. If the most recent window lacks an owner transition, the native screen reports owner unknown rather than pretending there is no owner.
+- Transactional SQL tests reject nonexistent owner releases. JUnit policy tests cover release, reassignment and duplicates. Native tests cover bounded-history uncertainty.
+- Internal support ticket read now returns the latest derived case state alongside the immutable original OPEN intake, and the Service Desk shows both instead of always displaying OPEN.

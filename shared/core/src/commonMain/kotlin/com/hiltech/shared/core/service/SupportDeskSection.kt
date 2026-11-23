@@ -106,7 +106,9 @@ fun InternalSupportDeskSection(
             ) {
                 Text(ticket.title, style = MaterialTheme.typography.titleSmall)
                 Text(
-                    ticket.lifecycleState + " · Coverage: " + ticket.coverageState +
+                    "Case: " + ticket.internalCaseState +
+                        " · Original report: " + ticket.lifecycleState +
+                        " · Coverage: " + ticket.coverageState +
                         " · SLA: " + ticket.slaState,
                     style = MaterialTheme.typography.bodySmall,
                 )

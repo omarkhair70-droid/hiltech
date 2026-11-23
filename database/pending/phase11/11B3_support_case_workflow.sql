@@ -165,6 +165,8 @@ DECLARE
  latest_number integer;
  previous_at timestamptz;
  ticket_opened_at timestamptz;
+ last_owner_event text;
+ last_owner uuid;
 BEGIN
  SELECT created_at INTO ticket_opened_at FROM service_support_ticket
   WHERE id=NEW.ticket_id AND project_id=NEW.project_id
@@ -185,6 +187,22 @@ BEGIN
   WHERE ticket_id=NEW.ticket_id ORDER BY event_number DESC LIMIT 1;
  IF latest_state IN ('RESOLVED_INTERNAL','CLOSED_INTERNAL') THEN
    RAISE EXCEPTION 'Triage requires reopened case after resolution'
+     USING ERRCODE='23514';
+ END IF;
+ SELECT event_type,assignee_employee_id INTO last_owner_event,last_owner
+   FROM service_support_triage_event
+  WHERE ticket_id=NEW.ticket_id
+    AND event_type IN ('OWNER_ASSIGNED','OWNER_RELEASED')
+  ORDER BY event_number DESC LIMIT 1;
+ IF NEW.event_type='OWNER_RELEASED'
+    AND last_owner_event IS DISTINCT FROM 'OWNER_ASSIGNED' THEN
+   RAISE EXCEPTION 'Cannot release a support desk owner who is not assigned'
+     USING ERRCODE='23514';
+ END IF;
+ IF NEW.event_type='OWNER_ASSIGNED'
+    AND last_owner_event='OWNER_ASSIGNED'
+    AND last_owner=NEW.assignee_employee_id THEN
+   RAISE EXCEPTION 'Cannot repeat support desk owner assignment without a change'
      USING ERRCODE='23514';
  END IF;
  RETURN NEW;

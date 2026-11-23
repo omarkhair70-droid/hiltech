@@ -46,6 +46,26 @@ class SupportTriagePolicyTest {
     }
 
     @Test
+    fun deskOwnerLedgerRequiresRealChangesAndCannotReleaseNobody() {
+        val first = UUID.fromString("11111111-1111-4111-8111-111111111111")
+        val second = UUID.fromString("22222222-2222-4222-8222-222222222222")
+        org.junit.jupiter.api.Assertions.assertFalse(
+            SupportTriagePolicy.ownerChangeAllowed("OWNER_RELEASED", null, null))
+        org.junit.jupiter.api.Assertions.assertTrue(
+            SupportTriagePolicy.ownerChangeAllowed("OWNER_ASSIGNED", null, first))
+        org.junit.jupiter.api.Assertions.assertFalse(
+            SupportTriagePolicy.ownerChangeAllowed("OWNER_ASSIGNED", first, first))
+        org.junit.jupiter.api.Assertions.assertTrue(
+            SupportTriagePolicy.ownerChangeAllowed("OWNER_ASSIGNED", first, second))
+        org.junit.jupiter.api.Assertions.assertTrue(
+            SupportTriagePolicy.ownerChangeAllowed("OWNER_RELEASED", second, null))
+        org.junit.jupiter.api.Assertions.assertFalse(
+            SupportTriagePolicy.ownerChangeAllowed("OWNER_RELEASED", null, null))
+        org.junit.jupiter.api.Assertions.assertTrue(
+            SupportTriagePolicy.ownerChangeAllowed("CLASSIFICATION_RECORDED", first, null))
+    }
+
+    @Test
     fun releaseRequiresNoOwnerOrClassification() {
         val valid = SupportTriagePolicy.validate("OWNER_RELEASED", null, null, null, "Owner unavailable")
         assertNull(valid.ownerEmployeeId)

@@ -135,8 +135,13 @@ class JdbcHandoverReviewStore(private val jdbc: JdbcTemplate) {
             """
             SELECT id,package_version_id,event_number,event_type,review_state,
                    source_digest,reason,created_at,client_visibility
-              FROM service_handover_review_event WHERE package_version_id=?
-             ORDER BY event_number LIMIT 500
+              FROM (
+                  SELECT id,package_version_id,event_number,event_type,review_state,
+                         source_digest,reason,created_at,client_visibility
+                    FROM service_handover_review_event WHERE package_version_id=?
+                   ORDER BY event_number DESC LIMIT 500
+              ) recent
+             ORDER BY event_number ASC
             """.trimIndent(),
             { rs, _ -> row(rs) }, versionId,
         )

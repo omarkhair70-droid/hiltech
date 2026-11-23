@@ -128,8 +128,15 @@ class JdbcSupportDeskStore(private val jdbc: JdbcTemplate) {
             """
             SELECT id, project_id, client_organization_id, title, description,
                    severity_code, priority_code, lifecycle_state, coverage_state,
-                   sla_state, client_visibility, opened_by_user_id, created_at
-              FROM service_support_ticket
+                   sla_state, client_visibility, opened_by_user_id, created_at,
+                   COALESCE(
+                     (SELECT e.resulting_state
+                        FROM service_support_case_event e
+                       WHERE e.ticket_id=t.id
+                       ORDER BY e.event_number DESC LIMIT 1),
+                     'OPEN'
+                   ) AS internal_case_state
+              FROM service_support_ticket t
              WHERE id = ? AND project_id = ?
             """.trimIndent(),
             { rs, _ ->
@@ -142,6 +149,7 @@ class JdbcSupportDeskStore(private val jdbc: JdbcTemplate) {
                     severityCode = rs.getString("severity_code"),
                     priorityCode = rs.getString("priority_code"),
                     lifecycleState = rs.getString("lifecycle_state"),
+                    internalCaseState = rs.getString("internal_case_state"),
                     coverageState = rs.getString("coverage_state"),
                     slaState = rs.getString("sla_state"),
                     clientVisibility = rs.getString("client_visibility"),
@@ -218,9 +226,7 @@ class SupportDeskService(
     @Transactional(readOnly = true)
     fun tickets(projectId: UUID, actor: UUID): List<InternalSupportTicketDto> {
         managedProject(projectId, actor)
-        return store.tickets(projectId).map { ticket ->
-            ticket.copy(internalCaseState = cases.current(UUID.fromString(ticket.ticketId)).internalState)
-        }
+        return store.tickets(projectId)
     }
 
     @Transactional(readOnly = true)

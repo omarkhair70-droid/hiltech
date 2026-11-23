@@ -199,8 +199,13 @@ class JdbcSupportCaseStore(private val jdbc: JdbcTemplate) {
             """
             SELECT id, ticket_id, event_number, event_type, resulting_state,
                    reason, work_order_id, evidence_id, recorded_at, visibility
-              FROM service_support_case_event WHERE ticket_id=?
-             ORDER BY event_number LIMIT 500
+              FROM (
+                  SELECT id, ticket_id, event_number, event_type, resulting_state,
+                         reason, work_order_id, evidence_id, recorded_at, visibility
+                    FROM service_support_case_event WHERE ticket_id=?
+                   ORDER BY event_number DESC LIMIT 500
+              ) recent
+             ORDER BY event_number ASC
             """.trimIndent(),
             { rs, _ -> row(rs) },
             ticketId,

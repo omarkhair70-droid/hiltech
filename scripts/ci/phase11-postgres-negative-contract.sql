@@ -267,6 +267,21 @@ BEGIN
   WHERE ticket_id='a11a11a1-0000-4000-8000-000000000008';
  IF ticket_count<>2 THEN RAISE EXCEPTION 'Expected two genuine valid support events'; END IF;
 
+ -- The immutable intake row stays OPEN, but the support ticket READ projection
+ -- must reflect the latest case event. Checking the same correlated source
+ -- selected by JdbcSupportDeskStore prevents stale OPEN display after changes.
+ IF (
+   SELECT COALESCE(
+     (SELECT e.resulting_state FROM service_support_case_event e
+       WHERE e.ticket_id=t.id ORDER BY e.event_number DESC LIMIT 1),
+     'OPEN')
+     FROM service_support_ticket t
+    WHERE t.id='a11a11a1-0000-4000-8000-000000000008'
+ ) IS DISTINCT FROM 'INVESTIGATING' THEN
+   RAISE EXCEPTION 'Support ticket case projection must read latest case event';
+ END IF;
+ RAISE NOTICE 'PASS support ticket source case projection = INVESTIGATING';
+
  IF (SELECT count(*) FROM service_maintenance_ticket_followup
        WHERE finding_id='a11a11a1-0000-4000-8000-000000000031')<>1 THEN
    RAISE EXCEPTION 'Valid same-project finding follow-up is not durable';
@@ -357,6 +372,24 @@ BEGIN
   RAISE EXCEPTION 'INVALID: backdated support event accepted';
  EXCEPTION WHEN check_violation THEN
   RAISE NOTICE 'PASS support event timestamp monotonicity';
+ END;
+
+ -- Releasing a support owner who was never assigned cannot be written,
+ -- even by an SQL writer bypassing the manager service.
+ BEGIN
+  INSERT INTO service_support_triage_event(
+    id,ticket_id,organization_id,project_id,event_number,
+    event_type,reason,source_operation_id,created_by_user_id,created_at)
+  VALUES('a11a11a1-0000-4000-8000-000000000077',
+         'a11a11a1-0000-4000-8000-000000000008',
+         'a11a11a1-0000-4000-8000-000000000001',
+         'a11a11a1-0000-4000-8000-000000000004',
+         1,'OWNER_RELEASED','Attempt to release nonexistent desk owner',
+         'a11a11a1-0000-4000-8000-000000000078',
+         'a11a11a1-0000-4000-8000-000000000003',now());
+  RAISE EXCEPTION 'INVALID: release of unassigned support owner accepted';
+ EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'PASS no ghost owner release';
  END;
 
  -- B2 standalone triage must not skip its append-only event sequence.

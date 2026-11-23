@@ -18,9 +18,10 @@ Visit proposals still point to original WorkOrder. Manager read endpoints expose
 - database/pending/phase11/11B2_support_triage.sql
 - database/pending/phase11/11B3_support_case_workflow.sql
 - database/pending/phase11/11C_maintenance_visits.sql
+- database/pending/phase11/11C2_maintenance_ticket_followups.sql
 
 ## Dedicated CI contract
-.github/workflows/phase11-source-service.yml: exact-head six focused server policy test classes; canonical database migration contract on disposable PostgreSQL; ordered staging DDL plus scripts/ci/phase11-schema-source-check.sql verifying FKs, source triggers and immutability; shared native Desktop tests/compile and Android debug assembly.
+.github/workflows/phase11-source-service.yml: exact-head focused server policy test classes; canonical database migration contract on disposable PostgreSQL; ordered staging DDL plus scripts/ci/phase11-schema-source-check.sql verifying FKs, source triggers and immutability; shared native Desktop tests/compile and Android debug assembly.
 Successful earlier local focused Gradle run ONLY applied to 150e5989 before A2/B3/C changes. Treat new workflow as unverified until latest-head run completes. No staging/production flag activation.
 
 ## Full completion gates
@@ -38,3 +39,9 @@ Company-approved true handover completeness and client acceptance authority; ver
 - P11A `service_handover_package_version.state` is now restricted by the PostgreSQL schema to **DRAFT only**, not merely the backend controller. A direct INSERT pretending an `ISSUED`, `CLIENT_ACCEPTED` or `INTERNAL_APPROVED` package is rejected at the DB boundary.
 - Internal technical review is represented by its separate immutable `service_handover_review_event` ledger. No client signature, publication, delivery confirmation or acceptance is asserted by that ledger.
 - The disposable PostgreSQL negative script creates an attempted `CLIENT_ACCEPTED` package row and requires a `check_violation`. Any later legitimate client-issuance/acceptance implementation must introduce a separately reviewed, authorized state transition and schema migration rather than changing a magic state text in this draft.
+
+
+## Long-running ledger and source-state read repair (2026-11-23)
+- Support ticket remains OPEN as an immutable intake event, but internalCaseState derives from the newest B3 case event. The single-ticket SQL query and list now share this projection; the Compose PM Service Desk displays both independently. Disposable PostgreSQL verifies the source-derived INVESTIGATING state.
+- Case, triage and handover-review history GETs select the newest 500 events but return those selected events in chronological order. Former ORDER BY event_number LIMIT 500 omitted all new events after 500. Full cursor-based audit pagination remains an integration concern; the immutable database retains every event.
+- Triage now requires a real current desk owner to release, forbids duplicate assignment to the same Employee, and still permits a different active Employee to be reassigned with an explicit reason. Checks are in the service and SQL source trigger. No invented employee, SLA or field dispatch.

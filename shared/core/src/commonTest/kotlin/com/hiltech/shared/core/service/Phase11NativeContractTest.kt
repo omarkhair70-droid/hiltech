@@ -261,6 +261,22 @@ class Phase11NativeContractTest {
     }
 
     @Test
+    fun ownerUnknownOutsideLatestTriageWindowIsNotMisrepresentedAsUnassigned() {
+        val classification = InternalSupportTriageEventDto(
+            eventId = operation, ticketId = ticket, eventNumber = 501,
+            eventType = "CLASSIFICATION_RECORDED", ownerEmployeeId = null,
+            proposedSeverityCode = "HIGH", proposedPriorityCode = "P1",
+            reason = "Case reviewed", clientVisibility = "INTERNAL_ONLY",
+            createdAt = "2026-11-23T01:00:00Z", duplicateReplay = false,
+        )
+        assertTrue(SupportTriageRecentOwnerState.ownerUnavailableFromWindow(listOf(classification)))
+        assertFalse(SupportTriageRecentOwnerState.ownerUnavailableFromWindow(
+            listOf(classification.copy(eventNumber = 1))))
+        assertFalse(SupportTriageRecentOwnerState.ownerUnavailableFromWindow(
+            listOf(classification.copy(eventType = "OWNER_RELEASED"))))
+    }
+
+    @Test
     fun maintenanceSourceStatusDoesNotMisrepresentVisitAsCompleted() = runBlocking {
         val http = HttpClient(MockEngine { request ->
             assertEquals(HttpMethod.Get, request.method)
