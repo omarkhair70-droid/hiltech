@@ -35,6 +35,7 @@ import com.hiltech.shared.core.work.FieldPersonalIssuedStockLineDto
 import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.executive.executiveNativeWorkspace
+import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
@@ -126,9 +127,9 @@ class MainActivity : ComponentActivity() {
                 operationalWorkspaces = (shellState as? HiltechShellState.SignedIn)?.let { signed ->
                     val org = signed.identity.organizations.firstOrNull { it.primary }
                         ?: signed.identity.organizations.firstOrNull()
-                    if (BuildConfig.HILTECH_EXECUTIVE_HOME_ENABLED && org != null) {
-                        listOf(
-                            executiveNativeWorkspace(
+                    if (org == null) emptyList() else buildList {
+                        if (BuildConfig.HILTECH_EXECUTIVE_HOME_ENABLED) {
+                            add(executiveNativeWorkspace(
                                 client = hiltechApplication.executiveApi,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
@@ -136,11 +137,18 @@ class MainActivity : ComponentActivity() {
                                 authorityRevisionKey =
                                     signed.identity.identityVersion.toString() + ":" +
                                         org.membershipVersion.toString(),
-                                // Android Projects detail is not mounted yet.
-                                // Do not offer a destination with no original source screen.
-                            ),
-                        )
-                    } else emptyList()
+                                // Android original Projects detail route not mounted yet.
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_OWN_PAYSLIPS_ENABLED) {
+                            add(ownPayslipNativeWorkspace(
+                                client = hiltechApplication.payrollOwnApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                            ))
+                        }
+                    }
                 } ?: emptyList(),
                 onSignIn = ::startSignIn,
                 onSignOut = ::signOut,
