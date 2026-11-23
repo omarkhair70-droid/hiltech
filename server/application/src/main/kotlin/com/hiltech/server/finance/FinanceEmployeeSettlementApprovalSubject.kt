@@ -54,7 +54,7 @@ private data class FinanceSettlementDbRow(
     val fundedKind:String,val fundedAmount:BigDecimal,
     val fundedBankLine:UUID,val fundedCurrency:String,
 )
-private data class FinanceSettlementBankLine(
+data class FinanceSettlementBankLine(
     val amount:BigDecimal,val currency:String,val flow:String,
     val statementHash:String,
 )
@@ -175,7 +175,7 @@ class FinanceEmployeeSettlementApprovalSubject(
             return null
         val remaining=remaining(org,row.fundingId,row.fundedAmount)
         if(remaining<row.amount)return null
-        val fundingBank=bank(org,row.fundedBank) ?: return null
+        val fundingBank=bank(org,row.fundedBankLine) ?: return null
         if(fundingBank.flow!="DEBIT" || fundingBank.currency!=row.currency)
             return null
         val bank=if(row.bankLine==null)null else bank(org,row.bankLine)
@@ -218,7 +218,7 @@ class FinanceEmployeeSettlementApprovalSubject(
             evidenceSha256=row.evidenceHash,amount=row.amount,
             currency=row.currency,fundedKind=row.fundedKind,
             fundedAmount=row.fundedAmount,
-            fundingBankLineId=row.fundedBank,
+            fundingBankLineId=row.fundedBankLine,
             fundingStatementSha=fundingBank.statementHash,
             bankStatementSha=bank?.statementHash,
             remainingBefore=remaining,reviewVersion=expected,
