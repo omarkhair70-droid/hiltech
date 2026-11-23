@@ -152,7 +152,7 @@ class FinanceExpenseDocumentationSourcePostgresContractTest {
 
                 assertEquals(null, subject.current(org, expense))
                 val receiptOne = addReceipt(hash)
-                val initial = subject.current(org, expense)
+                val initial = requireNotNull(subject.current(org, expense))
                 assertNotNull(initial)
                 assertEquals(listOf(receiptOne), initial.verifiedEvidenceIds)
                 assertEquals("150", initial.amount)
@@ -163,7 +163,7 @@ class FinanceExpenseDocumentationSourcePostgresContractTest {
                 assertTrue(subject.isCurrent(original))
 
                 val receiptTwo = addReceipt("b".repeat(64))
-                val latest = subject.current(org, expense)
+                val latest = requireNotNull(subject.current(org, expense))
                 assertNotNull(latest)
                 assertEquals(2, latest.verifiedEvidenceIds.size)
                 assertTrue(latest.verifiedEvidenceIds.contains(receiptTwo))
