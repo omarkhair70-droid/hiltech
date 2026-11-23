@@ -490,12 +490,19 @@ CREATE TRIGGER trg_commercial_quote_no_delete BEFORE DELETE
 CREATE FUNCTION commercial_guard_award_document_update() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
  IF TG_OP='INSERT' THEN
-   IF TG_TABLE_NAME='commercial_contract' AND
-      (NEW.state<>'DRAFT' OR NEW.signed_evidence_id IS NOT NULL) THEN
-     RAISE EXCEPTION 'Contract must begin unsigned';
-   ELSIF TG_TABLE_NAME='commercial_client_po' AND
-      (NEW.verified OR NEW.evidence_id IS NOT NULL) THEN
-     RAISE EXCEPTION 'Client PO must begin unverified';
+   -- PL/pgSQL boolean expressions are not guaranteed to short circuit.
+   -- Branch on table FIRST: a Contract record has no .verified column and
+   -- a Client PO record has no .state column.
+   IF TG_TABLE_NAME='commercial_contract' THEN
+     IF NEW.state<>'DRAFT' OR NEW.signed_evidence_id IS NOT NULL THEN
+       RAISE EXCEPTION 'Contract must begin unsigned';
+     END IF;
+   ELSIF TG_TABLE_NAME='commercial_client_po' THEN
+     IF NEW.verified OR NEW.evidence_id IS NOT NULL THEN
+       RAISE EXCEPTION 'Client PO must begin unverified';
+     END IF;
+   ELSE
+     RAISE EXCEPTION 'Commercial document trigger applied to unsupported table';
    END IF;
    RETURN NEW;
  END IF;

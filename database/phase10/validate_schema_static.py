@@ -31,6 +31,11 @@ assert "security_scan_class='SIGNED_DOCUMENT'" in sql
 assert "security_scan_class='NATIVE_MEDIA'" in sql
 assert "security_scan_class='ARBITRARY_FILE'" not in sql
 assert "Canonical client PO Evidence is not READY" in sql
+# Every table-dependent field must be inspected only inside its table branch,
+# never in a combined AND expression (PostgreSQL can evaluate both operands).
+assert "IF TG_TABLE_NAME='commercial_contract' THEN" in sql
+assert "ELSIF TG_TABLE_NAME='commercial_client_po' THEN" in sql
+assert "TG_TABLE_NAME='commercial_client_po' AND" not in sql
 assert "Project handoff requires exact ready award and same client" in sql
 assert "commercial_private_boq_cost_summary" in sql
 assert "commercial_finance_award_source" in sql

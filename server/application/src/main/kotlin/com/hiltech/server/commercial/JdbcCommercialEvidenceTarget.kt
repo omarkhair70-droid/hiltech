@@ -2,6 +2,7 @@ package com.hiltech.server.commercial
 
 import com.hiltech.server.documents.CommercialEvidenceTargetPort
 import com.hiltech.server.documents.CommercialEvidenceTargetSnapshot
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -12,7 +13,7 @@ import java.util.UUID
  * storage, upload sessions or binary finalization.
  */
 @Component
-class JdbcCommercialEvidenceTarget(
+class JdbcCommercialEvidenceTarget @Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val access: CommercialAccess,
     @Value("\${hiltech.commercial.enabled:false}")

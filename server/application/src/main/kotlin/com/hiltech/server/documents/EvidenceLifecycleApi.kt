@@ -15,6 +15,7 @@ import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.security.AuthorizationProjectionIntentWriter
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.beans.factory.ObjectProvider
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
@@ -110,7 +111,7 @@ class SpringEvidenceStorageAccess(
 }
 
 @Component
-class EvidenceLifecycleService(
+class EvidenceLifecycleService @Autowired constructor(
     private val persistence: EvidencePersistencePort,
     private val targetAuthorization: EvidenceTargetAuthorizationPort,
     private val employeeDocumentTarget:
