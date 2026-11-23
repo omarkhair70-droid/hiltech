@@ -96,6 +96,21 @@ class FinanceExpenseDocumentationApprovalSubject(
             JOIN evidence_upload_session s ON s.evidence_id=e.id
             WHERE d.id=? AND d.organization_id=?
                 AND d.state='DRAFT_RECEIPT_PENDING'
+                AND EXISTS (
+                    SELECT 1 FROM employee emp
+                    JOIN employment employment ON employment.employee_id=emp.id
+                        AND employment.state='ACTIVE'
+                    JOIN user_identity owner ON owner.id=d.created_by_user_id
+                        AND owner.person_id=emp.person_id
+                    JOIN organization company ON company.id=d.organization_id
+                    WHERE emp.id=d.employee_id
+                        AND emp.organization_id=d.organization_id
+                        AND emp.state='ACTIVE'
+                        AND company.status='ACTIVE'
+                        AND owner.status='ACTIVE'
+                        AND employment.start_date<=CURRENT_DATE
+                        AND employment.end_date IS NULL
+                )
                 AND e.evidence_requirement_key='FINANCE_EXPENSE_RECEIPT_BINARY'
                 AND e.evidence_type_code='FINANCE_EXPENSE_RECEIPT'
                 AND e.storage_state='READY' AND s.state='READY'
@@ -138,7 +153,7 @@ class FinanceExpenseDocumentationApprovalSubject(
         if (rows.any {
                 it.expenseId != first.expenseId ||
                     it.organizationId != first.organizationId ||
-                    it.createdByUserIdSafe() != first.creatorId ||
+                    it.creatorId != first.creatorId ||
                     it.expenseVersion != first.expenseVersion ||
                     it.amount.compareTo(first.amount) != 0 ||
                     it.currency != first.currency
@@ -175,8 +190,6 @@ class FinanceExpenseDocumentationApprovalSubject(
             sourceVersion = version,
         )
     }
-
-    private fun ExpenseDocumentationSourceRow.createdByUserIdSafe() = creatorId
 
     private fun policyKey(): String? =
         environment.getProperty("hiltech.finance.expenses.documentation-review.policy-key", "")
