@@ -18,6 +18,8 @@ DECLARE
   wrong_project uuid := gen_random_uuid();
   contract_file uuid := gen_random_uuid();
   po_file uuid := gen_random_uuid();
+  partial_po uuid := gen_random_uuid();
+  partial_file uuid := gen_random_uuid();
   digest text := repeat('a',64);
   err text;
 BEGIN
@@ -119,6 +121,42 @@ BEGIN
   VALUES(project_id,company,'SYNTHETIC-PROJECT','Synthetic awarded project',client,
          'DRAFT','IMPORT','COMMERCIAL:'||opportunity||':QUOTE:'||quote_id,
          now(),actor,now());
+  -- A partially funded PO may be retained as evidence, but must NOT silently
+  -- convert the whole quotation into a won Project.
+  INSERT INTO commercial_client_po
+    (id,organization_id,opportunity_id,contract_id,client_po_number,
+     issued_on,amount,currency,created_by,created_at)
+  VALUES(partial_po,company,opportunity,contract_id,'SYNTHETIC-PARTIAL-PO',
+         CURRENT_DATE,30,'EGP',actor,now());
+  INSERT INTO evidence(
+    id,organization_id,target_type,target_id,evidence_type_code,
+    content_type,size_bytes,sha256,captured_at,captured_by_user_id,
+    storage_state,object_key_ref,finalized_at,classification_code,
+    client_visibility_mode,security_scan_class,created_at)
+  VALUES(partial_file,company,'COMMERCIAL_CLIENT_PO',partial_po,
+         'COMMERCIAL_CLIENT_PO','application/pdf',120,digest,now(),actor,
+         'READY','test-partial-po/'||partial_file,now(),'HIGHLY_RESTRICTED',
+         'INTERNAL_ONLY','SIGNED_DOCUMENT',now());
+  INSERT INTO evidence_upload_session(
+    id,evidence_id,expected_sha256,expected_size_bytes,
+    expires_at,state,created_at,finalized_at,operation_id)
+  VALUES(gen_random_uuid(),partial_file,digest,120,now()+interval '1 hour',
+         'READY',now(),now(),gen_random_uuid());
+  UPDATE commercial_client_po SET verified=true,evidence_id=partial_file
+  WHERE id=partial_po;
+  BEGIN
+    INSERT INTO commercial_project_handoff(
+      opportunity_id,organization_id,quote_version_id,contract_id,client_po_id,
+      project_id,created_by,created_at)
+    VALUES(opportunity,company,quote_id,contract_id,partial_po,project_id,actor,now());
+    RAISE EXCEPTION 'EXPECTED_PARTIAL_CUSTOMER_PO_REJECT';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS err = MESSAGE_TEXT;
+    IF err NOT LIKE '%Project handoff requires exact ready award and same client%' THEN
+      RAISE EXCEPTION 'Partially valued PO converted full project: %',err;
+    END IF;
+  END;
+
   INSERT INTO commercial_project_handoff(
     opportunity_id,organization_id,quote_version_id,contract_id,client_po_id,
     project_id,created_by,created_at)
