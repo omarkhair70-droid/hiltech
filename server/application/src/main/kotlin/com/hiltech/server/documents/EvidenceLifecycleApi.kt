@@ -2512,6 +2512,20 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
                     financeTarget.canAccess(actorIdentityId, target)
             }
 
+            "FINANCE_BANK_STATEMENT_INTAKE" -> {
+                val port = bankStatementTargetProvider?.ifAvailable ?: return false
+                record.classificationCode == "HIGHLY_RESTRICTED" &&
+                    record.clientVisibilityMode == "INTERNAL_ONLY" &&
+                    record.evidenceTypeCode == "FINANCE_BANK_STATEMENT_INTAKE" &&
+                    record.securityScanClass == "BANK_CANONICAL_CSV" &&
+                    record.contentType == "text/csv" &&
+                    port.canAccess(
+                        actorIdentityId,
+                        record.organizationId,
+                        record.capturedByUserId,
+                    )
+            }
+
             "FINANCE_EXPENSE_RECEIPT" -> {
                 val port = financeExpenseReceiptTargetProvider?.ifAvailable ?: return false
                 val target = port.loadTarget(record.targetId) ?: return false
@@ -2623,6 +2637,37 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
         verification: EvidenceFinalizeVerification.Verified,
     ): String =
         when (record.securityScanClass) {
+            "BANK_CANONICAL_CSV" -> {
+                // Hash verification of a private object alone does not prove
+                // that its bytes satisfy the canonical bank row contract.
+                // Never mark a bank CSV READY without re-reading those bytes.
+                if (record.targetType != "FINANCE_BANK_STATEMENT_INTAKE" ||
+                    record.classificationCode != "HIGHLY_RESTRICTED" ||
+                    record.clientVisibilityMode != "INTERNAL_ONLY" ||
+                    record.evidenceTypeCode != "FINANCE_BANK_STATEMENT_INTAKE" ||
+                    record.contentType != "text/csv" ||
+                    record.expectedSizeBytes !in 1L..FinanceBankCsvParser.MAX_BYTES.toLong()
+                ) "REJECTED" else {
+                    val bytes = runCatching {
+                        storageAccess.readRestrictedObject(
+                            record.objectKey, FinanceBankCsvParser.MAX_BYTES.toLong(),
+                        )
+                    }.getOrNull() ?: throw ProductApiException(
+                        "EVIDENCE_BANK_CSV_BYTES_UNAVAILABLE",
+                        "Private bank statement bytes could not be verified.",
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        retryable = true,
+                    )
+                    if (bytes.size.toLong() != record.expectedSizeBytes) "REJECTED"
+                    else if (runCatching {
+                        FinanceBankCsvParser.decodeAndValidate(
+                            Base64.getEncoder().encodeToString(bytes),
+                            record.expectedSha256,
+                        )
+                    }.isSuccess) "READY" else "REJECTED"
+                }
+            }
+
             "ARBITRARY_FILE" ->
                 "QUARANTINED"
 
