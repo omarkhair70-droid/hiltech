@@ -35,3 +35,10 @@ New shared native KMP API + Compose `ServiceContractSourceSection`, plus a Hando
 - Exact-head GH Actions must compile tests and run disposable PostgreSQL staging SQL/negative proofs, desktop and Android build.
 - Do NOT merge P10/Phase11 Flyway files, flip flags, issue a client document, start warranty, send messages, reserve parts, post invoices or create renewals based solely on this source projection.
 - Recheck P10 schema at integration time; this adapter relies on the *draft* P10 view and its evidence links. If the provider contract changes, update the adapter and its tests before deployment.
+
+
+## Reopening resets the source-evidence attempt (2026-11-23)
+- A reopened support case must link a fresh current-attempt WorkOrder event after its latest REOPENED event; a prior link remains in immutable history but cannot silently satisfy the next resolution.
+- READY Evidence for resolution must be captured after the latest REOPENED event (or ticket opening if never reopened). This is enforced both by SQL source trigger and JDBC evidence selection; native source choices no longer expose previous-attempt proof.
+- PostgreSQL source trigger also rejects a newly linked CANCELLED WorkOrder. Source work acceptance remains governed by the canonical Phase 4/6 lifecycle.
+- Fixed a blocking `DO $` typo in the synthetic PostgreSQL negative proof; it now uses the valid `DO $$ ... $$;` syntax.

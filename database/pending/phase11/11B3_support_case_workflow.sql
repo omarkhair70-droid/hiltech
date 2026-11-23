@@ -82,6 +82,16 @@ BEGIN
     RAISE EXCEPTION 'Support case transition is not authorized by internal state graph'
       USING ERRCODE='23514';
   END IF;
+  IF NEW.event_type='WORK_ORDER_LINKED' AND NOT EXISTS (
+    SELECT 1 FROM work_order wo
+     WHERE wo.id=NEW.work_order_id
+       AND wo.organization_id=NEW.organization_id
+       AND wo.project_id=NEW.project_id
+       AND wo.lifecycle_state <> 'CANCELLED'
+  ) THEN
+    RAISE EXCEPTION 'Cannot attach cancelled or foreign source work'
+      USING ERRCODE='23514';
+  END IF;
   IF NEW.event_type='RESOLUTION_RECORDED' THEN
     SELECT work_order_id INTO current_link FROM service_support_case_event
       WHERE ticket_id=NEW.ticket_id AND event_type='WORK_ORDER_LINKED'

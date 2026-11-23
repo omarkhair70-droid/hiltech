@@ -155,9 +155,13 @@ class JdbcSupportCaseStore(private val jdbc: JdbcTemplate) {
             """
             SELECT work_order_id FROM service_support_case_event
              WHERE ticket_id=? AND event_type='WORK_ORDER_LINKED'
+               AND event_number > COALESCE(
+                 (SELECT MAX(event_number) FROM service_support_case_event
+                    WHERE ticket_id=? AND event_type='REOPENED'), 0
+               )
              ORDER BY event_number DESC LIMIT 1
             """.trimIndent(),
-            { rs, _ -> rs.getObject(1, UUID::class.java) }, ticketId,
+            { rs, _ -> rs.getObject(1, UUID::class.java) }, ticketId, ticketId,
         ).singleOrNull()
 
     fun current(ticketId: UUID): SupportCaseSummaryDto {
@@ -202,7 +206,11 @@ class JdbcSupportCaseStore(private val jdbc: JdbcTemplate) {
               WHERE e.id=? AND e.organization_id=? AND e.work_order_id=?
                 AND e.target_type='WORK_ORDER' AND e.target_id=?
                 AND e.storage_state='READY'
-                AND e.captured_at>=ticket.created_at
+                AND e.captured_at>=COALESCE(
+                  (SELECT MAX(reopened.recorded_at)
+                     FROM service_support_case_event reopened
+                    WHERE reopened.ticket_id=ticket.id
+                      AND reopened.event_type='REOPENED'),ticket.created_at)
                 AND NOT EXISTS(
                   SELECT 1 FROM evidence replacement
                    WHERE replacement.supersedes_evidence_id=e.id
@@ -224,7 +232,11 @@ class JdbcSupportCaseStore(private val jdbc: JdbcTemplate) {
               JOIN service_support_ticket t ON t.id=?
              WHERE e.organization_id=? AND e.work_order_id=?
                AND e.target_type='WORK_ORDER' AND e.target_id=?
-               AND e.storage_state='READY' AND e.captured_at>=t.created_at
+               AND e.storage_state='READY' AND e.captured_at>=COALESCE(
+                 (SELECT MAX(reopened.recorded_at)
+                    FROM service_support_case_event reopened
+                   WHERE reopened.ticket_id=t.id
+                     AND reopened.event_type='REOPENED'),t.created_at)
                AND NOT EXISTS(
                  SELECT 1 FROM evidence replacement
                   WHERE replacement.supersedes_evidence_id=e.id
