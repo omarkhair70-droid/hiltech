@@ -209,6 +209,31 @@ class ExecutiveOperationalBriefTest {
     }
 
     @Test
+    fun mismatchedSourceOrActorScopeCannotDisplaySensitiveCards() {
+        val forgedSource = buildExecutiveOperationalBrief(snapshot(
+            needs = ExecutiveSectionDto(
+                "CURRENT", listOf(decision(1)), "PAYROLL_RUNS", partial = false,
+            ),
+            assets = ExecutiveSectionDto(
+                "CURRENT", listOf(asset(1)), "FINANCE_LEDGER", partial = false,
+            ),
+        ))
+        assertTrue(forgedSource.lanes[0].entries.isEmpty())
+        assertTrue(forgedSource.lanes[2].entries.isEmpty())
+        assertEquals("UNAVAILABLE", forgedSource.lanes[0].sourceStatus)
+        assertEquals("UNAVAILABLE", forgedSource.lanes[2].sourceStatus)
+
+        val unexpectedScope = buildExecutiveOperationalBrief(snapshot().copy(
+            needsYouScope = "OTHER_ORG_WIDE",
+            needsYou = ExecutiveSectionDto(
+                "CURRENT", listOf(decision(1)), "INBOX_WORK_QUEUE", partial = false,
+            ),
+        ))
+        assertTrue(unexpectedScope.lanes[0].entries.isEmpty())
+        assertEquals("UNTRUSTED_SOURCE_OR_SCOPE", unexpectedScope.lanes[0].missingReason)
+    }
+
+    @Test
     fun briefCannotRequestUnboundedItems() {
         assertFailsWith<IllegalArgumentException> {
             buildExecutiveOperationalBrief(snapshot(), maxPerLane = 0)
