@@ -1,9 +1,15 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,14 +21,17 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.IdentitySecuritySnapshot
 import com.hiltech.shared.core.people.EmployeeDetailDto
@@ -239,6 +248,8 @@ fun HiltechShell(
     onProjectCommandCenterAction: (ProjectCommandCenterUiAction) -> Unit = {},
     onRefreshFieldWork: () -> Unit = {},
     onSelectFieldWork: (String) -> Unit = {},
+    onFieldFocusChanged: (Boolean) -> Unit = {},
+    fieldBackRequest: Int = 0,
     onRefreshPersonalIssuedStock: (String) -> Unit = {},
     showPersonalIssuedStock: Boolean = false,
     onQueueMaterialUsage: (com.hiltech.shared.core.work.FieldPersonalIssuedStockLineDto, String) -> Unit = { _, _ -> },
@@ -258,13 +269,28 @@ fun HiltechShell(
     procurementOperator: @Composable () -> Unit = {},
 ) {
     MaterialTheme {
+        // Never inherit a different actor's previous desktop/mobile scroll
+        // position when signing out, switching org or restoring offline read.
+        val shellScrollScope = when (state) {
+            is HiltechShellState.SignedIn -> {
+                val orgId = state.identity.organizations.firstOrNull { it.primary }
+                    ?.organizationId ?: state.identity.organizations.firstOrNull()?.organizationId
+                "signed:${state.identity.identityId}:${orgId.orEmpty()}"
+            }
+            is HiltechShellState.OfflineFieldReadOnly -> "offline:${state.identityId}"
+            else -> "public"
+        }
+        val scopedShellScroll = key(shellScrollScope) { rememberScrollState() }
+        val fieldWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
+        val peopleWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
+        val warehouseWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
+        val projectWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
+        val shellNavigationScope = rememberCoroutineScope()
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(
-                        rememberScrollState(),
-                    )
+                    .verticalScroll(scopedShellScroll)
                     .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -333,6 +359,40 @@ fun HiltechShell(
                         "Your workspace only exposes actions authorized " +
                             "for this identity and context.",
                     )
+
+                    // Navigate to the real already-mounted Compose workspaces.
+                    // This is a scroll shortcut, not a permission grant, route
+                    // impersonation or an additional backend/source-of-truth.
+                    if (state.field != null || state.people != null ||
+                        state.warehouse != null || state.projects != null
+                    ) {
+                        Text("مساحات العمل / Workspaces", style = MaterialTheme.typography.titleMedium)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (state.field != null) {
+                                OutlinedButton(onClick = {
+                                    shellNavigationScope.launch { fieldWorkspaceRequester.bringIntoView() }
+                                }) { Text("شغلي اليوم") }
+                            }
+                            if (state.warehouse != null) {
+                                OutlinedButton(onClick = {
+                                    shellNavigationScope.launch { warehouseWorkspaceRequester.bringIntoView() }
+                                }) { Text("المخزن") }
+                            }
+                            if (state.projects != null) {
+                                OutlinedButton(onClick = {
+                                    shellNavigationScope.launch { projectWorkspaceRequester.bringIntoView() }
+                                }) { Text("المشاريع") }
+                            }
+                            if (state.people != null) {
+                                OutlinedButton(onClick = {
+                                    shellNavigationScope.launch { peopleWorkspaceRequester.bringIntoView() }
+                                }) { Text("الأفراد") }
+                            }
+                        }
+                    }
 
                     state.onboarding
                         ?.takeIf {
@@ -452,6 +512,10 @@ fun HiltechShell(
                     }
 
                     state.people?.let { people ->
+                        Column {
+                        // Tiny source-present anchor: scroll to section start,
+                        // never try to bring a multi-screen Column in view.
+                        Spacer(Modifier.fillMaxWidth().height(1.dp).bringIntoViewRequester(peopleWorkspaceRequester))
                         PeopleSection(
                             state = people,
                             onRefresh =
@@ -471,11 +535,16 @@ fun HiltechShell(
                             onCreateEmployee =
                                 onCreateEmployee,
                         )
+                        }
                     }
 
                     state.assetLookup?.let { AssetTagLookupSection(it, onLookupAssetTag) }
 
                     state.field?.let {
+                        Column {
+                        // Tiny source-present anchor: scroll to section start,
+                        // never try to bring a multi-screen Column in view.
+                        Spacer(Modifier.fillMaxWidth().height(1.dp).bringIntoViewRequester(fieldWorkspaceRequester))
                         AssignedWorkSection(
                             state = it,
                             onRefresh =
@@ -496,10 +565,23 @@ fun HiltechShell(
                             showAssignedAssetLookup = showAssignedAssetLookup,
                             onSubmitEngineeringTest = onSubmitEngineeringTest,
                             showEngineeringTests = showEngineeringTests,
+                            // Only verified sign-in gets focused compact navigation.
+                            // The offline read-only branch uses the baseline.
+                            focusScopeKey = primary?.organizationId?.let { organizationId ->
+                                "${state.identity.identityId}:$organizationId"
+                            }.orEmpty(),
+                            onCompactFocusChanged = onFieldFocusChanged,
+                            compactBackRequest = fieldBackRequest,
                         )
+                        }
                     }
 
-                    warehouseOperator()
+                    Column {
+                        // Tiny source-present anchor: scroll to section start,
+                        // never try to bring a multi-screen Column in view.
+                        Spacer(Modifier.fillMaxWidth().height(1.dp).bringIntoViewRequester(warehouseWorkspaceRequester))
+                        warehouseOperator()
+                    }
                     // Host applications mount procurement only with an explicit,
                     // default-OFF feature flag. Never show it during offline mode.
                     procurementOperator()
@@ -522,6 +604,10 @@ fun HiltechShell(
                     }
 
                     state.projects?.let {
+                        Column {
+                        // Tiny source-present anchor: scroll to section start,
+                        // never try to bring a multi-screen Column in view.
+                        Spacer(Modifier.fillMaxWidth().height(1.dp).bringIntoViewRequester(projectWorkspaceRequester))
                         ProjectControlSection(
                             reservationPort = reservationPort,
                             state = it,
@@ -550,6 +636,7 @@ fun HiltechShell(
                             onProjectCommandCenterAction =
                                 onProjectCommandCenterAction,
                         )
+                        }
                     }
 
                     state.onboarding

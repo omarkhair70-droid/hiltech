@@ -1,5 +1,7 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,6 +26,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.HiltechOperationalTheme
+import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.HiltechSectionHeading
+import com.hiltech.shared.core.design.HiltechSpace
+import com.hiltech.shared.core.design.HiltechStateTag
+import com.hiltech.shared.core.design.HiltechStateTone
 import com.hiltech.shared.core.field.FieldExecutionIntent
 import com.hiltech.shared.core.field.FieldMaterialUsageIntent
 import com.hiltech.shared.core.field.FieldQueuedIntent
@@ -80,16 +91,68 @@ fun AssignedWorkSection(
     showAssignedAssetLookup: Boolean = false,
     onSubmitEngineeringTest: (String, FieldEngineeringTestDraft) -> Unit = { _, _ -> },
     showEngineeringTests: Boolean = false,
+    // Nonblank only for an authenticated identity + organization host scope.
+    // Offline unverified identity keeps the original read-only presentation.
+    focusScopeKey: String = "",
+    onCompactFocusChanged: (Boolean) -> Unit = {},
+    // The Android host increments this when System Back is pressed in focus.
+    compactBackRequest: Int = 0,
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
             LayoutDirection.Rtl,
     ) {
+        // A selected bundle is a source snapshot, never a grant to keep
+        // showing an old WorkOrder after selection or assignment changes.
+        val visibleBundle = state.selectedBundle?.takeIf { bundle ->
+            fieldSourceAllowsSelectedBundle(
+                selectedWorkOrderId = state.selectedWorkOrderId,
+                bundleWorkOrderId = bundle.workOrderId,
+                todayWorkOrderIds = state.today.map { it.workOrderId },
+            )
+        }
+        val todayIds = state.today.map { it.workOrderId }
+        var focusedWorkOrderId by remember(focusScopeKey) { mutableStateOf<String?>(null) }
+        var returnAnchorId by remember(focusScopeKey) { mutableStateOf<String?>(null) }
+        // The shared host owns scrolling. No nested scroll state is created.
+        DisposableEffect(focusScopeKey) {
+            onDispose { onCompactFocusChanged(false) }
+        }
+        LaunchedEffect(focusScopeKey, compactBackRequest) {
+            if (compactBackRequest > 0 && focusScopeKey.isNotBlank() &&
+                fieldFocusStillAssigned(focusedWorkOrderId, todayIds)
+            ) {
+                returnAnchorId = focusedWorkOrderId
+                focusedWorkOrderId = null
+            }
+        }
+        LaunchedEffect(focusScopeKey, focusedWorkOrderId, todayIds) {
+            if (focusedWorkOrderId != null &&
+                !fieldFocusStillAssigned(focusedWorkOrderId, todayIds)
+            ) {
+                focusedWorkOrderId = null
+                returnAnchorId = null
+            }
+        }
         BoxWithConstraints(
             modifier = Modifier.fillMaxWidth(),
         ) {
             val wide =
                 maxWidth >= 760.dp
+            // Clear compact focus when the adaptive layout becomes wide;
+            // rotating back must not revive a previous focused route.
+            LaunchedEffect(focusScopeKey, wide) {
+                if (wide && focusedWorkOrderId != null) {
+                    focusedWorkOrderId = null
+                    returnAnchorId = null
+                }
+            }
+            LaunchedEffect(focusScopeKey, wide, focusedWorkOrderId, todayIds) {
+                onCompactFocusChanged(
+                    !wide && focusScopeKey.isNotBlank() &&
+                        fieldFocusStillAssigned(focusedWorkOrderId, todayIds)
+                )
+            }
             if (wide) {
                 Row(
                     modifier =
@@ -107,7 +170,7 @@ fun AssignedWorkSection(
                                 max = 460.dp,
                             ),
                     )
-                    state.selectedBundle
+                    visibleBundle
                         ?.let {
                             JobBundleDetail(
                                 bundle = it,
@@ -144,20 +207,75 @@ fun AssignedWorkSection(
                         }
                 }
             } else {
+                val compactFocus = focusScopeKey.isNotBlank()
+                val focusedId = focusedWorkOrderId?.takeIf {
+                    fieldFocusStillAssigned(it, todayIds)
+                }
+                val focusHeaderRequester = remember(focusScopeKey) { BringIntoViewRequester() }
+                val returnCardRequester = remember(focusScopeKey) { BringIntoViewRequester() }
+                LaunchedEffect(focusScopeKey, focusedId) {
+                    if (compactFocus && focusedId != null) {
+                        withFrameNanos { }
+                        focusHeaderRequester.bringIntoView()
+                    }
+                }
+                LaunchedEffect(focusScopeKey, returnAnchorId, todayIds) {
+                    val anchor = returnAnchorId ?: return@LaunchedEffect
+                    if (anchor in todayIds) {
+                        // Allow the Today cards to replace the detail before
+                        // returning to the same WorkOrder even after reorder.
+                        withFrameNanos { }
+                        returnCardRequester.bringIntoView()
+                    }
+                    returnAnchorId = null
+                }
                 Column(
-                    modifier =
-                        Modifier.fillMaxWidth(),
-                    verticalArrangement =
-                        Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    TodayColumn(
-                        state = state,
-                        onRefresh = onRefresh,
-                        onSelectWork = onSelectWork,
-                        modifier =
-                            Modifier.fillMaxWidth(),
-                    )
-                    state.selectedBundle
+                    if (!compactFocus || focusedId == null) {
+                        TodayColumn(
+                            state = state,
+                            onRefresh = onRefresh,
+                            onSelectWork = { id ->
+                                if (compactFocus && fieldFocusStillAssigned(id, todayIds)) {
+                                    focusedWorkOrderId = id
+                                    returnAnchorId = null
+                                    onCompactFocusChanged(true)
+                                }
+                                onSelectWork(id)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            returnAnchorId = returnAnchorId,
+                            returnCardRequester = returnCardRequester,
+                        )
+                    } else {
+                        OutlinedButton(
+                            modifier = Modifier.bringIntoViewRequester(focusHeaderRequester),
+                            onClick = {
+                                returnAnchorId = focusedId
+                                focusedWorkOrderId = null
+                                onCompactFocusChanged(false)
+                            },
+                        ) { Text("الرجوع لشغلي اليوم") }
+                        if (visibleBundle?.workOrderId != focusedId) {
+                            if (state.loading) {
+                                Text("بنجيب تفاصيل التكليف الحالي…")
+                            } else {
+                                HiltechStateTag(
+                                    state.errorMessage
+                                        ?: "التفاصيل الحالية غير متاحة. ارجع للتكليفات وحدّثها.",
+                                    HiltechStateTone.ATTENTION,
+                                )
+                            }
+                        }
+                    }
+                    val detailBundle = if (compactFocus) {
+                        visibleBundle?.takeIf { it.workOrderId == focusedId }
+                    } else {
+                        visibleBundle
+                    }
+                    detailBundle
                         ?.let {
                             JobBundleDetail(
                                 bundle = it,
@@ -204,71 +322,71 @@ private fun TodayColumn(
     onRefresh: () -> Unit,
     onSelectWork: (String) -> Unit,
     modifier: Modifier,
+    returnAnchorId: String? = null,
+    returnCardRequester: BringIntoViewRequester? = null,
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement =
-            Arrangement.spacedBy(8.dp),
-    ) {
-        Row(
-            horizontalArrangement =
-                Arrangement.spacedBy(8.dp),
+    HiltechOperationalTheme {
+        Column(
+            modifier = modifier,
+            verticalArrangement = Arrangement.spacedBy(HiltechSpace.small),
         ) {
-            Text(
-                "شغلي اليوم",
-                style =
-                    MaterialTheme.typography
-                        .titleLarge,
-            )
-            OutlinedButton(
-                onClick = onRefresh,
-            ) {
-                Text("تحديث")
-            }
-        }
-
-        if (state.loading) {
-            Row(
-                horizontalArrangement =
-                    Arrangement.spacedBy(8.dp),
-            ) {
-                CircularProgressIndicator()
-                Text("بنجيب آخر تكليفاتك…")
-            }
-        }
-
-        if (state.cachedTodayAt != null) {
-            Text("نسخة محفوظة بدون اتصال — قد يكون التكليف أو الجاهزية اتغيروا.")
-            Text("آخر وقت من السيرفر: " + (state.today.firstOrNull()?.bundleAsOf ?: "غير متاح"))
-        }
-
-        state.errorMessage?.let {
-            Text(
-                "تعذر تحديث الشغل: " + it,
-            )
-        }
-
-        if (
-            !state.loading &&
-            state.today.isEmpty()
-        ) {
-            Text(
-                "مفيش WorkOrder حالي متعيّن ليك. لو التكليف اتشال أو اتبدل، هيختفي هنا فورًا.",
-            )
-        }
-
-        state.today.forEach { item ->
-            TodayCard(
-                item = item,
-                selected =
-                    state.selectedWorkOrderId ==
-                        item.workOrderId,
-                onClick = {
-                    onSelectWork(
-                        item.workOrderId,
+            HiltechPanel(Modifier.fillMaxWidth()) {
+                HiltechSectionHeading(
+                    index = "FIELD / TODAY",
+                    title = "شغلي اليوم",
+                    subtitle = "تكليفاتك الحالية من مصدر العمل المسموح لك بالاطلاع عليه.",
+                )
+                OutlinedButton(onClick = onRefresh) {
+                    Text("تحديث التكليفات")
+                }
+                if (state.loading) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(HiltechSpace.xs)) {
+                        CircularProgressIndicator()
+                        Text("بنجيب آخر تكليفاتك…")
+                    }
+                }
+                if (state.cachedTodayAt != null) {
+                    HiltechStateTag(
+                        "نسخة محفوظة بدون اتصال — قد يكون التكليف أو الجاهزية اتغيروا.",
+                        HiltechStateTone.ATTENTION,
                     )
-                },
-            )
+                    Text("آخر وقت من السيرفر: " +
+                        (state.today.firstOrNull()?.bundleAsOf ?: "غير متاح"))
+                }
+                state.errorMessage?.let { issue ->
+                    HiltechStateTag(
+                        "تعذر تحديث الشغل: " + issue,
+                        HiltechStateTone.BLOCKED,
+                    )
+                }
+                if (!state.loading && state.today.isEmpty()) {
+                    Text(
+                        "مفيش WorkOrder حالي متعيّن ليك. لو التكليف اتشال أو اتبدل، هيختفي هنا فورًا.",
+                    )
+                }
+                if (state.selectedBundle != null &&
+                    !fieldSourceAllowsSelectedBundle(
+                        selectedWorkOrderId = state.selectedWorkOrderId,
+                        bundleWorkOrderId = state.selectedBundle.workOrderId,
+                        todayWorkOrderIds = state.today.map { it.workOrderId },
+                    )
+                ) {
+                    HiltechStateTag(
+                        "تفاصيل أمر العمل السابق اتخفت لأن التكليف الحالي أو الاختيار اتغير. حدّث التكليفات وافتح الشغل من جديد.",
+                        HiltechStateTone.BLOCKED,
+                    )
+                }
+            }
+            state.today.forEach { item ->
+                TodayCard(
+                    item = item,
+                    modifier = if (returnAnchorId == item.workOrderId &&
+                        returnCardRequester != null
+                    ) Modifier.bringIntoViewRequester(returnCardRequester) else Modifier,
+                    selected = state.selectedWorkOrderId == item.workOrderId,
+                    onClick = { onSelectWork(item.workOrderId) },
+                )
+            }
         }
     }
 }
@@ -278,66 +396,46 @@ private fun TodayCard(
     item: FieldTodayItemDto,
     selected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     OutlinedButton(
-        modifier =
-            Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         onClick = onClick,
     ) {
         Column(
-            modifier =
-                Modifier.fillMaxWidth(),
-            verticalArrangement =
-                Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(HiltechSpace.xs),
         ) {
             Text(
-                item.workOrderCode +
-                    " · " +
-                    item.title,
-                style =
-                    MaterialTheme.typography
-                        .titleMedium,
+                item.workOrderCode + " · " + item.title,
+                style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                item.project.projectCode +
-                    " · " +
-                    item.site.siteCode +
-                    " — " +
-                    item.site.name,
+                item.project.projectCode + " · " + item.site.siteCode +
+                    " — " + item.site.name,
             )
-            item.area?.let {
-                Text(
-                    "المنطقة: " +
-                        it.label,
+            item.area?.let { Text("المنطقة: " + it.label) }
+            Text("الحالة: " + item.lifecycleState +
+                " · readiness: " + item.readinessState)
+            Text("التكليف: " + item.assignment.targetType +
+                " · " + item.assignment.targetLabel)
+            item.importantBlocker?.let {
+                HiltechStateTag(
+                    "في انتظار: " + it,
+                    HiltechStateTone.ATTENTION,
                 )
             }
-            Text(
-                "الحالة: " +
-                    item.lifecycleState +
-                    " · readiness: " +
-                    item.readinessState,
-            )
-            Text(
-                "التكليف: " +
-                    item.assignment.targetType +
-                    " · " +
-                    item.assignment.targetLabel,
-            )
-            item.importantBlocker
-                ?.let {
-                    Text(
-                        "Waiting On: " + it,
-                    )
-                }
-            Text(
+            HiltechStateTag(
                 if (item.currentlyActionable) {
-                    "السياق جاهز للعرض — التنفيذ يبدأ في Phase 6."
+                    "السياق جاهز للمراجعة — التنفيذ بصلاحياتك الحالية فقط"
                 } else {
-                    "في انتظار شرط/دور آخر قبل التنفيذ."
+                    "في انتظار شرط أو دور آخر قبل التنفيذ"
                 },
+                if (item.currentlyActionable) HiltechStateTone.CURRENT
+                else HiltechStateTone.ATTENTION,
             )
             if (selected) {
-                Text("مفتوح دلوقتي")
+                HiltechStateTag("أمر العمل المفتوح", HiltechStateTone.NEUTRAL)
             }
         }
     }

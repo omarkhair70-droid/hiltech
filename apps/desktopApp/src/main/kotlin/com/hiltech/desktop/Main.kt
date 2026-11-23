@@ -2779,6 +2779,7 @@ fun main() {
                             api = runtime.physicalWarehouseApi,
                             organizationId = organization.organizationId,
                             installationId = runtime.physicalWarehouseInstallationId,
+                            operatorScopeKey = identity.identityId,
                             operationId = { fields ->
                                 val payload =
                                     (listOf(
