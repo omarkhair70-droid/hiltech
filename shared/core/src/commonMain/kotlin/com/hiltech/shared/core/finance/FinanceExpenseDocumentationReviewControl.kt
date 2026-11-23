@@ -30,6 +30,7 @@ fun FinanceExpenseDocumentationReviewControl(
     val scope = rememberCoroutineScope()
     var sending by remember(expenseDraftId) { mutableStateOf(false) }
     var pendingReviewId by remember(expenseDraftId) { mutableStateOf<String?>(null) }
+    var reviewState by remember(expenseDraftId) { mutableStateOf<String?>(null) }
     // Retry a timed-out HTTP request with its SAME idempotency operation,
     // never generate a second approval request for the same pending attempt.
     var reviewOperationId by remember(expenseDraftId) { mutableStateOf<String?>(null) }
@@ -66,6 +67,7 @@ fun FinanceExpenseDocumentationReviewControl(
                                 !result.cashMovementRecorded
                         ) { "Unexpected receipt documentation review response." }
                         pendingReviewId = result.documentationReviewRequestId
+                        reviewState = "PENDING"
                         error = null
                     } catch (failure: Exception) {
                         error = failure.message ?: "Documentation review not available."
@@ -75,12 +77,46 @@ fun FinanceExpenseDocumentationReviewControl(
                 }
             },
         ) { Text(if (sending) "Sending…" else "Submit receipts for review") }
-        pendingReviewId?.let {
+        OutlinedButton(
+            enabled = !sending,
+            onClick = {
+                sending = true
+                scope.launch {
+                    try {
+                        val latest = reviews.status(
+                            organizationId, expenseDraftId, installationId,
+                        )
+                        check(
+                            latest.currentSource && !latest.expenseApproved &&
+                                !latest.reimbursementAuthorized &&
+                                !latest.cashMovementRecorded
+                        ) { "Unexpected financial authorization in document review." }
+                        reviewState = latest.documentationReviewState
+                        pendingReviewId = latest.documentationReviewRequestId
+                        if (reviewState == "NOT_REQUESTED") reviewOperationId = null
+                        error = null
+                    } catch (failure: Exception) {
+                        error = failure.message ?: "Documentation review status unavailable."
+                    } finally {
+                        sending = false
+                    }
+                }
+            },
+        ) { Text("Refresh documentation review status") }
+        reviewState?.let { state ->
             Text(
-                "Documentation review requested: " + it.take(8) +
-                    " · Pending company reviewer · No payment approved",
+                when (state) {
+                    "PENDING" -> "Receipts sent, awaiting reviewer."
+                    "APPROVED" -> "Receipt documents accepted. Expense/payment NOT approved."
+                    "REJECTED" -> "Receipt documentation rejected. No reimbursement authorized."
+                    "CHANGE_REQUESTED" -> "Reviewer requested changes to receipt documentation."
+                    "SUPERSEDED" -> "Review invalidated by changed source; refresh receipts."
+                    "NOT_REQUESTED" -> "Receipt documentation review not requested."
+                    else -> "Documentation review: " + state
+                },
             )
         }
+        pendingReviewId?.let { Text("Review #" + it.take(8)) }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
 }
