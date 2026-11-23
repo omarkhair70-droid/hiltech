@@ -88,6 +88,13 @@ suspend fun recordApprovedAllocation(
     }
     check(result.organizationId.equals(org, ignoreCase = true) &&
         result.proposalId == before.proposalId &&
+        result.approvalId == before.approvalId &&
+        result.sourceKind == before.sourceKind &&
+        result.journalId == before.journalId &&
+        result.bankLineId == before.bankLineId &&
+        result.amount == before.amount && result.currency == before.currency &&
+        result.originalId == before.originalId &&
+        result.state == (if (before.kind == AllocationOperatorKind.ALLOCATION) "RECORDED" else "CORRECTED") &&
         result.recordedId?.let(::financeLookupIdIsUuid) == true
     ) { "FINANCE_RECORD_UNCONFIRMED" }
     return result
