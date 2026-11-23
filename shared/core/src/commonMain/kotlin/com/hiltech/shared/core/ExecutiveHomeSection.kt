@@ -26,6 +26,7 @@ import com.hiltech.shared.core.executive.executiveSnapshotMatchesSession
 import com.hiltech.shared.core.executive.orderExecutiveProjectsByHealth
 import com.hiltech.shared.core.executive.executiveVisiblePulse
 import com.hiltech.shared.core.executive.ExecutivePulseState
+import com.hiltech.shared.core.executive.ExecutiveOperationalBriefSection
 
 /**
  * Native Windows + Android executive surface. Stateless by design:
@@ -129,6 +130,14 @@ fun ExecutiveHomeSection(
                 }
             }
         }
+
+        // Phase 13B: optional source-bound operating brief over this already
+        // validated snapshot; no extra endpoint, cache, digest delivery or
+        // cross-tenant access.
+        ExecutiveOperationalBriefSection(
+            home = home,
+            onOpenSource = onOpenSource,
+        )
 
         ExecutiveSectionHeader(
             "يحتاج قرارك",
