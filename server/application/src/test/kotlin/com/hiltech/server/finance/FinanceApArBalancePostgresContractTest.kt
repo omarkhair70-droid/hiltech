@@ -36,6 +36,7 @@ class FinanceApArBalancePostgresContractTest {
         "database/phase8/pending_bank_statement_intake.sql",
         "database/phase8/pending_ap_ar_cash_allocation.sql",
         "database/phase8/pending_ap_ar_source_balance.sql",
+        "database/phase8/pending_bank_reconciliation_exceptions.sql",
       ).forEach {stmt.execute(Files.readString(root.resolve(it)))}
     }
     val jdbc=JdbcTemplate(SingleConnectionDataSource(c,true))
@@ -51,6 +52,12 @@ class FinanceApArBalancePostgresContractTest {
     assertTrue(src?.contains("finance_cash_allocation_record")==true)
     assertTrue(src?.contains("finance_ap_journal_reversal")==true)
     assertTrue(src?.contains("finance_ar_posted_journal")==true)
+    assertNotNull(jdbc.queryForObject(
+      "SELECT to_regclass('public.finance_bank_allocation_exception')",
+      String::class.java))
+    assertTrue(jdbc.queryForObject(
+      "SELECT count(*) FROM finance_bank_allocation_exception",
+      Long::class.java)==0L)
    } finally { c.rollback() }
   }
  }
