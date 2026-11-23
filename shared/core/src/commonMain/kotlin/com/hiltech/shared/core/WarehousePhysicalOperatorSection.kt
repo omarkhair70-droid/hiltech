@@ -2,6 +2,7 @@ package com.hiltech.shared.core
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -19,6 +20,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.HiltechOperationalTheme
+import com.hiltech.shared.core.design.HiltechSectionHeading
+import com.hiltech.shared.core.design.HiltechStateTag
+import com.hiltech.shared.core.design.HiltechStateTone
 import com.hiltech.shared.core.network.HiltechApiException
 import com.hiltech.shared.core.warehouse.*
 import kotlinx.coroutines.CancellationException
@@ -62,9 +67,13 @@ fun WarehousePhysicalOperatorSection(
     }
 
     WarehouseArabicFirstFrame {
+        HiltechOperationalTheme {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("عمليات المخزن / Warehouse physical operations", style = MaterialTheme.typography.titleLarge)
-        Text("أونلاين فقط · سجّل التسليم والمرتجع والاستهلاك الفعلي / Online only.")
+        HiltechSectionHeading(
+            index = "WAREHOUSE / PHYSICAL",
+            title = "عمليات المخزن",
+            subtitle = "أونلاين فقط · التسليم والمرتجع والاستهلاك الفعلي بإذن السيرفر.",
+        )
         OutlinedButton({
             runTask {
                 warehouses = null
@@ -72,15 +81,18 @@ fun WarehousePhysicalOperatorSection(
                 warehouses = api.warehouses(organizationId, installationId).items.filter { it.active }
             }
         }, enabled = !busy) { Text(if (busy) "جاري التنفيذ… / Working…" else "تحميل المخازن المتاحة / Load accessible warehouses") }
-        message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        message?.let { HiltechStateTag(it, HiltechStateTone.BLOCKED) }
         val options = warehouses ?: return@Column
-        if (options.isEmpty()) Text("لا توجد مخازن فعالة متاحة / No accessible active warehouses.")
+        if (options.isEmpty()) {
+            HiltechStateTag("لا توجد مخازن فعالة متاحة لهذه الهوية.", HiltechStateTone.ATTENTION)
+        }
         OperatorChoice("المخزن / Warehouse", warehouseId, options.map { it.warehouseId to "${it.code} · ${it.name}" }, !busy) {
             warehouseId = it
         }
         val facility = warehouseId ?: return@Column
         key(facility) {
             PhysicalOperatorWorkspace(api, facility, organizationId, installationId, operationId, busy, ::runTask)
+        }
         }
         }
     }
@@ -359,8 +371,12 @@ private fun PhysicalOperatorWorkspace(
     }
     workResourceDrillContext?.let { Text("مورد أمر العمل / Resource drill · $it") }
 
-    receipt?.let { Text("آخر إيصال مؤكد / Last confirmed server receipt · $it") }
-    refreshWarning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    receipt?.let {
+        HiltechStateTag("سجّل السيرفر العملية · $it", HiltechStateTone.CURRENT)
+    }
+    refreshWarning?.let {
+        HiltechStateTag("الإيصال مؤكد، لكن عرض البيانات لم يتحدث: $it", HiltechStateTone.ATTENTION)
+    }
     ReceivingOperatorSection(
         api = api,
         warehouse = warehouse,
@@ -512,8 +528,10 @@ fun WarehousePhysicalHandoffAuthorityGate(
     if (canOperate) {
         authorizedContent()
     } else {
-        Text("التسليم الفعلي غير متاح لهذه الهوية. · Physical handoff is not available for this identity.")
-        Text("سلطة تعديل المخزن · مرفوضة · Warehouse mutation authority · denied", color = MaterialTheme.colorScheme.error)
+        HiltechStateTag(
+            "التسليم الفعلي غير متاح لهذه الهوية · سلطة تعديل المخزن مرفوضة.",
+            HiltechStateTone.BLOCKED,
+        )
     }
 }
 
