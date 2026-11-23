@@ -76,8 +76,6 @@ CREATE TABLE finance_ap_posting_proposal (
     UNIQUE(organization_id,id),
     FOREIGN KEY (fiscal_period_id,organization_id)
       REFERENCES finance_gl_period(id,organization_id) ON DELETE RESTRICT,
-    FOREIGN KEY (payable_candidate_id,organization_id)
-      REFERENCES finance_payable_candidate(id,organization_id) ON DELETE RESTRICT,
     CHECK(
       (state='DRAFT' AND sealed_at IS NULL) OR
       (state='SEALED' AND sealed_at IS NOT NULL)
@@ -279,9 +277,12 @@ EXECUTE FUNCTION finance_ap_proposal_seal_guard();
 -- approval, an unapproved journal or a stale source/accounting period.
 CREATE FUNCTION finance_ap_posted_guard()
 RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE p finance_ap_posting_proposal%ROWTYPE; c finance_payable_candidate%ROWTYPE;
-DECLARE r approval_request%ROWTYPE; d approval_request%ROWTYPE;
-DECLARE posting_period finance_gl_period%ROWTYPE;
+DECLARE
+ p finance_ap_posting_proposal%ROWTYPE;
+ c finance_payable_candidate%ROWTYPE;
+ r approval_request%ROWTYPE;
+ d approval_request%ROWTYPE;
+ posting_period finance_gl_period%ROWTYPE;
 BEGIN
  SELECT * INTO p FROM finance_ap_posting_proposal WHERE id=NEW.proposal_id;
  IF NOT FOUND OR p.state<>'SEALED' OR p.organization_id<>NEW.organization_id
@@ -319,15 +320,21 @@ BEGIN
     r.subject_type<>'FINANCE_AP_JOURNAL_POSTING' OR
     r.subject_id<>p.id OR
     r.subject_version<>p.ledger_subject_version OR
-    r.policy_key<>p.posting_policy_key OR
-    r.requester_user_id=p.created_by_user_id AND
-      r.requester_user_id=NEW.posted_by_user_id THEN
+    r.policy_key<>p.posting_policy_key THEN
    RAISE EXCEPTION 'Independent exact journal posting approval required'
      USING ERRCODE='23514';
  END IF;
  IF r.requester_user_id=NEW.posted_by_user_id OR
-    p.created_by_user_id=NEW.posted_by_user_id THEN
-   RAISE EXCEPTION 'Posting approver/operator must be separate from preparer'
+    p.created_by_user_id=NEW.posted_by_user_id OR
+    NOT EXISTS (
+      SELECT 1 FROM approval_decision decision_record
+      WHERE decision_record.approval_request_id=r.id
+        AND decision_record.decision='APPROVE'
+        AND decision_record.subject_version=r.subject_version
+        AND decision_record.actor_user_id<>p.created_by_user_id
+        AND decision_record.actor_user_id<>NEW.posted_by_user_id
+    ) THEN
+   RAISE EXCEPTION 'Independent real reviewer approval and posting operator required'
      USING ERRCODE='23514';
  END IF;
  SELECT * INTO posting_period FROM finance_gl_period
@@ -364,11 +371,19 @@ BEFORE INSERT ON finance_ap_posted_journal_line FOR EACH ROW
 EXECUTE FUNCTION finance_ap_posted_line_guard();
 
 CREATE FUNCTION finance_ap_posted_complete_guard()
-RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE j finance_ap_posted_journal%ROWTYPE; totals record;
+RETURNS trigger LANGUAGE plpgsql AS $
+DECLARE
+ j finance_ap_posted_journal%ROWTYPE;
+ totals record;
+ posting_id uuid;
 BEGIN
- SELECT * INTO j FROM finance_ap_posted_journal
-   WHERE id=COALESCE(NEW.journal_id,NEW.id);
+ -- NEW.journal_id does not exist on the journal-header trigger record.
+ IF TG_TABLE_NAME='finance_ap_posted_journal' THEN
+   posting_id := NEW.id;
+ ELSE
+   posting_id := NEW.journal_id;
+ END IF;
+ SELECT * INTO j FROM finance_ap_posted_journal WHERE id=posting_id;
  IF NOT FOUND THEN RETURN NULL; END IF;
  SELECT COUNT(*) AS n,
    COALESCE(SUM(l.amount) FILTER(WHERE l.side='DEBIT'),0) AS dr,
