@@ -54,6 +54,8 @@ jobs:
             --tests com.hiltech.server.finance.FinanceEmployeeSettlementRulesTest \
             --tests com.hiltech.server.finance.FinanceBankStatementIntakePostgresContractTest \
             --tests com.hiltech.server.finance.FinanceBankStatementApprovedPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceExpenseReimbursementPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceExpenseReimbursementVersionTest \
             --tests com.hiltech.server.finance.FinanceApArBalancePostgresContractTest \
             --tests com.hiltech.server.finance.FinanceBankStatementReviewVersionTest \
             --tests com.hiltech.server.finance.FinanceCashAllocationRulesTest \
@@ -65,6 +67,7 @@ jobs:
             --tests com.hiltech.shared.core.finance.FinanceCashAllocationApiClientTest \
             --tests com.hiltech.shared.core.finance.FinanceBankStatementIntakeApiClientTest \
             --tests com.hiltech.shared.core.finance.FinanceEmployeeMoneyApiClientTest \
+            --tests com.hiltech.shared.core.finance.FinanceExpenseReimbursementApiClientTest \
             --no-daemon --console=plain
       - name: Prove native application integration
         run: |
