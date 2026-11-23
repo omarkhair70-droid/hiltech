@@ -39,12 +39,21 @@ fun WarehousePhysicalOperatorSection(
     organizationId: String,
     installationId: String,
     operationId: (List<Any?>) -> String,
+    // Caller must pass current actor for reliable cache/state isolation when
+    // people switch roles or accounts within the same organization.
+    operatorScopeKey: String = "",
 ) {
     val scope = rememberCoroutineScope()
-    var warehouses by remember(organizationId) { mutableStateOf<List<WarehouseDto>?>(null) }
-    var warehouseId by remember(organizationId) { mutableStateOf<String?>(null) }
-    var busy by remember(organizationId) { mutableStateOf(false) }
-    var message by remember(organizationId) { mutableStateOf<String?>(null) }
+    var warehouses by remember(organizationId, installationId, operatorScopeKey) {
+        mutableStateOf<List<WarehouseDto>?>(null)
+    }
+    var warehouseId by remember(organizationId, installationId, operatorScopeKey) {
+        mutableStateOf<String?>(null)
+    }
+    var busy by remember(organizationId, installationId, operatorScopeKey) { mutableStateOf(false) }
+    var message by remember(organizationId, installationId, operatorScopeKey) {
+        mutableStateOf<String?>(null)
+    }
 
     fun runTask(action: suspend () -> Unit) {
         if (busy) return
@@ -89,7 +98,7 @@ fun WarehousePhysicalOperatorSection(
             warehouseId = it
         }
         val facility = warehouseId ?: return@Column
-        key(facility) {
+        key(facility, organizationId, installationId, operatorScopeKey) {
             PhysicalOperatorWorkspace(api, facility, organizationId, installationId, operationId, busy, ::runTask)
         }
         }
