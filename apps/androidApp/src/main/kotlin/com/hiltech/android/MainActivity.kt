@@ -139,6 +139,13 @@ class MainActivity : ComponentActivity() {
                     ::selectFieldWork,
                 onFieldFocusChanged = { focused -> fieldFocused = focused },
                 fieldBackRequest = fieldBackRequest,
+                warehouseOperatorVisible =
+                    (shellState as? HiltechShellState.SignedIn)?.identity?.organizations?.isNotEmpty() == true,
+                procurementOperatorVisible =
+                    (BuildConfig.HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED &&
+                        (shellState as? HiltechShellState.SignedIn)?.field?.selectedWorkOrderId != null) ||
+                    (BuildConfig.HILTECH_SUPPLIER_INVOICE_FINANCE_ENABLED &&
+                        (shellState as? HiltechShellState.SignedIn)?.identity?.organizations?.isNotEmpty() == true),
                 onRefreshPersonalIssuedStock =
                     ::refreshPersonalIssuedStockSelected,
                 showPersonalIssuedStock = BuildConfig.HILTECH_PERSONAL_ISSUED_STOCK_ENABLED,
