@@ -135,6 +135,7 @@ class ExecutiveReadCoverageTest {
     fun unexpectedActorWideScopeMustBeExplicitlyFlagged() {
         val lines = executiveReadCoverage(home(scope = "WRONG_ORG_SCOPE"))
         assertTrue(lines[0].caveats.any { it.contains("غير معروف") })
-        assertEquals(ExecutiveCoverageState.INCOMPLETE, lines[0].state)
+        assertEquals(ExecutiveCoverageState.UNAVAILABLE, lines[0].state)
+        assertNull(lines[0].visibleCount)
     }
 }
