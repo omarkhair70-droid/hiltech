@@ -1,6 +1,8 @@
 name: Phase 13 - Source-bound Executive Home
 
 on:
+  push:
+    branches: [integration/phase7-finance8i-executive13a-20261123]
   pull_request:
     paths:
       - ".github/workflows/phase13-executive-contract.yml"
