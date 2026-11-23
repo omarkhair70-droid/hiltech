@@ -121,12 +121,13 @@ class CommercialNativeContractTest {
     @Test
     fun tenderSubmissionAndSiteVisitAreMappedToTypedCanonicalEndpoints() = runBlocking {
         val installation = "11111111-1111-4111-8111-111111111111"
-        val operation = "22222222-2222-4222-8222-222222222222"
+        val tenderOperation = "22222222-2222-4222-8222-222222222222"
+        val visitOperation = "55555555-5555-4555-8555-555555555555"
         val opportunity = "33333333-3333-4333-8333-333333333333"
         val existingSite = "44444444-4444-4444-8444-444444444444"
         val events = mutableListOf<Pair<String,String>>()
         val http = HttpClient(MockEngine { req ->
-            assertEquals(operation,req.headers["Idempotency-Key"])
+            assertTrue(req.headers["Idempotency-Key"] in setOf(tenderOperation,visitOperation))
             val body = (req.body as? TextContent)?.text.orEmpty()
             events += req.url.encodedPath to body
             respond(
@@ -148,7 +149,7 @@ class CommercialNativeContractTest {
                 referenceNumber="RFP-123",submissionDeadline="2026-12-10T12:00:00Z",
                 clarificationDeadline="",sourceChannel="official-portal",
                 submissionState="SUBMITTED",
-            ),operation,
+            ),tenderOperation,
         )
         coordinator.dispatch(
             CommercialDealAction.ScheduleVisit(
@@ -156,7 +157,7 @@ class CommercialNativeContractTest {
                 purpose="Inspect existing fiber pathway",
                 scheduledAt="2026-12-10T08:00:00Z",
                 siteId=existingSite,
-            ),operation,
+            ),visitOperation,
         )
         assertEquals("/v1/commercial/opportunities/$opportunity/tenders",events[0].first)
         assertTrue(events[0].second.contains("\"submissionState\":\"SUBMITTED\""))
