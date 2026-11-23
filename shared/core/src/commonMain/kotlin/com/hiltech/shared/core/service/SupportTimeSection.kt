@@ -34,6 +34,7 @@ fun SupportInternalTimeSection(
     onRefresh: () -> Unit,
     onRecord: (eventType: String, reason: String, expectedEventNumber: Int) -> Unit,
     modifier: Modifier = Modifier,
+    readOnly: Boolean = false,
 ) {
     val source = state.observation
     var reason by remember(source?.ticketId) { mutableStateOf("") }
@@ -74,6 +75,7 @@ fun SupportInternalTimeSection(
             }
             Text("Contractual SLA: " + timing.contractualSlaState)
             Text("Contractual hold-pause approval: " + timing.holdSlaPauseApprovalState)
+            if (!readOnly) {
             OutlinedTextField(
                 value = reason, onValueChange = { reason = it },
                 label = { Text("Reason / source observation (required)") },
@@ -93,6 +95,7 @@ fun SupportInternalTimeSection(
                 Button(onClick = {
                     onRecord("INTERNAL_HOLD_ENDED", reason, timing.latestEventNumber)
                 }) { Text("End internal hold") }
+            }
             }
         }
         Text("Immutable internal time history", style = MaterialTheme.typography.titleMedium)
