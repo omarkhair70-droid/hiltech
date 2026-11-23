@@ -38,6 +38,8 @@ fun ServiceSupplierQuoteCaptureSection(
     var error by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
     var confirmation by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
     var eligible by remember(organizationId, installationId) { mutableStateOf<List<ServiceEligibleNeedDto>>(emptyList()) }
+    var eligibleLoaded by remember(organizationId, installationId) { mutableStateOf(false) }
+    var supplierSearchLoaded by remember(organizationId, installationId) { mutableStateOf(false) }
     var rfqId by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
     var supplierSearch by remember(organizationId, installationId) { mutableStateOf("") }
     var suppliers by remember(organizationId, installationId) { mutableStateOf<List<SupplierRegistryCandidateDto>>(emptyList()) }
@@ -64,6 +66,8 @@ fun ServiceSupplierQuoteCaptureSection(
                 busy = true; error = null
                 // Denied/failed refresh must not leave an old RFQ selectable.
                 eligible = emptyList()
+                eligibleLoaded = false
+                supplierSearchLoaded = false
                 rfqId = null
                 comparison = emptyList()
                 selectedSupplier = null
@@ -72,11 +76,17 @@ fun ServiceSupplierQuoteCaptureSection(
                 supplierResultsQuery = null
                 supplierResultsRfq = null
                 scope.launch {
-                    try { eligible = sourcing.eligibleNeeds(organizationId, installationId) }
+                    try {
+                        eligible = sourcing.eligibleNeeds(organizationId, installationId)
+                        eligibleLoaded = true
+                    }
                     catch (e: Exception) { error = e.message ?: "No sourcing permission." }
                     finally { busy = false }
                 }
-            }) { Text("Load technically reviewed service needs") }
+            }) { Text("الطلبات المراجعة فنيًا والمتاحة للشراء") }
+            if(eligibleLoaded && eligible.isEmpty()) {
+                Text("لا توجد طلبات خدمات مؤهلة لتسجيل عروض موردين حاليًا.")
+            }
             eligible.forEach { need ->
                 OutlinedButton(enabled = !busy && need.sourceCurrent, onClick = {
                     busy = true; error = null; confirmation = null
@@ -87,6 +97,7 @@ fun ServiceSupplierQuoteCaptureSection(
                     rfqId = null
                     comparison = emptyList()
                     supplierSearch = ""
+                    supplierSearchLoaded = false
                     suppliers = emptyList()
                     supplierResultsQuery = null
                     supplierResultsRfq = null
@@ -119,6 +130,7 @@ fun ServiceSupplierQuoteCaptureSection(
                     value = supplierSearch, onValueChange = {
                         if (it != supplierSearch) {
                             supplierSearch = it
+                            supplierSearchLoaded = false
                             supplierSearchGeneration++
                             suppliers = emptyList()
                             supplierResultsQuery = null
@@ -137,6 +149,7 @@ fun ServiceSupplierQuoteCaptureSection(
                         supplierSearchGeneration++
                         val generation = supplierSearchGeneration
                         suppliers = emptyList()
+                        supplierSearchLoaded = false
                         supplierResultsQuery = null
                         supplierResultsRfq = null
                         selectedSupplier = null
@@ -157,6 +170,7 @@ fun ServiceSupplierQuoteCaptureSection(
                                     suppliers = results
                                     supplierResultsQuery = query
                                     supplierResultsRfq = originRfq
+                                    supplierSearchLoaded = true
                                 }
                             } catch (e: Exception) {
                                 if (supplierSearchGeneration == generation) {
@@ -174,13 +188,19 @@ fun ServiceSupplierQuoteCaptureSection(
                         resultRfqId = supplierResultsRfq,
                     )
                 }.orEmpty()
+                if(supplierSearchLoaded && visibleSuppliers.isEmpty()) {
+                    Text("لم يظهر مورد مسجل مطابق لهذا البحث؛ راجع الاسم أو حدّث المصدر.")
+                }
                 visibleSuppliers.forEach { supplier ->
                     OutlinedButton(enabled = !busy, onClick = { selectedSupplier = supplier }) {
                         Text((if (selectedSupplier?.supplierOrganizationId == supplier.supplierOrganizationId) "✓ " else "") +
                             supplier.displayName + " · " + supplier.supplierStatus)
                     }
                 }
-                selectedSupplier?.let { Text("Selected verified supplier · " + it.displayName) }
+                selectedSupplier?.let {
+                    Text("المورد المختار من السجل · " + it.displayName +
+                        " · الأهلية الفعلية يعيد السيرفر فحصها عند التسجيل.")
+                }
                 OutlinedTextField(value = reference, onValueChange = { reference = it },
                     label = { Text("Supplier's original quote reference") }, enabled = !busy)
                 OutlinedTextField(value = revision, onValueChange = { revision = it },
@@ -242,14 +262,19 @@ fun ServiceSupplierQuoteCaptureSection(
                                 finalizeOperationId = newOperationId(),
                                 recordOperationId = newOperationId(),
                             )
-                            comparison = sourcing.comparison(activeRfq, installationId)
-                            confirmation = "Verified source quote " + result.recorded.quote.id.take(8) +
-                                " recorded. Supplier was not contacted or awarded."
+                            confirmation = "تم تسجيل عرض المورد الأصلي " +
+                                result.recorded.quote.id.take(8) +
+                                " · لم يتم إرساله أو ترسيته تلقائيًا."
+                            try {
+                                comparison = sourcing.comparison(activeRfq, installationId)
+                            } catch (refreshError: Exception) {
+                                error = "تم تسجيل العرض، لكن تعذر تحديث المقارنة؛ أعد تحميل مصدر العروض."
+                            }
                         } catch (e: Exception) {
                             error = e.message ?: "Quote was not recorded; check the actual source."
                         } finally { busy = false }
                     }
-                }) { Text("Choose actual quote file and record verified offer") }
+                }) { Text("اختيار ملف العرض الأصلي وتسجيله") }
                 comparison.forEach { quote ->
                     Text(quote.quoteReference + " · " + quote.currency + " " + quote.totalAmount +
                         " · " + (if (quote.sourceCurrent) "Current" else "Source changed"),
@@ -257,6 +282,7 @@ fun ServiceSupplierQuoteCaptureSection(
                 }
                 confirmation?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
+            if(busy) Text("جارٍ التحقق من سجل الموردين أو حفظ المستند…")
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }
