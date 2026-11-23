@@ -4,7 +4,17 @@ import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+
+@Serializable
+data class FinanceBankApprovedAccountDto(
+    val id:String,
+    val bankName:String,
+    val maskedAccountReference:String,
+    val currency:String,
+    val state:String,
+)
 
 @Serializable
 data class FinanceBankIntakeLineDto(
@@ -63,6 +73,16 @@ class FinanceBankStatementIntakeApiClient(
     private val api:HiltechApiClient,
     private val json:Json=Json { ignoreUnknownKeys=true; explicitNulls=false },
 ) {
+    suspend fun listApprovedAccounts(
+        org:String,installation:String,
+    ):List<FinanceBankApprovedAccountDto> = api.request(
+        method=HttpMethod.Get,
+        path=base(org)+"/bank-accounts",
+        options=HiltechRequestOptions(installationId=installation),
+        decode={json.decodeFromString(
+            ListSerializer(FinanceBankApprovedAccountDto.serializer()),it)},
+    )
+
     suspend fun prepare(
         org:String,request:FinanceBankIntakePrepareDto,installation:String,
     ):FinanceBankIntakeReceiptDto {
