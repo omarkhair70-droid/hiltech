@@ -96,6 +96,8 @@ class ExecutiveOperationalBriefTest {
         assertEquals(ExecutiveBriefKind.PROJECT_RISK, lane.kind)
         assertEquals(listOf("P-3", "P-1", "P-4"), lane.entries.map { it.title.substringBefore(" · ") })
         assertEquals(ExecutiveBriefPriority.SOURCE_CRITICAL, lane.entries.first().priority)
+        assertTrue(lane.entries.first().detail.contains("BLOCKED_WORK"))
+        assertTrue(lane.entries.first().detail.contains("Source blocker"))
         assertEquals("2026-11-23T02:01:00Z", lane.entries.first().observedAt)
         assertEquals(ExecutiveDestination(
             ExecutiveDestinationKind.PROJECT_HEALTH, projectId,
@@ -123,6 +125,18 @@ class ExecutiveOperationalBriefTest {
         assertTrue(brief.lanes[2].extraVisibleItems)
         assertFalse(brief.lanes[2].incomplete)
         assertEquals("CURRENT_ACTOR_ACROSS_AUTHORIZED_MEMBERSHIPS", brief.needsYouScope)
+    }
+
+    @Test
+    fun assetReasonsAreQuotedFromActualSourceNotInferredFromStatus() {
+        val withReasons = asset(1).copy(reasonCodes = listOf("CALIBRATION_OVERDUE"))
+        val brief = buildExecutiveOperationalBrief(snapshot(
+            assets = ExecutiveSectionDto(
+                "CURRENT", listOf(withReasons), "ASSET_SERVICE_QUEUE", partial = false,
+            ),
+        ))
+        assertTrue(brief.lanes[2].entries.single().detail.contains("CALIBRATION_OVERDUE"))
+        assertEquals(ExecutiveBriefPriority.ACTION_VISIBLE, brief.lanes[2].entries.single().priority)
     }
 
     @Test
