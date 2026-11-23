@@ -28,7 +28,7 @@ data class WarehouseQuickScanState(
 
 /** Source results only describe the exact submitted query, never edited text. */
 fun warehouseScanResultMatchesQuery(currentInput: String, submittedQuery: String?): Boolean =
-    submittedQuery != null && currentInput.trim() == submittedQuery
+    submittedQuery != null && submittedQuery.isNotBlank() && currentInput.trim() == submittedQuery
 
 @Composable
 fun WarehouseQuickScanSection(
