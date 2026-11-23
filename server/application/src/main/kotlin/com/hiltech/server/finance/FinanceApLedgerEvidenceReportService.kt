@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest
 import org.springframework.core.env.Environment
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Service
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -106,7 +107,7 @@ class FinanceApLedgerEvidenceReportService(
             LIMIT 101
             """.trimIndent()
         }
-        val mapper=org.springframework.jdbc.core.RowMapper<FinanceApLedgerEvidenceGroup> { rs,_ ->
+        val mapper=RowMapper<FinanceApLedgerEvidenceGroup> { rs,_ ->
             val amount=rs.getBigDecimal("recognized_gross")
             if (amount==null || amount.signum()<0) unavailable()
             FinanceApLedgerEvidenceGroup(
