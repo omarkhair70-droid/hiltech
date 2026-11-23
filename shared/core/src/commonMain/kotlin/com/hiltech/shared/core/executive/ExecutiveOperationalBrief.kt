@@ -50,7 +50,7 @@ fun buildExecutiveOperationalBrief(
     require(maxPerLane in 1..10) { "A bounded number of preview items is required." }
 
     val needs = home.needsYou
-    val needsEntries = if (needs.status == "UNAVAILABLE") emptyList() else
+    val needsEntries = if (needs.status !in setOf("CURRENT", "PARTIAL")) emptyList() else
         needs.items.map { item ->
             ExecutiveBriefEntry(
                 kind = ExecutiveBriefKind.NEEDS_YOU,
@@ -66,7 +66,7 @@ fun buildExecutiveOperationalBrief(
         }
 
     val projects = home.projects
-    val projectEntries = if (projects.status == "UNAVAILABLE") emptyList() else
+    val projectEntries = if (projects.status !in setOf("CURRENT", "PARTIAL")) emptyList() else
         orderExecutiveProjectsByHealth(projects.items)
             .filter { it.healthState != "HEALTHY" || it.signals.isNotEmpty() }
             .map { project ->
@@ -90,13 +90,14 @@ fun buildExecutiveOperationalBrief(
                     sourceType = project.reference.sourceType,
                     sourceId = project.projectId,
                     sourceVersion = project.projectVersion,
-                    observedAt = project.healthAsOf ?: project.projectUpdatedAt,
+                    // Project updatedAt is NOT evidence of a fresh health evaluation.
+                    observedAt = project.healthAsOf,
                     destination = signalled ?: resolveExecutiveDestination(project.reference),
                 )
             }
 
     val assets = home.assetExceptions
-    val assetEntries = if (assets.status == "UNAVAILABLE") emptyList() else
+    val assetEntries = if (assets.status !in setOf("CURRENT", "PARTIAL")) emptyList() else
         assets.items.map { asset ->
             ExecutiveBriefEntry(
                 kind = ExecutiveBriefKind.ASSET_SERVICE,
