@@ -591,6 +591,7 @@ BEGIN
    JOIN commercial_client_po cp ON cp.id=NEW.client_po_id
        AND cp.organization_id=o.organization_id AND cp.opportunity_id=o.id
        AND cp.contract_id=c.id AND cp.verified=true
+       AND cp.amount=q.total_price AND cp.currency=q.currency
    JOIN evidence ce ON ce.id=c.signed_evidence_id
        AND ce.organization_id=o.organization_id
        AND ce.target_type='COMMERCIAL_CONTRACT' AND ce.target_id=c.id
