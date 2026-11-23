@@ -11,6 +11,7 @@ import java.math.BigDecimal
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.time.Clock
+import java.time.ZoneOffset
 import java.util.UUID
 
 const val FINANCE_EXPENSE_DOCUMENTATION_REVIEW_SUBJECT = "FINANCE_EXPENSE_DOCUMENTATION_REVIEW"
@@ -108,7 +109,7 @@ class FinanceExpenseDocumentationApprovalSubject(
                         AND emp.state='ACTIVE'
                         AND company.status='ACTIVE'
                         AND owner.status='ACTIVE'
-                        AND employment.start_date<=CURRENT_DATE
+                        AND employment.start_date<=?
                         AND employment.end_date IS NULL
                 )
                 AND e.evidence_requirement_key='FINANCE_EXPENSE_RECEIPT_BINARY'
@@ -145,7 +146,7 @@ class FinanceExpenseDocumentationApprovalSubject(
                     sizeBytes = rs.getLong("size_bytes"),
                 )
             },
-            expenseId, org,
+            expenseId, org, now.atZone(ZoneOffset.UTC).toLocalDate(),
         )
         // A capped source would not yield an authoritative version.
         if (rows.isEmpty() || rows.size > 100) return null
