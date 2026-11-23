@@ -4,6 +4,9 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -146,6 +149,8 @@ private fun PhysicalOperatorWorkspace(
     // The shell owns scrolling; quick scan opens the actual existing detail
     // without introducing a separate list or a second vertical scroll owner.
     val scanAssetDetailRequester = remember(warehouse) { BringIntoViewRequester() }
+    val quickScanReturnRequester = remember(warehouse) { BringIntoViewRequester() }
+    val quickScanNavigationScope = rememberCoroutineScope()
     val scanStockDetailRequester = remember(warehouse) { BringIntoViewRequester() }
     var requestedScanAssetId by remember(warehouse) { mutableStateOf<String?>(null) }
     var requestedScanStockId by remember(warehouse) { mutableStateOf<String?>(null) }
@@ -339,6 +344,7 @@ private fun PhysicalOperatorWorkspace(
         }
     }
 
+    Spacer(Modifier.fillMaxWidth().height(1.dp).bringIntoViewRequester(quickScanReturnRequester))
     WarehouseQuickScanSection(
         api = api,
         warehouseId = warehouse,
@@ -520,10 +526,14 @@ private fun PhysicalOperatorWorkspace(
         }, enabled = !busy) { Text("تحميل المزيد من الأصول / Load more assets") }
     }
     assetState.selected?.let { passport ->
-        Text(
-            "${passport.identity.assetCode} · ${passport.identity.condition}",
+        OutlinedButton(
             modifier = Modifier.bringIntoViewRequester(scanAssetDetailRequester),
-        )
+            enabled = !busy,
+            onClick = {
+                quickScanNavigationScope.launch { quickScanReturnRequester.bringIntoView() }
+            },
+        ) { Text("الرجوع للبحث السريع / Back to scan") }
+        Text("${passport.identity.assetCode} · ${passport.identity.condition}")
         passport.custody?.let { custody ->
             Text("Custody · ${custody.employeeCode ?: custody.locationCode ?: "Unavailable"}")
             custody.expectedReturnAt?.let { Text("Expected return · $it") }
@@ -562,10 +572,14 @@ private fun PhysicalOperatorWorkspace(
         }, enabled = !busy) { Text("تحميل المزيد من المخزون / Load more stock") }
     }
     stockState.selected?.let { item ->
-        Text(
-            "${item.itemCode} · ${item.name}",
+        OutlinedButton(
             modifier = Modifier.bringIntoViewRequester(scanStockDetailRequester),
-        )
+            enabled = !busy,
+            onClick = {
+                quickScanNavigationScope.launch { quickScanReturnRequester.bringIntoView() }
+            },
+        ) { Text("الرجوع للبحث السريع / Back to scan") }
+        Text("${item.itemCode} · ${item.name}")
         Text("المتاح فعليًا في المخزن / On hand in this Warehouse", style = MaterialTheme.typography.titleMedium)
         stockState.balances.forEach { Text("${it.locationCode} · ${it.onHandQuantity} ${item.baseUnitCode}") }
         StockStorageTransfer(item, stockState.copy(loading = busy), warehouse, ::stockAction)
