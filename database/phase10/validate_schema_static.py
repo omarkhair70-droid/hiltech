@@ -35,6 +35,9 @@ assert "Project handoff requires exact ready award and same client" in sql
 assert "commercial_private_boq_cost_summary" in sql
 assert "commercial_finance_award_source" in sql
 assert "commercial_support_contract_source" in sql
+assert "cp.amount=q.total_price AND cp.currency=q.currency" in sql
+assert "Tender award requires a canonical won Project" in sql
+assert "Commercial opportunity must begin as OPEN" in sql
 assert "CREATE TABLE commercial_project_handoff" in sql
 assert "V006" not in sql[:300], "Do not use a provisional migration version"
 print(f"Commercial SQL static contract PASS: {len(tables)} tables, "

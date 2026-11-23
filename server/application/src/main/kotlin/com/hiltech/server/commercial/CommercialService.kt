@@ -59,6 +59,12 @@ internal fun commercialExactLineTotal(quantity: BigDecimal, sellUnitPrice: BigDe
         )
     }
 
+internal fun commercialExactFullAward(
+    quoteAmount: BigDecimal, quoteCurrency: String,
+    clientPoAmount: BigDecimal, clientPoCurrency: String,
+): Boolean = quoteAmount.compareTo(clientPoAmount) == 0 &&
+    quoteCurrency.trim() == clientPoCurrency.trim()
+
 private fun amount(value: BigDecimal, positive: Boolean = false) {
     if ((if (positive) value.signum() <= 0 else value.signum() < 0) ||
         value.scale() > 4 || value.precision() > 20)
@@ -758,8 +764,10 @@ class CommercialService(
             // won Project. Change-order/partial-award policy is deliberately not guessed.
             val poAmount = po["amount"] as BigDecimal
             val approvedAmount = c["quote_total"] as BigDecimal
-            if (poAmount.compareTo(approvedAmount) != 0 ||
-                (po["currency"] as String).trim() != (c["quote_currency"] as String).trim())
+            if (!commercialExactFullAward(
+                    approvedAmount, c["quote_currency"] as String,
+                    poAmount, po["currency"] as String,
+                ))
                 throw commercialError(
                     "COMMERCIAL_PO_QUOTE_MISMATCH",
                     "Client purchase order must match the exact approved quote amount and currency for a full Project award.",

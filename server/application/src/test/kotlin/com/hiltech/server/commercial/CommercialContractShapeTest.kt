@@ -62,6 +62,15 @@ class CommercialContractShapeTest {
     }
 
     @Test
+    fun partialOvervaluedOrDifferentCurrencyPurchaseOrderCannotWinEntireQuote() {
+        val approved = BigDecimal("4000.0000")
+        assertTrue(commercialExactFullAward(approved, "EGP", BigDecimal("4000"), "EGP"))
+        assertFalse(commercialExactFullAward(approved, "EGP", BigDecimal("2000.0000"), "EGP"))
+        assertFalse(commercialExactFullAward(approved, "EGP", BigDecimal("5000.0000"), "EGP"))
+        assertFalse(commercialExactFullAward(approved, "EGP", BigDecimal("4000.0000"), "USD"))
+    }
+
+    @Test
     fun invalidIdentifiersAreRejectedBeforeUse() {
         assertThrows(Exception::class.java) { "cross-tenant-key".commercialUuid() }
     }
