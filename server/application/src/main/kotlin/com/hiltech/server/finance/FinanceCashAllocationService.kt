@@ -348,7 +348,7 @@ class FinanceCashAllocationService(
     ):Boolean {
         val all=jdbc.queryForList(
             """SELECT source_kind,source_journal_id,bank_statement_line_id,
-               allocated_amount FROM finance_cash_allocation_record
+               allocated_amount FROM finance_cash_allocation_effective
                WHERE organization_id=? AND
                  ((source_kind=? AND source_journal_id=?) OR bank_statement_line_id=?)""",
             org,kind,journal,bank,
