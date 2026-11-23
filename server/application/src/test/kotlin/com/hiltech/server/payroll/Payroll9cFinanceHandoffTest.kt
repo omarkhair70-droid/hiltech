@@ -113,9 +113,12 @@ class Payroll9cFinanceHandoffTest {
         assertThrows<ProductApiException> {
             manifest(run(lines = listOf(one, two), net = "176.00"))
         }
-        assertThrows<ProductApiException> {
-            manifest(run(lines = listOf(one.copy(net = "0"), two.copy(net = "0")), net = "0"))
-        }
+        val zeroNet = manifest(
+            run(lines = listOf(one.copy(net = "0"), two.copy(net = "0")), net = "0"),
+        )
+        assertEquals(0, zeroNet.positiveTransferCount)
+        assertEquals("0", zeroNet.payableTotal.stripTrailingZeros().toPlainString())
+        assertTrue(zeroNet.lines.all { !it.requiresTransfer })
         assertThrows<ProductApiException> {
             manifest(run().copy(state = "RELEASED"))
         }

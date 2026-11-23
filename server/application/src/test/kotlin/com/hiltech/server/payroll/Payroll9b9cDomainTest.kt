@@ -330,6 +330,33 @@ class Payroll9b9cDomainTest {
     }
 
     @Test
+    fun zeroNetEmployeeRequiresNoFinanceInstructionAndRejectsFakeZeroTransfer() {
+        val paid = expected()
+        val zero = UUID.randomUUID()
+        val frozen = listOf(
+            PayrollFrozenPaymentLine(paid.employeeId, BigDecimal("100.00"), "EGP"),
+            PayrollFrozenPaymentLine(zero, BigDecimal.ZERO, "EGP"),
+        )
+        Payroll9cExpectedBatchGuard.validate(org, runId, frozen, listOf(paid))
+        assertThrows<ProductApiException> {
+            Payroll9cExpectedBatchGuard.validate(
+                org, runId, frozen, listOf(paid, expected(zero).copy(amount = BigDecimal.ZERO)),
+            )
+        }
+        assertThrows<ProductApiException> {
+            Payroll9cExpectedBatchGuard.validate(org, runId, frozen, emptyList())
+        }
+        val zeroOnly = listOf(PayrollFrozenPaymentLine(zero, BigDecimal.ZERO, "EGP"))
+        Payroll9cExpectedBatchGuard.validate(org, runId, zeroOnly, emptyList())
+        assertThrows<ProductApiException> {
+            Payroll9cExpectedBatchGuard.validate(
+                org, runId, listOf(PayrollFrozenPaymentLine(zero, BigDecimal("-1"), "EGP")),
+                emptyList(),
+            )
+        }
+    }
+
+    @Test
     fun partialAndUnknownFinanceTransfersNeverMarkWholePayrollPaid() {
         val first = expected()
         val second = expected(UUID.randomUUID())

@@ -126,20 +126,34 @@ class Payroll9cPayslipService(
                 return@mapNotNull null
             }
             val expected = financePort.expectedPayments(organizationId, row.runId)
-            // No Finance batch at all is not evidence of payment.
-            if (expected.isEmpty()) return@mapNotNull null
+            // An empty Finance batch can be correct only for a whole
+            // released payroll with no positive transfer candidates.
             // A self-only payslip must not trust an incomplete batch while
             // the admin run-status endpoint would correctly reject it.
             Payroll9cExpectedBatchGuard.validateAgainstDatabase(
                 jdbc, organizationId, row.runId, expected,
             )
             val events = financePort.paymentEvents(organizationId, row.runId)
-            val reconciliation = Payroll9cReconciler.reconcile(
-                organizationId, row.runId, expected, events,
-            )
-            val own = reconciliation.employees.singleOrNull {
-                it.employeeId == employee.employeeId
-            } ?: return@mapNotNull null
+            if (expected.isEmpty() && events.isNotEmpty()) {
+                Payroll9aPolicy.fail("PAYROLL_FINANCE_UNEXPECTED_EVENT", HttpStatus.CONFLICT)
+            }
+            val outcome = if (row.net.signum() == 0) {
+                // No transfer was required for this employee; do not assert
+                // SUCCESS or invent a zero-value Finance instruction.
+                if (expected.isNotEmpty()) {
+                    Payroll9cReconciler.reconcile(
+                        organizationId, row.runId, expected, events,
+                    )
+                }
+                "NOT_APPLICABLE"
+            } else {
+                val reconciliation = Payroll9cReconciler.reconcile(
+                    organizationId, row.runId, expected, events,
+                )
+                reconciliation.employees.singleOrNull {
+                    it.employeeId == employee.employeeId
+                }?.result?.name ?: return@mapNotNull null
+            }
             PrivatePayrollPayslipDto(
                 runVersionId = row.runId.toString(),
                 employeeId = row.employeeId.toString(),
@@ -151,7 +165,7 @@ class Payroll9cPayslipService(
                 deductions = row.deductions.toPlainString(),
                 reimbursements = row.reimbursements.toPlainString(),
                 net = row.net.toPlainString(),
-                paymentStatus = own.result.name,
+                paymentStatus = outcome,
             )
         }
         return OwnPayrollPayslipsDto(approved, correlationId)

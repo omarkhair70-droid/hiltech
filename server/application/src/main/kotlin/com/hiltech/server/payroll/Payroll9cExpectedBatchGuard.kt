@@ -25,14 +25,18 @@ object Payroll9cExpectedBatchGuard {
         frozenLines: List<PayrollFrozenPaymentLine>,
         expected: List<PayrollExpectedPayment>,
     ) {
-        if (frozenLines.isEmpty() || expected.size != frozenLines.size ||
+        // Zero-net employees must remain in the frozen payroll population,
+        // but must never generate a fictitious payment instruction.
+        val transferLines = frozenLines.filter { it.net.signum() > 0 }
+        if (frozenLines.isEmpty() || expected.size != transferLines.size ||
+            frozenLines.any { it.net.signum() < 0 } ||
             frozenLines.map { it.employeeId }.toSet().size != frozenLines.size ||
             expected.map { it.employeeId }.toSet().size != expected.size ||
             expected.map { it.financeInstructionId }.toSet().size != expected.size
         ) {
             Payroll9aPolicy.fail("PAYROLL_FINANCE_BATCH_INCOMPLETE", HttpStatus.CONFLICT)
         }
-        val frozenByEmployee = frozenLines.associateBy { it.employeeId }
+        val frozenByEmployee = transferLines.associateBy { it.employeeId }
         if (expected.map { it.employeeId }.toSet() != frozenByEmployee.keys) {
             Payroll9aPolicy.fail("PAYROLL_FINANCE_BATCH_INCOMPLETE", HttpStatus.CONFLICT)
         }

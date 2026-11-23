@@ -61,24 +61,34 @@ class Payroll9cRunFinanceStatusService(
             },
             expected,
         )
-        val reconciled = Payroll9cReconciler.reconcile(
-            org, runVersionId, expected,
-            financePort.paymentEvents(org, runVersionId),
-        )
+        val events = financePort.paymentEvents(org, runVersionId)
+        if (expected.isEmpty() && events.isNotEmpty()) {
+            Payroll9aPolicy.fail("PAYROLL_FINANCE_UNEXPECTED_EVENT", HttpStatus.CONFLICT)
+        }
+        val reconciled = if (expected.isEmpty()) null else
+            Payroll9cReconciler.reconcile(org, runVersionId, expected, events)
+        val noTransferEmployees = run.lines.filter { BigDecimal(it.net).signum() == 0 }
         return Payroll9cRunFinanceStatusDto(
             runVersionId = run.runVersionId,
-            status = reconciled.status.name,
+            status = reconciled?.status?.name ?: "NO_PAYMENT_REQUIRED",
             financeConnected = true,
             publicationApproved = true,
             employeeCount = run.lines.size,
-            settledCount = reconciled.settledCount,
-            unresolvedCount = reconciled.unresolvedCount,
-            employeeOutcomes = reconciled.employees.map {
-                PayrollEmployeeFinanceStatusDto(
-                    employeeId = it.employeeId.toString(),
-                    outcome = it.result.name,
-                )
-            },
+            settledCount = reconciled?.settledCount ?: 0,
+            unresolvedCount = reconciled?.unresolvedCount ?: 0,
+            employeeOutcomes = (
+                (reconciled?.employees ?: emptyList()).map {
+                    PayrollEmployeeFinanceStatusDto(
+                        employeeId = it.employeeId.toString(),
+                        outcome = it.result.name,
+                    )
+                } + noTransferEmployees.map {
+                    PayrollEmployeeFinanceStatusDto(
+                        employeeId = it.employeeId,
+                        outcome = "NOT_APPLICABLE",
+                    )
+                }
+            ).sortedBy { it.employeeId },
         )
     }
 

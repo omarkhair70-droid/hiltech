@@ -127,7 +127,7 @@ object PayrollFinanceReviewManifestPolicy {
             Payroll9aPolicy.fail("PAYROLL_FINANCE_NET_INVALID", HttpStatus.CONFLICT)
         }
         val transfers = lines.count { it.requiresTransfer }
-        if (transfers == 0 || frozen.compareTo(total) != 0) {
+        if (frozen.compareTo(total) != 0) {
             Payroll9aPolicy.fail("PAYROLL_FINANCE_MANIFEST_TOTAL_MISMATCH", HttpStatus.CONFLICT)
         }
         val canonical = buildString {
