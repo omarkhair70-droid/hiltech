@@ -469,10 +469,11 @@ class Payroll9bDraftPostgresContractTest {
             financeInstructionVersion = 1,
             amount = BigDecimal("100.00"), currency = "EGP",
         )
+        var expectedFinance = listOf(financeInstruction)
         var paymentEvents = emptyList<PayrollFinanceResult>()
         val finance = object : PayrollFinancePaymentResultsPort {
             override fun expectedPayments(organizationId: UUID, runVersionId: UUID) =
-                listOf(financeInstruction)
+                expectedFinance
             override fun paymentEvents(organizationId: UUID, runVersionId: UUID) =
                 paymentEvents
         }
@@ -524,6 +525,23 @@ class Payroll9bDraftPostgresContractTest {
         )
         assertEquals("SUCCESS", self.own(actor, org, "p9c-private").items.single().paymentStatus)
         assertEquals("PAID", financeReviewer.status(actor, publishedRunId).status)
+        // A recorded SUCCESS event never excuses a mismatched Finance batch:
+        // both own payslip and admin run-status must fail closed.
+        expectedFinance = listOf(financeInstruction.copy(amount = BigDecimal("101.00")))
+        assertThrows<ProductApiException> {
+            self.own(actor, org, "p9c-private")
+        }
+        assertThrows<ProductApiException> {
+            financeReviewer.status(actor, publishedRunId)
+        }
+        expectedFinance = listOf(financeInstruction.copy(
+            financeInstructionVersion = 0,
+        ))
+        assertThrows<ProductApiException> {
+            self.own(actor, org, "p9c-private")
+        }
+        expectedFinance = listOf(financeInstruction)
+        assertEquals("SUCCESS", self.own(actor, org, "p9c-private").items.single().paymentStatus)
         paymentEvents = paymentEvents + paymentEvents.first().copy(
             outcomeEventId = UUID.randomUUID(),
             outcome = PayrollFinanceOutcome.RETURNED, financeSourceVersion = 2,
