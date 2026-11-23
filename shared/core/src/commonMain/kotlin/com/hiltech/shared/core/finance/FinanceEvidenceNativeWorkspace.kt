@@ -405,7 +405,12 @@ fun financeEvidenceReadNativeWorkspace(
             } else {
                 OutlinedTextField(
                     value = lookupText,
-                    onValueChange = { lookupText = it.trim() },
+                    onValueChange = {
+                        lookupText = it.trim()
+                        requestedId = null
+                        lookupResult = null
+                        lookupError = null
+                    },
                     label = { Text("معرّف السجل UUID") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
