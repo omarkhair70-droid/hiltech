@@ -28,3 +28,9 @@ Date: 2026-11-23
 
 ## Next authoring path
 Once the review request is valid under real company policy and source, the existing Approval Inbox/Decision paths handle review, rejection, change request and audit. The Finance lane must subsequently implement separately approved expense recognition and independently verified payment-result capture. Never infer those actions from receipt-documentation approval alone.
+
+## Employee outcome after reviewer decision
+- Added `GET /v1/finance/me/organizations/{orgId}/expenses/{draftId}/documentation-review` and `FinanceExpenseDocumentationStatusService` against the same canonical `ApprovalEngine.subjectStatus` for the **current** receipt/source version.
+- Only current original employee can read their review; statuses are `NOT_REQUESTED` (no record yet), `PENDING`, `APPROVED`, `REJECTED`, `CHANGE_REQUESTED`, or canonical other statuses. Every response explicitly says expenseApproved/payableRecognized/reimbursementAuthorized/cashMovementRecorded false.
+- Typed shared KMP GET, native refresh/decision text and tests. An APPROVED documentation result **does not** approve disbursement. Stale source or policy configuration fails closed rather than returning a false current approval.
+- UI remains a mountable component, not yet connected to authenticated native navigation. Review result is genuinely read from Phase2's approval record, not guessed locally.
