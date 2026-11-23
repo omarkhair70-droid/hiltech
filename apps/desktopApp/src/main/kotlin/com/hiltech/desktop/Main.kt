@@ -25,6 +25,7 @@ import com.hiltech.shared.core.procurement.SupplierPoCommunicationSection
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeSection
 import com.hiltech.shared.core.executive.executiveNativeWorkspace
 import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
+import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
@@ -2753,6 +2754,16 @@ fun main() {
                         ) {
                             add(ownPayslipNativeWorkspace(
                                 client = runtime.payrollOwnApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                            ))
+                        }
+                        if (System.getenv("HILTECH_COMMERCIAL_READ_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(commercialReadNativeWorkspace(
+                                client = runtime.commercialApi,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
