@@ -14,7 +14,7 @@ The extra SQL is **pending and unnumbered**. No change to main V0001..V0080, no 
 
 - Test `Payroll9bDraftPostgresContractTest` now supplements its fake handoff with a **real** Finance adapter using disposable PostgreSQL, after applying pending SQL. It checks one real review envelope, immutable replay, conflict on new operation, wrong-company refusal and zero bank-enabled rows.
 - `FinancePayrollReviewIntakePolicyTest` checks precise totals, unique beneficiaries, currency/scale consistency, nonnegative amount, exact source shape, no fake flags.
-- Dedicated `hiltech-payroll-finance-review-preflight.yml` uses PostgreSQL 18 and JDK 21 to run both test classes.
+- Dedicated `hiltech-payroll-finance-review-preflight.yml` uses PostgreSQL 18 and JDK 21 to run the Payroll→Finance test and policy negatives, plus a real Phase10 Sales award→Finance8+Service11 canonical view join regression (`CommercialFinanceServiceSourcePostgresContractTest`). This uses a rolled-back synthetic contract/PO/Project fixture only, not company data.
 - P10 `commercial_finance_award_source` is already numbered in V0071 and Finance AR candidate/issuance services consume this source; this PR deliberately does not modify invoice or commercial ownership. Real billing milestone/tax Evidence, approval, posting, customer payment and bank reconciliation remain separate gates.
 - P11 `commercial_support_contract_source` already binds a Sales contract to Handover/Service source. It does **not** authorize automatic chargeable maintenance or a made-up warranty billing rule; no service-owned Finance mutation is introduced here.
 

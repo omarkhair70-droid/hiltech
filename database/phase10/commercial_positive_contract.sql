@@ -198,6 +198,27 @@ BEGIN
                 WHERE support.project_id=phase10_fixture.project_id AND support.signed_evidence_id=contract_file) THEN
     RAISE EXCEPTION 'Support contract source reference missing';
   END IF;
+  -- Unified contract proof: the SAME released customer award is consumed by
+  -- Finance for review and by Service11 for written coverage, scoped to the
+  -- same organization/project/contract. No invoice or warranty activation.
+  IF NOT EXISTS(
+      SELECT 1 FROM commercial_finance_award_source finance
+      JOIN commercial_support_contract_source support
+        ON support.organization_id = finance.organization_id
+       AND support.project_id = finance.project_id
+       AND support.contract_id = finance.contract_id
+      WHERE finance.organization_id = company
+        AND finance.opportunity_id = opportunity
+        AND finance.project_id = phase10_fixture.project_id
+        AND finance.contract_id = phase10_fixture.contract_id
+        AND finance.client_po_id = po_id
+        AND finance.total_price = 40 AND finance.currency = 'EGP'
+        AND support.signed_evidence_id = contract_file
+        AND support.warranty_terms = 'Synthetic coverage'
+        AND support.maintenance_terms = 'Synthetic support'
+  ) THEN
+    RAISE EXCEPTION 'Finance8 and Service11 did not consume the same canonical Sales10 award';
+  END IF;
   IF (SELECT count(*) FROM commercial_project_handoff WHERE opportunity_id=opportunity)<>1 THEN
     RAISE EXCEPTION 'Exactly one canonical Project handoff was expected';
   END IF;
