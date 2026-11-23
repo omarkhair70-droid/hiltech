@@ -21,7 +21,14 @@ data class WarehouseQuickScanState(
     val assetTagResult: AssetTagLookupDto? = null,
     val assetSearchResults: List<AssetIdentityDto> = emptyList(),
     val stockSearchResults: List<StockItemDto> = emptyList(),
+    val resolvedTagQuery: String? = null,
+    val assetSearchResultQuery: String? = null,
+    val stockSearchResultQuery: String? = null,
 )
+
+/** Source results only describe the exact submitted query, never edited text. */
+fun warehouseScanResultMatchesQuery(currentInput: String, submittedQuery: String?): Boolean =
+    submittedQuery != null && currentInput.trim() == submittedQuery
 
 @Composable
 fun WarehouseQuickScanSection(
@@ -39,35 +46,34 @@ fun WarehouseQuickScanSection(
         state = state,
         busy = busy,
         onTagInputChanged = {
-            state = state.copy(assetTagResult = null)
+            state = state.copy(assetTagResult = null, resolvedTagQuery = null)
         },
         onAssetInputChanged = {
-            state = state.copy(assetSearchResults = emptyList())
+            state = state.copy(assetSearchResults = emptyList(), assetSearchResultQuery = null)
         },
         onStockInputChanged = {
-            state = state.copy(stockSearchResults = emptyList())
+            state = state.copy(stockSearchResults = emptyList(), stockSearchResultQuery = null)
         },
         onAssetTagLookup = { code ->
             // Never leave a previous asset's identity on screen if this lookup fails.
-            state = state.copy(assetTagResult = null)
+            state = state.copy(assetTagResult = null, resolvedTagQuery = null)
             runTask {
-                state = state.copy(assetTagResult = api.lookupAssetTag(code, installationId))
+                val result = api.lookupAssetTag(code, installationId)
+                state = state.copy(assetTagResult = result, resolvedTagQuery = code)
             }
         },
         onAssetSearch = { query ->
-            state = state.copy(assetSearchResults = emptyList())
+            state = state.copy(assetSearchResults = emptyList(), assetSearchResultQuery = null)
             runTask {
-                state = state.copy(
-                    assetSearchResults = api.assets(warehouseId, query, null, installationId).take(20),
-                )
+                val results = api.assets(warehouseId, query, null, installationId).take(20)
+                state = state.copy(assetSearchResults = results, assetSearchResultQuery = query)
             }
         },
         onStockSearch = { query ->
-            state = state.copy(stockSearchResults = emptyList())
+            state = state.copy(stockSearchResults = emptyList(), stockSearchResultQuery = null)
             runTask {
-                state = state.copy(
-                    stockSearchResults = api.searchStockItems(organizationId, query, installationId).take(20),
-                )
+                val results = api.searchStockItems(organizationId, query, installationId).take(20)
+                state = state.copy(stockSearchResults = results, stockSearchResultQuery = query)
             }
         },
     )
@@ -111,7 +117,10 @@ fun WarehouseQuickScanControls(
             enabled = !busy && validTag,
         ) { Text("حل AssetTag / Resolve AssetTag") }
 
-        state.assetTagResult?.let { result ->
+        val visibleTagResult = state.assetTagResult?.takeIf {
+            warehouseScanResultMatchesQuery(tag, state.resolvedTagQuery)
+        }
+        visibleTagResult?.let { result ->
             Text(result.assetCode + (result.name?.let { " · $it" } ?: ""), style = MaterialTheme.typography.titleMedium)
             Text("Asset canonical · " + (result.assetId ?: "unavailable"))
             Text(result.typeName + " · " + result.condition.name)
@@ -136,11 +145,14 @@ fun WarehouseQuickScanControls(
             onClick = { onAssetSearch(assetSearch.trim()) },
             enabled = !busy && assetSearch.isNotBlank(),
         ) { Text("بحث Asset / Search Asset") }
-        state.assetSearchResults.forEach { asset ->
+        val visibleAssetSearchResults = state.assetSearchResults.takeIf {
+            warehouseScanResultMatchesQuery(assetSearch, state.assetSearchResultQuery)
+        }.orEmpty()
+        visibleAssetSearchResults.forEach { asset ->
             Text("Asset result · " + asset.assetCode + " · " + asset.id)
         }
-        val scannedAssetId = state.assetTagResult?.assetId
-        if (scannedAssetId != null && state.assetSearchResults.any { it.id == scannedAssetId }) {
+        val scannedAssetId = visibleTagResult?.assetId
+        if (scannedAssetId != null && visibleAssetSearchResults.any { it.id == scannedAssetId }) {
             Text("Scan/search canonical match · PASS")
         }
 
@@ -161,7 +173,10 @@ fun WarehouseQuickScanControls(
             onClick = { onStockSearch(stockSearch.trim()) },
             enabled = !busy && stockSearch.isNotBlank(),
         ) { Text("بحث Stock / Search Stock") }
-        state.stockSearchResults.forEach { item ->
+        val visibleStockSearchResults = state.stockSearchResults.takeIf {
+            warehouseScanResultMatchesQuery(stockSearch, state.stockSearchResultQuery)
+        }.orEmpty()
+        visibleStockSearchResults.forEach { item ->
             Text("Stock canonical · " + item.id + " · " + item.itemCode)
             item.partNumber?.let { Text("Part number · $it") }
         }
