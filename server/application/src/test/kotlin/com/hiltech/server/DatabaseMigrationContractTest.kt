@@ -40,6 +40,8 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager
 import org.springframework.jdbc.datasource.DriverManagerDataSource
 import org.springframework.transaction.support.TransactionTemplate
 import java.math.BigDecimal
+import java.nio.file.Files
+import java.nio.file.Path
 import java.sql.DriverManager
 import java.sql.SQLException
 import java.time.Clock
@@ -86,7 +88,23 @@ class DatabaseMigrationContractTest {
             .load()
             .migrate()
 
-        assertEquals(27, result.migrationsExecuted)
+        // Validate the complete immutable, consecutive Flyway inventory.
+        // A fixed '27' was stale after the source-bound Finance V0061/V0062
+        // arrived. Still reject missing, duplicate or out-of-order versions
+        // instead of weakening migration verification to a minimum count.
+        val versionNumbers = Files.list(Path.of(migrationPath)).use { entries ->
+            entries.filter { file ->
+                Files.isRegularFile(file) &&
+                    Regex("^V[0-9]+__.+[.]sql$").matches(file.fileName.toString())
+            }.map { file ->
+                file.fileName.toString().substringAfter("V")
+                    .substringBefore("__").toInt()
+            }.sorted().toList()
+        }
+        assertTrue(versionNumbers.isNotEmpty())
+        assertEquals((1..versionNumbers.last()).toList(), versionNumbers)
+        assertEquals(versionNumbers.size - priorSliceResult.migrationsExecuted,
+            result.migrationsExecuted)
 
         DriverManager.getConnection(url, user, password).use { connection ->
             connection.createStatement().use { statement ->

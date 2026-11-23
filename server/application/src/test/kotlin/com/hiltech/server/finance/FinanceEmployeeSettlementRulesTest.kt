@@ -79,6 +79,8 @@ class FinanceEmployeeSettlementRulesTest {
     @Test fun reimbursedExpenseNeedsConfirmedBankDebitNotLoan() {
         val paid=base.copy(kind=FinanceEmployeeSettlementKind.EXPENSE_REIMBURSEMENT,
             action=FinanceEmployeeSettlementAction.REIMBURSEMENT_CONFIRMED,
+            approvedFundingRecorded=false,sourceBankTransactionId=null,
+            sourceBankEvidenceSha256=null,
             settlementBankTransactionId=UUID.randomUUID(),
             settlementBankEvidenceSha256="d".repeat(64))
         FinanceEmployeeSettlementRules.validate(paid)
