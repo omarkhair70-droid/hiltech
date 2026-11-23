@@ -59,6 +59,7 @@ jobs:
             --tests com.hiltech.server.finance.FinanceCashCountVersionTest \
             --tests com.hiltech.server.finance.FinanceSignedBankReconciliationVersionTest \
             --tests com.hiltech.server.finance.FinanceBankReconciliationSignoffPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceMixedBankCashPostgresContractTest \
             --no-daemon --console=plain --stacktrace
       - name: Package unified server
         run: ./gradlew :server:application:bootJar --no-daemon --console=plain
