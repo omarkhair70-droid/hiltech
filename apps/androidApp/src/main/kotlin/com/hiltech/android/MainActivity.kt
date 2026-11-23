@@ -34,6 +34,7 @@ import com.hiltech.shared.core.work.FieldEngineeringTestCaptureDto
 import com.hiltech.shared.core.work.FieldPersonalIssuedStockLineDto
 import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
+import com.hiltech.shared.core.executive.executiveNativeWorkspace
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
@@ -122,6 +123,25 @@ class MainActivity : ComponentActivity() {
             }
             HiltechShell(
                 state = shellState,
+                operationalWorkspaces = (shellState as? HiltechShellState.SignedIn)?.let { signed ->
+                    val org = signed.identity.organizations.firstOrNull { it.primary }
+                        ?: signed.identity.organizations.firstOrNull()
+                    if (BuildConfig.HILTECH_EXECUTIVE_HOME_ENABLED && org != null) {
+                        listOf(
+                            executiveNativeWorkspace(
+                                client = hiltechApplication.executiveApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                                authorityRevisionKey =
+                                    signed.identity.identityVersion.toString() + ":" +
+                                        org.membershipVersion.toString(),
+                                // Android Projects detail is not mounted yet.
+                                // Do not offer a destination with no original source screen.
+                            ),
+                        )
+                    } else emptyList()
+                } ?: emptyList(),
                 onSignIn = ::startSignIn,
                 onSignOut = ::signOut,
                 onRetry = ::restoreOrSignIn,
