@@ -164,8 +164,21 @@ class FinanceCashAllocationApprovalSubject(
         val usedBank=sums.filter {
             it["bank_statement_line_id"]==p.bankLineId
         }.fold(BigDecimal.ZERO){a,row->a.add(row["allocated_amount"] as BigDecimal)}
+        // A posted customer/supplier invoice can be settled partly in a
+        // company cashbox and partly by bank: never advertise the same
+        // remaining invoice balance twice.
+        val cashboxInstalled=jdbc.queryForObject(
+            "SELECT to_regclass('public.finance_cash_voucher_record') IS NOT NULL",
+            Boolean::class.java,
+        )==true
+        val usedPhysical=if(cashboxInstalled) jdbc.queryForObject(
+            """SELECT COALESCE(SUM(amount),0)
+               FROM finance_cash_voucher_record
+               WHERE organization_id=? AND source_kind=? AND source_journal_id=?""",
+            BigDecimal::class.java,org,p.kind,p.journalId,
+        ) ?: BigDecimal.ZERO else BigDecimal.ZERO
         if(p.amount<=BigDecimal.ZERO ||
-            usedSource.add(p.amount)>posted.first ||
+            usedSource.add(usedPhysical).add(p.amount)>posted.first ||
             usedBank.add(p.amount)>p.bankAmount)return null
         val version=FinanceCashReviewVersion.derive(
             org,p.kind,p.journalId,p.bankLineId,p.sourceHash,p.bankHash,
