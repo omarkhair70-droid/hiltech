@@ -30,6 +30,9 @@ fun FinanceExpenseDocumentationReviewControl(
     val scope = rememberCoroutineScope()
     var sending by remember(expenseDraftId) { mutableStateOf(false) }
     var pendingReviewId by remember(expenseDraftId) { mutableStateOf<String?>(null) }
+    // Retry a timed-out HTTP request with its SAME idempotency operation,
+    // never generate a second approval request for the same pending attempt.
+    var reviewOperationId by remember(expenseDraftId) { mutableStateOf<String?>(null) }
     var error by remember(expenseDraftId) { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -51,7 +54,9 @@ fun FinanceExpenseDocumentationReviewControl(
                         val result = reviews.request(
                             organizationId = organizationId,
                             expenseDraftId = expenseDraftId,
-                            operationId = newOperationId(),
+                            operationId = reviewOperationId ?: newOperationId().also {
+                                reviewOperationId = it
+                            },
                             installationId = installationId,
                         )
                         check(
