@@ -34,6 +34,8 @@ import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
 import com.hiltech.shared.core.service.handoverReadNativeWorkspace
 import com.hiltech.shared.core.service.serviceOperationsReadNativeWorkspace
 import com.hiltech.shared.core.finance.financeEvidenceReadNativeWorkspace
+import com.hiltech.shared.core.finance.financeBankCsvIntakeNativeWorkspace
+import com.hiltech.shared.core.finance.FinanceBankCsvSelectedFile
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
 import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
@@ -2824,6 +2826,66 @@ fun main() {
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
+                            ))
+                        }
+                        if (System.getenv("HILTECH_FINANCE_BANK_CSV_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(financeBankCsvIntakeNativeWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                api = runtime.financeBankIntakeApi,
+                                uploader = runtime.financeBankCsvUploader,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                deriveProposalId = { bankOperation ->
+                                    java.util.UUID.nameUUIDFromBytes(
+                                        "hiltech:bank-statement-intake:$bankOperation"
+                                            .toByteArray(Charsets.UTF_8),
+                                    ).toString()
+                                },
+                                pickCsvFile = {
+                                    kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                        val selected =
+                                            java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                        javax.swing.SwingUtilities.invokeAndWait {
+                                            val picker = javax.swing.JFileChooser()
+                                            picker.dialogTitle = "HILTECH · Private bank CSV"
+                                            picker.fileFilter =
+                                                javax.swing.filechooser.FileNameExtensionFilter(
+                                                    "Canonical UTF-8 bank CSV (2 MiB)", "csv",
+                                                )
+                                            picker.isAcceptAllFileFilterUsed = false
+                                            if (picker.showOpenDialog(null) ==
+                                                javax.swing.JFileChooser.APPROVE_OPTION
+                                            ) selected.set(picker.selectedFile)
+                                        }
+                                        selected.get()?.let { file ->
+                                            val path = file.toPath()
+                                            require(java.nio.file.Files.isRegularFile(
+                                                path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
+                                            )) { "Bank statement source must be a regular file." }
+                                            val size = java.nio.file.Files.size(path)
+                                            require(size in 1L..(2L * 1024L * 1024L)) {
+                                                "Bank statement must be 1 byte to 2 MiB."
+                                            }
+                                            val bytes = java.nio.file.Files.readAllBytes(path)
+                                            require(bytes.size.toLong() == size &&
+                                                file.name.endsWith(".csv", ignoreCase = true)
+                                            ) { "The canonical bank CSV source changed." }
+                                            val sha = java.security.MessageDigest
+                                                .getInstance("SHA-256").digest(bytes)
+                                                .joinToString("") { byte ->
+                                                    "%02x".format(byte.toInt() and 0xff)
+                                                }
+                                            FinanceBankCsvSelectedFile(
+                                                bytes = bytes, sha256 = sha,
+                                                originalFileName = file.name,
+                                                capturedAt = java.time.Instant.now().toString(),
+                                            )
+                                        }
+                                    }
+                                },
                             ))
                         }
                         if (System.getenv("HILTECH_FINANCE_EVIDENCE_READ_UI_ENABLED")
