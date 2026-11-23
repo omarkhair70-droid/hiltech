@@ -63,6 +63,11 @@ import com.hiltech.shared.core.procurement.PoWarehouseIntakeApiClient
 import com.hiltech.shared.core.procurement.PoReceivingDeliveryNoteUploader
 import com.hiltech.shared.core.procurement.PurchaseOrderDeliveryAmendmentApiClient
 import com.hiltech.shared.core.procurement.SupplierQuoteDocumentUploader
+import com.hiltech.shared.core.procurement.ServicePurchaseNeedApiClient
+import com.hiltech.shared.core.procurement.ServiceSupplierSourcingApiClient
+import com.hiltech.shared.core.procurement.ServiceSupplierQuoteUploader
+import com.hiltech.shared.core.procurement.ServiceOrderAndInvoiceApiClient
+import com.hiltech.shared.core.procurement.SupplierMasterDataApiClient
 import com.hiltech.shared.core.evidence.EvidenceApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
 import com.hiltech.shared.core.people.ChangeWorkforceAssignmentRequestDto
@@ -244,6 +249,14 @@ class DesktopIdentityRuntime(
     internal val officeStockNeedApi = OfficeStockNeedApiClient(productApi)
     internal val assetPurchaseNeedApi = AssetPurchaseNeedApiClient(productApi)
     internal val supplierSourcingApi = SupplierSourcingApiClient(productApi)
+    internal val servicePurchaseNeedApi = ServicePurchaseNeedApiClient(productApi)
+    internal val serviceSupplierSourcingApi = ServiceSupplierSourcingApiClient(productApi)
+    internal val supplierMasterDataApi = SupplierMasterDataApiClient(productApi)
+    internal val serviceOrderAndInvoiceApi =
+        ServiceOrderAndInvoiceApiClient(productApi, EvidenceApiClient(productApi, httpClient))
+    internal val serviceSupplierQuoteUploader = ServiceSupplierQuoteUploader(
+        serviceSupplierSourcingApi, EvidenceApiClient(productApi, httpClient),
+    )
     internal val purchaseOrderCandidateApi = PurchaseOrderCandidateApiClient(productApi)
     internal val purchaseOrderIssueApi = PurchaseOrderIssueApiClient(productApi)
     internal val supplierInvoiceFinanceApi = SupplierInvoiceFinanceApiClient(productApi)
