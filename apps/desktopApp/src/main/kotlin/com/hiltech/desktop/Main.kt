@@ -24,6 +24,7 @@ import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceSection
 import com.hiltech.shared.core.procurement.SupplierPoCommunicationSection
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeSection
 import com.hiltech.shared.core.executive.executiveNativeWorkspace
+import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
@@ -2732,11 +2733,11 @@ fun main() {
                 operationalWorkspaces = (shellState.value as? HiltechShellState.SignedIn)?.let { signed ->
                     val org = signed.identity.organizations.firstOrNull { it.primary }
                         ?: signed.identity.organizations.firstOrNull()
-                    if (System.getenv("HILTECH_EXECUTIVE_HOME_UI_ENABLED")
-                            ?.equals("true", ignoreCase = true) == true && org != null
-                    ) {
-                        listOf(
-                            executiveNativeWorkspace(
+                    if (org == null) emptyList() else buildList {
+                        if (System.getenv("HILTECH_EXECUTIVE_HOME_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(executiveNativeWorkspace(
                                 client = runtime.executiveApi,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
@@ -2745,9 +2746,19 @@ fun main() {
                                     signed.identity.identityVersion.toString() + ":" +
                                         org.membershipVersion.toString(),
                                 onOpenProject = ::selectProject,
-                            ),
-                        )
-                    } else emptyList()
+                            ))
+                        }
+                        if (System.getenv("HILTECH_OWN_PAYSLIPS_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(ownPayslipNativeWorkspace(
+                                client = runtime.payrollOwnApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                            ))
+                        }
+                    }
                 } ?: emptyList(),
                 onSignIn = { signIn(false) },
                 onSignOut = ::signOut,
