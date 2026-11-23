@@ -33,6 +33,7 @@ import com.hiltech.shared.core.payroll.payrollAdminReadNativeWorkspace
 import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
 import com.hiltech.shared.core.service.handoverReadNativeWorkspace
 import com.hiltech.shared.core.service.serviceOperationsReadNativeWorkspace
+import com.hiltech.shared.core.finance.financeEvidenceReadNativeWorkspace
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
 import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
@@ -2823,6 +2824,20 @@ fun main() {
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
+                            ))
+                        }
+                        if (System.getenv("HILTECH_FINANCE_EVIDENCE_READ_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true
+                        ) {
+                            add(financeEvidenceReadNativeWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                apis = runtime.financeEvidenceReadApis,
+                                reviewPreparationEnabled = System.getenv(
+                                    "HILTECH_FINANCE_REVIEW_PREPARE_UI_ENABLED"
+                                )?.equals("true", ignoreCase = true) == true,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
                             ))
                         }
                         if (System.getenv("HILTECH_FINANCE_INVOICE_READ_UI_ENABLED")
