@@ -26,13 +26,13 @@ class ExecutiveVisiblePulseTest {
 
     private fun snapshot(
         needs: ExecutiveSectionDto<ExecutiveDecisionDto> = ExecutiveSectionDto(
-            "CURRENT", emptyList(), "INBOX_WORK_QUEUE",
+            "CURRENT", emptyList(), "INBOX_WORK_QUEUE", partial = false,
         ),
         projects: ExecutiveSectionDto<ExecutiveProjectDto> = ExecutiveSectionDto(
             "PARTIAL", emptyList(), "PROJECTS_AND_PROJECT_HEALTH", partial = true,
         ),
         assets: ExecutiveSectionDto<ExecutiveAssetExceptionDto> = ExecutiveSectionDto(
-            "CURRENT", emptyList(), "ASSET_SERVICE_QUEUE",
+            "CURRENT", emptyList(), "ASSET_SERVICE_QUEUE", partial = false,
         ),
     ) = ExecutiveHomeDto(
         viewerIdentityId = "11111111-2222-4333-8444-555555555555",
@@ -70,7 +70,7 @@ class ExecutiveVisiblePulseTest {
     fun unknownHealthAndFailedSourceMustNeverLookHealthy() {
         val unknown = executiveVisiblePulse(snapshot(
             projects = ExecutiveSectionDto(
-                "CURRENT", listOf(project("UNKNOWN")), "PROJECTS_AND_PROJECT_HEALTH",
+                "CURRENT", listOf(project("UNKNOWN")), "PROJECTS_AND_PROJECT_HEALTH", partial = false,
             ),
         ))
         assertEquals(ExecutivePulseState.UNVERIFIED, unknown[1].state)
@@ -78,7 +78,7 @@ class ExecutiveVisiblePulseTest {
 
         val failed = executiveVisiblePulse(snapshot(
             projects = ExecutiveSectionDto(
-                "UNAVAILABLE", emptyList(), "PROJECTS_AND_PROJECT_HEALTH",
+                "UNAVAILABLE", emptyList(), "PROJECTS_AND_PROJECT_HEALTH", partial = false,
             ),
         ))
         assertEquals(ExecutivePulseState.SOURCE_UNAVAILABLE, failed[1].state)
