@@ -91,15 +91,15 @@ fun ServicePurchaseNeedSection(
             if(team.canRequest) {
                 OutlinedTextField(value=spec,onValueChange={
                     spec=it;pendingCreate=null
-                },label={Text("Service scope (what must be done)")},
+                },label={Text("نطاق الخدمة المطلوب تنفيذها")},
                     modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(value=acceptance,onValueChange={
                     acceptance=it;pendingCreate=null
-                },label={Text("Evidence and acceptance criteria")},
+                },label={Text("شروط القبول والمستندات المطلوبة")},
                     modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(value=why,onValueChange={
                     why=it;pendingCreate=null
-                },label={Text("Business justification")},
+                },label={Text("سبب طلب الخدمة")},
                     modifier=Modifier.fillMaxWidth())
                 OutlinedButton(
                     enabled=!loading && spec.trim().length in 20..2000 &&
@@ -170,20 +170,20 @@ private fun ServicePurchaseNeedCard(
 
     Card(modifier=Modifier.fillMaxWidth()) {
         Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
-            Text("Service · "+need.id.take(8)+" · "+need.state,
+            Text("طلب خدمة · "+need.id.take(8)+" · "+need.state,
                 style=MaterialTheme.typography.titleMedium)
-            Text(need.teamName+" · source version "+need.teamVersion,
+            Text(need.teamName+" · نسخة المصدر "+need.teamVersion,
                 style=MaterialTheme.typography.bodySmall)
             Text(need.specification)
-            Text("Acceptance: "+need.acceptanceCriteria,
+            Text("شروط القبول: "+need.acceptanceCriteria,
                 style=MaterialTheme.typography.bodySmall)
             Text(need.justification)
             if(!need.sourceCurrent) Text(
-                "Team or authority source changed; new decisions are blocked.",
+                "تغير مصدر الفريق أو الصلاحيات؛ الإجراءات متوقفة حتى التحديث.",
                 color=MaterialTheme.colorScheme.error,
             )
-            need.lastReviewReason?.let { Text("Reviewer: "+it) }
-            Text("Supplier not contacted · No service order or invoice",
+            need.lastReviewReason?.let { Text("ملاحظات المراجع: "+it) }
+            Text("لم يُتواصل مع المورد · لا يوجد أمر خدمة أو فاتورة",
                 style=MaterialTheme.typography.bodySmall)
 
             fun act(type: String, call: suspend (String) -> ServicePurchaseNeedDto) {
@@ -209,18 +209,18 @@ private fun ServicePurchaseNeedCard(
                     api.submit(need.id,ServicePurchaseNeedActionDto(
                         op,need.version),installationId).need
                 }
-            }) {Text("Submit for independent technical review")}
+            }) {Text("إرسال للمراجعة الفنية المستقلة")}
 
             if(need.canRevise) {
                 OutlinedTextField(value=scopeText,onValueChange={
                     scopeText=it;operation=null
-                },label={Text("Revised service scope")},modifier=Modifier.fillMaxWidth())
+                },label={Text("نطاق الخدمة بعد التعديل")},modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(value=criteria,onValueChange={
                     criteria=it;operation=null
-                },label={Text("Revised acceptance evidence")},modifier=Modifier.fillMaxWidth())
+                },label={Text("شروط القبول بعد التعديل")},modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(value=reason,onValueChange={
                     reason=it;operation=null
-                },label={Text("Revised business reason")},modifier=Modifier.fillMaxWidth())
+                },label={Text("سبب الطلب بعد التعديل")},modifier=Modifier.fillMaxWidth())
                 OutlinedButton(enabled=!busy && scopeText.trim().length in 20..2000 &&
                     criteria.trim().length in 20..2000 && reason.trim().length in 12..500,
                     onClick={
@@ -229,36 +229,36 @@ private fun ServicePurchaseNeedCard(
                             op,need.version,scopeText.trim(),criteria.trim(),reason.trim(),
                         ),installationId).need
                     }
-                }) { Text("Save immutable revision") }
+                }) { Text("حفظ نسخة تعديل موثقة") }
             }
             if(need.canWithdraw) OutlinedButton(enabled=!busy,onClick={
                 act("withdraw"){ op ->
                     api.withdraw(need.id,ServicePurchaseNeedActionDto(
                         op,need.version),installationId).need
                 }
-            }) {Text("Withdraw service request")}
+            }) {Text("سحب طلب الخدمة")}
             if(need.canTechnicalReview) {
                 OutlinedTextField(value=reviewReason,onValueChange={
                     reviewReason=it;operation=null
-                },label={Text("Reason for clarification or rejection")})
+                },label={Text("سبب طلب الاستيضاح أو الرفض")})
                 OutlinedButton(enabled=!busy && need.sourceCurrent,onClick={
                     act("ready"){ op ->
                         api.review(need.id,ServicePurchaseNeedReviewDto(
                             op,need.version,"READY_FOR_SOURCING"),installationId).need
                     }
-                }) {Text("Technical need ready — not purchasing approval")}
+                }) {Text("جاهز فنيًا — لا يعني موافقة شراء")}
                 OutlinedButton(enabled=!busy && reviewReason.trim().length in 3..500,onClick={
                     act("needs-info"){ op ->
                         api.review(need.id,ServicePurchaseNeedReviewDto(
                             op,need.version,"NEEDS_INFO",reviewReason.trim()),installationId).need
                     }
-                }) {Text("Request clarification")}
+                }) {Text("طلب استيضاح")}
                 OutlinedButton(enabled=!busy && reviewReason.trim().length in 3..500,onClick={
                     act("reject"){ op ->
                         api.review(need.id,ServicePurchaseNeedReviewDto(
                             op,need.version,"REJECTED",reviewReason.trim()),installationId).need
                     }
-                }) {Text("Reject technical need")}
+                }) {Text("رفض طلب الخدمة فنيًا")}
             }
             error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
         }
