@@ -287,6 +287,7 @@ fun HiltechShell(
         val fieldWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val peopleWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val warehouseWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
+        val warehouseSetupRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val procurementWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val projectWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val shellNavigationScope = rememberCoroutineScope()
@@ -383,7 +384,9 @@ fun HiltechShell(
                             }
                             if (state.warehouse != null || warehouseOperatorVisible) {
                                 OutlinedButton(onClick = {
-                                    shellNavigationScope.launch { warehouseWorkspaceRequester.bringIntoView() }
+                                    val target = if (warehouseOperatorVisible)
+                                        warehouseWorkspaceRequester else warehouseSetupRequester
+                                    shellNavigationScope.launch { target.bringIntoView() }
                                 }) { Text("المخزن") }
                             }
                             if (procurementOperatorVisible) {
@@ -603,6 +606,10 @@ fun HiltechShell(
                     }
 
                     state.warehouse?.let { warehouse ->
+                        Spacer(
+                            Modifier.fillMaxWidth().height(1.dp)
+                                .bringIntoViewRequester(warehouseSetupRequester),
+                        )
                         WarehouseSetupSection(
                             state = warehouse,
                             onRefresh = onRefreshWarehouse,
