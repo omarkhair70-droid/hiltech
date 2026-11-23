@@ -52,11 +52,11 @@ jobs:
       - name: Pinned Gradle setup
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
       - name: Run complete shared native regression suite
-        run: ./gradlew :shared:core:desktopTest --no-daemon --console=plain
+        run: ./gradlew :shared:core:desktopTest --no-configuration-cache --no-daemon --console=plain
       - name: Focus source/revocation tests plus Windows/Android build
         run: |
           ./gradlew :shared:core:desktopTest \
             --tests 'com.hiltech.shared.core.FieldSourcePresentationTest' \
             :apps:desktopApp:compileKotlin \
             :apps:androidApp:assembleDebug \
-            --no-daemon --console=plain
+            --no-configuration-cache --no-daemon --console=plain
