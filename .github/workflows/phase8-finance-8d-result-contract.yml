@@ -1,0 +1,35 @@
+name: Phase 8 8D immutable result contract
+
+on:
+  push:
+    branches:
+      - "phase8/finance-8d-result-safety-contract-20261123"
+  pull_request:
+    branches:
+      - "phase8/finance-8c-payment-preflight-20261123"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finance8d-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  finance-outcome-contract:
+    name: Unknown-safe payment result reducer contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+      - name: Verify UNKNOWN, proof, no retry and source invariants
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.finance.FinanceBankResultRulesTest \
+            --tests com.hiltech.server.finance.FinancePaymentPreflightServiceTest \
+            --tests com.hiltech.server.finance.FinanceEmployeeReviewServiceTest \
+            --no-daemon --console=plain

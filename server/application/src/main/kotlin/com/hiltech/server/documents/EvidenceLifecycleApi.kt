@@ -132,6 +132,7 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
     private val poDeliveryNoteTargetProvider: ObjectProvider<PoReceivingDeliveryNoteEvidenceTargetPort>? = null,
     private val serviceQuoteDocumentTargetProvider: ObjectProvider<ServiceQuoteDocumentEvidenceTargetPort>? = null,
     private val servicePurchaseDocumentTargetProvider: ObjectProvider<ServicePurchaseDocumentEvidenceTargetPort>? = null,
+    private val financeExpenseReceiptTargetProvider: ObjectProvider<FinanceExpenseReceiptEvidenceTargetPort>? = null,
 ) {
     fun reserve(
         actorIdentityId: UUID,
@@ -174,6 +175,9 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
         }
         if (command.targetType == "PO_RECEIVING_DELIVERY_NOTE") {
             return reservePoReceivingDeliveryNote(actorIdentityId, correlationId, command)
+        }
+        if (command.targetType == "FINANCE_EXPENSE_RECEIPT") {
+            return reserveFinanceExpenseReceipt(actorIdentityId, correlationId, command)
         }
 
         if (command.targetType != "WORK_ORDER") {
@@ -1018,6 +1022,130 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
             ),
             correlationId = correlationId,
             replayed = execution.replayed,
+        )
+    }
+
+    private fun reserveFinanceExpenseReceipt(
+        actorIdentityId: UUID,
+        correlationId: String,
+        command: ReserveCommand,
+    ): ReserveEvidenceUploadResponse {
+        val port = financeExpenseReceiptTargetProvider?.ifAvailable
+            ?: throw ProductApiException(
+                "EVIDENCE_TARGET_UNSUPPORTED", "Expense Evidence target is unavailable.",
+                HttpStatus.NOT_FOUND,
+            )
+        if (command.workOrderId != null || command.supersedesEvidenceId != null ||
+            command.requirementKey != "FINANCE_EXPENSE_RECEIPT_BINARY" ||
+            command.assertedEvidenceTypeCode != "FINANCE_EXPENSE_RECEIPT"
+        ) throw ProductApiException(
+            "EVIDENCE_FINANCE_EXPENSE_CONTRACT_MISMATCH",
+            "Expense receipts require the exact Finance Evidence contract.",
+            HttpStatus.UNPROCESSABLE_ENTITY,
+        )
+        val scanClass = employeeDocumentScanClass(command.contentType)
+            ?: throw ProductApiException(
+                "EVIDENCE_CONTENT_TYPE_NOT_ALLOWED", "Receipt must be PDF, PNG or JPEG.",
+                HttpStatus.UNPROCESSABLE_ENTITY,
+            )
+        if (command.sizeBytes !in 1..EvidenceUploadSpec.MAX_EVIDENCE_OBJECT_BYTES)
+            throw ProductApiException(
+                "EVIDENCE_SIZE_NOT_ALLOWED", "Receipt exceeds Evidence storage limit.",
+                HttpStatus.UNPROCESSABLE_ENTITY,
+            )
+        val target = port.loadTarget(command.targetId)
+            ?: throw ProductApiException(
+                "OBJECT_NOT_VISIBLE", "Expense draft unavailable.", HttpStatus.NOT_FOUND,
+            )
+        if (!port.canReserve(actorIdentityId, target))
+            throw ProductApiException(
+                "OBJECT_NOT_VISIBLE", "Expense draft unavailable.", HttpStatus.NOT_FOUND,
+            )
+        val storage = requireStorage()
+        val now = clock.instant()
+        val evidenceId = UUID.randomUUID()
+        val spec = EvidenceUploadSpec(
+            evidenceId = evidenceId, organizationId = target.organizationId,
+            objectVersionId = UUID.randomUUID(), contentType = command.contentType,
+            expectedSizeBytes = command.sizeBytes, expectedSha256Hex = command.sha256,
+        )
+        val expires = now.plusSeconds(storageProperties.uploadExpirySeconds)
+        val result = idempotency.execute(
+            spec = IdempotentCommandSpec(
+                operationId = command.operationId, actorUserId = actorIdentityId,
+                commandType = "ReserveEvidenceUpload",
+                targetType = "FinanceExpenseReceipt",
+                targetId = target.expenseDraftId,
+                requestFingerprint = command.fingerprint(), correlationId = correlationId,
+            ),
+        ) {
+            val current = port.loadTarget(command.targetId)
+            if (current != target || !port.canReserve(actorIdentityId, target))
+                throw ProductApiException(
+                    "OBJECT_NOT_VISIBLE", "Expense draft unavailable.", HttpStatus.NOT_FOUND,
+                )
+            persistence.insertFinanceExpenseReceiptReservation(
+                FinanceExpenseReceiptEvidenceReservationInsert(
+                    evidenceId = evidenceId, uploadSessionId = UUID.randomUUID(),
+                    operationId = command.operationId, objectKey = spec.objectKey,
+                    organizationId = current.organizationId,
+                    expenseDraftId = current.expenseDraftId,
+                    contentType = command.contentType,
+                    originalFileName = command.originalFileName,
+                    sizeBytes = command.sizeBytes, sha256 = command.sha256,
+                    capturedAt = command.capturedAt,
+                    clientOccurredAt = command.clientOccurredAt,
+                    capturedByUserId = actorIdentityId,
+                    securityScanClass = scanClass, uploadExpiresAt = expires,
+                    createdAt = now,
+                ),
+            )
+            audit.append(
+                AuditEventRecord(
+                    actorUserId = actorIdentityId, action = "EVIDENCE_UPLOAD_RESERVED",
+                    targetType = "Evidence", targetId = evidenceId,
+                    newStateRef = "evidence:RESERVED", occurredAt = now,
+                    correlationId = correlationId,
+                    reason = "FINANCE_EXPENSE_RECEIPT_RESERVE_NOT_APPROVAL",
+                    configRevisionRefsJson = """{"targetType":"FINANCE_EXPENSE_RECEIPT"}""",
+                ),
+            )
+            IdempotentCommandOutcome(resultCode = "EVIDENCE_RESERVED")
+        }
+        val reservation = persistence.findReservationByOperationId(command.operationId)
+            ?: throw ProductApiException(
+                "EVIDENCE_RESERVATION_UNAVAILABLE", "Receipt reservation unavailable.",
+                HttpStatus.SERVICE_UNAVAILABLE, retryable = true,
+            )
+        if (reservation.targetType != "FINANCE_EXPENSE_RECEIPT" ||
+            reservation.targetId != target.expenseDraftId ||
+            reservation.organizationId != target.organizationId ||
+            reservation.capturedByUserId != actorIdentityId)
+            throw ProductApiException(
+                "OBJECT_NOT_VISIBLE", "Receipt unavailable.", HttpStatus.NOT_FOUND,
+            )
+        if (!clock.instant().isBefore(reservation.uploadExpiresAt))
+            throw ProductApiException(
+                "EVIDENCE_UPLOAD_SESSION_EXPIRED", "Receipt upload session expired.",
+                HttpStatus.CONFLICT,
+            )
+        val signed = runCatching {
+            storage.createUploadTarget(reservation.toStorageSpec())
+        }.getOrElse {
+            throw ProductApiException(
+                "EVIDENCE_STORAGE_UNAVAILABLE", "Receipt storage unavailable.",
+                HttpStatus.SERVICE_UNAVAILABLE, retryable = true,
+            )
+        }
+        val expiry = if (signed.expiresAt.isBefore(reservation.uploadExpiresAt))
+            signed.expiresAt else reservation.uploadExpiresAt
+        return ReserveEvidenceUploadResponse(
+            evidence = reservation.toMetadata(),
+            upload = EvidenceUploadTargetResponse(
+                uploadUrl = signed.uploadUrl, requiredHeaders = signed.requiredHeaders,
+                expiresAt = expiry.toString(), expectedSizeBytes = reservation.sizeBytes,
+            ),
+            correlationId = correlationId, replayed = result.replayed,
         )
     }
 
@@ -2045,6 +2173,20 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
                 val target = financeTarget.loadTarget(record.targetId) ?: return false
                 target.purchasingOrganizationId == record.organizationId &&
                     financeTarget.canAccess(actorIdentityId, target)
+            }
+
+            "FINANCE_EXPENSE_RECEIPT" -> {
+                val port = financeExpenseReceiptTargetProvider?.ifAvailable ?: return false
+                val target = port.loadTarget(record.targetId) ?: return false
+                target.organizationId == record.organizationId &&
+                    target.createdByUserId == record.capturedByUserId &&
+                    when (operation) {
+                        EvidenceTargetOperation.FINALIZE ->
+                            port.canReserve(actorIdentityId, target)
+                        EvidenceTargetOperation.VIEW,
+                        EvidenceTargetOperation.DOWNLOAD ->
+                            port.canAccess(actorIdentityId, target)
+                    }
             }
 
             "PO_RECEIVING_DELIVERY_NOTE" -> {

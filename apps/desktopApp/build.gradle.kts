@@ -12,6 +12,7 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.ktor.client.core)
+    testImplementation(kotlin("test"))
 }
 
 val testRuntimeClasspath = sourceSets["test"].runtimeClasspath
