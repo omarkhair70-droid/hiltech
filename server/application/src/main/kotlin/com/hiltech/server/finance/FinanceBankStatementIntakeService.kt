@@ -312,13 +312,19 @@ class FinanceBankStatementIntakeService(
                     date_start,date_end,opening_balance,closing_balance,
                     expected_line_count,imported_by_user_id,imported_at,
                     correlation_id
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                )
+                SELECT ?,?,p.organization_id,p.id,p.account_id,
+                       ?,p.statement_sha256,p.statement_lines_sha256,
+                       p.statement_evidence_id,a.currency,
+                       p.date_start,p.date_end,p.opening_balance,p.closing_balance,
+                       p.expected_line_count,?,?,?
+                FROM finance_bank_statement_intake_proposal p
+                JOIN finance_bank_account_register a
+                  ON a.id=p.account_id AND a.organization_id=p.organization_id
+                WHERE p.id=? AND p.organization_id=? AND a.state='APPROVED'
                 """.trimIndent(),
-                id,operation,org,proposal,snap.accountId,
-                approved.approvalRequestId,snap.statementHash,snap.lineHash,
-                snap.statementEvidenceId,snap.currency,snap.periodStart,
-                snap.periodEnd,snap.opening,snap.closing,snap.expectedCount,
-                actor,at,correlation,
+                id,operation,approved.approvalRequestId,
+                actor,at,correlation,proposal,org,
             )==1)
             snap.lines.forEach {line ->
                 check(jdbc.update(
