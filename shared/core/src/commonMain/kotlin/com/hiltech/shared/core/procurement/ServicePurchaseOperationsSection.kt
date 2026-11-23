@@ -70,6 +70,7 @@ private fun ServiceBuyerAndIssuerPane(
     var currentRfq by remember(org,install) {mutableStateOf<String?>(null)}
     var selected by remember(org,install) {mutableStateOf<ServiceOrderCandidateDto?>(null)}
     var queue by remember(org,install) {mutableStateOf<List<ServiceOrderCandidateDto>>(emptyList())}
+    var pendingIssueId by remember(org,install) {mutableStateOf<String?>(null)}
     var confirmation by remember(org,install) {mutableStateOf<String?>(null)}
 
     Card(modifier=Modifier.fillMaxWidth()) {
@@ -78,7 +79,7 @@ private fun ServiceBuyerAndIssuerPane(
             OutlinedButton(enabled=!busy,onClick={
                 busy=true;error=null;confirmation=null
                 // Permission/source reload revokes previous buyer actions immediately.
-                needs=emptyList();quotes=emptyList();currentRfq=null;selected=null;queue=emptyList()
+                needs=emptyList();quotes=emptyList();currentRfq=null;selected=null;queue=emptyList();pendingIssueId=null
                 scope.launch {
                     try {needs=sourcing.eligibleNeeds(org,install)}
                     catch(e:Exception){error=e.message?:"Buyer authorization is unavailable."}
@@ -141,7 +142,7 @@ private fun ServiceBuyerAndIssuerPane(
                 Text("حالة الاعتماد: "+(candidate.approvalState?:"لم يُطلب بعد"))
             }
             OutlinedButton(enabled=!busy,onClick={
-                busy=true;error=null;queue=emptyList()
+                busy=true;error=null;queue=emptyList();pendingIssueId=null
                 scope.launch {
                     try {queue=api.queue(org,install)}
                     catch(e:Exception){error=e.message?:"Service order issue permission unavailable."}
@@ -153,23 +154,37 @@ private fun ServiceBuyerAndIssuerPane(
                     Text("Supplier "+candidate.supplierOrganizationId.take(8)+
                         " · "+candidate.currency+" "+candidate.totalAmount+
                         " · "+(candidate.approvalState?:"PENDING"))
-                    OutlinedButton(
-                        enabled=!busy&&candidate.sourceCurrent&&candidate.approvalState=="APPROVED",
-                        onClick={
+                    val mayIssue=!busy&&candidate.sourceCurrent&&candidate.approvalState=="APPROVED"
+                    if(pendingIssueId!=candidate.id) {
+                        OutlinedButton(enabled=mayIssue,onClick={
+                            pendingIssueId=candidate.id
+                            error=null;confirmation=null
+                        }) { Text("مراجعة إصدار أمر الخدمة") }
+                    } else {
+                        Text("تأكيد إصدار أمر داخلي للمورد "+
+                            candidate.supplierOrganizationId.take(8)+" بقيمة "+
+                            candidate.currency+" "+candidate.totalAmount+
+                            "؟ لن يُرسل شيء للمورد تلقائيًا.",
+                            style=MaterialTheme.typography.bodySmall)
+                        OutlinedButton(enabled=mayIssue,onClick={
+                            pendingIssueId=null
                             busy=true;error=null
                             scope.launch {
                                 try {
                                     val issued=api.issue(candidate.id,
                                         IssueServiceOrderDto(operation(),1),install)
                                     queue=queue.filterNot{it.id==candidate.id}
-                                    confirmation="Internal service order issued: "+
+                                    confirmation="تم إصدار أمر خدمة داخلي: "+
                                         issued.orderId.take(8)+
-                                        ". Supplier was NOT contacted automatically."
+                                        ". لم يتم إرسال أي شيء للمورد تلقائيًا."
                                 } catch(e:Exception){error=e.message?:"Order cannot be issued."}
                                 finally{busy=false}
                             }
+                        }) {Text("تأكيد إصدار أمر الخدمة الداخلي")}
+                        OutlinedButton(enabled=!busy,onClick={pendingIssueId=null}) {
+                            Text("إلغاء الإصدار")
                         }
-                    ) {Text("إصدار أمر خدمة داخلي معتمد")}
+                    }
                 }
             }
             confirmation?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
