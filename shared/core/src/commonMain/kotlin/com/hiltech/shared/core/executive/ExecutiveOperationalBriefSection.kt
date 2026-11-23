@@ -30,7 +30,11 @@ fun ExecutiveOperationalBriefSection(
     canOpenDestination: (ExecutiveDestination) -> Boolean = { true },
 ) {
     val brief = remember(home) { buildExecutiveOperationalBrief(home) }
+    val coverage = remember(home) { executiveReadCoverage(home) }
     var expanded by remember(home.viewerIdentityId, home.organizationId, home.correlationId, home.asOf) {
+        mutableStateOf(false)
+    }
+    var showCoverage by remember(home.viewerIdentityId, home.organizationId, home.correlationId, home.asOf) {
         mutableStateOf(false)
     }
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
@@ -128,6 +132,54 @@ fun ExecutiveOperationalBriefSection(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                }
+                HorizontalDivider()
+                OutlinedButton(onClick = { showCoverage = !showCoverage }) {
+                    Text(if (showCoverage) "إخفاء حدود البيانات" else "ما الذي لا نعرفه عن البيانات؟")
+                }
+                if (showCoverage) {
+                    Text(
+                        "مراجعة تغطية المصدر؛ عدد العناصر الظاهر ليس إجمالي المؤسسة، ووقت التجميع ليس دليلًا على حداثة كل سجل.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    coverage.forEach { line ->
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(line.label, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                when (line.state) {
+                                    ExecutiveCoverageState.VISIBLE_WINDOW -> "نافذة المصدر متاحة"
+                                    ExecutiveCoverageState.INCOMPLETE -> "القراءة جزئية أو غير مؤكدة"
+                                    ExecutiveCoverageState.UNAVAILABLE -> "المصدر غير متاح أو غير مطابق"
+                                    ExecutiveCoverageState.AWAITING_SOURCE_CONTRACT -> "بانتظار اعتماد مصدر القراءة"
+                                },
+                                color = if (line.state == ExecutiveCoverageState.UNAVAILABLE)
+                                    MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            Text(line.statement, style = MaterialTheme.typography.bodySmall)
+                            line.visibleCount?.let { count ->
+                                Text(
+                                    "عناصر النافذة الظاهرة: " + count,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                            line.sourceAsOf?.let { at ->
+                                Text(
+                                    "وقت لقطة المصدر: " + at,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                            line.caveats.forEach { note ->
+                                Text(
+                                    "• " + note,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     }
                 }
                 Text(
