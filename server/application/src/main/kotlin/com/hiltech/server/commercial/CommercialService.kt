@@ -257,9 +257,9 @@ class CommercialService(
                 r.tenderType,nullable(r.referenceNumber,120),received,deadline,clarification,
                 nullable(r.sourceChannel,160),r.submissionState,actor,now(),
             )
-            audit(actor,"COMMERCIAL_TENDER_REVISION_CREATED",target,"RECEIVED",correlation)
+            audit(actor,"COMMERCIAL_TENDER_REVISION_CREATED",target,r.submissionState,correlation)
         }
-        return result(target,replay,"RECEIVED",correlation)
+        return result(target,replay,r.submissionState,correlation)
     }
 
     fun addVisit(id: UUID,r: CommercialVisitRequest,key: UUID,actor: UUID,correlation: String): CommercialCommandResult {
@@ -735,19 +735,32 @@ class CommercialService(
                    FROM commercial_opportunity WHERE id=? FOR UPDATE""",id,
             );open(locked)
             val c=row(
-                """SELECT c.id,c.quote_version_id,c.state,q.state AS quote_state
+                """SELECT c.id,c.quote_version_id,c.state,q.state AS quote_state,
+                          q.total_price AS quote_total,q.currency AS quote_currency
                    FROM commercial_contract c JOIN commercial_quote_version q ON q.id=c.quote_version_id
                    WHERE c.id=? AND c.organization_id=? AND c.opportunity_id=?""",
                 contractId,locked["organization_id"]!!,id,
             )
             val po=row(
-                """SELECT id,contract_id,verified FROM commercial_client_po
+                """SELECT id,contract_id,verified,amount,currency FROM commercial_client_po
                    WHERE id=? AND opportunity_id=? AND organization_id=?""",
                 poId,id,locked["organization_id"]!!,
             )
             if(c["state"]!="SIGNED"||c["quote_state"]!="RELEASED"||
                po["verified"]!=true||po["contract_id"]!=contractId)
                 throw commercialError("COMMERCIAL_AWARD_INVALID","Signed contract and verified client PO required.",HttpStatus.CONFLICT)
+            // A partial/different-currency customer PO is still recorded as historical
+            // evidence, but it cannot silently convert an entire quoted scope into a
+            // won Project. Change-order/partial-award policy is deliberately not guessed.
+            val poAmount = po["amount"] as BigDecimal
+            val approvedAmount = c["quote_total"] as BigDecimal
+            if (poAmount.compareTo(approvedAmount) != 0 ||
+                (po["currency"] as String).trim() != (c["quote_currency"] as String).trim())
+                throw commercialError(
+                    "COMMERCIAL_PO_QUOTE_MISMATCH",
+                    "Client purchase order must match the exact approved quote amount and currency for a full Project award.",
+                    HttpStatus.CONFLICT,
+                )
             // The default gate is FAIL CLOSED until actual restricted READY evidence is linked.
             if(!awardEvidence.verifiedAward(contractId,poId,locked["organization_id"] as UUID))
                 throw commercialError("COMMERCIAL_EVIDENCE_MISSING","Verified signed evidence required.",HttpStatus.CONFLICT)
