@@ -1,0 +1,78 @@
+name: Phase 8U AP AR real bank source allocation posting
+on:
+  push:
+    branches:
+      - "phase8/finance-8u-ap-ar-cash-recording-20261123"
+      - "integration/hiltech-rc-finance8u-preflight-20261123"
+  pull_request:
+    branches:
+      - "phase8/finance-8t-employee-settlement-20261123"
+permissions:
+  contents: read
+concurrency:
+  group: finance8u-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  cash-ledger:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_DB: hiltech
+          POSTGRES_USER: hiltech
+          POSTGRES_PASSWORD: hiltech
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hiltech -d hiltech"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+      - name: Prove zero-fabrication bank allocation PostgreSQL contract
+        env:
+          HILTECH_DB_CONTRACT_TEST: "1"
+          HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
+          HILTECH_DB_USER: hiltech
+          HILTECH_DB_PASSWORD: hiltech
+          HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+          HILTECH_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.finance.FinanceCashAllocationPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceEmployeeFundingPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceEmployeeFundingOriginTest \
+            --tests com.hiltech.server.finance.FinanceEmployeeSettlementReviewVersionTest \
+            --tests com.hiltech.server.finance.FinanceEmployeeSettlementPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceEmployeeSettlementReviewVersionTest \
+            --tests com.hiltech.server.finance.FinanceEmployeeSettlementRulesTest \
+            --tests com.hiltech.server.finance.FinanceBankStatementIntakePostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceBankStatementApprovedPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceExpenseReimbursementPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceExpenseReimbursementVersionTest \
+            --tests com.hiltech.server.finance.FinanceBankCsvParserTest \
+            --tests com.hiltech.server.finance.FinanceProjectSourceReportPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceApArBalancePostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceBankStatementReviewVersionTest \
+            --tests com.hiltech.server.finance.FinanceCashAllocationRulesTest \
+            --tests com.hiltech.server.finance.FinanceBankIntakeRulesTest \
+            --no-daemon --stacktrace
+      - name: Verify authenticated native cash transport
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests com.hiltech.shared.core.finance.FinanceCashAllocationApiClientTest \
+            --tests com.hiltech.shared.core.finance.FinanceBankStatementIntakeApiClientTest \
+            --tests com.hiltech.shared.core.finance.FinanceEmployeeMoneyApiClientTest \
+            --tests com.hiltech.shared.core.finance.FinanceExpenseReimbursementApiClientTest \
+            --no-daemon --console=plain
+      - name: Prove native application integration
+        run: |
+          ./gradlew :apps:desktopApp:compileKotlin :apps:androidApp:assembleDebug \
+            --no-daemon --console=plain

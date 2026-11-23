@@ -2,7 +2,7 @@ name: Integration — Phase 7 + Finance 8A–8I + native UX + Payroll9 + Sales10
 
 on:
   push:
-    branches: [integration/hiltech-release-candidate-20261123]
+    branches: [integration/hiltech-release-candidate-20261123, integration/hiltech-rc-finance8u-preflight-20261123]
 
 permissions:
   contents: read
