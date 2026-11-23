@@ -114,6 +114,15 @@ BEGIN
     RAISE EXCEPTION 'Employee self-service policy approval is insufficient'
        USING ERRCODE='23514';
  END IF;
+ IF p.source_fingerprint_sha256<>encode(sha256(convert_to(
+     concat_ws('|','HILTECH_EMPLOYEE_FUNDING_ORIGIN_V1',
+       p.organization_id::text,p.draft_kind,p.employee_draft_id::text,
+       p.employee_id::text,source_amount::text,source_currency,
+       policy_review.id::text,policy_review.subject_version::text
+     ),'UTF8')),'hex') THEN
+   RAISE EXCEPTION 'Approved original employee draft fingerprint mismatch'
+     USING ERRCODE='23514';
+ END IF;
  SELECT * INTO funding_review FROM approval_request
     WHERE id=NEW.approval_request_id AND organization_id=NEW.organization_id;
  IF funding_review.id IS NULL OR funding_review.state<>'APPROVED'
