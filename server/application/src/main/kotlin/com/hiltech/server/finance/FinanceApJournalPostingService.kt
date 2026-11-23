@@ -14,6 +14,7 @@ import com.hiltech.server.platform.IdempotentCommandExecutor
 import com.hiltech.server.platform.IdempotentCommandOutcome
 import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
+import com.hiltech.server.procurement.PurchaseOrderIssuePersistence
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.core.env.Environment
 import org.springframework.http.HttpStatus
@@ -77,6 +78,7 @@ data class FinanceApPostingReceipt(
 @Service
 class FinanceApJournalPostingService(
     private val jdbc: JdbcTemplate,
+    private val purchases: PurchaseOrderIssuePersistence,
     private val accountantReview: FinanceSupplierAccountingApprovalSubject,
     private val postingSubject: FinanceApJournalPostingApprovalSubject,
     private val approvals: ApprovalPersistencePort,
@@ -186,7 +188,10 @@ class FinanceApJournalPostingService(
                 "FINANCE_AP_JOURNAL_PROPOSAL",id,fingerprint,correlation,
             ),
         ) {
-            // Recheck canonical supplier source inside exact SQL transaction.
+            // Same canonical P7 purchase-order lock as invoice intake and
+            // receiving/matching; holding it through this transaction prevents
+            // racing warehouse changes between currentness and accounting.
+            lockInvoicePurchaseOrder(org, candidate)
             val again = accountantReview.current(org, candidate) ?: stale()
             if (again != source) stale()
             val at = clock.instant().atOffset(ZoneOffset.UTC)
@@ -322,8 +327,10 @@ class FinanceApJournalPostingService(
             operation,actor,"FINANCE_AP_JOURNAL_POSTED",
             "FINANCE_AP_POSTED_JOURNAL",journalId,fingerprint,correlation,
         )) {
-            // Lock exact proposal and the company period in this transaction,
-            // then recheck current P7 match + independent approval.
+            // Acquire the canonical P7 PO lock BEFORE the proposal row lock.
+            // Holding this across source revalidation and journal INSERT
+            // makes warehousing/receiving vs posting serializable.
+            lockInvoicePurchaseOrder(org,snapshot.candidateId)
             val locked=jdbc.query(
                 """
                 SELECT id FROM finance_ap_posting_proposal
@@ -409,6 +416,18 @@ class FinanceApJournalPostingService(
             else review?.state?.name ?: "SEALED_AWAITING_POSTING_REVIEW",
             reviewId=review?.approvalRequestId,journalId=posted,
         )
+    }
+
+    private fun lockInvoicePurchaseOrder(org: UUID, candidate: UUID) {
+        val po=jdbc.query(
+            """
+            SELECT purchase_order_id FROM finance_payable_candidate
+            WHERE organization_id=? AND id=?
+            """.trimIndent(),
+            { rs,_ -> rs.getObject("purchase_order_id",UUID::class.java) },
+            org,candidate,
+        ).singleOrNull() ?: stale()
+        if(!purchases.lockOrder(po,org)) stale()
     }
 
     private fun readPosted(
