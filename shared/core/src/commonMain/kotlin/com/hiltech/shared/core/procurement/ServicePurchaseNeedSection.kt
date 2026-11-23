@@ -28,44 +28,56 @@ fun ServicePurchaseNeedSection(
     newOperationId: () -> String,
 ) {
     val scope = rememberCoroutineScope()
-    var loading by remember(organizationId) { mutableStateOf(false) }
-    var error by remember(organizationId) { mutableStateOf<String?>(null) }
-    var teams by remember(organizationId) { mutableStateOf<List<ServicePurchaseTeamDto>>(emptyList()) }
-    var selected by remember(organizationId) { mutableStateOf<ServicePurchaseTeamDto?>(null) }
-    var showTeams by remember(organizationId) { mutableStateOf(false) }
-    var needs by remember(organizationId) { mutableStateOf<List<ServicePurchaseNeedDto>>(emptyList()) }
-    var spec by remember(organizationId) { mutableStateOf("") }
-    var acceptance by remember(organizationId) { mutableStateOf("") }
-    var why by remember(organizationId) { mutableStateOf("") }
-    var pendingCreate by remember(organizationId) { mutableStateOf<String?>(null) }
+    var loading by remember(organizationId, installationId) { mutableStateOf(false) }
+    var error by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
+    var teams by remember(organizationId, installationId) { mutableStateOf<List<ServicePurchaseTeamDto>>(emptyList()) }
+    var selected by remember(organizationId, installationId) { mutableStateOf<ServicePurchaseTeamDto?>(null) }
+    var showTeams by remember(organizationId, installationId) { mutableStateOf(false) }
+    var needs by remember(organizationId, installationId) { mutableStateOf<List<ServicePurchaseNeedDto>>(emptyList()) }
+    var teamsLoaded by remember(organizationId, installationId) { mutableStateOf(false) }
+    var needsLoaded by remember(organizationId, installationId) { mutableStateOf(false) }
+    var confirmation by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
+    var spec by remember(organizationId, installationId) { mutableStateOf("") }
+    var acceptance by remember(organizationId, installationId) { mutableStateOf("") }
+    var why by remember(organizationId, installationId) { mutableStateOf("") }
+    var pendingCreate by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("External service requests",style = MaterialTheme.typography.titleLarge)
-        Text("Non-stock services are reviewed independently. A technically ready request is not a supplier order, completed service or finance approval.",
+        Text("طلبات الخدمات الخارجية / Service requests",style = MaterialTheme.typography.titleLarge)
+        Text("الخدمات خارج المخزون تمر بمراجعة فنية مستقلة؛ جاهزية الطلب لا تعني إصدار أمر للمورد أو إثبات تنفيذ أو اعتماد مالي.",
             style = MaterialTheme.typography.bodySmall)
         OutlinedButton(enabled = !loading,onClick = {
-            loading=true
-            error=null
+            loading=true;error=null;confirmation=null
+            // Revocation/failed refresh must not retain old team actions.
+            teams=emptyList();selected=null;showTeams=false;needs=emptyList()
+            teamsLoaded=false;needsLoaded=false
+            spec="";acceptance="";why="";pendingCreate=null
             scope.launch {
-                try { teams=api.teams(organizationId,installationId) }
-                catch(e:Exception) { error=e.message ?: "Team permission unavailable." }
+                try {
+                    teams=api.teams(organizationId,installationId)
+                    teamsLoaded=true
+                } catch(e:Exception) { error=e.message ?: "Team permission unavailable." }
                 finally { loading=false }
             }
-        }) { Text("Load authorized teams") }
+        }) { Text("تحميل الفرق المتاحة لي") }
+        if(teamsLoaded && teams.isEmpty()) Text("لا توجد فرق مخوّل لك العمل عليها حاليًا.")
         OutlinedButton(enabled = !loading && teams.isNotEmpty(),onClick = {showTeams=true}) {
-            Text(selected?.name ?: "Select my current company team")
+            Text(selected?.name ?: "اختار الفريق الحالي")
         }
         DropdownMenu(expanded=showTeams,onDismissRequest={showTeams=false}) {
             teams.forEach { team ->
                 DropdownMenuItem(text={ Text(team.name) },onClick={
-                    showTeams=false
-                    selected=team
-                    needs=emptyList()
-                    pendingCreate=null
+                    showTeams=false;error=null;confirmation=null
+                    if(selected?.id!=team.id) {
+                        spec="";acceptance="";why="";pendingCreate=null
+                    }
+                    selected=team;needs=emptyList();needsLoaded=false
                     loading=true
                     scope.launch {
-                        try { needs=api.list(team.id,installationId) }
-                        catch(e:Exception) { error=e.message ?: "Unable to read service requests." }
+                        try {
+                            needs=api.list(team.id,installationId)
+                            needsLoaded=true
+                        } catch(e:Exception) { error=e.message ?: "Unable to read service requests." }
                         finally { loading=false }
                     }
                 })
@@ -73,21 +85,21 @@ fun ServicePurchaseNeedSection(
         }
         val team=selected
         if(team!=null) {
-            Text(if(team.canRequest) "Can request an external service" else
-                "Authorized independent reviewer",
+            Text(if(team.canRequest) "مسموح لي بإنشاء طلب خدمة" else
+                "مراجعة فنية مستقلة وفق صلاحيات الفريق",
                 style=MaterialTheme.typography.bodySmall)
             if(team.canRequest) {
                 OutlinedTextField(value=spec,onValueChange={
                     spec=it;pendingCreate=null
-                },label={Text("Service scope (what must be done)")},
+                },label={Text("نطاق الخدمة المطلوب تنفيذها")},
                     modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(value=acceptance,onValueChange={
                     acceptance=it;pendingCreate=null
-                },label={Text("Evidence and acceptance criteria")},
+                },label={Text("شروط القبول والمستندات المطلوبة")},
                     modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(value=why,onValueChange={
                     why=it;pendingCreate=null
-                },label={Text("Business justification")},
+                },label={Text("سبب طلب الخدمة")},
                     modifier=Modifier.fillMaxWidth())
                 OutlinedButton(
                     enabled=!loading && spec.trim().length in 20..2000 &&
@@ -102,28 +114,40 @@ fun ServicePurchaseNeedSection(
                                 ),installationId)
                                 pendingCreate=null
                                 spec="";acceptance="";why=""
-                                needs=api.list(team.id,installationId)
+                                confirmation="تم حفظ مسودة طلب الخدمة؛ لم تُرسل للمورد."
+                                needs=emptyList();needsLoaded=false
+                                try {
+                                    needs=api.list(team.id,installationId)
+                                    needsLoaded=true
+                                } catch(e:Exception) {
+                                    error="تم حفظ المسودة، لكن تعذر تحديث القائمة؛ أعد تحميل الطلبات."
+                                }
                             } catch(e:Exception) {
                                 error=e.message ?: "Could not save service need; verify current team."
                             } finally { loading=false }
                         }
                     }
-                ) { Text(if(loading) "Saving…" else "Create service request draft") }
+                ) { Text(if(loading) "جارٍ الحفظ…" else "حفظ مسودة طلب خدمة") }
             }
             OutlinedButton(enabled=!loading,onClick={
                 loading=true;error=null
+                needs=emptyList();needsLoaded=false
                 scope.launch {
-                    try { needs=api.list(team.id,installationId) }
-                    catch(e:Exception) { error=e.message ?: "Unable to refresh service requests." }
+                    try {
+                        needs=api.list(team.id,installationId)
+                        needsLoaded=true
+                    } catch(e:Exception) { error=e.message ?: "Unable to refresh service requests." }
                     finally { loading=false }
                 }
-            }) { Text("Refresh service requests") }
+            }) { Text("تحديث طلبات الفريق") }
+            if(needsLoaded && needs.isEmpty()) Text("لا توجد طلبات خدمة حالية لهذا الفريق.")
             needs.forEach { need ->
                 ServicePurchaseNeedCard(need,api,installationId,newOperationId) { changed ->
                     needs=needs.map { if(it.id==changed.id) changed else it }
                 }
             }
         }
+        confirmation?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
     }
 }
@@ -146,20 +170,20 @@ private fun ServicePurchaseNeedCard(
 
     Card(modifier=Modifier.fillMaxWidth()) {
         Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
-            Text("Service · "+need.id.take(8)+" · "+need.state,
+            Text("طلب خدمة · "+need.id.take(8)+" · "+need.state,
                 style=MaterialTheme.typography.titleMedium)
-            Text(need.teamName+" · source version "+need.teamVersion,
+            Text(need.teamName+" · نسخة المصدر "+need.teamVersion,
                 style=MaterialTheme.typography.bodySmall)
             Text(need.specification)
-            Text("Acceptance: "+need.acceptanceCriteria,
+            Text("شروط القبول: "+need.acceptanceCriteria,
                 style=MaterialTheme.typography.bodySmall)
             Text(need.justification)
             if(!need.sourceCurrent) Text(
-                "Team or authority source changed; new decisions are blocked.",
+                "تغير مصدر الفريق أو الصلاحيات؛ الإجراءات متوقفة حتى التحديث.",
                 color=MaterialTheme.colorScheme.error,
             )
-            need.lastReviewReason?.let { Text("Reviewer: "+it) }
-            Text("Supplier not contacted · No service order or invoice",
+            need.lastReviewReason?.let { Text("ملاحظات المراجع: "+it) }
+            Text("لم يُتواصل مع المورد · لا يوجد أمر خدمة أو فاتورة",
                 style=MaterialTheme.typography.bodySmall)
 
             fun act(type: String, call: suspend (String) -> ServicePurchaseNeedDto) {
@@ -180,24 +204,24 @@ private fun ServicePurchaseNeedCard(
                     } finally {busy=false}
                 }
             }
-            if(need.canSubmit) OutlinedButton(enabled=!busy,onClick={
+            if(need.canSubmit) OutlinedButton(enabled=serviceNeedActionEnabled(need.sourceCurrent,need.canSubmit,busy),onClick={
                 act("submit"){ op ->
                     api.submit(need.id,ServicePurchaseNeedActionDto(
                         op,need.version),installationId).need
                 }
-            }) {Text("Submit for independent technical review")}
+            }) {Text("إرسال للمراجعة الفنية المستقلة")}
 
             if(need.canRevise) {
                 OutlinedTextField(value=scopeText,onValueChange={
                     scopeText=it;operation=null
-                },label={Text("Revised service scope")},modifier=Modifier.fillMaxWidth())
+                },label={Text("نطاق الخدمة بعد التعديل")},modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(value=criteria,onValueChange={
                     criteria=it;operation=null
-                },label={Text("Revised acceptance evidence")},modifier=Modifier.fillMaxWidth())
+                },label={Text("شروط القبول بعد التعديل")},modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(value=reason,onValueChange={
                     reason=it;operation=null
-                },label={Text("Revised business reason")},modifier=Modifier.fillMaxWidth())
-                OutlinedButton(enabled=!busy && scopeText.trim().length in 20..2000 &&
+                },label={Text("سبب الطلب بعد التعديل")},modifier=Modifier.fillMaxWidth())
+                OutlinedButton(enabled=serviceNeedActionEnabled(need.sourceCurrent,need.canRevise,busy) && scopeText.trim().length in 20..2000 &&
                     criteria.trim().length in 20..2000 && reason.trim().length in 12..500,
                     onClick={
                     act("revise"){ op ->
@@ -205,36 +229,36 @@ private fun ServicePurchaseNeedCard(
                             op,need.version,scopeText.trim(),criteria.trim(),reason.trim(),
                         ),installationId).need
                     }
-                }) { Text("Save immutable revision") }
+                }) { Text("حفظ نسخة تعديل موثقة") }
             }
-            if(need.canWithdraw) OutlinedButton(enabled=!busy,onClick={
+            if(need.canWithdraw) OutlinedButton(enabled=serviceNeedActionEnabled(need.sourceCurrent,need.canWithdraw,busy),onClick={
                 act("withdraw"){ op ->
                     api.withdraw(need.id,ServicePurchaseNeedActionDto(
                         op,need.version),installationId).need
                 }
-            }) {Text("Withdraw service request")}
+            }) {Text("سحب طلب الخدمة")}
             if(need.canTechnicalReview) {
                 OutlinedTextField(value=reviewReason,onValueChange={
                     reviewReason=it;operation=null
-                },label={Text("Reason for clarification or rejection")})
-                OutlinedButton(enabled=!busy && need.sourceCurrent,onClick={
+                },label={Text("سبب طلب الاستيضاح أو الرفض")})
+                OutlinedButton(enabled=serviceNeedActionEnabled(need.sourceCurrent,need.canTechnicalReview,busy),onClick={
                     act("ready"){ op ->
                         api.review(need.id,ServicePurchaseNeedReviewDto(
                             op,need.version,"READY_FOR_SOURCING"),installationId).need
                     }
-                }) {Text("Technical need ready — not purchasing approval")}
-                OutlinedButton(enabled=!busy && reviewReason.trim().length in 3..500,onClick={
+                }) {Text("جاهز فنيًا — لا يعني موافقة شراء")}
+                OutlinedButton(enabled=serviceNeedActionEnabled(need.sourceCurrent,need.canTechnicalReview,busy) && reviewReason.trim().length in 3..500,onClick={
                     act("needs-info"){ op ->
                         api.review(need.id,ServicePurchaseNeedReviewDto(
                             op,need.version,"NEEDS_INFO",reviewReason.trim()),installationId).need
                     }
-                }) {Text("Request clarification")}
-                OutlinedButton(enabled=!busy && reviewReason.trim().length in 3..500,onClick={
+                }) {Text("طلب استيضاح")}
+                OutlinedButton(enabled=serviceNeedActionEnabled(need.sourceCurrent,need.canTechnicalReview,busy) && reviewReason.trim().length in 3..500,onClick={
                     act("reject"){ op ->
                         api.review(need.id,ServicePurchaseNeedReviewDto(
                             op,need.version,"REJECTED",reviewReason.trim()),installationId).need
                     }
-                }) {Text("Reject technical need")}
+                }) {Text("رفض طلب الخدمة فنيًا")}
             }
             error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
         }

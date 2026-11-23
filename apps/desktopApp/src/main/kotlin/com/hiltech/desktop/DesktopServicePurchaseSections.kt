@@ -1,9 +1,7 @@
 package com.hiltech.desktop
 
 import androidx.compose.runtime.Composable
-import com.hiltech.shared.core.procurement.ServicePurchaseNeedSection
-import com.hiltech.shared.core.procurement.ServiceSupplierQuoteCaptureSection
-import com.hiltech.shared.core.procurement.ServicePurchaseOperationsSection
+import com.hiltech.shared.core.procurement.ServicePurchaseNativeJourney
 import com.hiltech.shared.core.procurement.ServiceSelectedFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -58,23 +56,16 @@ fun DesktopServicePurchaseSections(runtime: DesktopIdentityRuntime, organization
         ServiceSelectedFile(mime, file.name.take(200), bytes, digest, Instant.now().toString())
     }
 
-    ServicePurchaseNeedSection(
-        api = runtime.servicePurchaseNeedApi,
-        organizationId = organizationId, installationId = install, newOperationId = op,
-    )
-    ServiceSupplierQuoteCaptureSection(
+    ServicePurchaseNativeJourney(
+        needApi = runtime.servicePurchaseNeedApi,
         sourcing = runtime.serviceSupplierSourcingApi,
         supplierRegistry = runtime.supplierMasterDataApi,
-        uploader = runtime.serviceSupplierQuoteUploader,
-        organizationId = organizationId, installationId = install,
+        quoteUploader = runtime.serviceSupplierQuoteUploader,
+        api = runtime.serviceOrderAndInvoiceApi,
+        organizationId = organizationId,
+        installationId = install,
         newOperationId = op,
         pickQuoteFile = { selectActualFile() },
-    )
-    ServicePurchaseOperationsSection(
-        sourcing = runtime.serviceSupplierSourcingApi,
-        api = runtime.serviceOrderAndInvoiceApi,
-        organizationId = organizationId, installationId = install,
-        newOperationId = op,
         uploadFile = { kind, slot ->
             require(kind == slot.documentKind) { "Wrong order document kind." }
             val file = selectActualFile()
