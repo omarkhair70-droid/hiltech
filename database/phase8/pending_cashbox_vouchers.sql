@@ -37,6 +37,7 @@ CREATE TABLE finance_cashbox_register (
  opening_approval_request_id uuid NOT NULL
    REFERENCES approval_request(id) ON DELETE RESTRICT,
  opening_proposal_id uuid NOT NULL,
+ activation_operation_id uuid NOT NULL UNIQUE,
  created_by_user_id uuid NOT NULL REFERENCES user_identity(id) ON DELETE RESTRICT,
  created_at timestamptz NOT NULL,
  UNIQUE(organization_id,id),UNIQUE(organization_id,cashbox_code),
