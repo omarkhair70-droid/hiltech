@@ -41,7 +41,9 @@ class FinanceApLedgerSchemaPostgresContractTest {
             connection.autoCommit = false
             val jdbc = JdbcTemplate(SingleConnectionDataSource(connection, true))
             try {
-                connection.createStatement().use { it.execute(ddl) }
+                // Flyway has already installed this schema at V0081 on the unified RC.
+                // Verify exact pending SQL bytes but do not execute the DDL twice.
+                connection.createStatement().use { it.execute(FinancePendingSql.read(Path.of(schema))) }
                 for (table in listOf(
                     "finance_gl_account", "finance_gl_period",
                     "finance_ap_posting_proposal", "finance_ap_posting_proposal_line",
