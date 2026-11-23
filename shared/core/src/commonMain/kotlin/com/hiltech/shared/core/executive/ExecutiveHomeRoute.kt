@@ -26,6 +26,9 @@ fun ExecutiveHomeRoute(
     currentIdentityId: String,
     currentOrganizationId: String,
     installationId: String,
+    // The authenticated shell can bump this after a membership/role/session
+    // authority update even when identity and company IDs do not change.
+    authorityRevisionKey: String = "",
     onOpenSource: (ExecutiveDestination) -> Unit,
 ) {
     var refreshVersion by remember(
@@ -33,6 +36,7 @@ fun ExecutiveHomeRoute(
         currentIdentityId,
         currentOrganizationId,
         installationId,
+        authorityRevisionKey,
     ) { mutableIntStateOf(0) }
 
     var result by remember(
@@ -40,6 +44,7 @@ fun ExecutiveHomeRoute(
         currentIdentityId,
         currentOrganizationId,
         installationId,
+        authorityRevisionKey,
     ) { mutableStateOf<ExecutiveHomeDto?>(null) }
 
     var loading by remember(
@@ -47,6 +52,7 @@ fun ExecutiveHomeRoute(
         currentIdentityId,
         currentOrganizationId,
         installationId,
+        authorityRevisionKey,
     ) { mutableStateOf(true) }
 
     var loadError by remember(
@@ -54,6 +60,7 @@ fun ExecutiveHomeRoute(
         currentIdentityId,
         currentOrganizationId,
         installationId,
+        authorityRevisionKey,
     ) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(
@@ -61,6 +68,7 @@ fun ExecutiveHomeRoute(
         currentIdentityId,
         currentOrganizationId,
         installationId,
+        authorityRevisionKey,
         refreshVersion,
     ) {
         loading = true
