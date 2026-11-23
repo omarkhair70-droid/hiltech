@@ -19,6 +19,7 @@ import com.hiltech.android.field.FieldEngineeringTestOnlineIdentity
 import com.hiltech.android.field.FieldEvidenceOnlineIdentity
 import com.hiltech.shared.core.local.buildHiltechLocalDatabase
 import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
+import com.hiltech.shared.core.payroll.Payroll9aApiClient
 import com.hiltech.shared.core.payroll.Payroll9b9cApiClient
 import com.hiltech.shared.core.service.HandoverApiClient
 import com.hiltech.shared.core.projects.ProjectsApiClient
@@ -118,6 +119,7 @@ class HiltechApplication : Application() {
     val supplierInvoiceFinanceApi by lazy { SupplierInvoiceFinanceApiClient(productApi) }
     val executiveApi by lazy { ExecutiveApiClient(productApi) }
     val payrollOwnApi by lazy { Payroll9b9cApiClient(productApi) }
+    val payrollAdminApi by lazy { Payroll9aApiClient(productApi) }
     val commercialApi by lazy { CommercialApiClient(productApi) }
     val readProjectsApi by lazy { ProjectsApiClient(productApi) }
     val handoverApi by lazy { HandoverApiClient(productApi) }
