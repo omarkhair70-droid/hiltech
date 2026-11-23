@@ -1,5 +1,7 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -86,6 +90,9 @@ fun AssignedWorkSection(
     showAssignedAssetLookup: Boolean = false,
     onSubmitEngineeringTest: (String, FieldEngineeringTestDraft) -> Unit = { _, _ -> },
     showEngineeringTests: Boolean = false,
+    // Nonblank only for an authenticated identity + organization host scope.
+    // Offline unverified identity keeps the original read-only presentation.
+    focusScopeKey: String = "",
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -99,6 +106,18 @@ fun AssignedWorkSection(
                 bundleWorkOrderId = bundle.workOrderId,
                 todayWorkOrderIds = state.today.map { it.workOrderId },
             )
+        }
+        val todayIds = state.today.map { it.workOrderId }
+        var focusedWorkOrderId by remember(focusScopeKey) { mutableStateOf<String?>(null) }
+        var returnAnchorId by remember(focusScopeKey) { mutableStateOf<String?>(null) }
+        // The shared host owns scrolling. No nested scroll state is created.
+        LaunchedEffect(focusScopeKey, focusedWorkOrderId, todayIds) {
+            if (focusedWorkOrderId != null &&
+                !fieldFocusStillAssigned(focusedWorkOrderId, todayIds)
+            ) {
+                focusedWorkOrderId = null
+                returnAnchorId = null
+            }
         }
         BoxWithConstraints(
             modifier = Modifier.fillMaxWidth(),
@@ -159,20 +178,73 @@ fun AssignedWorkSection(
                         }
                 }
             } else {
+                val compactFocus = focusScopeKey.isNotBlank()
+                val focusedId = focusedWorkOrderId?.takeIf {
+                    fieldFocusStillAssigned(it, todayIds)
+                }
+                val focusHeaderRequester = remember(focusScopeKey) { BringIntoViewRequester() }
+                val returnCardRequester = remember(focusScopeKey) { BringIntoViewRequester() }
+                LaunchedEffect(focusScopeKey, focusedId) {
+                    if (compactFocus && focusedId != null) {
+                        withFrameNanos { }
+                        focusHeaderRequester.bringIntoView()
+                    }
+                }
+                LaunchedEffect(focusScopeKey, returnAnchorId, todayIds) {
+                    val anchor = returnAnchorId ?: return@LaunchedEffect
+                    if (anchor in todayIds) {
+                        // Allow the Today cards to replace the detail before
+                        // returning to the same WorkOrder even after reorder.
+                        withFrameNanos { }
+                        returnCardRequester.bringIntoView()
+                    }
+                    returnAnchorId = null
+                }
                 Column(
-                    modifier =
-                        Modifier.fillMaxWidth(),
-                    verticalArrangement =
-                        Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    TodayColumn(
-                        state = state,
-                        onRefresh = onRefresh,
-                        onSelectWork = onSelectWork,
-                        modifier =
-                            Modifier.fillMaxWidth(),
-                    )
-                    visibleBundle
+                    if (!compactFocus || focusedId == null) {
+                        TodayColumn(
+                            state = state,
+                            onRefresh = onRefresh,
+                            onSelectWork = { id ->
+                                if (compactFocus && fieldFocusStillAssigned(id, todayIds)) {
+                                    focusedWorkOrderId = id
+                                    returnAnchorId = null
+                                }
+                                onSelectWork(id)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            returnAnchorId = returnAnchorId,
+                            returnCardRequester = returnCardRequester,
+                        )
+                    } else {
+                        OutlinedButton(
+                            modifier = Modifier.bringIntoViewRequester(focusHeaderRequester),
+                            onClick = {
+                                returnAnchorId = focusedId
+                                focusedWorkOrderId = null
+                            },
+                        ) { Text("الرجوع لشغلي اليوم") }
+                        if (visibleBundle?.workOrderId != focusedId) {
+                            if (state.loading) {
+                                Text("بنجيب تفاصيل التكليف الحالي…")
+                            } else {
+                                HiltechStateTag(
+                                    state.errorMessage
+                                        ?: "التفاصيل الحالية غير متاحة. ارجع للتكليفات وحدّثها.",
+                                    HiltechStateTone.ATTENTION,
+                                )
+                            }
+                        }
+                    }
+                    val detailBundle = if (compactFocus) {
+                        visibleBundle?.takeIf { it.workOrderId == focusedId }
+                    } else {
+                        visibleBundle
+                    }
+                    detailBundle
                         ?.let {
                             JobBundleDetail(
                                 bundle = it,
@@ -219,6 +291,8 @@ private fun TodayColumn(
     onRefresh: () -> Unit,
     onSelectWork: (String) -> Unit,
     modifier: Modifier,
+    returnAnchorId: String? = null,
+    returnCardRequester: BringIntoViewRequester? = null,
 ) {
     HiltechOperationalTheme {
         Column(
@@ -275,6 +349,9 @@ private fun TodayColumn(
             state.today.forEach { item ->
                 TodayCard(
                     item = item,
+                    modifier = if (returnAnchorId == item.workOrderId &&
+                        returnCardRequester != null
+                    ) Modifier.bringIntoViewRequester(returnCardRequester) else Modifier,
                     selected = state.selectedWorkOrderId == item.workOrderId,
                     onClick = { onSelectWork(item.workOrderId) },
                 )
@@ -288,9 +365,10 @@ private fun TodayCard(
     item: FieldTodayItemDto,
     selected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     OutlinedButton(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         onClick = onClick,
     ) {
         Column(
