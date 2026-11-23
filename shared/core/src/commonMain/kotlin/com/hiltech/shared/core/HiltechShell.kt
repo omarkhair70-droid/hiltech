@@ -496,6 +496,11 @@ fun HiltechShell(
                             showAssignedAssetLookup = showAssignedAssetLookup,
                             onSubmitEngineeringTest = onSubmitEngineeringTest,
                             showEngineeringTests = showEngineeringTests,
+                            // Only verified sign-in gets focused compact navigation.
+                            // The offline read-only branch uses the baseline.
+                            focusScopeKey = primary?.organizationId?.let { organizationId ->
+                                "${state.identity.identityId}:$organizationId"
+                            }.orEmpty(),
                         )
                     }
 
