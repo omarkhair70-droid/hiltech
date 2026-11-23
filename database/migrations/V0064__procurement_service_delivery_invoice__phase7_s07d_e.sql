@@ -29,20 +29,35 @@ CREATE UNIQUE INDEX uq_service_purchase_document_evidence_slot
 
 CREATE FUNCTION guard_service_purchase_document_evidence() RETURNS trigger
 LANGUAGE plpgsql AS $$
-DECLARE slot procurement_service_document_slot%ROWTYPE;
+DECLARE
+  slot procurement_service_document_slot%ROWTYPE;
+  required_evidence_key varchar(64);
+  required_evidence_type varchar(64);
 BEGIN
   SELECT * INTO slot FROM procurement_service_document_slot WHERE id=NEW.target_id;
-  IF slot.id IS NULL OR slot.organization_id<>NEW.organization_id
-    OR NEW.target_type<>'SERVICE_PURCHASE_DOCUMENT'
-    OR NEW.evidence_requirement_key<>
-      CASE WHEN slot.document_kind='DELIVERY' THEN 'SERVICE_DELIVERY_BINARY'
-           ELSE 'SERVICE_INVOICE_BINARY' END
-    OR NEW.evidence_type_code<>
-      CASE WHEN slot.document_kind='DELIVERY' THEN 'SERVICE_DELIVERY'
-           ELSE 'SERVICE_INVOICE' END
-    OR NEW.classification_code<>'HIGHLY_RESTRICTED'
-    OR NEW.client_visibility_mode<>'INTERNAL_ONLY'
+  IF slot.id IS NULL THEN
+    RAISE EXCEPTION 'Unknown service purchase document slot' USING ERRCODE='23514';
+  END IF;
+  -- Do not place CASE WHEN ... THEN inside a PL/pgSQL IF condition: its
+  -- internal THEN can terminate PL/pgSQL expression parsing prematurely.
+  -- Resolve document-specific metadata before evaluating the security guard.
+  IF slot.document_kind='DELIVERY' THEN
+    required_evidence_key:='SERVICE_DELIVERY_BINARY';
+    required_evidence_type:='SERVICE_DELIVERY';
+  ELSIF slot.document_kind='INVOICE' THEN
+    required_evidence_key:='SERVICE_INVOICE_BINARY';
+    required_evidence_type:='SERVICE_INVOICE';
+  ELSE
+    RAISE EXCEPTION 'Unsupported service purchase document kind' USING ERRCODE='23514';
+  END IF;
+  IF slot.organization_id IS DISTINCT FROM NEW.organization_id
+    OR NEW.target_type IS DISTINCT FROM 'SERVICE_PURCHASE_DOCUMENT'
+    OR NEW.evidence_requirement_key IS DISTINCT FROM required_evidence_key
+    OR NEW.evidence_type_code IS DISTINCT FROM required_evidence_type
+    OR NEW.classification_code IS DISTINCT FROM 'HIGHLY_RESTRICTED'
+    OR NEW.client_visibility_mode IS DISTINCT FROM 'INTERNAL_ONLY'
     OR NEW.work_order_id IS NOT NULL
+    OR NEW.content_type IS NULL
     OR NEW.content_type NOT IN ('application/pdf','image/jpeg','image/png','image/webp')
   THEN
     RAISE EXCEPTION 'Service attachment must be scoped to a private delivery/invoice slot'
