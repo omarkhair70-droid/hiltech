@@ -28,6 +28,21 @@ BEGIN
   (id,organization_id,client_organization_id,owner_user_id,source,opportunity_code,
    title,state,created_by,created_at,updated_at)
  VALUES(opportunity,company_a,client_a,actor,'RFQ','PHASE10_TEST_OPP','Synthetic commercial test','OPEN',actor,now(),now());
+ -- Direct INSERT must not fabricate an already-awarded opportunity.
+ BEGIN
+  INSERT INTO commercial_opportunity
+    (id,organization_id,client_organization_id,owner_user_id,source,
+     opportunity_code,title,state,created_by,created_at,updated_at)
+  VALUES(gen_random_uuid(),company_a,client_a,actor,'RFP',
+         'PHASE10_FAKE_AWARDED','Fraudulent direct award','AWARDED',actor,now(),now());
+  RAISE EXCEPTION 'EXPECTED_DIRECT_AWARDED_INSERT_BLOCK_MISSING';
+ EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS error_message = MESSAGE_TEXT;
+  IF error_message NOT LIKE '%Commercial opportunity must begin as OPEN%' THEN
+   RAISE EXCEPTION 'Direct AWARDED insert was accepted: %',error_message;
+  END IF;
+ END;
+
  -- A synthetic operator cannot mark a deal AWARDED without real handoff.
  BEGIN
   UPDATE commercial_opportunity SET state='AWARDED',version=version+1,updated_at=now()
