@@ -115,6 +115,24 @@ data class PoReceivingDeliveryNoteEvidenceReservationInsert(
     val createdAt: Instant,
 )
 
+data class FinanceBankStatementEvidenceReservationInsert(
+    val evidenceId: UUID,
+    val uploadSessionId: UUID,
+    val operationId: UUID,
+    val objectKey: String,
+    val organizationId: UUID,
+    val bankProposalId: UUID,
+    val contentType: String,
+    val originalFileName: String?,
+    val sizeBytes: Long,
+    val sha256: String,
+    val capturedAt: Instant,
+    val clientOccurredAt: Instant?,
+    val capturedByUserId: UUID,
+    val uploadExpiresAt: Instant,
+    val createdAt: Instant,
+)
+
 data class FinanceExpenseReceiptEvidenceReservationInsert(
     val evidenceId: UUID,
     val uploadSessionId: UUID,
@@ -256,6 +274,12 @@ interface EvidencePersistencePort {
         value: PoReceivingDeliveryNoteEvidenceReservationInsert,
     ) {
         throw UnsupportedOperationException("PO delivery note Evidence repository is not configured.")
+    }
+
+    fun insertFinanceBankStatementReservation(
+        value: FinanceBankStatementEvidenceReservationInsert,
+    ) {
+        throw UnsupportedOperationException("Finance bank Evidence target not configured.")
     }
 
     fun insertFinanceExpenseReceiptReservation(
