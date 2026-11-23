@@ -213,11 +213,11 @@ class FinanceGlPeriodCloseService(
         if (!source.enabled()) unavailable()
         return jdbc.query(
             """
-            SELECT id,approval_request_id,source_version_stub,
+            SELECT id,approval_request_id,subject_version,
                    journal_count,snapshot_sha256
             FROM finance_gl_period_close
             WHERE organization_id=? AND period_id=?
-            """.trimIndent().replace("source_version_stub","subject_version"),
+            """.trimIndent(),
             { rs,_ ->
                 FinancePeriodCloseReceipt(
                     organizationId=org,periodId=period,
