@@ -122,6 +122,52 @@ class Payroll9b9cDomainTest {
     }
 
     @Test
+    fun sourceFingerprintRejectsAmbiguousApprovalReferenceDelimiters() {
+        val earning = component(PayrollComponentKind.EARNING, "100")
+        // These two policies would serialize to an IDENTICAL canonical
+        // fingerprint before delimiter validation ("A|B|C").
+        assertThrows<ProductApiException> {
+            calculate(org, employee, policy.copy(
+                companyAuthorizationReference = "A|B",
+                statutoryPolicyReference = "C",
+            ), listOf(earning))
+        }
+        assertThrows<ProductApiException> {
+            calculate(org, employee, policy.copy(
+                companyAuthorizationReference = "A",
+                statutoryPolicyReference = "B|C",
+            ), listOf(earning))
+        }
+        assertThrows<ProductApiException> {
+            calculate(org, employee, policy.copy(
+                deductionLimitPolicyReference = "source|manipulated",
+            ), listOf(earning))
+        }
+        assertThrows<ProductApiException> {
+            calculate(org, employee, policy, listOf(earning.copy(
+                sourceApprovalReference = "approved\\nFAKE|SOURCE",
+            )))
+        }
+        assertThrows<ProductApiException> {
+            Payroll9bCalculator.calculate(
+                org, periodId, employee, policy, listOf(earning),
+                verifiedCoverage.map {
+                    if (it.domain == PayrollInputCoverageDomain.FINANCE)
+                        it.copy(sourceApprovalReference = "fake|bank-proof")
+                    else it
+                },
+            )
+        }
+        val first = calculate(org, employee, policy, listOf(earning))
+        val amended = calculate(
+            org, employee,
+            policy.copy(companyAuthorizationReference = "synthetic-new-approval"),
+            listOf(earning),
+        )
+        assertNotEquals(first.sourceFingerprint, amended.sourceFingerprint)
+    }
+
+    @Test
     fun preventScientificOverflowRoundedToZeroAndUnapprovedPrecision() {
         val normal = component(PayrollComponentKind.EARNING, "100")
         assertThrows<ProductApiException> {

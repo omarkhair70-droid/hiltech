@@ -114,6 +114,13 @@ data class PayrollEmployeeCalculation(
 
 /** Fail closed on any untrusted or incomplete component/policy. */
 object Payroll9bCalculator {
+    // References are canonical fingerprint fields separated by newlines and
+    // pipes. Reject embedded delimiters rather than allowing two different
+    // approval/policy records to serialize to the same source fingerprint.
+    private fun safeReference(value: String?): Boolean =
+        value != null && value.isNotBlank() && value.length <= 240 &&
+            value.none { it == '|' || it == '\n' || it == '\r' }
+
     fun calculate(
         organizationId: UUID,
         payrollPeriodId: UUID,
@@ -135,8 +142,7 @@ object Payroll9bCalculator {
                 separation.offboardingCaseVersion < 1 ||
                 separation.approvedFinalPayScopeVersion < 1 ||
                 separation.approval != PayrollInputApproval.APPROVED ||
-                separation.approvedFinalPayScopeRef.isBlank() ||
-                separation.approvedFinalPayScopeRef.length > 240
+                !safeReference(separation.approvedFinalPayScopeRef)
             ) {
                 Payroll9aPolicy.fail("PAYROLL_FINAL_ELIGIBILITY_NOT_VERIFIED", HttpStatus.CONFLICT)
             }
@@ -155,8 +161,7 @@ object Payroll9bCalculator {
                 receipt.employeeId != employeeId ||
                 receipt.sourceVersion < 1 || !receipt.complete ||
                 receipt.approval != PayrollInputApproval.APPROVED ||
-                receipt.sourceApprovalReference.isBlank() ||
-                receipt.sourceApprovalReference.length > 240
+                !safeReference(receipt.sourceApprovalReference)
             ) {
                 Payroll9aPolicy.fail("PAYROLL_SOURCE_COVERAGE_NOT_VERIFIED", HttpStatus.CONFLICT)
             }
@@ -164,8 +169,10 @@ object Payroll9bCalculator {
         if (policy.organizationId != organizationId || policy.policyVersion < 1 ||
             !Regex("^[A-Z]{3}$").matches(policy.currency) ||
             policy.fractionalDigits !in 0..6 ||
-            policy.companyAuthorizationReference.isBlank() ||
-            policy.statutoryPolicyReference.isBlank() ||
+            !safeReference(policy.companyAuthorizationReference) ||
+            !safeReference(policy.statutoryPolicyReference) ||
+            (policy.deductionLimitPolicyReference != null &&
+                !safeReference(policy.deductionLimitPolicyReference)) ||
             !policy.statutoryVerified
         ) {
             Payroll9aPolicy.fail("PAYROLL_POLICY_NOT_VERIFIED", HttpStatus.CONFLICT)
@@ -179,10 +186,9 @@ object Payroll9bCalculator {
                 Payroll9aPolicy.fail("PAYROLL_INPUT_SCOPE_MISMATCH", HttpStatus.FORBIDDEN)
             }
             if (input.approval != PayrollInputApproval.APPROVED ||
-                input.sourceApprovalReference.isBlank() || input.sourceVersion < 1 ||
+                !safeReference(input.sourceApprovalReference) || input.sourceVersion < 1 ||
                 !Regex("^[A-Z][A-Z0-9_-]{0,79}$").matches(input.sourceDomain) ||
                 !Regex("^[A-Z][A-Z0-9_-]{0,79}$").matches(input.componentCode) ||
-                input.sourceApprovalReference.length > 240 ||
                 input.currency != policy.currency
             ) {
                 Payroll9aPolicy.fail("PAYROLL_APPROVED_INPUT_REQUIRED", HttpStatus.CONFLICT)
@@ -194,7 +200,7 @@ object Payroll9bCalculator {
             if (input.kind == PayrollComponentKind.DEDUCTION &&
                 (!policy.deductionLimitsVerified ||
                     policy.deductionLimitPolicyReference.isNullOrBlank() ||
-                    input.approvedDeductionPlanReference.isNullOrBlank())
+                    !safeReference(input.approvedDeductionPlanReference))
             ) {
                 Payroll9aPolicy.fail("PAYROLL_DEDUCTION_POLICY_REQUIRED", HttpStatus.CONFLICT)
             }
