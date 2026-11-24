@@ -1,8 +1,5 @@
 package com.hiltech.server.documents
 
-import com.hiltech.server.finance.FinanceBankCsvParser
-import com.hiltech.server.finance.FinanceBankIntakeEvidenceBinding
-import com.hiltech.server.finance.FinanceBankStatementEvidenceTargetPort
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.documents.storage.EvidenceFinalizeVerification
@@ -30,7 +27,6 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.time.Clock
 import java.time.Instant
-import java.util.Base64
 import java.util.UUID
 
 data class ReserveEvidenceUploadRequest(
@@ -1065,7 +1061,7 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
             command.requirementKey != "FINANCE_BANK_STATEMENT_INTAKE_BINARY" ||
             command.assertedEvidenceTypeCode != "FINANCE_BANK_STATEMENT_INTAKE" ||
             command.contentType != "text/csv" ||
-            command.sizeBytes !in 1L..FinanceBankCsvParser.MAX_BYTES.toLong() ||
+            command.sizeBytes !in 1L..FinanceBankIntakeEvidenceBinding.MAX_BYTES.toLong() ||
             FinanceBankIntakeEvidenceBinding.proposalId(bankOperation) != command.targetId
         ) throw ProductApiException(
             "EVIDENCE_BANK_STATEMENT_CONTRACT_MISMATCH",
@@ -2646,11 +2642,11 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
                     record.clientVisibilityMode != "INTERNAL_ONLY" ||
                     record.evidenceTypeCode != "FINANCE_BANK_STATEMENT_INTAKE" ||
                     record.contentType != "text/csv" ||
-                    record.expectedSizeBytes !in 1L..FinanceBankCsvParser.MAX_BYTES.toLong()
+                    record.expectedSizeBytes !in 1L..FinanceBankIntakeEvidenceBinding.MAX_BYTES.toLong()
                 ) "REJECTED" else {
                     val bytes = runCatching {
                         storageAccess.readRestrictedObject(
-                            record.objectKey, FinanceBankCsvParser.MAX_BYTES.toLong(),
+                            record.objectKey, FinanceBankIntakeEvidenceBinding.MAX_BYTES.toLong(),
                         )
                     }.getOrNull() ?: throw ProductApiException(
                         "EVIDENCE_BANK_CSV_BYTES_UNAVAILABLE",
@@ -2659,12 +2655,15 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
                         retryable = true,
                     )
                     if (bytes.size.toLong() != record.expectedSizeBytes) "REJECTED"
-                    else if (runCatching {
-                        FinanceBankCsvParser.decodeAndValidate(
-                            Base64.getEncoder().encodeToString(bytes),
-                            record.expectedSha256,
+                    else {
+                        val port = bankStatementTargetProvider?.getIfAvailable() ?: throw ProductApiException(
+                            "EVIDENCE_BANK_CSV_VALIDATOR_UNAVAILABLE",
+                            "Canonical bank statement validator is unavailable.",
+                            HttpStatus.SERVICE_UNAVAILABLE,
+                            retryable = true,
                         )
-                    }.isSuccess) "READY" else "REJECTED"
+                        if (port.validateCanonicalCsv(bytes, record.expectedSha256)) "READY" else "REJECTED"
+                    }
                 }
             }
 

@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.documents.FinanceBankEvidenceAccount
+import com.hiltech.server.documents.FinanceBankStatementEvidenceTargetPort
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import org.springframework.core.env.Environment
@@ -7,35 +9,6 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import java.time.Clock
 import java.util.UUID
-
-/**
- * Pre-proposal binding: FinanceBankStatementIntakeService creates the proposal
- * only AFTER the exact uploaded CSV evidence has reached READY.
- *
- * Never accept a user-supplied arbitrary Evidence target. The target ID is
- * deterministic from the bank intake operation ID, which is later reused by
- * prepareCsv. This is *not* a new Finance policy or shadow role store.
- */
-object FinanceBankIntakeEvidenceBinding {
-    fun proposalId(bankIntakeOperationId: UUID): UUID =
-        UUID.nameUUIDFromBytes(
-            "hiltech:bank-statement-intake:$bankIntakeOperationId"
-                .toByteArray(Charsets.UTF_8),
-        )
-}
-
-data class FinanceBankEvidenceAccount(
-    val id: UUID,
-    val organizationId: UUID,
-    val currency: String,
-    val state: String,
-)
-
-interface FinanceBankStatementEvidenceTargetPort {
-    fun loadApprovedAccount(accountId: UUID): FinanceBankEvidenceAccount?
-    fun canReserve(actor: UUID, account: FinanceBankEvidenceAccount): Boolean
-    fun canAccess(actor: UUID, organizationId: UUID, uploader: UUID): Boolean
-}
 
 /**
  * Shares the exact company Bank Intake preparer authority and current active
@@ -75,6 +48,11 @@ class JdbcFinanceBankStatementEvidenceTarget(
 
     override fun canAccess(actor: UUID, organizationId: UUID, uploader: UUID): Boolean =
         actor == uploader && canUseFinanceBankIntake(actor, organizationId)
+
+    override fun validateCanonicalCsv(bytes: ByteArray, expectedSha256: String): Boolean =
+        runCatching {
+            FinanceBankCsvParser.decodeAndValidate(java.util.Base64.getEncoder().encodeToString(bytes), expectedSha256)
+        }.isSuccess
 
     private fun canUseFinanceBankIntake(actor: UUID, org: UUID): Boolean {
         if (!subject.enabled()) return false

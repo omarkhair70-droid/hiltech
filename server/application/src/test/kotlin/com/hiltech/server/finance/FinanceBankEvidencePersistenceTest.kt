@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.documents.FinanceBankIntakeEvidenceBinding
+
 import com.hiltech.server.documents.FinanceBankStatementEvidenceReservationInsert
 import com.hiltech.server.documents.persistence.JdbcEvidencePersistence
 import org.junit.jupiter.api.Assertions.assertEquals

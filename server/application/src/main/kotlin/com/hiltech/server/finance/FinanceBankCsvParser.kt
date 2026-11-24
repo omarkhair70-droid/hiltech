@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.documents.FinanceBankIntakeEvidenceBinding
+
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.IdempotencyKeyContract
 import com.hiltech.server.platform.ProductApiException
@@ -42,7 +44,7 @@ data class FinanceBankParsedCsv(
  * A reader cannot edit a row after company review without changing the hash.
  */
 object FinanceBankCsvParser {
-    const val MAX_BYTES=2*1024*1024
+    const val MAX_BYTES=FinanceBankIntakeEvidenceBinding.MAX_BYTES
     private const val HEADER=
         "external_transaction_id,booked_on,flow,currency,amount"
     private val transactionId=Regex("^[A-Za-z0-9][A-Za-z0-9._:/-]{4,179}$")

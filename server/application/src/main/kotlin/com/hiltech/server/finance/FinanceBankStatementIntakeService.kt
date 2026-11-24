@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.documents.FinanceBankIntakeEvidenceBinding
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
