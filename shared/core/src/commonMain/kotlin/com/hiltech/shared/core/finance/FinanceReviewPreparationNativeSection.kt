@@ -32,6 +32,7 @@ enum class FinanceReviewKind(val label: String) {
     CASH_ALLOCATION("تخصيص AP / AR"),
     CASH_ALLOCATION_CORRECTION("تصحيح تخصيص"),
     CASH_COUNT("جرد الخزنة"),
+    CASH_VOUCHER("تجهيز سند قبض أو صرف"),
     INVOICE_ISSUANCE_REVIEW("مراجعة فاتورة موجودة"),
     INVOICE_ISSUANCE_PREPARE("تجهيز إصدار فاتورة عميل"),
     EMPLOYEE_FUNDING("تجهيز سلفة أو عهدة"),
@@ -51,6 +52,8 @@ data class FinanceReviewDraft(
     val amount: String = "",
     val reference: String = "",
     val documentEvidenceId: String = "",
+    val cashboxId: String = "",
+    val voucherReference: String = "",
     val policyApprovalId: String = "",
     val fundingKind: String = "EMPLOYEE_ADVANCE",
     val settlementAction: String = "ADVANCE_RECOVERY_CONFIRMED",
@@ -119,6 +122,10 @@ fun financeReviewDraftIsValid(
                 draft.reference.trim().length in 8..180
         FinanceReviewKind.CASH_ALLOCATION_CORRECTION ->
             draft.reference.trim().length in 8..180
+        FinanceReviewKind.CASH_VOUCHER ->
+            draft.sourceKind in setOf("AP","AR") && financeLookupIdIsUuid(draft.cashboxId) &&
+                financeReviewIsAmount(draft.amount,false) && draft.reference.trim().length in 8..180 &&
+                draft.voucherReference.trim().length in 3..100
         FinanceReviewKind.CASH_COUNT ->
             financeReviewIsAmount(draft.amount, allowZero = true) &&
                 draft.reference.trim().length in 8..180
@@ -202,6 +209,10 @@ private fun FinanceCashVoidReceiptDto.review() =
             "قيد معكوس في دفتر الأستاذ: $generalLedgerReversed"),
     )
 
+private fun FinanceCashVoucherReceiptDto.review() = FinancePreparedReview(
+    FinanceReviewKind.CASH_VOUCHER,proposalId,organizationId,state,approvalRequestId,
+    listOf("الخزنة: $cashboxId","النوع: $direction","المبلغ: $amount $currency","القيد: $sourceJournalId"))
+
 private fun FinanceCashCountReceiptDto.review() =
     FinancePreparedReview(
         FinanceReviewKind.CASH_COUNT, proposalId, organizationId,
@@ -248,6 +259,7 @@ suspend fun financeReadReviewProposal(
             apis.allocation.status(org, proposalId, install).review()
         FinanceReviewKind.CASH_ALLOCATION_CORRECTION ->
             apis.allocationCorrection.status(org, proposalId, install).review()
+        FinanceReviewKind.CASH_VOUCHER -> apis.cash.voucherStatus(org,proposalId,install).review()
         FinanceReviewKind.CASH_COUNT ->
             apis.cashCount.status(org, proposalId, install).review()
         FinanceReviewKind.INVOICE_ISSUANCE_REVIEW,
@@ -336,6 +348,18 @@ suspend fun financePrepareReviewProposal(
                 FinanceCashVoidPrepareDto(operation, form.reference.trim()),
                 install,
             ).review()
+        FinanceReviewKind.CASH_VOUCHER -> {
+            val box=apis.cash.balance(org,form.cashboxId,install)
+            check(financeReadSourceMatches(org,box.organizationId,form.cashboxId,box.cashboxId))
+            val result=apis.cash.prepareVoucher(org,form.sourceKind,form.sourceId,
+                FinanceCashVoucherPrepareDto(operation,form.cashboxId,form.amount,
+                    form.voucherReference.trim(),form.reference.trim()),install)
+            check(result.cashboxId.equals(form.cashboxId,true) &&
+                result.sourceJournalId.equals(form.sourceId,true) && result.sourceKind==form.sourceKind &&
+                result.currency==box.currency && result.voucherRecordId==null &&
+                !result.physicalCustodyConfirmed && !result.bankTransactionInitiated)
+            result.review()
+        }
         FinanceReviewKind.CASH_COUNT -> {
             // An original read of the cashbox is required before preparing
             // a witnessed observation; no invented ledger amount.
@@ -391,6 +415,7 @@ suspend fun financeRequestIndependentReview(
             apis.allocation.requestApproval(org, proposalId, operationId, install).review()
         FinanceReviewKind.CASH_ALLOCATION_CORRECTION ->
             apis.allocationCorrection.requestReview(org, proposalId, operationId, install).review()
+        FinanceReviewKind.CASH_VOUCHER -> apis.cash.reviewVoucher(org,proposalId,operationId,install).review()
         FinanceReviewKind.CASH_COUNT ->
             apis.cashCount.requestReview(org, proposalId, operationId, install).review()
         FinanceReviewKind.INVOICE_ISSUANCE_REVIEW,
@@ -551,6 +576,7 @@ fun FinanceReviewPreparationSection(
             FinanceReviewKind.CASH_ALLOCATION -> "معرّف قيد AP/AR المرحّل (Journal UUID)"
             FinanceReviewKind.CASH_ALLOCATION_CORRECTION -> "معرّف التخصيص الأصلي (Allocation UUID)"
             FinanceReviewKind.CASH_COUNT -> "معرّف الخزنة الحالي (Cashbox UUID)"
+            FinanceReviewKind.CASH_VOUCHER -> "معرّف القيد المحاسبي المرحّل"
             FinanceReviewKind.INVOICE_ISSUANCE_REVIEW -> "معرّف طلب إصدار فاتورة قائم (Proposal UUID)"
             FinanceReviewKind.INVOICE_ISSUANCE_PREPARE -> "معرّف مسودة فاتورة العميل (Candidate UUID)"
             FinanceReviewKind.EMPLOYEE_FUNDING -> "معرّف مسودة السلفة أو العهدة"
@@ -632,6 +658,21 @@ fun FinanceReviewPreparationSection(
                 draft=draft.copy(lines=draft.lines+FinanceReviewJournalLine());resetForFormChange()
             }) {Text("إضافة بند")}
         }
+        if (kind == FinanceReviewKind.CASH_VOUCHER) {
+            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                listOf("AR" to "قبض عميل","AP" to "صرف مورد").forEach { (value,label) ->
+                    OutlinedButton(enabled=editable && draft.sourceKind!=value,onClick={
+                        draft=draft.copy(sourceKind=value);resetForFormChange()
+                    }) {Text(label)}
+                }
+            }
+            OutlinedTextField(value=draft.cashboxId,onValueChange={
+                draft=draft.copy(cashboxId=it.trim());resetForFormChange()
+            },label={Text("معرّف الخزنة النشطة")},enabled=editable,modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(value=draft.voucherReference,onValueChange={
+                draft=draft.copy(voucherReference=it);resetForFormChange()
+            },label={Text("رقم السند")},enabled=editable,modifier=Modifier.fillMaxWidth())
+        }
         if (kind == FinanceReviewKind.CASH_ALLOCATION) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("AR", "AP").forEach { type ->
@@ -653,7 +694,7 @@ fun FinanceReviewPreparationSection(
             )
         }
         if (kind == FinanceReviewKind.CASH_COUNT ||
-            kind == FinanceReviewKind.CASH_ALLOCATION || kind == FinanceReviewKind.EMPLOYEE_SETTLEMENT ||
+            kind == FinanceReviewKind.CASH_ALLOCATION || kind == FinanceReviewKind.CASH_VOUCHER || kind == FinanceReviewKind.EMPLOYEE_SETTLEMENT ||
             kind == FinanceReviewKind.EXPENSE_REIMBURSEMENT
         ) {
             OutlinedTextField(
