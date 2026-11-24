@@ -1,5 +1,6 @@
 package com.hiltech.shared.core.service
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
