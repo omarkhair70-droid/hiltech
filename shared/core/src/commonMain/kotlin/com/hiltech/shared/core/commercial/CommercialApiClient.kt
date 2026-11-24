@@ -295,7 +295,13 @@ data class ClientQuoteDto(
     val exclusions: String,
     val validityDate: String,
     val lines: List<ClientQuoteLineDto>,
+    val clientName: String? = null,
+    val issuerName: String? = null,
+    val releasedAt: String? = null,
 )
+
+@Serializable
+data class ClientQuotePdfDto(val filename: String, val base64: String)
 
 /** Uses existing identity, device/session headers and idempotency transport. No anonymous client endpoint. */
 class CommercialApiClient(
@@ -444,6 +450,11 @@ class CommercialApiClient(
             options = HiltechRequestOptions(installationId = installationId),
             decode = { json.decodeFromString(ClientQuoteDto.serializer(), it) },
         )
+
+    suspend fun customerPdf(quoteId: String, installationId: String): ClientQuotePdfDto =
+        api.request(method = HttpMethod.Get, path = "/v1/commercial/quotes/" + quoteId + "/customer-pdf",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(ClientQuotePdfDto.serializer(), it) })
 
     private suspend fun command(path: String, operationId: String, installationId: String, body: String) =
         api.request(

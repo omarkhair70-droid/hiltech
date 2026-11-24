@@ -56,6 +56,7 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation(libs.jooq)
     implementation(libs.kotlinx.serialization.json)
+    implementation("org.apache.pdfbox:pdfbox:3.0.8")
     implementation(libs.aws.s3)
     implementation(libs.aws.urlconnection)
     implementation(libs.opentelemetry.api)
@@ -81,6 +82,11 @@ kotlin {
     sourceSets.named("main") {
         kotlin.srcDir(generatedJooqDir)
     }
+}
+
+tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") {
+    from(rootProject.file("shared/core/src/commonMain/composeResources/font/plex_regular.ttf")) { into("commercial-fonts") }
+    from(rootProject.file("docs/10-design/IBM_PLEX_OFL.txt")) { into("commercial-fonts") }
 }
 
 fun String.xmlEscaped(): String =

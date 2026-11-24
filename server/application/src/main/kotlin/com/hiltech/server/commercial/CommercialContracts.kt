@@ -136,6 +136,9 @@ data class ClientCommercialQuote(
     val exclusions: String,
     val validityDate: String,
     val lines: List<ClientCommercialQuoteLine>,
+    val clientName: String? = null,
+    val issuerName: String? = null,
+    val releasedAt: String? = null,
 )
 data class ClientCommercialQuoteLine(
     val lineCode: String,

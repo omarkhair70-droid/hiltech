@@ -553,7 +553,9 @@ class CommercialService(
         // Explicit projection: never SELECT * or join the private BOQ cost table.
         val v = row(
             """SELECT quote_code,version_number,client_organization_id,currency,total_price,
-                      payment_terms,delivery_terms,exclusions,validity_date
+                      payment_terms,delivery_terms,exclusions,validity_date,released_at,
+                      (SELECT legal_name FROM organization WHERE id=commercial_quote_version.client_organization_id) AS client_name,
+                      (SELECT legal_name FROM organization WHERE id=commercial_quote_version.organization_id) AS issuer_name
                FROM commercial_quote_version WHERE id=? AND state='RELEASED'""",id,
         )
         val lines = jdbc.queryForList(
@@ -571,6 +573,7 @@ class CommercialService(
             currency=(v["currency"] as String).trim(),totalPrice=v["total_price"] as BigDecimal,
             paymentTerms=v["payment_terms"] as String,deliveryTerms=v["delivery_terms"] as String,
             exclusions=v["exclusions"] as String,validityDate=v["validity_date"].toString(),lines=lines,
+            clientName=v["client_name"] as? String, issuerName=v["issuer_name"] as? String, releasedAt=v["released_at"]?.toString(),
         )
     }
 
