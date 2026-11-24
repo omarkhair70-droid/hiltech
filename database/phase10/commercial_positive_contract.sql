@@ -58,12 +58,15 @@ BEGIN
      boq_version_id,version_number,quote_code,currency,total_price,
      payment_terms,delivery_terms,exclusions,validity_date,created_by,created_at,discount_amount,tax_amount)
   VALUES(quote_id,company,opportunity,client,scope_id,boq_id,1,'SYNTHETIC-Q',
-         'EGP',40,'Synthetic 30-day payment','Synthetic on-site delivery',
-         'Synthetic exclusions',CURRENT_DATE+30,actor,now(),5,5);
+         'EGP',42,'Synthetic 30-day payment','Synthetic on-site delivery',
+         'Synthetic exclusions',CURRENT_DATE+30,actor,now(),5,7);
   INSERT INTO commercial_quote_line
     (id,quote_version_id,line_code,description,quantity,unit,unit_price)
   VALUES(gen_random_uuid(),quote_id,'LABOR-1','Synthetic labor',2,'hour',20);
   UPDATE commercial_quote_version SET state='APPROVAL_PENDING',version=version+1 WHERE id=quote_id;
+  IF NOT EXISTS(SELECT 1 FROM commercial_quote_version q WHERE q.id=quote_id AND q.discount_amount=5 AND q.tax_amount=7 AND q.total_price=42) THEN
+    RAISE EXCEPTION 'Net quotation amount did not retain separate discount and tax';
+  END IF;
   INSERT INTO approval_policy_version
     (id,organization_id,policy_key,version_number,lifecycle_state,approval_required,
      step_mode,authority_key,effective_from,created_by_user_id,created_at)
@@ -77,7 +80,7 @@ BEGIN
   UPDATE commercial_quote_version SET state='RELEASED',released_at=now(),version=version+1
   WHERE id=quote_id;
   IF NOT EXISTS (SELECT 1 FROM commercial_released_client_quote AS released
-                 WHERE released.quote_id=phase10_fixture.quote_id AND released.total_price=40) THEN
+                 WHERE released.quote_id=phase10_fixture.quote_id AND released.total_price=42) THEN
     RAISE EXCEPTION 'Exact approved quote was not released to customer projection';
   END IF;
   -- New document settings, immutable issuer snapshot and export archive.
@@ -116,7 +119,7 @@ BEGIN
     (id,organization_id,opportunity_id,contract_id,client_po_number,
      issued_on,amount,currency,created_by,created_at)
   VALUES(po_id,company,opportunity,contract_id,'SYNTHETIC-PO',
-         CURRENT_DATE,40,'EGP',actor,now());
+         CURRENT_DATE,42,'EGP',actor,now());
 
   -- Two documents with bytes that would be READY only after the canonical
   -- uploader has verified matching PDF bytes. These are synthetic DB fixtures.
@@ -215,7 +218,7 @@ BEGIN
   IF NOT EXISTS(SELECT 1 FROM commercial_finance_award_source AS finance
                 WHERE finance.opportunity_id=opportunity AND finance.project_id=phase10_fixture.project_id
                   AND finance.contract_id=phase10_fixture.contract_id AND finance.client_po_id=po_id
-                  AND quote_revision=1 AND total_price=40) THEN
+                  AND quote_revision=1 AND total_price=42) THEN
     RAISE EXCEPTION 'Finance source handoff was not complete';
   END IF;
   IF NOT EXISTS(SELECT 1 FROM commercial_project_scope_source AS scope
@@ -240,7 +243,7 @@ BEGIN
         AND finance.project_id = phase10_fixture.project_id
         AND finance.contract_id = phase10_fixture.contract_id
         AND finance.client_po_id = po_id
-        AND finance.total_price = 40 AND finance.currency = 'EGP'
+        AND finance.total_price = 42 AND finance.currency = 'EGP'
         AND support.signed_evidence_id = contract_file
         AND support.warranty_terms = 'Synthetic coverage'
         AND support.maintenance_terms = 'Synthetic support'
