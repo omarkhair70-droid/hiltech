@@ -1,6 +1,7 @@
 name: HILTECH V0100 full unified integration regression
 
 on:
+  workflow_call:
   workflow_dispatch:
   push:
     branches: [integration/hiltech-finance-v0100-payroll-bridge-20261123]

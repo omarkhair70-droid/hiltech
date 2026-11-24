@@ -1,6 +1,7 @@
 name: DevOps - Payroll9 to Finance8 review envelope integration
 
 on:
+  workflow_call:
   push:
     branches:
       - integration/hiltech-payroll-finance-review-intake-20261123

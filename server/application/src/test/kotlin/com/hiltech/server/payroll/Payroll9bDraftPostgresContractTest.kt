@@ -2,8 +2,6 @@ package com.hiltech.server.payroll
 
 import com.hiltech.server.approval.ApprovalSubjectRef
 import com.hiltech.server.finance.FinancePayrollReviewIntakeAdapter
-import java.nio.file.Files
-import java.nio.file.Path
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.people.JdbcPeoplePersistence
@@ -624,15 +622,8 @@ class Payroll9bDraftPostgresContractTest {
         assertEquals(1, acceptedOperations.size)
 
         // Real Finance module bridge, not the in-memory Payroll test fake.
-        // Pending DDL is applied ONLY on the disposable contract database.
-        val sqlRelative = "database/phase8/pending_payroll_review_intake.sql"
-        val sqlPath = listOf(
-            System.getenv("HILTECH_REPO_ROOT") ?: ".",
-            "../..", "../../..",
-        ).map { Path.of(it).toAbsolutePath().normalize().resolve(sqlRelative) }
-            .firstOrNull { Files.isRegularFile(it) }
-            ?: error("Finance Payroll review integration SQL not found")
-        jdbc.execute(Files.readString(sqlPath))
+        // The canonical Flyway V0101 migration must install this table before the handoff.
+        assertEquals("finance_payroll_review_batch", jdbc.queryForObject("SELECT to_regclass('public.finance_payroll_review_batch')::text", String::class.java))
         val realFinanceIntake = FinancePayrollReviewIntakeAdapter(jdbc)
         val realHandoff = Payroll9cFinanceHandoffService(
             jdbc, service, permission, reviewPublisher,
