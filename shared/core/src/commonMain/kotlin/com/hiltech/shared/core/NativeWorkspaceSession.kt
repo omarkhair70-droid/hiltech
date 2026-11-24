@@ -26,6 +26,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.HiltechLanguage
+import com.hiltech.shared.core.design.LocalHiltechLanguage
+import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.design.HiltechPanel
 import com.hiltech.shared.core.design.HiltechSectionHeading
 import com.hiltech.shared.core.design.HiltechShape
@@ -139,34 +142,41 @@ internal fun NativeWorkspaceDirectory(
     val visible = eligible.filter { session.availability[it.id] == WorkspaceAvailability.AVAILABLE }
     val checking = eligible.any { session.availability[it.id] == null || session.availability[it.id] == WorkspaceAvailability.CHECKING }
     val unavailable = eligible.count { session.availability[it.id] == WorkspaceAvailability.UNAVAILABLE }
-    HiltechSectionHeading("OPERATIONS", "Connected workspaces", "Open a live workspace to continue your work.")
-    visible.forEach { workspace ->
-        Surface(
-            onClick = { onOpen(workspace.id) },
-            enabled = session.pendingId == null,
-            shape = HiltechShape.medium,
-            color = colors.surface,
-            contentColor = colors.primaryText,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(workspace.label, style = MaterialTheme.typography.titleMedium)
-                    Text(if (session.pendingId == workspace.id) "Checking source…" else "Open workspace",
-                        color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+    val language = LocalHiltechLanguage.current
+    HiltechSectionHeading("OPERATIONS", language.text("مساحات الشركة", "Company workspaces"),
+        language.text("انتقل إلى المجال الذي تحتاجه.", "Go to the area you need."))
+    visible.groupBy { nativeWorkspaceGroup(it.id) }.forEach { (group, entries) ->
+        Text(group.title(language), style = MaterialTheme.typography.titleMedium)
+        HiltechPanel(Modifier.fillMaxWidth()) {
+            entries.forEach { workspace ->
+                Surface(
+                    onClick = { onOpen(workspace.id) },
+                    enabled = session.pendingId == null,
+                    shape = HiltechShape.small,
+                    color = colors.surface,
+                    contentColor = colors.primaryText,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(Modifier.padding(vertical = 12.dp, horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(nativeWorkspaceTitle(workspace, language), style = MaterialTheme.typography.titleMedium)
+                            if (session.pendingId == workspace.id) Text(language.text("جارٍ فتح المصدر…", "Opening source…"),
+                                color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text(language.text("فتح", "Open"), color = colors.accent, style = MaterialTheme.typography.labelLarge)
+                    }
                 }
-                Text("›", color = colors.accent, style = MaterialTheme.typography.headlineSmall)
             }
         }
     }
     if (checking || unavailable > 0 || visible.isEmpty() || session.message != null) {
         HiltechPanel(Modifier.fillMaxWidth()) {
-            if (checking) Text("Checking connected sources…")
-            if (!checking && visible.isEmpty()) Text("No connected workspaces are available to this account.")
-            if (unavailable > 0) Text("Some sources are currently unavailable. Refresh to retry.")
+            if (checking) Text(hiltechText("جارٍ تحميل المساحات المتاحة…", "Checking connected sources…"))
+            if (!checking && visible.isEmpty()) Text(hiltechText("لا توجد مساحات متخصصة متاحة لهذا الحساب.", "No connected workspaces are available to this account."))
+            if (unavailable > 0) Text(hiltechText("بعض المصادر غير متاحة الآن. حدّث لإعادة المحاولة.", "Some sources are currently unavailable. Refresh to retry."))
             session.message?.let { Text(it) }
             TextButton(onClick = session::refresh, enabled = !checking && session.pendingId == null) {
-                Text("Refresh workspaces")
+                Text(hiltechText("تحديث المساحات", "Refresh workspaces"))
             }
         }
     }
@@ -182,8 +192,8 @@ internal fun NativeWorkspacePane(
     Column(Modifier.fillMaxSize()) {
         Surface(color = colors.surface, contentColor = colors.primaryText, modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onExit) { Text("‹ Explore") }
-                Text(workspace.label, modifier = Modifier.weight(1f).padding(start = 8.dp),
+                TextButton(onClick = onExit) { Text(hiltechText("استكشف", "‹ Explore")) }
+                Text(nativeWorkspaceTitle(workspace, LocalHiltechLanguage.current), modifier = Modifier.weight(1f).padding(start = 8.dp),
                     style = MaterialTheme.typography.titleMedium)
             }
         }
@@ -216,7 +226,7 @@ fun NativeOperationAreas(title: String, description: String, areas: List<NativeO
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (current == null) {
             HiltechSectionHeading("OPERATIONS", title, description)
-            if (areas.isEmpty()) Text("لا توجد عمليات متاحة في إعدادات التشغيل الحالية.")
+            if (areas.isEmpty()) Text(hiltechText("لا توجد عمليات متاحة في إعدادات التشغيل الحالية.", "No operations are available in the current configuration."))
             areas.forEach { area ->
                 Surface(onClick = { requested = area.id }, modifier = Modifier.fillMaxWidth(),
                     color = colors.surface, contentColor = colors.primaryText, shape = HiltechShape.medium) {
@@ -225,7 +235,7 @@ fun NativeOperationAreas(title: String, description: String, areas: List<NativeO
                             Text(area.title, style = MaterialTheme.typography.titleMedium)
                             Text(area.description, color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
                         }
-                        Text("فتح", color = colors.accent, style = MaterialTheme.typography.labelLarge)
+                        Text(hiltechText("فتح", "Open"), color = colors.accent, style = MaterialTheme.typography.labelLarge)
                     }
                 }
             }
@@ -235,7 +245,7 @@ fun NativeOperationAreas(title: String, description: String, areas: List<NativeO
                     Text(title, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
                     Text(current.title, style = MaterialTheme.typography.titleLarge)
                 }
-                TextButton(onClick = { requested = null }) { Text("كل العمليات") }
+                TextButton(onClick = { requested = null }) { Text(hiltechText("كل العمليات", "All operations")) }
             }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 areas.forEach { area ->
@@ -245,4 +255,43 @@ fun NativeOperationAreas(title: String, description: String, areas: List<NativeO
             key(current.id) { current.content() }
         }
     }
+}
+
+internal enum class NativeWorkspaceGroup(val ar: String, val en: String) {
+    Management("الإدارة", "Management"),
+    Finance("المالية والمحاسبة", "Finance & accounting"),
+    Payroll("الرواتب", "Payroll"),
+    Sales("المبيعات", "Sales"),
+    Delivery("التسليم والخدمة", "Delivery & service"),
+    Purchasing("المشتريات", "Purchasing"),
+    Other("مساحات أخرى", "Other workspaces");
+    fun title(language: HiltechLanguage): String = language.text(ar, en)
+}
+
+internal fun nativeWorkspaceGroup(id: String): NativeWorkspaceGroup = when {
+    id.startsWith("executive") -> NativeWorkspaceGroup.Management
+    id.contains("payroll") || id.contains("payslip") -> NativeWorkspaceGroup.Payroll
+    id.startsWith("finance") -> NativeWorkspaceGroup.Finance
+    id.startsWith("commercial") -> NativeWorkspaceGroup.Sales
+    id.startsWith("handover") || id.startsWith("service-operations") -> NativeWorkspaceGroup.Delivery
+    id.contains("purchase") || id.contains("procurement") -> NativeWorkspaceGroup.Purchasing
+    else -> NativeWorkspaceGroup.Other
+}
+
+internal fun nativeWorkspaceTitle(workspace: NativeOperationalWorkspace, language: HiltechLanguage): String {
+    val names = when (workspace.id) {
+        "executive-home" -> "نظرة عامة على الشركة" to "Company overview"
+        "my-payslips" -> "كشوف مرتباتي" to "My payslips"
+        "payroll-admin-read" -> "مراجعة فترات المرتبات" to "Payroll periods"
+        "commercial-read" -> "المبيعات والمناقصات" to "Sales & tenders"
+        "handover-read" -> "تسليم المشاريع" to "Project handover"
+        "service-operations-read" -> "الدعم والصيانة" to "Support & maintenance"
+        "finance-evidence-read" -> "المراجعة المالية" to "Financial review"
+        "finance-bank-statement" -> "كشف البنك والتحصيلات" to "Bank statements & collections"
+        "finance-invoice-read" -> "فواتير الموردين" to "Supplier invoices"
+        "finance-completion-operator" -> "إتمام العمليات المالية" to "Complete financial operations"
+        "finance-cashbox-opening" -> "فتح خزنة" to "Open cashbox"
+        else -> return workspace.label
+    }
+    return language.text(names.first, names.second)
 }
