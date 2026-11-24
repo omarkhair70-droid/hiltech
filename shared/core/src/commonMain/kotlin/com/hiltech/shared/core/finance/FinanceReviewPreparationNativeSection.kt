@@ -444,6 +444,7 @@ fun FinanceReviewPreparationSection(
     var kind by remember(identityId, organizationId, installationId) {
         mutableStateOf(FinanceReviewKind.BANK_RECONCILIATION)
     }
+    var selectedCandidate by remember(identityId, organizationId, installationId) { mutableStateOf<String?>(null) }
     var draft by remember(identityId, organizationId, installationId, kind) {
         mutableStateOf(FinanceReviewDraft())
     }
@@ -543,6 +544,15 @@ fun FinanceReviewPreparationSection(
         error = null
     }
 
+    LaunchedEffect(kind,selectedCandidate) {
+        val candidate=selectedCandidate ?: return@LaunchedEffect
+        if(kind==FinanceReviewKind.INVOICE_ISSUANCE_PREPARE) {
+            draft=FinanceReviewDraft(sourceId=candidate)
+            resetForFormChange()
+            selectedCandidate=null
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = { expanded = !expanded }) {
             Text(if (expanded) "إخفاء تجهيز المراجعات" else "تجهيز طلب مراجعة مالية")
@@ -554,14 +564,28 @@ fun FinanceReviewPreparationSection(
                 "لن يُسجل نقد أو يُرسل عميل أو يُخصم راتب من هنا.",
             style = MaterialTheme.typography.bodySmall,
         )
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            FinanceReviewKind.entries.forEach { option ->
-                OutlinedButton(enabled = !preparing && !requestingReview &&
-                    option != kind, onClick = { kind = option }) {
-                    Text(option.label)
+        if (!preparing && !requestingReview && !refreshing && prepared==null) {
+            FinanceInvoiceCandidateSection(identityId,organizationId,installationId,apis,newOperationId) { candidate ->
+                selectedCandidate=candidate
+                kind=FinanceReviewKind.INVOICE_ISSUANCE_PREPARE
+            }
+        }
+        val groups=listOf(
+            "الفواتير والقيود" to listOf(FinanceReviewKind.INVOICE_ISSUANCE_PREPARE,
+                FinanceReviewKind.INVOICE_ISSUANCE_REVIEW,FinanceReviewKind.AP_JOURNAL,FinanceReviewKind.AR_JOURNAL),
+            "البنك والخزنة" to listOf(FinanceReviewKind.BANK_STATEMENT_REVIEW,FinanceReviewKind.BANK_RECONCILIATION,
+                FinanceReviewKind.CASH_ALLOCATION,FinanceReviewKind.CASH_ALLOCATION_CORRECTION,
+                FinanceReviewKind.CASH_VOUCHER,FinanceReviewKind.CASH_COUNT),
+            "الموظفون والإقفال" to listOf(FinanceReviewKind.EMPLOYEE_FUNDING,
+                FinanceReviewKind.EMPLOYEE_SETTLEMENT,FinanceReviewKind.EXPENSE_REIMBURSEMENT,FinanceReviewKind.PERIOD_CLOSE),
+        )
+        groups.forEach { (label,options) ->
+            Text(label,style=MaterialTheme.typography.labelMedium)
+            Row(modifier=Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                options.forEach { option ->
+                    OutlinedButton(enabled=!preparing && !requestingReview && !refreshing && option!=kind,
+                        onClick={kind=option}) {Text(option.label)}
                 }
             }
         }
