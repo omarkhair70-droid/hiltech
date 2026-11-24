@@ -3,6 +3,7 @@ package com.hiltech.shared.core.finance
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -147,7 +148,8 @@ fun FinanceInvoiceCandidateSection(identityId:String,org:String,install:String,a
                     if(matching.isEmpty())Text("لا توجد نتائج مطابقة في الصفحة المتاحة.")
                     matching.take(8).forEach {award ->
                         Card(modifier=Modifier.fillMaxWidth()) {
-                            Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                            Column(verticalArrangement=Arrangement.spacedBy(6.dp),
+                                modifier=Modifier.padding(12.dp).fillMaxWidth()) {
                                 Text("مشروع: "+award.projectId.take(8)+" · عميل: "+award.clientOrganizationId.take(8),
                                     style=MaterialTheme.typography.titleSmall)
                                 Text("قيمة التعاقد: "+award.sellAmount+" "+award.currency)
