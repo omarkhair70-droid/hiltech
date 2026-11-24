@@ -54,9 +54,13 @@ fun commercialReadNativeWorkspace(
     hostOwnsScroll = false,
     content = { _ ->
         val jobs = rememberCoroutineScope()
+        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
         val coordinator = remember(client, installationId) { CommercialDealCoordinator(client, installationId) }
         var capabilities by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialCapabilitiesDto?>(null) }
         var whatsappConnection by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialWhatsappConnectionDto?>(null) }
+        var oauthStatus by remember(identityId,organizationId,installationId) { mutableStateOf<CommercialOAuthStatusDto?>(null) }
+        var oauthPendingId by remember(identityId,organizationId,installationId) { mutableStateOf<String?>(null) }
+        var oauthPending by remember(identityId,organizationId,installationId) { mutableStateOf<CommercialOAuthPendingDto?>(null) }
         var mailConnection by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialMailConnectionDto?>(null) }
         var settings by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialDocumentSettingsDto?>(null) }
         var showSettings by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
@@ -122,6 +126,7 @@ fun commercialReadNativeWorkspace(
             capabilities = null
             settings = null
             mailConnection = null
+            oauthStatus = null
             whatsappConnection = null
             clients = emptyList()
             detail = null
@@ -135,6 +140,9 @@ fun commercialReadNativeWorkspace(
                     try { mailConnection = client.mailConnection(organizationId,installationId) }
                     catch (e: CancellationException) { throw e }
                     catch (_: Exception) { mailConnection = null }
+                    try { oauthStatus = client.oauthStatus(organizationId,installationId) }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { oauthStatus = null }
                     try { whatsappConnection = client.whatsappConnection(organizationId,installationId) }
                     catch (e: CancellationException) { throw e }
                     catch (_: Exception) { whatsappConnection = null }
@@ -195,6 +203,65 @@ fun commercialReadNativeWorkspace(
                         client.saveDocumentSettings(SaveCommercialDocumentSettingsDto(id,organizationId,documentSettings.version,profile),installationId)
                     } }, onBack = { showSettings = false },
                     mail = mailConnection,
+                    oauth = oauthStatus,
+                    pendingOAuth = oauthPending,
+                    oauthStarted = oauthPendingId != null,
+                    onStartOAuth = { provider ->
+                        if (!saving && capabilities?.canRelease == true && oauthStatus?.providers?.contains(provider) == true) {
+                            saving = true; oauthPending = null; oauthPendingId = null
+                            jobs.launch {
+                                try {
+                                    val started = client.oauthStart(CommercialOAuthStartRequestDto(organizationId,provider),installationId)
+                                    val expected = if(provider == "GOOGLE") "https://accounts.google.com/" else "https://login.microsoftonline.com/"
+                                    require(started.authorizationUrl.startsWith(expected))
+                                    oauthPendingId = started.id
+                                    uriHandler.openUri(started.authorizationUrl)
+                                } catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { feedback = "MAIL_CONNECTION_NOT_CONFIRMED" }
+                                finally { saving = false }
+                            }
+                        }
+                    },
+                    onCheckOAuth = {
+                        val id = oauthPendingId
+                        if (!saving && id != null && capabilities?.canRelease == true) {
+                            saving = true
+                            jobs.launch {
+                                try { oauthPending = client.oauthPending(organizationId,id,installationId) }
+                                catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { feedback = "MAIL_CONNECTION_NOT_CONFIRMED" }
+                                finally { saving = false }
+                            }
+                        }
+                    },
+                    onFinishOAuth = {
+                        val id = oauthPendingId
+                        if (!saving && id != null && oauthPending?.status == "READY" && capabilities?.canRelease == true) {
+                            saving = true
+                            jobs.launch {
+                                try {
+                                    oauthStatus = client.oauthFinish(CommercialOAuthFinishRequestDto(organizationId,id),installationId)
+                                    oauthPendingId = null; oauthPending = null; feedback = "MAIL_CONNECTED"
+                                } catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { feedback = "MAIL_CONNECTION_NOT_CONFIRMED" }
+                                finally { saving = false }
+                            }
+                        }
+                    },
+                    onDisconnectOAuth = {
+                        val connection = oauthStatus
+                        if (!saving && connection?.email != null && capabilities?.canRelease == true) {
+                            saving = true
+                            jobs.launch {
+                                try {
+                                    oauthStatus = client.oauthDisconnect(CommercialOAuthDisconnectRequestDto(organizationId,connection.version),installationId)
+                                    oauthPendingId = null; oauthPending = null; feedback = "MAIL_DISCONNECTED"
+                                } catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { feedback = "MAIL_DISCONNECT_NOT_CONFIRMED" }
+                                finally { saving = false }
+                            }
+                        }
+                    },
                     onConnectMail = { host,username,secret ->
                         val connection = mailConnection
                         if (!saving && capabilities?.canRelease == true && connection?.setupAvailable == true) {

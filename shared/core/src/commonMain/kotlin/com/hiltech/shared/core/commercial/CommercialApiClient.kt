@@ -17,6 +17,19 @@ class ConnectCommercialWhatsappDto(val organizationId: String,val phoneId: Strin
 data class DisconnectCommercialWhatsappDto(val organizationId: String,val baseVersion: Long)
 
 @Serializable
+data class CommercialOAuthStatusDto(val providers: List<String>,val provider: String? = null,val email: String? = null,val version: Long = 0)
+@Serializable
+data class CommercialOAuthStartDto(val id: String,val authorizationUrl: String)
+@Serializable
+data class CommercialOAuthPendingDto(val status: String,val provider: String,val email: String? = null)
+@Serializable
+data class CommercialOAuthStartRequestDto(val organizationId: String,val provider: String)
+@Serializable
+data class CommercialOAuthFinishRequestDto(val organizationId: String,val pendingId: String)
+@Serializable
+data class CommercialOAuthDisconnectRequestDto(val organizationId: String,val version: Long)
+
+@Serializable
 data class CommercialMailConnectionDto(val configured: Boolean, val setupAvailable: Boolean, val allowedHosts: List<String>, val host: String? = null, val username: String? = null, val version: Long = 0)
 @Serializable
 class ConnectCommercialMailDto(val organizationId: String, val host: String, val username: String, val appPassword: String, val baseVersion: Long)
@@ -381,6 +394,17 @@ class CommercialApiClient(
         api.request(method=HttpMethod.Post,path="/v1/commercial/whatsapp-connection/connect",options=HiltechRequestOptions(installationId=installationId),requestBody=json.encodeToString(ConnectCommercialWhatsappDto.serializer(),request),decode={json.decodeFromString(CommercialWhatsappConnectionDto.serializer(),it)})
     suspend fun disconnectWhatsapp(request: DisconnectCommercialWhatsappDto,installationId: String): CommercialWhatsappConnectionDto =
         api.request(method=HttpMethod.Post,path="/v1/commercial/whatsapp-connection/disconnect",options=HiltechRequestOptions(installationId=installationId),requestBody=json.encodeToString(DisconnectCommercialWhatsappDto.serializer(),request),decode={json.decodeFromString(CommercialWhatsappConnectionDto.serializer(),it)})
+
+    suspend fun oauthStatus(organizationId: String,installationId: String): CommercialOAuthStatusDto =
+        api.request(method=HttpMethod.Get,path="/v1/commercial/oauth/status?organizationId="+organizationId,options=HiltechRequestOptions(installationId=installationId),decode={json.decodeFromString(CommercialOAuthStatusDto.serializer(),it)})
+    suspend fun oauthStart(request: CommercialOAuthStartRequestDto,installationId: String): CommercialOAuthStartDto =
+        api.request(method=HttpMethod.Post,path="/v1/commercial/oauth/start",options=HiltechRequestOptions(installationId=installationId),requestBody=json.encodeToString(CommercialOAuthStartRequestDto.serializer(),request),decode={json.decodeFromString(CommercialOAuthStartDto.serializer(),it)})
+    suspend fun oauthPending(organizationId: String,pendingId: String,installationId: String): CommercialOAuthPendingDto =
+        api.request(method=HttpMethod.Get,path="/v1/commercial/oauth/pending?organizationId="+organizationId+"&pendingId="+pendingId,options=HiltechRequestOptions(installationId=installationId),decode={json.decodeFromString(CommercialOAuthPendingDto.serializer(),it)})
+    suspend fun oauthFinish(request: CommercialOAuthFinishRequestDto,installationId: String): CommercialOAuthStatusDto =
+        api.request(method=HttpMethod.Post,path="/v1/commercial/oauth/finish",options=HiltechRequestOptions(installationId=installationId),requestBody=json.encodeToString(CommercialOAuthFinishRequestDto.serializer(),request),decode={json.decodeFromString(CommercialOAuthStatusDto.serializer(),it)})
+    suspend fun oauthDisconnect(request: CommercialOAuthDisconnectRequestDto,installationId: String): CommercialOAuthStatusDto =
+        api.request(method=HttpMethod.Post,path="/v1/commercial/oauth/disconnect",options=HiltechRequestOptions(installationId=installationId),requestBody=json.encodeToString(CommercialOAuthDisconnectRequestDto.serializer(),request),decode={json.decodeFromString(CommercialOAuthStatusDto.serializer(),it)})
 
     suspend fun mailConnection(organizationId: String, installationId: String): CommercialMailConnectionDto =
         api.request(method = HttpMethod.Get, path = "/v1/commercial/mail-connection?organizationId=" + organizationId,

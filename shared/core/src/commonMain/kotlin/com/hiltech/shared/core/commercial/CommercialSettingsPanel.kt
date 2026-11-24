@@ -27,6 +27,13 @@ internal fun CommercialSettingsPanel(
     whatsapp: CommercialWhatsappConnectionDto?,
     onConnectWhatsapp: (String,String,String,String,String) -> Unit,
     onDisconnectWhatsapp: () -> Unit,
+    oauth: CommercialOAuthStatusDto?,
+    pendingOAuth: CommercialOAuthPendingDto?,
+    oauthStarted: Boolean,
+    onStartOAuth: (String) -> Unit,
+    onCheckOAuth: () -> Unit,
+    onFinishOAuth: () -> Unit,
+    onDisconnectOAuth: () -> Unit,
 ) {
     var draft by remember(settings) { mutableStateOf(settings.profile) }
     var picking by remember { mutableStateOf(false) }
@@ -72,6 +79,7 @@ internal fun CommercialSettingsPanel(
             SettingField(hiltechText("شروط التسليم الافتراضية","Default delivery terms"), draft.deliveryTerms) { draft = draft.copy(deliveryTerms = it) }
             Text(hiltechText("يولّد النظام الرقم الفريد تلقائيًا. مبالغ الخصم والضريبة تُحدد لكل عرض.","Unique numbers are generated automatically. Discount and tax amounts are specified per quote."))
         }
+        OAuthConnectionPanel(oauth,pendingOAuth,oauthStarted,busy,onStartOAuth,onCheckOAuth,onFinishOAuth,onDisconnectOAuth)
         MailConnectionPanel(mail,busy,onConnectMail,onDisconnectMail)
         WhatsappConnectionPanel(whatsapp,busy,onConnectWhatsapp,onDisconnectWhatsapp)
         Button(enabled = !busy && !picking && draft != settings.profile && draft.legalName.isNotBlank() &&
@@ -80,6 +88,41 @@ internal fun CommercialSettingsPanel(
         }
     }
 }
+@Composable
+private fun OAuthConnectionPanel(status: CommercialOAuthStatusDto?,pending: CommercialOAuthPendingDto?,started: Boolean,busy: Boolean,start: (String) -> Unit,check: () -> Unit,finish: () -> Unit,disconnect: () -> Unit) {
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("ربط حساب البريد","Connect email account"),style = MaterialTheme.typography.titleMedium)
+        if(status == null) {
+            Text(hiltechText("تعذر قراءة حالة الحسابات.","Account status unavailable."))
+            return@HiltechPanel
+        }
+        if(status.email != null) {
+            HiltechKeyValue(status.provider.orEmpty(),status.email)
+            Text(hiltechText("هذا الحساب له الأولوية على SMTP في إرسال العروض.","This account takes priority over SMTP for sending quotes."))
+            var confirm by remember(status) { mutableStateOf(false) }
+            if(!confirm) TextButton(enabled=!busy,onClick={confirm=true}) { Text(hiltechText("فصل الحساب","Disconnect account")) }
+            else Row {
+                OutlinedButton(enabled=!busy,onClick={disconnect();confirm=false}) { Text(hiltechText("تأكيد الفصل","Confirm disconnect")) }
+                TextButton(onClick={confirm=false}) { Text(hiltechText("إلغاء","Cancel")) }
+            }
+        }
+        listOf("GOOGLE" to "Google / Gmail","MICROSOFT" to "Microsoft / Outlook").forEach { (provider,label) ->
+            OutlinedButton(enabled=!busy && provider in status.providers,onClick={start(provider)},modifier=Modifier.fillMaxWidth()) {
+                Text(hiltechText("ربط ","Connect ")+label)
+            }
+        }
+        if(status.providers.isEmpty()) Text(hiltechText("يحتاج المسؤول التقني إعداد تطبيقات OAuth مرة واحدة قبل الربط.","OAuth applications require one-time deployment configuration."))
+        if(started) {
+            Text(hiltechText("أكمل التفويض في المتصفح ثم عد إلى هنا.","Complete authorization in your browser, then return here."))
+            OutlinedButton(enabled=!busy,onClick=check) { Text(hiltechText("تحقق من الحساب","Check authorization")) }
+            if(pending?.status=="READY" && pending.email!=null) {
+                HiltechKeyValue(hiltechText("الحساب الذي سيتم ربطه","Account to connect"),pending.email)
+                Button(enabled=!busy,onClick=finish) { Text(hiltechText("تأكيد ربط هذا الحساب","Confirm this account")) }
+            } else if(pending?.status=="FAILED") Text(hiltechText("لم يكتمل التفويض. ابدأ اتصالًا جديدًا.","Authorization failed. Start a new connection."))
+        }
+    }
+}
+
 @Composable
 private fun MailConnectionPanel(mail: CommercialMailConnectionDto?,busy: Boolean,connect: (String,String,String) -> Unit,disconnect: () -> Unit) {
     HiltechPanel(Modifier.fillMaxWidth()) {
