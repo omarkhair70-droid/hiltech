@@ -11,6 +11,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.FilterChip
 import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.HiltechRecordTable
+import com.hiltech.shared.core.design.HiltechTableColumn
+import com.hiltech.shared.core.design.HiltechTableRecord
 import com.hiltech.shared.core.design.HiltechSectionHeading
 import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.design.LocalHiltechLanguage
@@ -472,12 +475,20 @@ fun financeEvidenceReadNativeWorkspace(
                         "مصدر القيود غير متاح؛ المستحقات الفعلية مجهولة وليست صفرًا.")
                     current.groups.isEmpty() -> Text(
                         "لا توجد قيود في نطاق المصدر المعروض؛ هذا لا يثبت عدم وجود التزامات.")
-                    else -> current.groups.forEach { item ->
-                        Text("مورد " + item.supplierOrganizationId.take(8) +
-                            " · إجمالي قيود تاريخية: " +
-                            item.historicallyRecognizedGross + " " + item.currency)
-                        Text("عدد القيود: " + item.postedJournalCount +
-                            " · المدفوع والمتبقي غير مثبتين بهذا المصدر.",
+                    else -> {
+                        HiltechRecordTable(
+                            columns = listOf(
+                                HiltechTableColumn(hiltechText("مرجع المورد", "Supplier reference")),
+                                HiltechTableColumn(hiltechText("القيود التاريخية", "Historical gross"), 1.4f),
+                                HiltechTableColumn(hiltechText("العملة", "Currency"), .7f),
+                                HiltechTableColumn(hiltechText("عدد القيود", "Journal count")),
+                            ),
+                            records = current.groups.map { item -> HiltechTableRecord(listOf(
+                                item.supplierOrganizationId.take(8), item.historicallyRecognizedGross.toString(),
+                                item.currency, item.postedJournalCount.toString())) },
+                            emptyMessage = hiltechText("لا توجد قيود معروضة.", "No visible journals."),
+                        )
+                        Text(hiltechText("المدفوع والمتبقي غير مثبتين بهذا المصدر.", "Paid and outstanding balances are not established by this source."),
                             style = MaterialTheme.typography.bodySmall)
                     }
                 }
