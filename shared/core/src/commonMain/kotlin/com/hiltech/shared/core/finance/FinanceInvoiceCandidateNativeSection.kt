@@ -96,7 +96,15 @@ fun FinanceInvoiceCandidateSection(identityId:String,org:String,install:String,a
         var result by remember {mutableStateOf<FinanceArInvoiceCandidateReceiptDto?>(null)}
         var error by remember {mutableStateOf<String?>(null)}
         var busy by remember {mutableStateOf(false)}
-        fun change(next:FinanceInvoiceCandidateDraft) {draft=next;operation=null;error=null;result=null}
+        var awardsLoading by remember {mutableStateOf(false)}
+        var awards by remember {mutableStateOf<FinanceClientAwardSourcePageDto?>(null)}
+        var awardSearch by remember {mutableStateOf("")}
+        var awardsError by remember {mutableStateOf<String?>(null)}
+        var selectedAward by remember {mutableStateOf<FinanceClientAwardSourceRowDto?>(null)}
+        fun change(next:FinanceInvoiceCandidateDraft) {
+            if(next.opportunityId!=draft.opportunityId)selectedAward=null
+            draft=next;operation=null;error=null;result=null
+        }
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
             OutlinedButton(enabled=!busy,onClick={expanded=!expanded}) {
                 Text(if(expanded)"إخفاء إنشاء مسودة فاتورة العميل" else "إنشاء مسودة فاتورة من عقد العميل")
@@ -104,13 +112,64 @@ fun FinanceInvoiceCandidateSection(identityId:String,org:String,install:String,a
             if(!expanded)return@Column
             Text("مسودة الفاتورة",style=MaterialTheme.typography.titleMedium)
             Text("ابدأ من فرصة تجارية معتمدة ومستند استحقاق الفوترة. المسودة ليست فاتورة صادرة.")
-            val editable=!busy && result==null
+            val editable=!busy && !awardsLoading && result==null
+            Text("1. اختيار العقد التجاري المعتمد",style=MaterialTheme.typography.titleSmall)
+            OutlinedButton(enabled=!busy && !awardsLoading,onClick={
+                awardsLoading=true;awardsError=null;awards=null
+                scope.launch {
+                    try {awards=financeReadClientAwardChoices(apis,org,install)}
+                    catch(cancelled:CancellationException){throw cancelled}
+                    catch(_:Exception){awardsError="تعذر قراءة العقود المتاحة لهذا الدور من المصدر."}
+                    finally{awardsLoading=false}
+                }
+            }) {Text(if(awardsLoading)"جارٍ تحميل العقود…" else "عرض العقود المتاحة")}
+            awardsError?.let {Text(it,color=MaterialTheme.colorScheme.error)}
+            awards?.let {page ->
+                if(!page.sourceAvailable) {
+                    Text("مصدر العقود غير متاح؛ لا يمكن افتراض وجود عقود جاهزة للفوترة.")
+                } else {
+                    if(page.hasMoreSources) Text("القائمة جزئية؛ يمكن إدخال معرّف عقد معروف من المصدر.")
+                    OutlinedTextField(value=awardSearch,onValueChange={awardSearch=it},
+                        label={Text("بحث برقم المشروع أو العميل")},enabled=editable,
+                        modifier=Modifier.fillMaxWidth())
+                    val matching=page.rows.filter {
+                        awardSearch.isBlank() ||
+                            it.projectId.contains(awardSearch.trim(),true) ||
+                            it.opportunityId.contains(awardSearch.trim(),true) ||
+                            it.clientOrganizationId.contains(awardSearch.trim(),true)
+                    }
+                    if(matching.isEmpty())Text("لا توجد نتائج مطابقة في الصفحة المتاحة.")
+                    matching.take(8).forEach {award ->
+                        Card(modifier=Modifier.fillMaxWidth()) {
+                            Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                                Text("مشروع: "+award.projectId.take(8)+" · عميل: "+award.clientOrganizationId.take(8),
+                                    style=MaterialTheme.typography.titleSmall)
+                                Text("قيمة التعاقد: "+award.sellAmount+" "+award.currency)
+                                Text("مراجعة مالية مطلوبة: "+(if(award.financeReviewRequired)"نعم" else "لا"),
+                                    style=MaterialTheme.typography.bodySmall)
+                                Text("مستند استحقاق الفوترة: "+(if(award.billingMilestonesVerified)"موثق بالمصدر" else "يحتاج تحققًا"),
+                                    style=MaterialTheme.typography.bodySmall)
+                                OutlinedButton(enabled=editable && draft.opportunityId!=award.opportunityId,
+                                    onClick={
+                                        change(draft.copy(opportunityId=award.opportunityId))
+                                        selectedAward=award
+                                    }) {Text("اختيار العقد")}
+                            }
+                        }
+                    }
+                    if(matching.size>8)Text("تظهر أول 8 نتائج؛ ضيّق البحث للوصول لبقية العقود.")
+                }
+            }
+            selectedAward?.let {award ->
+                Text("العقد المختار: "+award.projectId.take(8)+" · "+award.sellAmount+" "+award.currency)
+            }
+            Text("2. مستند الاستحقاق وقيمة الفاتورة",style=MaterialTheme.typography.titleSmall)
             OutlinedTextField(value=draft.opportunityId,onValueChange={change(draft.copy(opportunityId=it.trim()))},
                 label={Text("معرّف الفرصة التجارية المعتمدة")},enabled=editable,modifier=Modifier.fillMaxWidth())
             OutlinedTextField(value=draft.evidenceId,onValueChange={change(draft.copy(evidenceId=it.trim()))},
                 label={Text("مستند استحقاق الفوترة")},enabled=editable,modifier=Modifier.fillMaxWidth())
             OutlinedTextField(value=draft.amount,onValueChange={change(draft.copy(amount=it.trim()))},
-                label={Text("قيمة الفاتورة")},enabled=editable,modifier=Modifier.fillMaxWidth())
+                label={Text("قيمة الفاتورة المستحقة لهذه الدفعة")},enabled=editable,modifier=Modifier.fillMaxWidth())
             OutlinedTextField(value=draft.legalReference,onValueChange={change(draft.copy(legalReference=it))},
                 label={Text("مرجع المراجعة القانونية والضريبية")},enabled=editable,modifier=Modifier.fillMaxWidth())
             OutlinedTextField(value=draft.contractReference,onValueChange={change(draft.copy(contractReference=it))},
@@ -122,6 +181,8 @@ fun FinanceInvoiceCandidateSection(identityId:String,org:String,install:String,a
             if(draft.issueDate.isNotBlank() && !financeValidCalendarDate(draft.issueDate)) Text("تاريخ الإصدار غير صحيح.",color=MaterialTheme.colorScheme.error)
             if(draft.dueDate.isNotBlank() && (!financeValidCalendarDate(draft.dueDate) || draft.dueDate<draft.issueDate))
                 Text("تاريخ الاستحقاق يجب أن يكون تاريخًا صحيحًا لا يسبق الإصدار.",color=MaterialTheme.colorScheme.error)
+            Text("قيمة التعاقد ليست بالضرورة قيمة الفاتورة. حدّد المبلغ المستحق وفق مستند الفوترة.",
+                style=MaterialTheme.typography.bodySmall)
             OutlinedButton(enabled=editable && financeInvoiceCandidateValid(draft),onClick={
                 val op=operation?:newOperationId().also {operation=it}
                 val frozen=draft
