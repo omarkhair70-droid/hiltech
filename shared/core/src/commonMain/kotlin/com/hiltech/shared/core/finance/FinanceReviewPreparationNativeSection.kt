@@ -25,6 +25,10 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.HiltechRecordChoice
+import com.hiltech.shared.core.design.HiltechRecordPicker
+import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.hiltechText
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -459,9 +463,6 @@ fun FinanceReviewPreparationSection(
     var accountingChoicesError by remember(identityId, organizationId, installationId, kind) {
         mutableStateOf<String?>(null)
     }
-    var accountSearch by remember(identityId, organizationId, installationId, kind) {
-        mutableStateOf("")
-    }
     var selectedCandidate by remember(identityId, organizationId, installationId) { mutableStateOf<String?>(null) }
     var draft by remember(identityId, organizationId, installationId, kind) {
         mutableStateOf(FinanceReviewDraft())
@@ -704,77 +705,51 @@ fun FinanceReviewPreparationSection(
             }
             accountingChoicesError?.let {Text(it,color=MaterialTheme.colorScheme.error)}
             accountingChoices?.let { choices ->
-                Text("الفترات المحاسبية المفتوحة",style=MaterialTheme.typography.titleSmall)
-                if(choices.openPeriods.isEmpty())Text("لا توجد فترة مفتوحة متاحة لهذا الدور.")
-                choices.openPeriods.take(8).forEach {period ->
-                    OutlinedButton(enabled=editable && draft.periodId!=period.id,onClick={
-                        draft=draft.copy(periodId=period.id);resetForFormChange()
-                    }) {Text(period.dateStart+" — "+period.dateEnd)}
-                }
-                if(choices.hasMorePeriods || choices.openPeriods.size>8)
-                    Text("تظهر أول 8 فترات. يمكن إدخال معرّف فترة أخرى معتمدة.")
-                Text("حسابات دفتر الأستاذ المعتمدة",style=MaterialTheme.typography.titleSmall)
-                OutlinedTextField(value=accountSearch,onValueChange={accountSearch=it},
-                    label={Text("بحث بنوع الحساب أو العملة أو المعرّف")},
-                    enabled=editable,modifier=Modifier.fillMaxWidth())
-                if(choices.hasMoreAccounts)Text("هذه أول 100 حساب فقط من المصدر.")
+                if (choices.hasMoreAccounts || choices.hasMorePeriods) Text(hiltechText(
+                    "الاختيارات من نافذة المصدر الحالية، وقد توجد سجلات إضافية.",
+                    "Choices are from the current source window; additional records may exist."))
             }
-            OutlinedTextField(value=draft.periodId,onValueChange={
-                draft=draft.copy(periodId=it.trim());resetForFormChange()
-            },label={Text("الفترة المحاسبية")},enabled=editable,modifier=Modifier.fillMaxWidth())
+            HiltechRecordPicker(
+                label = hiltechText("الفترة المحاسبية المفتوحة", "Open accounting period"),
+                value = draft.periodId,
+                choices = accountingChoices?.openPeriods.orEmpty().map {
+                    HiltechRecordChoice(it.id, it.dateStart + " — " + it.dateEnd)
+                },
+                onChange = { draft = draft.copy(periodId = it.trim()); resetForFormChange() },
+                enabled = editable,
+            )
             OutlinedTextField(value=draft.taxDisposition,onValueChange={
                 draft=draft.copy(taxDisposition=it);resetForFormChange()
-            },label={Text("المعالجة الضريبية المعتمدة")},enabled=editable,modifier=Modifier.fillMaxWidth())
+            },label={Text(hiltechText("المعالجة الضريبية المعتمدة", "Approved tax treatment"))},enabled=editable,modifier=Modifier.fillMaxWidth())
             draft.lines.forEachIndexed { index,line ->
                 Text("بند القيد ${index+1}",style=MaterialTheme.typography.titleSmall)
                 fun changeLine(next:FinanceReviewJournalLine) {
                     draft=draft.copy(lines=draft.lines.mapIndexed { i,l -> if(i==index) next else l })
                     resetForFormChange()
                 }
-                OutlinedTextField(value=line.accountId,onValueChange={changeLine(line.copy(accountId=it.trim()))},
-                    label={Text("معرّف حساب دفتر الأستاذ")},enabled=editable,modifier=Modifier.fillMaxWidth())
-                accountingChoices?.let {choices ->
-                    var accountMenuOpen by remember(identityId,organizationId,installationId,kind,index) {
-                        mutableStateOf(false)
-                    }
-                    Box {
-                        OutlinedButton(enabled=editable && choices.approvedAccounts.isNotEmpty(),
-                            onClick={accountMenuOpen=true}) {Text("اختيار حساب معتمد")}
-                        DropdownMenu(expanded=accountMenuOpen,onDismissRequest={accountMenuOpen=false}) {
-                            val filtered=choices.approvedAccounts.filter {
-                                accountSearch.isBlank() ||
-                                    it.id.contains(accountSearch.trim(),true) ||
-                                    it.accountKind.contains(accountSearch.trim(),true) ||
-                                    (it.currency?.contains(accountSearch.trim(),true)==true)
-                            }
-                            filtered.take(12).forEach {account ->
-                                DropdownMenuItem(
-                                    text={Text(account.accountKind+" · "+(account.currency?:"كل العملات")+" · "+account.id.take(8))},
-                                    onClick={
-                                        changeLine(line.copy(accountId=account.id))
-                                        accountMenuOpen=false
-                                    },
-                                )
-                            }
-                            if(filtered.isEmpty())DropdownMenuItem(text={Text("لا توجد نتائج مطابقة")},onClick={accountMenuOpen=false})
-                            if(filtered.size>12)DropdownMenuItem(text={Text("ضيّق البحث لإظهار المزيد")},onClick={accountMenuOpen=false})
-                        }
-                    }
-                }
+                HiltechRecordPicker(
+                    label = hiltechText("حساب دفتر الأستاذ", "General ledger account"),
+                    value = line.accountId,
+                    choices = accountingChoices?.approvedAccounts.orEmpty().map {
+                        HiltechRecordChoice(it.id, it.accountKind, (it.currency ?: hiltechText("كل العملات", "All currencies")) + " · " + it.id.take(8))
+                    },
+                    onChange = { changeLine(line.copy(accountId = it.trim())) },
+                    enabled = editable,
+                )
                 Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                    listOf("DEBIT" to "مدين","CREDIT" to "دائن").forEach { (value,label) ->
+                    listOf("DEBIT" to hiltechText("مدين", "Debit"),"CREDIT" to hiltechText("دائن", "Credit")).forEach { (value,label) ->
                         OutlinedButton(enabled=editable && line.side!=value,onClick={changeLine(line.copy(side=value))}) {Text(label)}
                     }
                 }
                 OutlinedTextField(value=line.amount,onValueChange={changeLine(line.copy(amount=it.trim()))},
-                    label={Text("المبلغ")},enabled=editable,modifier=Modifier.fillMaxWidth())
+                    label={Text(hiltechText("المبلغ", "Amount"))},enabled=editable,modifier=Modifier.fillMaxWidth())
                 if(draft.lines.size>2) OutlinedButton(enabled=editable,onClick={
                     draft=draft.copy(lines=draft.lines.filterIndexed { i,_ -> i!=index });resetForFormChange()
-                }) {Text("حذف البند")}
+                }) {Text(hiltechText("حذف البند", "Remove line"))}
             }
             OutlinedButton(enabled=editable && draft.lines.size<32,onClick={
                 draft=draft.copy(lines=draft.lines+FinanceReviewJournalLine());resetForFormChange()
-            }) {Text("إضافة بند")}
+            }) {Text(hiltechText("إضافة بند", "Add line"))}
         }
         if (kind == FinanceReviewKind.CASH_VOUCHER) {
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
