@@ -435,6 +435,8 @@ fun FinanceReviewPreparationSection(
     installationId: String,
     apis: FinanceEvidenceReadApis,
     newOperationId: () -> String,
+    handoff: FinanceReviewHandoff? = null,
+    onHandoffConsumed: () -> Unit = {},
 ) {
     // A keyed state means an account/company/installation switch removes any
     // outstanding request, source evidence, error and in-memory draft.
@@ -542,6 +544,17 @@ fun FinanceReviewPreparationSection(
         reviewOperationId = null
         prepared = null
         error = null
+    }
+
+    LaunchedEffect(handoff,kind,preparing,requestingReview,refreshing) {
+        val next=handoff ?: return@LaunchedEffect
+        if(preparing || requestingReview || refreshing)return@LaunchedEffect
+        if(!financeLookupIdIsUuid(next.sourceId)) {onHandoffConsumed();return@LaunchedEffect}
+        expanded=true
+        if(kind!=next.kind) {kind=next.kind;return@LaunchedEffect}
+        draft=FinanceReviewDraft(sourceId=next.sourceId,sourceKind=next.sourceKind)
+        resetForFormChange()
+        onHandoffConsumed()
     }
 
     LaunchedEffect(kind,selectedCandidate) {
