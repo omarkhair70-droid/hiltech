@@ -47,6 +47,8 @@ import com.hiltech.shared.core.finance.financeCashboxOpeningWorkspace
 import com.hiltech.shared.core.finance.FinanceBankCsvSelectedFile
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
+import com.hiltech.shared.core.NativeOperationArea
+import com.hiltech.shared.core.NativeOperationAreas
 import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
@@ -3102,368 +3104,392 @@ fun main() {
                     }
                 },
                 procurementOperator = {
-                    if (System.getenv("HILTECH_SERVICE_PURCHASES_UI_ENABLED")
-                            ?.equals("true", ignoreCase = true) == true &&
-                        System.getenv("HILTECH_SERVICE_PURCHASES_WORKSPACE_UI_ENABLED")
-                            ?.equals("true", ignoreCase = true) != true
-                    ) {
-                        val signed = shellState.value as? HiltechShellState.SignedIn
-                        val identity = signed?.identity
-                        val organization = identity?.organizations?.firstOrNull { it.primary }
-                            ?: identity?.organizations?.firstOrNull()
-                        if (identity != null && organization != null) {
-                            androidx.compose.runtime.key(
-                                identity.identityId, organization.organizationId, "service-purchases",
+                    NativeOperationAreas(
+                        title = "المشتريات",
+                        description = "اختر العملية المطلوبة وتابعها في مساحتها المستقلة.",
+                        areas = buildList<NativeOperationArea> {
+                            if (System.getenv("HILTECH_SERVICE_PURCHASES_UI_ENABLED")
+                                    ?.equals("true", ignoreCase = true) == true &&
+                                System.getenv("HILTECH_SERVICE_PURCHASES_WORKSPACE_UI_ENABLED")
+                                    ?.equals("true", ignoreCase = true) != true
                             ) {
-                                DesktopServicePurchaseSections(
-                                    runtime = runtime,
-                                    organizationId = organization.organizationId,
-                                )
-                            }
-                        }
-                    }
-                    if (System.getenv("HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED")
-                            ?.equals("true", ignoreCase = true) == true
-                    ) {
-                        val signed = shellState.value as? HiltechShellState.SignedIn
-                        val identity = signed?.identity
-                        val works = signed?.projects?.workOrders.orEmpty()
-                        if (identity != null && works.isNotEmpty()) {
-                            androidx.compose.runtime.key(identity.identityId) {
-                                PurchaseRequirementOperatorSection(
-                                    api = runtime.procurementApi,
-                                    warehouseApi = runtime.physicalWarehouseApi,
-                                    workApi = runtime.procurementWorkApi,
-                                    installationId = runtime.physicalWarehouseInstallationId,
-                                    workChoices = works,
-                                    projectIntakeId = signed.projects?.selectedProject?.projectId,
-                                    newOperationId = { java.util.UUID.randomUUID().toString() },
-                                )
-                            }
-                        }
-                    }
-                    if (System.getenv("HILTECH_SUPPLIER_SOURCING_UI_ENABLED")
-                            ?.equals("true", ignoreCase = true) == true
-                    ) {
-                        val signed = shellState.value as? HiltechShellState.SignedIn
-                        val identity = signed?.identity
-                        val organization = identity?.organizations?.firstOrNull { it.primary }
-                            ?: identity?.organizations?.firstOrNull()
-                        if (identity != null && organization != null) {
-                            androidx.compose.runtime.key(identity.identityId, organization.organizationId) {
-                                SupplierSourcingBuyerSection(
-                                    api = runtime.supplierSourcingApi,
-                                    organizationId = organization.organizationId,
-                                    installationId = runtime.physicalWarehouseInstallationId,
-                                    newOperationId = { java.util.UUID.randomUUID().toString() },
-                                    purchaseCandidateApi = runtime.purchaseOrderCandidateApi.takeIf {
-                                        System.getenv("HILTECH_PO_CANDIDATES_UI_ENABLED")
-                                            ?.equals("true", ignoreCase = true) == true
-                                    },
-                                    purchaseApprovalRequestEnabled =
-                                        System.getenv("HILTECH_PO_APPROVAL_REQUEST_UI_ENABLED")
-                                            ?.equals("true", ignoreCase = true) == true,
-                                    quoteDocumentUploader = runtime.supplierQuoteDocumentUploader,
-                                    pickQuoteFile = {
-                                        kotlinx.coroutines.withContext(Dispatchers.IO) {
-                                            val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
-                                            javax.swing.SwingUtilities.invokeAndWait {
-                                                val picker = javax.swing.JFileChooser()
-                                                picker.dialogTitle = "Private supplier quotation document"
-                                                picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter(
-                                                    "Quotation PDF or image (max 16 MiB)", "pdf", "jpg", "jpeg", "png", "webp",
-                                                )
-                                                picker.isAcceptAllFileFilterUsed = false
-                                                if (picker.showOpenDialog(null) ==
-                                                    javax.swing.JFileChooser.APPROVE_OPTION
-                                                ) chosen.set(picker.selectedFile)
-                                            }
-                                            val file = chosen.get()
-                                            if (file == null) null else {
-                                                val path = file.toPath()
-                                                require(java.nio.file.Files.isRegularFile(
-                                                    path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
-                                                )) { "Quotation source must be a regular file." }
-                                                val size = java.nio.file.Files.size(path)
-                                                require(size in 1..(16L * 1024L * 1024L)) {
-                                                    "Quotation file must be between 1 byte and 16 MiB."
-                                                }
-                                                val ext = file.extension.lowercase()
-                                                val mime = when (ext) {
-                                                    "pdf" -> "application/pdf"
-                                                    "jpg", "jpeg" -> "image/jpeg"
-                                                    "png" -> "image/png"
-                                                    "webp" -> "image/webp"
-                                                    else -> error("Unsupported quotation document format.")
-                                                }
-                                                val bytes = java.nio.file.Files.readAllBytes(path)
-                                                require(bytes.size.toLong() == size) {
-                                                    "Quotation source changed during file selection."
-                                                }
-                                                val digest = java.security.MessageDigest
-                                                    .getInstance("SHA-256").digest(bytes)
-                                                    .joinToString("") { byte ->
-                                                        "%02x".format(byte.toInt() and 0xff)
-                                                    }
-                                                com.hiltech.shared.core.procurement.SupplierQuotePickedFile(
-                                                    fileName = file.name,
-                                                    contentType = mime,
-                                                    sha256 = digest,
-                                                    bytes = bytes,
-                                                    capturedAt = java.time.Instant.now().toString(),
-                                                )
-                                            }
+                                add(NativeOperationArea("services", "شراء الخدمات", "طلبات الخدمات وعروض الأسعار وأوامر الخدمة") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, organization.organizationId, "service-purchases",
+                                        ) {
+                                            DesktopServicePurchaseSections(
+                                                runtime = runtime,
+                                                organizationId = organization.organizationId,
+                                            )
                                         }
-                                    },
-                                )
+                                    }
+                                })
                             }
-                        }
-                    }
-                    if (System.getenv("HILTECH_PO_ISSUER_UI_ENABLED")
-                            ?.equals("true", ignoreCase = true) == true
-                    ) {
-                        val signed = shellState.value as? HiltechShellState.SignedIn
-                        val identity = signed?.identity
-                        val organization = identity?.organizations?.firstOrNull { it.primary }
-                            ?: identity?.organizations?.firstOrNull()
-                        if (identity != null && organization != null) {
-                            androidx.compose.runtime.key(
-                                identity.identityId, organization.organizationId, "po-issuer",
-                            ) {
-                                PurchaseOrderIssuerSection(
-                                    api = runtime.purchaseOrderIssueApi,
-                                    amendmentApi = runtime.purchaseOrderDeliveryAmendmentApi.takeIf {
-                                        System.getenv("HILTECH_PO_AMENDMENT_UI_ENABLED")
-                                            ?.equals("true", ignoreCase = true) == true
-                                    },
-                                    cancellationEnabled =
-                                        System.getenv("HILTECH_PO_CANCELLATION_UI_ENABLED")
-                                            ?.equals("true", ignoreCase = true) == true,
-                                    organizationId = organization.organizationId,
-                                    installationId = runtime.physicalWarehouseInstallationId,
-                                    newOperationId = { java.util.UUID.randomUUID().toString() },
-                                )
-                            }
-                            if (System.getenv("HILTECH_PO_SUPPLIER_COMMUNICATION_UI_ENABLED")
+                            if (System.getenv("HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED")
                                     ?.equals("true", ignoreCase = true) == true
                             ) {
-                                androidx.compose.runtime.key(
-                                    identity.identityId, organization.organizationId, "po-dispatch-evidence",
-                                ) {
-                                    SupplierPoCommunicationSection(
-                                        issued = runtime.purchaseOrderIssueApi,
-                                        communications = runtime.supplierPoCommunicationApi,
-                                        organizationId = organization.organizationId,
-                                        installationId = runtime.physicalWarehouseInstallationId,
-                                        newOperationId = { java.util.UUID.randomUUID().toString() },
-                                        currentInstant = { java.time.Instant.now().toString() },
-                                    )
-                                }
+                                add(NativeOperationArea("requirements", "احتياجات المشاريع", "طلبات الخامات المرتبطة بالأعمال والمشاريع") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val works = signed?.projects?.workOrders.orEmpty()
+                                    if (identity != null && works.isNotEmpty()) {
+                                        androidx.compose.runtime.key(identity.identityId) {
+                                            PurchaseRequirementOperatorSection(
+                                                api = runtime.procurementApi,
+                                                warehouseApi = runtime.physicalWarehouseApi,
+                                                workApi = runtime.procurementWorkApi,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                workChoices = works,
+                                                projectIntakeId = signed.projects?.selectedProject?.projectId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                            )
+                                        }
+                                    }
+                                })
                             }
-                        }
-                    }
-                    if (System.getenv("HILTECH_ASSET_PURCHASE_NEEDS_ENABLED")
-                            ?.equals("true", ignoreCase = true) == true
-                    ) {
-                        val signed = shellState.value as? HiltechShellState.SignedIn
-                        val identity = signed?.identity
-                        val organization = identity?.organizations?.firstOrNull { it.primary }
-                            ?: identity?.organizations?.firstOrNull()
-                        if (identity != null && organization != null) {
-                            androidx.compose.runtime.key(
-                                identity.identityId, organization.organizationId, "asset-parts-needs",
+                            if (System.getenv("HILTECH_SUPPLIER_SOURCING_UI_ENABLED")
+                                    ?.equals("true", ignoreCase = true) == true
                             ) {
-                                AssetPurchaseNeedSection(
-                                    api = runtime.assetPurchaseNeedApi,
-                                    warehouseApi = runtime.physicalWarehouseApi,
-                                    organizationId = organization.organizationId,
-                                    installationId = runtime.physicalWarehouseInstallationId,
-                                    newOperationId = { java.util.UUID.randomUUID().toString() },
-                                )
-                            }
-                        }
-                    }
-                    if (System.getenv("HILTECH_OFFICE_STOCK_NEEDS_ENABLED")
-                            ?.equals("true", ignoreCase = true) == true
-                    ) {
-                        val signed = shellState.value as? HiltechShellState.SignedIn
-                        val identity = signed?.identity
-                        val org = identity?.organizations?.firstOrNull { it.primary }
-                            ?: identity?.organizations?.firstOrNull()
-                        if (identity != null && org != null) {
-                            androidx.compose.runtime.key(
-                                identity.identityId, org.organizationId, "office-needs",
-                            ) {
-                                OfficeStockNeedSection(
-                                    api = runtime.officeStockNeedApi,
-                                    organizationId = org.organizationId,
-                                    installationId = runtime.physicalWarehouseInstallationId,
-                                    newOperationId = { java.util.UUID.randomUUID().toString() },
-                                )
-                            }
-                        }
-                    }
-                    if (System.getenv("HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED")
-                            ?.equals("true", ignoreCase = true) == true
-                    ) {
-                        val signed = shellState.value as? HiltechShellState.SignedIn
-                        val identity = signed?.identity
-                        val organization = identity?.organizations?.firstOrNull { it.primary }
-                            ?: identity?.organizations?.firstOrNull()
-                        if (identity != null && organization != null) {
-                            androidx.compose.runtime.key(
-                                identity.identityId, organization.organizationId, "warehouse-needs",
-                            ) {
-                                WarehouseReplenishmentSection(
-                                    api = runtime.warehouseReplenishmentApi,
-                                    warehouseApi = runtime.physicalWarehouseApi,
-                                    organizationId = organization.organizationId,
-                                    installationId = runtime.physicalWarehouseInstallationId,
-                                    newOperationId = { java.util.UUID.randomUUID().toString() },
-                                )
-                            }
-                        }
-                    }
-                    if (System.getenv("HILTECH_PO_WAREHOUSE_INTAKE_UI_ENABLED")
-                            ?.equals("true", ignoreCase = true) == true
-                    ) {
-                        val signed = shellState.value as? HiltechShellState.SignedIn
-                        val identity = signed?.identity
-                        val organization = identity?.organizations?.firstOrNull { it.primary }
-                            ?: identity?.organizations?.firstOrNull()
-                        if (identity != null && organization != null) {
-                            androidx.compose.runtime.key(
-                                identity.identityId, organization.organizationId, "po-warehouse",
-                            ) {
-                                PoWarehouseIntakeSection(
-                                    api = runtime.poWarehouseIntakeApi,
-                                    warehouseApi = runtime.physicalWarehouseApi,
-                                    organizationId = organization.organizationId,
-                                    installationId = runtime.physicalWarehouseInstallationId,
-                                    newOperationId = { java.util.UUID.randomUUID().toString() },
-                                    deliveryNoteUploader = runtime.poReceivingDeliveryNoteUploader,
-                                    pickDeliveryNote = {
-                                        kotlinx.coroutines.withContext(Dispatchers.IO) {
-                                            val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
-                                            javax.swing.SwingUtilities.invokeAndWait {
-                                                val picker = javax.swing.JFileChooser()
-                                                picker.dialogTitle = "Private supplier delivery note document"
-                                                picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter(
-                                                    "Delivery note PDF/image (max 16 MiB)", "pdf", "jpg", "jpeg", "png", "webp",
-                                                )
-                                                picker.isAcceptAllFileFilterUsed = false
-                                                if (picker.showOpenDialog(null) ==
-                                                    javax.swing.JFileChooser.APPROVE_OPTION
-                                                ) chosen.set(picker.selectedFile)
-                                            }
-                                            val file = chosen.get()
-                                            if (file == null) null else {
-                                                val path = file.toPath()
-                                                require(java.nio.file.Files.isRegularFile(
-                                                    path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
-                                                )) { "Delivery note source must be a regular file." }
-                                                val size = java.nio.file.Files.size(path)
-                                                require(size in 1..(16L * 1024L * 1024L)) {
-                                                    "Delivery note must be between 1 byte and 16 MiB."
-                                                }
-                                                val mime = when (file.extension.lowercase()) {
-                                                    "pdf" -> "application/pdf"
-                                                    "jpg", "jpeg" -> "image/jpeg"
-                                                    "png" -> "image/png"
-                                                    "webp" -> "image/webp"
-                                                    else -> error("Unsupported delivery note file type.")
-                                                }
-                                                val bytes = java.nio.file.Files.readAllBytes(path)
-                                                require(bytes.size.toLong() == size) {
-                                                    "Delivery note document changed during file selection."
-                                                }
-                                                val digest = java.security.MessageDigest
-                                                    .getInstance("SHA-256").digest(bytes)
-                                                    .joinToString("") { byte ->
-                                                        "%02x".format(byte.toInt() and 0xff)
+                                add(NativeOperationArea("sourcing", "الموردون وعروض الأسعار", "مقارنة عروض الموردين وإعداد طلب الشراء") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(identity.identityId, organization.organizationId) {
+                                            SupplierSourcingBuyerSection(
+                                                api = runtime.supplierSourcingApi,
+                                                organizationId = organization.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                                purchaseCandidateApi = runtime.purchaseOrderCandidateApi.takeIf {
+                                                    System.getenv("HILTECH_PO_CANDIDATES_UI_ENABLED")
+                                                        ?.equals("true", ignoreCase = true) == true
+                                                },
+                                                purchaseApprovalRequestEnabled =
+                                                    System.getenv("HILTECH_PO_APPROVAL_REQUEST_UI_ENABLED")
+                                                        ?.equals("true", ignoreCase = true) == true,
+                                                quoteDocumentUploader = runtime.supplierQuoteDocumentUploader,
+                                                pickQuoteFile = {
+                                                    kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                                        val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                                        javax.swing.SwingUtilities.invokeAndWait {
+                                                            val picker = javax.swing.JFileChooser()
+                                                            picker.dialogTitle = "Private supplier quotation document"
+                                                            picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter(
+                                                                "Quotation PDF or image (max 16 MiB)", "pdf", "jpg", "jpeg", "png", "webp",
+                                                            )
+                                                            picker.isAcceptAllFileFilterUsed = false
+                                                            if (picker.showOpenDialog(null) ==
+                                                                javax.swing.JFileChooser.APPROVE_OPTION
+                                                            ) chosen.set(picker.selectedFile)
+                                                        }
+                                                        val file = chosen.get()
+                                                        if (file == null) null else {
+                                                            val path = file.toPath()
+                                                            require(java.nio.file.Files.isRegularFile(
+                                                                path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
+                                                            )) { "Quotation source must be a regular file." }
+                                                            val size = java.nio.file.Files.size(path)
+                                                            require(size in 1..(16L * 1024L * 1024L)) {
+                                                                "Quotation file must be between 1 byte and 16 MiB."
+                                                            }
+                                                            val ext = file.extension.lowercase()
+                                                            val mime = when (ext) {
+                                                                "pdf" -> "application/pdf"
+                                                                "jpg", "jpeg" -> "image/jpeg"
+                                                                "png" -> "image/png"
+                                                                "webp" -> "image/webp"
+                                                                else -> error("Unsupported quotation document format.")
+                                                            }
+                                                            val bytes = java.nio.file.Files.readAllBytes(path)
+                                                            require(bytes.size.toLong() == size) {
+                                                                "Quotation source changed during file selection."
+                                                            }
+                                                            val digest = java.security.MessageDigest
+                                                                .getInstance("SHA-256").digest(bytes)
+                                                                .joinToString("") { byte ->
+                                                                    "%02x".format(byte.toInt() and 0xff)
+                                                                }
+                                                            com.hiltech.shared.core.procurement.SupplierQuotePickedFile(
+                                                                fileName = file.name,
+                                                                contentType = mime,
+                                                                sha256 = digest,
+                                                                bytes = bytes,
+                                                                capturedAt = java.time.Instant.now().toString(),
+                                                            )
+                                                        }
                                                     }
-                                                com.hiltech.shared.core.procurement.PoDeliveryNoteFile(
-                                                    contentType = mime, originalFileName = file.name,
-                                                    bytes = bytes, sha256 = digest,
-                                                    capturedAt = java.time.Instant.now().toString(),
+                                                },
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                            if (System.getenv("HILTECH_PO_ISSUER_UI_ENABLED")
+                                    ?.equals("true", ignoreCase = true) == true
+                            ) {
+                                add(NativeOperationArea("orders", "أوامر الشراء", "الإصدار والتعديلات والإلغاء والتواصل مع المورد") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, organization.organizationId, "po-issuer",
+                                        ) {
+                                            PurchaseOrderIssuerSection(
+                                                api = runtime.purchaseOrderIssueApi,
+                                                amendmentApi = runtime.purchaseOrderDeliveryAmendmentApi.takeIf {
+                                                    System.getenv("HILTECH_PO_AMENDMENT_UI_ENABLED")
+                                                        ?.equals("true", ignoreCase = true) == true
+                                                },
+                                                cancellationEnabled =
+                                                    System.getenv("HILTECH_PO_CANCELLATION_UI_ENABLED")
+                                                        ?.equals("true", ignoreCase = true) == true,
+                                                organizationId = organization.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                            )
+                                        }
+                                        if (System.getenv("HILTECH_PO_SUPPLIER_COMMUNICATION_UI_ENABLED")
+                                                ?.equals("true", ignoreCase = true) == true
+                                        ) {
+                                            androidx.compose.runtime.key(
+                                                identity.identityId, organization.organizationId, "po-dispatch-evidence",
+                                            ) {
+                                                SupplierPoCommunicationSection(
+                                                    issued = runtime.purchaseOrderIssueApi,
+                                                    communications = runtime.supplierPoCommunicationApi,
+                                                    organizationId = organization.organizationId,
+                                                    installationId = runtime.physicalWarehouseInstallationId,
+                                                    newOperationId = { java.util.UUID.randomUUID().toString() },
+                                                    currentInstant = { java.time.Instant.now().toString() },
                                                 )
                                             }
                                         }
-                                    },
-  
-                                )
+                                    }
+                                })
                             }
-                        }
-                    }
-                    if (System.getenv("HILTECH_SUPPLIER_INVOICE_FINANCE_UI_ENABLED")
-                            ?.equals("true", ignoreCase = true) == true
-                    ) {
-                        val signed = shellState.value as? HiltechShellState.SignedIn
-                        val identity = signed?.identity
-                        val organization = identity?.organizations?.firstOrNull { it.primary }
-                            ?: identity?.organizations?.firstOrNull()
-                        if (identity != null && organization != null) {
-                            androidx.compose.runtime.key(
-                                identity.identityId, organization.organizationId, "invoice-finance",
+                            if (System.getenv("HILTECH_ASSET_PURCHASE_NEEDS_ENABLED")
+                                    ?.equals("true", ignoreCase = true) == true
                             ) {
-                                SupplierInvoiceFinanceSection(
-                                    api = runtime.supplierInvoiceFinanceApi,
-                                    organizationId = organization.organizationId,
-                                    installationId = runtime.physicalWarehouseInstallationId,
-                                    newOperationId = { java.util.UUID.randomUUID().toString() },
-                                    documentUploader = runtime.supplierInvoiceDocumentUploader,
-                                    pickInvoiceFile = {
-                                        kotlinx.coroutines.withContext(Dispatchers.IO) {
-                                            val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
-                                            javax.swing.SwingUtilities.invokeAndWait {
-                                                val picker = javax.swing.JFileChooser()
-                                                picker.dialogTitle = "Private supplier invoice document"
-                                                picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter(
-                                                    "Invoice PDF/image (max 16 MiB)", "pdf", "jpg", "jpeg", "png", "webp",
-                                                )
-                                                picker.isAcceptAllFileFilterUsed = false
-                                                if (picker.showOpenDialog(null) ==
-                                                    javax.swing.JFileChooser.APPROVE_OPTION
-                                                ) chosen.set(picker.selectedFile)
-                                            }
-                                            val file = chosen.get()
-                                            if (file == null) null else {
-                                                val path = file.toPath()
-                                                require(java.nio.file.Files.isRegularFile(
-                                                    path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
-                                                )) { "Invoice source must be a regular file." }
-                                                val size = java.nio.file.Files.size(path)
-                                                require(size in 1..(16L * 1024L * 1024L)) {
-                                                    "Invoice must be between 1 byte and 16 MiB."
-                                                }
-                                                val mime = when (file.extension.lowercase()) {
-                                                    "pdf" -> "application/pdf"
-                                                    "jpg", "jpeg" -> "image/jpeg"
-                                                    "png" -> "image/png"
-                                                    "webp" -> "image/webp"
-                                                    else -> error("Unsupported invoice file type.")
-                                                }
-                                                val bytes = java.nio.file.Files.readAllBytes(path)
-                                                require(bytes.size.toLong() == size) {
-                                                    "Invoice document changed during file selection."
-                                                }
-                                                val digest = java.security.MessageDigest
-                                                    .getInstance("SHA-256").digest(bytes)
-                                                    .joinToString("") { byte ->
-                                                        "%02x".format(byte.toInt() and 0xff)
-                                                    }
-                                                com.hiltech.shared.core.procurement.SupplierInvoiceSelectedFile(
-                                                    contentType = mime, originalFileName = file.name,
-                                                    bytes = bytes, sha256 = digest,
-                                                    capturedAt = java.time.Instant.now().toString(),
-                                                )
-                                            }
+                                add(NativeOperationArea("asset-parts", "قطع غيار المعدات", "احتياجات الأصول والصيانة") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, organization.organizationId, "asset-parts-needs",
+                                        ) {
+                                            AssetPurchaseNeedSection(
+                                                api = runtime.assetPurchaseNeedApi,
+                                                warehouseApi = runtime.physicalWarehouseApi,
+                                                organizationId = organization.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                            )
                                         }
-                                    },
-                                )
+                                    }
+                                })
                             }
-                        }
-                    }
+                            if (System.getenv("HILTECH_OFFICE_STOCK_NEEDS_ENABLED")
+                                    ?.equals("true", ignoreCase = true) == true
+                            ) {
+                                add(NativeOperationArea("office-stock", "احتياجات المكتب", "طلبات المستلزمات الداخلية") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val org = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && org != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, org.organizationId, "office-needs",
+                                        ) {
+                                            OfficeStockNeedSection(
+                                                api = runtime.officeStockNeedApi,
+                                                organizationId = org.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                            if (System.getenv("HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED")
+                                    ?.equals("true", ignoreCase = true) == true
+                            ) {
+                                add(NativeOperationArea("replenishment", "إعادة التوريد", "احتياجات إعادة تعبئة المخزون") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, organization.organizationId, "warehouse-needs",
+                                        ) {
+                                            WarehouseReplenishmentSection(
+                                                api = runtime.warehouseReplenishmentApi,
+                                                warehouseApi = runtime.physicalWarehouseApi,
+                                                organizationId = organization.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                            if (System.getenv("HILTECH_PO_WAREHOUSE_INTAKE_UI_ENABLED")
+                                    ?.equals("true", ignoreCase = true) == true
+                            ) {
+                                add(NativeOperationArea("receiving", "استلام المشتريات", "استلام التوريدات ومستندات التسليم") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, organization.organizationId, "po-warehouse",
+                                        ) {
+                                            PoWarehouseIntakeSection(
+                                                api = runtime.poWarehouseIntakeApi,
+                                                warehouseApi = runtime.physicalWarehouseApi,
+                                                organizationId = organization.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                                deliveryNoteUploader = runtime.poReceivingDeliveryNoteUploader,
+                                                pickDeliveryNote = {
+                                                    kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                                        val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                                        javax.swing.SwingUtilities.invokeAndWait {
+                                                            val picker = javax.swing.JFileChooser()
+                                                            picker.dialogTitle = "Private supplier delivery note document"
+                                                            picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter(
+                                                                "Delivery note PDF/image (max 16 MiB)", "pdf", "jpg", "jpeg", "png", "webp",
+                                                            )
+                                                            picker.isAcceptAllFileFilterUsed = false
+                                                            if (picker.showOpenDialog(null) ==
+                                                                javax.swing.JFileChooser.APPROVE_OPTION
+                                                            ) chosen.set(picker.selectedFile)
+                                                        }
+                                                        val file = chosen.get()
+                                                        if (file == null) null else {
+                                                            val path = file.toPath()
+                                                            require(java.nio.file.Files.isRegularFile(
+                                                                path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
+                                                            )) { "Delivery note source must be a regular file." }
+                                                            val size = java.nio.file.Files.size(path)
+                                                            require(size in 1..(16L * 1024L * 1024L)) {
+                                                                "Delivery note must be between 1 byte and 16 MiB."
+                                                            }
+                                                            val mime = when (file.extension.lowercase()) {
+                                                                "pdf" -> "application/pdf"
+                                                                "jpg", "jpeg" -> "image/jpeg"
+                                                                "png" -> "image/png"
+                                                                "webp" -> "image/webp"
+                                                                else -> error("Unsupported delivery note file type.")
+                                                            }
+                                                            val bytes = java.nio.file.Files.readAllBytes(path)
+                                                            require(bytes.size.toLong() == size) {
+                                                                "Delivery note document changed during file selection."
+                                                            }
+                                                            val digest = java.security.MessageDigest
+                                                                .getInstance("SHA-256").digest(bytes)
+                                                                .joinToString("") { byte ->
+                                                                    "%02x".format(byte.toInt() and 0xff)
+                                                                }
+                                                            com.hiltech.shared.core.procurement.PoDeliveryNoteFile(
+                                                                contentType = mime, originalFileName = file.name,
+                                                                bytes = bytes, sha256 = digest,
+                                                                capturedAt = java.time.Instant.now().toString(),
+                                                            )
+                                                        }
+                                                    }
+                                                },
+              
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                            if (System.getenv("HILTECH_SUPPLIER_INVOICE_FINANCE_UI_ENABLED")
+                                    ?.equals("true", ignoreCase = true) == true
+                            ) {
+                                add(NativeOperationArea("invoices", "فواتير الموردين", "تسجيل الفواتير ومراجعتها") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, organization.organizationId, "invoice-finance",
+                                        ) {
+                                            SupplierInvoiceFinanceSection(
+                                                api = runtime.supplierInvoiceFinanceApi,
+                                                organizationId = organization.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                                documentUploader = runtime.supplierInvoiceDocumentUploader,
+                                                pickInvoiceFile = {
+                                                    kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                                        val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                                        javax.swing.SwingUtilities.invokeAndWait {
+                                                            val picker = javax.swing.JFileChooser()
+                                                            picker.dialogTitle = "Private supplier invoice document"
+                                                            picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter(
+                                                                "Invoice PDF/image (max 16 MiB)", "pdf", "jpg", "jpeg", "png", "webp",
+                                                            )
+                                                            picker.isAcceptAllFileFilterUsed = false
+                                                            if (picker.showOpenDialog(null) ==
+                                                                javax.swing.JFileChooser.APPROVE_OPTION
+                                                            ) chosen.set(picker.selectedFile)
+                                                        }
+                                                        val file = chosen.get()
+                                                        if (file == null) null else {
+                                                            val path = file.toPath()
+                                                            require(java.nio.file.Files.isRegularFile(
+                                                                path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
+                                                            )) { "Invoice source must be a regular file." }
+                                                            val size = java.nio.file.Files.size(path)
+                                                            require(size in 1..(16L * 1024L * 1024L)) {
+                                                                "Invoice must be between 1 byte and 16 MiB."
+                                                            }
+                                                            val mime = when (file.extension.lowercase()) {
+                                                                "pdf" -> "application/pdf"
+                                                                "jpg", "jpeg" -> "image/jpeg"
+                                                                "png" -> "image/png"
+                                                                "webp" -> "image/webp"
+                                                                else -> error("Unsupported invoice file type.")
+                                                            }
+                                                            val bytes = java.nio.file.Files.readAllBytes(path)
+                                                            require(bytes.size.toLong() == size) {
+                                                                "Invoice document changed during file selection."
+                                                            }
+                                                            val digest = java.security.MessageDigest
+                                                                .getInstance("SHA-256").digest(bytes)
+                                                                .joinToString("") { byte ->
+                                                                    "%02x".format(byte.toInt() and 0xff)
+                                                                }
+                                                            com.hiltech.shared.core.procurement.SupplierInvoiceSelectedFile(
+                                                                contentType = mime, originalFileName = file.name,
+                                                                bytes = bytes, sha256 = digest,
+                                                                capturedAt = java.time.Instant.now().toString(),
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                        },
+                    )
                 },
                 onRefreshProjects =
                     ::refreshProjects,
