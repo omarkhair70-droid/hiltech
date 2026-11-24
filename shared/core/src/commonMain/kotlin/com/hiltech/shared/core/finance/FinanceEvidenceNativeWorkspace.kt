@@ -327,12 +327,16 @@ fun financeEvidenceReadNativeWorkspace(
             mutableStateOf<FinanceApLedgerEvidenceReportDto?>(null)
         }
         var ledgerLoading by remember(identityId, organizationId, installationId) {
-            mutableStateOf(true)
+            mutableStateOf(false)
+        }
+        var ledgerExpanded by remember(identityId, organizationId, installationId) {
+            mutableStateOf(false)
         }
         var ledgerError by remember(identityId, organizationId, installationId) {
             mutableStateOf<String?>(null)
         }
         LaunchedEffect(identityId, organizationId, installationId, ledgerRefresh) {
+            if (ledgerRefresh == 0) return@LaunchedEffect
             ledgerLoading = true
             ledger = null
             ledgerError = null
@@ -405,6 +409,25 @@ fun financeEvidenceReadNativeWorkspace(
                 style = MaterialTheme.typography.titleMedium)
             Text(if (reviewPreparationEnabled) "قراءة وتجهيز ومتابعة التسجيل الداخلي المعتمد حسب صلاحيات المصدر." else "قراءة داخلية فقط.",
                 style = MaterialTheme.typography.bodySmall)
+            if (reviewPreparationEnabled) {
+                FinanceReviewPreparationSection(
+                    identityId = identityId,
+                    organizationId = organizationId,
+                    installationId = installationId,
+                    apis = apis,
+                    newOperationId = newOperationId,
+                    handoff = handoff,
+                    onHandoffConsumed = { handoff = null },
+                )
+            }
+
+            OutlinedButton(onClick = {
+                ledgerExpanded = !ledgerExpanded
+                if (ledgerExpanded && ledgerRefresh == 0) ledgerRefresh += 1
+            }) {
+                Text(if (ledgerExpanded) "إخفاء سجل قيود الموردين" else "عرض سجل قيود الموردين")
+            }
+            if (ledgerExpanded) {
             Text("سجل الموردين · قيود تاريخية مثبتة",
                 style = MaterialTheme.typography.titleSmall)
             OutlinedButton(enabled = !ledgerLoading, onClick = { ledgerRefresh += 1 }) {
@@ -433,16 +456,6 @@ fun financeEvidenceReadNativeWorkspace(
                 }
             }
 
-            if (reviewPreparationEnabled) {
-                FinanceReviewPreparationSection(
-                    identityId = identityId,
-                    organizationId = organizationId,
-                    installationId = installationId,
-                    apis = apis,
-                    newOperationId = newOperationId,
-                    handoff = handoff,
-                    onHandoffConsumed = { handoff = null },
-                )
             }
 
             Text("تتبّع عملية برقم مصدرها", style = MaterialTheme.typography.titleSmall)
