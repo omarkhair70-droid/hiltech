@@ -551,6 +551,7 @@ private fun QuoteEmailPanel(quoteId: String, history: List<com.hiltech.shared.co
         history.forEach { item ->
             val status = when (item.state) {
                 "SMTP_ACCEPTED" -> hiltechText("قبله خادم البريد؛ الاستلام غير مؤكد", "Accepted by mail server; delivery unconfirmed")
+                "API_ACCEPTED" -> hiltechText("قبله مزود البريد؛ الاستلام غير مؤكد", "Accepted by mail provider; delivery unconfirmed")
                 else -> hiltechText("نتيجة غير مؤكدة — تحقق قبل إعادة الإرسال", "Uncertain outcome — verify before resending")
             }
             HiltechKeyValue(item.recipient + " · " + item.createdAt, status)

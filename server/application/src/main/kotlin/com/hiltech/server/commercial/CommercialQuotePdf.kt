@@ -108,11 +108,57 @@ internal object CommercialQuotePdf {
             paragraph("Issued / تاريخ الإصدار: " + (quote.releasedAt ?: "—"))
             paragraph("Valid until / صالح حتى: " + quote.validityDate)
             paragraph("ITEMS / البنود", 30f, true)
-            quote.lines.forEach { line ->
-                paragraph(line.lineCode + "  ·  " + line.description, 29f)
-                paragraph("Quantity / الكمية: " + line.quantity.stripTrailingZeros().toPlainString() +
-                    "  " + line.unit + "   |   Unit price / سعر الوحدة: " + line.unitPrice.toPlainString() + " " + quote.currency, 23f)
+            val edges = intArrayOf(margin, margin+90, margin+490, margin+620, margin+810, width-margin)
+            fun tableHeader() {
+                if (y+62 > height-115) { finish(); begin() }
+                graphics.color = accent
+                graphics.fillRect(margin,y.toInt(),width-margin*2,54)
+                graphics.color = Color.WHITE
+                graphics.font = regular.deriveFont(19f)
+                listOf("No. / رقم","Item / البند","Qty / الكمية","Unit price / السعر","Total / الإجمالي").forEachIndexed { i,label ->
+                    graphics.drawString(label,edges[i]+9,y+34)
+                }
+                y += 54
             }
+            fun layoutCell(value: String, cellWidth: Int): List<java.awt.font.TextLayout> {
+                val a = AttributedString(value.ifBlank { "—" }.replace("\n"," ").replace("\r"," "))
+                a.addAttribute(TextAttribute.FONT,regular.deriveFont(21f))
+                val it = a.iterator
+                val measurer = LineBreakMeasurer(it,graphics.fontRenderContext)
+                val result = mutableListOf<java.awt.font.TextLayout>()
+                while(measurer.position<it.endIndex) result.add(measurer.nextLayout((cellWidth-18).toFloat()))
+                return result
+            }
+            tableHeader()
+            quote.lines.forEachIndexed { index,line ->
+                val values = listOf(line.lineCode,line.description,line.quantity.stripTrailingZeros().toPlainString()+" "+line.unit,
+                    line.unitPrice.stripTrailingZeros().toPlainString(),commercialExactLineTotal(line.quantity,line.unitPrice).stripTrailingZeros().toPlainString())
+                val cells = values.mapIndexed { i,value -> layoutCell(value,edges[i+1]-edges[i]) }
+                val maxLines = cells.maxOf { it.size }
+                var offset = 0
+                while (offset < maxLines) {
+                    if (y+52>height-115) { finish(); begin(); tableHeader() }
+                    val linesFit = ((height-115-y-18)/30).toInt().coerceAtLeast(1)
+                    val count = minOf(maxLines-offset,linesFit)
+                    val rowHeight = (count*30+18).toFloat()
+                    graphics.color = if(index%2==0) Color(242,246,245) else Color.WHITE
+                    graphics.fillRect(margin,y.toInt(),width-margin*2,rowHeight.toInt())
+                    graphics.color = ink
+                    cells.forEachIndexed { i,cell ->
+                        cell.drop(offset).take(count).forEachIndexed { j,layout ->
+                            val x = if(i>=2 || !layout.isLeftToRight) edges[i+1]-9-layout.advance else edges[i]+9f
+                            layout.draw(graphics,x,y+9+j*30+layout.ascent)
+                        }
+                    }
+                    graphics.color = Color(216,225,223)
+                    graphics.drawLine(margin,(y+rowHeight).toInt(),width-margin,(y+rowHeight).toInt())
+                    y += rowHeight
+                    offset += count
+                    if(offset<maxLines) { finish(); begin(); tableHeader() }
+                }
+            }
+            y += 24
+            paragraph("Currency / العملة: "+quote.currency,22f)
             quote.subtotal?.let { paragraph("Subtotal / قبل الخصم والضريبة: " + it.toPlainString() + " " + quote.currency) }
             paragraph("Discount / الخصم: " + quote.discountAmount.toPlainString() + " " + quote.currency)
             paragraph("Tax / الضريبة: " + quote.taxAmount.toPlainString() + " " + quote.currency)

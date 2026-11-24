@@ -25,7 +25,7 @@ data class CommercialOAuthStart(val id: String,val authorizationUrl: String)
 data class CommercialOAuthPending(val status: String,val provider: String,val email: String? = null)
 data class CommercialOAuthFinishRequest(val organizationId: String,val pendingId: String)
 data class CommercialOAuthDisconnectRequest(val organizationId: String,val version: Long)
-internal data class CommercialOAuthSender(val company: UUID,val provider: String,val email: String)
+data class CommercialOAuthSender(val company: UUID,val provider: String,val email: String)
 
 @Component
 class CommercialMailOAuth(
@@ -143,7 +143,7 @@ class CommercialMailOAuth(
         return CommercialOAuthSender(org,name,r["account_email"] as String)
     }
     @org.springframework.transaction.annotation.Transactional
-    internal fun send(sender: CommercialOAuthSender,mime: ByteArray) {
+    fun send(sender: CommercialOAuthSender,mime: ByteArray) {
         val org = sender.company
         jdbc.queryForObject("SELECT id FROM organization WHERE id=? FOR UPDATE",UUID::class.java,org)
         val r = requireNotNull(record(org))

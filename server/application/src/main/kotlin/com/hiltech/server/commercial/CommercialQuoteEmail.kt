@@ -89,7 +89,7 @@ class CommercialQuoteEmail(
                 val mime = java.io.ByteArrayOutputStream().use { out -> message.saveChanges(); message.writeTo(out); out.toByteArray() }
                 oauth.send(oauthSender,mime)
             } else requireNotNull(sender).send(message)
-            "SMTP_ACCEPTED"
+            if (oauthSender != null) "API_ACCEPTED" else "SMTP_ACCEPTED"
         } catch (_: Exception) {
             "UNKNOWN"
         }
