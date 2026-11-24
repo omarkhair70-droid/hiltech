@@ -4,6 +4,7 @@ import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 @Serializable
@@ -69,7 +70,16 @@ class FinanceBankReconciliationSignoffApiClient(
             options=HiltechRequestOptions(installationId=installation),
             decode={json.decodeFromString(FinanceBankReconciliationReceiptDto.serializer(),it)},
         )
-    private suspend fun post(
+   
+ suspend fun operatorQueue(org:String,installation:String):List<FinanceBankReconciliationReceiptDto> =
+    api.request(method=HttpMethod.Get,path=base(org)+"/bank-reconciliations/operator-queue",
+      options=HiltechRequestOptions(installationId=installation),
+      decode={json.decodeFromString(ListSerializer(FinanceBankReconciliationReceiptDto.serializer()),it)})
+ suspend fun operatorStatus(org:String,id:String,installation:String):FinanceBankReconciliationReceiptDto =
+    api.request(method=HttpMethod.Get,path=base(org)+"/bank-reconciliations/"+uuid(id)+"/operator-status",
+      options=HiltechRequestOptions(installationId=installation),
+      decode={json.decodeFromString(FinanceBankReconciliationReceiptDto.serializer(),it)})
+ private suspend fun post(
         org:String,id:String,operation:String,evidence:String?,
         installation:String,action:String,
     ):FinanceBankReconciliationReceiptDto {
