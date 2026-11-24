@@ -360,4 +360,38 @@ class FinanceReviewPreparationNativeTest {
         assertFalse(financeReviewDraftIsValid(FinanceReviewKind.CASH_VOUCHER,valid.copy(amount="0")))
     }
 
+    @Test
+    fun invoiceCandidateValidatesRealDatesAndSourceBeforeCreation() {
+        val draft=FinanceInvoiceCandidateDraft(opportunityId=source,evidenceId=install,
+            amount="120.50",legalReference="LEGAL-REVIEW",contractReference="CONTRACT-MILESTONE",
+            issueDate="2028-02-29",dueDate="2028-03-01")
+        assertTrue(financeInvoiceCandidateValid(draft))
+        assertFalse(financeInvoiceCandidateValid(draft.copy(issueDate="2027-02-29")))
+        assertFalse(financeInvoiceCandidateValid(draft.copy(dueDate="2028-02-28")))
+        assertFalse(financeInvoiceCandidateValid(draft.copy(amount="0")))
+        assertFalse(financeInvoiceCandidateValid(draft.copy(evidenceId="missing")))
+    }
+
+    @Test
+    fun invoiceCandidateCreationReturnsUnissuedDraftFromExactAward() = runBlocking {
+        var calls=0
+        val client=HttpClient(MockEngine { request ->
+            calls++
+            assertEquals("POST",request.method.value)
+            assertEquals("/v1/finance/organizations/$org/client-award-sources/$source/invoice-candidates",request.url.encodedPath)
+            assertEquals(operation,request.headers["Idempotency-Key"])
+            respond("""{"candidateId":"$proposal","organizationId":"$org",
+                "opportunityId":"$source","customerOrganizationId":"$install",
+                "commercialSourceSha256":"${"a".repeat(64)}","requestedAmount":"120.500000",
+                "currency":"EGP","state":"DRAFT_UNISSUED"}""",HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType,"application/json"))
+        })
+        val draft=FinanceInvoiceCandidateDraft(source,install,"120.50","LEGAL-REVIEW","CONTRACT-MILESTONE",
+            "2026-11-24","2026-12-24")
+        val result=financeCreateInvoiceCandidate(apis(client),org,install,draft,operation)
+        assertEquals(proposal,result.candidateId)
+        assertFalse(result.invoiceIssued)
+        assertEquals(1,calls)
+    }
+
 }
