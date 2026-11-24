@@ -2,6 +2,12 @@ package com.hiltech.shared.core.service
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import com.hiltech.shared.core.design.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -117,21 +123,38 @@ fun serviceOperationsReadNativeWorkspace(
                 modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("الدعم والصيانة — قراءة داخلية فقط، دون تعهد SLA أو تواصل مع العميل")
-                OutlinedButton(enabled = !projectsLoading, onClick = { projectRefresh++ }) {
-                    Text("تحديث صلاحيات مشاريع الخدمة")
+                val colors = LocalHiltechOperationalColors.current
+                var query by remember { mutableStateOf("") }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        HiltechSectionHeading("SERVICE", hiltechText("الدعم والصيانة", "Support & maintenance"),
+                            hiltechText("البلاغات والضمان والمواعيد وزيارات الصيانة لكل مشروع.", "Tickets, warranty, timing and maintenance visits by project."))
+                    }
+                    TextButton(enabled = !projectsLoading, onClick = { projectRefresh++ }) {
+                        Text(hiltechText("تحديث", "Refresh"))
+                    }
                 }
-                if (projectsLoading) Text("جارٍ التحقق من مشاريع الدعم المصرح بها…")
-                projectsError?.let { Text("المصدر غير متاح: " + it) }
-                if (!projectsLoading && projectsError == null && allowedProjects.isEmpty()) {
-                    Text("لا توجد مشاريع خدمة مسموح بعرضها في نافذة المصدر الحالية.")
-                }
-                allowedProjects.forEach { project ->
-                    OutlinedButton(enabled = !projectsLoading, onClick = {
-                        if (allowedProjects.any { it.projectId == project.projectId }) {
-                            selectedProjectId = project.projectId
+                OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    label = { Text(hiltechText("اسم المشروع أو الكود", "Project name or code")) })
+                if (projectsLoading) Text(hiltechText("جارٍ تحميل المشاريع…", "Loading projects…"))
+                projectsError?.let { Text(hiltechText("المصدر غير متاح: ", "Source unavailable: ") + it) }
+                val matching = allowedProjects.filter { project -> query.isBlank() ||
+                    listOf(project.name, project.projectCode, project.clientDisplayName).any { it.contains(query.trim(), true) } }
+                if (!projectsLoading && projectsError == null && matching.isEmpty()) Text(hiltechText("لا توجد مشاريع مطابقة.", "No matching projects."))
+                matching.forEach { project ->
+                    Surface(onClick = { if (allowedProjects.any { it.projectId == project.projectId }) selectedProjectId = project.projectId },
+                        enabled = !projectsLoading, color = colors.surface, contentColor = colors.primaryText,
+                        shape = HiltechShape.medium, modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(project.projectCode, style = MaterialTheme.typography.labelMedium, color = colors.secondaryText)
+                                Text(project.name, style = MaterialTheme.typography.titleMedium)
+                                Text(project.clientDisplayName, color = colors.secondaryText)
+                                HiltechStateTag(project.lifecycleState, HiltechStateTone.NEUTRAL)
+                            }
+                            Text(hiltechText("فتح", "Open"), color = colors.accent)
                         }
-                    }) { Text(project.projectCode + " · " + project.name) }
+                    }
                 }
             }
         } else {
@@ -292,7 +315,7 @@ fun serviceOperationsReadNativeWorkspace(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     OutlinedButton(onClick = { selectedProjectId = null }) {
-                        Text("الرجوع لمشاريع الخدمة")
+                        Text(hiltechText("الرجوع لمشاريع الخدمة", "Back to service projects"))
                     }
                     Text(project.name)
                     Row(
@@ -300,10 +323,10 @@ fun serviceOperationsReadNativeWorkspace(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         for ((key, title) in listOf(
-                            "TICKETS" to "البلاغات",
-                            "COVERAGE" to "استحقاق الضمان",
-                            "TIME" to "التوقيت الداخلي",
-                            "AGENDA" to "مقترحات الزيارات",
+                            "TICKETS" to hiltechText("البلاغات", "Tickets"),
+                            "COVERAGE" to hiltechText("استحقاق الضمان", "Warranty coverage"),
+                            "TIME" to hiltechText("التوقيت الداخلي", "Internal timing"),
+                            "AGENDA" to hiltechText("مقترحات الزيارات", "Visit agenda"),
                         )) {
                             OutlinedButton(
                                 enabled = key != tab,
@@ -312,7 +335,7 @@ fun serviceOperationsReadNativeWorkspace(
                         }
                     }
                     if (tab in setOf("COVERAGE", "TIME") && selectedTicket == null) {
-                        Text("اختَر بلاغًا من شاشة البلاغات لعرض هذا المصدر.")
+                        Text(hiltechText("اختَر بلاغًا من شاشة البلاغات لعرض هذا المصدر.", "Select a support ticket to view this source."))
                     } else {
                         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                             when (tab) {
