@@ -50,6 +50,8 @@ import com.hiltech.shared.core.finance.financeCashboxOpeningWorkspace
 import com.hiltech.shared.core.finance.FinanceBankCsvSelectedFile
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
+import com.hiltech.shared.core.NativeOperationArea
+import com.hiltech.shared.core.NativeOperationAreas
 import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
@@ -238,6 +240,10 @@ class MainActivity : ComponentActivity() {
                     }
                 },
                 compactNavigation = true,
+                warehouseOperatorAvailable = true,
+                desktopPurchasingAvailable = BuildConfig.HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED ||
+                    BuildConfig.HILTECH_SUPPLIER_INVOICE_FINANCE_ENABLED ||
+                    (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED && !BuildConfig.HILTECH_SERVICE_PURCHASES_WORKSPACE_ENABLED),
                 compactBackRequest = workspaceBackRequest,
                 onCompactNavigationChanged = { canGoBack, inWork ->
                     workspaceBackAvailable = canGoBack
@@ -499,55 +505,67 @@ class MainActivity : ComponentActivity() {
                     }
                 },
                 procurementOperator = {
-                    if (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED &&
-                        !BuildConfig.HILTECH_SERVICE_PURCHASES_WORKSPACE_ENABLED
-                    ) {
-                        val signed = shellState as? HiltechShellState.SignedIn
-                        val identity = signed?.identity
-                        val organization = identity?.organizations?.firstOrNull { it.primary }
-                            ?: identity?.organizations?.firstOrNull()
-                        if (identity != null && organization != null) {
-                            key(identity.identityId, organization.organizationId, "service-purchases") {
-                                AndroidServicePurchaseSections(
-                                    application = hiltechApplication,
-                                    organizationId = organization.organizationId,
-                                )
+                    NativeOperationAreas(
+                        title = "المشتريات",
+                        description = "اختر العملية المطلوبة وتابعها في مساحتها المستقلة.",
+                        areas = buildList<NativeOperationArea> {
+                            if (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED &&
+                                !BuildConfig.HILTECH_SERVICE_PURCHASES_WORKSPACE_ENABLED
+                            ) {
+                                add(NativeOperationArea("services", "شراء الخدمات", "طلبات الخدمات وعروض الأسعار وأوامر الخدمة") {
+                                    val signed = shellState as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        key(identity.identityId, organization.organizationId, "service-purchases") {
+                                            AndroidServicePurchaseSections(
+                                                application = hiltechApplication,
+                                                organizationId = organization.organizationId,
+                                            )
+                                        }
+                                    }
+                                })
                             }
-                        }
-                    }
-                    if (BuildConfig.HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED) {
-                        val signed = shellState as? HiltechShellState.SignedIn
-                        val identity = signed?.identity
-                        val selectedWork = signed?.field?.selectedWorkOrderId
-                        if (identity != null && !selectedWork.isNullOrBlank()) {
-                            key(identity.identityId, selectedWork) {
-                                PurchaseRequirementOperatorSection(
-                                    api = hiltechApplication.procurementApi,
-                                    warehouseApi = hiltechApplication.warehouseApi,
-                                    workApi = hiltechApplication.procurementWorkApi,
-                                    installationId = hiltechApplication.installationId,
-                                    selectedWorkOrderId = selectedWork,
-                                    newOperationId = { UUID.randomUUID().toString() },
-                                )
+                            if (BuildConfig.HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED) {
+                                add(NativeOperationArea("requirements", "احتياجات المشاريع", "طلبات الخامات المرتبطة بالأعمال والمشاريع") {
+                                    val signed = shellState as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val selectedWork = signed?.field?.selectedWorkOrderId
+                                    if (identity != null && !selectedWork.isNullOrBlank()) {
+                                        key(identity.identityId, selectedWork) {
+                                            PurchaseRequirementOperatorSection(
+                                                api = hiltechApplication.procurementApi,
+                                                warehouseApi = hiltechApplication.warehouseApi,
+                                                workApi = hiltechApplication.procurementWorkApi,
+                                                installationId = hiltechApplication.installationId,
+                                                selectedWorkOrderId = selectedWork,
+                                                newOperationId = { UUID.randomUUID().toString() },
+                                            )
+                                        }
+                                    }
+                                })
                             }
-                        }
-                    }
-                    if (BuildConfig.HILTECH_SUPPLIER_INVOICE_FINANCE_ENABLED) {
-                        val signed = shellState as? HiltechShellState.SignedIn
-                        val identity = signed?.identity
-                        val organization = identity?.organizations?.firstOrNull { it.primary }
-                            ?: identity?.organizations?.firstOrNull()
-                        if (identity != null && organization != null) {
-                            key(identity.identityId, organization.organizationId, "finance-invoice") {
-                                SupplierInvoiceFinanceSection(
-                                    api = hiltechApplication.supplierInvoiceFinanceApi,
-                                    organizationId = organization.organizationId,
-                                    installationId = hiltechApplication.installationId,
-                                    newOperationId = { UUID.randomUUID().toString() },
-                                )
+                            if (BuildConfig.HILTECH_SUPPLIER_INVOICE_FINANCE_ENABLED) {
+                                add(NativeOperationArea("invoices", "فواتير الموردين", "تسجيل الفواتير ومراجعتها") {
+                                    val signed = shellState as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        key(identity.identityId, organization.organizationId, "finance-invoice") {
+                                            SupplierInvoiceFinanceSection(
+                                                api = hiltechApplication.supplierInvoiceFinanceApi,
+                                                organizationId = organization.organizationId,
+                                                installationId = hiltechApplication.installationId,
+                                                newOperationId = { UUID.randomUUID().toString() },
+                                            )
+                                        }
+                                    }
+                                })
                             }
-                        }
-                    }
+                        },
+                    )
                 },
             )
         }
