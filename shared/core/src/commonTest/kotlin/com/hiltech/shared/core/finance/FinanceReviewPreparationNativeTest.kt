@@ -330,7 +330,7 @@ class FinanceReviewPreparationNativeTest {
             requests++
             val terminal=requests==3
             assertEquals(if(terminal) "POST" else "GET",request.method.value)
-            assertEquals("/v1/finance/organizations/$org/cash-counts/$proposal"+(if(terminal) "/record" else ""),request.url.encodedPath)
+            assertEquals("/v1/finance/organizations/$org/cash-counts/$proposal"+(if(terminal) "/record" else "/operator-status"),request.url.encodedPath)
             if(terminal) assertEquals(operation,request.headers["Idempotency-Key"])
             val recorded=if(terminal) "\"$source\"" else "null"
             val state=if(terminal) "RECORDED" else "APPROVED"
@@ -392,6 +392,27 @@ class FinanceReviewPreparationNativeTest {
         assertEquals(proposal,result.candidateId)
         assertFalse(result.invoiceIssued)
         assertEquals(1,calls)
+    }
+
+    @Test
+    fun signedQueueReturnsOnlyScopedApprovedOperations() = runBlocking {
+        val approval="55555555-6666-4777-8888-999999999999"
+        for (actualOrg in listOf(org,wrongOrg)) {
+            val client=HttpClient(MockEngine { request ->
+                assertEquals("GET",request.method.value)
+                assertEquals("/v1/finance/organizations/$org/cash-counts/operator-queue",request.url.encodedPath)
+                respond("""[{"proposalId":"$proposal","organizationId":"$actualOrg","cashboxId":"$source",
+                    "currency":"EGP","countedAmount":"9","ledgerAmount":"10","varianceAmount":"-1",
+                    "voucherCount":1,"state":"APPROVED","approvalRequestId":"$approval"}]""",
+                    HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+            })
+            if(actualOrg==org) {
+                val items=financeSignedQueue(apis(client),org,install,FinanceReviewKind.CASH_COUNT)
+                assertEquals(proposal,items.single().id)
+            } else assertFailsWith<IllegalStateException> {
+                financeSignedQueue(apis(client),org,install,FinanceReviewKind.CASH_COUNT)
+            }
+        }
     }
 
 }
