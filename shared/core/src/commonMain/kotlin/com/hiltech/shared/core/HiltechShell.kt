@@ -315,20 +315,32 @@ fun HiltechShell(
             if (desktopPurchasingAvailable) add(ShellWorkspace.Purchasing)
             add(ShellWorkspace.Account)
         } else emptyList()
+        val nativeScope = if (useWorkspaceNavigation && signedIn != null) shellScrollScope else ""
+        val nativeAuthority = signedIn?.identity?.let { identity ->
+            val org = identity.organizations.firstOrNull { it.primary } ?: identity.organizations.firstOrNull()
+            "${identity.identityVersion}:${org?.membershipVersion}"
+        }.orEmpty()
+        val nativeWorkspaces = if (nativeScope.isNotBlank()) uniqueNativeWorkspaces(operationalWorkspaces) else emptyList()
+        val nativeSession = rememberNativeWorkspaceSession(nativeScope, nativeAuthority, nativeWorkspaces)
+        val activeNative = nativeWorkspaces.firstOrNull { it.id == nativeSession.selectedId && nativeSession.availability[it.id] == WorkspaceAvailability.AVAILABLE }
         var requestedWorkspace by remember(shellScrollScope) { mutableStateOf(ShellWorkspace.Home) }
         var finding by remember(shellScrollScope) { mutableStateOf(false) }
         LaunchedEffect(desktopFindRequest) {
             if (desktopNavigation && signedIn != null && desktopFindRequest > 0) finding = true
         }
         val selectedWorkspace = requestedWorkspace.takeIf(destinations::contains) ?: destinations.firstOrNull()
-        LaunchedEffect(selectedWorkspace, compactNavigation) {
+        LaunchedEffect(selectedWorkspace, compactNavigation, activeNative?.id) {
             if (compactNavigation) onCompactNavigationChanged(
-                selectedWorkspace != null && selectedWorkspace != ShellWorkspace.Home,
-                selectedWorkspace == ShellWorkspace.Work || selectedWorkspace == null,
+                activeNative != null || (selectedWorkspace != null && selectedWorkspace != ShellWorkspace.Home),
+                activeNative == null && (selectedWorkspace == ShellWorkspace.Work || selectedWorkspace == null),
             )
         }
         LaunchedEffect(compactBackRequest) {
             if (compactNavigation && compactBackRequest > 0) {
+                if (nativeSession.selectedId != null || nativeSession.pendingId != null) {
+                    nativeSession.close()
+                    return@LaunchedEffect
+                }
                 requestedWorkspace = when (selectedWorkspace) {
                     ShellWorkspace.People, ShellWorkspace.Projects, ShellWorkspace.Warehouse,
                     ShellWorkspace.Purchasing, ShellWorkspace.Account ->
@@ -349,6 +361,7 @@ fun HiltechShell(
         LaunchedEffect(shellScrollScope, projectFocusRequest, canFocusProjects) {
             if (projectFocusRequest > 0 && canFocusProjects) {
                 if (useWorkspaceNavigation) {
+                    nativeSession.close()
                     requestedWorkspace = ShellWorkspace.Projects
                 } else {
                     projectWorkspaceRequester.bringIntoView()
@@ -360,9 +373,12 @@ fun HiltechShell(
             destinations = destinations,
             scroll = scopedShellScroll,
             compact = compactNavigation,
-            onSelect = { requestedWorkspace = it },
+            onSelect = { nativeSession.close(); requestedWorkspace = it },
             onFind = if (desktopNavigation && signedIn != null) {
                 { finding = true }
+            } else null,
+            boundedContent = if (activeNative != null) {
+                { NativeWorkspacePane(activeNative, nativeScope, nativeSession::close) }
             } else null,
         ) {
             Text(
@@ -425,6 +441,12 @@ fun HiltechShell(
                         if (state.identity.teams.isNotEmpty()) {
                             Text("Teams: " + state.identity.teams.joinToString { it.name })
                         }
+                        if (selectedWorkspace != null && nativeSession.availability["executive-home"] == WorkspaceAvailability.AVAILABLE) {
+                            OutlinedButton(onClick = {
+                                requestedWorkspace = ShellWorkspace.Explore
+                                nativeSession.open("executive-home")
+                            }) { Text("Open company overview") }
+                        }
                         if (selectedWorkspace != null && inboxWorkspace != null) {
                             OutlinedButton(onClick = { requestedWorkspace = ShellWorkspace.Inbox }) {
                                 Text("Open inbox")
@@ -472,7 +494,9 @@ fun HiltechShell(
                     // roots: never nest their root vertical scrollers here.
                     // Sign-in and current source-granted eligibility are both
                     // required; a tab never grants server-side authority.
-                    if (show(ShellWorkspace.Explore) && primary != null && operationalWorkspaces.isNotEmpty()) {
+                    if (selectedWorkspace == ShellWorkspace.Explore && nativeWorkspaces.isNotEmpty()) {
+                        NativeWorkspaceDirectory(nativeWorkspaces, nativeSession, nativeSession::open)
+                    } else if (selectedWorkspace == null && primary != null && operationalWorkspaces.isNotEmpty()) {
                         NativeOperationalWorkspaceHub(
                             scopeKey = state.identity.identityId + ":" + primary.organizationId,
                             authorityRevisionKey =
@@ -811,13 +835,21 @@ fun HiltechShell(
             val commands = buildList {
                 destinations.forEach { workspace ->
                     add(WorkspaceSearchResult("workspace:${workspace.name}", workspace.label, "Workspace") {
+                        nativeSession.close()
                         requestedWorkspace = workspace
+                    })
+                }
+                nativeWorkspaces.filter { nativeSession.availability[it.id] == WorkspaceAvailability.AVAILABLE }.forEach { workspace ->
+                    add(WorkspaceSearchResult("specialist:${workspace.id}", workspace.label, "Operations") {
+                        requestedWorkspace = ShellWorkspace.Explore
+                        nativeSession.open(workspace.id)
                     })
                 }
                 signedIn.projects?.list?.items.orEmpty().forEach { project ->
                     add(WorkspaceSearchResult(
                         "project:${project.projectId}", project.name, "Project · ${project.projectCode}",
                     ) {
+                        nativeSession.close()
                         requestedWorkspace = ShellWorkspace.Projects
                         onSelectProject(project.projectId)
                     })
@@ -826,6 +858,7 @@ fun HiltechShell(
                     add(WorkspaceSearchResult(
                         "employee:${employee.employeeId}", employee.displayName, "People · ${employee.employeeCode}",
                     ) {
+                        nativeSession.close()
                         requestedWorkspace = ShellWorkspace.People
                         onSelectEmployee(employee.employeeId)
                     })

@@ -3,6 +3,7 @@ package com.hiltech.shared.core
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -46,6 +47,7 @@ internal fun NativeWorkspaceNavigation(
     compact: Boolean,
     onSelect: (ShellWorkspace) -> Unit,
     onFind: (() -> Unit)? = null,
+    boundedContent: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalHiltechOperationalColors.current
@@ -53,7 +55,9 @@ internal fun NativeWorkspaceNavigation(
         val primary = listOf(ShellWorkspace.Home, ShellWorkspace.Work, ShellWorkspace.Inbox, ShellWorkspace.Explore)
         val selectedTab = selected.takeIf(primary::contains) ?: ShellWorkspace.Explore
         Column(Modifier.fillMaxSize().background(colors.canvas)) {
-            Column(
+            if (boundedContent != null) {
+                Box(Modifier.weight(1f).fillMaxWidth()) { boundedContent() }
+            } else Column(
                 modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll)
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -117,7 +121,9 @@ internal fun NativeWorkspaceNavigation(
                 }
             }
         }
-        Column(
+        if (boundedContent != null) {
+            Box(Modifier.weight(1f).fillMaxHeight()) { boundedContent() }
+        } else Column(
             modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(scroll).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
