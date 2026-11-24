@@ -322,4 +322,42 @@ class FinanceReviewPreparationNativeTest {
         assertEquals(2,requests)
     }
 
+    @Test
+    fun signedCountRechecksApprovalAndRecordsOnlyWithEvidence() = runBlocking {
+        val approval="55555555-6666-4777-8888-999999999999"
+        var requests=0
+        val client=HttpClient(MockEngine { request ->
+            requests++
+            val terminal=requests==3
+            assertEquals(if(terminal) "POST" else "GET",request.method.value)
+            assertEquals("/v1/finance/organizations/$org/cash-counts/$proposal"+(if(terminal) "/record" else ""),request.url.encodedPath)
+            if(terminal) assertEquals(operation,request.headers["Idempotency-Key"])
+            val recorded=if(terminal) "\"$source\"" else "null"
+            val state=if(terminal) "RECORDED" else "APPROVED"
+            respond("""{"proposalId":"$proposal","organizationId":"$org","cashboxId":"$source",
+                "currency":"EGP","countedAmount":"9","ledgerAmount":"10","varianceAmount":"-1",
+                "voucherCount":1,"state":"$state","approvalRequestId":"$approval","countRecordId":$recorded}""",
+                HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+        })
+        val sourceReceipt=financeReadSignedSource(apis(client),org,install,FinanceReviewKind.CASH_COUNT,proposal)
+        assertTrue(financeSignedReady(sourceReceipt,org))
+        assertFailsWith<IllegalArgumentException> {
+            financeRecordSignedSource(apis(client),org,install,sourceReceipt,"bad",operation)
+        }
+        assertEquals(1,requests)
+        val recorded=financeRecordSignedSource(apis(client),org,install,sourceReceipt,install,operation)
+        assertEquals("RECORDED",recorded.state)
+        assertEquals(3,requests)
+        assertFalse(financeSignedReady(recorded,org))
+    }
+
+    @Test
+    fun voucherRequiresCashboxAndPositiveAmount() {
+        val valid=FinanceReviewDraft(sourceId=source,cashboxId=install,sourceKind="AR",
+            amount="10.00",reference="CUSTODY-REASON",voucherReference="REC-001")
+        assertTrue(financeReviewDraftIsValid(FinanceReviewKind.CASH_VOUCHER,valid))
+        assertFalse(financeReviewDraftIsValid(FinanceReviewKind.CASH_VOUCHER,valid.copy(cashboxId="")))
+        assertFalse(financeReviewDraftIsValid(FinanceReviewKind.CASH_VOUCHER,valid.copy(amount="0")))
+    }
+
 }
