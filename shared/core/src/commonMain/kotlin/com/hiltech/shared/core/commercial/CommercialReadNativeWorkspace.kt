@@ -190,6 +190,11 @@ fun commercialReadNativeWorkspace(
                             selectedId = requested
                         }
                     },
+                    onCreateClient = { legal, display ->
+                        if (canWrite) perform(listOf("client", legal, display)) { id ->
+                            client.createClient(CreateCommercialClientDto(id, organizationId, legal, display), installationId)
+                        }
+                    },
                     onCreate = { title, customer, source ->
                         if (canWrite) perform(listOf("create", title, customer, source)) { id ->
                             coordinator.createOpportunity(CreateCommercialOpportunityDto(id, organizationId, customer, title, source))

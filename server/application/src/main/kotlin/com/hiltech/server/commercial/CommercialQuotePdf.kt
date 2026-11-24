@@ -98,6 +98,9 @@ internal object CommercialQuotePdf {
                 paragraph("Quantity / الكمية: " + line.quantity.stripTrailingZeros().toPlainString() +
                     "  " + line.unit + "   |   Unit price / سعر الوحدة: " + line.unitPrice.toPlainString() + " " + quote.currency, 23f)
             }
+            quote.subtotal?.let { paragraph("Subtotal / قبل الخصم والضريبة: " + it.toPlainString() + " " + quote.currency) }
+            paragraph("Discount / الخصم: " + quote.discountAmount.toPlainString() + " " + quote.currency)
+            paragraph("Tax / الضريبة: " + quote.taxAmount.toPlainString() + " " + quote.currency)
             paragraph("TOTAL / الإجمالي: " + quote.totalPrice.toPlainString() + " " + quote.currency, 34f, true)
             paragraph("Payment terms / شروط الدفع", 30f, true)
             paragraph(quote.paymentTerms)

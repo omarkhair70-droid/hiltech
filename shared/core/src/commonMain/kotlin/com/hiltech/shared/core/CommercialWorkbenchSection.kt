@@ -61,6 +61,7 @@ fun CommercialWorkbenchSection(
     onPlanVisit: (opportunityId: String, purpose: String, scheduledAt: String) -> Unit,
     onRequestQuoteApproval: (quoteId: String) -> Unit,
     onReleaseApprovedQuote: (quoteId: String) -> Unit,
+    onCreateClient: ((String, String) -> Unit)? = null,
 ) {
     if (!state.enabled) {
         Text(hiltechText("عمليات المبيعات غير مفعّلة.", "Commercial operations are not enabled."), style = MaterialTheme.typography.bodyMedium)
@@ -72,6 +73,9 @@ fun CommercialWorkbenchSection(
     var creating by remember { mutableStateOf(false) }
     val colors = LocalHiltechOperationalColors.current
     var clientId by remember { mutableStateOf("") }
+    var registeringClient by remember { mutableStateOf(false) }
+    var legalName by remember { mutableStateOf("") }
+    var displayName by remember { mutableStateOf("") }
     var visitPurpose by remember { mutableStateOf("") }
     var visitAt by remember { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -91,7 +95,16 @@ fun CommercialWorkbenchSection(
                 value = title, onValueChange = { title = it },
                 label = { Text(hiltechText("اسم الفرصة", "Opportunity title")) },
             )
-            HiltechRecordPicker(hiltechText("العميل", "Customer"), clientId, state.clientChoices, { clientId = it }, allowKnownReference = true)
+            HiltechRecordPicker(hiltechText("العميل", "Customer"), clientId, state.clientChoices, { clientId = it }, allowKnownReference = onCreateClient == null)
+            if (onCreateClient != null) {
+                TextButton(onClick = { registeringClient = !registeringClient }) { Text(hiltechText("+ عميل جديد", "+ New customer")) }
+                if (registeringClient) {
+                    OutlinedTextField(legalName, { legalName = it }, label = { Text(hiltechText("الاسم القانوني", "Legal name")) })
+                    OutlinedTextField(displayName, { displayName = it }, label = { Text(hiltechText("الاسم المتداول", "Display name")) })
+                    Button(enabled = legalName.isNotBlank() && displayName.isNotBlank() && !state.loading,
+                        onClick = { onCreateClient(legalName.trim(), displayName.trim()) }) { Text(hiltechText("تسجيل العميل", "Register customer")) }
+                }
+            }
             Button(
                 enabled = title.isNotBlank() && clientId.isNotBlank(),
                 onClick = { onCreate(title.trim(), clientId.trim(), "DIRECT") },

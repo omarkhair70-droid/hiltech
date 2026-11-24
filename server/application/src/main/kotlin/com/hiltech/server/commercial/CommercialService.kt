@@ -151,6 +151,7 @@ class CommercialService(
                 Boolean::class.java, client,
             ) == true
             if (!exists) throw commercialError("COMMERCIAL_CLIENT_INVALID", "Active Client required.", HttpStatus.BAD_REQUEST)
+            jdbc.update("INSERT INTO commercial_client_relationship(organization_id,client_organization_id) VALUES (?,?) ON CONFLICT DO NOTHING", company, client)
             jdbc.update(
                 """INSERT INTO commercial_opportunity
                    (id,organization_id,client_organization_id,owner_user_id,source,opportunity_code,
@@ -166,12 +167,28 @@ class CommercialService(
 
     fun capabilities(company: UUID, actor: UUID): Map<String, Boolean> = access.capabilities(actor, company)
 
+    fun createClient(r: CreateCommercialClientRequest, key: UUID, actor: UUID, correlation: String): CommercialCommandResult {
+        val company = r.organizationId.commercialUuid()
+        access.require(actor, company, "SALES_WRITE")
+        val legal = required(r.legalName, 240)
+        val display = required(r.displayName, 160)
+        val target = id("client", key)
+        val replay = execute(key, actor, "COMMERCIAL_CLIENT_CREATE", target, "$company|$legal|$display", correlation) {
+            access.require(actor, company, "SALES_WRITE")
+            jdbc.update("INSERT INTO organization(id,organization_code,legal_name,display_name,organization_type,status,created_at) VALUES (?,?,?,?,'CLIENT','ACTIVE',?)",
+                target, "CLIENT-" + target.toString().uppercase(), legal, display, now())
+            jdbc.update("INSERT INTO commercial_client_relationship(organization_id,client_organization_id) VALUES (?,?)", company, target)
+            audit(actor,"COMMERCIAL_CLIENT_CREATED",target,"ACTIVE",correlation)
+        }
+        return result(target,replay,"ACTIVE",correlation)
+    }
+
     fun clients(company: UUID, actor: UUID): List<Map<String, Any?>> {
         access.require(actor, company, "SALES_WRITE")
         // Only clients with an existing relationship to this company.
         return jdbc.queryForList(
             """SELECT DISTINCT c.id,c.display_name,c.organization_code
-               FROM organization c JOIN commercial_opportunity o ON o.client_organization_id=c.id
+               FROM organization c JOIN commercial_client_relationship o ON o.client_organization_id=c.id
                WHERE o.organization_id=? AND c.organization_type='CLIENT' AND c.status='ACTIVE'
                ORDER BY c.display_name,c.id LIMIT 500""", company,
         )
@@ -445,19 +462,22 @@ class CommercialService(
                    FROM commercial_boq_cost_line WHERE boq_version_id=? ORDER BY line_code""",boqId,
             )
             if (lines.isEmpty()) throw commercialError("COMMERCIAL_QUOTE_EMPTY","BOQ has no lines.",HttpStatus.CONFLICT)
-            val total = lines.fold(BigDecimal.ZERO) { sum,l ->
+            val subtotal = lines.fold(BigDecimal.ZERO) { sum,l ->
                 sum + commercialExactLineTotal(l["quantity"] as BigDecimal,l["sell_unit_price"] as BigDecimal)
             }
+            amount(r.discountAmount); amount(r.taxAmount)
+            if (r.discountAmount > subtotal) throw commercialError("COMMERCIAL_DISCOUNT_INVALID", "Discount exceeds subtotal.", HttpStatus.BAD_REQUEST)
+            val total = subtotal - r.discountAmount + r.taxAmount
             amount(total)
             jdbc.update(
                 """INSERT INTO commercial_quote_version
                    (id,organization_id,opportunity_id,client_organization_id,scope_version_id,
                     boq_version_id,version_number,quote_code,currency,total_price,payment_terms,
-                    delivery_terms,exclusions,validity_date,created_by,created_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    delivery_terms,exclusions,validity_date,created_by,created_at,discount_amount,tax_amount)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 target,parent["organization_id"],id,parent["client_organization_id"],boq["scope_version_id"],
                 boqId,next("commercial_quote_version",id),"Q-"+target.toString().uppercase(),
-                boq["currency"],total,payment,delivery,r.exclusions.trim(),validity,actor,now(),
+                boq["currency"],total,payment,delivery,r.exclusions.trim(),validity,actor,now(),r.discountAmount,r.taxAmount,
             )
             lines.forEachIndexed { i,l ->
                 jdbc.update(
@@ -569,7 +589,7 @@ class CommercialService(
         // Explicit projection: never SELECT * or join the private BOQ cost table.
         val v = row(
             """SELECT quote_code,version_number,client_organization_id,currency,total_price,
-                      payment_terms,delivery_terms,exclusions,validity_date,released_at,
+                      payment_terms,delivery_terms,exclusions,validity_date,released_at,discount_amount,tax_amount,
                       (SELECT legal_name FROM organization WHERE id=commercial_quote_version.client_organization_id) AS client_name,
                       (SELECT legal_name FROM organization WHERE id=commercial_quote_version.organization_id) AS issuer_name
                FROM commercial_quote_version WHERE id=? AND state='RELEASED'""",id,
@@ -590,6 +610,8 @@ class CommercialService(
             paymentTerms=v["payment_terms"] as String,deliveryTerms=v["delivery_terms"] as String,
             exclusions=v["exclusions"] as String,validityDate=v["validity_date"].toString(),lines=lines,
             clientName=v["client_name"] as? String, issuerName=v["issuer_name"] as? String, releasedAt=v["released_at"]?.toString(),
+            subtotal=lines.fold(BigDecimal.ZERO) { sum,l -> sum + commercialExactLineTotal(l.quantity,l.unitPrice) },
+            discountAmount=v["discount_amount"] as BigDecimal, taxAmount=v["tax_amount"] as BigDecimal,
         )
     }
 

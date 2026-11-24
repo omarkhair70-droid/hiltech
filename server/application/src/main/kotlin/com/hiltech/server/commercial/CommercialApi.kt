@@ -44,6 +44,10 @@ class CommercialController(private val service: CommercialService) {
     fun capabilities(http: HttpServletRequest, @RequestParam organizationId: String) =
         service.capabilities(organizationId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
 
+    @PostMapping("/clients")
+    fun createClient(http: HttpServletRequest, @RequestHeader("Idempotency-Key") key: String, @RequestBody body: CreateCommercialClientRequest) =
+        service.createClient(body, operation(key, body.operationId), HiltechRequestContext.current(http).requireIdentityId(), HiltechRequestContext.current(http).correlationId)
+
     @GetMapping("/clients")
     fun clients(http: HttpServletRequest, @RequestParam organizationId: String) =
         service.clients(organizationId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())

@@ -88,7 +88,7 @@ sealed interface CommercialDealAction {
                        val currency: String, val lines: List<CommercialDraftLine>) : CommercialDealAction
     data class DraftQuote(val opportunityId: String, val boqVersionId: String,
                           val paymentTerms: String, val deliveryTerms: String,
-                          val exclusions: String, val validityDate: String) : CommercialDealAction
+                          val exclusions: String, val validityDate: String, val discountAmount: String = "0", val taxAmount: String = "0") : CommercialDealAction
     data class RequestApproval(val quoteId: String) : CommercialDealAction
     data class ReleaseApprovedQuote(val quoteId: String) : CommercialDealAction
     data class DraftContract(val opportunityId: String, val quoteId: String,
@@ -472,17 +472,22 @@ private fun CommercialQuotePanel(
         var delivery by remember(op.id) { mutableStateOf("") }
         var exclusions by remember(op.id) { mutableStateOf("") }
         var validity by remember(op.id) { mutableStateOf("") }
+        var discount by remember(op.id) { mutableStateOf("0") }
+        var tax by remember(op.id) { mutableStateOf("0") }
         HiltechRecordPicker(hiltechText("إصدار البنود والأسعار", "Priced BOQ version"), boqId,
             deal.boqVersions.map { HiltechRecordChoice(it.id, "v" + it.versionNumber, it.currency) }, { boqId = it }, allowKnownReference = false)
         OutlinedTextField(value=payment,onValueChange={payment=it},label={Text(hiltechText("شروط دفع العميل", "Client payment terms"))})
         OutlinedTextField(value=delivery,onValueChange={delivery=it},label={Text(hiltechText("شروط التسليم", "Delivery terms"))})
         OutlinedTextField(value=exclusions,onValueChange={exclusions=it},label={Text(hiltechText("استبعادات العرض", "Quote exclusions"))})
         OutlinedTextField(value=validity,onValueChange={validity=it},label={Text(hiltechText("صالح حتى (YYYY-MM-DD)", "Valid until (YYYY-MM-DD)"))})
+        OutlinedTextField(discount, { discount = it }, label = { Text(hiltechText("قيمة الخصم", "Discount amount")) })
+        OutlinedTextField(tax, { tax = it }, label = { Text(hiltechText("قيمة الضريبة", "Tax amount")) })
+        Text(hiltechText("القيم مبالغ بعملة العرض وليست نسبًا؛ أدخل الضريبة المعتمدة للمعاملة.", "Amounts in quote currency, not percentages; enter the approved tax amount."))
         Button(
-            enabled=deal.boqVersions.any { it.id == boqId } && payment.isNotBlank() &&
+            enabled=validCommercialDecimal(discount) && validCommercialDecimal(tax) && deal.boqVersions.any { it.id == boqId } && payment.isNotBlank() &&
                 delivery.isNotBlank() && Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(validity),
             onClick={onAction(CommercialDealAction.DraftQuote(
-                op.id,boqId,payment,delivery,exclusions,validity))},
+                op.id,boqId,payment,delivery,exclusions,validity,discount,tax))},
         ) { Text(hiltechText("إنشاء إصدار جديد لعرض السعر", "Create new quote version")) }
     }
     Text(hiltechText("نسخة العميل لا تتضمن التكلفة الداخلية أو هامش الربح.", "Customer copies exclude internal cost and margin."))
@@ -533,6 +538,9 @@ private fun ReleasedQuotePreview(quote: ClientQuoteDto) {
             HiltechTableColumn(hiltechText("سعر الوحدة", "Unit price"), numeric = true),
         ), quote.lines.map { HiltechTableRecord(listOf(it.lineCode + " · " + it.description, it.quantity.content, it.unit, it.unitPrice.content + " " + quote.currency)) },
             hiltechText("لا توجد بنود", "No lines"))
+        quote.subtotal?.let { HiltechKeyValue(hiltechText("قبل الخصم والضريبة", "Subtotal"), it.content + " " + quote.currency) }
+        HiltechKeyValue(hiltechText("الخصم", "Discount"), quote.discountAmount.content + " " + quote.currency)
+        HiltechKeyValue(hiltechText("الضريبة", "Tax"), quote.taxAmount.content + " " + quote.currency)
         HiltechKeyValue(hiltechText("الإجمالي المعتمد", "Released total"), quote.totalPrice.content + " " + quote.currency)
         HiltechKeyValue(hiltechText("شروط الدفع", "Payment terms"), quote.paymentTerms)
         HiltechKeyValue(hiltechText("شروط التسليم", "Delivery terms"), quote.deliveryTerms)

@@ -83,6 +83,8 @@ data class CommercialBoqRequest(
     val lines: List<CommercialBoqLineInput>,
 )
 
+data class CreateCommercialClientRequest(val operationId: String, val organizationId: String, val legalName: String, val displayName: String)
+
 data class CommercialQuoteRequest(
     val operationId: String,
     val boqVersionId: String,
@@ -90,6 +92,8 @@ data class CommercialQuoteRequest(
     val deliveryTerms: String,
     val exclusions: String,
     val validityDate: String,
+    val discountAmount: BigDecimal = BigDecimal.ZERO,
+    val taxAmount: BigDecimal = BigDecimal.ZERO,
 )
 
 data class CommercialApprovalRequest(val operationId: String)
@@ -143,6 +147,9 @@ data class ClientCommercialQuote(
     val clientName: String? = null,
     val issuerName: String? = null,
     val releasedAt: String? = null,
+    val subtotal: BigDecimal? = null,
+    val discountAmount: BigDecimal = BigDecimal.ZERO,
+    val taxAmount: BigDecimal = BigDecimal.ZERO,
 )
 data class ClientCommercialQuoteLine(
     val lineCode: String,

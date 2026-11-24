@@ -114,6 +114,7 @@ class CommercialDealCoordinator(
                 CommercialQuoteDraftDto(
                     operationId,action.boqVersionId,action.paymentTerms,
                     action.deliveryTerms,action.exclusions,action.validityDate,
+                    exactCommercialNumber(action.discountAmount),exactCommercialNumber(action.taxAmount),
                 ),
                 installationId,
             )

@@ -24,6 +24,9 @@ data class CommercialOpportunityDto(
 )
 
 @Serializable
+data class CreateCommercialClientDto(val operationId: String, val organizationId: String, val legalName: String, val displayName: String)
+
+@Serializable
 data class CommercialClientRefDto(val id: String, @SerialName("display_name") val displayName: String, @SerialName("organization_code") val organizationCode: String)
 @Serializable
 data class CreateCommercialOpportunityDto(
@@ -209,6 +212,8 @@ data class CommercialQuoteDraftDto(
     val deliveryTerms: String,
     val exclusions: String,
     val validityDate: String,
+    val discountAmount: JsonPrimitive = JsonPrimitive(0),
+    val taxAmount: JsonPrimitive = JsonPrimitive(0),
 )
 
 @Serializable
@@ -306,6 +311,9 @@ data class ClientQuoteDto(
     val clientName: String? = null,
     val issuerName: String? = null,
     val releasedAt: String? = null,
+    val subtotal: JsonPrimitive? = null,
+    val discountAmount: JsonPrimitive = JsonPrimitive(0),
+    val taxAmount: JsonPrimitive = JsonPrimitive(0),
 )
 
 @Serializable
@@ -325,6 +333,9 @@ class CommercialApiClient(
         api.request(method = HttpMethod.Get, path = "/v1/commercial/capabilities?organizationId=" + organizationId,
             options = HiltechRequestOptions(installationId = installationId),
             decode = { json.decodeFromString(CommercialCapabilitiesDto.serializer(), it) })
+
+    suspend fun createClient(request: CreateCommercialClientDto, installationId: String) =
+        command("/v1/commercial/clients", request.operationId, installationId, json.encodeToString(CreateCommercialClientDto.serializer(), request))
 
     suspend fun clients(organizationId: String, installationId: String): List<CommercialClientRefDto> =
         api.request(method = HttpMethod.Get, path = "/v1/commercial/clients?organizationId=" + organizationId,
