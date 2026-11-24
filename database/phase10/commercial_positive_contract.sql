@@ -97,6 +97,20 @@ BEGIN
   VALUES(company,1,'Synthetic issuer before update',actor,now());
   INSERT INTO commercial_quote_issuer_snapshot(quote_version_id,legal_name)
   VALUES(quote_id,'Synthetic issuer before update');
+  INSERT INTO commercial_quote_client_snapshot(quote_version_id,client_organization_id,client_legal_name)
+  VALUES(quote_id,client,'Synthetic customer before rename');
+  UPDATE organization SET legal_name='Synthetic customer after rename' WHERE id=client;
+  IF NOT EXISTS(SELECT 1 FROM commercial_quote_client_snapshot WHERE quote_version_id=quote_id
+    AND client_legal_name='Synthetic customer before rename') THEN
+    RAISE EXCEPTION 'Released customer legal name changed';
+  END IF;
+  BEGIN
+    UPDATE commercial_quote_client_snapshot SET client_legal_name='Invalid' WHERE quote_version_id=quote_id;
+    RAISE EXCEPTION 'EXPECTED_CLIENT_SNAPSHOT_IMMUTABILITY';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS err=MESSAGE_TEXT;
+    IF err NOT LIKE '%archive is immutable%' THEN RAISE EXCEPTION 'Client snapshot immutability failed: %',err; END IF;
+  END;
   UPDATE commercial_document_settings SET legal_name='Synthetic issuer after update',version=2 WHERE organization_id=company;
   IF NOT EXISTS(SELECT 1 FROM commercial_quote_issuer_snapshot s WHERE s.quote_version_id=quote_id AND s.legal_name='Synthetic issuer before update') THEN
     RAISE EXCEPTION 'Released issuer snapshot changed';

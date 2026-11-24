@@ -602,6 +602,15 @@ class CommercialService(
                    WHERE id=? AND version=? AND state='APPROVAL_PENDING'""",now(),id,q["version"]!!,
             ) != 1) throw commercialError("COMMERCIAL_QUOTE_STALE","Quote changed.",HttpStatus.CONFLICT)
             CommercialDocumentSettings.freeze(jdbc,id,company)
+            val client = jdbc.queryForMap(
+                """SELECT client_organization_id AS id, legal_name
+                   FROM commercial_quote_version q
+                   JOIN organization client ON client.id=q.client_organization_id
+                   WHERE q.id=? AND q.organization_id=?""",id,company)
+            jdbc.update(
+                """INSERT INTO commercial_quote_client_snapshot
+                   (quote_version_id,client_organization_id,client_legal_name) VALUES (?,?,?)""",
+                id,client["id"],client["legal_name"])
             audit(actor,"COMMERCIAL_QUOTE_RELEASED",id,"RELEASED",correlation)
         }
         return result(id,replay,"RELEASED",correlation)
@@ -616,7 +625,10 @@ class CommercialService(
         val v = row(
             """SELECT quote_code,version_number,client_organization_id,currency,total_price,
                       payment_terms,delivery_terms,exclusions,validity_date,released_at,discount_amount,tax_amount,
-                      (SELECT legal_name FROM organization WHERE id=commercial_quote_version.client_organization_id) AS client_name,
+                      COALESCE(
+                          (SELECT client_legal_name FROM commercial_quote_client_snapshot WHERE quote_version_id=commercial_quote_version.id),
+                          (SELECT legal_name FROM organization WHERE id=commercial_quote_version.client_organization_id)
+                      ) AS client_name,
                       (SELECT legal_name FROM organization WHERE id=commercial_quote_version.organization_id) AS issuer_name
                FROM commercial_quote_version WHERE id=? AND state='RELEASED'""",id,
         )
