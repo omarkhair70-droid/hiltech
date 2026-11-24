@@ -21,6 +21,7 @@ DECLARE
   po_file uuid := gen_random_uuid();
   partial_po uuid := gen_random_uuid();
   partial_file uuid := gen_random_uuid();
+  receipt_id uuid := gen_random_uuid();
   digest text := repeat('a',64);
   err text;
 BEGIN
@@ -55,10 +56,10 @@ BEGIN
   INSERT INTO commercial_quote_version
     (id,organization_id,opportunity_id,client_organization_id,scope_version_id,
      boq_version_id,version_number,quote_code,currency,total_price,
-     payment_terms,delivery_terms,exclusions,validity_date,created_by,created_at)
+     payment_terms,delivery_terms,exclusions,validity_date,created_by,created_at,discount_amount,tax_amount)
   VALUES(quote_id,company,opportunity,client,scope_id,boq_id,1,'SYNTHETIC-Q',
          'EGP',40,'Synthetic 30-day payment','Synthetic on-site delivery',
-         'Synthetic exclusions',CURRENT_DATE+30,actor,now());
+         'Synthetic exclusions',CURRENT_DATE+30,actor,now(),5,5);
   INSERT INTO commercial_quote_line
     (id,quote_version_id,line_code,description,quantity,unit,unit_price)
   VALUES(gen_random_uuid(),quote_id,'LABOR-1','Synthetic labor',2,'hour',20);
@@ -78,6 +79,33 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM commercial_released_client_quote AS released
                  WHERE released.quote_id=phase10_fixture.quote_id AND released.total_price=40) THEN
     RAISE EXCEPTION 'Exact approved quote was not released to customer projection';
+  END IF;
+  -- New document settings, immutable issuer snapshot and export archive.
+  INSERT INTO commercial_document_settings(organization_id,version,legal_name,updated_by,updated_at)
+  VALUES(company,1,'Synthetic issuer before update',actor,now());
+  INSERT INTO commercial_quote_issuer_snapshot(quote_version_id,legal_name)
+  VALUES(quote_id,'Synthetic issuer before update');
+  UPDATE commercial_document_settings SET legal_name='Synthetic issuer after update',version=2 WHERE organization_id=company;
+  IF NOT EXISTS(SELECT 1 FROM commercial_quote_issuer_snapshot s WHERE s.quote_version_id=quote_id AND s.legal_name='Synthetic issuer before update') THEN
+    RAISE EXCEPTION 'Released issuer snapshot changed';
+  END IF;
+  INSERT INTO commercial_customer_pdf_archive(quote_version_id,filename,template_version,pdf_bytes,sha256,created_at,created_by)
+  VALUES(quote_id,'synthetic.pdf',1,convert_to('%PDF-fixture','UTF8'),digest,now(),actor);
+  BEGIN
+    UPDATE commercial_customer_pdf_archive SET filename='changed.pdf' WHERE quote_version_id=quote_id;
+    RAISE EXCEPTION 'EXPECTED_ARCHIVE_IMMUTABILITY';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS err=MESSAGE_TEXT;
+    IF err NOT LIKE '%archive is immutable%' THEN RAISE EXCEPTION 'Archive immutability failed: %',err; END IF;
+  END;
+  INSERT INTO commercial_quote_email_attempt(id,quote_version_id,recipient,actor_id,state)
+  VALUES(gen_random_uuid(),quote_id,'fixture@example.invalid',actor,'API_ACCEPTED');
+  INSERT INTO commercial_quote_whatsapp_attempt(id,quote_version_id,recipient,actor_id,state,sender_phone_id,provider_message_id)
+  VALUES(receipt_id,quote_id,'201000000000',actor,'API_ACCEPTED','123456','wamid.synthetic');
+  UPDATE commercial_quote_whatsapp_attempt SET state='DELIVERED',provider_status_at=now() WHERE id=receipt_id;
+  UPDATE commercial_quote_whatsapp_attempt SET state='READ',provider_status_at=now() WHERE id=receipt_id;
+  IF NOT EXISTS(SELECT 1 FROM commercial_quote_whatsapp_attempt WHERE id=receipt_id AND state='READ') THEN
+    RAISE EXCEPTION 'Provider receipt status was not persisted';
   END IF;
   INSERT INTO commercial_contract
     (id,organization_id,opportunity_id,quote_version_id,contract_code,

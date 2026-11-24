@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - "database/phase10/**"
+      - "database/migrations/**"
       - "server/application/src/main/kotlin/com/hiltech/server/commercial/**"
       - "server/application/src/main/kotlin/com/hiltech/server/documents/CommercialEvidenceTargetPort.kt"
       - "server/application/src/main/kotlin/com/hiltech/server/documents/EvidenceLifecycleApi.kt"
@@ -86,7 +87,7 @@ jobs:
           HILTECH_COMMERCIAL_DB_TEST: "1"
         run: |
           ./gradlew :server:application:test \
-            --tests com.hiltech.server.commercial.CommercialPostgresAuthorizationContractTest \
+            --tests "com.hiltech.server.commercial.*" \
             --rerun-tasks --no-configuration-cache --console=plain
       - name: Native KMP desktop and customer quote number contract
         run: |
@@ -99,5 +100,6 @@ jobs:
           name: phase10-commercial-contract-reports
           path: |
             server/application/build/test-results/test/
+            server/application/build/reports/commercial-pdf-evidence/
             shared/core/build/test-results/
           if-no-files-found: ignore
