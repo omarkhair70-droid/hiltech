@@ -16,6 +16,8 @@ import com.hiltech.shared.core.design.HiltechTableColumn
 import com.hiltech.shared.core.design.HiltechTableRecord
 import com.hiltech.shared.core.design.HiltechSectionHeading
 import com.hiltech.shared.core.design.hiltechText
+import com.hiltech.shared.core.design.HiltechLanguage
+import com.hiltech.shared.core.design.HiltechKeyValue
 import com.hiltech.shared.core.design.LocalHiltechLanguage
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -59,22 +61,22 @@ class FinanceEvidenceReadApis(api: HiltechApiClient) {
     val periodClose = FinanceGlPeriodCloseApiClient(api)
 }
 
-enum class FinanceReadKind(val label: String) {
-    BANK_INTAKE("كشف البنك"),
-    BANK_RECONCILIATION("مطابقة البنك"),
-    BANK_ALLOCATION("تخصيص التحصيل/السداد"),
-    BANK_ALLOCATION_CORRECTION("تصحيح التخصيص"),
-    CASHBOX("رصيد خزنة"),
-    CASH_VOUCHER("سند خزنة"),
-    CASH_COUNT("جرد الخزنة"),
-    AP_JOURNAL("قيد المورد"),
-    AR_CANDIDATE("مرشح فاتورة عميل"),
-    AR_INVOICE("إثبات فاتورة عميل"),
-    AR_JOURNAL("قيد العميل"),
-    EMPLOYEE_FUNDING("عهدة/سلفة"),
-    EMPLOYEE_SETTLEMENT("تسوية موظف"),
-    EMPLOYEE_REIMBURSEMENT("رد مصروف موظف"),
-    PERIOD_CLOSE("إقفال الفترة"),
+enum class FinanceReadKind(val label: String, val english: String) {
+    BANK_INTAKE("كشف البنك", "Bank statement"),
+    BANK_RECONCILIATION("مطابقة البنك", "Bank reconciliation"),
+    BANK_ALLOCATION("تخصيص التحصيل/السداد", "Receipt/payment allocation"),
+    BANK_ALLOCATION_CORRECTION("تصحيح التخصيص", "Allocation correction"),
+    CASHBOX("رصيد خزنة", "Cashbox balance"),
+    CASH_VOUCHER("سند خزنة", "Cash voucher"),
+    CASH_COUNT("جرد الخزنة", "Cash count"),
+    AP_JOURNAL("قيد المورد", "Supplier journal"),
+    AR_CANDIDATE("مرشح فاتورة عميل", "Customer invoice candidate"),
+    AR_INVOICE("إثبات فاتورة عميل", "Customer invoice evidence"),
+    AR_JOURNAL("قيد العميل", "Customer journal"),
+    EMPLOYEE_FUNDING("عهدة/سلفة", "Employee advance / imprest"),
+    EMPLOYEE_SETTLEMENT("تسوية موظف", "Employee settlement"),
+    EMPLOYEE_REIMBURSEMENT("رد مصروف موظف", "Employee expense reimbursement"),
+    PERIOD_CLOSE("إقفال الفترة", "Period close"),
 }
 
 data class FinanceReviewHandoff(val kind:FinanceReviewKind,val sourceId:String,val sourceKind:String="AR")
@@ -106,7 +108,7 @@ fun financeLookupIdIsUuid(value: String): Boolean = Regex(
     "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
 ).matches(value)
 
-private fun yesNo(value: Boolean) = if (value) "نعم (حسب المصدر)" else "لا (حسب المصدر)"
+private fun yesNo(value: Boolean, language: HiltechLanguage) = if (value) language.text("نعم (حسب المصدر)", "Yes (per source)") else language.text("لا (حسب المصدر)", "No (per source)")
 
 /** Never return data from another org, a different proposal or a stale lookup. */
 suspend fun financeReadSourceSnapshot(
@@ -115,6 +117,7 @@ suspend fun financeReadSourceSnapshot(
     organizationId: String,
     objectId: String,
     installationId: String,
+    language: HiltechLanguage = HiltechLanguage.Arabic,
 ): FinanceSourceSnapshot {
     require(financeLookupIdIsUuid(objectId)) { "معرّف UUID صحيح مطلوب" }
     fun checked(org: String, id: String) {
@@ -126,75 +129,75 @@ suspend fun financeReadSourceSnapshot(
         FinanceReadKind.BANK_INTAKE -> {
             val r = apis.bankIntake.status(organizationId, objectId, installationId)
             checked(r.organizationId, r.proposalId)
-            FinanceSourceSnapshot("كشف البنك", r.state, listOf(
-                "عدد الحركات من المصدر: " + r.lineCount,
-                "مسجل داخليًا: " + yesNo(r.internalBankStatementRecorded),
-                "مطابق بنكيًا: " + yesNo(r.bankReconciled),
-                "تحويل بدأه HILTECH: " + yesNo(r.bankTransactionInitiated),
+            FinanceSourceSnapshot(language.text("كشف البنك", "Bank statement"), r.state, listOf(
+                language.text("عدد الحركات من المصدر: ", "Source transaction count: ") + r.lineCount,
+                language.text("مسجل داخليًا: ", "Recorded internally: ") + yesNo(r.internalBankStatementRecorded, language),
+                language.text("مطابق بنكيًا: ", "Bank reconciled: ") + yesNo(r.bankReconciled, language),
+                language.text("تحويل بدأه HILTECH: ", "Transfer initiated by HILTECH: ") + yesNo(r.bankTransactionInitiated, language),
             ), if(r.internalBankStatementRecorded && r.intakeId?.let(::financeLookupIdIsUuid)==true)
                 listOf(FinanceReviewHandoff(FinanceReviewKind.BANK_RECONCILIATION,r.intakeId!!)) else emptyList())
         }
         FinanceReadKind.BANK_RECONCILIATION -> {
             val r = apis.reconciliation.status(organizationId, objectId, installationId)
             checked(r.organizationId, r.proposalId)
-            FinanceSourceSnapshot("قرار مطابقة البنك", r.state, listOf(
-                "عدد الحركات: " + r.lineCount,
-                "إجمالي المطابق في المستند: " + r.totalMatched + " " + r.currency,
-                "مطابقة داخلية موقعة: " + yesNo(r.internallyReconciled),
-                "تأكيد مزود البنك: " + yesNo(r.verifiedByBankProvider),
-                "تحويل بنكي جديد: " + yesNo(r.bankTransferInitiated),
+            FinanceSourceSnapshot(language.text("قرار مطابقة البنك", "Bank reconciliation decision"), r.state, listOf(
+                language.text("عدد الحركات: ", "Transaction count: ") + r.lineCount,
+                language.text("إجمالي المطابق في المستند: ", "Total matched in document: ") + r.totalMatched + " " + r.currency,
+                language.text("مطابقة داخلية موقعة: ", "Signed internal reconciliation: ") + yesNo(r.internallyReconciled, language),
+                language.text("تأكيد مزود البنك: ", "Bank provider confirmation: ") + yesNo(r.verifiedByBankProvider, language),
+                language.text("تحويل بنكي جديد: ", "New bank transfer: ") + yesNo(r.bankTransferInitiated, language),
             ))
         }
         FinanceReadKind.BANK_ALLOCATION -> {
             val r = apis.allocation.status(organizationId, objectId, installationId)
             checked(r.organizationId, r.proposalId)
-            FinanceSourceSnapshot("تخصيص مالي", r.state, listOf(
-                "المصدر: " + r.sourceKind,
-                "المبلغ: " + r.amount + " " + r.currency,
-                "تخصيص محاسبي مسجل: " + yesNo(r.cashAllocatedToAccountingSource),
-                "تحويل منفذ بواسطة النظام: " + yesNo(r.moneyTransferredByHiltech),
-                "مطابقة بنكية: " + yesNo(r.bankReconciled),
+            FinanceSourceSnapshot(language.text("تخصيص مالي", "Financial allocation"), r.state, listOf(
+                language.text("المصدر: ", "Source: ") + r.sourceKind,
+                language.text("المبلغ: ", "Amount: ") + r.amount + " " + r.currency,
+                language.text("تخصيص محاسبي مسجل: ", "Accounting allocation recorded: ") + yesNo(r.cashAllocatedToAccountingSource, language),
+                language.text("تحويل منفذ بواسطة النظام: ", "Transfer made by system: ") + yesNo(r.moneyTransferredByHiltech, language),
+                language.text("مطابقة بنكية: ", "Bank reconciliation: ") + yesNo(r.bankReconciled, language),
             ), if(r.cashAllocatedToAccountingSource && r.recordedAllocationId?.let(::financeLookupIdIsUuid)==true)
                 listOf(FinanceReviewHandoff(FinanceReviewKind.CASH_ALLOCATION_CORRECTION,r.recordedAllocationId!!)) else emptyList())
         }
         FinanceReadKind.BANK_ALLOCATION_CORRECTION -> {
             val r = apis.allocationCorrection.status(organizationId, objectId, installationId)
             checked(r.organizationId, r.proposalId)
-            FinanceSourceSnapshot("تصحيح تخصيص", r.state, listOf(
-                "المبلغ: " + r.amount + " " + r.currency,
-                "السجل الأصلي محفوظ: " + yesNo(r.originalRecordPreserved),
-                "مطابقة السجل الأصلي ما زالت سارية: " + yesNo(r.originalMatchStillEffective),
-                "عكس قيد دفتر الأستاذ: " + yesNo(r.generalLedgerReversed),
+            FinanceSourceSnapshot(language.text("تصحيح تخصيص", "Allocation correction"), r.state, listOf(
+                language.text("المبلغ: ", "Amount: ") + r.amount + " " + r.currency,
+                language.text("السجل الأصلي محفوظ: ", "Original record preserved: ") + yesNo(r.originalRecordPreserved, language),
+                language.text("مطابقة السجل الأصلي ما زالت سارية: ", "Original match still effective: ") + yesNo(r.originalMatchStillEffective, language),
+                language.text("عكس قيد دفتر الأستاذ: ", "Ledger reversal: ") + yesNo(r.generalLedgerReversed, language),
             ))
         }
         FinanceReadKind.CASHBOX -> {
             val r = apis.cash.balance(organizationId, objectId, installationId)
             checked(r.organizationId, r.cashboxId)
-            FinanceSourceSnapshot("رصيد الخزنة المسجل", "SOURCE_BALANCE", listOf(
-                "الخزنة: " + r.code,
-                "الرصيد الدفتري: " + r.cashOnHand + " " + r.currency,
-                "عدد السندات: " + r.voucherCount,
-                "جرد فعلي مطابق: " + yesNo(r.physicalCountReconciled),
+            FinanceSourceSnapshot(language.text("رصيد الخزنة المسجل", "Recorded cashbox balance"), "SOURCE_BALANCE", listOf(
+                language.text("الخزنة: ", "Cashbox: ") + r.code,
+                language.text("الرصيد الدفتري: ", "Ledger balance: ") + r.cashOnHand + " " + r.currency,
+                language.text("عدد السندات: ", "Voucher count: ") + r.voucherCount,
+                language.text("جرد فعلي مطابق: ", "Physical count reconciled: ") + yesNo(r.physicalCountReconciled, language),
             ), listOf(FinanceReviewHandoff(FinanceReviewKind.CASH_COUNT,r.cashboxId)))
         }
         FinanceReadKind.CASH_VOUCHER -> {
             val r = apis.cash.voucherStatus(organizationId, objectId, installationId)
             checked(r.organizationId, r.proposalId)
-            FinanceSourceSnapshot("سند خزنة", r.state, listOf(
-                "نوع المصدر: " + r.sourceKind,
-                "المبلغ: " + r.amount + " " + r.currency,
-                "إثبات عهدة فعلية: " + yesNo(r.physicalCustodyConfirmed),
-                "تحويل بنكي: " + yesNo(r.bankTransactionInitiated),
+            FinanceSourceSnapshot(language.text("سند خزنة", "Cash voucher"), r.state, listOf(
+                language.text("نوع المصدر: ", "Source type: ") + r.sourceKind,
+                language.text("المبلغ: ", "Amount: ") + r.amount + " " + r.currency,
+                language.text("إثبات عهدة فعلية: ", "Physical custody confirmed: ") + yesNo(r.physicalCustodyConfirmed, language),
+                language.text("تحويل بنكي: ", "Bank transfer: ") + yesNo(r.bankTransactionInitiated, language),
             ))
         }
         FinanceReadKind.CASH_COUNT -> {
             val r = apis.cashCount.status(organizationId, objectId, installationId)
             checked(r.organizationId, r.proposalId)
-            FinanceSourceSnapshot("جرد الخزنة", r.state, listOf(
-                "المعدود: " + r.countedAmount + " " + r.currency,
-                "الدفتر: " + r.ledgerAmount + " " + r.currency,
-                "الفرق المثبت: " + r.varianceAmount + " " + r.currency,
-                "تعديل محاسبي منفذ: " + yesNo(r.ledgerAdjusted),
+            FinanceSourceSnapshot(language.text("جرد الخزنة", "Cash count"), r.state, listOf(
+                language.text("المعدود: ", "Counted: ") + r.countedAmount + " " + r.currency,
+                language.text("الدفتر: ", "Ledger: ") + r.ledgerAmount + " " + r.currency,
+                language.text("الفرق المثبت: ", "Recorded variance: ") + r.varianceAmount + " " + r.currency,
+                language.text("تعديل محاسبي منفذ: ", "Accounting adjustment made: ") + yesNo(r.ledgerAdjusted, language),
             ))
         }
         FinanceReadKind.AP_JOURNAL -> {
@@ -202,83 +205,83 @@ suspend fun financeReadSourceSnapshot(
             // This Phase8K receipt is keyed by original proposal ID, without an
             // organization field. Endpoint itself is source/actor/organization scoped.
             check(r.proposalId.equals(objectId, ignoreCase = true)) { "FINANCE_PROPOSAL_CHANGED" }
-            FinanceSourceSnapshot("قيد المورد", r.state, listOf(
-                "قيمة الفاتورة: " + r.invoiceAmount + " " + r.currency,
-                "التزام محاسبي معترف به: " + yesNo(r.recognizedAccountsPayable),
-                "تحويل أموال: " + yesNo(r.moneyTransferred),
-                "مطابقة بنك: " + yesNo(r.bankReconciled),
+            FinanceSourceSnapshot(language.text("قيد المورد", "Supplier journal"), r.state, listOf(
+                language.text("قيمة الفاتورة: ", "Invoice amount: ") + r.invoiceAmount + " " + r.currency,
+                language.text("التزام محاسبي معترف به: ", "Recognized payable: ") + yesNo(r.recognizedAccountsPayable, language),
+                language.text("تحويل أموال: ", "Funds transferred: ") + yesNo(r.moneyTransferred, language),
+                language.text("مطابقة بنك: ", "Bank reconciled: ") + yesNo(r.bankReconciled, language),
             ), if(r.state=="POSTED_ACCOUNTS_PAYABLE" && r.recognizedAccountsPayable) financePostedJournalHandoffs(r.postedJournalId,"AP") else emptyList())
         }
         FinanceReadKind.AR_CANDIDATE -> {
             val r = apis.arCandidate.status(organizationId, objectId, installationId)
             checked(r.organizationId, r.candidateId)
-            FinanceSourceSnapshot("مرشح فاتورة عميل", r.state, listOf(
-                "القيمة المطلوبة: " + r.requestedAmount + " " + r.currency,
-                "صدرت فاتورة: " + yesNo(r.invoiceIssued),
-                "أثبت ذمم مدينة: " + yesNo(r.receivablePosted),
-                "تم تحصيل نقدية: " + yesNo(r.cashCollected),
+            FinanceSourceSnapshot(language.text("مرشح فاتورة عميل", "Customer invoice candidate"), r.state, listOf(
+                language.text("القيمة المطلوبة: ", "Requested amount: ") + r.requestedAmount + " " + r.currency,
+                language.text("صدرت فاتورة: ", "Invoice issued: ") + yesNo(r.invoiceIssued, language),
+                language.text("أثبت ذمم مدينة: ", "Receivable posted: ") + yesNo(r.receivablePosted, language),
+                language.text("تم تحصيل نقدية: ", "Cash collected: ") + yesNo(r.cashCollected, language),
             ), if(r.state=="DRAFT_UNISSUED" && !r.invoiceIssued) listOf(FinanceReviewHandoff(FinanceReviewKind.INVOICE_ISSUANCE_PREPARE,r.candidateId)) else emptyList())
         }
         FinanceReadKind.AR_INVOICE -> {
             val r = apis.arIssuance.status(organizationId, objectId, installationId)
             checked(r.organizationId, r.proposalId)
-            FinanceSourceSnapshot("إثبات فاتورة عميل", r.state, listOf(
-                "رقم الفاتورة: " + r.invoiceNumber,
-                "سُجلت داخليًا: " + yesNo(r.recordedInternally),
-                "أُرسلت للعميل: " + yesNo(r.invoiceSentExternally),
-                "تم تحصيلها: " + yesNo(r.paymentCollected),
+            FinanceSourceSnapshot(language.text("إثبات فاتورة عميل", "Customer invoice evidence"), r.state, listOf(
+                language.text("رقم الفاتورة: ", "Invoice number: ") + r.invoiceNumber,
+                language.text("سُجلت داخليًا: ", "Recorded internally: ") + yesNo(r.recordedInternally, language),
+                language.text("أُرسلت للعميل: ", "Sent to customer: ") + yesNo(r.invoiceSentExternally, language),
+                language.text("تم تحصيلها: ", "Payment collected: ") + yesNo(r.paymentCollected, language),
             ), if(r.recordedInternally && r.issuedInvoiceId?.let(::financeLookupIdIsUuid)==true)
                 listOf(FinanceReviewHandoff(FinanceReviewKind.AR_JOURNAL,r.issuedInvoiceId!!)) else emptyList())
         }
         FinanceReadKind.AR_JOURNAL -> {
             val r = apis.arJournal.status(organizationId, objectId, installationId)
             checked(r.organizationId, r.proposalId)
-            FinanceSourceSnapshot("قيد العميل", r.state, listOf(
-                "القيمة: " + r.amount + " " + r.currency,
-                "ذمم مدينة معترف بها: " + yesNo(r.receivableRecognized),
-                "نقدية محصلة: " + yesNo(r.cashCollected),
-                "مطابقة البنك: " + yesNo(r.bankReconciled),
+            FinanceSourceSnapshot(language.text("قيد العميل", "Customer journal"), r.state, listOf(
+                language.text("القيمة: ", "Amount: ") + r.amount + " " + r.currency,
+                language.text("ذمم مدينة معترف بها: ", "Recognized receivable: ") + yesNo(r.receivableRecognized, language),
+                language.text("نقدية محصلة: ", "Cash collected: ") + yesNo(r.cashCollected, language),
+                language.text("مطابقة البنك: ", "Bank reconciled: ") + yesNo(r.bankReconciled, language),
             ), if(r.state=="POSTED_ACCOUNTS_RECEIVABLE" && r.receivableRecognized) financePostedJournalHandoffs(r.postedJournalId,"AR") else emptyList())
         }
         FinanceReadKind.EMPLOYEE_FUNDING -> {
             val r = apis.employeeMoney.fundingStatus(organizationId, objectId, installationId)
             checked(r.organizationId, r.proposalId)
-            FinanceSourceSnapshot("تمويل موظف / عهدة", r.state, listOf(
-                "القيمة: " + r.amount + " " + r.currency,
-                "إثبات التمويل محفوظ: " + yesNo(r.fundingEvidenceRecorded),
-                "تحويل بنك جديد: " + yesNo(r.bankTransferInitiated),
-                "تسوية الموظف اكتملت: " + yesNo(r.employeeSettled),
+            FinanceSourceSnapshot(language.text("تمويل موظف / عهدة", "Employee funding / imprest"), r.state, listOf(
+                language.text("القيمة: ", "Amount: ") + r.amount + " " + r.currency,
+                language.text("إثبات التمويل محفوظ: ", "Funding evidence recorded: ") + yesNo(r.fundingEvidenceRecorded, language),
+                language.text("تحويل بنك جديد: ", "New bank transfer: ") + yesNo(r.bankTransferInitiated, language),
+                language.text("تسوية الموظف اكتملت: ", "Employee settlement complete: ") + yesNo(r.employeeSettled, language),
             ), if(r.fundingEvidenceRecorded && !r.employeeSettled && r.fundingRecordId?.let(::financeLookupIdIsUuid)==true)
                 listOf(FinanceReviewHandoff(FinanceReviewKind.EMPLOYEE_SETTLEMENT,r.fundingRecordId!!)) else emptyList())
         }
         FinanceReadKind.EMPLOYEE_SETTLEMENT -> {
             val r = apis.employeeMoney.settlementStatus(organizationId, objectId, installationId)
             checked(r.organizationId, r.proposalId)
-            FinanceSourceSnapshot("تسوية موظف", r.state, listOf(
-                "العملية: " + r.action,
-                "القيمة: " + r.amount + " " + r.currency,
-                "تسوية مسجلة: " + yesNo(r.settlementRecorded),
-                "خصم راتب منفذ: " + yesNo(r.payrollDeductionInitiated),
+            FinanceSourceSnapshot(language.text("تسوية موظف", "Employee settlement"), r.state, listOf(
+                language.text("العملية: ", "Operation: ") + r.action,
+                language.text("القيمة: ", "Amount: ") + r.amount + " " + r.currency,
+                language.text("تسوية مسجلة: ", "Settlement recorded: ") + yesNo(r.settlementRecorded, language),
+                language.text("خصم راتب منفذ: ", "Payroll deduction initiated: ") + yesNo(r.payrollDeductionInitiated, language),
             ))
         }
         FinanceReadKind.EMPLOYEE_REIMBURSEMENT -> {
             val r = apis.reimbursement.status(organizationId, objectId, installationId)
             checked(r.organizationId, r.proposalId)
-            FinanceSourceSnapshot("تعويض مصروف موظف", r.state, listOf(
-                "القيمة: " + r.amount + " " + r.currency,
-                "خصم بنكي خصص للمصروف: " + yesNo(r.bankDebitAllocatedToEmployeeExpense),
-                "تحويل جديد بدأه النظام: " + yesNo(r.bankTransferInitiated),
-                "اعتراف بالمصروف في GL: " + yesNo(r.expenseRecognizedInGl),
+            FinanceSourceSnapshot(language.text("تعويض مصروف موظف", "Employee expense reimbursement"), r.state, listOf(
+                language.text("القيمة: ", "Amount: ") + r.amount + " " + r.currency,
+                language.text("خصم بنكي خصص للمصروف: ", "Bank debit allocated to expense: ") + yesNo(r.bankDebitAllocatedToEmployeeExpense, language),
+                language.text("تحويل جديد بدأه النظام: ", "New transfer initiated by system: ") + yesNo(r.bankTransferInitiated, language),
+                language.text("اعتراف بالمصروف في GL: ", "Expense recognized in GL: ") + yesNo(r.expenseRecognizedInGl, language),
             ))
         }
         FinanceReadKind.PERIOD_CLOSE -> {
             val r = apis.periodClose.status(organizationId, objectId, installationId)
             checked(r.organizationId, r.periodId)
-            FinanceSourceSnapshot("إقفال فترة", r.state, listOf(
-                "القيود في اللقطة: " + r.journalCount,
-                "الفترة مقفولة: " + yesNo(r.periodClosed),
-                "تحويل أموال: " + yesNo(r.moneyTransferred),
-                "مطابقة بنكية: " + yesNo(r.bankReconciled),
+            FinanceSourceSnapshot(language.text("إقفال فترة", "Period close"), r.state, listOf(
+                language.text("القيود في اللقطة: ", "Journals in snapshot: ") + r.journalCount,
+                language.text("الفترة مقفولة: ", "Period closed: ") + yesNo(r.periodClosed, language),
+                language.text("تحويل أموال: ", "Funds transferred: ") + yesNo(r.moneyTransferred, language),
+                language.text("مطابقة بنكية: ", "Bank reconciliation: ") + yesNo(r.bankReconciled, language),
             ))
         }
     }
@@ -409,8 +412,9 @@ fun financeEvidenceReadNativeWorkspace(
         var lookupError by remember(identityId, organizationId, installationId, lookupKind) {
             mutableStateOf<String?>(null)
         }
+        val language = LocalHiltechLanguage.current
         LaunchedEffect(identityId, organizationId, installationId,
-            lookupKind, requestedId, lookupRevision
+            lookupKind, requestedId, lookupRevision, language
         ) {
             val kind = lookupKind ?: return@LaunchedEffect
             val id = requestedId ?: return@LaunchedEffect
@@ -419,7 +423,7 @@ fun financeEvidenceReadNativeWorkspace(
             lookupError = null
             try {
                 lookupResult = financeReadSourceSnapshot(
-                    apis, kind, organizationId, id, installationId,
+                    apis, kind, organizationId, id, installationId, language,
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -434,7 +438,6 @@ fun financeEvidenceReadNativeWorkspace(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            val language = LocalHiltechLanguage.current
             HiltechSectionHeading("FINANCE / REVIEW", language.text("المراجعة المالية", "Financial review"),
                 language.text("راجع السجلات المحاسبية والإجراءات المرتبطة بها من مصادرها.", "Review accounting records and their related actions at source."))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -506,19 +509,19 @@ fun financeEvidenceReadNativeWorkspace(
             Text(hiltechText("اختر نوع السجل، ثم أدخل UUID أصليًا معروفًا من العملية. كل قراءة تعيد التحقق من صلاحية السيرفر الحالية.", "Choose a record type and enter its source record ID. Each lookup checks current access."),
                 style = MaterialTheme.typography.bodySmall)
             listOf(
-                "البنك والتخصيص" to listOf(
+                language.text("البنك والتخصيص", "Bank & allocations") to listOf(
                     FinanceReadKind.BANK_INTAKE, FinanceReadKind.BANK_RECONCILIATION,
                     FinanceReadKind.BANK_ALLOCATION, FinanceReadKind.BANK_ALLOCATION_CORRECTION,
                 ),
-                "الخزنة الفعلية" to listOf(
+                language.text("الخزنة الفعلية", "Physical cash") to listOf(
                     FinanceReadKind.CASHBOX, FinanceReadKind.CASH_VOUCHER,
                     FinanceReadKind.CASH_COUNT,
                 ),
-                "فواتير ودفاتر الموردين والعملاء" to listOf(
+                language.text("فواتير ودفاتر الموردين والعملاء", "Supplier & customer journals") to listOf(
                     FinanceReadKind.AP_JOURNAL, FinanceReadKind.AR_CANDIDATE,
                     FinanceReadKind.AR_INVOICE, FinanceReadKind.AR_JOURNAL,
                 ),
-                "الموظفون والإقفال" to listOf(
+                language.text("الموظفون والإقفال", "Employees & closing") to listOf(
                     FinanceReadKind.EMPLOYEE_FUNDING, FinanceReadKind.EMPLOYEE_SETTLEMENT,
                     FinanceReadKind.EMPLOYEE_REIMBURSEMENT, FinanceReadKind.PERIOD_CLOSE,
                 ),
@@ -532,7 +535,7 @@ fun financeEvidenceReadNativeWorkspace(
                         OutlinedButton(
                             enabled = kind != lookupKind,
                             onClick = { lookupKind = kind },
-                        ) { Text(kind.label) }
+                        ) { Text(language.text(kind.label, kind.english)) }
                     }
                 }
             }
@@ -564,9 +567,15 @@ fun financeEvidenceReadNativeWorkspace(
                 ) { Text(if (lookupLoading) hiltechText("جارٍ القراءة…", "Reading…") else hiltechText("قراءة الحالة الحالية", "Read current status")) }
                 lookupError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 lookupResult?.let { record ->
-                    Text(record.title + " · " + record.state,
-                        style = MaterialTheme.typography.titleSmall)
-                    record.facts.forEach { Text(it) }
+                    HiltechPanel(Modifier.fillMaxWidth()) {
+                        Text(record.title, style = MaterialTheme.typography.titleLarge)
+                        HiltechKeyValue(hiltechText("حالة المصدر", "Source state"), record.state)
+                        record.facts.forEach { fact ->
+                            val split = fact.indexOf(": ")
+                            if (split > 0) HiltechKeyValue(fact.substring(0, split), fact.substring(split + 2))
+                            else Text(fact)
+                        }
+                    }
                     if(reviewPreparationEnabled) record.nextActions.forEach { action ->
                         OutlinedButton(enabled=handoff==null,onClick={handoff=action;area=FinanceReviewArea.Prepare}) {Text(hiltechText("متابعة: ", "Continue: ")+action.kind.label)}
                     }
