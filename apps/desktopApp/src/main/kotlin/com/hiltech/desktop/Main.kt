@@ -157,6 +157,12 @@ fun main() {
                                 ?: "HILTECH sign-in failed.",
                     )
 
+                failure is LinkageError ->
+                    HiltechShellState.Failure(
+                        code = "IDENTITY_RUNTIME_COMPONENT_MISSING",
+                        message = "This installation is missing a sign-in component. Install the latest HILTECH update.",
+                    )
+
                 else ->
                     HiltechShellState.Failure(
                         code = "IDENTITY_RUNTIME_FAILURE",

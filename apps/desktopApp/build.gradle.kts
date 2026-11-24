@@ -84,9 +84,12 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             packageName = "HILTECH"
-            packageVersion = "0.1.0"
+            packageVersion = "0.1.1"
+            // DesktopIdentityRuntime binds the native browser callback on loopback.
+            modules("jdk.httpserver")
             windows {
                 perUserInstall = true
+                upgradeUuid = "c6fb84f4-f9b9-36ed-bfea-9d872b1be327"
                 menu = true
                 menuGroup = "HILTECH"
             }

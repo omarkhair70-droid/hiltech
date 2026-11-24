@@ -183,6 +183,35 @@ jobs:
           cat /tmp/hiltech-oidc-android.log 2>/dev/null || true
           cat /tmp/hiltech-oidc-windows.log 2>/dev/null || true
 
+  windows-packaged-oidc-runtime:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+      - name: Build Windows MSI with the production launcher
+        run: .\gradlew.bat :apps:desktopApp:packageMsi --console=plain
+      - name: Verify the MSI includes the browser callback runtime
+        shell: pwsh
+        run: |
+          $msis = @(Get-ChildItem apps/desktopApp/build/compose/binaries/main/msi -Filter '*.msi')
+          if ($msis.Count -ne 1) { throw "Expected one Windows installer." }
+          $destination = Join-Path $env:RUNNER_TEMP 'hiltech-msi-contents'
+          $arguments = @('/a', ('"' + $msis[0].FullName + '"'), '/qn', ('TARGETDIR="' + $destination + '"'))
+          $installer = Start-Process -FilePath msiexec.exe -ArgumentList $arguments -PassThru -Wait -WindowStyle Hidden
+          if ($installer.ExitCode -ne 0) { throw "MSI extraction failed ($($installer.ExitCode))." }
+          $image = Join-Path $destination 'HILTECH/runtime/lib/modules'
+          $contents = & (Join-Path $env:JAVA_HOME 'bin/jimage.exe') list $image
+          if ($LASTEXITCODE -ne 0 -or !($contents -match '^\s*com/sun/net/httpserver/HttpServer\.class$')) {
+            throw 'The installed runtime is missing the native OIDC callback server.'
+          }
+
   desktop-shell-render:
     runs-on: ubuntu-latest
     timeout-minutes: 15
