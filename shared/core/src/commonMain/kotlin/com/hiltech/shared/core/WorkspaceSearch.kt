@@ -1,6 +1,11 @@
 package com.hiltech.shared.core
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.TextButton
+import com.hiltech.shared.core.design.hiltechText
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -50,7 +55,7 @@ internal fun WorkspaceSearch(
     var highlighted by remember { mutableIntStateOf(0) }
     val term = query.trim()
     val matching = commands.filter { result ->
-        if (term.isEmpty()) result.key.startsWith("workspace:")
+        if (term.isEmpty()) result.key.startsWith("workspace:") || result.key.startsWith("specialist:")
         else result.title.contains(term, ignoreCase = true) || result.context.contains(term, ignoreCase = true)
     }
     val results = rememberLazyListState()
@@ -98,6 +103,11 @@ internal fun WorkspaceSearch(
                 },
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(hiltechText("انتقل إلى أي مساحة", "Go to a workspace"), style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onDismiss) { Text("Esc") }
+                }
                 OutlinedTextField(
                     value = query,
                     onValueChange = {
@@ -106,9 +116,11 @@ internal fun WorkspaceSearch(
                     },
                     modifier = Modifier.fillMaxWidth().focusRequester(focus),
                     singleLine = true,
-                    label = { Text("Find workspaces, projects or employees") },
+                    label = { Text(hiltechText("ابحث عن مساحة أو مشروع أو موظف", "Find a workspace, project or employee")) },
                 )
-                if (matching.isEmpty()) Text("No results for this search")
+                if (matching.isEmpty()) Text(hiltechText("لا توجد نتائج لهذا البحث", "No results for this search"))
+                Text(hiltechText("النتائج المتاحة: ", "Available results: ") + matching.size,
+                    style = MaterialTheme.typography.labelMedium, color = colors.secondaryText)
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp),
                     state = results,
@@ -122,9 +134,12 @@ internal fun WorkspaceSearch(
                             contentColor = colors.primaryText,
                             shape = HiltechShape.small,
                         ) {
-                            Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                                Text(item.title, style = MaterialTheme.typography.titleSmall)
-                                Text(item.context, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                            Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(item.title, style = MaterialTheme.typography.titleSmall)
+                                    Text(item.context, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                                }
+                                if (highlighted == index) Text("Enter", color = colors.accent, style = MaterialTheme.typography.labelMedium)
                             }
                         }
                     }
