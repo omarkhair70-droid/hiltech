@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.HiltechShape
+import com.hiltech.shared.core.design.HiltechMotion
+import com.hiltech.shared.core.design.hiltechRevealModifier
 import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.design.LocalHiltechOperationalColors
 
@@ -65,6 +67,7 @@ internal fun NativeWorkspaceNavigation(
     }
 
     val selectedTab = selected.takeIf(primaryDestinations::contains) ?: ShellWorkspace.Explore
+    val reveal = hiltechRevealModifier(selected)
     if (compact) {
         Column(Modifier.fillMaxSize().background(colors.canvas)) {
             Surface(color = colors.surface, contentColor = colors.primaryText) {
@@ -91,7 +94,7 @@ internal fun NativeWorkspaceNavigation(
             if (boundedContent != null) {
                 Box(Modifier.weight(1f).fillMaxWidth()) { boundedContent() }
             } else Column(
-                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll)
+                modifier = Modifier.weight(1f).fillMaxWidth().then(reveal).verticalScroll(scroll)
                     .padding(horizontal = 16.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -188,7 +191,7 @@ internal fun NativeWorkspaceNavigation(
             if (boundedContent != null) {
                 Box(Modifier.weight(1f).fillMaxWidth()) { boundedContent() }
             } else Column(
-                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(24.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth().then(reveal).verticalScroll(scroll).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 CompositionLocalProvider(LocalContentColor provides colors.primaryText) { content() }
@@ -223,7 +226,7 @@ private fun WorkspaceRailEntry(destination: ShellWorkspace, selected: Boolean, o
     val colors = LocalHiltechOperationalColors.current
     val selectionColor = animateColorAsState(
         targetValue = if (selected) colors.selected else colors.surfaceElevated,
-        animationSpec = tween(durationMillis = 140), label = "workspace selection",
+        animationSpec = tween(durationMillis = HiltechMotion.selectionMillis), label = "workspace selection",
     ).value
     Surface(color = selectionColor, shape = HiltechShape.small) {
         Row(

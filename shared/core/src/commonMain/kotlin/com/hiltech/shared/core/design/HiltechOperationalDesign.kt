@@ -147,8 +147,8 @@ object HiltechShape {
 }
 
 /**
- * Operational text hierarchy shared by both native clients. Use the platform
- * embedded Plex family with Arabic and Latin coverage on both platforms.
+ * Operational text hierarchy shared by both native clients, using the
+ * embedded Plex family with Arabic and Latin coverage.
  */
 @Composable
 private fun operationalTypography(): Typography {
@@ -252,7 +252,7 @@ fun HiltechStateTag(label: String, tone: HiltechStateTone, modifier: Modifier = 
     }
     Surface(modifier = modifier, color = background, shape = HiltechShape.small) {
         Text(label, color = foreground, fontWeight = FontWeight.SemiBold,
-            fontSize = 12.sp, lineHeight = 16.sp,
+            style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp))
     }
 }
@@ -277,8 +277,8 @@ fun HiltechPanel(modifier: Modifier = Modifier, content: @Composable () -> Unit)
 fun HiltechKeyValue(label: String, value: String, modifier: Modifier = Modifier) {
     val p = LocalHiltechOperationalColors.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(label, color = p.secondaryText, fontSize = 12.sp, lineHeight = 16.sp)
-        Text(value, color = p.primaryText, fontSize = 15.sp, lineHeight = 20.sp,
+        Text(label, color = p.secondaryText, style = MaterialTheme.typography.labelMedium)
+        Text(value, color = p.primaryText, style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content),
             fontWeight = FontWeight.Medium)
     }
 }
@@ -287,12 +287,10 @@ fun HiltechKeyValue(label: String, value: String, modifier: Modifier = Modifier)
 fun HiltechSectionHeading(index: String, title: String, subtitle: String? = null) {
     val p = LocalHiltechOperationalColors.current
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text(index, color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp)
-        Text(title, color = p.primaryText, fontSize = 23.sp,
-            lineHeight = 29.sp, fontWeight = FontWeight.Bold)
+        Text(index, color = p.accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        Text(title, color = p.primaryText, style = MaterialTheme.typography.headlineMedium)
         if (subtitle != null) Text(subtitle, color = p.secondaryText,
-            fontSize = 13.sp, lineHeight = 19.sp)
+            style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -373,7 +371,7 @@ fun HiltechRecordPicker(
             }
         }
         if (expanded) {
-            HiltechPanel(Modifier.fillMaxWidth()) {
+            HiltechPanel(Modifier.fillMaxWidth().then(hiltechRevealModifier(Unit))) {
                 OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
                     label = { Text(hiltechText("بحث في السجلات المتاحة", "Search available records")) })
                 val matching = records.filter { query.isBlank() || it.title.contains(query.trim(), true) || it.context.contains(query.trim(), true) || it.id.contains(query.trim(), true) }

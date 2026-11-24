@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.hiltechRevealModifier
 import com.hiltech.shared.core.design.HiltechLanguage
 import com.hiltech.shared.core.design.LocalHiltechLanguage
 import com.hiltech.shared.core.design.hiltechText
@@ -174,7 +175,13 @@ internal fun NativeWorkspaceDirectory(
             if (checking) Text(hiltechText("جارٍ تحميل المساحات المتاحة…", "Checking connected sources…"))
             if (!checking && visible.isEmpty()) Text(hiltechText("لا توجد مساحات متخصصة متاحة لهذا الحساب.", "No connected workspaces are available to this account."))
             if (unavailable > 0) Text(hiltechText("بعض المصادر غير متاحة الآن. حدّث لإعادة المحاولة.", "Some sources are currently unavailable. Refresh to retry."))
-            session.message?.let { Text(it) }
+            session.message?.let { message ->
+                Text(when (message) {
+                    "Access is no longer available." -> language.text("لم تعد صلاحية الوصول متاحة.", message)
+                    "The source could not be reached. Refresh and try again." -> language.text("تعذر الاتصال بالمصدر. حدّث وحاول مرة أخرى.", message)
+                    else -> message
+                })
+            }
             TextButton(onClick = session::refresh, enabled = !checking && session.pendingId == null) {
                 Text(hiltechText("تحديث المساحات", "Refresh workspaces"))
             }
@@ -197,7 +204,7 @@ internal fun NativeWorkspacePane(
                     style = MaterialTheme.typography.titleMedium)
             }
         }
-        Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp)) {
+        Box(Modifier.weight(1f).fillMaxWidth().then(hiltechRevealModifier(scope to workspace.id)).padding(horizontal = 12.dp)) {
             key(scope, workspace.id) {
                 if (workspace.hostOwnsScroll) {
                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { workspace.content(onExit) }
@@ -255,7 +262,9 @@ fun NativeOperationAreas(title: String, description: String, areas: List<NativeO
                     FilterChip(selected = current.id == area.id, onClick = { requested = area.id }, label = { Text(language.text(area.title, operationEnglish(area.id, area.title))) })
                 }
             }
-            key(current.id) { current.content() }
+            Box(Modifier.fillMaxWidth().then(hiltechRevealModifier(current.id))) {
+                key(current.id) { current.content() }
+            }
         }
     }
 }
