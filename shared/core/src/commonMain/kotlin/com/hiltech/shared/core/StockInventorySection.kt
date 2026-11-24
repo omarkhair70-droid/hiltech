@@ -86,11 +86,11 @@ fun StockInventorySection(state: StockInventoryState, selectedWarehouseId: Strin
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("دليل الأصناف", style = MaterialTheme.typography.titleLarge)
-                Text("الأرصدة والحركة والتسليم الفعلي", color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+                Text(hiltechText("دليل الأصناف", "Stock catalogue"), style = MaterialTheme.typography.titleLarge)
+                Text(hiltechText("الأرصدة والحركة والتسليم الفعلي", "Balances, movements and actual fulfillment"), color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
             }
             TextButton(onClick = { dispatch(StockAction.Refresh) }, enabled = !state.loading) {
-                Text(if (state.loading) "جارٍ التحميل" else "تحديث")
+                Text(if (state.loading) hiltechText("جارٍ التحميل", "Loading") else hiltechText("تحديث", "Refresh"))
             }
         }
         state.message?.let { Text(it) }
@@ -99,18 +99,18 @@ fun StockInventorySection(state: StockInventoryState, selectedWarehouseId: Strin
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (selectedWarehouseId != null) {
                     TextButton(onClick = { showSetup = !showSetup }, enabled = !state.loading) {
-                        Text(if (showSetup) "إغلاق إعداد الأصناف" else "+ صنف أو وحدة قياس")
+                        Text(if (showSetup) hiltechText("إغلاق إعداد الأصناف", "Close stock setup") else hiltechText("+ صنف أو وحدة قياس", "+ Item or unit"))
                     }
                     if (showSetup) HiltechPanel(Modifier.fillMaxWidth()) { StockMasterForm(catalog, state.loading, dispatch) }
                 }
-                OutlinedTextField(query, { query = it }, label = { Text("ابحث في الأصناف المعروضة") },
+                OutlinedTextField(query, { query = it }, label = { Text(hiltechText("ابحث في الأصناف المعروضة", "Search visible items")) },
                     modifier = Modifier.fillMaxWidth(), singleLine = true)
                 val matches = state.items.filter { item ->
                     query.isBlank() || listOfNotNull(item.itemCode, item.name, item.brand, item.partNumber)
                         .any { it.contains(query.trim(), ignoreCase = true) }
                 }
                 Text("المعروض: " + matches.size, style = MaterialTheme.typography.labelMedium, color = colors.secondaryText)
-                if (matches.isEmpty()) Text(if (query.isBlank()) "لا توجد أصناف معروضة." else "لا توجد نتائج في الصفحة المحمّلة.")
+                if (matches.isEmpty()) Text(if (query.isBlank()) hiltechText("لا توجد أصناف معروضة.", "No visible items.") else hiltechText("لا توجد نتائج في الصفحة المحمّلة.", "No results in the loaded page."))
                 matches.forEach { item ->
                     Surface(onClick = { detailMode = true; dispatch(StockAction.Select(item.id)) }, enabled = !state.loading,
                         color = if (item.id == state.selected?.id) colors.selected else colors.surface,
@@ -120,20 +120,20 @@ fun StockInventorySection(state: StockInventoryState, selectedWarehouseId: Strin
                             Text(item.name, style = MaterialTheme.typography.titleMedium)
                             Text(listOfNotNull(item.brand, item.partNumber, item.baseUnitCode).joinToString(" · "),
                                 color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
-                            HiltechStateTag(if (item.active) "نشط" else "غير نشط",
+                            HiltechStateTag(if (item.active) hiltechText("نشط", "Active") else hiltechText("غير نشط", "Inactive"),
                                 if (item.active) HiltechStateTone.CURRENT else HiltechStateTone.NEUTRAL)
                         }
                     }
                 }
                 state.nextAfterCode?.let { cursor ->
-                    OutlinedButton({ dispatch(StockAction.More(cursor)) }, enabled = !state.loading) { Text("تحميل أصناف إضافية") }
+                    OutlinedButton({ dispatch(StockAction.More(cursor)) }, enabled = !state.loading) { Text(hiltechText("تحميل أصناف إضافية", "Load more items")) }
                 }
             }
         }
         val detail: @Composable () -> Unit = {
             val item = state.selected
             if (item == null) {
-                HiltechPanel(Modifier.fillMaxWidth()) { Text("اختر صنفًا لعرض رصيده وحركته.") }
+                HiltechPanel(Modifier.fillMaxWidth()) { Text(hiltechText("اختر صنفًا لعرض رصيده وحركته.", "Choose an item to view its balance and movements.")) }
             } else {
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     HiltechPanel(Modifier.fillMaxWidth()) {
@@ -145,7 +145,7 @@ fun StockInventorySection(state: StockInventoryState, selectedWarehouseId: Strin
                     val current = tab.takeIf { it in tabs } ?: StockDetailTab.Balance
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         tabs.forEach { choice -> FilterChip(selected = current == choice, onClick = { tab = choice },
-                            label = { Text(choice.title) }) }
+                            label = { Text(hiltechText(choice.title, choice.english)) }) }
                     }
                     when (current) {
                         StockDetailTab.Balance -> HiltechPanel(Modifier.fillMaxWidth()) { StockItemDetail(item, state, dispatch) }
@@ -160,15 +160,15 @@ fun StockInventorySection(state: StockInventoryState, selectedWarehouseId: Strin
                 Column(Modifier.weight(.9f)) { directory() }
                 Column(Modifier.weight(1.5f)) { detail() }
             } else if (detailMode && state.selected != null) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                TextButton(onClick = { detailMode = false }) { Text("العودة إلى الأصناف") }
+                TextButton(onClick = { detailMode = false }) { Text(hiltechText("العودة إلى الأصناف", "Back to stock")) }
                 detail()
             } else directory()
         }
     }
 }
 
-private enum class StockDetailTab(val title: String) {
-    Balance("الرصيد والحركة"), Issued("العهد المصروفة"), History("سجل التسليم"),
+private enum class StockDetailTab(val title: String, val english: String) {
+    Balance("الرصيد والحركة", "Balance & movements"), Issued("العهد المصروفة", "Issued stock"), History("سجل التسليم", "Fulfillment history"),
 }
 
 @Composable
