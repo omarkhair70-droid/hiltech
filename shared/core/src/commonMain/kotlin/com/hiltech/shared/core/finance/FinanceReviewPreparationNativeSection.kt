@@ -2,10 +2,13 @@ package com.hiltech.shared.core.finance
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -445,6 +448,19 @@ fun FinanceReviewPreparationSection(
     }
     var kind by remember(identityId, organizationId, installationId) {
         mutableStateOf(FinanceReviewKind.BANK_RECONCILIATION)
+    }
+    val scope = rememberCoroutineScope()
+    var accountingChoices by remember(identityId, organizationId, installationId, kind) {
+        mutableStateOf<FinanceAccountingChoicesDto?>(null)
+    }
+    var accountingChoicesLoading by remember(identityId, organizationId, installationId, kind) {
+        mutableStateOf(false)
+    }
+    var accountingChoicesError by remember(identityId, organizationId, installationId, kind) {
+        mutableStateOf<String?>(null)
+    }
+    var accountSearch by remember(identityId, organizationId, installationId, kind) {
+        mutableStateOf("")
     }
     var selectedCandidate by remember(identityId, organizationId, installationId) { mutableStateOf<String?>(null) }
     var draft by remember(identityId, organizationId, installationId, kind) {
