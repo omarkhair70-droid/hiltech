@@ -1,0 +1,59 @@
+name: Release — HILTECH production readiness gate
+
+on:
+  pull_request:
+    paths:
+      - "scripts/devops/hiltech_production_gate.py"
+      - "scripts/devops/test_hiltech_production_gate.py"
+      - ".github/workflows/hiltech-production-readiness.yml"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Static preflight or read-only live DNS/TLS/OIDC/API checks"
+        required: true
+        type: choice
+        options:
+          - static
+          - live
+        default: static
+
+permissions:
+  contents: read
+
+jobs:
+  static-contract:
+    name: Verify production safety preflight (no deployment)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run production gate unit tests
+        run: python3 -m unittest discover -s scripts/devops -p 'test_hiltech_production_gate.py' -v
+      - name: Validate preflight syntax
+        run: python3 -m py_compile scripts/devops/hiltech_production_gate.py
+
+  live-readonly:
+    name: Live production DNS, TLS, OIDC and API check (no deployment)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'live' }}
+    needs: static-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: production
+    env:
+      HILTECH_PROD_API_URL: ${{ vars.HILTECH_PROD_API_URL }}
+      HILTECH_PROD_OIDC_ISSUER: ${{ vars.HILTECH_PROD_OIDC_ISSUER }}
+      HILTECH_PROD_EVIDENCE_URL: ${{ vars.HILTECH_PROD_EVIDENCE_URL }}
+      HILTECH_PROD_API_IMAGE: ${{ vars.HILTECH_PROD_API_IMAGE }}
+      HILTECH_PROD_FGA_STORE_ID: ${{ vars.HILTECH_PROD_FGA_STORE_ID }}
+      HILTECH_PROD_FGA_MODEL_ID: ${{ vars.HILTECH_PROD_FGA_MODEL_ID }}
+      HILTECH_PROD_ANDROID_RELEASE_REF: ${{ vars.HILTECH_PROD_ANDROID_RELEASE_REF }}
+      HILTECH_PROD_WINDOWS_RELEASE_REF: ${{ vars.HILTECH_PROD_WINDOWS_RELEASE_REF }}
+      HILTECH_PROD_BACKUP_RESTORE_REF: ${{ vars.HILTECH_PROD_BACKUP_RESTORE_REF }}
+      HILTECH_PROD_APPROVAL_REF: ${{ vars.HILTECH_PROD_APPROVAL_REF }}
+      HILTECH_PROD_FGA_AUTHN_METHOD: preshared
+      HILTECH_PROD_OPENFGA_PUBLIC: "false"
+      HILTECH_PROD_DATABASE_PUBLIC: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Prove approved public ingress without exposing databases or FGA
+        run: python3 scripts/devops/hiltech_production_gate.py --live
