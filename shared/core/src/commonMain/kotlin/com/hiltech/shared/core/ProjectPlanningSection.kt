@@ -287,7 +287,7 @@ private fun CreateAreaForm(plan: ProjectPlanDto, onAction: (PlanningUiAction) ->
     var projectSiteId by remember(plan.project.projectId) { mutableStateOf(plan.projectSites.first().projectSiteId) }
     HiltechRecordPicker(hiltechText("الموقع", "Project site"), projectSiteId,
         plan.projectSites.map { HiltechRecordChoice(it.projectSiteId, it.name, it.siteCode) },
-        { projectSiteId = it }, allowKnownReference = false)
+        { projectSiteId = it }, allowKnownReference = false, allowClear = false)
     AreaFields("", "", "ZONE", "", "") { code, name, type, parent, sequence ->
         onAction(
             PlanningUiAction.CreateArea(
