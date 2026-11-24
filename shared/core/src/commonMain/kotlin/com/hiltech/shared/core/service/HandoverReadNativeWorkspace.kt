@@ -1,6 +1,13 @@
 package com.hiltech.shared.core.service
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import com.hiltech.shared.core.design.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -156,21 +163,38 @@ fun handoverReadNativeWorkspace(
                 modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("تسليم المشاريع / Handover — قراءة من المصدر، بدون إجراءات خارجية")
-                OutlinedButton(enabled = !loading, onClick = { refresh++ }) {
-                    Text("تحديث صلاحيات ومشاريع التسليم")
+                val colors = LocalHiltechOperationalColors.current
+                var query by remember { mutableStateOf("") }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        HiltechSectionHeading("DELIVERY", hiltechText("تسليم المشاريع", "Project handover"),
+                            hiltechText("تابع جاهزية التسليم والمستندات الخاصة بالمشاريع المتاحة.", "Review handover readiness and documents for accessible projects."))
+                    }
+                    TextButton(enabled = !loading, onClick = { refresh++ }) {
+                        Text(hiltechText("تحديث", "Refresh"))
+                    }
                 }
-                if (loading) Text("جارٍ التحقق من المصادر والصلاحيات…")
-                error?.let { Text("المصدر غير متاح: " + it) }
-                if (!loading && error == null && eligible.isEmpty()) {
-                    Text("لا توجد مشاريع مخوّل لك عرض تسليمها في نافذة القراءة الحالية.")
-                }
-                eligible.forEach { project ->
-                    OutlinedButton(enabled = !loading, onClick = {
-                        if (eligible.any { it.projectId == project.projectId }) {
-                            selectedId = project.projectId
+                OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    label = { Text(hiltechText("اسم المشروع أو الكود", "Project name or code")) })
+                if (loading) Text(hiltechText("جارٍ تحميل المشاريع…", "Loading projects…"))
+                error?.let { Text(hiltechText("المصدر غير متاح: ", "Source unavailable: ") + it) }
+                val matching = eligible.filter { project -> query.isBlank() ||
+                    listOf(project.name, project.projectCode, project.clientDisplayName).any { it.contains(query.trim(), true) } }
+                if (!loading && error == null && matching.isEmpty()) Text(hiltechText("لا توجد مشاريع مطابقة.", "No matching projects."))
+                matching.forEach { project ->
+                    Surface(onClick = { if (eligible.any { it.projectId == project.projectId }) selectedId = project.projectId },
+                        enabled = !loading, color = colors.surface, contentColor = colors.primaryText,
+                        shape = HiltechShape.medium, modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(project.projectCode, style = MaterialTheme.typography.labelMedium, color = colors.secondaryText)
+                                Text(project.name, style = MaterialTheme.typography.titleMedium)
+                                Text(project.clientDisplayName, color = colors.secondaryText)
+                                HiltechStateTag(project.lifecycleState, HiltechStateTone.NEUTRAL)
+                            }
+                            Text(hiltechText("فتح", "Open"), color = colors.accent)
                         }
-                    }) { Text(project.projectCode + " · " + project.name) }
+                    }
                 }
             }
         } else {
@@ -180,7 +204,7 @@ fun handoverReadNativeWorkspace(
                     selectedId = null
                     readiness = null
                     latest = null
-                }) { Text("الرجوع لمشاريع التسليم") }
+                }) { Text(hiltechText("الرجوع لمشاريع التسليم", "Back to handover projects")) }
                 Box(Modifier.weight(1f)) {
                     HandoverSection(
                         state = HandoverUiState(
