@@ -383,7 +383,7 @@ fun HiltechShell(
             scroll = scopedShellScroll,
             compact = compactNavigation,
             onSelect = { nativeSession.close(); requestedWorkspace = it },
-            onFind = if (desktopNavigation && signedIn != null) {
+            onFind = if (useWorkspaceNavigation && signedIn != null) {
                 { finding = true }
             } else null,
             boundedContent = if (activeNative != null) {
@@ -418,19 +418,19 @@ fun HiltechShell(
 
                 is HiltechShellState.OfflineFieldReadOnly -> {
                     Text(
-                        "وضع القراءة بدون إنترنت",
+                        hiltechText("وضع القراءة بدون إنترنت", "Offline read-only mode"),
                         style = MaterialTheme.typography.titleLarge,
                     )
-                    Text("نسخة محفوظة للجهاز فقط. لا نقدر نؤكد صلاحية التكليف الحالية أو أي تغيير حصل على السيرفر.")
-                    Text("لا يوجد بدء/إنهاء عمل، تسجيل خامات، رفع صور، أو صلاحيات إدارة في الوضع ده.")
+                    Text(hiltechText("نسخة محفوظة للجهاز فقط. لا نقدر نؤكد صلاحية التكليف الحالية أو أي تغيير حصل على السيرفر.", "Local cached data only. Current assignment authority and server changes cannot be confirmed."))
+                    Text(hiltechText("لا يوجد بدء/إنهاء عمل، تسجيل خامات، رفع صور، أو صلاحيات إدارة في الوضع ده.", "Starting or completing work, material logging, photo uploads and administration are unavailable."))
                     AssignedWorkSection(
                         state = state.field,
                         onRefresh = onRetry,
                         onSelectWork = onSelectFieldWork,
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = onRetry) { Text("إعادة الاتصال والتحقق") }
-                        OutlinedButton(onClick = onSignOut) { Text("تسجيل الخروج") }
+                        Button(onClick = onRetry) { Text(hiltechText("إعادة الاتصال والتحقق", "Reconnect and verify")) }
+                        OutlinedButton(onClick = onSignOut) { Text(hiltechText("تسجيل الخروج", "Sign out")) }
                     }
                 }
 
@@ -878,7 +878,7 @@ fun HiltechShell(
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Text(state.message)
-                    Text("Reference: ${state.code}")
+                    Text(hiltechText("المرجع: ", "Reference: ") + state.code)
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -903,13 +903,13 @@ fun HiltechShell(
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Text(state.message)
-                    Text("Reference: ${state.code}")
+                    Text(hiltechText("المرجع: ", "Reference: ") + state.code)
                     Button(onClick = onRetry) { Text(hiltechText("إعادة المحاولة", "Retry")) }
                 }
             }
         }
 
-        if (finding && desktopNavigation && signedIn != null) {
+        if (finding && useWorkspaceNavigation && signedIn != null) {
             val commands = buildList {
                 destinations.forEach { workspace ->
                     add(WorkspaceSearchResult("workspace:${workspace.name}", language.text(workspace.displayLabel, workspace.label), language.text("مساحة عمل", "Workspace")) {
@@ -925,7 +925,7 @@ fun HiltechShell(
                 }
                 signedIn.projects?.list?.items.orEmpty().forEach { project ->
                     add(WorkspaceSearchResult(
-                        "project:${project.projectId}", project.name, "Project · ${project.projectCode}",
+                        "project:${project.projectId}", project.name, language.text("مشروع", "Project") + " · ${project.projectCode}",
                     ) {
                         nativeSession.close()
                         requestedWorkspace = ShellWorkspace.Projects
@@ -934,7 +934,7 @@ fun HiltechShell(
                 }
                 signedIn.people?.directory?.takeIf { it.canManagePeople }?.items.orEmpty().forEach { employee ->
                     add(WorkspaceSearchResult(
-                        "employee:${employee.employeeId}", employee.displayName, "People · ${employee.employeeCode}",
+                        "employee:${employee.employeeId}", employee.displayName, language.text("موظف", "Employee") + " · ${employee.employeeCode}",
                     ) {
                         nativeSession.close()
                         requestedWorkspace = ShellWorkspace.People
@@ -942,7 +942,7 @@ fun HiltechShell(
                     })
                 }
             }
-            WorkspaceSearch(commands, onDismiss = { finding = false })
+            WorkspaceSearch(commands, onDismiss = { finding = false }, compact = compactNavigation)
         }
     }
     }
@@ -1320,7 +1320,7 @@ private fun PeopleSection(
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Text(item.displayName, style = MaterialTheme.typography.titleMedium)
                                         Text(item.employeeCode, color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
-                                        Text(if (item.linkedIdentity) hiltechText("حساب مرتبط", "Account linked") else "حساب غير مرتبط",
+                                        Text(if (item.linkedIdentity) hiltechText("حساب مرتبط", "Account linked") else hiltechText("حساب غير مرتبط", "Account not linked"),
                                             color = colors.secondaryText, style = MaterialTheme.typography.labelSmall)
                                     }
                                     HiltechStateTag(employeeStateLabel(item.employeeState),
@@ -1442,12 +1442,13 @@ private enum class PeopleWorkspaceTab(val title: String, val english: String) {
     Profile("الملف", "Profile"), Assignment("المسؤوليات", "Responsibilities"), Account("حساب العمل", "Work account"), Offboarding("إنهاء الخدمة", "Offboarding"),
 }
 
+@Composable
 private fun employeeStateLabel(state: String): String = when (state) {
-    "ACTIVE" -> "نشط"
-    "PREBOARDING" -> "قيد التجهيز"
-    "OFFBOARDING" -> "إنهاء الخدمة"
-    "TERMINATED" -> "منتهي"
-    "INACTIVE" -> "غير نشط"
+    "ACTIVE" -> hiltechText("نشط", "Active")
+    "PREBOARDING" -> hiltechText("قيد التجهيز", "Preboarding")
+    "OFFBOARDING" -> hiltechText("إنهاء الخدمة", "Offboarding")
+    "TERMINATED" -> hiltechText("منتهي", "Terminated")
+    "INACTIVE" -> hiltechText("غير نشط", "Inactive")
     else -> state
 }
 

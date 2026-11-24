@@ -9,6 +9,9 @@ import com.hiltech.shared.core.design.hiltechText
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -50,6 +53,7 @@ internal data class WorkspaceSearchResult(
 internal fun WorkspaceSearch(
     commands: List<WorkspaceSearchResult>,
     onDismiss: () -> Unit,
+    compact: Boolean = false,
 ) {
     var query by remember { mutableStateOf("") }
     var highlighted by remember { mutableIntStateOf(0) }
@@ -71,7 +75,7 @@ internal fun WorkspaceSearch(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        LaunchedEffect(Unit) { focus.requestFocus() }
+        LaunchedEffect(compact) { if (!compact) focus.requestFocus() }
         LaunchedEffect(highlighted, matching) {
             if (highlighted in matching.indices) results.scrollToItem(highlighted)
         }
@@ -106,7 +110,7 @@ internal fun WorkspaceSearch(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(hiltechText("انتقل إلى أي مساحة", "Go to a workspace"), style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onDismiss) { Text("Esc") }
+                    TextButton(onClick = onDismiss) { Text(if (compact) hiltechText("إغلاق", "Close") else "Esc") }
                 }
                 OutlinedTextField(
                     value = query,
@@ -116,6 +120,8 @@ internal fun WorkspaceSearch(
                     },
                     modifier = Modifier.fillMaxWidth().focusRequester(focus),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { matching.getOrNull(highlighted)?.let { choose(it) } }),
                     label = { Text(hiltechText("ابحث عن مساحة أو مشروع أو موظف", "Find a workspace, project or employee")) },
                 )
                 if (matching.isEmpty()) Text(hiltechText("لا توجد نتائج لهذا البحث", "No results for this search"))
@@ -130,16 +136,16 @@ internal fun WorkspaceSearch(
                         Surface(
                             onClick = { choose(item) },
                             modifier = Modifier.fillMaxWidth(),
-                            color = if (highlighted == index) colors.selected else colors.surface,
+                            color = if (!compact && highlighted == index) colors.selected else colors.surface,
                             contentColor = colors.primaryText,
                             shape = HiltechShape.small,
                         ) {
-                            Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.heightIn(min = if (compact) 56.dp else 44.dp).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(item.title, style = MaterialTheme.typography.titleSmall)
                                     Text(item.context, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
                                 }
-                                if (highlighted == index) Text("Enter", color = colors.accent, style = MaterialTheme.typography.labelMedium)
+                                if (!compact && highlighted == index) Text("Enter", color = colors.accent, style = MaterialTheme.typography.labelMedium)
                             }
                         }
                     }

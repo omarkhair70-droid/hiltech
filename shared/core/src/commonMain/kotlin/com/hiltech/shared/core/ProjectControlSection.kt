@@ -152,19 +152,19 @@ fun ProjectControlSection(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(1f)) {
                     HiltechSectionHeading("PROJECTS / DELIVERY", hiltechText("المشاريع والمواقع", "Projects & sites"),
-                        "تابع المشاريع، فرق التنفيذ، والتقدم الفعلي من مكان واحد.")
+                        hiltechText("تابع المشاريع، فرق التنفيذ، والتقدم الفعلي من مكان واحد.", "Follow projects, delivery teams and actual progress in one place."))
                 }
                 TextButton(onClick = onRefresh, enabled = !state.loading) { Text(hiltechText("تحديث", "Refresh")) }
             }
             if (state.loading) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator()
-                    Text("جارٍ تحميل بيانات المشاريع…")
+                    Text(hiltechText("جارٍ تحميل بيانات المشاريع…", "Loading project data…"))
                 }
             }
             state.errorMessage?.let { error ->
                 HiltechPanel(Modifier.fillMaxWidth()) {
-                    HiltechStateTag("تعذر تحديث المشروع", HiltechStateTone.ATTENTION)
+                    HiltechStateTag(hiltechText("تعذر تحديث المشروع", "Unable to refresh project"), HiltechStateTone.ATTENTION)
                     Text(error)
                     state.errorCode?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = colors.secondaryText) }
                 }
@@ -192,7 +192,7 @@ fun ProjectControlSection(
                             value.contains(query.trim(), ignoreCase = true)
                         }
                     }
-                    Text("المعروض: " + matching.size, color = colors.secondaryText,
+                    Text(hiltechText("المعروض: ", "Visible: ") + matching.size, color = colors.secondaryText,
                         style = MaterialTheme.typography.labelMedium)
                     if (!state.loading && matching.isEmpty()) {
                         Text(if (query.isBlank()) hiltechText("لا توجد مشاريع متاحة الآن.", "No projects available.") else hiltechText("لا توجد نتائج مطابقة.", "No matching results."))
@@ -214,7 +214,7 @@ fun ProjectControlSection(
                                 Text(project.name, style = MaterialTheme.typography.titleMedium)
                                 Text(project.clientDisplayName, color = colors.secondaryText,
                                     style = MaterialTheme.typography.bodyMedium)
-                                Text(project.currentResponsibility.principalLabel ?: "لم يُعيّن مسؤول",
+                                Text(project.currentResponsibility.principalLabel ?: hiltechText("لم يُعيّن مسؤول", "No responsible person assigned"),
                                     style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
                             }
                         }
@@ -236,7 +236,7 @@ fun ProjectControlSection(
                             Text(selected.clientDisplayName, style = MaterialTheme.typography.bodyLarge, color = colors.secondaryText)
                             HiltechStateTag(projectStateLabel(selected.lifecycleState), projectStateTone(selected.lifecycleState))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                HiltechKeyValue(hiltechText("المسؤول", "Responsible person"), selected.currentResponsibility.principalLabel ?: "غير معيّن", Modifier.weight(1f))
+                                HiltechKeyValue(hiltechText("المسؤول", "Responsible person"), selected.currentResponsibility.principalLabel ?: hiltechText("غير معيّن", "Not assigned"), Modifier.weight(1f))
                                 HiltechKeyValue(hiltechText("المواقع المرتبطة", "Linked sites"), selected.siteCount.toString(), Modifier.weight(1f))
                             }
                             HiltechKeyValue(hiltechText("الفترة المخططة", "Planned period"), (selected.startDatePlanned ?: "غير محددة") + " — " + (selected.endDatePlanned ?: "غير محددة"))
@@ -256,7 +256,7 @@ fun ProjectControlSection(
                                 } else {
                                     HiltechPanel(Modifier.fillMaxWidth()) {
                                         Text(hiltechText("صحة المشروع والتقدم", "Project health & progress"), style = MaterialTheme.typography.titleMedium)
-                                        Text("لا توجد قراءة حديثة لمركز قيادة هذا المشروع. حدّث البيانات لإعادة المحاولة.")
+                                        Text(hiltechText("لا توجد قراءة حديثة لمركز قيادة هذا المشروع. حدّث البيانات لإعادة المحاولة.", "No current project command-center reading. Refresh to try again."))
                                     }
                                 }
                                 HiltechPanel(Modifier.fillMaxWidth()) {
@@ -272,20 +272,20 @@ fun ProjectControlSection(
                                     }
                                     if (showManager) ProjectManagerChangeForm(project = selected, onChangeManager = onChangeManager,
                                         employeeChoices = employeeChoices, teamChoices = teamChoices)
-                                    Text("المصدر: " + selected.sourceType + (selected.sourceExternalReference?.let { " · " + it } ?: ""),
+                                    Text(hiltechText("المصدر: ", "Source: ") + selected.sourceType + (selected.sourceExternalReference?.let { " · " + it } ?: ""),
                                         style = MaterialTheme.typography.labelSmall, color = colors.secondaryText)
                                 }
                             }
                             ProjectWorkspaceTab.Sites -> {
                                 HiltechPanel(Modifier.fillMaxWidth()) {
                                     Text(hiltechText("مواقع المشروع", "Project sites"), style = MaterialTheme.typography.titleMedium)
-                                    if (state.selectedSites?.items.orEmpty().isEmpty()) Text("لا توجد مواقع معروضة لهذا المشروع.")
+                                    if (state.selectedSites?.items.orEmpty().isEmpty()) Text(hiltechText("لا توجد مواقع معروضة لهذا المشروع.", "No sites are available for this project."))
                                     state.selectedSites?.items.orEmpty().forEach { relation ->
                                         HorizontalDivider(color = colors.divider)
                                         Text(relation.site.name, style = MaterialTheme.typography.titleSmall)
                                         Text(relation.site.siteCode + " · " + relation.lifecycleState, color = colors.secondaryText)
                                         relation.site.addressText?.let { Text(it) }
-                                        relation.accessInstructions?.let { Text("تعليمات الدخول: " + it) }
+                                        relation.accessInstructions?.let { Text(hiltechText("تعليمات الدخول: ", "Access instructions: ") + it) }
                                     }
                                     TextButton(onClick = { showSiteCreate = !showSiteCreate }) { Text(if (showSiteCreate) hiltechText("إغلاق إنشاء الموقع", "Close site creation") else hiltechText("+ موقع جديد", "+ New site")) }
                                     if (showSiteCreate) SiteCreateForm(defaultClientOrganizationId = selected.clientOrganizationId, onCreateSite = onCreateSite)
@@ -339,13 +339,14 @@ private enum class ProjectWorkspaceTab(val title: String, val english: String) {
     Overview("نظرة عامة", "Overview"), Sites("المواقع", "Sites"), Plan("التخطيط", "Planning"), Work("الأعمال", "Work"), Readiness("الجاهزية", "Readiness"),
 }
 
+@Composable
 private fun projectStateLabel(state: String): String = when (state) {
-    "DRAFT" -> "مسودة"
-    "KICKOFF" -> "التجهيز"
-    "ACTIVE" -> "قيد التنفيذ"
-    "ON_HOLD" -> "متوقف"
-    "COMPLETED" -> "مكتمل"
-    "CANCELLED" -> "ملغى"
+    "DRAFT" -> hiltechText("مسودة", "Draft")
+    "KICKOFF" -> hiltechText("التجهيز", "Kickoff")
+    "ACTIVE" -> hiltechText("قيد التنفيذ", "Active")
+    "ON_HOLD" -> hiltechText("متوقف", "On hold")
+    "COMPLETED" -> hiltechText("مكتمل", "Completed")
+    "CANCELLED" -> hiltechText("ملغى", "Cancelled")
     else -> state
 }
 
@@ -633,7 +634,7 @@ private fun SiteCreateForm(
     OutlinedTextField(
         value = name,
         onValueChange = { name = it },
-        label = { Text("اسم الموقع") },
+        label = { Text(hiltechText("اسم الموقع", "Site name")) },
     )
     OutlinedTextField(
         value = address,
@@ -668,7 +669,7 @@ private fun SiteCreateForm(
             )
         },
     ) {
-        Text("إنشاء Site")
+        Text(hiltechText("إنشاء Site", "Create site"))
     }
 }
 
@@ -767,6 +768,6 @@ private fun ProjectSiteAttachForm(
             )
         },
     ) {
-        Text("ربط الموقع")
+        Text(hiltechText("ربط الموقع", "Attach site"))
     }
 }

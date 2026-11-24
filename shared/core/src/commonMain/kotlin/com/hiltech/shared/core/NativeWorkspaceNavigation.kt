@@ -1,5 +1,7 @@
 package com.hiltech.shared.core
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -18,6 +20,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.HiltechShape
@@ -66,12 +72,17 @@ internal fun NativeWorkspaceNavigation(
                     verticalAlignment = Alignment.CenterVertically) {
                     HiltechWordmark()
                     Spacer(Modifier.weight(1f))
-                    Text(hiltechText(selected.displayLabel, selected.label), style = MaterialTheme.typography.labelLarge, color = colors.secondaryText)
+                    onFind?.let { open ->
+                        val searchLabel = hiltechText("بحث في النظام", "Search HILTECH")
+                        IconButton(onClick = open, modifier = Modifier.semantics { contentDescription = searchLabel }) {
+                            SearchGlyph(colors.accent)
+                        }
+                    }
                     if (ShellWorkspace.Account in destinations) {
-                        TextButton(onClick = { onSelect(ShellWorkspace.Account) }) {
+                        val accountLabel = hiltechText("حسابي", "Account")
+                        IconButton(onClick = { onSelect(ShellWorkspace.Account) },
+                            modifier = Modifier.semantics { contentDescription = accountLabel }) {
                             WorkspaceGlyph(ShellWorkspace.Account, colors.accent)
-                            Spacer(Modifier.width(6.dp))
-                            Text(hiltechText("حسابي", "Account"))
                         }
                     }
                 }
@@ -210,7 +221,11 @@ private fun HiltechWordmark(modifier: Modifier = Modifier) {
 @Composable
 private fun WorkspaceRailEntry(destination: ShellWorkspace, selected: Boolean, onSelect: (ShellWorkspace) -> Unit) {
     val colors = LocalHiltechOperationalColors.current
-    Surface(color = if (selected) colors.selected else colors.surfaceElevated, shape = HiltechShape.small) {
+    val selectionColor = animateColorAsState(
+        targetValue = if (selected) colors.selected else colors.surfaceElevated,
+        animationSpec = tween(durationMillis = 140), label = "workspace selection",
+    ).value
+    Surface(color = selectionColor, shape = HiltechShape.small) {
         Row(
             Modifier.fillMaxWidth().selectable(selected = selected, role = Role.Tab, onClick = { onSelect(destination) })
                 .heightIn(min = 44.dp).padding(horizontal = 10.dp, vertical = 10.dp),
@@ -233,7 +248,7 @@ private fun WorkspaceDirectoryEntry(destination: ShellWorkspace, onClick: () -> 
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             WorkspaceGlyph(destination, colors.accent)
             Text(hiltechText(destination.displayLabel, destination.label), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-            Text("‹", color = colors.secondaryText)
+            Text(if (LocalLayoutDirection.current == LayoutDirection.Rtl) "‹" else "›", color = colors.secondaryText)
         }
     }
 }
