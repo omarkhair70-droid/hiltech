@@ -1071,7 +1071,7 @@ fun FinanceSignedCompletionSection(identityId:String,org:String,install:String,
                     FinanceReviewKind.CASH_COUNT -> "جرد · "+item.facts.getOrNull(2).orEmpty()+" "+item.facts.getOrNull(1).orEmpty()
                     else -> "مطابقة · "+item.facts.getOrNull(8).orEmpty()+" "+item.facts.getOrNull(4).orEmpty()
                 }
-                OutlinedButton(enabled=!busy,onClick={
+                OutlinedButton(modifier=Modifier.fillMaxWidth(),enabled=!busy,onClick={
                     id=item.id;current=item;evidence="";operation=null;confirm=false
                 }) {Text(description+" · "+item.id.take(8))}
             }
