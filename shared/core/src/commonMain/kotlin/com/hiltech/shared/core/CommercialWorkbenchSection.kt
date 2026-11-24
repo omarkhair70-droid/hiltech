@@ -1,6 +1,16 @@
 package com.hiltech.shared.core
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import com.hiltech.shared.core.design.*
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
@@ -51,70 +61,99 @@ fun CommercialWorkbenchSection(
     onReleaseApprovedQuote: (quoteId: String) -> Unit,
 ) {
     if (!state.enabled) {
-        Text("Commercial operations are not enabled.", style = MaterialTheme.typography.bodyMedium)
+        Text(hiltechText("عمليات المبيعات غير مفعّلة.", "Commercial operations are not enabled."), style = MaterialTheme.typography.bodyMedium)
         return
     }
     var title by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
+    var stateFilter by remember { mutableStateOf<String?>(null) }
+    var creating by remember { mutableStateOf(false) }
+    val colors = LocalHiltechOperationalColors.current
     var clientId by remember { mutableStateOf("") }
     var visitPurpose by remember { mutableStateOf("") }
     var visitAt by remember { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Sales / Tenders", style = MaterialTheme.typography.titleMedium)
-            OutlinedButton(onClick = onRefresh) { Text("Refresh") }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                HiltechSectionHeading("COMMERCIAL", hiltechText("المبيعات والمناقصات", "Sales & tenders"),
+                    hiltechText("الفرص وعروض الأسعار والعملاء ومسار التعاقد.", "Opportunities, quotations, clients and contract journeys."))
+            }
+            TextButton(onClick = onRefresh, enabled = !state.loading) { Text(hiltechText("تحديث", "Refresh")) }
         }
-        if (state.loading) Text("Loading commercial records…")
+        if (state.loading) Text(hiltechText("جارٍ تحميل الفرص…", "Loading commercial records…"))
         state.errorCode?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        if (state.canWrite) {
-            Text("New opportunity", style = MaterialTheme.typography.titleSmall)
+        if (state.canWrite) TextButton(onClick = { creating = !creating }) { Text(if (creating) hiltechText("إغلاق", "Close") else hiltechText("+ فرصة", "+ Opportunity")) }
+        if (state.canWrite && creating) {
+            Text(hiltechText("فرصة جديدة", "New opportunity"), style = MaterialTheme.typography.titleSmall)
             OutlinedTextField(
                 value = title, onValueChange = { title = it },
-                label = { Text("Opportunity title") },
+                label = { Text(hiltechText("اسم الفرصة", "Opportunity title")) },
             )
             OutlinedTextField(
                 value = clientId, onValueChange = { clientId = it },
-                label = { Text("Existing client organization ID") },
+                label = { Text(hiltechText("معرّف العميل الحالي", "Existing client organization ID")) },
             )
             Button(
                 enabled = title.isNotBlank() && clientId.isNotBlank(),
                 onClick = { onCreate(title.trim(), clientId.trim(), "DIRECT") },
-            ) { Text("Create opportunity") }
+            ) { Text(hiltechText("إنشاء فرصة", "Create opportunity")) }
         }
-        state.opportunities.forEach { opportunity ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Column {
-                    Text(opportunity.title, style = MaterialTheme.typography.titleSmall)
-                    Text(opportunity.state + " · " + opportunity.source)
-                    opportunity.deadline?.let { Text("Decision: " + it) }
+        OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+            label = { Text(hiltechText("ابحث عن فرصة", "Find an opportunity")) })
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FilterChip(selected = stateFilter == null, onClick = { stateFilter = null }, label = { Text(hiltechText("الكل", "All")) })
+            state.opportunities.map { it.state }.distinct().forEach { stage ->
+                FilterChip(selected = stateFilter == stage, onClick = { stateFilter = stage }, label = { Text(stage) })
+            }
+        }
+        val matching = state.opportunities.filter { opportunity ->
+            (stateFilter == null || opportunity.state == stateFilter) &&
+                (query.isBlank() || opportunity.title.contains(query.trim(), true))
+        }
+        Text(hiltechText("الفرص المعروضة: ", "Visible opportunities: ") + matching.size,
+            color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+        if (!state.loading && matching.isEmpty()) Text(hiltechText("لا توجد فرص مطابقة.", "No matching opportunities."))
+        matching.forEach { opportunity ->
+            Surface(onClick = { onSelect(opportunity.id) }, enabled = !state.loading,
+                modifier = Modifier.fillMaxWidth(), shape = HiltechShape.medium,
+                color = colors.surface, contentColor = colors.primaryText) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Text(opportunity.title, style = MaterialTheme.typography.titleMedium)
+                        Text(opportunity.source, color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+                        opportunity.deadline?.let { Text(hiltechText("القرار المتوقع: ", "Expected decision: ") + it) }
+                        HiltechStateTag(opportunity.state, HiltechStateTone.NEUTRAL)
+                    }
+                    Text(hiltechText("فتح", "Open"), color = colors.accent)
                 }
-                OutlinedButton(onClick = { onSelect(opportunity.id) }) { Text("Open") }
             }
         }
         if (state.canWrite && state.selectedOpportunityId != null) {
-            Text("Discovery / site visit", style = MaterialTheme.typography.titleSmall)
+            Text(hiltechText("استكشاف وزيارة الموقع", "Discovery / site visit"), style = MaterialTheme.typography.titleSmall)
             OutlinedTextField(
                 value = visitPurpose, onValueChange = { visitPurpose = it },
-                label = { Text("Purpose") },
+                label = { Text(hiltechText("الغرض", "Purpose")) },
             )
             OutlinedTextField(
                 value = visitAt, onValueChange = { visitAt = it },
-                label = { Text("Scheduled UTC (ISO-8601)") },
+                label = { Text(hiltechText("موعد الزيارة UTC (ISO-8601)", "Scheduled UTC (ISO-8601)")) },
             )
             Button(
                 enabled = visitPurpose.isNotBlank() && visitAt.isNotBlank(),
                 onClick = {
                     onPlanVisit(state.selectedOpportunityId, visitPurpose.trim(), visitAt.trim())
                 },
-            ) { Text("Record site visit") }
+            ) { Text(hiltechText("تسجيل زيارة الموقع", "Record site visit")) }
         }
         if (state.canWrite && state.selectedQuoteId != null) {
             OutlinedButton(onClick = { onRequestQuoteApproval(state.selectedQuoteId) }) {
-                Text("Request independent quote approval")
+                Text(hiltechText("طلب مراجعة مستقلة للعرض", "Request independent quote approval"))
             }
         }
         if (state.canRelease && state.selectedQuoteId != null) {
             Button(onClick = { onReleaseApprovedQuote(state.selectedQuoteId) }) {
-                Text("Release approved quote")
+                Text(hiltechText("إصدار العرض المعتمد", "Release approved quote"))
             }
         }
         Text(
