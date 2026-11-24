@@ -18,6 +18,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.material3.FilterChip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -208,5 +211,42 @@ fun HiltechSectionHeading(index: String, title: String, subtitle: String? = null
             lineHeight = 29.sp, fontWeight = FontWeight.Bold)
         if (subtitle != null) Text(subtitle, color = p.secondaryText,
             fontSize = 13.sp, lineHeight = 19.sp)
+    }
+}
+
+/** UI preference only. Never translate identifiers, source data or commands. */
+enum class HiltechLanguage(val code: String, val direction: LayoutDirection) {
+    Arabic("ar", LayoutDirection.Rtl),
+    English("en", LayoutDirection.Ltr);
+
+    fun text(arabic: String, english: String): String =
+        if (this == Arabic) arabic else english
+
+    companion object {
+        fun fromCode(code: String?): HiltechLanguage = entries.firstOrNull { it.code == code } ?: Arabic
+    }
+}
+
+val LocalHiltechLanguage = staticCompositionLocalOf { HiltechLanguage.Arabic }
+
+@Composable
+fun hiltechText(arabic: String, english: String): String = LocalHiltechLanguage.current.text(arabic, english)
+
+@Composable
+fun HiltechLanguageProvider(language: HiltechLanguage, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalHiltechLanguage provides language, LocalLayoutDirection provides language.direction) {
+        content()
+    }
+}
+
+@Composable
+fun HiltechLanguagePreference(language: HiltechLanguage, onChange: (HiltechLanguage) -> Unit) {
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("لغة التطبيق", "App language"), style = MaterialTheme.typography.titleMedium)
+        Text(hiltechText("تغيير اللغة واتجاه الواجهة على هذا الجهاز.", "Change the interface language and direction on this device."))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = language == HiltechLanguage.Arabic, onClick = { onChange(HiltechLanguage.Arabic) }, label = { Text("العربية") })
+            FilterChip(selected = language == HiltechLanguage.English, onClick = { onChange(HiltechLanguage.English) }, label = { Text("English") })
+        }
     }
 }
