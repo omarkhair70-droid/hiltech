@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import com.hiltech.shared.core.CommercialDealAction
 import com.hiltech.shared.core.design.hiltechText
+import com.hiltech.shared.core.design.HiltechRecordChoice
 import kotlinx.coroutines.launch
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -54,6 +55,7 @@ fun commercialReadNativeWorkspace(
         val jobs = rememberCoroutineScope()
         val coordinator = remember(client, installationId) { CommercialDealCoordinator(client, installationId) }
         var capabilities by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialCapabilitiesDto?>(null) }
+        var clients by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialClientRefDto>>(emptyList()) }
         var costs by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialPrivateCostLineDto>>(emptyList()) }
         var summaries by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialPrivateCostSummaryDto>>(emptyList()) }
         var saving by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
@@ -108,11 +110,13 @@ fun commercialReadNativeWorkspace(
             listLoading = true
             items = emptyList()
             capabilities = null
+            clients = emptyList()
             detail = null
             error = null
             try {
                 items = client.opportunities(organizationId, installationId)
                 if (newOperationId != null) capabilities = client.capabilities(organizationId, installationId)
+                if (capabilities?.canWrite == true) clients = client.clients(organizationId, installationId)
                 // An old source selection is invalid when the current list
                 // no longer authorizes/contains that opportunity.
                 if (selectedId !in items.map { it.id }) selectedId = null
@@ -172,9 +176,11 @@ fun commercialReadNativeWorkspace(
                                 source = item.source,
                                 clientOrganizationId = item.clientOrganizationId,
                                 deadline = item.expectedDecisionDate,
+                                clientDisplayName = item.clientDisplayName,
                             )
                         },
                         errorCode = error,
+                        clientChoices = clients.map { HiltechRecordChoice(it.id, it.displayName, it.organizationCode) },
                     ),
                     onRefresh = { refreshVersion++ },
                     onSelect = { requested ->

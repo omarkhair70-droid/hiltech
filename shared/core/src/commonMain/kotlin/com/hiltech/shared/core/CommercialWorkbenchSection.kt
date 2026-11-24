@@ -33,6 +33,7 @@ data class CommercialOpportunityTile(
     val source: String,
     val clientOrganizationId: String,
     val deadline: String? = null,
+    val clientDisplayName: String? = null,
 )
 data class CommercialWorkbenchState(
     val loading: Boolean = false,
@@ -43,6 +44,7 @@ data class CommercialWorkbenchState(
     val selectedOpportunityId: String? = null,
     val selectedQuoteId: String? = null,
     val errorCode: String? = null,
+    val clientChoices: List<HiltechRecordChoice> = emptyList(),
 )
 
 /**
@@ -89,10 +91,7 @@ fun CommercialWorkbenchSection(
                 value = title, onValueChange = { title = it },
                 label = { Text(hiltechText("اسم الفرصة", "Opportunity title")) },
             )
-            OutlinedTextField(
-                value = clientId, onValueChange = { clientId = it },
-                label = { Text(hiltechText("معرّف العميل الحالي", "Existing client organization ID")) },
-            )
+            HiltechRecordPicker(hiltechText("العميل", "Customer"), clientId, state.clientChoices, { clientId = it }, allowKnownReference = true)
             Button(
                 enabled = title.isNotBlank() && clientId.isNotBlank(),
                 onClick = { onCreate(title.trim(), clientId.trim(), "DIRECT") },
@@ -108,7 +107,7 @@ fun CommercialWorkbenchSection(
         }
         val matching = state.opportunities.filter { opportunity ->
             (stateFilter == null || opportunity.state == stateFilter) &&
-                (query.isBlank() || opportunity.title.contains(query.trim(), true))
+                (query.isBlank() || opportunity.title.contains(query.trim(), true) || opportunity.clientDisplayName?.contains(query.trim(), true) == true)
         }
         Text(hiltechText("الفرص المعروضة: ", "Visible opportunities: ") + matching.size,
             color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
@@ -121,6 +120,7 @@ fun CommercialWorkbenchSection(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         Text(opportunity.title, style = MaterialTheme.typography.titleMedium)
+                        opportunity.clientDisplayName?.let { Text(it, color = colors.secondaryText, style = MaterialTheme.typography.bodyMedium) }
                         Text(opportunity.source, color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
                         opportunity.deadline?.let { Text(hiltechText("القرار المتوقع: ", "Expected decision: ") + it) }
                         HiltechStateTag(opportunity.state, HiltechStateTone.NEUTRAL)

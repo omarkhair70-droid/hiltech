@@ -20,7 +20,11 @@ data class CommercialOpportunityDto(
     val state: String,
     @SerialName("client_organization_id") val clientOrganizationId: String,
     @SerialName("expected_decision_date") val expectedDecisionDate: String? = null,
+    @SerialName("client_display_name") val clientDisplayName: String? = null,
 )
+
+@Serializable
+data class CommercialClientRefDto(val id: String, @SerialName("display_name") val displayName: String, @SerialName("organization_code") val organizationCode: String)
 @Serializable
 data class CreateCommercialOpportunityDto(
     val operationId: String,
@@ -39,10 +43,10 @@ data class CommercialDealDetailDto(
     val visits: List<CommercialVisitSummaryDto> = emptyList(),
     val scopeVersions: List<CommercialScopeVersionDto> = emptyList(),
     val quotes: List<CommercialQuoteSummaryDto> = emptyList(),
-    val boqVersions: List<CommercialBoqVersionRefDto> = emptyList(),
     val contracts: List<CommercialContractSummaryDto> = emptyList(),
     val clientPurchaseOrders: List<CommercialClientPoSummaryDto> = emptyList(),
     val handoff: List<CommercialHandoffSummaryDto> = emptyList(),
+    val boqVersions: List<CommercialBoqVersionRefDto> = emptyList(),
 )
 
 @Serializable
@@ -317,6 +321,11 @@ class CommercialApiClient(
             options = HiltechRequestOptions(installationId = installationId),
             decode = { json.decodeFromString(CommercialCapabilitiesDto.serializer(), it) })
 
+    suspend fun clients(organizationId: String, installationId: String): List<CommercialClientRefDto> =
+        api.request(method = HttpMethod.Get, path = "/v1/commercial/clients?organizationId=" + organizationId,
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(ListSerializer(CommercialClientRefDto.serializer()), it) })
+
     suspend fun opportunities(organizationId: String, installationId: String): List<CommercialOpportunityDto> =
         api.request(
             method = HttpMethod.Get,
@@ -456,7 +465,7 @@ class CommercialApiClient(
         )
 
     suspend fun customerPdf(quoteId: String, installationId: String): ClientQuotePdfDto =
-        api.request(method = HttpMethod.Get, path = "/v1/commercial/quotes/" + quoteId + "/customer-pdf",
+        api.request(method = HttpMethod.Post, path = "/v1/commercial/quotes/" + quoteId + "/customer-pdf",
             options = HiltechRequestOptions(installationId = installationId),
             decode = { json.decodeFromString(ClientQuotePdfDto.serializer(), it) })
 

@@ -38,6 +38,7 @@ internal object CommercialQuotePdf {
             var y = 0f
             var pageNumber = 0
             fun begin() {
+                graphics.dispose()
                 image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
                 graphics = image.createGraphics()
                 graphics.color = Color.WHITE

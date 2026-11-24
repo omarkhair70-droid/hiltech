@@ -44,6 +44,10 @@ class CommercialController(private val service: CommercialService) {
     fun capabilities(http: HttpServletRequest, @RequestParam organizationId: String) =
         service.capabilities(organizationId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
 
+    @GetMapping("/clients")
+    fun clients(http: HttpServletRequest, @RequestParam organizationId: String) =
+        service.clients(organizationId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
+
     @GetMapping("/opportunities")
     fun list(http: HttpServletRequest, @RequestParam organizationId: String,
              @RequestParam(defaultValue = "100") limit: Int) =
@@ -166,7 +170,7 @@ class CommercialController(private val service: CommercialService) {
             HiltechRequestContext.current(http).requireIdentityId(),
         )
 
-    @GetMapping("/quotes/{quoteId}/customer-pdf")
+    @PostMapping("/quotes/{quoteId}/customer-pdf")
     fun quotePdf(http: HttpServletRequest, @PathVariable quoteId: String) =
         service.customerPdf(quoteId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
 

@@ -166,12 +166,24 @@ class CommercialService(
 
     fun capabilities(company: UUID, actor: UUID): Map<String, Boolean> = access.capabilities(actor, company)
 
+    fun clients(company: UUID, actor: UUID): List<Map<String, Any?>> {
+        access.require(actor, company, "SALES_WRITE")
+        // Only clients with an existing relationship to this company.
+        return jdbc.queryForList(
+            """SELECT DISTINCT c.id,c.display_name,c.organization_code
+               FROM organization c JOIN commercial_opportunity o ON o.client_organization_id=c.id
+               WHERE o.organization_id=? AND c.organization_type='CLIENT' AND c.status='ACTIVE'
+               ORDER BY c.display_name,c.id LIMIT 500""", company,
+        )
+    }
+
     fun listOpportunities(company: UUID, actor: UUID, limit: Int): List<Map<String, Any?>> {
         access.require(actor,company,"SALES_VIEW","SALES_WRITE","SALES_RELEASE","SALES_AWARD")
         if (limit !in 1..200) throw commercialError("COMMERCIAL_LIMIT_INVALID","Limit 1..200.",HttpStatus.BAD_REQUEST)
         return jdbc.queryForList(
             """SELECT id,organization_id,client_organization_id,owner_user_id,opportunity_code,
-                      title,source,state,expected_decision_date,created_at,updated_at,version
+                      title,source,state,expected_decision_date,created_at,updated_at,version,
+                      (SELECT display_name FROM organization WHERE id=commercial_opportunity.client_organization_id) AS client_display_name
                FROM commercial_opportunity WHERE organization_id=?
                ORDER BY updated_at DESC,id LIMIT ?""",company,limit,
         )
