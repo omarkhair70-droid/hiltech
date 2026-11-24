@@ -3,6 +3,7 @@ package com.hiltech.android
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.view.WindowManager
 import java.io.ByteArrayOutputStream
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
@@ -62,9 +63,11 @@ import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceSection
 import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
+import com.hiltech.shared.core.inbox.InboxWorkspace
 import com.hiltech.shared.core.network.HiltechApiException
 import com.hiltech.shared.core.people.CreateEmployeeRequestDto
 import com.hiltech.shared.core.people.EmployeeDetailDto
+import com.hiltech.shared.core.people.EmployeeAccountWorkspace
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -207,6 +210,17 @@ class MainActivity : ComponentActivity() {
             }
             HiltechShell(
                 state = shellState,
+                inboxWorkspace = {
+                    (shellState as? HiltechShellState.SignedIn)?.let { signed ->
+                        InboxWorkspace(
+                            sessionScope = "${signed.identity.identityId}:${signed.identity.identityVersion}",
+                            inbox = hiltechApplication.inboxApi,
+                            approvals = hiltechApplication.approvalApi,
+                            installationId = hiltechApplication.installationId,
+                            newOperationId = { UUID.randomUUID().toString() },
+                        )
+                    }
+                },
                 compactNavigation = true,
                 compactBackRequest = workspaceBackRequest,
                 onCompactNavigationChanged = { canGoBack, inWork ->
@@ -365,6 +379,22 @@ class MainActivity : ComponentActivity() {
                 onSelectEmployee = ::selectEmployee,
                 onCreateEmployee = ::createEmployee,
                 peopleOffboardingAvailable = false,
+                employeeAccountWorkspace = { employee ->
+                    (shellState as? HiltechShellState.SignedIn)?.let { signed ->
+                        EmployeeAccountWorkspace(
+                            employee = employee,
+                            sessionScope = signed.identity.identityId,
+                            client = hiltechApplication.onboardingApi,
+                            installationId = hiltechApplication.installationId,
+                            newOperationId = { UUID.randomUUID().toString() },
+                            onReauthenticate = ::startReauthentication,
+                            onCredentialVisibilityChanged = { visible ->
+                                val secure = WindowManager.LayoutParams.FLAG_SECURE
+                                if (visible) window.addFlags(secure) else window.clearFlags(secure)
+                            },
+                        )
+                    }
+                },
                 onRefreshOnboarding =
                     ::refreshOnboarding,
                 onLookupAssetTag = ::lookupAssetTag,

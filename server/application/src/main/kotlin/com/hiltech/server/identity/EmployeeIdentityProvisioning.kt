@@ -73,6 +73,8 @@ sealed interface EmployeeIdentityProvisioningResult {
 }
 
 interface EmployeeIdentityProvisioningPort {
+    fun availableDeliveryModes(): Set<IdentityProvisioningDeliveryMode>
+
     fun provision(
         request:
             EmployeeIdentityProvisioningRequest,
@@ -142,6 +144,7 @@ internal class JdbcEmployeeIdentityProvisioning(
         PlatformTransactionManager,
     private val oidc:
         HiltechOidcProperties,
+    private val properties: KeycloakProvisioningProperties,
     private val provider:
         ObjectProvider<KeycloakIdentityAdminPort>,
     private val clock: Clock,
@@ -150,6 +153,14 @@ internal class JdbcEmployeeIdentityProvisioning(
         TransactionTemplate(
             transactionManager,
         )
+
+    override fun availableDeliveryModes(): Set<IdentityProvisioningDeliveryMode> {
+        if (!oidc.enabled || oidc.issuerUri.isBlank() || !properties.enabled) return emptySet()
+        return buildSet {
+            add(IdentityProvisioningDeliveryMode.TEMPORARY_PASSWORD_HANDOFF)
+            if (properties.emailActionLinkEnabled) add(IdentityProvisioningDeliveryMode.EMAIL_ACTION_LINK)
+        }
+    }
 
     override fun provision(
         request:
@@ -216,6 +227,14 @@ internal class JdbcEmployeeIdentityProvisioning(
                         request.requestedLogin,
                     mode = request.deliveryMode,
                 )
+
+            if (delivery.state !in setOf(IdentityProvisioningDeliveryState.SENT, IdentityProvisioningDeliveryState.READY)) {
+                return EmployeeIdentityProvisioningResult.RetryableFailure(
+                    safeCode = "IDENTITY_DELIVERY_INCOMPLETE",
+                    providerSubject = providerSubject,
+                    deliveryState = delivery.state,
+                )
+            }
 
             transaction.executeWithoutResult {
                 activateLocalIdentity(

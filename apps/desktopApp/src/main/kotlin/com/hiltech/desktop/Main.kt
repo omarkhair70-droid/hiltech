@@ -52,6 +52,8 @@ import com.hiltech.shared.core.WorkReadinessUiAction
 import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
+import com.hiltech.shared.core.inbox.InboxWorkspace
+import com.hiltech.shared.core.people.EmployeeAccountWorkspace
 import com.hiltech.shared.core.network.HiltechApiException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -2776,6 +2778,29 @@ fun main() {
                 projectFocusRequest = executiveProjectFocus,
                 desktopNavigation = true,
                 desktopPurchasingAvailable = purchasingAvailable,
+                employeeAccountWorkspace = { employee ->
+                    navigationIdentity?.let { identity ->
+                        EmployeeAccountWorkspace(
+                            employee = employee,
+                            sessionScope = identity.identityId,
+                            client = runtime.onboardingApi,
+                            installationId = runtime.physicalWarehouseInstallationId,
+                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                            onReauthenticate = { signIn(true) },
+                        )
+                    }
+                },
+                inboxWorkspace = {
+                    navigationIdentity?.let { identity ->
+                        InboxWorkspace(
+                            sessionScope = "${identity.identityId}:${identity.identityVersion}",
+                            inbox = runtime.inboxApi,
+                            approvals = runtime.approvalApi,
+                            installationId = runtime.physicalWarehouseInstallationId,
+                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                        )
+                    }
+                },
                 operationalWorkspaces = (shellState.value as? HiltechShellState.SignedIn)?.let { signed ->
                     val org = signed.identity.organizations.firstOrNull { it.primary }
                         ?: signed.identity.organizations.firstOrNull()

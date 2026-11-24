@@ -10,6 +10,7 @@ import com.hiltech.server.identity.IdentityProvisioningDeliveryState
 import com.hiltech.server.platform.ProductApiException
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus
+import org.springframework.jdbc.core.ConnectionCallback
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
@@ -67,7 +68,23 @@ data class EmployeeIdentityInvitationCommandResult(
     val replayed: Boolean,
 )
 
+data class EmployeeIdentityInvitationPending(
+    val operationId: String,
+    val requestedLogin: String,
+    val deliveryMode: String,
+)
+
+data class EmployeeIdentityInvitationAvailability(
+    val employeeId: String,
+    val organizationId: String,
+    val status: String,
+    val deliveryModes: List<String>,
+    val pending: EmployeeIdentityInvitationPending?,
+)
+
 interface EmployeeIdentityInvitationPersistencePort {
+    fun <T> serializeProvisioning(employeeId: UUID, provision: () -> T): T
+
     fun byOperationId(
         operationId: UUID,
     ): EmployeeIdentityInvitationSnapshot?
@@ -116,6 +133,31 @@ interface EmployeeIdentityInvitationPersistencePort {
 class JdbcEmployeeIdentityInvitationPersistence(
     private val jdbc: JdbcTemplate,
 ) : EmployeeIdentityInvitationPersistencePort {
+    override fun <T> serializeProvisioning(employeeId: UUID, provision: () -> T): T =
+        jdbc.execute(ConnectionCallback { connection ->
+            val lockKey = "hiltech.employee-identity:$employeeId"
+            val claimed = connection.prepareStatement("SELECT pg_try_advisory_lock(hashtextextended(?, 0))").use { query ->
+                query.setString(1, lockKey)
+                query.executeQuery().use { it.next() && it.getBoolean(1) }
+            }
+            if (!claimed) {
+                throw ProductApiException(
+                    code = "EMPLOYEE_IDENTITY_INVITATION_IN_PROGRESS",
+                    message = "Account setup is already running for this employee.",
+                    status = HttpStatus.CONFLICT,
+                    retryable = true,
+                )
+            }
+            try {
+                provision()
+            } finally {
+                connection.prepareStatement("SELECT pg_advisory_unlock(hashtextextended(?, 0))").use { query ->
+                    query.setString(1, lockKey)
+                    query.execute()
+                }
+            }
+        }) ?: error("Employee identity operation did not produce a result.")
+
     override fun byOperationId(
         operationId: UUID,
     ): EmployeeIdentityInvitationSnapshot? =
@@ -421,6 +463,41 @@ class EmployeeIdentityInvitationService(
         ApplicationEventPublisher,
     private val clock: Clock,
 ) {
+    fun availability(employeeId: UUID, actorUserId: UUID): EmployeeIdentityInvitationAvailability {
+        val employee = onboarding.employee(employeeId) ?: throw invitationError(
+            code = "EMPLOYEE_NOT_FOUND",
+            message = "The employee does not exist.",
+            status = HttpStatus.NOT_FOUND,
+        )
+        requireManage(actorUserId, employee.organizationId)
+
+        val current = persistence.currentForEmployee(employeeId)
+        val pending = current?.takeUnless { it.state == EmployeeIdentityInvitationState.READY }
+        val modes = provisioning.availableDeliveryModes()
+        val status = when {
+            current?.state == EmployeeIdentityInvitationState.READY -> "LINKED"
+            employee.employeeState != EmployeeState.PREBOARDING -> "NOT_PREBOARDING"
+            pending != null && pending.deliveryMode in modes -> "CONTINUE_INVITATION"
+            pending != null -> "DELIVERY_UNAVAILABLE"
+            persistence.employeeHasLinkedIdentity(employeeId) -> "LINKED"
+            modes.isEmpty() -> "DELIVERY_UNAVAILABLE"
+            else -> "READY_TO_INVITE"
+        }
+        return EmployeeIdentityInvitationAvailability(
+            employeeId = employeeId.toString(),
+            organizationId = employee.organizationId.toString(),
+            status = status,
+            deliveryModes = when (status) {
+                "READY_TO_INVITE" -> modes.map { it.name }
+                "CONTINUE_INVITATION" -> listOf(requireNotNull(pending).deliveryMode.name)
+                else -> emptyList()
+            },
+            pending = pending?.takeIf { status == "CONTINUE_INVITATION" }?.let {
+                EmployeeIdentityInvitationPending(it.operationId.toString(), it.requestedLogin, it.deliveryMode.name)
+            },
+        )
+    }
+
     fun provision(
         command:
             ProvisionEmployeeIdentityCommand,
@@ -440,6 +517,15 @@ class EmployeeIdentityInvitationService(
             normalizeLogin(
                 command.requestedLogin,
             )
+        if (command.deliveryMode == IdentityProvisioningDeliveryMode.EMAIL_ACTION_LINK &&
+            (login.count { it == '@' } != 1 || login.startsWith('@') || login.endsWith('@') || login.any(Char::isWhitespace))
+        ) {
+            throw invitationError(
+                code = "IDENTITY_EMAIL_REQUIRED",
+                message = "Enter the employee’s email address to send a setup link.",
+                status = HttpStatus.BAD_REQUEST,
+            )
+        }
         val employee =
             onboarding.employee(
                 command.employeeId,
@@ -458,6 +544,23 @@ class EmployeeIdentityInvitationService(
             employee.organizationId,
         )
 
+        return persistence.serializeProvisioning(employee.employeeId) {
+            val current = onboarding.employee(employee.employeeId)
+                ?.takeIf { it.organizationId == employee.organizationId }
+                ?: throw invitationError(
+                    code = "EMPLOYEE_NOT_FOUND",
+                    message = "The employee does not exist.",
+                    status = HttpStatus.NOT_FOUND,
+                )
+            provisionAuthorized(command, current, login)
+        }
+    }
+
+    private fun provisionAuthorized(
+        command: ProvisionEmployeeIdentityCommand,
+        employee: OnboardingEmployeeContext,
+        login: String,
+    ): EmployeeIdentityInvitationCommandResult {
         if (
             employee.employeeState !=
             EmployeeState.PREBOARDING
@@ -492,6 +595,16 @@ class EmployeeIdentityInvitationService(
             persistence.byOperationId(
                 command.operationId,
             )
+
+        if (existing?.state != EmployeeIdentityInvitationState.READY &&
+            command.deliveryMode !in provisioning.availableDeliveryModes()
+        ) {
+            throw invitationError(
+                code = "IDENTITY_DELIVERY_NOT_CONFIGURED",
+                message = "The selected account delivery method is unavailable.",
+                status = HttpStatus.SERVICE_UNAVAILABLE,
+            )
+        }
 
         if (existing != null) {
             requireSameRequest(

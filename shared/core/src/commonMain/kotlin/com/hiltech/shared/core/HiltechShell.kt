@@ -33,6 +33,9 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.HiltechOperationalTheme
+import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.HiltechStateTag
+import com.hiltech.shared.core.design.HiltechStateTone
 import kotlinx.coroutines.launch
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.IdentitySecuritySnapshot
@@ -280,6 +283,8 @@ fun HiltechShell(
     compactBackRequest: Int = 0,
     onCompactNavigationChanged: (canGoBack: Boolean, inWork: Boolean) -> Unit = { _, _ -> },
     peopleOffboardingAvailable: Boolean = true,
+    inboxWorkspace: (@Composable () -> Unit)? = null,
+    employeeAccountWorkspace: (@Composable (EmployeeDetailDto) -> Unit)? = null,
 ) {
     HiltechOperationalTheme {
         // Never inherit a different actor's previous desktop/mobile scroll
@@ -298,6 +303,7 @@ fun HiltechShell(
         val destinations = if (useWorkspaceNavigation && signedIn != null) buildList {
             add(ShellWorkspace.Home)
             if (signedIn.field != null) add(ShellWorkspace.Work)
+            if (inboxWorkspace != null) add(ShellWorkspace.Inbox)
             if (compactNavigation || operationalWorkspaces.isNotEmpty()) add(ShellWorkspace.Explore)
             if (signedIn.projects != null) add(ShellWorkspace.Projects)
             if (signedIn.people != null) add(ShellWorkspace.People)
@@ -316,7 +322,8 @@ fun HiltechShell(
         LaunchedEffect(compactBackRequest) {
             if (compactNavigation && compactBackRequest > 0) {
                 requestedWorkspace = when (selectedWorkspace) {
-                    ShellWorkspace.People, ShellWorkspace.Projects, ShellWorkspace.Warehouse, ShellWorkspace.Purchasing ->
+                    ShellWorkspace.People, ShellWorkspace.Projects, ShellWorkspace.Warehouse,
+                    ShellWorkspace.Purchasing, ShellWorkspace.Account ->
                         ShellWorkspace.Explore
                     else -> ShellWorkspace.Home
                 }
@@ -407,7 +414,14 @@ fun HiltechShell(
                         if (state.identity.teams.isNotEmpty()) {
                             Text("Teams: " + state.identity.teams.joinToString { it.name })
                         }
+                        if (selectedWorkspace != null && inboxWorkspace != null) {
+                            OutlinedButton(onClick = { requestedWorkspace = ShellWorkspace.Inbox }) {
+                                Text("Open inbox")
+                            }
+                        }
                     }
+
+                    if (selectedWorkspace == ShellWorkspace.Inbox) inboxWorkspace?.invoke()
 
                     // Navigate to the real already-mounted Compose workspaces.
                     // This is a scroll shortcut, not a permission grant, route
@@ -600,6 +614,7 @@ fun HiltechShell(
                             onCreateEmployee =
                                 onCreateEmployee,
                             offboardingAvailable = peopleOffboardingAvailable,
+                            accountWorkspace = employeeAccountWorkspace,
                         )
                         }
                     }
@@ -1063,6 +1078,7 @@ private fun PeopleSection(
             employmentTypeCode: String?,
         ) -> Unit,
     offboardingAvailable: Boolean,
+    accountWorkspace: (@Composable (EmployeeDetailDto) -> Unit)?,
 ) {
     Text(
         "People",
@@ -1151,46 +1167,59 @@ private fun PeopleSection(
     }
 
     state.directory?.let { directory ->
-        Text(
-            "Employees: " +
-                directory.items.size,
-        )
-
-        directory.items.forEach { employee ->
+        var query by remember { mutableStateOf("") }
+        var creating by remember { mutableStateOf(false) }
+        val term = query.trim()
+        val matches = directory.items.filter { employee ->
+            term.isEmpty() || employee.displayName.contains(term, ignoreCase = true) ||
+                employee.employeeCode.contains(term, ignoreCase = true)
+        }
+        HiltechPanel(Modifier.fillMaxWidth()) {
+            Text("Employee directory", style = MaterialTheme.typography.titleMedium)
             if (directory.canManagePeople) {
-                OutlinedButton(
-                    enabled = !state.loading,
-                    onClick = {
-                        onSelectEmployee(
-                            employee.employeeId,
-                        )
-                    },
-                ) {
-                    Text(
-                        employee.employeeCode +
-                            " · " +
-                            employee.displayName +
-                            " · " +
-                            employee.employeeState,
+                OutlinedButton(enabled = !state.loading, onClick = { creating = !creating }) {
+                    Text(if (creating) "Close new employee form" else "New employee")
+                }
+                if (creating) {
+                    PeopleCreateForm(
+                        onCreateEmployee = onCreateEmployee,
+                        canSubmit = !state.loading,
                     )
                 }
-            } else {
-                Text(
-                    employee.employeeCode +
-                        " · " +
-                        employee.displayName +
-                        " · " +
-                        employee.employeeState,
-                )
+            }
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Search by name or employee code") },
+                singleLine = true,
+            )
+            if (matches.isEmpty()) {
+                Text(if (term.isEmpty()) "No employees available" else "No matching employees")
             }
         }
-
-        if (directory.canManagePeople) {
-            PeopleCreateForm(
-                onCreateEmployee =
-                    onCreateEmployee,
-                canSubmit = !state.loading,
-            )
+        matches.forEach { employee ->
+            HiltechPanel(Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(employee.displayName, style = MaterialTheme.typography.titleSmall)
+                        Text(employee.employeeCode, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (directory.canManagePeople) {
+                        OutlinedButton(
+                            enabled = !state.loading,
+                            onClick = { onSelectEmployee(employee.employeeId) },
+                        ) { Text("Open") }
+                    }
+                }
+                HiltechStateTag(
+                    label = employee.employeeState.lowercase().replaceFirstChar { it.uppercaseChar() },
+                    tone = if (employee.employeeState == "ACTIVE") HiltechStateTone.CURRENT else HiltechStateTone.NEUTRAL,
+                )
+            }
         }
     }
 
@@ -1239,6 +1268,10 @@ private fun PeopleSection(
                         onChangeWorkforceAssignment,
                 )
             }
+
+        if (!state.loading && state.directory?.canManagePeople == true) {
+            accountWorkspace?.invoke(employee)
+        }
 
         if (offboardingAvailable) OffboardingAdminSection(
             employee = employee,

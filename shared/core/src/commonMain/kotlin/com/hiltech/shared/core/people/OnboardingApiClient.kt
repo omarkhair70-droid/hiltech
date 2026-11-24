@@ -172,6 +172,19 @@ class OnboardingApiClient(
         )
     }
 
+    suspend fun identityInvitationAvailability(
+        employeeId: String,
+        installationId: String,
+    ): EmployeeIdentityInvitationAvailabilityDto {
+        requireId(employeeId)
+        return api.request(
+            method = HttpMethod.Get,
+            path = "/v1/employees/$employeeId/identity-invitations/availability",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(EmployeeIdentityInvitationAvailabilityDto.serializer(), it) },
+        )
+    }
+
     suspend fun provisionIdentity(
         employeeId: String,
         request:

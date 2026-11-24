@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
@@ -47,6 +48,22 @@ class EmployeeIdentityInvitationController(
     private val sessionService:
         IdentitySessionService,
 ) {
+    @GetMapping("/v1/employees/{employeeId}/identity-invitations/availability")
+    fun availability(
+        servletRequest: HttpServletRequest,
+        @PathVariable employeeId: String,
+    ): ResponseEntity<EmployeeIdentityInvitationAvailability> {
+        val actor = HiltechRequestContext.current(servletRequest).identityId
+            ?.toIdentityInvitationUuid("UNAUTHENTICATED")
+            ?: throw ProductApiException(
+                code = "UNAUTHENTICATED",
+                message = "Authentication is required.",
+                status = HttpStatus.UNAUTHORIZED,
+            )
+        val availability = service.availability(employeeId.toIdentityInvitationUuid("INVALID_EMPLOYEE_ID"), actor)
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(availability)
+    }
+
     @PostMapping(
         "/v1/employees/{employeeId}/identity-invitations",
     )

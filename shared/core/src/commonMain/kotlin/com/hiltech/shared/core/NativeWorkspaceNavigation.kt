@@ -29,6 +29,7 @@ import com.hiltech.shared.core.design.LocalHiltechOperationalColors
 internal enum class ShellWorkspace(val label: String) {
     Home("Home"),
     Work("Work"),
+    Inbox("Inbox"),
     Explore("Explore"),
     Projects("Projects"),
     People("People"),
@@ -48,7 +49,7 @@ internal fun NativeWorkspaceNavigation(
 ) {
     val colors = LocalHiltechOperationalColors.current
     if (compact && selected != null) {
-        val primary = listOf(ShellWorkspace.Home, ShellWorkspace.Work, ShellWorkspace.Explore, ShellWorkspace.Account)
+        val primary = listOf(ShellWorkspace.Home, ShellWorkspace.Work, ShellWorkspace.Inbox, ShellWorkspace.Explore)
         val selectedTab = selected.takeIf(primary::contains) ?: ShellWorkspace.Explore
         Column(Modifier.fillMaxSize().background(colors.canvas)) {
             Column(

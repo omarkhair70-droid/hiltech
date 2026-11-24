@@ -86,3 +86,19 @@ data class EmployeeIdentityInvitationDto(
     val replayed: Boolean,
     val correlationId: String,
 )
+
+@Serializable
+data class EmployeeIdentityInvitationPendingDto(
+    val operationId: String,
+    val requestedLogin: String,
+    val deliveryMode: String,
+)
+
+@Serializable
+data class EmployeeIdentityInvitationAvailabilityDto(
+    val employeeId: String,
+    val organizationId: String,
+    val status: String,
+    val deliveryModes: List<String>,
+    val pending: EmployeeIdentityInvitationPendingDto? = null,
+)

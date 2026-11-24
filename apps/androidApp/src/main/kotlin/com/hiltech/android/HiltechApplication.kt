@@ -29,6 +29,8 @@ import com.hiltech.shared.core.service.HandoverApiClient
 import com.hiltech.shared.core.projects.ProjectsApiClient
 import com.hiltech.shared.core.commercial.CommercialApiClient
 import com.hiltech.shared.core.executive.ExecutiveApiClient
+import com.hiltech.shared.core.approval.ApprovalApiClient
+import com.hiltech.shared.core.inbox.InboxApiClient
 import com.hiltech.shared.core.finance.FinanceEvidenceReadApis
 import com.hiltech.shared.core.finance.FinanceBankCsvEvidenceUploader
 import com.hiltech.shared.core.finance.FinanceBankStatementIntakeApiClient
@@ -130,6 +132,8 @@ class HiltechApplication : Application() {
         FinanceBankCsvEvidenceUploader(evidenceApi, financeBankIntakeApi)
     }
     val executiveApi by lazy { ExecutiveApiClient(productApi) }
+    val inboxApi by lazy { InboxApiClient(productApi) }
+    val approvalApi by lazy { ApprovalApiClient(productApi) }
     val payrollOwnApi by lazy { Payroll9b9cApiClient(productApi) }
     val payrollAdminApi by lazy { Payroll9aApiClient(productApi) }
     val commercialApi by lazy { CommercialApiClient(productApi) }

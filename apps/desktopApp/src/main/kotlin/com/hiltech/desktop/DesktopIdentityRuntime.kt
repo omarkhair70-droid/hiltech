@@ -235,7 +235,7 @@ class DesktopIdentityRuntime(
             productApi,
         )
 
-    private val onboardingApi =
+    internal val onboardingApi =
         OnboardingApiClient(productApi)
 
     private val hrDocumentsApi =
@@ -262,6 +262,8 @@ class DesktopIdentityRuntime(
     internal val assetPurchaseNeedApi = AssetPurchaseNeedApiClient(productApi)
     internal val supplierSourcingApi = SupplierSourcingApiClient(productApi)
     internal val executiveApi = ExecutiveApiClient(productApi)
+    internal val inboxApi = com.hiltech.shared.core.inbox.InboxApiClient(productApi)
+    internal val approvalApi = com.hiltech.shared.core.approval.ApprovalApiClient(productApi)
     internal val payrollOwnApi = Payroll9b9cApiClient(productApi)
     internal val payrollAdminApi = Payroll9aApiClient(productApi)
     internal val commercialApi = CommercialApiClient(productApi)

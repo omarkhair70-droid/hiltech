@@ -85,6 +85,11 @@ compose.desktop {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             packageName = "HILTECH"
             packageVersion = "0.1.0"
+            windows {
+                perUserInstall = true
+                menu = true
+                menuGroup = "HILTECH"
+            }
         }
     }
 }
