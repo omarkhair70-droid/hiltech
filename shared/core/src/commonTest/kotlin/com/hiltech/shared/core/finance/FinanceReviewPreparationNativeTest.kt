@@ -476,4 +476,48 @@ class FinanceReviewPreparationNativeTest {
         assertTrue(financeReadSourceSnapshot(apis(client),FinanceReadKind.AR_JOURNAL,org,proposal,install).nextActions.isEmpty())
     }
 
+    @Test
+    fun invoiceAwardChoicesReadActualCurrentOrgAndRejectCrossOrg() = runBlocking {
+        for (actualOrg in listOf(org,wrongOrg)) {
+            var reads=0
+            val client=HttpClient(MockEngine {request ->
+                reads++
+                assertEquals("GET",request.method.value)
+                assertEquals("/v1/finance/organizations/$org/client-award-sources",request.url.encodedPath)
+                respond("""{"organizationId":"$actualOrg","observedAt":"2026-11-24T02:00:00Z",
+                    "sourceAvailable":true,"sourceStatus":"AVAILABLE",
+                    "reportedCompanyReceivableTotal":null,"rows":[{
+                        "organizationId":"$actualOrg","opportunityId":"$source","projectId":"$proposal",
+                        "clientOrganizationId":"$install","quoteVersionId":"$source","quoteRevision":3,
+                        "quoteRecordVersion":4,"contractId":"$source","clientPoId":"$source",
+                        "sellAmount":"3000.00","currency":"EGP","paymentTerms":"NET30",
+                        "sourceFingerprintSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    }]}""",HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+            })
+            if(actualOrg==org) {
+                val page=financeReadClientAwardChoices(apis(client),org,install)
+                assertEquals(source,page.rows.single().opportunityId)
+                assertEquals("3000.00",page.rows.single().sellAmount)
+            } else {
+                assertFailsWith<IllegalStateException> {
+                    financeReadClientAwardChoices(apis(client),org,install)
+                }
+            }
+            assertEquals(1,reads)
+        }
+    }
+
+    @Test
+    fun invoiceAwardPageCannotManufactureCustomerBalance() = runBlocking {
+        val client=HttpClient(MockEngine {request ->
+            respond("""{"organizationId":"$org","observedAt":"2026-11-24T02:00:00Z",
+                "sourceAvailable":true,"sourceStatus":"AVAILABLE",
+                "reportedCompanyReceivableTotal":"500","rows":[]}""",
+                HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+        })
+        assertFailsWith<IllegalStateException> {
+            financeReadClientAwardChoices(apis(client),org,install)
+        }
+    }
+
 }
