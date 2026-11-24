@@ -33,6 +33,7 @@ enum class FinanceReviewKind(val label: String) {
     CASH_ALLOCATION_CORRECTION("تصحيح تخصيص"),
     CASH_COUNT("جرد الخزنة"),
     INVOICE_ISSUANCE_REVIEW("مراجعة فاتورة موجودة"),
+    INVOICE_ISSUANCE_PREPARE("تجهيز إصدار فاتورة عميل"),
 }
 
 data class FinanceReviewDraft(
@@ -41,6 +42,7 @@ data class FinanceReviewDraft(
     val sourceKind: String = "AR",
     val amount: String = "",
     val reference: String = "",
+    val documentEvidenceId: String = "",
 )
 
 data class FinancePreparedReview(
@@ -70,6 +72,9 @@ fun financeReviewDraftIsValid(
     return when (kind) {
         FinanceReviewKind.BANK_STATEMENT_REVIEW,
         FinanceReviewKind.INVOICE_ISSUANCE_REVIEW -> true
+        FinanceReviewKind.INVOICE_ISSUANCE_PREPARE ->
+            draft.reference.trim().length in 3..100 &&
+                financeLookupIdIsUuid(draft.documentEvidenceId)
         FinanceReviewKind.BANK_RECONCILIATION ->
             draft.reference.trim().length in 8..180
         FinanceReviewKind.CASH_ALLOCATION ->
@@ -143,9 +148,11 @@ private fun FinanceCashCountReceiptDto.review() =
             "الفرق: $varianceAmount $currency", "تعديل دفتر الأستاذ: $ledgerAdjusted"),
     )
 
-private fun FinanceArInvoiceIssuanceReceiptDto.review() =
+private fun FinanceArInvoiceIssuanceReceiptDto.review(
+    kind: FinanceReviewKind = FinanceReviewKind.INVOICE_ISSUANCE_REVIEW,
+) =
     FinancePreparedReview(
-        FinanceReviewKind.INVOICE_ISSUANCE_REVIEW, proposalId,
+        kind, proposalId,
         organizationId, state, approvalRequestId,
         listOf("رقم الفاتورة: $invoiceNumber",
             "تسجيل داخلي: $recordedInternally",
@@ -175,8 +182,9 @@ suspend fun financeReadReviewProposal(
             apis.allocationCorrection.status(org, proposalId, install).review()
         FinanceReviewKind.CASH_COUNT ->
             apis.cashCount.status(org, proposalId, install).review()
-        FinanceReviewKind.INVOICE_ISSUANCE_REVIEW ->
-            apis.arIssuance.status(org, proposalId, install).review()
+        FinanceReviewKind.INVOICE_ISSUANCE_REVIEW,
+        FinanceReviewKind.INVOICE_ISSUANCE_PREPARE ->
+            apis.arIssuance.status(org, proposalId, install).review(kind)
     }
     return requireScopedReview(org, proposalId, receipt)
 }
@@ -195,6 +203,17 @@ suspend fun financePrepareReviewProposal(
         FinanceReviewKind.BANK_STATEMENT_REVIEW,
         FinanceReviewKind.INVOICE_ISSUANCE_REVIEW ->
             return financeReadReviewProposal(apis, kind, org, form.sourceId, install)
+        FinanceReviewKind.INVOICE_ISSUANCE_PREPARE -> {
+            val prepared = apis.arIssuance.prepare(org, form.sourceId, operation,
+                form.reference.trim(), form.documentEvidenceId, install)
+            check(prepared.candidateId.equals(form.sourceId, ignoreCase = true) &&
+                prepared.invoiceNumber == form.reference.trim() &&
+                prepared.state == "PROPOSED" && prepared.approvalRequestId == null &&
+                prepared.issuedInvoiceId == null && !prepared.recordedInternally &&
+                !prepared.invoiceSentExternally && !prepared.receivableRecognized &&
+                !prepared.paymentCollected) { "FINANCE_INVOICE_SOURCE_MISMATCH" }
+            prepared.review(kind)
+        }
         FinanceReviewKind.BANK_RECONCILIATION -> apis.reconciliation.prepare(
             org, FinanceBankReconciliationPrepareDto(
                 operation, form.sourceId, form.reference.trim(),
@@ -258,8 +277,9 @@ suspend fun financeRequestIndependentReview(
             apis.allocationCorrection.requestReview(org, proposalId, operationId, install).review()
         FinanceReviewKind.CASH_COUNT ->
             apis.cashCount.requestReview(org, proposalId, operationId, install).review()
-        FinanceReviewKind.INVOICE_ISSUANCE_REVIEW ->
-            apis.arIssuance.requestReview(org, proposalId, operationId, install).review()
+        FinanceReviewKind.INVOICE_ISSUANCE_REVIEW,
+        FinanceReviewKind.INVOICE_ISSUANCE_PREPARE ->
+            apis.arIssuance.requestReview(org, proposalId, operationId, install).review(kind)
     }
     return requireScopedReview(org, proposalId, response)
 }
@@ -413,6 +433,7 @@ fun FinanceReviewPreparationSection(
             FinanceReviewKind.CASH_ALLOCATION_CORRECTION -> "معرّف التخصيص الأصلي (Allocation UUID)"
             FinanceReviewKind.CASH_COUNT -> "معرّف الخزنة الحالي (Cashbox UUID)"
             FinanceReviewKind.INVOICE_ISSUANCE_REVIEW -> "معرّف طلب إصدار فاتورة قائم (Proposal UUID)"
+            FinanceReviewKind.INVOICE_ISSUANCE_PREPARE -> "معرّف مسودة فاتورة العميل (Candidate UUID)"
         }
         OutlinedTextField(
             value = draft.sourceId,
@@ -459,15 +480,26 @@ fun FinanceReviewPreparationSection(
                 enabled = !preparing && !requestingReview && prepared == null,
             )
         }
+        if (kind == FinanceReviewKind.INVOICE_ISSUANCE_PREPARE) {
+            OutlinedTextField(
+                value = draft.documentEvidenceId,
+                onValueChange = { draft = draft.copy(documentEvidenceId = it.trim()); resetForFormChange() },
+                label = { Text("معرّف مستند الفاتورة المحفوظ والجاهز (Evidence UUID)") },
+                singleLine = true, modifier = Modifier.fillMaxWidth(),
+                enabled = !preparing && !requestingReview && prepared == null,
+            )
+        }
         if (!existing) {
             OutlinedTextField(
                 value = draft.reference,
                 onValueChange = {
                     draft = draft.copy(reference = it); resetForFormChange()
                 },
-                label = { Text(if (kind == FinanceReviewKind.BANK_RECONCILIATION)
-                    "مرجع المطابقة المعتمد من الشركة" else "مرجع/سبب العملية"
-                ) },
+                label = { Text(when (kind) {
+                    FinanceReviewKind.BANK_RECONCILIATION -> "مرجع المطابقة المعتمد من الشركة"
+                    FinanceReviewKind.INVOICE_ISSUANCE_PREPARE -> "رقم فاتورة الشركة"
+                    else -> "مرجع/سبب العملية"
+                }) },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
                 enabled = !preparing && !requestingReview && prepared == null,
             )
