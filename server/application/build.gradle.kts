@@ -14,6 +14,16 @@ java {
     }
 }
 
+tasks.named<Test>("test") {
+    // The disposable Keycloak CA is for the verifier's test JVM only.
+    providers.environmentVariable("HILTECH_OIDC_TRUST_STORE").orNull?.let { trustStore ->
+        systemProperty("javax.net.ssl.trustStore", trustStore)
+    }
+    providers.environmentVariable("HILTECH_OIDC_TRUST_STORE_PASSWORD").orNull?.let { password ->
+        systemProperty("javax.net.ssl.trustStorePassword", password)
+    }
+}
+
 val jooqCodegen by configurations.creating
 val generatedJooqDir = rootProject.layout.projectDirectory.dir("server/build/generated-src/jooq/main")
 

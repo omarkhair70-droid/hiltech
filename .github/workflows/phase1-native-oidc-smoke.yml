@@ -103,8 +103,8 @@ jobs:
           REQUESTS_CA_BUNDLE: ${{ runner.temp }}/keycloak-tls/cert.pem
         run: python3 scripts/ci/phase1_native_oidc_browser.py setup
 
-      - name: Compile provider smoke harness before timed browser checks
-        run: ./gradlew :apps:desktopApp:testClasses --stacktrace
+      - name: Compile provider smoke harness and server verifier before timed browser checks
+        run: ./gradlew :apps:desktopApp:testClasses :server:application:testClasses --stacktrace
 
       - name: Android private-use callback through production OIDC session core
         shell: bash
@@ -169,13 +169,11 @@ jobs:
           HILTECH_REAUTH_ID_TOKEN_CONTRACT_TEST: "1"
           HILTECH_REAUTH_ID_TOKEN_FILE: ${{ runner.temp }}/phase1-oidc-windows/windows-reauth-id-token.txt
           HILTECH_OIDC_ISSUER_URI: https://127.0.0.1:8443/realms/hiltech
-          JAVA_TOOL_OPTIONS: >-
-            -Djavax.net.ssl.trustStore=${{ runner.temp }}/keycloak-truststore.p12
-            -Djavax.net.ssl.trustStorePassword=changeit
+          HILTECH_OIDC_TRUST_STORE: ${{ runner.temp }}/keycloak-truststore.p12
+          HILTECH_OIDC_TRUST_STORE_PASSWORD: changeit
         run: |
-          ./gradlew :server:application:test \
-            --tests com.hiltech.server.identity.ReauthIdTokenKeycloakContractTest \
-            --rerun-tasks
+          ./gradlew :server:application:test --rerun \
+            --tests com.hiltech.server.identity.ReauthIdTokenKeycloakContractTest
 
       - name: Keycloak and runtime logs on failure
         if: failure()
