@@ -1,5 +1,7 @@
 package com.hiltech.shared.core.inbox
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -33,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.approval.ApprovalApiClient
 import com.hiltech.shared.core.approval.ApprovalRequestDto
+import com.hiltech.shared.core.design.HiltechKeyValue
 import com.hiltech.shared.core.design.HiltechPanel
 import com.hiltech.shared.core.design.HiltechStateTag
 import com.hiltech.shared.core.design.HiltechStateTone
@@ -90,7 +93,7 @@ fun InboxWorkspace(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            listError = "Couldn’t load the inbox. Refresh to try again."
+            listError = "LIST_FAILED"
         } finally {
             listing = false
         }
@@ -118,7 +121,7 @@ fun InboxWorkspace(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            detailError = "This item is unavailable. Refresh for current access and status."
+            detailError = "DETAIL_FAILED"
         } finally {
             opening = false
         }
@@ -126,7 +129,7 @@ fun InboxWorkspace(
 
     val listPane: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 InboxFilter.entries.forEach { choice ->
                     FilterChip(
                         selected = filter == choice,
@@ -142,7 +145,7 @@ fun InboxWorkspace(
                 }
             }
             if (listing) CircularProgressIndicator()
-            listError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            listError?.let { Text(inboxErrorLabel(it), color = MaterialTheme.colorScheme.error) }
             if (items.isEmpty() && !listing && listError == null) {
                 HiltechPanel(Modifier.fillMaxWidth()) {
                     Text(
@@ -172,6 +175,7 @@ fun InboxWorkspace(
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(inboxTitle(item), style = MaterialTheme.typography.titleMedium,
                                 fontWeight = if (item.read) FontWeight.Normal else FontWeight.SemiBold)
+                            if (!item.read) Text(hiltechText("غير مقروء", "Unread"), color = colors.accent, style = MaterialTheme.typography.labelMedium)
                             item.safeSummary?.takeIf(String::isNotBlank)?.let {
                                 Text(it, style = MaterialTheme.typography.bodyMedium)
                             }
@@ -194,7 +198,7 @@ fun InboxWorkspace(
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) {
-                            listError = "Couldn’t load more items. Try again."
+                            listError = "PAGE_FAILED"
                         } finally {
                             listing = false
                         }
@@ -208,7 +212,7 @@ fun InboxWorkspace(
         HiltechPanel(Modifier.fillMaxWidth()) {
             TextButton(enabled = !saving, onClick = { selectedId = null }) { Text(hiltechText("العودة إلى الوارد", "Back to inbox")) }
             if (opening) CircularProgressIndicator()
-            detailError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            detailError?.let { Text(inboxErrorLabel(it), color = MaterialTheme.colorScheme.error) }
             detail?.takeIf { it.item.inboxItemId == selectedId }?.let { entry ->
                 val item = entry.item
                 Text(inboxTitle(item), style = MaterialTheme.typography.titleLarge)
@@ -223,9 +227,12 @@ fun InboxWorkspace(
                 item.safeSummary?.takeIf(String::isNotBlank)?.let { Text(it) }
                 entry.approval?.let { approval ->
                     Text(humanizeInboxCode(approval.subjectType), style = MaterialTheme.typography.titleMedium)
-                    Text("Version ${approval.subjectVersion} · ${humanizeInboxCode(approval.state)}")
+                    HiltechKeyValue(hiltechText("حالة الموافقة", "Approval status"), humanizeInboxCode(approval.state))
+                    HiltechKeyValue(hiltechText("إصدار السجل", "Record version"), approval.subjectVersion.toString())
+                    HiltechKeyValue(hiltechText("تاريخ الطلب", "Requested at"), approval.createdAt)
                     approval.safeReasonSummary?.takeIf(String::isNotBlank)?.let { Text(it) }
                 }
+                HiltechKeyValue(hiltechText("تاريخ آخر تحديث", "Last updated"), item.updatedAt)
                 if (item.sourceType == "APPROVAL_REQUEST" && entry.approval == null) {
                     Text(hiltechText("تفاصيل الموافقة غير متاحة في هذه الجلسة.", "The approval details are unavailable for this session."))
                 }
@@ -248,7 +255,7 @@ fun InboxWorkspace(
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) {
-                            detailError = "Couldn’t update the read status. Try again."
+                            detailError = "READ_FAILED"
                         } finally {
                             saving = false
                         }
@@ -263,14 +270,18 @@ fun InboxWorkspace(
         TextButton(enabled = !saving && !listing && !opening, onClick = { revision += 1 }) { Text(hiltechText("تحديث", "Refresh")) }
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        if (selectedId == null) {
-            listPane()
-        } else if (maxWidth < 720.dp) {
-            detailPane()
+        if (maxWidth < 720.dp) {
+            if (selectedId == null) listPane() else detailPane()
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(Modifier.weight(1f)) { listPane() }
-                Column(Modifier.weight(1f)) { detailPane() }
+                Column(Modifier.weight(1.25f)) {
+                    if (selectedId != null) detailPane()
+                    else HiltechPanel(Modifier.fillMaxWidth()) {
+                        Text(hiltechText("تفاصيل الوارد", "Inbox details"), style = MaterialTheme.typography.titleLarge)
+                        Text(hiltechText("اختر طلبًا من القائمة لقراءة مصدره وحالته.", "Select an item to inspect its source and status."))
+                    }
+                }
             }
         }
     }
@@ -280,6 +291,15 @@ fun InboxWorkspace(
 private fun inboxTitle(item: InboxItemDto): String = when (item.safeTitleCode) {
     "APPROVAL_DECISION_REQUIRED" -> hiltechText("طلب موافقة", "Approval request")
     else -> humanizeInboxCode(item.safeTitleCode)
+}
+
+@Composable
+private fun inboxErrorLabel(code: String): String = when (code) {
+    "LIST_FAILED" -> hiltechText("تعذر تحميل الوارد. حدّث البيانات للمحاولة مرة أخرى.", "Couldn’t load the inbox. Refresh to try again.")
+    "DETAIL_FAILED" -> hiltechText("الطلب غير متاح. حدّث البيانات للتحقق من الصلاحية والحالة.", "This item is unavailable. Refresh for current access and status.")
+    "PAGE_FAILED" -> hiltechText("تعذر تحميل المزيد من الطلبات.", "Couldn’t load more items. Try again.")
+    "READ_FAILED" -> hiltechText("تعذر تحديث حالة القراءة. حاول مرة أخرى.", "Couldn’t update the read status. Try again.")
+    else -> code
 }
 
 private fun humanizeInboxCode(code: String): String =

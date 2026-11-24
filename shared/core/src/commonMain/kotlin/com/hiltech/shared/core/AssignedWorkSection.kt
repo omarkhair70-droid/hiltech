@@ -889,37 +889,7 @@ private fun JobBundleDetail(
             }
         }
 
-        if (
-            bundle.safeDocumentRefs
-                .isNotEmpty()
-        ) {
-            Text(
-                "مستندات حالية مصرح بها",
-                style =
-                    MaterialTheme.typography
-                        .titleMedium,
-            )
-            bundle.safeDocumentRefs
-                .forEach {
-                    Text(
-                        "• " +
-                            it.code +
-                            " · " +
-                            it.title +
-                            (
-                                it.revision
-                                    ?.let { revision ->
-                                        " · r" + revision
-                                    }
-                                    ?: ""
-                            ),
-                    )
-                }
-        } else {
-            Text(
-                "مفيش document revision source موثوق للـWork ده حاليًا.",
-            )
-        }
+        FieldDocumentRegister(bundle, cached)
 
         Text(
             "التنفيذ من الموبايل",
@@ -937,6 +907,63 @@ private fun JobBundleDetail(
     }
 }
 
+
+/** Read-only register: document IDs and evidence status are the exact source values.
+ * A reference is not a downloadable document or a verified file. */
+@Composable
+private fun FieldDocumentRegister(bundle: TechnicianJobBundleDto, cached: Boolean) {
+    val colors = LocalHiltechOperationalColors.current
+    var query by remember(bundle.workOrderId) { mutableStateOf("") }
+    var expanded by remember(bundle.workOrderId) { mutableStateOf(false) }
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(hiltechText("المستندات والأدلة", "Documents & evidence"), style = MaterialTheme.typography.titleLarge)
+                Text(hiltechText("المراجع: ", "References: ") + bundle.safeDocumentRefs.size +
+                    " · " + hiltechText("الأدلة: ", "Evidence: ") + bundle.existingEvidence.size,
+                    color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+            }
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(if (expanded) hiltechText("طي", "Collapse") else hiltechText("عرض", "View"))
+            }
+        }
+        if (cached) Text(hiltechText("بيانات محفوظة؛ الإصدار والصلاحية الحالية غير مؤكدين.", "Cached data; current revision and access are unconfirmed."),
+            color = colors.cautionText)
+        if (expanded) {
+            OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                label = { Text(hiltechText("ابحث بالكود أو العنوان أو الإصدار", "Search code, title or revision")) })
+            val term = query.trim()
+            val documents = bundle.safeDocumentRefs.filter {
+                term.isEmpty() || listOf(it.code, it.title, it.revision.orEmpty(), it.sourceType).any { value -> value.contains(term, true) }
+            }
+            if (documents.isEmpty()) Text(if (term.isEmpty())
+                hiltechText("لا توجد مراجع مستندات متاحة من المصدر.", "No document references available from source.")
+                else hiltechText("لا توجد مراجع مطابقة.", "No matching references."))
+            documents.forEach { doc ->
+                Surface(color = colors.surfaceElevated, shape = HiltechShape.small, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(doc.title, style = MaterialTheme.typography.titleMedium)
+                        Text(doc.code, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+                        Text(hiltechText("الإصدار: ", "Revision: ") + (doc.revision ?: hiltechText("غير متاح", "Unavailable")))
+                        Text(hiltechText("المصدر: ", "Source: ") + doc.sourceType, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            Text(hiltechText("أدلة التنفيذ المسجلة", "Recorded execution evidence"), style = MaterialTheme.typography.titleMedium)
+            if (bundle.existingEvidence.isEmpty()) Text(hiltechText("لا توجد أدلة في البيانات المعروضة.", "No evidence in the visible data."))
+            bundle.existingEvidence.forEach { evidence ->
+                Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(evidence.evidenceTypeCode, style = MaterialTheme.typography.titleSmall)
+                    Text(evidence.contentType + " · v" + evidence.version, color = colors.secondaryText)
+                    Text(hiltechText("حالة التخزين: ", "Storage state: ") + evidence.storageState)
+                    Text(evidence.capturedAt, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                }
+            }
+            Text(hiltechText("هذه بيانات تعريفية من المصدر وليست معاينة للملف نفسه.", "These are source metadata, not a preview of the file itself."),
+                style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+        }
+    }
+}
 
 @Composable
 private fun MaterialUsageCaptureLine(
