@@ -447,4 +447,33 @@ class FinanceReviewPreparationNativeTest {
         }
     }
 
+    @Test
+    fun sourceHandoffUsesPostedRecordNotProposalId() = runBlocking {
+        val client=HttpClient(MockEngine {request ->
+            assertEquals("GET",request.method.value)
+            respond("""{"proposalId":"$proposal","organizationId":"$org","issuedInvoiceId":"$install",
+                "sourceVersion":1,"ledgerFingerprintSha256":"${"a".repeat(64)}","amount":"120",
+                "currency":"EGP","state":"POSTED_ACCOUNTS_RECEIVABLE",
+                "postedJournalId":"$source","receivableRecognized":true}""",
+                HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+        })
+        val snapshot=financeReadSourceSnapshot(apis(client),FinanceReadKind.AR_JOURNAL,org,proposal,install)
+        assertEquals(listOf(
+            FinanceReviewHandoff(FinanceReviewKind.CASH_ALLOCATION,source,"AR"),
+            FinanceReviewHandoff(FinanceReviewKind.CASH_VOUCHER,source,"AR")),snapshot.nextActions)
+        assertTrue(financePostedJournalHandoffs(null,"AR").isEmpty())
+        assertTrue(financePostedJournalHandoffs(source,"unknown").isEmpty())
+    }
+
+    @Test
+    fun unpostedJournalDoesNotOfferCashHandoff() = runBlocking {
+        val client=HttpClient(MockEngine {
+            respond("""{"proposalId":"$proposal","organizationId":"$org","issuedInvoiceId":"$install",
+                "sourceVersion":1,"ledgerFingerprintSha256":"${"a".repeat(64)}","amount":"120",
+                "currency":"EGP","state":"PENDING","postedJournalId":null}""",
+                HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+        })
+        assertTrue(financeReadSourceSnapshot(apis(client),FinanceReadKind.AR_JOURNAL,org,proposal,install).nextActions.isEmpty())
+    }
+
 }
