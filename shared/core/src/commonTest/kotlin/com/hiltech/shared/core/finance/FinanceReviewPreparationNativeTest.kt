@@ -520,4 +520,34 @@ class FinanceReviewPreparationNativeTest {
         }
     }
 
+    @Test
+    fun billingEvidencePreviewChecksActualReadyTarget() = runBlocking {
+        for (ready in listOf(true,false)) {
+            var reads=0
+            val client=HttpClient(MockEngine {request ->
+                reads++
+                assertEquals("GET",request.method.value)
+                assertEquals("/v1/evidence/$install",request.url.encodedPath)
+                respond("""{"evidenceId":"$install","uploadSessionId":"$proposal",
+                    "targetType":"FINANCE_CLIENT_BILLING_MILESTONE","targetId":"$source",
+                    "evidenceTypeCode":"BILLING_DOCUMENT","contentType":"application/pdf",
+                    "sizeBytes":123,"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "storageState":"${if(ready)"READY" else "QUARANTINED"}",
+                    "classificationCode":"HIGHLY_RESTRICTED","clientVisibilityMode":"INTERNAL_ONLY",
+                    "evidenceVersion":1}""",HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType,"application/json"))
+            })
+            if (ready) {
+                val result=financeBillingEvidencePreview(apis(client),source,install,install)
+                assertTrue(result.verifiedReady)
+                assertEquals("application/pdf",result.contentType)
+            } else {
+                assertFailsWith<IllegalStateException> {
+                    financeBillingEvidencePreview(apis(client),source,install,install)
+                }
+            }
+            assertEquals(1,reads)
+        }
+    }
+
 }
