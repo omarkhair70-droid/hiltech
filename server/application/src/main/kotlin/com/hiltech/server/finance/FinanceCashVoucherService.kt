@@ -230,6 +230,50 @@ class FinanceCashVoucherService(
    return receipt(s,"RECORDED",approved.approvalRequestId,
       recordId,outcome.replayed)
  }
+ /** Only approved, unrecorded operations available to this specific operator. */
+ fun operatorQueue(actor:UUID,org:UUID):List<FinanceCashVoucherReceipt> {
+   authority(actor,org,"hiltech.finance.cashbox.voucher-operator-authority-key")
+   val ids=jdbc.query(
+      """SELECT p.id FROM finance_cash_voucher_proposal p
+         WHERE p.organization_id=?
+         AND EXISTS (SELECT 1 FROM approval_request a
+           WHERE a.organization_id=p.organization_id AND a.subject_id=p.id
+           AND a.subject_type=? AND a.state='APPROVED')
+         AND NOT EXISTS (SELECT 1 FROM finance_cash_voucher_record r
+           WHERE r.organization_id=p.organization_id AND r.proposal_id=p.id)
+         ORDER BY p.id LIMIT 100""",
+      {rs,_->rs.getObject("id",UUID::class.java)},org,FINANCE_CASH_VOUCHER_SUBJECT)
+   return ids.mapNotNull { id ->
+      val s=subject.current(org,id) ?:return@mapNotNull null
+      if(s.custodian!=actor || s.preparedBy==actor)return@mapNotNull null
+      val review=engine.subjectStatus(
+          ApprovalSubjectRef(org,FINANCE_CASH_VOUCHER_SUBJECT,id,s.version),s.policyKey)
+          ?.takeIf {it.state==ApprovalRequestState.APPROVED && it.subjectVersion==s.version}
+          ?:return@mapNotNull null
+      if(historic(org,id)!=null)return@mapNotNull null
+      receipt(s,"APPROVED",review.approvalRequestId)
+   }
+ }
+ /** Operator-only detail; historical records are limited to the recording actor. */
+ fun operatorStatus(actor:UUID,org:UUID,id:UUID):FinanceCashVoucherReceipt {
+   authority(actor,org,"hiltech.finance.cashbox.voucher-operator-authority-key")
+   historic(org,id)?.let { old ->
+      val owner=jdbc.query(
+        """SELECT recorded_by_user_id FROM finance_cash_voucher_record
+           WHERE organization_id=? AND id=?""",
+        {rs,_->rs.getObject("recorded_by_user_id",UUID::class.java)},org,old.voucherRecordId)
+        .singleOrNull() ?:unavailable()
+      if(owner!=actor)unavailable()
+      return old
+   }
+   val s=subject.current(org,id) ?:stale()
+   if(s.custodian!=actor || s.preparedBy==actor)unavailable()
+   val review=engine.subjectStatus(
+       ApprovalSubjectRef(org,FINANCE_CASH_VOUCHER_SUBJECT,id,s.version),s.policyKey)
+       ?.takeIf {it.state==ApprovalRequestState.APPROVED && it.subjectVersion==s.version}
+       ?:unavailable()
+   return receipt(s,"APPROVED",review.approvalRequestId)
+ }
  fun status(actor:UUID,org:UUID,id:UUID):FinanceCashVoucherReceipt {
    authority(actor,org,"hiltech.finance.cashbox.reader-authority-key")
    historic(org,id)?.let{return it}
@@ -328,6 +372,12 @@ class FinanceCashVoucherController(private val vouchers:FinanceCashVoucherServic
    IdempotencyKeyContract.requireMatches(ctx.idempotencyKey,body.operationId)
    return vouchers.record(actor(http),orgId,id,body,ctx.correlationId)
  }
+ @GetMapping("/v1/finance/organizations/{orgId}/cash-vouchers/operator-queue")
+ fun operatorQueue(http:HttpServletRequest,@PathVariable orgId:UUID):List<FinanceCashVoucherReceipt> =
+   vouchers.operatorQueue(actor(http),orgId)
+ @GetMapping("/v1/finance/organizations/{orgId}/cash-vouchers/{id}/operator-status")
+ fun operatorStatus(http:HttpServletRequest,@PathVariable orgId:UUID,@PathVariable id:UUID):FinanceCashVoucherReceipt=
+   vouchers.operatorStatus(actor(http),orgId,id)
  @GetMapping("/v1/finance/organizations/{orgId}/cash-vouchers/{id}")
  fun status(http:HttpServletRequest,@PathVariable orgId:UUID,
      @PathVariable id:UUID):FinanceCashVoucherReceipt=
