@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.HiltechShape
+import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.design.LocalHiltechOperationalColors
 
 internal enum class ShellWorkspace(val label: String, val displayLabel: String) {
@@ -65,12 +66,12 @@ internal fun NativeWorkspaceNavigation(
                     verticalAlignment = Alignment.CenterVertically) {
                     HiltechWordmark()
                     Spacer(Modifier.weight(1f))
-                    Text(selected.displayLabel, style = MaterialTheme.typography.labelLarge, color = colors.secondaryText)
+                    Text(hiltechText(selected.displayLabel, selected.label), style = MaterialTheme.typography.labelLarge, color = colors.secondaryText)
                     if (ShellWorkspace.Account in destinations) {
                         TextButton(onClick = { onSelect(ShellWorkspace.Account) }) {
                             WorkspaceGlyph(ShellWorkspace.Account, colors.accent)
                             Spacer(Modifier.width(6.dp))
-                            Text("حسابي")
+                            Text(hiltechText("حسابي", "Account"))
                         }
                     }
                 }
@@ -87,7 +88,7 @@ internal fun NativeWorkspaceNavigation(
                 if (selected == ShellWorkspace.Explore) {
                     val areas = destinations.filterNot(primaryDestinations::contains).filterNot { it == ShellWorkspace.Account }
                     if (areas.isNotEmpty()) {
-                        Text("مساحات العمل", style = MaterialTheme.typography.titleMedium)
+                        Text(hiltechText("مساحات العمل", "Workspaces"), style = MaterialTheme.typography.titleMedium)
                         areas.forEach { workspace ->
                             WorkspaceDirectoryEntry(workspace) { onSelect(workspace) }
                         }
@@ -101,7 +102,7 @@ internal fun NativeWorkspaceNavigation(
                         selected = selectedTab == tab,
                         onClick = { onSelect(tab) },
                         icon = { WorkspaceGlyph(tab, if (selectedTab == tab) colors.accent else colors.secondaryText) },
-                        label = { Text(tab.displayLabel) },
+                        label = { Text(hiltechText(tab.displayLabel, tab.label)) },
                         alwaysShowLabel = true,
                         colors = NavigationBarItemDefaults.colors(
                             indicatorColor = colors.selected,
@@ -132,7 +133,7 @@ internal fun NativeWorkspaceNavigation(
                     ) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             SearchGlyph(colors.secondaryText)
-                            Text("بحث / أمر", Modifier.padding(start = 8.dp).weight(1f), style = MaterialTheme.typography.labelLarge)
+                            Text(hiltechText("بحث / أمر", "Search / Command"), Modifier.padding(start = 8.dp).weight(1f), style = MaterialTheme.typography.labelLarge)
                             Text("Ctrl K", color = colors.secondaryText, style = MaterialTheme.typography.labelSmall)
                         }
                     }
@@ -148,7 +149,7 @@ internal fun NativeWorkspaceNavigation(
                     val areas = destinations.filterNot(primaryDestinations::contains).filterNot { it == ShellWorkspace.Account }
                     if (areas.isNotEmpty()) {
                         Spacer(Modifier.height(14.dp))
-                        Text("مساحات العمل", Modifier.padding(start = 10.dp, bottom = 4.dp),
+                        Text(hiltechText("مساحات العمل", "Workspaces"), Modifier.padding(start = 10.dp, bottom = 4.dp),
                             color = colors.secondaryText, style = MaterialTheme.typography.labelSmall)
                         areas.forEach { destination -> WorkspaceRailEntry(destination, selected == destination, onSelect) }
                     }
@@ -167,9 +168,9 @@ internal fun NativeWorkspaceNavigation(
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("HILTECH", style = MaterialTheme.typography.labelMedium, color = colors.secondaryText)
                     Text(" / ", color = colors.secondaryText)
-                    Text(selected.displayLabel, style = MaterialTheme.typography.titleSmall)
+                    Text(hiltechText(selected.displayLabel, selected.label), style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.weight(1f))
-                    onFind?.let { TextButton(onClick = it) { SearchGlyph(colors.secondaryText); Spacer(Modifier.width(8.dp)); Text("بحث") } }
+                    onFind?.let { TextButton(onClick = it) { SearchGlyph(colors.secondaryText); Spacer(Modifier.width(8.dp)); Text(hiltechText("بحث", "Search")) } }
                 }
             }
             HorizontalDivider(color = colors.divider)
@@ -217,7 +218,7 @@ private fun WorkspaceRailEntry(destination: ShellWorkspace, selected: Boolean, o
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             WorkspaceGlyph(destination, if (selected) colors.accent else colors.secondaryText)
-            Text(destination.displayLabel, Modifier.weight(1f), color = colors.primaryText,
+            Text(hiltechText(destination.displayLabel, destination.label), Modifier.weight(1f), color = colors.primaryText,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 style = MaterialTheme.typography.bodyMedium)
             if (selected) Box(Modifier.width(3.dp).height(18.dp).background(colors.accent, HiltechShape.small))
@@ -231,7 +232,7 @@ private fun WorkspaceDirectoryEntry(destination: ShellWorkspace, onClick: () -> 
     Surface(onClick = onClick, color = colors.surface, shape = HiltechShape.medium, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             WorkspaceGlyph(destination, colors.accent)
-            Text(destination.displayLabel, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+            Text(hiltechText(destination.displayLabel, destination.label), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
             Text("‹", color = colors.secondaryText)
         }
     }
