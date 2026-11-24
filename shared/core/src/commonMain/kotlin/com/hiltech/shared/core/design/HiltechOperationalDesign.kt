@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
@@ -278,6 +279,7 @@ fun HiltechRecordPicker(
     onChange: (String) -> Unit,
     allowKnownReference: Boolean = true,
     enabled: Boolean = true,
+    allowClear: Boolean = true,
 ) {
     val palette = LocalHiltechOperationalColors.current
     var expanded by remember { mutableStateOf(false) }
@@ -326,8 +328,53 @@ fun HiltechRecordPicker(
                 }
                 if (allowKnownReference && referenceMode) OutlinedTextField(value, onChange, modifier = Modifier.fillMaxWidth(),
                     label = { Text(hiltechText("معرّف السجل من المصدر", "Record ID from source")) }, singleLine = true, enabled = enabled)
-                if (value.isNotBlank()) TextButton(onClick = { onChange(""); expanded = false }, enabled = enabled) {
+                if (allowClear && value.isNotBlank()) TextButton(onClick = { onChange(""); expanded = false }, enabled = enabled) {
                     Text(hiltechText("مسح الاختيار", "Clear selection"))
+                }
+            }
+        }
+    }
+}
+
+/** One record presentation, two layout densities. No synthetic totals. */
+data class HiltechTableColumn(val title: String, val weight: Float = 1f)
+data class HiltechTableRecord(val values: List<String>)
+
+@Composable
+fun HiltechRecordTable(columns: List<HiltechTableColumn>, records: List<HiltechTableRecord>, emptyMessage: String) {
+    val palette = LocalHiltechOperationalColors.current
+    if (records.isEmpty()) {
+        Text(emptyMessage, color = palette.secondaryText, style = MaterialTheme.typography.bodyMedium)
+        return
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val wide = maxWidth >= 640.dp && columns.size <= 6
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (wide) 0.dp else 10.dp)) {
+            if (wide) {
+                Surface(color = palette.surfaceElevated, shape = HiltechShape.small) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        columns.forEach { column ->
+                            Text(column.title, Modifier.weight(column.weight.coerceAtLeast(.2f)), style = MaterialTheme.typography.labelMedium, color = palette.secondaryText)
+                        }
+                    }
+                }
+                records.forEachIndexed { index, record ->
+                    Surface(color = if (index % 2 == 0) palette.surface else palette.canvas) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            columns.forEachIndexed { cell, column ->
+                                Text(record.values.getOrNull(cell).orEmpty().ifBlank { "—" },
+                                    Modifier.weight(column.weight.coerceAtLeast(.2f)), style = MaterialTheme.typography.bodyMedium,
+                                    color = palette.primaryText)
+                            }
+                        }
+                    }
+                    HorizontalDivider(color = palette.divider)
+                }
+            } else records.forEach { record ->
+                HiltechPanel(Modifier.fillMaxWidth()) {
+                    columns.forEachIndexed { index, column ->
+                        HiltechKeyValue(column.title, record.values.getOrNull(index).orEmpty().ifBlank { "—" })
+                    }
                 }
             }
         }
