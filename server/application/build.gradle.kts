@@ -41,7 +41,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-jooq")
     implementation("org.springframework.modulith:spring-modulith-starter-jdbc")
-    implementation("org.flywaydb:flyway-core")
+    // Boot 4 modularizes Flyway auto-configuration; core alone does not migrate on startup.
+    implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation(libs.jooq)
     implementation(libs.kotlinx.serialization.json)
