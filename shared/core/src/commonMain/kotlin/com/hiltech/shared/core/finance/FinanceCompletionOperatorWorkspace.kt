@@ -34,6 +34,8 @@ enum class FinanceCompletionKind(val label: String, val terminal: String) {
     SETTLEMENT("تسجيل تسوية موظف","RECORDED"),
     REIMBURSEMENT("تسجيل رد مصروف","RECORDED"),
     PERIOD_CLOSE("إقفال فترة محاسبية","CLOSED"),
+    CASH_ALLOCATION("تسجيل تخصيص تحصيل أو سداد","RECORDED"),
+    CASH_CORRECTION("تسجيل تصحيح تخصيص","CORRECTED"),
 }
 
 /** Facts are from typed authoritative receipts, never editable client balances. */
@@ -90,6 +92,18 @@ private fun FinanceGlPeriodCloseReceiptDto.completionSource() = FinanceCompletio
     listOf("عدد القيود: " + journalCount, "بصمة الدفتر: " + ledgerSnapshotSha256, "نسخة المصدر: " + sourceVersion),
 )
 
+private fun FinanceCashAllocationReceiptDto.completionSource() = FinanceCompletionSource(
+    FinanceCompletionKind.CASH_ALLOCATION,proposalId,organizationId,state,approvalRequestId,recordedAllocationId,
+    listOf(sourceKind,sourceJournalId,bankStatementLineId,amount,currency),
+    listOf(if(sourceKind=="AR") "تحصيل عميل" else "سداد مورد","المبلغ: $amount $currency","القيد: $sourceJournalId","حركة البنك: $bankStatementLineId"),
+)
+
+private fun FinanceCashVoidReceiptDto.completionSource() = FinanceCompletionSource(
+    FinanceCompletionKind.CASH_CORRECTION,proposalId,organizationId,state,approvalRequestId,correctionRecordId,
+    listOf(originalAllocationId,sourceKind,sourceJournalId,bankStatementLineId,amount,currency),
+    listOf("تصحيح تخصيص سابق","المبلغ: $amount $currency","التخصيص الأصلي: $originalAllocationId","حركة البنك: $bankStatementLineId"),
+)
+
 fun financeCompletionReady(source: FinanceCompletionSource, org: String): Boolean =
     source.org.equals(org, ignoreCase = true) &&
         financeLookupIdIsUuid(source.id) &&
@@ -107,6 +121,8 @@ suspend fun financeCompletionQueue(
         FinanceCompletionKind.SETTLEMENT -> apis.employeeMoney.settlementOperatorQueue(org, installation).map { it.completionSource() }
         FinanceCompletionKind.REIMBURSEMENT -> apis.reimbursement.operatorQueue(org, installation).map { it.completionSource() }
         FinanceCompletionKind.PERIOD_CLOSE -> apis.periodClose.operatorQueue(org, installation).map { it.completionSource() }
+        FinanceCompletionKind.CASH_ALLOCATION -> apis.allocation.operatorQueue(org,installation).map {it.completionSource()}
+        FinanceCompletionKind.CASH_CORRECTION -> apis.allocationCorrection.operatorQueue(org,installation).map {it.completionSource()}
     }
     check(result.all { it.kind == kind && financeCompletionReady(it,org) })
     return result
@@ -125,6 +141,8 @@ suspend fun financeCompletionRead(
         FinanceCompletionKind.SETTLEMENT -> apis.employeeMoney.settlementStatus(org,id,installation).completionSource()
         FinanceCompletionKind.REIMBURSEMENT -> apis.reimbursement.status(org,id,installation).completionSource()
         FinanceCompletionKind.PERIOD_CLOSE -> apis.periodClose.status(org,id,installation).completionSource()
+        FinanceCompletionKind.CASH_ALLOCATION -> apis.allocation.status(org,id,installation).completionSource()
+        FinanceCompletionKind.CASH_CORRECTION -> apis.allocationCorrection.status(org,id,installation).completionSource()
     }
     check(source.org.equals(org,ignoreCase=true) && source.id.equals(id,ignoreCase=true) &&
         source.kind == kind)
@@ -148,6 +166,12 @@ suspend fun financeCompleteApprovedSource(
         FinanceCompletionKind.SETTLEMENT -> apis.employeeMoney.recordSettlement(org,expected.id,operationId,installation).completionSource()
         FinanceCompletionKind.REIMBURSEMENT -> apis.reimbursement.record(org,expected.id,operationId,installation).completionSource()
         FinanceCompletionKind.PERIOD_CLOSE -> apis.periodClose.close(org,expected.id,operationId,installation).completionSource()
+        FinanceCompletionKind.CASH_ALLOCATION -> apis.allocation.record(org,expected.id,operationId,installation).also {
+            check(it.cashAllocatedToAccountingSource && !it.moneyTransferredByHiltech && !it.bankReconciled)
+        }.completionSource()
+        FinanceCompletionKind.CASH_CORRECTION -> apis.allocationCorrection.record(org,expected.id,operationId,installation).also {
+            check(it.originalRecordPreserved && !it.originalMatchStillEffective && !it.bankRefundInitiated && !it.generalLedgerReversed)
+        }.completionSource()
     }
     check(result.kind == expected.kind && result.org.equals(org,ignoreCase=true) &&
         result.id == expected.id && result.approvalId == expected.approvalId &&
@@ -238,7 +262,7 @@ private fun CompletionOperatorSection(
         items.forEach { item ->
             OutlinedButton(enabled=!busy,onClick={
                 selected=item; lookup=item.id; operationId=null; confirmation=false
-            }) { Text(item.details.firstOrNull().orEmpty()+" · "+item.id.take(8)) }
+            }) { Column { Text(item.details.firstOrNull().orEmpty()); item.details.getOrNull(1)?.let {Text(it,style=MaterialTheme.typography.bodySmall)}; Text(item.id.take(8),style=MaterialTheme.typography.labelSmall) } }
         }
         OutlinedTextField(value=lookup,onValueChange={
             lookup=it.trim(); selected=null; operationId=null; confirmation=false
