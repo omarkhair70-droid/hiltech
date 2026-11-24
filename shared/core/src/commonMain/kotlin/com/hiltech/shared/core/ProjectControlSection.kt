@@ -1,8 +1,19 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -15,9 +26,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.HiltechSectionHeading
+import com.hiltech.shared.core.design.HiltechShape
+import com.hiltech.shared.core.design.HiltechStateTag
+import com.hiltech.shared.core.design.HiltechStateTone
+import com.hiltech.shared.core.design.HiltechKeyValue
+import com.hiltech.shared.core.design.LocalHiltechOperationalColors
 import com.hiltech.shared.core.projects.ProjectListDto
 import com.hiltech.shared.core.projects.ProjectPlanDto
 import com.hiltech.shared.core.projects.ProjectSiteListDto
@@ -111,329 +131,221 @@ fun ProjectControlSection(
     reservationPort: ReservationUiPort? = null,
     onProjectCommandCenterAction: (ProjectCommandCenterUiAction) -> Unit = {},
 ) {
-    CompositionLocalProvider(
-        LocalLayoutDirection provides
-            LayoutDirection.Rtl,
-    ) {
-        Column(
-            verticalArrangement =
-                Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                "المشروعات والمواقع",
-                style =
-                    MaterialTheme.typography
-                        .titleMedium,
-            )
-            Text(
-                "حقيقة التنفيذ الحالية فقط — بدون نسب تقدم أو صحة مشروع مصطنعة.",
-            )
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        val colors = LocalHiltechOperationalColors.current
+        var query by remember { mutableStateOf("") }
+        var creating by remember { mutableStateOf(false) }
+        val selected = state.selectedProject
+        var showDetail by remember(selected?.projectId) { mutableStateOf(selected != null) }
+        var tab by remember(selected?.projectId) { mutableStateOf(ProjectWorkspaceTab.Overview) }
+        var showManager by remember(selected?.projectId) { mutableStateOf(false) }
+        var showSiteCreate by remember(selected?.projectId) { mutableStateOf(false) }
+        var showSiteAttach by remember(selected?.projectId) { mutableStateOf(false) }
 
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f)) {
+                    HiltechSectionHeading("PROJECTS / DELIVERY", "المشاريع والمواقع",
+                        "تابع المشاريع، فرق التنفيذ، والتقدم الفعلي من مكان واحد.")
+                }
+                TextButton(onClick = onRefresh, enabled = !state.loading) { Text("تحديث") }
+            }
             if (state.loading) {
-                Row(
-                    horizontalArrangement =
-                        Arrangement.spacedBy(8.dp),
-                ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator()
-                    Text("جارٍ تحميل واقع المشروعات…")
+                    Text("جارٍ تحميل بيانات المشاريع…")
                 }
             }
-
-            state.errorMessage?.let {
-                Text(
-                    buildString {
-                        state.errorCode?.let { code ->
-                            append(code)
-                            append(" · ")
-                        }
-                        append(it)
-                    },
-                )
-            }
-
-            state.list?.let { list ->
-                Text(
-                    "مشروعاتي: " +
-                        list.items.size,
-                    style =
-                        MaterialTheme.typography
-                            .titleSmall,
-                )
-                if (list.items.isEmpty()) {
-                    Text(
-                        "لا توجد مشروعات متاحة لهذه الهوية حاليًا.",
-                    )
+            state.errorMessage?.let { error ->
+                HiltechPanel(Modifier.fillMaxWidth()) {
+                    HiltechStateTag("تعذر تحديث المشروع", HiltechStateTone.ATTENTION)
+                    Text(error)
+                    state.errorCode?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = colors.secondaryText) }
                 }
-                list.items.forEach { project ->
-                    OutlinedButton(
-                        onClick = {
-                            onSelectProject(
-                                project.projectId,
-                            )
-                        },
-                    ) {
-                        Text(
-                            buildString {
-                                append(project.projectCode)
-                                append(" · ")
-                                append(project.name)
-                                append(" · ")
-                                append(project.clientDisplayName)
-                                append(" · ")
-                                append(project.lifecycleState)
-                                append(" · ")
-                                append(
-                                    project
-                                        .currentResponsibility
-                                        .principalLabel
-                                        ?: "بدون مسؤول",
-                                )
-                                if (
-                                    project.startDatePlanned !=
-                                    null ||
-                                    project.endDatePlanned !=
-                                    null
-                                ) {
-                                    append(" · ")
-                                    append(
-                                        project.startDatePlanned
-                                            ?: "؟",
-                                    )
-                                    append(" → ")
-                                    append(
-                                        project.endDatePlanned
-                                            ?: "؟",
-                                    )
-                                }
-                            },
-                        )
+            }
+            val directory: @Composable () -> Unit = {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("دليل المشاريع", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Button(onClick = { creating = !creating }) { Text(if (creating) "إغلاق" else "+ مشروع") }
                     }
-                }
-            }
-
-            ProjectCreateForm(
-                onCreateProject =
-                    onCreateProject,
-            )
-
-            state.selectedProject?.let { project ->
-                Text(
-                    "المشروع المفتوح",
-                    style =
-                        MaterialTheme.typography
-                            .titleSmall,
-                )
-                Text(
-                    project.projectCode +
-                        " · " +
-                        project.name,
-                )
-                Text(
-                    "العميل: " +
-                        project.clientDisplayName,
-                )
-                Text(
-                    "الحالة: " +
-                        project.lifecycleState +
-                        " · v" +
-                        project.version,
-                )
-                Text(
-                    "المصدر: " +
-                        project.sourceType +
-                        (
-                            project.sourceExternalReference
-                                ?.let {
-                                    " · " + it
-                                }
-                                ?: ""
-                        ),
-                )
-                Text(
-                    "المسؤول: " +
-                        (
-                            project
-                                .currentResponsibility
-                                .principalLabel
-                                ?: "غير معيّن"
-                        ) +
-                        " · " +
-                        project
-                            .currentResponsibility
-                            .resolutionState,
-                )
-                Text(
-                    "الفترة المخططة: " +
-                        (
-                            project.startDatePlanned
-                                ?: "غير محددة"
-                        ) +
-                        " → " +
-                        (
-                            project.endDatePlanned
-                                ?: "غير محددة"
-                        ),
-                )
-                Text(
-                    "المواقع المرتبطة: " +
-                        project.siteCount,
-                )
-
-                Row(
-                    horizontalArrangement =
-                        Arrangement.spacedBy(8.dp),
-                ) {
-                    if (
-                        project.lifecycleState ==
-                        "DRAFT"
-                    ) {
-                        Button(
-                            onClick = {
-                                onStartKickoff(
-                                    project.projectId,
-                                    project.version,
-                                )
-                            },
+                    if (creating) {
+                        HiltechPanel(Modifier.fillMaxWidth()) {
+                            Text("إنشاء مشروع", style = MaterialTheme.typography.titleLarge)
+                            ProjectCreateForm(onCreateProject = onCreateProject)
+                        }
+                    }
+                    OutlinedTextField(value = query, onValueChange = { query = it },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        label = { Text("ابحث بالاسم أو الكود أو العميل") })
+                    val projects = state.list?.items.orEmpty()
+                    val matching = projects.filter {
+                        query.isBlank() || listOf(it.name, it.projectCode, it.clientDisplayName).any { value ->
+                            value.contains(query.trim(), ignoreCase = true)
+                        }
+                    }
+                    Text("المعروض: " + matching.size, color = colors.secondaryText,
+                        style = MaterialTheme.typography.labelMedium)
+                    if (!state.loading && matching.isEmpty()) {
+                        Text(if (query.isBlank()) "لا توجد مشاريع متاحة الآن." else "لا توجد نتائج مطابقة.")
+                    }
+                    matching.forEach { project ->
+                        Surface(
+                            onClick = { showDetail = true; creating = false; onSelectProject(project.projectId) },
+                            color = if (project.projectId == selected?.projectId) colors.selected else colors.surface,
+                            contentColor = colors.primaryText, shape = HiltechShape.medium,
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("بدء Kickoff")
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(project.projectCode, Modifier.weight(1f), color = colors.secondaryText,
+                                        style = MaterialTheme.typography.labelMedium)
+                                    HiltechStateTag(projectStateLabel(project.lifecycleState), projectStateTone(project.lifecycleState))
+                                }
+                                Text(project.name, style = MaterialTheme.typography.titleMedium)
+                                Text(project.clientDisplayName, color = colors.secondaryText,
+                                    style = MaterialTheme.typography.bodyMedium)
+                                Text(project.currentResponsibility.principalLabel ?: "لم يُعيّن مسؤول",
+                                    style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                            }
                         }
-                    }
-                    if (
-                        project.lifecycleState ==
-                        "KICKOFF"
-                    ) {
-                        Button(
-                            onClick = {
-                                onCompleteKickoff(
-                                    project.projectId,
-                                    project.version,
-                                )
-                            },
-                        ) {
-                            Text("إكمال Kickoff")
-                        }
-                    }
-                }
-
-                ProjectManagerChangeForm(
-                    project = project,
-                    onChangeManager =
-                        onChangeManager,
-                )
-
-                state.selectedSites?.let {
-                    sites ->
-                    Text(
-                        "مواقع المشروع",
-                        style =
-                            MaterialTheme.typography
-                                .titleSmall,
-                    )
-                    if (sites.items.isEmpty()) {
-                        Text(
-                            "لا توجد مواقع مرتبطة بعد.",
-                        )
-                    }
-                    sites.items.forEach {
-                        relation ->
-                        Text(
-                            "• " +
-                                relation.site.siteCode +
-                                " · " +
-                                relation.site.name +
-                                " · " +
-                                relation.lifecycleState,
-                        )
-                        relation.site
-                            .addressText
-                            ?.let {
-                                Text(
-                                    "  العنوان: " +
-                                        it,
-                                )
-                            }
-                        relation
-                            .accessInstructions
-                            ?.let {
-                                Text(
-                                    "  تعليمات الدخول: " +
-                                        it,
-                                )
-                            }
-                    }
-                }
-
-                SiteCreateForm(
-                    defaultClientOrganizationId =
-                        project
-                            .clientOrganizationId,
-                    onCreateSite =
-                        onCreateSite,
-                )
-
-                ProjectSiteAttachForm(
-                    project = project,
-                    suggestedSiteId =
-                        state.lastCreatedSite
-                            ?.takeIf {
-                                it.clientOrganizationId ==
-                                    project.clientOrganizationId
-                            }
-                            ?.siteId,
-                    onAttachSite =
-                        onAttachSite,
-                )
-
-                state.plan?.let { plan ->
-                    ProjectPlanningSection(
-                        plan = plan,
-                        onAction = onPlanningAction,
-                    )
-                    WorkPlanningSection(
-                        plan = plan,
-                        workTypes = state.workTypes,
-                        orders = state.workOrders,
-                        onAction = onWorkPlanningAction,
-                    )
-                    WorkReadinessSection(
-                        orders = state.workOrders,
-                        readinessByWorkOrder =
-                            state.workReadinessByOrder,
-                        workQueueContext =
-                            state.workQueueContext,
-                        onAction =
-                            onWorkReadinessAction,
-                        reservationPort = reservationPort,
-                    )
-                    state.commandCenter?.let {
-                        ProjectCommandCenterSection(
-                            project = project,
-                            commandCenter = it,
-                            onAction =
-                                onProjectCommandCenterAction,
-                        )
                     }
                 }
             }
 
-            state.lastCreatedSite?.let {
-                Text(
-                    "آخر موقع تم إنشاؤه: " +
-                        it.siteCode +
-                        " · " +
-                        it.name +
-                        " · " +
-                        it.siteId,
-                )
+            val detail: @Composable () -> Unit = {
+                if (selected == null) {
+                    HiltechPanel(Modifier.fillMaxWidth()) {
+                        Text("اختر مشروعًا", style = MaterialTheme.typography.titleLarge)
+                        Text("ستجد تفاصيل التنفيذ والمواقع والتخطيط والقرارات في مساحة المشروع.")
+                    }
+                } else {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        HiltechPanel(Modifier.fillMaxWidth()) {
+                            Text(selected.projectCode, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+                            Text(selected.name, style = MaterialTheme.typography.headlineSmall)
+                            Text(selected.clientDisplayName, style = MaterialTheme.typography.bodyLarge, color = colors.secondaryText)
+                            HiltechStateTag(projectStateLabel(selected.lifecycleState), projectStateTone(selected.lifecycleState))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                HiltechKeyValue("المسؤول", selected.currentResponsibility.principalLabel ?: "غير معيّن", Modifier.weight(1f))
+                                HiltechKeyValue("المواقع المرتبطة", selected.siteCount.toString(), Modifier.weight(1f))
+                            }
+                            HiltechKeyValue("الفترة المخططة", (selected.startDatePlanned ?: "غير محددة") + " — " + (selected.endDatePlanned ?: "غير محددة"))
+                        }
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ProjectWorkspaceTab.entries.forEach { item ->
+                                FilterChip(selected = tab == item, onClick = { tab = item }, label = { Text(item.title) })
+                            }
+                        }
+                        when (tab) {
+                            ProjectWorkspaceTab.Overview -> {
+                                val commandCenter = state.commandCenter
+                                if (commandCenter != null && commandCenter.projectCode == selected.projectCode) {
+                                    ProjectCommandCenterSection(project = selected, commandCenter = commandCenter,
+                                        onAction = onProjectCommandCenterAction)
+                                } else {
+                                    HiltechPanel(Modifier.fillMaxWidth()) {
+                                        Text("صحة المشروع والتقدم", style = MaterialTheme.typography.titleMedium)
+                                        Text("لا توجد قراءة حديثة لمركز قيادة هذا المشروع. حدّث البيانات لإعادة المحاولة.")
+                                    }
+                                }
+                                HiltechPanel(Modifier.fillMaxWidth()) {
+                                    Text("إدارة المشروع", style = MaterialTheme.typography.titleMedium)
+                                    if (selected.lifecycleState == "DRAFT") {
+                                        Button(onClick = { onStartKickoff(selected.projectId, selected.version) }) { Text("بدء التجهيز") }
+                                    }
+                                    if (selected.lifecycleState == "KICKOFF") {
+                                        Button(onClick = { onCompleteKickoff(selected.projectId, selected.version) }) { Text("إكمال التجهيز") }
+                                    }
+                                    TextButton(onClick = { showManager = !showManager }) {
+                                        Text(if (showManager) "إغلاق تغيير المسؤول" else "تغيير مسؤول المشروع")
+                                    }
+                                    if (showManager) ProjectManagerChangeForm(project = selected, onChangeManager = onChangeManager)
+                                    Text("المصدر: " + selected.sourceType + (selected.sourceExternalReference?.let { " · " + it } ?: ""),
+                                        style = MaterialTheme.typography.labelSmall, color = colors.secondaryText)
+                                }
+                            }
+                            ProjectWorkspaceTab.Sites -> {
+                                HiltechPanel(Modifier.fillMaxWidth()) {
+                                    Text("مواقع المشروع", style = MaterialTheme.typography.titleMedium)
+                                    if (state.selectedSites?.items.orEmpty().isEmpty()) Text("لا توجد مواقع معروضة لهذا المشروع.")
+                                    state.selectedSites?.items.orEmpty().forEach { relation ->
+                                        HorizontalDivider(color = colors.divider)
+                                        Text(relation.site.name, style = MaterialTheme.typography.titleSmall)
+                                        Text(relation.site.siteCode + " · " + relation.lifecycleState, color = colors.secondaryText)
+                                        relation.site.addressText?.let { Text(it) }
+                                        relation.accessInstructions?.let { Text("تعليمات الدخول: " + it) }
+                                    }
+                                    TextButton(onClick = { showSiteCreate = !showSiteCreate }) { Text(if (showSiteCreate) "إغلاق إنشاء الموقع" else "+ موقع جديد") }
+                                    if (showSiteCreate) SiteCreateForm(defaultClientOrganizationId = selected.clientOrganizationId, onCreateSite = onCreateSite)
+                                    TextButton(onClick = { showSiteAttach = !showSiteAttach }) { Text(if (showSiteAttach) "إغلاق الربط" else "ربط موقع موجود") }
+                                    if (showSiteAttach) ProjectSiteAttachForm(project = selected,
+                                        suggestedSiteId = state.lastCreatedSite?.takeIf { it.clientOrganizationId == selected.clientOrganizationId }?.siteId,
+                                        onAttachSite = onAttachSite)
+                                }
+                            }
+                            ProjectWorkspaceTab.Plan -> {
+                                state.plan?.let { ProjectPlanningSection(plan = it, onAction = onPlanningAction) }
+                                    ?: Text("بيانات التخطيط غير متاحة حاليًا.")
+                            }
+                            ProjectWorkspaceTab.Work -> {
+                                state.plan?.let { WorkPlanningSection(plan = it, workTypes = state.workTypes,
+                                    orders = state.workOrders, onAction = onWorkPlanningAction) }
+                                    ?: Text("بيانات الأعمال غير متاحة حاليًا.")
+                            }
+                            ProjectWorkspaceTab.Readiness -> {
+                                WorkReadinessSection(orders = state.workOrders, readinessByWorkOrder = state.workReadinessByOrder,
+                                    workQueueContext = state.workQueueContext, onAction = onWorkReadinessAction,
+                                    reservationPort = reservationPort)
+                            }
+                        }
+                    }
+                }
             }
 
-            OutlinedButton(
-                onClick = onRefresh,
-            ) {
-                Text("تحديث المشروعات")
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                if (maxWidth >= 900.dp) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Column(Modifier.weight(0.85f)) { directory() }
+                        Column(Modifier.weight(1.65f)) { detail() }
+                    }
+                } else {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (showDetail && selected != null) {
+                            TextButton(onClick = { showDetail = false }) { Text("العودة إلى المشاريع") }
+                            detail()
+                        } else {
+                            directory()
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+private enum class ProjectWorkspaceTab(val title: String) {
+    Overview("نظرة عامة"), Sites("المواقع"), Plan("التخطيط"), Work("الأعمال"), Readiness("الجاهزية"),
+}
+
+private fun projectStateLabel(state: String): String = when (state) {
+    "DRAFT" -> "مسودة"
+    "KICKOFF" -> "التجهيز"
+    "ACTIVE" -> "قيد التنفيذ"
+    "ON_HOLD" -> "متوقف"
+    "COMPLETED" -> "مكتمل"
+    "CANCELLED" -> "ملغى"
+    else -> state
+}
+
+private fun projectStateTone(state: String): HiltechStateTone = when (state) {
+    "ACTIVE", "COMPLETED" -> HiltechStateTone.CURRENT
+    "ON_HOLD", "CANCELLED" -> HiltechStateTone.BLOCKED
+    "KICKOFF" -> HiltechStateTone.ATTENTION
+    else -> HiltechStateTone.NEUTRAL
 }
 
 @Composable
