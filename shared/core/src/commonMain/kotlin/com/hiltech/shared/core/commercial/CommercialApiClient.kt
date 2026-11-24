@@ -10,6 +10,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
+data class CommercialCapabilitiesDto(val canWrite: Boolean, val canCost: Boolean, val canRelease: Boolean, val canAward: Boolean)
+
+@Serializable
 data class CommercialOpportunityDto(
     val id: String,
     val title: String,
@@ -299,6 +302,11 @@ class CommercialApiClient(
     private val api: HiltechApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
 ) {
+    suspend fun capabilities(organizationId: String, installationId: String): CommercialCapabilitiesDto =
+        api.request(method = HttpMethod.Get, path = "/v1/commercial/capabilities?organizationId=" + organizationId,
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(CommercialCapabilitiesDto.serializer(), it) })
+
     suspend fun opportunities(organizationId: String, installationId: String): List<CommercialOpportunityDto> =
         api.request(
             method = HttpMethod.Get,

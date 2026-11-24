@@ -37,6 +37,16 @@ class CommercialAccess(
         }
     }
 
+    fun capabilities(actor: UUID, company: UUID): Map<String, Boolean> {
+        require(actor, company, "SALES_VIEW", "SALES_WRITE", "SALES_RELEASE", "SALES_AWARD")
+        return mapOf(
+            "canWrite" to hasPermission(actor, company, "SALES_WRITE"),
+            "canCost" to hasPermission(actor, company, "SALES_COST_VIEW"),
+            "canRelease" to hasPermission(actor, company, "SALES_RELEASE"),
+            "canAward" to hasPermission(actor, company, "SALES_AWARD"),
+        )
+    }
+
     private fun hasPermission(actor: UUID, company: UUID, permission: String): Boolean {
         val now = clock.instant().atOffset(ZoneOffset.UTC)
         return jdbc.queryForObject(

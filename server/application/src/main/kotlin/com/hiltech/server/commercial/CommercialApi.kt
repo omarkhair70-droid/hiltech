@@ -40,6 +40,10 @@ class CommercialController(private val service: CommercialService) {
         HiltechRequestContext.current(http).correlationId,
     )
 
+    @GetMapping("/capabilities")
+    fun capabilities(http: HttpServletRequest, @RequestParam organizationId: String) =
+        service.capabilities(organizationId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
+
     @GetMapping("/opportunities")
     fun list(http: HttpServletRequest, @RequestParam organizationId: String,
              @RequestParam(defaultValue = "100") limit: Int) =

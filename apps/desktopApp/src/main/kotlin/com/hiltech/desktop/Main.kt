@@ -2872,14 +2872,13 @@ fun main() {
                                 installationId = runtime.physicalWarehouseInstallationId,
                             ))
                         }
-                        if (System.getenv("HILTECH_COMMERCIAL_READ_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true
-                        ) {
+                        run {
                             add(commercialReadNativeWorkspace(
                                 client = runtime.commercialApi,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
                             ))
                         }
                         if (System.getenv("HILTECH_HANDOVER_READ_UI_ENABLED")

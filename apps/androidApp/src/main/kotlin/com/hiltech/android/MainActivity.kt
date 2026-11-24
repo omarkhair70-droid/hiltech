@@ -289,12 +289,13 @@ class MainActivity : ComponentActivity() {
                                 installationId = hiltechApplication.installationId,
                             ))
                         }
-                        if (BuildConfig.HILTECH_COMMERCIAL_READ_ENABLED) {
+                        run {
                             add(commercialReadNativeWorkspace(
                                 client = hiltechApplication.commercialApi,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
                             ))
                         }
                         if (BuildConfig.HILTECH_HANDOVER_READ_ENABLED) {

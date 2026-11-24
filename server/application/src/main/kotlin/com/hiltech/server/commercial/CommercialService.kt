@@ -164,6 +164,8 @@ class CommercialService(
         return result(target,replay,"OPEN",correlation)
     }
 
+    fun capabilities(company: UUID, actor: UUID): Map<String, Boolean> = access.capabilities(actor, company)
+
     fun listOpportunities(company: UUID, actor: UUID, limit: Int): List<Map<String, Any?>> {
         access.require(actor,company,"SALES_VIEW","SALES_WRITE","SALES_RELEASE","SALES_AWARD")
         if (limit !in 1..200) throw commercialError("COMMERCIAL_LIMIT_INVALID","Limit 1..200.",HttpStatus.BAD_REQUEST)
