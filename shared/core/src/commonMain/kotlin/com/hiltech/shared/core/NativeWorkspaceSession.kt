@@ -221,19 +221,22 @@ data class NativeOperationArea(
 @Composable
 fun NativeOperationAreas(title: String, description: String, areas: List<NativeOperationArea>) {
     val colors = LocalHiltechOperationalColors.current
+    val language = LocalHiltechLanguage.current
+    val sectionTitle = language.text(title, operationSectionEnglish(title))
+    val sectionDescription = language.text(description, operationSectionEnglish(description))
     var requested by remember { mutableStateOf<String?>(null) }
     val current = areas.firstOrNull { it.id == requested }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (current == null) {
-            HiltechSectionHeading("OPERATIONS", title, description)
+            HiltechSectionHeading("OPERATIONS", sectionTitle, sectionDescription)
             if (areas.isEmpty()) Text(hiltechText("لا توجد عمليات متاحة في إعدادات التشغيل الحالية.", "No operations are available in the current configuration."))
             areas.forEach { area ->
                 Surface(onClick = { requested = area.id }, modifier = Modifier.fillMaxWidth(),
                     color = colors.surface, contentColor = colors.primaryText, shape = HiltechShape.medium) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text(area.title, style = MaterialTheme.typography.titleMedium)
-                            Text(area.description, color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+                            Text(language.text(area.title, operationEnglish(area.id, area.title)), style = MaterialTheme.typography.titleMedium)
+                            Text(language.text(area.description, operationEnglishDescription(area.id, area.description)), color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
                         }
                         Text(hiltechText("فتح", "Open"), color = colors.accent, style = MaterialTheme.typography.labelLarge)
                     }
@@ -242,14 +245,14 @@ fun NativeOperationAreas(title: String, description: String, areas: List<NativeO
         } else {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(title, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
-                    Text(current.title, style = MaterialTheme.typography.titleLarge)
+                    Text(sectionTitle, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+                    Text(language.text(current.title, operationEnglish(current.id, current.title)), style = MaterialTheme.typography.titleLarge)
                 }
                 TextButton(onClick = { requested = null }) { Text(hiltechText("كل العمليات", "All operations")) }
             }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 areas.forEach { area ->
-                    FilterChip(selected = current.id == area.id, onClick = { requested = area.id }, label = { Text(area.title) })
+                    FilterChip(selected = current.id == area.id, onClick = { requested = area.id }, label = { Text(language.text(area.title, operationEnglish(area.id, area.title))) })
                 }
             }
             key(current.id) { current.content() }
@@ -294,4 +297,48 @@ internal fun nativeWorkspaceTitle(workspace: NativeOperationalWorkspace, languag
         else -> return workspace.label
     }
     return language.text(names.first, names.second)
+}
+
+private fun operationSectionEnglish(label: String): String = when (label) {
+    "المخازن" -> "Warehouses"
+    "المشتريات" -> "Purchasing"
+    "العمليات اليومية" -> "Daily operations"
+    "اختر ما تحتاج إليه: تنفيذ حركة أو مراجعة المخزون أو البحث عن معدة." -> "Choose a movement, inventory review or asset lookup."
+    "اختر العملية المطلوبة وتابعها في مساحتها المستقلة." -> "Choose an operation and continue in its dedicated workspace."
+    "اختر نوع الحركة أو الطلب الذي تريد تنفيذه." -> "Choose the movement or supply request you need."
+    else -> label
+}
+
+private fun operationEnglish(id: String, fallback: String): String = when (id) {
+    "services" -> "Service purchasing"
+    "requirements" -> "Project requirements"
+    "sourcing" -> "Suppliers & quotations"
+    "orders" -> "Purchase orders"
+    "asset-parts", "parts" -> "Equipment spare parts"
+    "office-stock", "office" -> "Office supplies"
+    "replenishment" -> "Stock replenishment"
+    "receiving" -> "Purchase receiving"
+    "invoices" -> "Supplier invoices"
+    "physical" -> "Daily operations"
+    "movements" -> "Warehouse movements"
+    "scan" -> "Find equipment"
+    "inventory" -> "Inventory management"
+    else -> fallback
+}
+
+private fun operationEnglishDescription(id: String, fallback: String): String = when (id) {
+    "services" -> "Service requests, quotes and service orders"
+    "requirements" -> "Material requirements linked to projects and work"
+    "sourcing" -> "Compare supplier quotes and prepare a purchase order"
+    "orders" -> "Issue, amend, cancel and communicate purchase orders"
+    "asset-parts", "parts" -> "Equipment and maintenance requirements"
+    "office-stock", "office" -> "Internal supply requests"
+    "replenishment" -> "Stock replenishment requests"
+    "receiving" -> "Receive deliveries and verify supporting documents"
+    "invoices" -> "Record and review supplier invoices"
+    "physical" -> "Issue, receive, return and review resource readiness"
+    "movements" -> "Issue, return and record actual consumption"
+    "scan" -> "Open an asset passport using its AssetTag"
+    "inventory" -> "Stock, equipment, reservations, locations and permissions"
+    else -> fallback
 }
