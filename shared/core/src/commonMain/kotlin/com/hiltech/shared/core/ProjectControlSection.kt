@@ -137,6 +137,8 @@ fun ProjectControlSection(
     teamChoices: List<HiltechRecordChoice> = emptyList(),
     openResponsibleEmployee: ((String) -> Unit)? = null,
     readableEmployeeIds: Set<String> = emptySet(),
+    assignedWork: List<com.hiltech.shared.core.work.FieldTodayItemDto> = emptyList(),
+    openAssignedWork: ((String) -> Unit)? = null,
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides com.hiltech.shared.core.design.LocalHiltechLanguage.current.direction) {
         val colors = LocalHiltechOperationalColors.current
@@ -259,6 +261,21 @@ fun ProjectControlSection(
                         }
                         when (tab) {
                             ProjectWorkspaceTab.Overview -> {
+                                val linkedAssignments = assignedWork.filter { it.project.projectId == selected.projectId }
+                                if (openAssignedWork != null && linkedAssignments.isNotEmpty()) {
+                                    HiltechPanel(Modifier.fillMaxWidth()) {
+                                        Text(hiltechText("تكليفاتي في هذا المشروع", "My assignments in this project"), style = MaterialTheme.typography.titleMedium)
+                                        linkedAssignments.forEach { work ->
+                                            Surface(onClick = { openAssignedWork(work.workOrderId) }, modifier = Modifier.fillMaxWidth(),
+                                                color = colors.surfaceElevated, contentColor = colors.primaryText, shape = HiltechShape.small) {
+                                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    Text(work.title, style = MaterialTheme.typography.titleSmall)
+                                                    Text(work.workOrderCode + " · " + work.site.name, color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 val commandCenter = state.commandCenter
                                 if (commandCenter != null && commandCenter.projectCode == selected.projectCode) {
                                     ProjectCommandCenterSection(project = selected, commandCenter = commandCenter,

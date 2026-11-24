@@ -334,6 +334,14 @@ fun HiltechShell(
         val activeNative = nativeWorkspaces.firstOrNull { it.id == nativeSession.selectedId && nativeSession.availability[it.id] == WorkspaceAvailability.AVAILABLE }
         var requestedWorkspace by remember(shellScrollScope) { mutableStateOf(ShellWorkspace.Home) }
         var finding by remember(shellScrollScope) { mutableStateOf(false) }
+        var requestedFieldFocus by remember(shellScrollScope) { mutableStateOf<String?>(null) }
+        fun openAssignedWork(workId: String) {
+            if (ShellWorkspace.Work !in destinations || signedIn?.field?.today?.none { it.workOrderId == workId } != false) return
+            nativeSession.close()
+            requestedWorkspace = ShellWorkspace.Work
+            requestedFieldFocus = workId
+            onSelectFieldWork(workId)
+        }
         LaunchedEffect(desktopFindRequest) {
             if (desktopNavigation && signedIn != null && desktopFindRequest > 0) finding = true
         }
@@ -737,6 +745,8 @@ fun HiltechShell(
                             }.orEmpty(),
                             onCompactFocusChanged = onFieldFocusChanged,
                             compactBackRequest = fieldBackRequest,
+                            externalFocusId = requestedFieldFocus,
+                            onExternalFocusConsumed = { requestedFieldFocus = null },
                         )
                         }
                     }
@@ -816,6 +826,8 @@ fun HiltechShell(
                                 com.hiltech.shared.core.design.HiltechRecordChoice(it.teamId, it.name, it.code)
                             },
                             reservationPort = reservationPort,
+                            assignedWork = state.field?.today.orEmpty(),
+                            openAssignedWork = if (ShellWorkspace.Work in destinations) ({ id: String -> openAssignedWork(id) }) else null,
                             readableEmployeeIds = state.people?.directory?.takeIf { it.canManagePeople }?.items.orEmpty().map { it.employeeId }.toSet(),
                             openResponsibleEmployee = if (useWorkspaceNavigation && ShellWorkspace.People in destinations) { employeeId ->
                                 nativeSession.close()
@@ -943,6 +955,12 @@ fun HiltechShell(
                         requestedWorkspace = ShellWorkspace.Projects
                         onSelectProject(project.projectId)
                     })
+                }
+                signedIn.field?.today.orEmpty().forEach { work ->
+                    add(WorkspaceSearchResult(
+                        "work:${work.workOrderId}", work.title,
+                        language.text("تكليف", "Assignment") + " · ${work.workOrderCode} · ${work.project.name} · ${work.site.name}",
+                    ) { openAssignedWork(work.workOrderId) })
                 }
                 signedIn.people?.directory?.takeIf { it.canManagePeople }?.items.orEmpty().forEach { employee ->
                     add(WorkspaceSearchResult(

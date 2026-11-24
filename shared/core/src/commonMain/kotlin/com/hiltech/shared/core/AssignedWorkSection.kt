@@ -108,6 +108,8 @@ fun AssignedWorkSection(
     onCompactFocusChanged: (Boolean) -> Unit = {},
     // The Android host increments this when System Back is pressed in focus.
     compactBackRequest: Int = 0,
+    externalFocusId: String? = null,
+    onExternalFocusConsumed: () -> Unit = {},
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
@@ -150,6 +152,14 @@ fun AssignedWorkSection(
         ) {
             val wide =
                 maxWidth >= 760.dp
+            LaunchedEffect(focusScopeKey, wide, externalFocusId, todayIds) {
+                val requested = externalFocusId ?: return@LaunchedEffect
+                if (!wide && focusScopeKey.isNotBlank() && fieldFocusStillAssigned(requested, todayIds)) {
+                    focusedWorkOrderId = requested
+                    returnAnchorId = null
+                }
+                onExternalFocusConsumed()
+            }
             // Clear compact focus when the adaptive layout becomes wide;
             // rotating back must not revive a previous focused route.
             LaunchedEffect(focusScopeKey, wide) {
