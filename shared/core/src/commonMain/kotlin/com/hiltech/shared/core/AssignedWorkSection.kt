@@ -3,6 +3,17 @@ package com.hiltech.shared.core
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import com.hiltech.shared.core.design.HiltechShape
+import com.hiltech.shared.core.design.LocalHiltechOperationalColors
+import com.hiltech.shared.core.design.LocalHiltechLanguage
+import com.hiltech.shared.core.design.hiltechText
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -100,7 +111,7 @@ fun AssignedWorkSection(
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
-            LayoutDirection.Rtl,
+            LocalHiltechLanguage.current.direction,
     ) {
         // A selected bundle is a source snapshot, never a grant to keep
         // showing an old WorkOrder after selection or assignment changes.
@@ -257,10 +268,10 @@ fun AssignedWorkSection(
                                 focusedWorkOrderId = null
                                 onCompactFocusChanged(false)
                             },
-                        ) { Text("الرجوع لشغلي اليوم") }
+                        ) { Text(hiltechText("الرجوع لشغلي اليوم", "Back to my work")) }
                         if (visibleBundle?.workOrderId != focusedId) {
                             if (state.loading) {
-                                Text("بنجيب تفاصيل التكليف الحالي…")
+                                Text(hiltechText("بنجيب تفاصيل التكليف الحالي…", "Loading assignment details…"))
                             } else {
                                 HiltechStateTag(
                                     state.errorMessage
@@ -326,6 +337,9 @@ private fun TodayColumn(
     returnCardRequester: BringIntoViewRequester? = null,
 ) {
     HiltechOperationalTheme {
+        var query by remember { mutableStateOf("") }
+        var filter by remember { mutableStateOf(FieldAssignmentFilter.All) }
+        LaunchedEffect(returnAnchorId) { if (returnAnchorId != null) { query = ""; filter = FieldAssignmentFilter.All } }
         Column(
             modifier = modifier,
             verticalArrangement = Arrangement.spacedBy(HiltechSpace.small),
@@ -333,16 +347,16 @@ private fun TodayColumn(
             HiltechPanel(Modifier.fillMaxWidth()) {
                 HiltechSectionHeading(
                     index = "FIELD / TODAY",
-                    title = "شغلي اليوم",
-                    subtitle = "تكليفاتك الحالية من مصدر العمل المسموح لك بالاطلاع عليه.",
+                    title = hiltechText("شغلي اليوم", "My work today"),
+                    subtitle = hiltechText("تكليفاتك الحالية ومواقعها وجاهزيتها.", "Your current assignments, sites and readiness."),
                 )
                 OutlinedButton(onClick = onRefresh) {
-                    Text("تحديث التكليفات")
+                    Text(hiltechText("تحديث التكليفات", "Refresh assignments"))
                 }
                 if (state.loading) {
                     Row(horizontalArrangement = Arrangement.spacedBy(HiltechSpace.xs)) {
                         CircularProgressIndicator()
-                        Text("بنجيب آخر تكليفاتك…")
+                        Text(hiltechText("بنجيب آخر تكليفاتك…", "Loading current assignments…"))
                     }
                 }
                 if (state.cachedTodayAt != null) {
@@ -377,7 +391,23 @@ private fun TodayColumn(
                     )
                 }
             }
-            state.today.forEach { item ->
+            OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                label = { Text(hiltechText("ابحث في تكليفاتك", "Search assignments")) })
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FieldAssignmentFilter.entries.forEach { item ->
+                    FilterChip(selected = filter == item, onClick = { filter = item }, label = { Text(hiltechText(item.ar, item.en)) })
+                }
+            }
+            val visible = state.today.filter { item ->
+                val match = query.isBlank() || listOf(item.title, item.workOrderCode, item.project.projectCode, item.site.name).any { it.contains(query.trim(), true) }
+                match && when (filter) {
+                    FieldAssignmentFilter.All -> true
+                    FieldAssignmentFilter.Ready -> item.currentlyActionable
+                    FieldAssignmentFilter.Waiting -> !item.currentlyActionable
+                }
+            }
+            if (visible.isEmpty() && state.today.isNotEmpty()) Text(hiltechText("لا توجد تكليفات مطابقة.", "No matching assignments."))
+            visible.forEach { item ->
                 TodayCard(
                     item = item,
                     modifier = if (returnAnchorId == item.workOrderId &&
@@ -398,47 +428,31 @@ private fun TodayCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    OutlinedButton(
-        modifier = modifier.fillMaxWidth(),
-        onClick = onClick,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(HiltechSpace.xs),
-        ) {
-            Text(
-                item.workOrderCode + " · " + item.title,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                item.project.projectCode + " · " + item.site.siteCode +
-                    " — " + item.site.name,
-            )
-            item.area?.let { Text("المنطقة: " + it.label) }
-            Text("الحالة: " + item.lifecycleState +
-                " · readiness: " + item.readinessState)
-            Text("التكليف: " + item.assignment.targetType +
-                " · " + item.assignment.targetLabel)
-            item.importantBlocker?.let {
-                HiltechStateTag(
-                    "في انتظار: " + it,
-                    HiltechStateTone.ATTENTION,
-                )
+    val colors = LocalHiltechOperationalColors.current
+    Surface(onClick = onClick, modifier = modifier.fillMaxWidth(),
+        color = if (selected) colors.selected else colors.surface, contentColor = colors.primaryText,
+        shape = HiltechShape.medium) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(HiltechSpace.xs)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(item.workOrderCode, Modifier.weight(1f), color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+                HiltechStateTag(if (item.currentlyActionable) hiltechText("جاهز للمراجعة", "Ready for review") else hiltechText("بانتظار متطلبات", "Waiting"),
+                    if (item.currentlyActionable) HiltechStateTone.CURRENT else HiltechStateTone.ATTENTION)
             }
-            HiltechStateTag(
-                if (item.currentlyActionable) {
-                    "السياق جاهز للمراجعة — التنفيذ بصلاحياتك الحالية فقط"
-                } else {
-                    "في انتظار شرط أو دور آخر قبل التنفيذ"
-                },
-                if (item.currentlyActionable) HiltechStateTone.CURRENT
-                else HiltechStateTone.ATTENTION,
-            )
-            if (selected) {
-                HiltechStateTag("أمر العمل المفتوح", HiltechStateTone.NEUTRAL)
-            }
+            Text(item.title, style = MaterialTheme.typography.titleLarge)
+            Text(item.site.name, style = MaterialTheme.typography.titleSmall)
+            Text(item.project.projectCode + " · " + item.site.siteCode, color = colors.secondaryText)
+            item.area?.let { Text(hiltechText("المنطقة: ", "Area: ") + it.label) }
+            Text(item.lifecycleState + " · " + item.readinessState, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+            Text(item.assignment.targetLabel, style = MaterialTheme.typography.bodySmall)
+            item.importantBlocker?.let { HiltechStateTag(hiltechText("في انتظار: ", "Waiting for: ") + it, HiltechStateTone.ATTENTION) }
+            Text(if (selected) hiltechText("العمل المفتوح", "Open assignment") else hiltechText("عرض العمل", "View assignment"),
+                color = colors.accent, style = MaterialTheme.typography.labelLarge)
         }
     }
+}
+
+private enum class FieldAssignmentFilter(val ar: String, val en: String) {
+    All("الكل", "All"), Ready("الجاهز", "Ready"), Waiting("بانتظار", "Waiting"),
 }
 
 @Composable
@@ -483,7 +497,7 @@ private fun JobBundleDetail(
             Text("وقت بيانات السيرفر: " + bundle.asOf)
         }
         Text(
-            "تفاصيل الشغل",
+            hiltechText("تفاصيل الشغل", "Work details"),
             style =
                 MaterialTheme.typography
                     .titleLarge,
@@ -547,12 +561,12 @@ private fun JobBundleDetail(
 
         if (bundle.completionGate.available) {
             Text(
-                "تسليم العمل للمراجعة",
+                hiltechText("تسليم العمل للمراجعة", "Submit work for review"),
                 style = MaterialTheme.typography.titleMedium,
             )
             val gate = bundle.completionGate
             if (!gate.satisfied) {
-                Text("التسليم متوقف لحين استيفاء المتطلبات:")
+                Text(hiltechText("التسليم متوقف لحين استيفاء المتطلبات:", "Submission is waiting for requirements:"))
                 gate.reasonCodes.forEach { reason ->
                     Text("• " + reason)
                 }
@@ -568,7 +582,7 @@ private fun JobBundleDetail(
                 Text("سيُرسل هذا العمل إلى المراجع، ولن يُعتبر مقبولًا قبل قرار المراجعة.")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { confirmCompletion = false }) {
-                        Text("إلغاء")
+                        Text(hiltechText("إلغاء", "Cancel"))
                     }
                     OutlinedButton(
                         enabled =
@@ -581,7 +595,7 @@ private fun JobBundleDetail(
                             onQueueCompletion()
                         },
                     ) {
-                        Text("تأكيد التسليم للمراجعة")
+                        Text(hiltechText("تأكيد التسليم للمراجعة", "Confirm submission for review"))
                     }
                 }
             } else {
@@ -593,7 +607,7 @@ private fun JobBundleDetail(
                             gate.satisfied,
                     onClick = { confirmCompletion = true },
                 ) {
-                    Text("تقديم العمل للمراجعة")
+                    Text(hiltechText("تقديم العمل للمراجعة", "Submit for review"))
                 }
             }
         }
