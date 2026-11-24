@@ -25,13 +25,14 @@ data class CommercialOAuthStart(val id: String,val authorizationUrl: String)
 data class CommercialOAuthPending(val status: String,val provider: String,val email: String? = null)
 data class CommercialOAuthFinishRequest(val organizationId: String,val pendingId: String)
 data class CommercialOAuthDisconnectRequest(val organizationId: String,val version: Long)
-data class CommercialOAuthSender(val company: UUID,val provider: String,val email: String)
+data class CommercialOAuthSender(val company: UUID,val provider: String,val email: String,val version: Long,val updatedAt: java.time.Instant)
 
 @Component
 class CommercialMailOAuth(
     private val jdbc: JdbcTemplate,
     private val access: CommercialAccess,
     private val secrets: CommercialMailConnection,
+    transactionManager: org.springframework.transaction.PlatformTransactionManager,
     @Value("\${hiltech.commercial.oauth.public-base:}") private val publicBase: String,
     @Value("\${hiltech.commercial.oauth.google-client-id:}") private val googleId: String,
     @Value("\${hiltech.commercial.oauth.google-client-secret:}") private val googleSecret: String,
@@ -41,6 +42,9 @@ class CommercialMailOAuth(
     private data class Provider(val id: String,val secret: String,val authorize: String,val token: String,val scope: String)
     private val client = RestClient.builder().requestFactory(JdkClientHttpRequestFactory(
         HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()).apply { setReadTimeout(Duration.ofSeconds(30)) }).build()
+    private val refreshTransaction = org.springframework.transaction.support.TransactionTemplate(transactionManager).apply {
+        propagationBehavior = org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW
+    }
     private val random = SecureRandom()
     private fun randomString() = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32).also(random::nextBytes))
     private fun sha(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
@@ -55,16 +59,18 @@ class CommercialMailOAuth(
         }?.takeIf { it.id.isNotBlank() && it.secret.isNotBlank() }
     }
     private fun redirect() = publicBase.trimEnd('/')+"/v1/commercial/oauth/callback"
-    private fun record(org: UUID) = jdbc.queryForList("SELECT provider,account_email,encrypted_refresh,version FROM commercial_mail_oauth_connection WHERE organization_id=?",org).firstOrNull()
+    private fun record(org: UUID) = jdbc.queryForList("SELECT provider,account_email,encrypted_refresh,version,updated_at FROM commercial_mail_oauth_connection WHERE organization_id=?",org).firstOrNull()
     fun status(org: UUID,actor: UUID): CommercialOAuthStatus {
         access.require(actor,org,"SALES_RELEASE")
         val r = record(org)
         return CommercialOAuthStatus(listOf("GOOGLE","MICROSOFT").filter { provider(it)!=null },r?.get("provider") as? String,r?.get("account_email") as? String,(r?.get("version") as? Number)?.toLong() ?: 0)
     }
+    @org.springframework.transaction.annotation.Transactional
     fun start(r: CommercialOAuthStartRequest,actor: UUID): CommercialOAuthStart {
         val org = r.organizationId.commercialUuid()
         access.require(actor,org,"SALES_RELEASE")
         val p = provider(r.provider) ?: throw commercialError("OAUTH_NOT_CONFIGURED","Provider is not configured.",HttpStatus.SERVICE_UNAVAILABLE)
+        jdbc.queryForObject("SELECT id FROM organization WHERE id=? FOR UPDATE",UUID::class.java,org)
         val id = UUID.randomUUID()
         val state = randomString()
         val verifier = randomString()
@@ -140,21 +146,26 @@ class CommercialMailOAuth(
         val r = record(org) ?: return null
         val name = r["provider"] as String
         if(provider(name)==null) return null
-        return CommercialOAuthSender(org,name,r["account_email"] as String)
+        return CommercialOAuthSender(org,name,r["account_email"] as String,(r["version"] as Number).toLong(),(r["updated_at"] as java.sql.Timestamp).toInstant())
     }
-    @org.springframework.transaction.annotation.Transactional
+    internal fun hasConnection(org: UUID): Boolean = record(org)!=null
     fun send(sender: CommercialOAuthSender,mime: ByteArray) {
+        val at = requireNotNull(refreshTransaction.execute {
         val org = sender.company
         jdbc.queryForObject("SELECT id FROM organization WHERE id=? FOR UPDATE",UUID::class.java,org)
         val r = requireNotNull(record(org))
-        require(r["provider"]==sender.provider && r["account_email"]==sender.email)
+        require(r["provider"]==sender.provider && r["account_email"]==sender.email &&
+            (r["version"] as Number).toLong()==sender.version &&
+            (r["updated_at"] as java.sql.Timestamp).toInstant()==sender.updatedAt)
         val p = requireNotNull(provider(sender.provider))
         val refresh = secrets.decryptProviderSecret(org,"oauth-refresh",r["encrypted_refresh"] as ByteArray)
         val tokens = token(p,mapOf("grant_type" to "refresh_token","refresh_token" to refresh))
-        val at = requireNotNull(tokens["access_token"] as? String)
+        val accessToken = requireNotNull(tokens["access_token"] as? String)
         (tokens["refresh_token"] as? String)?.let { next ->
             jdbc.update("UPDATE commercial_mail_oauth_connection SET encrypted_refresh=? WHERE organization_id=?",secrets.encryptProviderSecret(org,"oauth-refresh",next),org)
         }
+        accessToken
+        }) // Persist refresh-token rotation before any external delivery attempt.
         if(sender.provider=="GOOGLE") {
             client.post().uri("https://gmail.googleapis.com/gmail/v1/users/me/messages/send").headers { it.setBearerAuth(at) }
                 .contentType(MediaType.APPLICATION_JSON).body(mapOf("raw" to Base64.getUrlEncoder().withoutPadding().encodeToString(mime))).retrieve().toBodilessEntity()

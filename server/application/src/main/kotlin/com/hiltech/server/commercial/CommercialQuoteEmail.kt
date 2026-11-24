@@ -29,7 +29,8 @@ class CommercialQuoteEmail(
     fun available(): Boolean = from.isNotBlank() && mail.ifAvailable != null
     fun available(id: UUID, actor: UUID): Boolean {
         val company = commercial.quoteCompanyForDispatch(id,actor)
-        return oauth.sender(company) != null || connections.forSending(company) != null || (legacyCompany == company.toString() && available())
+        if(oauth.hasConnection(company)) return oauth.sender(company)!=null
+        return connections.forSending(company) != null || (legacyCompany == company.toString() && available())
     }
 
     private fun email(raw: String): String {
@@ -60,6 +61,7 @@ class CommercialQuoteEmail(
         val to = email(recipient)
         val company = commercial.quoteCompanyForDispatch(quote,actor)
         val oauthSender = oauth.sender(company)
+        if(oauthSender==null && oauth.hasConnection(company)) throw commercialError("COMMERCIAL_EMAIL_NOT_CONFIGURED","Connected OAuth provider is unavailable; reconnect before sending.",HttpStatus.SERVICE_UNAVAILABLE)
         val connected = if(oauthSender == null) connections.forSending(company) else null
         val sender = if(oauthSender == null) connected?.first ?: mail.ifAvailable?.takeIf { legacyCompany == company.toString() && available() } else null
         if(sender == null && oauthSender == null) throw commercialError("COMMERCIAL_EMAIL_NOT_CONFIGURED","Company email service is not configured.",HttpStatus.SERVICE_UNAVAILABLE)

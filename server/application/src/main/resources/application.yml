@@ -36,6 +36,33 @@ management:
           include: readinessState,db
 
 hiltech:
+  commercial:
+    enabled: ${HILTECH_COMMERCIAL_ENABLED:true}
+    mail-encryption-key: ${HILTECH_COMMERCIAL_MAIL_ENCRYPTION_KEY:}
+    smtp-allowed-hosts: ${HILTECH_COMMERCIAL_SMTP_ALLOWED_HOSTS:smtp.gmail.com,smtp.office365.com}
+    legacy-mail-company: ${HILTECH_COMMERCIAL_LEGACY_MAIL_COMPANY:}
+    email-from: ${HILTECH_COMMERCIAL_EMAIL_FROM:}
+    oauth:
+      public-base: ${HILTECH_COMMERCIAL_OAUTH_PUBLIC_BASE:}
+      google-client-id: ${HILTECH_COMMERCIAL_OAUTH_GOOGLE_CLIENT_ID:}
+      google-client-secret: ${HILTECH_COMMERCIAL_OAUTH_GOOGLE_CLIENT_SECRET:}
+      microsoft-client-id: ${HILTECH_COMMERCIAL_OAUTH_MICROSOFT_CLIENT_ID:}
+      microsoft-client-secret: ${HILTECH_COMMERCIAL_OAUTH_MICROSOFT_CLIENT_SECRET:}
+    meta:
+      public-base: ${HILTECH_COMMERCIAL_META_PUBLIC_BASE:}
+      app-id: ${HILTECH_COMMERCIAL_META_APP_ID:}
+      app-secret: ${HILTECH_COMMERCIAL_META_APP_SECRET:}
+      config-id: ${HILTECH_COMMERCIAL_META_CONFIG_ID:}
+      api-version: ${HILTECH_COMMERCIAL_META_API_VERSION:}
+      webhook-verify-token: ${HILTECH_COMMERCIAL_META_WEBHOOK_VERIFY_TOKEN:}
+    whatsapp:
+      company: ${HILTECH_COMMERCIAL_WHATSAPP_COMPANY:}
+      phone-id: ${HILTECH_COMMERCIAL_WHATSAPP_PHONE_ID:}
+      token: ${HILTECH_COMMERCIAL_WHATSAPP_TOKEN:}
+      template: ${HILTECH_COMMERCIAL_WHATSAPP_TEMPLATE:}
+      language: ${HILTECH_COMMERCIAL_WHATSAPP_LANGUAGE:ar}
+      api-version: ${HILTECH_COMMERCIAL_WHATSAPP_API_VERSION:}
+
   # Human authorization gate: disabled by default even when Android code is merged.
   # Enable only after S04A ownership/custody visibility review and rollout signoff.
   field:
