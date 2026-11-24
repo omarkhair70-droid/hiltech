@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.design.HiltechPanel
 import com.hiltech.shared.core.design.HiltechSectionHeading
 import com.hiltech.shared.core.design.HiltechShape
@@ -111,15 +112,15 @@ fun WarehouseSetupSection(
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                HiltechSectionHeading("WAREHOUSE / INVENTORY", "إدارة المخازن",
-                    "المخزون والمعدات ومواقع التخزين والحجوزات.")
+                HiltechSectionHeading("WAREHOUSE / INVENTORY", hiltechText("إدارة المخازن", "Warehouse management"),
+                    hiltechText("المخزون والمعدات ومواقع التخزين والحجوزات.", "Stock, equipment, storage locations and reservations."))
             }
-            TextButton(onClick = onRefresh, enabled = !state.loading) { Text("تحديث") }
+            TextButton(onClick = onRefresh, enabled = !state.loading) { Text(hiltechText("تحديث", "Refresh")) }
         }
         if (state.loading) CircularProgressIndicator()
         state.errorMessage?.let { error ->
             HiltechPanel(Modifier.fillMaxWidth()) {
-                HiltechStateTag("تعذر تحديث البيانات", HiltechStateTone.ATTENTION)
+                HiltechStateTag(hiltechText("تعذر تحديث البيانات", "Unable to refresh data"), HiltechStateTone.ATTENTION)
                 Text(error)
                 state.errorCode?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = colors.secondaryText) }
             }
@@ -129,8 +130,8 @@ fun WarehouseSetupSection(
         val directory: @Composable () -> Unit = {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("دليل المخازن", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    TextButton(onClick = { creating = !creating }) { Text(if (creating) "إغلاق" else "+ مخزن") }
+                    Text(hiltechText("دليل المخازن", "Warehouse directory"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = { creating = !creating }) { Text(if (creating) hiltechText("إغلاق", "Close") else hiltechText("+ مخزن", "+ Warehouse")) }
                 }
                 if (creating) HiltechPanel(Modifier.fillMaxWidth()) {
                     Text("New Warehouse", style = MaterialTheme.typography.titleMedium)
@@ -153,9 +154,9 @@ fun WarehouseSetupSection(
                     ) { Text("Create warehouse") }
                 }
                 OutlinedTextField(value = query, onValueChange = { query = it },
-                    label = { Text("اسم المخزن أو الكود") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    label = { Text(hiltechText("اسم المخزن أو الكود", "Warehouse name or code")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 val matching = warehouses.filter { it.name.contains(query.trim(), true) || it.code.contains(query.trim(), true) }
-                if (!state.loading && matching.isEmpty()) Text(if (query.isBlank()) "لا توجد مخازن متاحة." else "لا توجد نتائج مطابقة.")
+                if (!state.loading && matching.isEmpty()) Text(if (query.isBlank()) hiltechText("لا توجد مخازن متاحة.", "No warehouses available.") else hiltechText("لا توجد نتائج مطابقة.", "No matching results."))
                 matching.forEach { warehouse ->
                     Surface(
                         onClick = { onSelectWarehouse(warehouse.warehouseId); creating = false },
@@ -165,7 +166,7 @@ fun WarehouseSetupSection(
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Text(warehouse.code, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
                             Text(warehouse.name, style = MaterialTheme.typography.titleMedium)
-                            HiltechStateTag(if (warehouse.active) "نشط" else "غير نشط",
+                            HiltechStateTag(if (warehouse.active) hiltechText("نشط", "Active") else hiltechText("غير نشط", "Inactive"),
                                 if (warehouse.active) HiltechStateTone.CURRENT else HiltechStateTone.NEUTRAL)
                         }
                     }
@@ -177,7 +178,7 @@ fun WarehouseSetupSection(
                 if (selected != null) HiltechPanel(Modifier.fillMaxWidth()) {
                     Text(selected.code, style = MaterialTheme.typography.labelMedium, color = colors.secondaryText)
                     Text(selected.name, style = MaterialTheme.typography.headlineSmall)
-                    HiltechStateTag(if (selected.active) "مخزن نشط" else "غير نشط",
+                    HiltechStateTag(if (selected.active) hiltechText("مخزن نشط", "Active warehouse") else hiltechText("غير نشط", "Inactive"),
                         if (selected.active) HiltechStateTone.CURRENT else HiltechStateTone.NEUTRAL)
                 }
                 val tabs = WarehouseWorkspaceTab.entries.filter {
@@ -192,20 +193,20 @@ fun WarehouseSetupSection(
                 val currentTab = tab.takeIf { it in tabs } ?: WarehouseWorkspaceTab.Overview
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     tabs.forEach { item ->
-                        FilterChip(selected = currentTab == item, onClick = { tab = item }, label = { Text(item.title) })
+                        FilterChip(selected = currentTab == item, onClick = { tab = item }, label = { Text(hiltechText(item.title, item.english)) })
                     }
                 }
                 when (currentTab) {
                     WarehouseWorkspaceTab.Overview -> {
                         HiltechPanel(Modifier.fillMaxWidth()) {
-                            Text("مساحات المخزن", style = MaterialTheme.typography.titleLarge)
-                            Text(if (selected == null) "اختر مخزنًا لاستعراض بياناته." else "انتقل إلى الأصناف أو المعدات أو مواقع التخزين وإدارة المخزن.")
+                            Text(hiltechText("مساحات المخزن", "Warehouse workspaces"), style = MaterialTheme.typography.titleLarge)
+                            Text(if (selected == null) hiltechText("اختر مخزنًا لاستعراض بياناته.", "Choose a warehouse to view its data.") else hiltechText("انتقل إلى الأصناف أو المعدات أو مواقع التخزين وإدارة المخزن.", "Browse stock, equipment, storage locations and administration."))
                             tabs.filter { it != WarehouseWorkspaceTab.Overview }.forEach { item ->
                                 Surface(onClick = { tab = item }, color = colors.surfaceElevated,
                                     shape = HiltechShape.small, modifier = Modifier.fillMaxWidth()) {
                                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(item.title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                                        Text("فتح", color = colors.accent)
+                                        Text(hiltechText(item.title, item.english), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                                        Text(hiltechText("فتح", "Open"), color = colors.accent)
                                     }
                                 }
                             }
@@ -215,10 +216,10 @@ fun WarehouseSetupSection(
                     WarehouseWorkspaceTab.Assets -> state.assets?.let { AssetPassportSection(it, state.selectedWarehouseId, onAssetAction) }
                     WarehouseWorkspaceTab.Reservations -> if (reservationPort != null) state.selectedWarehouseId?.let { WarehouseReservations(it, reservationPort) }
                     WarehouseWorkspaceTab.Locations -> HiltechPanel(Modifier.fillMaxWidth()) {
-                        Text("مواقع التخزين", style = MaterialTheme.typography.titleMedium)
+                        Text(hiltechText("مواقع التخزين", "Storage locations"), style = MaterialTheme.typography.titleMedium)
                         val locations = state.locations
-                        if (locations == null) Text("بيانات المواقع غير متاحة حاليًا.")
-                        else if (locations.items.isEmpty()) Text("لا توجد مواقع تخزين مسجلة.")
+                        if (locations == null) Text(hiltechText("بيانات المواقع غير متاحة حاليًا.", "Location data is unavailable."))
+                        else if (locations.items.isEmpty()) Text(hiltechText("لا توجد مواقع تخزين مسجلة.", "No storage locations registered."))
                         for ((location, depth) in storageTree(locations?.items.orEmpty())) {
                             Column(Modifier.padding(start = (depth.coerceAtMost(6) * 12).dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(location.name, style = MaterialTheme.typography.titleSmall)
@@ -227,7 +228,7 @@ fun WarehouseSetupSection(
                             }
                             HorizontalDivider(color = colors.divider)
                         }
-                        TextButton(onClick = { showLocationForm = !showLocationForm }) { Text(if (showLocationForm) "إغلاق" else "+ موقع تخزين") }
+                        TextButton(onClick = { showLocationForm = !showLocationForm }) { Text(if (showLocationForm) hiltechText("إغلاق", "Close") else hiltechText("+ موقع تخزين", "+ Storage location")) }
                         if (showLocationForm) {
                             Text("Add a location inside the selected Warehouse")
                             OutlinedTextField(
@@ -245,9 +246,9 @@ fun WarehouseSetupSection(
                         }
                     }
                     WarehouseWorkspaceTab.Access -> HiltechPanel(Modifier.fillMaxWidth()) {
-                        Text("صلاحيات المخزن", style = MaterialTheme.typography.titleMedium)
+                        Text(hiltechText("صلاحيات المخزن", "Warehouse permissions"), style = MaterialTheme.typography.titleMedium)
                         val authority = state.currentAuthority
-                        if (authority == null) Text("لا يتوفر دليل الصلاحيات لهذا الحساب.")
+                        if (authority == null) Text(hiltechText("لا يتوفر دليل الصلاحيات لهذا الحساب.", "Permission directory is unavailable to this account."))
                         else {
                             authority.items.forEach { binding ->
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -256,12 +257,12 @@ fun WarehouseSetupSection(
                                         Text(binding.principalType + " · " + binding.principalId.take(8), color = colors.secondaryText)
                                     }
                                     if (binding.authorityKey in setOf("WAREHOUSE_OPERATOR", "WAREHOUSE_VIEWER")) {
-                                        TextButton(onClick = { onEndWarehouseAuthority(binding.bindingId, binding.version) }) { Text("إنهاء") }
+                                        TextButton(onClick = { onEndWarehouseAuthority(binding.bindingId, binding.version) }) { Text(hiltechText("إنهاء", "End")) }
                                     }
                                 }
                                 HorizontalDivider(color = colors.divider)
                             }
-                            TextButton(onClick = { showAuthorityForm = !showAuthorityForm }) { Text(if (showAuthorityForm) "إغلاق" else "إضافة صلاحية") }
+                            TextButton(onClick = { showAuthorityForm = !showAuthorityForm }) { Text(if (showAuthorityForm) hiltechText("إغلاق", "Close") else hiltechText("إضافة صلاحية", "Grant access")) }
                             if (showAuthorityForm) {
                             Text("Delegate Warehouse Viewer or Operator access")
                             OutlinedTextField(
@@ -480,9 +481,9 @@ fun WarehouseSetupSection(
     }
 }
 
-private enum class WarehouseWorkspaceTab(val title: String) {
-    Overview("نظرة عامة"), Stock("الأصناف"), Assets("المعدات"), Reservations("الحجوزات"),
-    Locations("المواقع"), Import("مراجعة الاستيراد"), Access("الصلاحيات"),
+private enum class WarehouseWorkspaceTab(val title: String, val english: String) {
+    Overview("نظرة عامة", "Overview"), Stock("الأصناف", "Stock"), Assets("المعدات", "Equipment"), Reservations("الحجوزات", "Reservations"),
+    Locations("المواقع", "Locations"), Import("مراجعة الاستيراد", "Import review"), Access("الصلاحيات", "Permissions"),
 }
 
 private val candidateReviewIssues = setOf(
