@@ -1,5 +1,7 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.ScrollState
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -8,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -22,7 +23,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.HiltechOperationalTheme
 import kotlinx.coroutines.launch
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.IdentitySecuritySnapshot
@@ -273,8 +274,14 @@ fun HiltechShell(
     // Host requests a source-owned Projects workspace focus after selecting
     // a canonical Executive project, never a new permission or API route.
     projectFocusRequest: Int = 0,
+    desktopNavigation: Boolean = false,
+    desktopPurchasingAvailable: Boolean = false,
+    compactNavigation: Boolean = false,
+    compactBackRequest: Int = 0,
+    onCompactNavigationChanged: (canGoBack: Boolean, inWork: Boolean) -> Unit = { _, _ -> },
+    peopleOffboardingAvailable: Boolean = true,
 ) {
-    MaterialTheme {
+    HiltechOperationalTheme {
         // Never inherit a different actor's previous desktop/mobile scroll
         // position when signing out, switching org or restoring offline read.
         val shellScrollScope = when (state) {
@@ -286,7 +293,38 @@ fun HiltechShell(
             is HiltechShellState.OfflineFieldReadOnly -> "offline:${state.identityId}"
             else -> "public"
         }
-        val scopedShellScroll = key(shellScrollScope) { rememberScrollState() }
+        val signedIn = state as? HiltechShellState.SignedIn
+        val useWorkspaceNavigation = desktopNavigation || compactNavigation
+        val destinations = if (useWorkspaceNavigation && signedIn != null) buildList {
+            add(ShellWorkspace.Home)
+            if (signedIn.field != null) add(ShellWorkspace.Work)
+            if (compactNavigation || operationalWorkspaces.isNotEmpty()) add(ShellWorkspace.Explore)
+            if (signedIn.projects != null) add(ShellWorkspace.Projects)
+            if (signedIn.people != null) add(ShellWorkspace.People)
+            if (signedIn.warehouse != null || signedIn.assetLookup != null) add(ShellWorkspace.Warehouse)
+            if (desktopPurchasingAvailable) add(ShellWorkspace.Purchasing)
+            add(ShellWorkspace.Account)
+        } else emptyList()
+        var requestedWorkspace by remember(shellScrollScope) { mutableStateOf(ShellWorkspace.Home) }
+        val selectedWorkspace = requestedWorkspace.takeIf(destinations::contains) ?: destinations.firstOrNull()
+        LaunchedEffect(selectedWorkspace, compactNavigation) {
+            if (compactNavigation) onCompactNavigationChanged(
+                selectedWorkspace != null && selectedWorkspace != ShellWorkspace.Home,
+                selectedWorkspace == ShellWorkspace.Work || selectedWorkspace == null,
+            )
+        }
+        LaunchedEffect(compactBackRequest) {
+            if (compactNavigation && compactBackRequest > 0) {
+                requestedWorkspace = when (selectedWorkspace) {
+                    ShellWorkspace.People, ShellWorkspace.Projects, ShellWorkspace.Warehouse, ShellWorkspace.Purchasing ->
+                        ShellWorkspace.Explore
+                    else -> ShellWorkspace.Home
+                }
+            }
+        }
+        val workspaceScroll = remember(shellScrollScope) { mutableMapOf<ShellWorkspace?, ScrollState>() }
+        val scopedShellScroll = workspaceScroll.getOrPut(selectedWorkspace) { ScrollState(0) }
+        fun show(workspace: ShellWorkspace) = selectedWorkspace == null || selectedWorkspace == workspace
         val fieldWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val peopleWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
         val warehouseWorkspaceRequester = remember(shellScrollScope) { BringIntoViewRequester() }
@@ -295,25 +333,30 @@ fun HiltechShell(
         val canFocusProjects = state is HiltechShellState.SignedIn && state.projects != null
         LaunchedEffect(shellScrollScope, projectFocusRequest, canFocusProjects) {
             if (projectFocusRequest > 0 && canFocusProjects) {
-                projectWorkspaceRequester.bringIntoView()
+                if (useWorkspaceNavigation) {
+                    requestedWorkspace = ShellWorkspace.Projects
+                } else {
+                    projectWorkspaceRequester.bringIntoView()
+                }
             }
         }
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scopedShellScroll)
-                    .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        NativeWorkspaceNavigation(
+            selected = selectedWorkspace,
+            destinations = destinations,
+            scroll = scopedShellScroll,
+            compact = compactNavigation,
+            onSelect = { requestedWorkspace = it },
         ) {
             Text(
-                "HILTECH OS",
+                selectedWorkspace?.label ?: "HILTECH OS",
                 style = MaterialTheme.typography.headlineMedium,
             )
-            Text(
-                "Identity / Organization / Permissions",
-                style = MaterialTheme.typography.labelLarge,
-            )
+            if (selectedWorkspace == null) {
+                Text(
+                    "Identity / Organization / Permissions",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
 
             when (state) {
                 HiltechShellState.SignedOut -> {
@@ -353,31 +396,25 @@ fun HiltechShell(
                         state.identity.organizations.firstOrNull { it.primary }
                             ?: state.identity.organizations.firstOrNull()
 
-                    Text(
-                        primary?.displayName ?: "HILTECH",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(
-                        "Identity ${state.identity.identityId.take(8)} · " +
-                            "${state.identity.identityStatus}",
-                    )
-                    if (state.identity.teams.isNotEmpty()) {
+                    if (show(ShellWorkspace.Home)) {
                         Text(
-                            "Teams: " +
-                                state.identity.teams.joinToString { it.name },
+                            primary?.displayName ?: "HILTECH",
+                            style = MaterialTheme.typography.titleLarge,
                         )
+                        if (selectedWorkspace == null) {
+                            Text("Identity ${state.identity.identityId.take(8)} · ${state.identity.identityStatus}")
+                        }
+                        if (state.identity.teams.isNotEmpty()) {
+                            Text("Teams: " + state.identity.teams.joinToString { it.name })
+                        }
                     }
-                    Text(
-                        "Your workspace only exposes actions authorized " +
-                            "for this identity and context.",
-                    )
 
                     // Navigate to the real already-mounted Compose workspaces.
                     // This is a scroll shortcut, not a permission grant, route
                     // impersonation or an additional backend/source-of-truth.
-                    if (state.field != null || state.people != null ||
+                    if (selectedWorkspace == null && (state.field != null || state.people != null ||
                         state.warehouse != null || state.projects != null
-                    ) {
+                    )) {
                         Text("مساحات العمل / Workspaces", style = MaterialTheme.typography.titleMedium)
                         Row(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -410,7 +447,7 @@ fun HiltechShell(
                     // roots: never nest their root vertical scrollers here.
                     // Sign-in and current source-granted eligibility are both
                     // required; a tab never grants server-side authority.
-                    if (primary != null && operationalWorkspaces.isNotEmpty()) {
+                    if (show(ShellWorkspace.Explore) && primary != null && operationalWorkspaces.isNotEmpty()) {
                         NativeOperationalWorkspaceHub(
                             scopeKey = state.identity.identityId + ":" + primary.organizationId,
                             authorityRevisionKey =
@@ -420,7 +457,7 @@ fun HiltechShell(
                         )
                     }
 
-                    state.onboarding
+                    if (show(ShellWorkspace.Home)) state.onboarding
                         ?.takeIf {
                             it.ownCase?.employeeState ==
                                 "PREBOARDING"
@@ -433,111 +470,113 @@ fun HiltechShell(
                             )
                         }
 
-                    Text(
-                        "Me / Sessions",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-
-                    val security = state.security
-                    if (security == null) {
+                    if (show(ShellWorkspace.Account)) {
                         Text(
-                            "Session and device security context is loading.",
+                            "Me / Sessions",
+                            style = MaterialTheme.typography.titleMedium,
                         )
-                    } else {
-                        val activeSessions =
-                            security.sessions.count {
-                                it.revokedAt == null
-                            }
-                        val activeDevices =
-                            security.devices.count {
-                                it.revokedAt == null
-                            }
-                        val currentSession =
-                            security.sessions.firstOrNull {
-                                it.current
-                            }
-                        val currentDevice =
-                            security.devices.firstOrNull {
-                                it.current
-                            }
-                        val remoteSession =
-                            security.sessions.firstOrNull {
-                                !it.current &&
-                                    it.revokedAt == null
-                            }
-                        val remoteDevice =
-                            security.devices.firstOrNull {
-                                !it.current &&
-                                    it.revokedAt == null
-                            }
 
-                        Text(
-                            "Active sessions: $activeSessions · " +
-                                "devices: $activeDevices",
-                        )
-                        currentSession?.let {
+                        val security = state.security
+                        if (security == null) {
                             Text(
-                                "Current session: " +
-                                    it.sessionId.take(8),
+                                "Session and device security context is loading.",
                             )
-                        }
-                        currentDevice?.let {
+                        } else {
+                            val activeSessions =
+                                security.sessions.count {
+                                    it.revokedAt == null
+                                }
+                            val activeDevices =
+                                security.devices.count {
+                                    it.revokedAt == null
+                                }
+                            val currentSession =
+                                security.sessions.firstOrNull {
+                                    it.current
+                                }
+                            val currentDevice =
+                                security.devices.firstOrNull {
+                                    it.current
+                                }
+                            val remoteSession =
+                                security.sessions.firstOrNull {
+                                    !it.current &&
+                                        it.revokedAt == null
+                                }
+                            val remoteDevice =
+                                security.devices.firstOrNull {
+                                    !it.current &&
+                                        it.revokedAt == null
+                                }
+
                             Text(
-                                "Current device: " +
-                                    (it.deviceName
-                                        ?: it.platform),
+                                "Active sessions: $activeSessions · " +
+                                    "devices: $activeDevices",
                             )
-                        }
-
-                        Row(
-                            horizontalArrangement =
-                                Arrangement.spacedBy(8.dp),
-                        ) {
-                            OutlinedButton(
-                                onClick = onRefreshSecurity,
-                            ) {
-                                Text("Refresh")
-                            }
-                            OutlinedButton(
-                                onClick = onReauthenticate,
-                            ) {
-                                Text("Re-authenticate")
-                            }
-                        }
-
-                        remoteSession?.let {
-                            OutlinedButton(
-                                onClick = {
-                                    onRevokeSession(
-                                        it.sessionId,
-                                    )
-                                },
-                            ) {
+                            currentSession?.let {
                                 Text(
-                                    "Revoke other session " +
+                                    "Current session: " +
                                         it.sessionId.take(8),
                                 )
                             }
-                        }
-
-                        remoteDevice?.let {
-                            OutlinedButton(
-                                onClick = {
-                                    onRevokeDevice(
-                                        it.deviceId,
-                                    )
-                                },
-                            ) {
+                            currentDevice?.let {
                                 Text(
-                                    "Revoke other device " +
+                                    "Current device: " +
                                         (it.deviceName
                                             ?: it.platform),
                                 )
                             }
+
+                            Row(
+                                horizontalArrangement =
+                                    Arrangement.spacedBy(8.dp),
+                            ) {
+                                OutlinedButton(
+                                    onClick = onRefreshSecurity,
+                                ) {
+                                    Text("Refresh")
+                                }
+                                OutlinedButton(
+                                    onClick = onReauthenticate,
+                                ) {
+                                    Text("Re-authenticate")
+                                }
+                            }
+
+                            remoteSession?.let {
+                                OutlinedButton(
+                                    onClick = {
+                                        onRevokeSession(
+                                            it.sessionId,
+                                        )
+                                    },
+                                ) {
+                                    Text(
+                                        "Revoke other session " +
+                                            it.sessionId.take(8),
+                                    )
+                                }
+                            }
+
+                            remoteDevice?.let {
+                                OutlinedButton(
+                                    onClick = {
+                                        onRevokeDevice(
+                                            it.deviceId,
+                                        )
+                                    },
+                                ) {
+                                    Text(
+                                        "Revoke other device " +
+                                            (it.deviceName
+                                                ?: it.platform),
+                                    )
+                                }
+                            }
                         }
                     }
 
-                    state.people?.let { people ->
+                    if (show(ShellWorkspace.People)) state.people?.let { people ->
                         Column {
                         // Tiny source-present anchor: scroll to section start,
                         // never try to bring a multi-screen Column in view.
@@ -560,13 +599,16 @@ fun HiltechShell(
                                 onCompleteOffboarding,
                             onCreateEmployee =
                                 onCreateEmployee,
+                            offboardingAvailable = peopleOffboardingAvailable,
                         )
                         }
                     }
 
-                    state.assetLookup?.let { AssetTagLookupSection(it, onLookupAssetTag) }
+                    if (show(ShellWorkspace.Warehouse)) {
+                        state.assetLookup?.let { AssetTagLookupSection(it, onLookupAssetTag) }
+                    }
 
-                    state.field?.let {
+                    if (show(ShellWorkspace.Work)) state.field?.let {
                         Column {
                         // Tiny source-present anchor: scroll to section start,
                         // never try to bring a multi-screen Column in view.
@@ -602,7 +644,9 @@ fun HiltechShell(
                         }
                     }
 
-                    Column {
+                    if (show(ShellWorkspace.Warehouse) ||
+                        (compactNavigation && selectedWorkspace == ShellWorkspace.Explore && ShellWorkspace.Warehouse !in destinations)
+                    ) Column {
                         // Tiny source-present anchor: scroll to section start,
                         // never try to bring a multi-screen Column in view.
                         Spacer(Modifier.fillMaxWidth().height(1.dp).bringIntoViewRequester(warehouseWorkspaceRequester))
@@ -610,9 +654,11 @@ fun HiltechShell(
                     }
                     // Host applications mount procurement only with an explicit,
                     // default-OFF feature flag. Never show it during offline mode.
-                    procurementOperator()
+                    if (show(ShellWorkspace.Purchasing) || (compactNavigation && selectedWorkspace == ShellWorkspace.Explore)) {
+                        procurementOperator()
+                    }
 
-                    state.warehouse?.let { warehouse ->
+                    if (show(ShellWorkspace.Warehouse)) state.warehouse?.let { warehouse ->
                         WarehouseSetupSection(
                             state = warehouse,
                             onRefresh = onRefreshWarehouse,
@@ -629,7 +675,7 @@ fun HiltechShell(
                         )
                     }
 
-                    state.projects?.let {
+                    if (show(ShellWorkspace.Projects)) state.projects?.let {
                         Column {
                         // Tiny source-present anchor: scroll to section start,
                         // never try to bring a multi-screen Column in view.
@@ -665,7 +711,7 @@ fun HiltechShell(
                         }
                     }
 
-                    state.onboarding
+                    if (show(ShellWorkspace.People)) state.onboarding
                         ?.selectedEmployeeCase
                         ?.let {
                             AdminOnboardingSection(
@@ -675,7 +721,7 @@ fun HiltechShell(
                             )
                         }
 
-                    state.onboarding
+                    if (show(ShellWorkspace.Account)) state.onboarding
                         ?.takeIf {
                             it.ownCase?.employeeState !=
                                 "PREBOARDING" &&
@@ -693,7 +739,7 @@ fun HiltechShell(
                             )
                         }
 
-                    OutlinedButton(onClick = onSignOut) {
+                    if (show(ShellWorkspace.Account)) OutlinedButton(onClick = onSignOut) {
                         Text("Sign out")
                     }
                 }
@@ -1016,6 +1062,7 @@ private fun PeopleSection(
             startDate: String,
             employmentTypeCode: String?,
         ) -> Unit,
+    offboardingAvailable: Boolean,
 ) {
     Text(
         "People",
@@ -1112,6 +1159,7 @@ private fun PeopleSection(
         directory.items.forEach { employee ->
             if (directory.canManagePeople) {
                 OutlinedButton(
+                    enabled = !state.loading,
                     onClick = {
                         onSelectEmployee(
                             employee.employeeId,
@@ -1141,6 +1189,7 @@ private fun PeopleSection(
             PeopleCreateForm(
                 onCreateEmployee =
                     onCreateEmployee,
+                canSubmit = !state.loading,
             )
         }
     }
@@ -1191,7 +1240,7 @@ private fun PeopleSection(
                 )
             }
 
-        OffboardingAdminSection(
+        if (offboardingAvailable) OffboardingAdminSection(
             employee = employee,
             offboarding =
                 state.selectedOffboarding,
@@ -1208,6 +1257,7 @@ private fun PeopleSection(
 
     OutlinedButton(
         onClick = onRefresh,
+        enabled = !state.loading,
     ) {
         Text("Refresh People")
     }
@@ -1943,6 +1993,7 @@ private fun PeopleCreateForm(
             startDate: String,
             employmentTypeCode: String?,
         ) -> Unit,
+    canSubmit: Boolean,
 ) {
     var displayName by
         remember {
@@ -2019,7 +2070,7 @@ private fun PeopleCreateForm(
             )
         },
         enabled =
-            displayName.isNotBlank() &&
+            canSubmit && displayName.isNotBlank() &&
                 employeeCode.isNotBlank() &&
                 startDate.isNotBlank(),
     ) {

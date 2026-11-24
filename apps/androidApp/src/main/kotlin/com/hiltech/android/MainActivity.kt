@@ -63,6 +63,8 @@ import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.network.HiltechApiException
+import com.hiltech.shared.core.people.CreateEmployeeRequestDto
+import com.hiltech.shared.core.people.EmployeeDetailDto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -175,6 +177,7 @@ class MainActivity : ComponentActivity() {
     private var personalIssuedStockSequence = 0
     private var assignedAssetLookupSequence = 0
     private var engineeringTestSequence = 0
+    private var peopleRequestSequence = 0
 
     private var shellState:
         HiltechShellState by mutableStateOf(
@@ -197,11 +200,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             var fieldFocused by remember { mutableStateOf(false) }
             var fieldBackRequest by remember { mutableStateOf(0) }
-            BackHandler(enabled = fieldFocused) {
-                fieldBackRequest += 1
+            var workspaceBackAvailable by remember { mutableStateOf(false) }
+            var workspaceBackRequest by remember { mutableStateOf(0) }
+            BackHandler(enabled = fieldFocused || workspaceBackAvailable) {
+                if (fieldFocused) fieldBackRequest += 1 else workspaceBackRequest += 1
             }
             HiltechShell(
                 state = shellState,
+                compactNavigation = true,
+                compactBackRequest = workspaceBackRequest,
+                onCompactNavigationChanged = { canGoBack, inWork ->
+                    workspaceBackAvailable = canGoBack
+                    if (!inWork) fieldFocused = false
+                },
                 operationalWorkspaces = (shellState as? HiltechShellState.SignedIn)?.let { signed ->
                     val org = signed.identity.organizations.firstOrNull { it.primary }
                         ?: signed.identity.organizations.firstOrNull()
@@ -351,6 +362,9 @@ class MainActivity : ComponentActivity() {
                 onRevokeSession = ::revokeSession,
                 onRevokeDevice = ::revokeDevice,
                 onRefreshPeople = ::refreshPeople,
+                onSelectEmployee = ::selectEmployee,
+                onCreateEmployee = ::createEmployee,
+                peopleOffboardingAvailable = false,
                 onRefreshOnboarding =
                     ::refreshOnboarding,
                 onLookupAssetTag = ::lookupAssetTag,
@@ -1690,22 +1704,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun HiltechShellState.SignedIn.peopleScope() =
+        identity.organizations.let { organizations ->
+            organizations.firstOrNull { it.primary } ?: organizations.firstOrNull()
+        }?.let { identity.identityId to it.organizationId }
+
+    private fun updatePeople(
+        expectedScope: Pair<String, String>,
+        requestSequence: Int,
+        update: (HiltechPeopleState) -> HiltechPeopleState,
+    ) {
+        val current = shellState as? HiltechShellState.SignedIn ?: return
+        if (current.peopleScope() == expectedScope && requestSequence == peopleRequestSequence) {
+            shellState = current.copy(people = update(current.people ?: HiltechPeopleState()))
+        }
+    }
+
     private fun refreshPeople() {
         val signed =
             shellState as?
                 HiltechShellState.SignedIn
                 ?: return
-        val organizationId =
-            signed.identity.organizations
-                .firstOrNull {
-                    it.primary
-                }
-                ?.organizationId
-                ?: signed.identity
-                    .organizations
-                    .firstOrNull()
-                    ?.organizationId
-                ?: return
+        val peopleScope = signed.peopleScope() ?: return
+        val organizationId = peopleScope.second
+        val requestSequence = ++peopleRequestSequence
 
         shellState =
             signed.copy(
@@ -1742,15 +1764,11 @@ class MainActivity : ComponentActivity() {
                                     .installationId,
                         )
                 }
+            val directory = runCatching {
+                hiltechApplication.peopleApi.directory(organizationId, hiltechApplication.installationId)
+            }.getOrNull()
 
-            val current =
-                shellState as?
-                    HiltechShellState.SignedIn
-            if (
-                current != null &&
-                current.identity.identityId ==
-                signed.identity.identityId
-            ) {
+            updatePeople(peopleScope, requestSequence) { people ->
                 val profileFailure =
                     ownProfileResult
                         .exceptionOrNull()
@@ -1791,25 +1809,81 @@ class MainActivity : ComponentActivity() {
                                 ?: "Workforce assignment could not be loaded."
                     }
 
-                shellState =
-                    current.copy(
-                        people =
-                            HiltechPeopleState(
-                                ownProfile =
-                                    ownProfileResult
-                                        .getOrNull(),
-                                ownWorkforceAssignment =
-                                    ownAssignmentResult
-                                        .getOrNull(),
-                                errorMessage =
-                                    listOfNotNull(
-                                        profileMessage,
-                                        assignmentMessage,
-                                    ).takeIf {
-                                        it.isNotEmpty()
-                                    }?.joinToString(" "),
-                            ),
-                    )
+                HiltechPeopleState(
+                    directory = directory,
+                    selectedEmployee = people.selectedEmployee.takeIf { directory?.canManagePeople == true },
+                    ownProfile = ownProfileResult.getOrNull(),
+                    ownWorkforceAssignment = ownAssignmentResult.getOrNull(),
+                    errorMessage = listOfNotNull(profileMessage, assignmentMessage)
+                        .joinToString(" ").ifBlank { null },
+                )
+            }
+        }
+    }
+
+    private fun selectEmployee(employeeId: String) {
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        val directory = signed.people?.directory ?: return
+        if (!directory.canManagePeople || directory.items.none { it.employeeId == employeeId }) return
+
+        loadPeopleEmployee { _, _ ->
+            hiltechApplication.peopleApi.detail(employeeId, hiltechApplication.installationId)
+        }
+    }
+
+    private fun createEmployee(
+        displayName: String,
+        employeeCode: String,
+        startDate: String,
+        employmentTypeCode: String?,
+    ) {
+        loadPeopleEmployee(refreshDirectory = true) { identityId, organizationId ->
+            val payload = listOf(
+                "android-employee-create", identityId, organizationId,
+                employeeCode, displayName, startDate, employmentTypeCode,
+            ).joinToString("") { value -> value?.let { "${it.length}:$it" } ?: "-1:" }
+            hiltechApplication.peopleApi.create(
+                request = CreateEmployeeRequestDto(
+                    operationId = UUID.nameUUIDFromBytes(payload.encodeToByteArray()).toString(),
+                    organizationId = organizationId,
+                    displayName = displayName,
+                    employeeCode = employeeCode,
+                    startDate = startDate,
+                    employmentTypeCode = employmentTypeCode,
+                ),
+                installationId = hiltechApplication.installationId,
+            ).employee
+        }
+    }
+
+    private fun loadPeopleEmployee(
+        refreshDirectory: Boolean = false,
+        command: suspend (String, String) -> EmployeeDetailDto,
+    ) {
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        val people = signed.people ?: return
+        if (people.loading || people.directory?.canManagePeople != true) return
+        val peopleScope = signed.peopleScope() ?: return
+        val (identityId, organizationId) = peopleScope
+        val requestSequence = ++peopleRequestSequence
+        shellState = signed.copy(people = people.copy(loading = true, errorMessage = null, selectedEmployee = null))
+        scope.launch {
+            val result = runCatching { command(identityId, organizationId) }
+            val refreshedDirectory = if (refreshDirectory && result.isSuccess) {
+                runCatching {
+                    hiltechApplication.peopleApi.directory(organizationId, hiltechApplication.installationId)
+                }.getOrNull()
+            } else null
+            updatePeople(peopleScope, requestSequence) { current ->
+                val directory = refreshedDirectory ?: current.directory
+                current.copy(
+                    loading = false,
+                    directory = directory,
+                    selectedEmployee = result.getOrNull()?.takeIf {
+                        it.organizationId == organizationId && directory?.canManagePeople == true
+                    },
+                    errorMessage = result.exceptionOrNull()?.let { it.message ?: "Employee details are unavailable." },
+                )
             }
         }
     }

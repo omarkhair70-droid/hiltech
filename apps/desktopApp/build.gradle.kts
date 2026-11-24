@@ -16,6 +16,13 @@ dependencies {
 }
 
 val testRuntimeClasspath = sourceSets["test"].runtimeClasspath
+val hiltechDesktopLauncherProperties = listOf(
+    "hiltech.apiBaseUrl",
+    "hiltech.oidcIssuerUri",
+    "hiltech.oidcClientId",
+)
+val hiltechDesktopProductProfile = providers.gradleProperty("hiltech.productProfile").getOrElse("core")
+require(hiltechDesktopProductProfile in setOf("core", "operations")) { "Unknown HILTECH product profile" }
 
 // Hosted Linux evidence jobs render real Compose windows without GPU access.
 // Keep this limited to evidence JavaExec tasks, never the production launcher.
@@ -67,6 +74,12 @@ tasks.register<JavaExec>("renderPhase1ShellEvidence") {
 compose.desktop {
     application {
         mainClass = "com.hiltech.desktop.MainKt"
+        jvmArgs("-Dhiltech.productProfile=$hiltechDesktopProductProfile")
+        hiltechDesktopLauncherProperties.forEach { property ->
+            providers.gradleProperty(property).orNull?.let { value ->
+                jvmArgs("-D$property=$value")
+            }
+        }
 
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)

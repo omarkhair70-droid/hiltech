@@ -7,15 +7,18 @@ val hiltechOidcIssuerUri = providers.gradleProperty("hiltech.oidcIssuerUri")
     .getOrElse("")
 val hiltechOidcClientId = providers.gradleProperty("hiltech.oidcClientId")
     .getOrElse("hiltech-native")
+val hiltechProductProfile = providers.gradleProperty("hiltech.productProfile").getOrElse("core")
+require(hiltechProductProfile in setOf("core", "operations")) { "Unknown HILTECH product profile" }
+val fieldOperationsEnabled = (hiltechProductProfile == "operations").toString()
 val personalIssuedStockUiEnabled = providers
     .gradleProperty("hiltech.personalIssuedStockEnabled")
-    .getOrElse("false") == "true"
+    .getOrElse(fieldOperationsEnabled) == "true"
 val materialUsageReportingUiEnabled = providers
     .gradleProperty("hiltech.materialUsageReportingEnabled")
-    .getOrElse("false") == "true"
+    .getOrElse(fieldOperationsEnabled) == "true"
 val assignedAssetLookupUiEnabled = providers
     .gradleProperty("hiltech.assignedAssetLookupEnabled")
-    .getOrElse("false") == "true"
+    .getOrElse(fieldOperationsEnabled) == "true"
 val engineeringTestsUiEnabled = providers
     .gradleProperty("hiltech.engineeringTestsEnabled")
     .getOrElse("false") == "true"
@@ -40,10 +43,9 @@ val supplierInvoiceFinanceUiEnabled = providers
 val servicePurchasesUiEnabled = providers
     .gradleProperty("hiltech.servicePurchasesEnabled")
     .getOrElse("false") == "true"
-// Read-only source projection; never enabled for production by default.
 val executiveHomeUiEnabled = providers
     .gradleProperty("hiltech.executiveHomeEnabled")
-    .getOrElse("false") == "true"
+    .getOrElse(fieldOperationsEnabled) == "true"
 val ownPayslipsUiEnabled = providers
     .gradleProperty("hiltech.ownPayslipsEnabled")
     .getOrElse("false") == "true"

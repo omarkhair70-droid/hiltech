@@ -10,8 +10,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
 import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechProjectsState
@@ -59,15 +61,33 @@ import kotlinx.coroutines.launch
 import javax.swing.SwingUtilities
 
 fun main() {
+    val operationsProfile = (System.getenv("HILTECH_PRODUCT_PROFILE")
+        ?: System.getProperty("hiltech.productProfile")) == "operations"
+    val executiveHomeAvailable = System.getenv("HILTECH_EXECUTIVE_HOME_UI_ENABLED")
+        ?.equals("true", ignoreCase = true) ?: operationsProfile
+    val purchasingAvailable = listOf(
+        "HILTECH_SERVICE_PURCHASES_UI_ENABLED",
+        "HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED",
+        "HILTECH_SUPPLIER_SOURCING_UI_ENABLED",
+        "HILTECH_PO_ISSUER_UI_ENABLED",
+        "HILTECH_ASSET_PURCHASE_NEEDS_ENABLED",
+        "HILTECH_OFFICE_STOCK_NEEDS_ENABLED",
+        "HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED",
+        "HILTECH_PO_WAREHOUSE_INTAKE_UI_ENABLED",
+        "HILTECH_SUPPLIER_INVOICE_FINANCE_UI_ENABLED",
+    ).any { System.getenv(it).equals("true", ignoreCase = true) }
     val runtime = DesktopIdentityRuntime(
         apiBaseUrl =
             System.getenv("HILTECH_API_BASE_URL")
+                ?: System.getProperty("hiltech.apiBaseUrl")
                 ?: "",
         oidcIssuer =
             System.getenv("HILTECH_OIDC_ISSUER_URI")
+                ?: System.getProperty("hiltech.oidcIssuerUri")
                 ?: "",
         oidcClientId =
             System.getenv("HILTECH_OIDC_CLIENT_ID")
+                ?: System.getProperty("hiltech.oidcClientId")
                 ?: "hiltech-native",
     )
 
@@ -2743,6 +2763,7 @@ fun main() {
                 exitApplication()
             },
             title = "HILTECH",
+            state = rememberWindowState(width = 1120.dp, height = 760.dp),
         ) {
             val navigationIdentity = (shellState.value as? HiltechShellState.SignedIn)?.identity
             val navigationOrganization = navigationIdentity?.organizations?.firstOrNull { it.primary }
@@ -2753,13 +2774,13 @@ fun main() {
             HiltechShell(
                 state = shellState.value,
                 projectFocusRequest = executiveProjectFocus,
+                desktopNavigation = true,
+                desktopPurchasingAvailable = purchasingAvailable,
                 operationalWorkspaces = (shellState.value as? HiltechShellState.SignedIn)?.let { signed ->
                     val org = signed.identity.organizations.firstOrNull { it.primary }
                         ?: signed.identity.organizations.firstOrNull()
                     if (org == null) emptyList() else buildList {
-                        if (System.getenv("HILTECH_EXECUTIVE_HOME_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true
-                        ) {
+                        if (executiveHomeAvailable) {
                             add(executiveNativeWorkspace(
                                 client = runtime.executiveApi,
                                 identityId = signed.identity.identityId,

@@ -1,0 +1,14 @@
+# The internal operations profile enables canonical work and executive routes.
+# Domain authority, assignment, evidence and approval checks remain in their services.
+hiltech:
+  field:
+    personal-issued-stock:
+      enabled: ${HILTECH_FIELD_PERSONAL_ISSUED_STOCK_ENABLED:true}
+    material-usage-report:
+      enabled: ${HILTECH_FIELD_MATERIAL_USAGE_REPORT_ENABLED:true}
+    assigned-asset-lookup:
+      enabled: ${HILTECH_FIELD_ASSIGNED_ASSET_LOOKUP_ENABLED:true}
+    completion:
+      enabled: ${HILTECH_FIELD_COMPLETION_ENABLED:true}
+  executive:
+    home-enabled: ${HILTECH_EXECUTIVE_HOME_ENABLED:true}
