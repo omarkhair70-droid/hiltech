@@ -39,11 +39,45 @@ class CommercialFinanceServiceSourcePostgresContractTest {
                     assertTrue(rs.next() && rs.getBoolean(1))
                 }
             }
-            // The approved Sales quote, verified PO and signed contract in this
-            // fixture are SYNTHETIC only, and the SQL ROLLBACK keeps them out of
-            // subsequent tests. The joined source check executes inside its DO.
-            connection.createStatement().use { stmt ->
-                stmt.execute(Files.readString(source))
+            // Keep the synthetic fixture in this transaction long enough to exercise
+            // the real signed webhook handler, then roll back every fixture row.
+            connection.autoCommit = false
+            try {
+                val fixture = Files.readString(source).replaceFirst("BEGIN;","").replace("ROLLBACK;","")
+                connection.createStatement().use { it.execute(fixture) }
+                val jdbc = org.springframework.jdbc.core.JdbcTemplate(
+                    org.springframework.jdbc.datasource.SingleConnectionDataSource(connection,true))
+                val message = "wamid.synthetic"
+                val phone = "123456"
+                val recipient = "201000000000"
+                org.junit.jupiter.api.Assertions.assertEquals(1,jdbc.update(
+                    "UPDATE commercial_quote_whatsapp_attempt SET state='API_ACCEPTED',provider_status_at=NULL WHERE provider_message_id=?",message))
+                val secret = "synthetic-only-webhook-key"
+                val handler = CommercialWhatsappWebhook(jdbc,secret,"synthetic-verify-token")
+                fun state() = jdbc.queryForObject(
+                    "SELECT state FROM commercial_quote_whatsapp_attempt WHERE provider_message_id=?",String::class.java,message)
+                fun receipt(status: String, timestamp: Long, sender: String=phone, to: String=recipient, signed: Boolean=true): Boolean {
+                    val raw = """{"object":"whatsapp_business_account","entry":[{"changes":[{"field":"messages","value":{"metadata":{"phone_number_id":"$sender"},"statuses":[{"id":"$message","status":"$status","timestamp":"$timestamp","recipient_id":"$to"}]}}]}]}""".toByteArray()
+                    val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+                    mac.init(javax.crypto.spec.SecretKeySpec(secret.toByteArray(),"HmacSHA256"))
+                    val signature = "sha256="+java.util.HexFormat.of().formatHex(mac.doFinal(raw))
+                    return handler.receive(raw,if(signed) signature else "sha256="+ "0".repeat(64))
+                }
+                org.junit.jupiter.api.Assertions.assertFalse(receipt("delivered",10,signed=false))
+                org.junit.jupiter.api.Assertions.assertEquals("API_ACCEPTED",state())
+                assertTrue(receipt("delivered",11,sender="654321"))
+                assertTrue(receipt("delivered",12,to="201111111111"))
+                org.junit.jupiter.api.Assertions.assertEquals("API_ACCEPTED",state())
+                assertTrue(receipt("sent",13))
+                org.junit.jupiter.api.Assertions.assertEquals("SENT",state())
+                assertTrue(receipt("delivered",14))
+                assertTrue(receipt("read",15))
+                assertTrue(receipt("failed",16))
+                assertTrue(receipt("sent",12))
+                assertTrue(receipt("delivered",14))
+                org.junit.jupiter.api.Assertions.assertEquals("READ",state())
+            } finally {
+                connection.rollback()
             }
         }
     }
