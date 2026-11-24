@@ -227,16 +227,25 @@ private fun StockItemDetail(item: StockItemDto, state: StockInventoryState, disp
         item.sourceImportRowId != null -> "Opening pending"
         else -> "Stock master created without opening evidence"
     })
-    Text("On hand by location", style = MaterialTheme.typography.titleMedium)
-    if (state.balances.isEmpty()) Text("No visible balances")
-    state.balances.forEach { Text("${it.locationCode} · ${it.onHandQuantity} ${item.baseUnitCode}") }
-    Text("Movement history", style = MaterialTheme.typography.titleMedium)
-    if (state.movements.isEmpty()) Text("No visible movements")
-    state.movements.forEach { movement ->
-        val route = listOfNotNull(locations[movement.fromStorageLocationId], locations[movement.toStorageLocationId])
-            .joinToString(" → ")
-        Text("${movement.occurredAt} · ${movement.type} · ${movement.quantity} ${movement.unitCode} · $route")
-    }
+    Text(hiltechText("الأرصدة حسب الموقع", "On hand by location"), style = MaterialTheme.typography.titleMedium)
+    HiltechRecordTable(
+        columns = listOf(HiltechTableColumn(hiltechText("موقع التخزين", "Storage location"), 1.4f),
+            HiltechTableColumn(hiltechText("الرصيد", "On hand")), HiltechTableColumn(hiltechText("الوحدة", "Unit"), .65f)),
+        records = state.balances.map { HiltechTableRecord(listOf(it.locationCode, it.onHandQuantity, item.baseUnitCode)) },
+        emptyMessage = hiltechText("لا توجد أرصدة معروضة.", "No visible balances."),
+    )
+    Text(hiltechText("سجل الحركة", "Movement history"), style = MaterialTheme.typography.titleMedium)
+    HiltechRecordTable(
+        columns = listOf(HiltechTableColumn(hiltechText("التاريخ", "Date"), 1.4f),
+            HiltechTableColumn(hiltechText("الحركة", "Movement")),
+            HiltechTableColumn(hiltechText("الكمية", "Quantity"), .8f),
+            HiltechTableColumn(hiltechText("من / إلى", "From / to"), 1.2f)),
+        records = state.movements.map { movement ->
+            val route = listOfNotNull(locations[movement.fromStorageLocationId], locations[movement.toStorageLocationId]).joinToString(" → ")
+            HiltechTableRecord(listOf(movement.occurredAt, movement.type, movement.quantity + " " + movement.unitCode, route))
+        },
+        emptyMessage = hiltechText("لا توجد حركات معروضة.", "No visible movements."),
+    )
     if (item.sourceImportRowId != null && !item.openingInitialized && !item.verifiedZeroOpening) {
         stockPicker("Verified opening location", openingLocation, active, canMove) { openingLocation = it }
         stockField("Opening quantity (${item.baseUnitCode})", openingQuantity) { openingQuantity = it }
