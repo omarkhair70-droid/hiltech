@@ -2852,9 +2852,7 @@ fun main() {
                                 },
                             ))
                         }
-                        if (System.getenv("HILTECH_OWN_PAYSLIPS_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true
-                        ) {
+                        run {
                             add(ownPayslipNativeWorkspace(
                                 client = runtime.payrollOwnApi,
                                 identityId = signed.identity.identityId,

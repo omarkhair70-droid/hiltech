@@ -273,7 +273,7 @@ class MainActivity : ComponentActivity() {
                                 // Android original Projects detail route not mounted yet.
                             ))
                         }
-                        if (BuildConfig.HILTECH_OWN_PAYSLIPS_ENABLED) {
+                        run {
                             add(ownPayslipNativeWorkspace(
                                 client = hiltechApplication.payrollOwnApi,
                                 identityId = signed.identity.identityId,
