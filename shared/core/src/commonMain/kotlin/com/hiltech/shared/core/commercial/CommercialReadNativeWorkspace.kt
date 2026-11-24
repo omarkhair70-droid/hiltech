@@ -57,6 +57,9 @@ fun commercialReadNativeWorkspace(
         val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
         val coordinator = remember(client, installationId) { CommercialDealCoordinator(client, installationId) }
         var capabilities by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialCapabilitiesDto?>(null) }
+        var metaAvailable by remember(identityId,organizationId,installationId) { mutableStateOf(false) }
+        var metaPendingId by remember(identityId,organizationId,installationId) { mutableStateOf<String?>(null) }
+        var metaPending by remember(identityId,organizationId,installationId) { mutableStateOf<CommercialMetaPendingDto?>(null) }
         var whatsappConnection by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialWhatsappConnectionDto?>(null) }
         var oauthStatus by remember(identityId,organizationId,installationId) { mutableStateOf<CommercialOAuthStatusDto?>(null) }
         var oauthPendingId by remember(identityId,organizationId,installationId) { mutableStateOf<String?>(null) }
@@ -127,6 +130,7 @@ fun commercialReadNativeWorkspace(
             settings = null
             mailConnection = null
             oauthStatus = null
+            metaAvailable = false
             whatsappConnection = null
             clients = emptyList()
             detail = null
@@ -143,6 +147,9 @@ fun commercialReadNativeWorkspace(
                     try { oauthStatus = client.oauthStatus(organizationId,installationId) }
                     catch (e: CancellationException) { throw e }
                     catch (_: Exception) { oauthStatus = null }
+                    try { metaAvailable = client.metaStatus(organizationId,installationId).available }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { metaAvailable = false }
                     try { whatsappConnection = client.whatsappConnection(organizationId,installationId) }
                     catch (e: CancellationException) { throw e }
                     catch (_: Exception) { whatsappConnection = null }
@@ -277,6 +284,50 @@ fun commercialReadNativeWorkspace(
                         }
                     },
                     whatsapp = whatsappConnection,
+                    metaAvailable = metaAvailable,
+                    metaStarted = metaPendingId != null,
+                    metaPending = metaPending,
+                    onStartMeta = { template,language ->
+                        if(!saving && metaAvailable && capabilities?.canRelease == true) {
+                            saving=true;metaPendingId=null;metaPending=null
+                            jobs.launch {
+                                try {
+                                    val started=client.metaStart(CommercialMetaStartRequestDto(organizationId,template,language),installationId)
+                                    require(started.url.startsWith("https://") && started.url.contains("/v1/commercial/meta/launch#"))
+                                    metaPendingId=started.id
+                                    uriHandler.openUri(started.url)
+                                } catch(e:CancellationException) { throw e }
+                                catch(_:Exception) { feedback="WHATSAPP_CONNECTION_NOT_CONFIRMED" }
+                                finally { saving=false }
+                            }
+                        }
+                    },
+                    onCheckMeta = {
+                        val id=metaPendingId
+                        if(!saving && id!=null && capabilities?.canRelease == true) {
+                            saving=true
+                            jobs.launch {
+                                try { metaPending=client.metaPending(organizationId,id,installationId) }
+                                catch(e:CancellationException) { throw e }
+                                catch(_:Exception) { feedback="WHATSAPP_CONNECTION_NOT_CONFIRMED" }
+                                finally { saving=false }
+                            }
+                        }
+                    },
+                    onFinishMeta = {
+                        val id=metaPendingId
+                        if(!saving && id!=null && metaPending?.status=="READY" && capabilities?.canRelease == true) {
+                            saving=true
+                            jobs.launch {
+                                try {
+                                    whatsappConnection=client.metaFinish(CommercialMetaFinishRequestDto(organizationId,id),installationId)
+                                    metaPendingId=null;metaPending=null;feedback="WHATSAPP_CONNECTED"
+                                } catch(e:CancellationException) { throw e }
+                                catch(_:Exception) { feedback="WHATSAPP_CONNECTION_NOT_CONFIRMED" }
+                                finally { saving=false }
+                            }
+                        }
+                    },
                     onConnectWhatsapp = { phoneId,token,template,language,apiVersion ->
                         val connection = whatsappConnection
                         if (!saving && capabilities?.canRelease == true && connection?.setupAvailable == true) {

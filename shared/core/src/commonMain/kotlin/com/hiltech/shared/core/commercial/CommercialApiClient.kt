@@ -10,6 +10,17 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
+data class CommercialMetaStatusDto(val available: Boolean = false)
+@Serializable
+data class CommercialMetaStartRequestDto(val organizationId: String,val template: String,val language: String)
+@Serializable
+data class CommercialMetaStartDto(val id: String,val url: String)
+@Serializable
+data class CommercialMetaPendingDto(val status: String,val displayPhone: String? = null)
+@Serializable
+data class CommercialMetaFinishRequestDto(val organizationId: String,val pendingId: String)
+
+@Serializable
 data class CommercialWhatsappConnectionDto(val configured: Boolean,val setupAvailable: Boolean,val phoneId: String? = null,val displayPhone: String? = null,val template: String? = null,val language: String? = null,val apiVersion: String? = null,val version: Long = 0)
 @Serializable
 class ConnectCommercialWhatsappDto(val organizationId: String,val phoneId: String,val token: String,val template: String,val language: String,val apiVersion: String,val baseVersion: Long)
@@ -388,6 +399,15 @@ class CommercialApiClient(
     private val api: HiltechApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
 ) {
+    suspend fun metaStatus(organizationId: String,installationId: String): CommercialMetaStatusDto =
+        api.request(method=HttpMethod.Get,path="/v1/commercial/meta/status?organizationId="+organizationId,options=HiltechRequestOptions(installationId=installationId),decode={json.decodeFromString(CommercialMetaStatusDto.serializer(),it)})
+    suspend fun metaStart(request: CommercialMetaStartRequestDto,installationId: String): CommercialMetaStartDto =
+        api.request(method=HttpMethod.Post,path="/v1/commercial/meta/start",options=HiltechRequestOptions(installationId=installationId),requestBody=json.encodeToString(CommercialMetaStartRequestDto.serializer(),request),decode={json.decodeFromString(CommercialMetaStartDto.serializer(),it)})
+    suspend fun metaPending(organizationId: String,pendingId: String,installationId: String): CommercialMetaPendingDto =
+        api.request(method=HttpMethod.Get,path="/v1/commercial/meta/pending?organizationId="+organizationId+"&pendingId="+pendingId,options=HiltechRequestOptions(installationId=installationId),decode={json.decodeFromString(CommercialMetaPendingDto.serializer(),it)})
+    suspend fun metaFinish(request: CommercialMetaFinishRequestDto,installationId: String): CommercialWhatsappConnectionDto =
+        api.request(method=HttpMethod.Post,path="/v1/commercial/meta/finish",options=HiltechRequestOptions(installationId=installationId),requestBody=json.encodeToString(CommercialMetaFinishRequestDto.serializer(),request),decode={json.decodeFromString(CommercialWhatsappConnectionDto.serializer(),it)})
+
     suspend fun whatsappConnection(organizationId: String,installationId: String): CommercialWhatsappConnectionDto =
         api.request(method=HttpMethod.Get,path="/v1/commercial/whatsapp-connection?organizationId="+organizationId,options=HiltechRequestOptions(installationId=installationId),decode={json.decodeFromString(CommercialWhatsappConnectionDto.serializer(),it)})
     suspend fun connectWhatsapp(request: ConnectCommercialWhatsappDto,installationId: String): CommercialWhatsappConnectionDto =

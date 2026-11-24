@@ -34,6 +34,12 @@ internal fun CommercialSettingsPanel(
     onCheckOAuth: () -> Unit,
     onFinishOAuth: () -> Unit,
     onDisconnectOAuth: () -> Unit,
+    metaAvailable: Boolean,
+    metaStarted: Boolean,
+    metaPending: CommercialMetaPendingDto?,
+    onStartMeta: (String,String) -> Unit,
+    onCheckMeta: () -> Unit,
+    onFinishMeta: () -> Unit,
 ) {
     var draft by remember(settings) { mutableStateOf(settings.profile) }
     var picking by remember { mutableStateOf(false) }
@@ -81,6 +87,7 @@ internal fun CommercialSettingsPanel(
         }
         OAuthConnectionPanel(oauth,pendingOAuth,oauthStarted,busy,onStartOAuth,onCheckOAuth,onFinishOAuth,onDisconnectOAuth)
         MailConnectionPanel(mail,busy,onConnectMail,onDisconnectMail)
+        MetaSignupPanel(metaAvailable,metaStarted,metaPending,busy,onStartMeta,onCheckMeta,onFinishMeta)
         WhatsappConnectionPanel(whatsapp,busy,onConnectWhatsapp,onDisconnectWhatsapp)
         Button(enabled = !busy && !picking && draft != settings.profile && draft.legalName.isNotBlank() &&
             Regex("[A-Z0-9-]{1,12}").matches(draft.quotePrefix), onClick = { onSave(draft) }) {
@@ -168,6 +175,32 @@ private fun MailConnectionPanel(mail: CommercialMailConnectionDto?,busy: Boolean
             }
         }
 
+    }
+}
+
+@Composable
+private fun MetaSignupPanel(available: Boolean,started: Boolean,pending: CommercialMetaPendingDto?,busy: Boolean,start: (String,String)->Unit,check: ()->Unit,finish: ()->Unit) {
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("ربط واتساب عبر Meta","Connect WhatsApp via Meta"),style=MaterialTheme.typography.titleMedium)
+        if(!available) {
+            Text(hiltechText("يتطلب تسجيل تطبيق Meta وإعداد التفويض مرة واحدة. الربط اليدوي متاح بشكل مستقل.","Requires one-time Meta application setup. Manual connection is separate."))
+            return@HiltechPanel
+        }
+        var template by remember { mutableStateOf("") }
+        var language by remember { mutableStateOf("ar") }
+        SettingField(hiltechText("اسم قالب المستند المعتمد","Approved document template"),template) { template=it.trim() }
+        SettingField(hiltechText("لغة القالب","Template language"),language) { language=it.trim() }
+        Button(enabled=!busy && template.matches(Regex("[a-z0-9_]+")) && language.matches(Regex("[a-zA-Z_]+")),onClick={start(template,language)}) {
+            Text(hiltechText("متابعة مع Meta","Continue with Meta"))
+        }
+        if(started) {
+            Text(hiltechText("أكمل التفويض في المتصفح ثم تحقق من الحساب.","Complete browser authorization, then check the account."))
+            OutlinedButton(enabled=!busy,onClick=check) { Text(hiltechText("تحقق من التفويض","Check authorization")) }
+            if(pending?.status=="READY") {
+                HiltechKeyValue(hiltechText("الرقم الذي سيتم ربطه","Number to connect"),pending.displayPhone.orEmpty())
+                Button(enabled=!busy,onClick=finish) { Text(hiltechText("تأكيد ربط الرقم","Confirm number")) }
+            } else if(pending?.status=="FAILED") Text(hiltechText("لم يكتمل التحقق من الرقم والقالب. ابدأ اتصالًا جديدًا.","Number or template verification failed. Start again."))
+        }
     }
 }
 
