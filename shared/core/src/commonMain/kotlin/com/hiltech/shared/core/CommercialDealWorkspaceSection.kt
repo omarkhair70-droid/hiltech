@@ -129,13 +129,13 @@ fun CommercialDealWorkspaceSection(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Commercial / Deal workspace", style = MaterialTheme.typography.titleMedium)
-            OutlinedButton(onClick = onRefresh) { Text("Refresh") }
+            Text(hiltechText("مساحة المبيعات والتعاقد", "Commercial / Deal workspace"), style = MaterialTheme.typography.titleMedium)
+            OutlinedButton(onClick = onRefresh) { Text(hiltechText("تحديث", "Refresh")) }
         }
         state.errorCode?.let { Text("Action blocked: $it", color = MaterialTheme.colorScheme.error) }
-        if (state.loading) Text("Loading authoritative commercial history…")
+        if (state.loading) Text(hiltechText("جارٍ تحميل سجل المبيعات…", "Loading authoritative commercial history…"))
         if (detail == null) {
-            Text("Select an opportunity to review its source-bound history.")
+            Text(hiltechText("اختر فرصة للاطلاع على سجلها.", "Select an opportunity to review its source-bound history."))
         } else {
             val op = detail.opportunity
             Text(op.title, style = MaterialTheme.typography.titleLarge)
@@ -183,14 +183,14 @@ private fun CommercialDiscoveryPanel(
     onAction: (CommercialDealAction) -> Unit,
 ) {
     val op = deal.opportunity
-    Text("Discovery / technical qualification", style = MaterialTheme.typography.titleMedium)
+    Text(hiltechText("الاستكشاف والتأهيل الفني", "Discovery / technical qualification"), style = MaterialTheme.typography.titleMedium)
     if (deal.qualification.isNotEmpty()) {
         deal.qualification.forEach {
             Text("Qualified discovery: " + it.discoverySummary)
             if (it.openQuestions.isNotBlank()) Text("Open questions: " + it.openQuestions)
         }
     } else {
-        Text("No qualified discovery recorded.")
+        Text(hiltechText("لم يُسجل تأهيل فني بعد.", "No qualified discovery recorded."))
     }
     if (canWrite && op.state in setOf("OPEN","QUALIFIED")) {
         var tenderType by remember(op.id) { mutableStateOf("RFQ") }
@@ -200,7 +200,7 @@ private fun CommercialDiscoveryPanel(
         var tenderDeadline by remember(op.id) { mutableStateOf("") }
         var clarification by remember(op.id) { mutableStateOf("") }
         var sourceChannel by remember(op.id) { mutableStateOf("") }
-        Text("Tender / RFQ intake and deadline revision")
+        Text(hiltechText("استقبال المناقصة وطلب العرض ومواعيد التقديم", "Tender / RFQ intake and deadline revision"))
         Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
             listOf("RFQ","RFP","TENDER","OTHER").forEach { type ->
                 OutlinedButton(onClick={tenderType=type},enabled=type!=tenderType){Text(type)}
@@ -215,11 +215,11 @@ private fun CommercialDiscoveryPanel(
                 OutlinedButton(onClick={tenderStatus=status},enabled=status!=tenderStatus){Text(status)}
             }
         }
-        OutlinedTextField(value=tenderRef,onValueChange={tenderRef=it},label={Text("Tender reference")})
+        OutlinedTextField(value=tenderRef,onValueChange={tenderRef=it},label={Text(hiltechText("مرجع المناقصة", "Tender reference"))})
         OutlinedTextField(value=tenderReceived,onValueChange={tenderReceived=it},
-            label={Text("Received at (ISO-8601 UTC)")})
+            label={Text(hiltechText("تاريخ الاستلام (UTC)", "Received at (ISO-8601 UTC)"))})
         OutlinedTextField(value=tenderDeadline,onValueChange={tenderDeadline=it},
-            label={Text("Submission deadline (ISO-8601 UTC, optional)")})
+            label={Text(hiltechText("موعد التقديم (UTC، اختياري)", "Submission deadline (ISO-8601 UTC, optional)"))})
         OutlinedTextField(value=clarification,onValueChange={clarification=it},
             label={Text("Clarification deadline (optional)")})
         OutlinedTextField(value=sourceChannel,onValueChange={sourceChannel=it},
@@ -350,9 +350,9 @@ private fun CommercialBoqPanel(
     onAction: (CommercialDealAction) -> Unit,
 ) {
     val op = deal.opportunity
-    Text("Costing / BOQ", style = MaterialTheme.typography.titleMedium)
+    Text(hiltechText("التكاليف وجدول الكميات", "Costing / BOQ"), style = MaterialTheme.typography.titleMedium)
     if (!canEditPrivateCost) {
-        Text("Private costing is restricted to explicitly authorized commercial staff.")
+        Text(hiltechText("التكاليف الداخلية متاحة للمسؤول المخول فقط.", "Private costing is restricted to explicitly authorized commercial staff."))
         return
     }
     summaries.forEach { summary ->
@@ -388,17 +388,17 @@ private fun CommercialBoqPanel(
         deal.scopeVersions.map { HiltechRecordChoice(it.id, "v" + it.versionNumber, it.description) }, { scopeVersionId = it }, allowKnownReference = false)
     OutlinedTextField(value=currency,onValueChange={currency=it.uppercase()},label={Text(hiltechText("رمز العملة", "ISO currency"))})
     Text("Draft lines: " + lines.size)
-    OutlinedTextField(value=code,onValueChange={code=it},label={Text("Line code")})
-    OutlinedTextField(value=description,onValueChange={description=it},label={Text("Work / material description")})
+    OutlinedTextField(value=code,onValueChange={code=it},label={Text(hiltechText("رقم البند", "Line code"))})
+    OutlinedTextField(value=description,onValueChange={description=it},label={Text(hiltechText("وصف العمل أو المادة", "Work / material description"))})
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         listOf("MATERIAL","LABOR","SUBCONTRACT","EQUIPMENT","OVERHEAD","OTHER").forEach {
             OutlinedButton(enabled=it!=category,onClick={category=it}){Text(it)}
         }
     }
-    OutlinedTextField(value=quantity,onValueChange={quantity=it},label={Text("Quantity")})
-    OutlinedTextField(value=unit,onValueChange={unit=it},label={Text("Unit")})
-    OutlinedTextField(value=internalCost,onValueChange={internalCost=it},label={Text("Private unit cost (optional)")})
-    OutlinedTextField(value=sellPrice,onValueChange={sellPrice=it},label={Text("Customer unit sell price")})
+    OutlinedTextField(value=quantity,onValueChange={quantity=it},label={Text(hiltechText("الكمية", "Quantity"))})
+    OutlinedTextField(value=unit,onValueChange={unit=it},label={Text(hiltechText("الوحدة", "Unit"))})
+    OutlinedTextField(value=internalCost,onValueChange={internalCost=it},label={Text(hiltechText("تكلفة الوحدة الداخلية (اختياري)", "Private unit cost (optional)"))})
+    OutlinedTextField(value=sellPrice,onValueChange={sellPrice=it},label={Text(hiltechText("سعر بيع الوحدة للعميل", "Customer unit sell price"))})
     val lineValid = code.isNotBlank() && description.isNotBlank() && unit.isNotBlank() &&
         validCommercialDecimal(quantity,true) && validCommercialDecimal(sellPrice) &&
         (internalCost.isBlank() || validCommercialDecimal(internalCost)) &&
@@ -411,7 +411,7 @@ private fun CommercialBoqPanel(
                 internalCost.takeIf { it.isNotBlank() },sellPrice))
             code=""; description=""; quantity=""; unit=""; internalCost=""; sellPrice=""
         },
-    ) { Text("Add line to draft") }
+    ) { Text(hiltechText("إضافة بند", "Add line to draft")) }
     lines.toList().forEach { line ->
         HiltechPanel(Modifier.fillMaxWidth()) {
             Text(line.lineCode + " · " + line.description)
@@ -425,7 +425,7 @@ private fun CommercialBoqPanel(
         onClick = {
             onAction(CommercialDealAction.SaveBoq(op.id,scopeVersionId,currency,lines.toList()))
         },
-    ) { Text("Commit complete, immutable BOQ version") }
+    ) { Text(hiltechText("حفظ إصدار البنود والأسعار", "Commit complete, immutable BOQ version")) }
 }
 
 @Composable
@@ -457,12 +457,12 @@ private fun CommercialQuotePanel(
         }
         if (canWrite && q.state == "DRAFT") {
             OutlinedButton(onClick={onAction(CommercialDealAction.RequestApproval(q.id))}) {
-                Text("Request independent approval")
+                Text(hiltechText("طلب اعتماد العرض", "Request independent approval"))
             }
         }
         if (canRelease && q.state == "APPROVAL_PENDING") {
             Button(onClick={onAction(CommercialDealAction.ReleaseApprovedQuote(q.id))}) {
-                Text("Release only after exact-version Approval Engine decision")
+                Text(hiltechText("إصدار العرض بعد اعتماد الإصدار", "Release only after exact-version Approval Engine decision"))
             }
         }
     }
@@ -474,16 +474,16 @@ private fun CommercialQuotePanel(
         var validity by remember(op.id) { mutableStateOf("") }
         HiltechRecordPicker(hiltechText("إصدار البنود والأسعار", "Priced BOQ version"), boqId,
             deal.boqVersions.map { HiltechRecordChoice(it.id, "v" + it.versionNumber, it.currency) }, { boqId = it }, allowKnownReference = false)
-        OutlinedTextField(value=payment,onValueChange={payment=it},label={Text("Client payment terms")})
-        OutlinedTextField(value=delivery,onValueChange={delivery=it},label={Text("Delivery terms")})
-        OutlinedTextField(value=exclusions,onValueChange={exclusions=it},label={Text("Quote exclusions")})
-        OutlinedTextField(value=validity,onValueChange={validity=it},label={Text("Valid until (YYYY-MM-DD)")})
+        OutlinedTextField(value=payment,onValueChange={payment=it},label={Text(hiltechText("شروط دفع العميل", "Client payment terms"))})
+        OutlinedTextField(value=delivery,onValueChange={delivery=it},label={Text(hiltechText("شروط التسليم", "Delivery terms"))})
+        OutlinedTextField(value=exclusions,onValueChange={exclusions=it},label={Text(hiltechText("استبعادات العرض", "Quote exclusions"))})
+        OutlinedTextField(value=validity,onValueChange={validity=it},label={Text(hiltechText("صالح حتى (YYYY-MM-DD)", "Valid until (YYYY-MM-DD)"))})
         Button(
             enabled=deal.boqVersions.any { it.id == boqId } && payment.isNotBlank() &&
                 delivery.isNotBlank() && Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(validity),
             onClick={onAction(CommercialDealAction.DraftQuote(
                 op.id,boqId,payment,delivery,exclusions,validity))},
-        ) { Text("Create new quote version") }
+        ) { Text(hiltechText("إنشاء إصدار جديد لعرض السعر", "Create new quote version")) }
     }
     Text(hiltechText("نسخة العميل لا تتضمن التكلفة الداخلية أو هامش الربح.", "Customer copies exclude internal cost and margin."))
 }
@@ -548,7 +548,7 @@ private fun CommercialAwardPanel(
     onAction: (CommercialDealAction) -> Unit,
 ) {
     val op=deal.opportunity
-    Text("Contract / client PO / project handoff",style=MaterialTheme.typography.titleMedium)
+    Text(hiltechText("العقد وأمر شراء العميل والتحويل لمشروع", "Contract / client PO / project handoff"),style=MaterialTheme.typography.titleMedium)
     deal.handoff.firstOrNull()?.let {
         Text("Project created: "+it.projectId)
         Text("Awarded quote: "+it.quoteVersionId)
@@ -564,13 +564,13 @@ private fun CommercialAwardPanel(
     var maintenance by remember(op.id) { mutableStateOf("") }
     HiltechRecordPicker(hiltechText("عرض السعر الصادر", "Released quote"), quoteId,
         deal.quotes.filter { it.state == "RELEASED" }.map { HiltechRecordChoice(it.id, it.quoteCode, "v" + it.versionNumber + " · " + it.totalPrice.content + " " + it.currency) }, { quoteId = it }, allowKnownReference = false)
-    OutlinedTextField(value=contractCode,onValueChange={contractCode=it},label={Text("Contract reference")})
-    OutlinedTextField(value=warranty,onValueChange={warranty=it},label={Text("Actual warranty terms (optional)")})
-    OutlinedTextField(value=maintenance,onValueChange={maintenance=it},label={Text("Actual support terms (optional)")})
+    OutlinedTextField(value=contractCode,onValueChange={contractCode=it},label={Text(hiltechText("مرجع العقد", "Contract reference"))})
+    OutlinedTextField(value=warranty,onValueChange={warranty=it},label={Text(hiltechText("شروط الضمان (اختياري)", "Actual warranty terms (optional)"))})
+    OutlinedTextField(value=maintenance,onValueChange={maintenance=it},label={Text(hiltechText("شروط الدعم (اختياري)", "Actual support terms (optional)"))})
     Button(
         enabled=quoteId.isNotBlank() && contractCode.isNotBlank(),
         onClick={onAction(CommercialDealAction.DraftContract(op.id,quoteId,contractCode,warranty,maintenance))},
-    ) { Text("Draft contract from released quote") }
+    ) { Text(hiltechText("إعداد عقد من العرض الصادر", "Draft contract from released quote")) }
     deal.contracts.forEach { c ->
         Text(c.contractCode + " · " + c.state)
         if(c.state=="DRAFT") {
@@ -579,7 +579,7 @@ private fun CommercialAwardPanel(
                 label={Text("Canonical READY signed-contract Evidence ID")})
             Button(enabled=evidenceId.isNotBlank(),
                 onClick={onAction(CommercialDealAction.ConfirmSigned(c.id,evidenceId))}) {
-                Text("Verify actual signed contract")
+                Text(hiltechText("التحقق من العقد الموقع", "Verify actual signed contract"))
             }
         }
         if(c.state=="SIGNED") {

@@ -3,7 +3,7 @@ package com.hiltech.server.commercial
 import org.apache.pdfbox.Loader
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
-import kotlin.test.assertTrue
+import org.junit.jupiter.api.Assertions.assertTrue
 
 class CommercialQuotePdfTest {
     @Test

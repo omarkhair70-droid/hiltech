@@ -160,7 +160,7 @@ fun commercialReadNativeWorkspace(
         val canWrite = !saving && capabilities?.canWrite == true
         val canRelease = !saving && capabilities?.canRelease == true
         val canAward = !saving && capabilities?.canAward == true
-        val message = feedback?.let { if (it == "COMMAND_NOT_CONFIRMED") hiltechText("لم يتم تأكيد العملية. أعد المحاولة بنفس البيانات.", "Action not confirmed. Retry with the same values.") else hiltechText("حالة العملية: ", "Operation state: ") + it }
+        val message = feedback?.let { if (it == "COMMAND_NOT_CONFIRMED") hiltechText("لم يتم تأكيد العملية. أعد المحاولة بنفس البيانات.", "Action not confirmed. Retry with the same values.") else if (it == "PDF_EXPORT_HANDOFF") hiltechText("تم تسليم ملف PDF لنافذة الحفظ أو المشاركة. لم يُسجّل إرسال تلقائي.", "PDF handed to save/share. No automatic dispatch was recorded.") else hiltechText("حالة العملية: ", "Operation state: ") + it }
         if (selectedId == null) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 message?.let { Text(it) }
@@ -269,7 +269,7 @@ fun commercialReadNativeWorkspace(
                                         val bytes = Base64.decode(pdf.base64)
                                         require(bytes.size > 5 && bytes.copyOfRange(0, 5).decodeToString() == "%PDF-")
                                         if (customerQuote?.quoteId == quoteId && detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) {
-                                            if (exporter(pdf.filename, bytes)) feedback = "PDF_EXPORTED"
+                                            if (exporter(pdf.filename, bytes)) feedback = "PDF_EXPORT_HANDOFF"
                                         }
                                     } catch (cancelled: CancellationException) { throw cancelled }
                                     catch (_: Exception) { error = "QUOTE_EXPORT_UNAVAILABLE" }
