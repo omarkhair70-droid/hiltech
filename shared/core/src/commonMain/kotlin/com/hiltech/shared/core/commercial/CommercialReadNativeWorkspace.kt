@@ -69,6 +69,7 @@ fun commercialReadNativeWorkspace(
         var dispatchHistory by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialQuoteDispatchDto>>(emptyList()) }
         var emailHistory by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialQuoteEmailStatusDto>>(emptyList()) }
         var whatsappHistory by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialWhatsappStatusDto>>(emptyList()) }
+        var historyUnavailable by remember(identityId,organizationId,installationId) { mutableStateOf(false) }
         var deliveryCapabilities by remember(identityId,organizationId,installationId) { mutableStateOf<CommercialDeliveryCapabilitiesDto?>(null) }
         var quoteBusy by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
         var feedback by remember(identityId, organizationId, installationId) { mutableStateOf<String?>(null) }
@@ -158,6 +159,7 @@ fun commercialReadNativeWorkspace(
             detail = null
             customerQuote = null
             deliveryCapabilities = null
+            historyUnavailable = false
             dispatchHistory = emptyList()
             emailHistory = emptyList()
             whatsappHistory = emptyList()
@@ -326,6 +328,7 @@ fun commercialReadNativeWorkspace(
                             customerQuote = customerQuote,
                             quoteBusy = quoteBusy,
                             deliveryCapabilities = deliveryCapabilities,
+                            historyUnavailable = historyUnavailable,
                             dispatchHistory = dispatchHistory,
                             emailHistory = emailHistory,
                             whatsappHistory = whatsappHistory,
@@ -339,6 +342,7 @@ fun commercialReadNativeWorkspace(
                                 quoteBusy = true
                                 customerQuote = null
                                 deliveryCapabilities = null
+                                historyUnavailable = false
                                 dispatchHistory = emptyList()
                                 emailHistory = emptyList()
                                 whatsappHistory = emptyList()
@@ -347,7 +351,7 @@ fun commercialReadNativeWorkspace(
                                         val loaded = client.customerQuote(quoteId, installationId)
                                         suspend fun <T> optionalHistory(load: suspend () -> List<T>): List<T> = try { load() }
                                         catch (e: CancellationException) { throw e }
-                                        catch (_: Exception) { emptyList() }
+                                        catch (_: Exception) { historyUnavailable = true; emptyList() }
                                         val history = optionalHistory { client.dispatchHistory(quoteId, installationId) }
                                         val emails = optionalHistory { client.emailHistory(quoteId, installationId) }
                                         val whatsapp = optionalHistory { client.whatsappHistory(quoteId, installationId) }
@@ -391,8 +395,10 @@ fun commercialReadNativeWorkspace(
                                         val key = listOf("email", quoteId, recipient)
                                         val id = retryIds.getOrPut(key) { newOperationId() }
                                         val status = client.sendEmail(quoteId, CommercialQuoteEmailDto(id, recipient), installationId)
-                                        emailHistory = client.emailHistory(quoteId, installationId)
-                                        feedback = status.state
+                                        if (customerQuote?.quoteId == quoteId) {
+                                            emailHistory = client.emailHistory(quoteId, installationId)
+                                            feedback = status.state
+                                        }
                                         // Retain the operation ID after ambiguous results to prevent blind repeats.
                                         if (status.state == "SMTP_ACCEPTED") retryIds.remove(key)
                                     } catch (cancelled: CancellationException) { throw cancelled }

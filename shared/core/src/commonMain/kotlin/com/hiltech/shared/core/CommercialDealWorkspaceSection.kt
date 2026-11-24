@@ -44,6 +44,7 @@ data class CommercialDealWorkspaceState(
     val errorCode: String? = null,
     val customerQuote: ClientQuoteDto? = null,
     val quoteBusy: Boolean = false,
+    val historyUnavailable: Boolean = false,
     val deliveryCapabilities: com.hiltech.shared.core.commercial.CommercialDeliveryCapabilitiesDto? = null,
     val dispatchHistory: List<CommercialQuoteDispatchDto> = emptyList(),
     val emailHistory: List<com.hiltech.shared.core.commercial.CommercialQuoteEmailStatusDto> = emptyList(),
@@ -173,7 +174,7 @@ fun CommercialDealWorkspaceSection(
                 )
                 CommercialStage.QUOTE -> CommercialQuotePanel(
                     detail, state.canWrite, state.canRelease, onAction,
-                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote, state.dispatchHistory, onRecordDispatch, state.emailHistory, onSendEmail, state.defaultPaymentTerms, state.defaultDeliveryTerms, state.whatsappHistory, onSendWhatsapp, state.deliveryCapabilities,
+                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote, state.dispatchHistory, onRecordDispatch, state.emailHistory, onSendEmail, state.defaultPaymentTerms, state.defaultDeliveryTerms, state.whatsappHistory, onSendWhatsapp, state.deliveryCapabilities, state.historyUnavailable,
                 )
                 CommercialStage.AWARD -> CommercialAwardPanel(
                     detail, state.canAward, state.canCreateProject, onAction,
@@ -454,6 +455,7 @@ private fun CommercialQuotePanel(
     whatsappHistory: List<com.hiltech.shared.core.commercial.CommercialWhatsappStatusDto>,
     onSendWhatsapp: ((String, String) -> Unit)?,
     deliveryCapabilities: com.hiltech.shared.core.commercial.CommercialDeliveryCapabilitiesDto?,
+    historyUnavailable: Boolean,
 ) {
     val op=deal.opportunity
     Text(hiltechText("عروض الأسعار والاعتماد", "Customer quotations & approval"), style=MaterialTheme.typography.titleMedium)
@@ -472,10 +474,11 @@ private fun CommercialQuotePanel(
                         if (!deliveryCapabilities.whatsapp) Text(hiltechText("واتساب المباشر غير مهيأ؛ راجع الحسابات المتصلة.", "Direct WhatsApp is not configured; review connected accounts."))
                     }
                 }
-                QuoteEmailPanel(q.id, emailHistory, quoteBusy, if ((canWrite || canRelease) && deliveryCapabilities?.email == true) onSendEmail else null)
-                QuoteWhatsappPanel(q.id, whatsappHistory, quoteBusy, if ((canWrite || canRelease) && deliveryCapabilities?.whatsapp == true) onSendWhatsapp else null)
+                if (historyUnavailable) Text(hiltechText("قد يكون سجل الإرسال غير مكتمل بسبب تعذر التحميل. حدّث المعاينة قبل إعادة الإرسال.", "Delivery history may be incomplete. Reload the preview before resending."), color = MaterialTheme.colorScheme.error)
+                QuoteEmailPanel(q.id, emailHistory, quoteBusy, if ((canWrite || canRelease) && deliveryCapabilities?.email == true && !historyUnavailable) onSendEmail else null)
+                QuoteWhatsappPanel(q.id, whatsappHistory, quoteBusy, if ((canWrite || canRelease) && deliveryCapabilities?.whatsapp == true && !historyUnavailable) onSendWhatsapp else null)
                 QuoteDispatchPanel(q.id, dispatchHistory, quoteBusy,
-                    if (canWrite || canRelease) onRecordDispatch else null)
+                    if ((canWrite || canRelease) && !historyUnavailable) onRecordDispatch else null, historyUnavailable)
             }
         }
         if (canWrite && q.state == "DRAFT") {
@@ -568,13 +571,13 @@ private fun QuoteEmailPanel(quoteId: String, history: List<com.hiltech.shared.co
 }
 
 @Composable
-private fun QuoteDispatchPanel(quoteId: String, history: List<CommercialQuoteDispatchDto>, busy: Boolean, record: ((String, String, String) -> Unit)?) {
+private fun QuoteDispatchPanel(quoteId: String, history: List<CommercialQuoteDispatchDto>, busy: Boolean, record: ((String, String, String) -> Unit)?, historyUnavailable: Boolean) {
     HiltechPanel(Modifier.fillMaxWidth()) {
         Text(hiltechText("سجل إرسال العرض", "Recorded dispatch history"), style = MaterialTheme.typography.titleMedium)
         history.forEach { item ->
             HiltechKeyValue(item.channel + " · " + item.recordedAt, item.recipientReference)
         }
-        if (history.isEmpty()) Text(hiltechText("لا يوجد إرسال مسجل.", "No dispatch recorded."))
+        if (history.isEmpty() && !historyUnavailable) Text(hiltechText("لا يوجد إرسال مسجل.", "No dispatch recorded."))
         if (record != null) {
             var channel by remember(quoteId) { mutableStateOf("EMAIL") }
             var recipient by remember(quoteId) { mutableStateOf("") }
