@@ -41,6 +41,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -360,7 +361,7 @@ fun HiltechRecordPicker(
             HiltechPanel(Modifier.fillMaxWidth()) {
                 OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
                     label = { Text(hiltechText("بحث في السجلات المتاحة", "Search available records")) })
-                val matching = records.filter { query.isBlank() || it.title.contains(query.trim(), true) || it.context.contains(query.trim(), true) }
+                val matching = records.filter { query.isBlank() || it.title.contains(query.trim(), true) || it.context.contains(query.trim(), true) || it.id.contains(query.trim(), true) }
                 if (matching.isEmpty()) Text(hiltechText("لا توجد نتائج في السجلات المحمّلة.", "No matches in loaded records."))
                 else LazyColumn(Modifier.fillMaxWidth().heightIn(max = 260.dp)) {
                     items(matching, key = { it.id }) { record ->
@@ -424,7 +425,14 @@ fun HiltechRecordTable(columns: List<HiltechTableColumn>, records: List<HiltechT
             } else records.forEach { record ->
                 HiltechPanel(Modifier.fillMaxWidth()) {
                     columns.forEachIndexed { index, column ->
-                        HiltechKeyValue(column.title, record.values.getOrNull(index).orEmpty().ifBlank { "—" })
+                        val value = record.values.getOrNull(index).orEmpty().ifBlank { "—" }
+                        if (index == 0) {
+                            Text(column.title, style = MaterialTheme.typography.labelMedium, color = palette.secondaryText)
+                            Text(value, style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),
+                                color = palette.primaryText)
+                        } else {
+                            HiltechKeyValue(column.title, value)
+                        }
                     }
                 }
             }

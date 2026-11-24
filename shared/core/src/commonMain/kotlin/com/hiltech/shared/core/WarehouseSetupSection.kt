@@ -138,12 +138,12 @@ fun WarehouseSetupSection(
                     Text("Requires an existing current Warehouse Manager assignment.")
                     OutlinedTextField(
                         value = warehouseCode, onValueChange = { warehouseCode = it },
-                        label = { Text("Warehouse code") },
+                        label = { Text(hiltechText("كود المخزن", "Warehouse code")) },
                         singleLine = true,
                     )
                     OutlinedTextField(
                         value = warehouseName, onValueChange = { warehouseName = it },
-                        label = { Text("Warehouse name") },
+                        label = { Text(hiltechText("اسم المخزن", "Warehouse name")) },
                         singleLine = true,
                     )
                     Button(
@@ -151,7 +151,7 @@ fun WarehouseSetupSection(
                         onClick = {
                             onCreateWarehouse(warehouseCode.trim(), warehouseName.trim())
                         },
-                    ) { Text("Create warehouse") }
+                    ) { Text(hiltechText("إنشاء مخزن", "Create warehouse")) }
                 }
                 OutlinedTextField(value = query, onValueChange = { query = it },
                     label = { Text(hiltechText("اسم المخزن أو الكود", "Warehouse name or code")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -224,25 +224,25 @@ fun WarehouseSetupSection(
                             Column(Modifier.padding(start = (depth.coerceAtMost(6) * 12).dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(location.name, style = MaterialTheme.typography.titleSmall)
                                 Text(location.code + " · " + location.kind, color = colors.secondaryText)
-                                Text(location.lifecycleState + if (location.temporary) " · مؤقت" else "")
+                                Text(location.lifecycleState + if (location.temporary) hiltechText(" · مؤقت", " · Temporary") else "")
                             }
                             HorizontalDivider(color = colors.divider)
                         }
                         TextButton(onClick = { showLocationForm = !showLocationForm }) { Text(if (showLocationForm) hiltechText("إغلاق", "Close") else hiltechText("+ موقع تخزين", "+ Storage location")) }
                         if (showLocationForm) {
-                            Text("Add a location inside the selected Warehouse")
+                            Text(hiltechText("أضف موقع تخزين داخل المخزن المحدد", "Add a location inside the selected Warehouse"))
                             OutlinedTextField(
                                 value = storageCode, onValueChange = { storageCode = it },
-                                label = { Text("Location code") }, singleLine = true,
+                                label = { Text(hiltechText("كود الموقع", "Location code")) }, singleLine = true,
                             )
                             OutlinedTextField(
                                 value = storageName, onValueChange = { storageName = it },
-                                label = { Text("Location name") }, singleLine = true,
+                                label = { Text(hiltechText("اسم الموقع", "Location name")) }, singleLine = true,
                             )
                             Button(
                                 enabled = !state.loading && storageCode.isNotBlank() && storageName.isNotBlank(),
                                 onClick = { onCreateWarehouseLocation(storageCode.trim(), storageName.trim()) },
-                            ) { Text("Create storage location") }
+                            ) { Text(hiltechText("إنشاء موقع تخزين", "Create storage location")) }
                         }
                     }
                     WarehouseWorkspaceTab.Access -> HiltechPanel(Modifier.fillMaxWidth()) {

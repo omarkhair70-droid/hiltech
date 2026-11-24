@@ -135,6 +135,8 @@ fun ProjectControlSection(
     onProjectCommandCenterAction: (ProjectCommandCenterUiAction) -> Unit = {},
     employeeChoices: List<HiltechRecordChoice> = emptyList(),
     teamChoices: List<HiltechRecordChoice> = emptyList(),
+    openResponsibleEmployee: ((String) -> Unit)? = null,
+    readableEmployeeIds: Set<String> = emptySet(),
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides com.hiltech.shared.core.design.LocalHiltechLanguage.current.direction) {
         val colors = LocalHiltechOperationalColors.current
@@ -238,6 +240,14 @@ fun ProjectControlSection(
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 HiltechKeyValue(hiltechText("المسؤول", "Responsible person"), selected.currentResponsibility.principalLabel ?: hiltechText("غير معيّن", "Not assigned"), Modifier.weight(1f))
                                 HiltechKeyValue(hiltechText("المواقع المرتبطة", "Linked sites"), selected.siteCount.toString(), Modifier.weight(1f))
+                            }
+                            val responsible = selected.currentResponsibility
+                            val employeeId = responsible.principalId
+                            if (responsible.principalType == "EMPLOYEE" && employeeId != null &&
+                                employeeId in readableEmployeeIds && openResponsibleEmployee != null) {
+                                TextButton(onClick = { openResponsibleEmployee(employeeId) }) {
+                                    Text(hiltechText("فتح ملف مسؤول المشروع", "Open project owner's profile"))
+                                }
                             }
                             HiltechKeyValue(hiltechText("الفترة المخططة", "Planned period"), (selected.startDatePlanned ?: "غير محددة") + " — " + (selected.endDatePlanned ?: "غير محددة"))
                         }

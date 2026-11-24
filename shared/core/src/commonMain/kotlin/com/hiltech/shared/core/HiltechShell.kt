@@ -695,6 +695,12 @@ fun HiltechShell(
                                 onCreateEmployee,
                             offboardingAvailable = peopleOffboardingAvailable,
                             accountWorkspace = employeeAccountWorkspace,
+                            relatedProjects = state.projects?.list?.items.orEmpty().filter { it.organizationId == primary?.organizationId },
+                            openRelatedProject = if (useWorkspaceNavigation && ShellWorkspace.Projects in destinations) { projectId ->
+                                nativeSession.close()
+                                requestedWorkspace = ShellWorkspace.Projects
+                                onSelectProject(projectId)
+                            } else null,
                         )
                         }
                     }
@@ -810,6 +816,12 @@ fun HiltechShell(
                                 com.hiltech.shared.core.design.HiltechRecordChoice(it.teamId, it.name, it.code)
                             },
                             reservationPort = reservationPort,
+                            readableEmployeeIds = state.people?.directory?.takeIf { it.canManagePeople }?.items.orEmpty().map { it.employeeId }.toSet(),
+                            openResponsibleEmployee = if (useWorkspaceNavigation && ShellWorkspace.People in destinations) { employeeId ->
+                                nativeSession.close()
+                                requestedWorkspace = ShellWorkspace.People
+                                onSelectEmployee(employeeId)
+                            } else null,
                             state = it,
                             onRefresh =
                                 onRefreshProjects,
@@ -1247,6 +1259,8 @@ private fun PeopleSection(
         ) -> Unit,
     offboardingAvailable: Boolean,
     accountWorkspace: (@Composable (EmployeeDetailDto) -> Unit)?,
+    relatedProjects: List<com.hiltech.shared.core.projects.ProjectSummaryDto> = emptyList(),
+    openRelatedProject: ((String) -> Unit)? = null,
 ) {
     val colors = com.hiltech.shared.core.design.LocalHiltechOperationalColors.current
     var query by remember { mutableStateOf("") }
@@ -1387,6 +1401,27 @@ private fun PeopleSection(
                                     if (employee.linkedIdentityId != null) hiltechText("مرتبط", "Linked") else hiltechText("لم يتم ربطه", "Not linked"))
                             }
                             PeopleWorkspaceTab.Assignment -> {
+                                val ownedProjects = relatedProjects.filter { project ->
+                                    project.currentResponsibility.principalType == "EMPLOYEE" &&
+                                        project.currentResponsibility.principalId == employee.employeeId
+                                }
+                                if (openRelatedProject != null && ownedProjects.isNotEmpty()) {
+                                    HiltechPanel(Modifier.fillMaxWidth()) {
+                                        Text(hiltechText("المشاريع المرتبطة بمسؤولية الموظف", "Projects owned by this employee"),
+                                            style = MaterialTheme.typography.titleMedium)
+                                        ownedProjects.forEach { project ->
+                                            androidx.compose.material3.Surface(onClick = { openRelatedProject(project.projectId) },
+                                                color = colors.surfaceElevated, contentColor = colors.primaryText,
+                                                shape = com.hiltech.shared.core.design.HiltechShape.small,
+                                                modifier = Modifier.fillMaxWidth()) {
+                                                Column(Modifier.padding(12.dp)) {
+                                                    Text(project.name, style = MaterialTheme.typography.titleSmall)
+                                                    Text(project.projectCode, color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 val assignment = state.selectedWorkforceAssignment
                                 if (assignment != null) WorkforceAssignmentChangeSection(employee = employee, current = assignment,
                                     structure = state.workforceStructure, history = state.selectedWorkforceHistory,
