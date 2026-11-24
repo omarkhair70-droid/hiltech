@@ -335,7 +335,17 @@ fun HiltechShell(
         var requestedWorkspace by remember(shellScrollScope, nativeAuthority) { mutableStateOf(ShellWorkspace.Home) }
         var workspaceTabs by remember(shellScrollScope, nativeAuthority) { mutableStateOf(listOf(ShellWorkspace.Home)) }
         var finding by remember(shellScrollScope) { mutableStateOf(false) }
-        var requestedFieldFocus by remember(shellScrollScope) { mutableStateOf<String?>(null) }
+        var requestedFieldFocus by remember(shellScrollScope, nativeAuthority) { mutableStateOf<String?>(null) }
+        var requestedAssetFocus by remember(shellScrollScope, nativeAuthority) { mutableStateOf<String?>(null) }
+        fun openLoadedAsset(assetId: String) {
+            val warehouse = signedIn?.warehouse ?: return
+            if (ShellWorkspace.Warehouse !in destinations || warehouse.selectedWarehouseId == null ||
+                warehouse.assets?.items?.any { it.id == assetId } != true) return
+            nativeSession.close()
+            requestedWorkspace = ShellWorkspace.Warehouse
+            requestedAssetFocus = assetId
+            onAssetAction(AssetAction.Select(assetId))
+        }
         fun openAssignedWork(workId: String) {
             if (ShellWorkspace.Work !in destinations || signedIn?.field?.today?.none { it.workOrderId == workId } != false) return
             nativeSession.close()
@@ -794,6 +804,7 @@ fun HiltechShell(
                             NativeOperationAreas(
                                 title = "المخازن",
                                 description = "اختر ما تحتاج إليه: تنفيذ حركة أو مراجعة المخزون أو البحث عن معدة.",
+                                requestedArea = if (requestedAssetFocus != null) "inventory" else null,
                                 areas = buildList<NativeOperationArea> {
                                     if (warehouseOperatorAvailable || desktopNavigation) {
                                         add(NativeOperationArea("physical", "العمليات اليومية", "التسليم والاستلام والحركات ومتابعة جاهزية الموارد.") {
@@ -810,6 +821,8 @@ fun HiltechShell(
                                             state.warehouse?.let { warehouse ->
                                                 WarehouseSetupSection(
                             state = warehouse,
+                            requestedAssetId = requestedAssetFocus,
+                            onAssetFocusConsumed = { requestedAssetFocus = null },
                             onRefresh = onRefreshWarehouse,
                             onStockAction = onStockAction,
                             reservationPort = reservationPort,
@@ -973,6 +986,12 @@ fun HiltechShell(
                         requestedWorkspace = ShellWorkspace.Projects
                         onSelectProject(project.projectId)
                     })
+                }
+                signedIn.warehouse?.takeIf { it.selectedWarehouseId != null }?.assets?.items.orEmpty().forEach { asset ->
+                    add(WorkspaceSearchResult(
+                        "asset:${asset.id}", asset.name ?: asset.assetCode,
+                        language.text("معدة", "Equipment") + " · " + listOfNotNull(asset.assetCode, asset.typeName, asset.serialNumber).joinToString(" · "),
+                    ) { openLoadedAsset(asset.id) })
                 }
                 signedIn.field?.today.orEmpty().forEach { work ->
                     add(WorkspaceSearchResult(

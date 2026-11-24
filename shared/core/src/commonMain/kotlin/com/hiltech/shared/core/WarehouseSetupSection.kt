@@ -93,6 +93,8 @@ fun WarehouseSetupSection(
     onStockAction: (StockAction) -> Unit = {},
     reservationPort: ReservationUiPort? = null,
     onAssetAction: (AssetAction) -> Unit = {},
+    requestedAssetId: String? = null,
+    onAssetFocusConsumed: () -> Unit = {},
 ) {
     var warehouseCode by remember { mutableStateOf("") }
     var warehouseName by remember { mutableStateOf("") }
@@ -105,7 +107,10 @@ fun WarehouseSetupSection(
     val colors = LocalHiltechOperationalColors.current
     var query by remember { mutableStateOf("") }
     var creating by remember { mutableStateOf(false) }
-    var tab by remember(state.selectedWarehouseId) { mutableStateOf(WarehouseWorkspaceTab.Overview) }
+    var tab by remember(state.selectedWarehouseId) { mutableStateOf(if (requestedAssetId != null && state.assets != null) WarehouseWorkspaceTab.Assets else WarehouseWorkspaceTab.Overview) }
+    androidx.compose.runtime.LaunchedEffect(requestedAssetId, state.selectedWarehouseId, state.assets != null) {
+        if (requestedAssetId != null && state.selectedWarehouseId != null && state.assets != null) tab = WarehouseWorkspaceTab.Assets
+    }
     var showLocationForm by remember(state.selectedWarehouseId) { mutableStateOf(false) }
     var showAuthorityForm by remember(state.selectedWarehouseId) { mutableStateOf(false) }
 
@@ -213,7 +218,7 @@ fun WarehouseSetupSection(
                         }
                     }
                     WarehouseWorkspaceTab.Stock -> state.stock?.let { StockInventorySection(it, state.selectedWarehouseId, onStockAction) }
-                    WarehouseWorkspaceTab.Assets -> state.assets?.let { AssetPassportSection(it, state.selectedWarehouseId, onAssetAction) }
+                    WarehouseWorkspaceTab.Assets -> state.assets?.let { AssetPassportSection(it, state.selectedWarehouseId, onAssetAction, requestedAssetId, onAssetFocusConsumed) }
                     WarehouseWorkspaceTab.Reservations -> if (reservationPort != null) state.selectedWarehouseId?.let { WarehouseReservations(it, reservationPort) }
                     WarehouseWorkspaceTab.Locations -> HiltechPanel(Modifier.fillMaxWidth()) {
                         Text(hiltechText("مواقع التخزين", "Storage locations"), style = MaterialTheme.typography.titleMedium)

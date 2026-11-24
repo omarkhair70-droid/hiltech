@@ -101,12 +101,21 @@ sealed interface AssetAction {
 }
 
 @Composable
-fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispatch: (AssetAction) -> Unit) {
+fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispatch: (AssetAction) -> Unit, requestedAssetId: String? = null, onAssetFocusConsumed: () -> Unit = {}) {
     val colors = LocalHiltechOperationalColors.current
     var search by remember(warehouseId) { mutableStateOf(state.search) }
     var showRegistration by remember(warehouseId) { mutableStateOf(false) }
     var mode by remember(warehouseId) { mutableStateOf(AssetDirectoryMode.Catalogue) }
     var detailMode by remember(state.selected?.identity?.id) { mutableStateOf(state.selected != null) }
+    androidx.compose.runtime.LaunchedEffect(requestedAssetId, state.selected?.identity?.id, state.loading) {
+        if (requestedAssetId != null) {
+            mode = AssetDirectoryMode.Catalogue
+            if (state.selected?.identity?.id == requestedAssetId) {
+                detailMode = true
+                onAssetFocusConsumed()
+            } else if (!state.loading && state.message != null) onAssetFocusConsumed()
+        }
+    }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(hiltechText("المعدات والأصول", "Equipment & assets"), style = MaterialTheme.typography.titleLarge)
         Text(hiltechText("سجل المعدة وحالتها وعهدتها وخدمتها.", "Asset passport, condition, custody and service."), color = colors.secondaryText, style = MaterialTheme.typography.bodyMedium)
@@ -121,7 +130,7 @@ fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispa
         }
         state.message?.let { Text(it) }
         val detail: @Composable () -> Unit = {
-            state.selected?.let { AssetPassportDetail(it, state, dispatch) }
+            state.selected?.takeIf { requestedAssetId == null || it.identity.id == requestedAssetId }?.let { AssetPassportDetail(it, state, dispatch) }
                 ?: HiltechPanel(Modifier.fillMaxWidth()) { Text(hiltechText("اختر معدة لفتح سجلها.", "Select an asset to open its passport.")) }
         }
         when (mode) {

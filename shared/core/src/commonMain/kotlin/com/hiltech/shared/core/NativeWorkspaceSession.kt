@@ -226,12 +226,15 @@ data class NativeOperationArea(
 )
 
 @Composable
-fun NativeOperationAreas(title: String, description: String, areas: List<NativeOperationArea>) {
+fun NativeOperationAreas(title: String, description: String, areas: List<NativeOperationArea>, requestedArea: String? = null) {
     val colors = LocalHiltechOperationalColors.current
     val language = LocalHiltechLanguage.current
     val sectionTitle = language.text(title, operationSectionEnglish(title))
     val sectionDescription = language.text(description, operationSectionEnglish(description))
     var requested by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(requestedArea, areas.map { it.id }) {
+        if (requestedArea != null && areas.any { it.id == requestedArea }) requested = requestedArea
+    }
     val current = areas.firstOrNull { it.id == requested }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (current == null) {
