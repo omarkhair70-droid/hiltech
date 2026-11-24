@@ -196,4 +196,49 @@ class FinanceReviewPreparationNativeTest {
         assertEquals(source, receipt.approvalRequestId)
         assertFalse(financeReviewCanRequest(receipt.state, receipt.approvalRequestId))
     }
+    @Test
+    fun customerInvoicePreparationUsesOriginalCandidateAndEvidenceWithoutIssuing() = runBlocking {
+        val draft = FinanceReviewDraft(sourceId=source, reference="INV-2026-001",
+            documentEvidenceId=install)
+        assertTrue(financeReviewDraftIsValid(FinanceReviewKind.INVOICE_ISSUANCE_PREPARE,draft))
+        assertFalse(financeReviewDraftIsValid(FinanceReviewKind.INVOICE_ISSUANCE_PREPARE,
+            draft.copy(documentEvidenceId="not-a-source")))
+        var requests = 0
+        val client = HttpClient(MockEngine { request ->
+            requests++
+            assertEquals(1,requests)
+            assertEquals("POST",request.method.value)
+            assertEquals("/v1/finance/organizations/$org/invoice-candidates/$source/issuance-proposals",
+                request.url.encodedPath)
+            assertEquals(operation,request.headers["Idempotency-Key"])
+            respond("""{"proposalId":"$proposal","candidateId":"$source",
+                "organizationId":"$org","invoiceNumber":"INV-2026-001","state":"PROPOSED"}""",
+                HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+        })
+        val result=financePrepareReviewProposal(apis(client),org,install,
+            FinanceReviewAttempt(FinanceReviewKind.INVOICE_ISSUANCE_PREPARE,draft,operation))
+        assertEquals(proposal,result.id)
+        assertEquals(FinanceReviewKind.INVOICE_ISSUANCE_PREPARE,result.kind)
+        assertTrue(financeReviewCanRequest(result.state,result.approvalRequestId))
+        assertEquals(1,requests)
+    }
+
+    @Test
+    fun invoicePreparationRejectsDifferentCandidateOrPrematureIssuance() = runBlocking {
+        for (returnedCandidate in listOf(wrongOrg,source)) {
+            val client=HttpClient(MockEngine {
+                respond("""{"proposalId":"$proposal","candidateId":"$returnedCandidate",
+                    "organizationId":"$org","invoiceNumber":"INV-2026-001","state":"PROPOSED",
+                    "recordedInternally":${returnedCandidate==source}}""",
+                    HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+            })
+            assertFailsWith<IllegalStateException> {
+                financePrepareReviewProposal(apis(client),org,install,
+                    FinanceReviewAttempt(FinanceReviewKind.INVOICE_ISSUANCE_PREPARE,
+                        FinanceReviewDraft(sourceId=source,reference="INV-2026-001",
+                            documentEvidenceId=install),operation))
+            }
+        }
+    }
+
 }
