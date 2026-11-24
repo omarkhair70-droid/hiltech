@@ -9,6 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.FilterChip
+import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.HiltechSectionHeading
+import com.hiltech.shared.core.design.hiltechText
+import com.hiltech.shared.core.design.LocalHiltechLanguage
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -376,6 +381,9 @@ fun financeEvidenceReadNativeWorkspace(
             }
         }
 
+        var area by remember(identityId, organizationId, installationId, reviewPreparationEnabled) {
+            mutableStateOf(if (reviewPreparationEnabled) FinanceReviewArea.Prepare else FinanceReviewArea.Trace)
+        }
         var handoff by remember(identityId, organizationId, installationId) { mutableStateOf<FinanceReviewHandoff?>(null) }
         var lookupKind by remember(identityId, organizationId, installationId) {
             mutableStateOf<FinanceReadKind?>(null)
@@ -423,11 +431,15 @@ fun financeEvidenceReadNativeWorkspace(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("المراجعة المالية · بيانات مصدرية",
-                style = MaterialTheme.typography.titleMedium)
-            Text(if (reviewPreparationEnabled) "قراءة وتجهيز ومتابعة التسجيل الداخلي المعتمد حسب صلاحيات المصدر." else "قراءة داخلية فقط.",
-                style = MaterialTheme.typography.bodySmall)
-            if (reviewPreparationEnabled) {
+            val language = LocalHiltechLanguage.current
+            HiltechSectionHeading("FINANCE / REVIEW", language.text("المراجعة المالية", "Financial review"),
+                language.text("راجع السجلات المحاسبية والإجراءات المرتبطة بها من مصادرها.", "Review accounting records and their related actions at source."))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FinanceReviewArea.entries.filter { reviewPreparationEnabled || it != FinanceReviewArea.Prepare }.forEach { choice ->
+                    FilterChip(selected = area == choice, onClick = { area = choice }, label = { Text(language.text(choice.ar, choice.en)) })
+                }
+            }
+            if (reviewPreparationEnabled && area == FinanceReviewArea.Prepare) {
                 FinanceReviewPreparationSection(
                     identityId = identityId,
                     organizationId = organizationId,
@@ -439,19 +451,20 @@ fun financeEvidenceReadNativeWorkspace(
                 )
             }
 
+            if (area == FinanceReviewArea.Ledger) {
             OutlinedButton(onClick = {
                 ledgerExpanded = !ledgerExpanded
                 if (ledgerExpanded && ledgerRefresh == 0) ledgerRefresh += 1
             }) {
-                Text(if (ledgerExpanded) "إخفاء سجل قيود الموردين" else "عرض سجل قيود الموردين")
+                Text(if (ledgerExpanded) hiltechText("إخفاء سجل قيود الموردين", "Hide supplier journal history") else hiltechText("عرض سجل قيود الموردين", "Show supplier journal history"))
             }
             if (ledgerExpanded) {
-            Text("سجل الموردين · قيود تاريخية مثبتة",
+            Text(hiltechText("سجل الموردين · قيود تاريخية مثبتة", "Supplier ledger · recorded historical journals"),
                 style = MaterialTheme.typography.titleSmall)
             OutlinedButton(enabled = !ledgerLoading, onClick = { ledgerRefresh += 1 }) {
-                Text(if (ledgerLoading) "جارٍ تحديث المصدر…" else "تحديث سجل الموردين")
+                Text(if (ledgerLoading) hiltechText("جارٍ تحديث المصدر…", "Refreshing source…") else hiltechText("تحديث سجل الموردين", "Refresh supplier ledger"))
             }
-            if (ledgerLoading) Text("جارٍ تحميل قيود الموردين المسموح بها…")
+            if (ledgerLoading) Text(hiltechText("جارٍ تحميل قيود الموردين المسموح بها…", "Loading accessible supplier journals…"))
             ledgerError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             ledger?.let { current ->
                 when {
@@ -476,8 +489,10 @@ fun financeEvidenceReadNativeWorkspace(
 
             }
 
-            Text("تتبّع عملية برقم مصدرها", style = MaterialTheme.typography.titleSmall)
-            Text("اختر نوع السجل، ثم أدخل UUID أصليًا معروفًا من العملية. كل قراءة تعيد التحقق من صلاحية السيرفر الحالية.",
+            }
+            if (area == FinanceReviewArea.Trace) {
+            Text(hiltechText("تتبّع عملية برقم مصدرها", "Trace a source record"), style = MaterialTheme.typography.titleSmall)
+            Text(hiltechText("اختر نوع السجل، ثم أدخل UUID أصليًا معروفًا من العملية. كل قراءة تعيد التحقق من صلاحية السيرفر الحالية.", "Choose a record type and enter its source record ID. Each lookup checks current access."),
                 style = MaterialTheme.typography.bodySmall)
             listOf(
                 "البنك والتخصيص" to listOf(
@@ -511,7 +526,7 @@ fun financeEvidenceReadNativeWorkspace(
                 }
             }
             if (lookupKind == null) {
-                Text("اختَر نوع العملية لاستعراض دليلها من المصدر.")
+                Text(hiltechText("اختَر نوع العملية لاستعراض دليلها من المصدر.", "Choose a record type to view its source evidence."))
             } else {
                 OutlinedTextField(
                     value = lookupText,
@@ -521,13 +536,13 @@ fun financeEvidenceReadNativeWorkspace(
                         lookupResult = null
                         lookupError = null
                     },
-                    label = { Text("معرّف السجل UUID") },
+                    label = { Text(hiltechText("معرّف السجل UUID", "Source record ID (UUID)")) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 val valid = financeLookupIdIsUuid(lookupText)
                 if (lookupText.isNotEmpty() && !valid) {
-                    Text("أدخل UUID صحيحًا من المصدر الأصلي.")
+                    Text(hiltechText("أدخل UUID صحيحًا من المصدر الأصلي.", "Enter a valid UUID from the original record."))
                 }
                 OutlinedButton(
                     enabled = valid && !lookupLoading,
@@ -535,19 +550,24 @@ fun financeEvidenceReadNativeWorkspace(
                         requestedId = lookupText
                         lookupRevision += 1
                     },
-                ) { Text(if (lookupLoading) "جارٍ القراءة…" else "قراءة الحالة الحالية") }
+                ) { Text(if (lookupLoading) hiltechText("جارٍ القراءة…", "Reading…") else hiltechText("قراءة الحالة الحالية", "Read current status")) }
                 lookupError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 lookupResult?.let { record ->
                     Text(record.title + " · " + record.state,
                         style = MaterialTheme.typography.titleSmall)
                     record.facts.forEach { Text(it) }
                     if(reviewPreparationEnabled) record.nextActions.forEach { action ->
-                        OutlinedButton(enabled=handoff==null,onClick={handoff=action}) {Text("متابعة: "+action.kind.label)}
+                        OutlinedButton(enabled=handoff==null,onClick={handoff=action;area=FinanceReviewArea.Prepare}) {Text(hiltechText("متابعة: ", "Continue: ")+action.kind.label)}
                     }
-                    Text("الحالة قراءة فقط من API، ولا تعني إتمام حركة بنك أو اعتماد مستقل.",
+                    Text(hiltechText("الحالة قراءة فقط من API، ولا تعني إتمام حركة بنك أو اعتماد مستقل.", "Read-only source status. It does not imply a bank transfer or independent approval."),
                         style = MaterialTheme.typography.bodySmall)
                 }
+            }
             }
         }
     },
 )
+
+private enum class FinanceReviewArea(val ar: String, val en: String) {
+    Prepare("تجهيز ومراجعة", "Prepare & review"), Ledger("دفتر الموردين", "Supplier ledger"), Trace("تتبّع السجلات", "Trace records"),
+}
