@@ -59,7 +59,10 @@ internal object CommercialQuotePdf {
                 graphics.color = accent
                 graphics.drawLine(margin, height - 90, width - margin, height - 90)
                 graphics.font = regular.deriveFont(20f)
-                graphics.drawString("HILTECH  /  " + pageNumber, margin, height - 55)
+                graphics.drawString("HILTECH  /  " + pageNumber, margin, height - 58)
+                graphics.font = regular.deriveFont(17f)
+                graphics.drawString("D1 Tiba Building - Zahraa El Maadi - Cairo, Egypt", margin + 190, height - 60)
+                graphics.drawString("01000087808   |   info@hiltech-eg.com   |   hiltech-eg.com", margin + 190, height - 34)
                 graphics.dispose()
                 val page = PDPage(PDRectangle.A4)
                 document.addPage(page)
