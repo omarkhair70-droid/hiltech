@@ -161,6 +161,15 @@ class FinancePhysicalCashApiClient(
      decode={json.decodeFromString(
        FinanceCashVoucherReceiptDto.serializer(),it)},
  )
+
+ suspend fun operatorQueue(org:String,installation:String):List<FinanceCashVoucherReceiptDto> =
+    api.request(method=HttpMethod.Get,path=base(org)+"/cash-vouchers/operator-queue",
+      options=HiltechRequestOptions(installationId=installation),
+      decode={json.decodeFromString(ListSerializer(FinanceCashVoucherReceiptDto.serializer()),it)})
+ suspend fun operatorStatus(org:String,id:String,installation:String):FinanceCashVoucherReceiptDto =
+    api.request(method=HttpMethod.Get,path=base(org)+"/cash-vouchers/"+uuid(id)+"/operator-status",
+      options=HiltechRequestOptions(installationId=installation),
+      decode={json.decodeFromString(FinanceCashVoucherReceiptDto.serializer(),it)})
  private suspend fun voucherCommand(
    org:String,proposal:String,operation:String,installation:String,
    action:String,evidence:String?,
