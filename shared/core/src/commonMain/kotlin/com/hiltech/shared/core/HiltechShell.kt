@@ -282,6 +282,7 @@ fun HiltechShell(
     projectFocusRequest: Int = 0,
     desktopNavigation: Boolean = false,
     desktopPurchasingAvailable: Boolean = false,
+    warehouseOperatorAvailable: Boolean = false,
     compactNavigation: Boolean = false,
     compactBackRequest: Int = 0,
     onCompactNavigationChanged: (canGoBack: Boolean, inWork: Boolean) -> Unit = { _, _ -> },
@@ -311,7 +312,7 @@ fun HiltechShell(
             if (compactNavigation || operationalWorkspaces.isNotEmpty()) add(ShellWorkspace.Explore)
             if (signedIn.projects != null) add(ShellWorkspace.Projects)
             if (signedIn.people != null) add(ShellWorkspace.People)
-            if (signedIn.warehouse != null || signedIn.assetLookup != null) add(ShellWorkspace.Warehouse)
+            if (signedIn.warehouse != null || signedIn.assetLookup != null || warehouseOperatorAvailable) add(ShellWorkspace.Warehouse)
             if (desktopPurchasingAvailable) add(ShellWorkspace.Purchasing)
             add(ShellWorkspace.Account)
         } else emptyList()
@@ -654,10 +655,6 @@ fun HiltechShell(
                         }
                     }
 
-                    if (show(ShellWorkspace.Warehouse)) {
-                        state.assetLookup?.let { AssetTagLookupSection(it, onLookupAssetTag) }
-                    }
-
                     if (show(ShellWorkspace.Work)) state.field?.let {
                         Column {
                         // Tiny source-present anchor: scroll to section start,
@@ -694,22 +691,13 @@ fun HiltechShell(
                         }
                     }
 
-                    if (show(ShellWorkspace.Warehouse) ||
-                        (compactNavigation && selectedWorkspace == ShellWorkspace.Explore && ShellWorkspace.Warehouse !in destinations)
-                    ) Column {
-                        // Tiny source-present anchor: scroll to section start,
-                        // never try to bring a multi-screen Column in view.
+                    if (show(ShellWorkspace.Warehouse)) {
                         Spacer(Modifier.fillMaxWidth().height(1.dp).bringIntoViewRequester(warehouseWorkspaceRequester))
-                        warehouseOperator()
-                    }
-                    // Host applications mount procurement only with an explicit,
-                    // default-OFF feature flag. Never show it during offline mode.
-                    if (show(ShellWorkspace.Purchasing) || (compactNavigation && selectedWorkspace == ShellWorkspace.Explore)) {
-                        procurementOperator()
-                    }
-
-                    if (show(ShellWorkspace.Warehouse)) state.warehouse?.let { warehouse ->
-                        WarehouseSetupSection(
+                        if (selectedWorkspace == null) {
+                            state.assetLookup?.let { AssetTagLookupSection(it, onLookupAssetTag) }
+                            warehouseOperator()
+                            state.warehouse?.let { warehouse ->
+                                WarehouseSetupSection(
                             state = warehouse,
                             onRefresh = onRefreshWarehouse,
                             onStockAction = onStockAction,
@@ -723,7 +711,47 @@ fun HiltechShell(
                             onGrantWarehouseAuthority = onGrantWarehouseAuthority,
                             onEndWarehouseAuthority = onEndWarehouseAuthority,
                         )
+                            }
+                        } else {
+                            NativeOperationAreas(
+                                title = "المخازن",
+                                description = "اختر ما تحتاج إليه: تنفيذ حركة أو مراجعة المخزون أو البحث عن معدة.",
+                                areas = buildList<NativeOperationArea> {
+                                    if (warehouseOperatorAvailable || desktopNavigation) {
+                                        add(NativeOperationArea("physical", "العمليات اليومية", "التسليم والاستلام والحركات ومتابعة جاهزية الموارد.") {
+                                            warehouseOperator()
+                                        })
+                                    }
+                                    if (state.assetLookup != null) {
+                                        add(NativeOperationArea("scan", "البحث عن معدة", "افتح سجل المعدة باستخدام AssetTag.") {
+                                            state.assetLookup?.let { AssetTagLookupSection(it, onLookupAssetTag) }
+                                        })
+                                    }
+                                    if (state.warehouse != null) {
+                                        add(NativeOperationArea("inventory", "إدارة المخزون", "الأصناف والمعدات والحجوزات والمواقع والصلاحيات.") {
+                                            state.warehouse?.let { warehouse ->
+                                                WarehouseSetupSection(
+                            state = warehouse,
+                            onRefresh = onRefreshWarehouse,
+                            onStockAction = onStockAction,
+                            reservationPort = reservationPort,
+                            onAssetAction = onAssetAction,
+                            onSelectWarehouse = onSelectWarehouse,
+                            onCreateWarehouse = onCreateWarehouse,
+                            onCreateWarehouseLocation = onCreateWarehouseLocation,
+                            onOpenImportBatch = onOpenImportBatch,
+                            onReviewImportRow = onReviewImportRow,
+                            onGrantWarehouseAuthority = onGrantWarehouseAuthority,
+                            onEndWarehouseAuthority = onEndWarehouseAuthority,
+                        )
+                                            }
+                                        })
+                                    }
+                                },
+                            )
+                        }
                     }
+                    if (show(ShellWorkspace.Purchasing)) procurementOperator()
 
                     if (show(ShellWorkspace.Projects)) state.projects?.let {
                         Column {
