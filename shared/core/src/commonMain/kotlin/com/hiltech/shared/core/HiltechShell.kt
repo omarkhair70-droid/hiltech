@@ -36,6 +36,11 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.HiltechOperationalTheme
+import com.hiltech.shared.core.design.HiltechLanguage
+import com.hiltech.shared.core.design.HiltechLanguageProvider
+import com.hiltech.shared.core.design.HiltechLanguagePreference
+import com.hiltech.shared.core.design.LocalHiltechLanguage
+import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.design.HiltechPanel
 import com.hiltech.shared.core.design.HiltechStateTag
 import com.hiltech.shared.core.design.HiltechStateTone
@@ -290,7 +295,10 @@ fun HiltechShell(
     inboxWorkspace: (@Composable () -> Unit)? = null,
     employeeAccountWorkspace: (@Composable (EmployeeDetailDto) -> Unit)? = null,
     desktopFindRequest: Int = 0,
+    language: HiltechLanguage = HiltechLanguage.Arabic,
+    onLanguageChange: (HiltechLanguage) -> Unit = {},
 ) {
+    HiltechLanguageProvider(language) {
     HiltechOperationalTheme {
         // Never inherit a different actor's previous desktop/mobile scroll
         // position when signing out, switching org or restoring offline read.
@@ -383,7 +391,7 @@ fun HiltechShell(
             } else null,
         ) {
             Text(
-                selectedWorkspace?.displayLabel ?: "HILTECH OS",
+                selectedWorkspace?.let { language.text(it.displayLabel, it.label) } ?: "HILTECH OS",
                 style = MaterialTheme.typography.headlineMedium,
             )
             if (selectedWorkspace == null) {
@@ -395,8 +403,8 @@ fun HiltechShell(
 
             when (state) {
                 HiltechShellState.SignedOut -> {
-                    Text("Sign in with your HILTECH identity to continue.")
-                    Button(onClick = onSignIn) { Text("Sign in") }
+                    Text(hiltechText("سجّل الدخول بحساب HILTECH للمتابعة.", "Sign in with your HILTECH identity to continue."))
+                    Button(onClick = onSignIn) { Text(hiltechText("تسجيل الدخول", "Sign in")) }
                 }
 
                 is HiltechShellState.Working -> {
@@ -446,11 +454,11 @@ fun HiltechShell(
                             OutlinedButton(onClick = {
                                 requestedWorkspace = ShellWorkspace.Explore
                                 nativeSession.open("executive-home")
-                            }) { Text("Open company overview") }
+                            }) { Text(hiltechText("نظرة عامة على الشركة", "Open company overview")) }
                         }
                         if (selectedWorkspace != null && inboxWorkspace != null) {
                             OutlinedButton(onClick = { requestedWorkspace = ShellWorkspace.Inbox }) {
-                                Text("Open inbox")
+                                Text(hiltechText("فتح الوارد", "Open inbox"))
                             }
                         }
                     }
@@ -521,15 +529,16 @@ fun HiltechShell(
                         }
 
                     if (show(ShellWorkspace.Account)) {
+                        HiltechLanguagePreference(language, onLanguageChange)
                         Text(
-                            "Me / Sessions",
+                            hiltechText("حسابي والأجهزة", "Me / Sessions"),
                             style = MaterialTheme.typography.titleMedium,
                         )
 
                         val security = state.security
                         if (security == null) {
                             Text(
-                                "Session and device security context is loading.",
+                                hiltechText("جارٍ تحميل معلومات الجلسات والأجهزة.", "Session and device security context is loading."),
                             )
                         } else {
                             val activeSessions =
@@ -818,13 +827,13 @@ fun HiltechShell(
                         }
 
                     if (show(ShellWorkspace.Account)) OutlinedButton(onClick = onSignOut) {
-                        Text("Sign out")
+                        Text(hiltechText("تسجيل الخروج", "Sign out"))
                     }
                 }
 
                 is HiltechShellState.AccessDenied -> {
                     Text(
-                        "Access unavailable",
+                        hiltechText("الوصول غير متاح", "Access unavailable"),
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Text(state.message)
@@ -832,16 +841,16 @@ fun HiltechShell(
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Button(onClick = onRetry) { Text("Try again") }
+                        Button(onClick = onRetry) { Text(hiltechText("حاول مرة أخرى", "Try again")) }
                         OutlinedButton(onClick = onSignOut) {
-                            Text("Sign out")
+                            Text(hiltechText("تسجيل الخروج", "Sign out"))
                         }
                     }
                 }
 
                 is HiltechShellState.ConfigurationRequired -> {
                     Text(
-                        "HILTECH is not configured",
+                        hiltechText("لم يتم إعداد HILTECH", "HILTECH is not configured"),
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Text(state.message)
@@ -849,12 +858,12 @@ fun HiltechShell(
 
                 is HiltechShellState.Failure -> {
                     Text(
-                        "Something went wrong",
+                        hiltechText("حدث خطأ", "Something went wrong"),
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Text(state.message)
                     Text("Reference: ${state.code}")
-                    Button(onClick = onRetry) { Text("Retry") }
+                    Button(onClick = onRetry) { Text(hiltechText("إعادة المحاولة", "Retry")) }
                 }
             }
         }
@@ -862,7 +871,7 @@ fun HiltechShell(
         if (finding && desktopNavigation && signedIn != null) {
             val commands = buildList {
                 destinations.forEach { workspace ->
-                    add(WorkspaceSearchResult("workspace:${workspace.name}", workspace.label, "Workspace") {
+                    add(WorkspaceSearchResult("workspace:${workspace.name}", language.text(workspace.displayLabel, workspace.label), language.text("مساحة عمل", "Workspace")) {
                         nativeSession.close()
                         requestedWorkspace = workspace
                     })
@@ -895,6 +904,7 @@ fun HiltechShell(
             WorkspaceSearch(commands, onDismiss = { finding = false })
         }
     }
+    }
 }
 
 
@@ -905,7 +915,7 @@ private fun EmployeeOnboardingSection(
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
-            LayoutDirection.Rtl,
+            LocalHiltechLanguage.current.direction,
     ) {
         Column(
             verticalArrangement =
