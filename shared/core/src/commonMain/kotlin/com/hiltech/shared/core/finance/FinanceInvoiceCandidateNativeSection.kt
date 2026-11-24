@@ -101,8 +101,14 @@ fun FinanceInvoiceCandidateSection(identityId:String,org:String,install:String,a
         var awardSearch by remember {mutableStateOf("")}
         var awardsError by remember {mutableStateOf<String?>(null)}
         var selectedAward by remember {mutableStateOf<FinanceClientAwardSourceRowDto?>(null)}
+        var evidencePreview by remember {mutableStateOf<FinanceBillingEvidencePreview?>(null)}
+        var evidenceLoading by remember {mutableStateOf(false)}
+        var evidenceError by remember {mutableStateOf<String?>(null)}
         fun change(next:FinanceInvoiceCandidateDraft) {
             if(next.opportunityId!=draft.opportunityId)selectedAward=null
+            if(next.opportunityId!=draft.opportunityId || next.evidenceId!=draft.evidenceId) {
+                evidencePreview=null;evidenceError=null
+            }
             draft=next;operation=null;error=null;result=null
         }
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -167,7 +173,27 @@ fun FinanceInvoiceCandidateSection(identityId:String,org:String,install:String,a
             OutlinedTextField(value=draft.opportunityId,onValueChange={change(draft.copy(opportunityId=it.trim()))},
                 label={Text("معرّف الفرصة التجارية المعتمدة")},enabled=editable,modifier=Modifier.fillMaxWidth())
             OutlinedTextField(value=draft.evidenceId,onValueChange={change(draft.copy(evidenceId=it.trim()))},
-                label={Text("مستند استحقاق الفوترة")},enabled=editable,modifier=Modifier.fillMaxWidth())
+                label={Text("معرّف مستند استحقاق الفوترة")},enabled=editable,modifier=Modifier.fillMaxWidth())
+            OutlinedButton(enabled=editable && !evidenceLoading &&
+                financeLookupIdIsUuid(draft.opportunityId) &&
+                financeLookupIdIsUuid(draft.evidenceId),onClick={
+                    val frozen=draft
+                    evidenceLoading=true;evidenceError=null;evidencePreview=null
+                    scope.launch {
+                        try {
+                            evidencePreview=financeBillingEvidencePreview(
+                                apis,frozen.opportunityId,frozen.evidenceId,install)
+                        } catch(cancelled:CancellationException){throw cancelled}
+                        catch(_:Exception) {
+                            evidenceError="تعذر تأكيد جاهزية المستند أو ارتباطه بالعقد. تحقق من صلاحية المصدر وحالة الرفع."
+                        } finally {evidenceLoading=false}
+                    }
+                }) {Text(if(evidenceLoading)"جارٍ فحص المستند…" else "فحص المستند من المصدر")}
+            evidenceError?.let {Text(it,color=MaterialTheme.colorScheme.error)}
+            evidencePreview?.let {preview ->
+                Text("مستند جاهز · "+preview.contentType+" · "+preview.sizeBytes+" بايت",
+                    style=MaterialTheme.typography.bodySmall)
+            }
             OutlinedTextField(value=draft.amount,onValueChange={change(draft.copy(amount=it.trim()))},
                 label={Text("قيمة الفاتورة المستحقة لهذه الدفعة")},enabled=editable,modifier=Modifier.fillMaxWidth())
             OutlinedTextField(value=draft.legalReference,onValueChange={change(draft.copy(legalReference=it))},
