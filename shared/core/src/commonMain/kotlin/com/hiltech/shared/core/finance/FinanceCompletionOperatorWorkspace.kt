@@ -198,19 +198,24 @@ fun financeCompletionOperatorWorkspace(
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { }
         }
+        if(!available) for(kind in listOf(FinanceReviewKind.CASH_VOUCHER,FinanceReviewKind.CASH_COUNT,FinanceReviewKind.BANK_RECONCILIATION)) {
+            try {financeSignedQueue(apis,organizationId,installationId,kind);available=true;break}
+            catch(cancelled:CancellationException){throw cancelled}
+            catch(_:Exception){}
+        }
         available
     },
     hostOwnsScroll = false,
     content = { _ ->
         key(identityId, organizationId, installationId) {
-            CompletionOperatorSection(organizationId,installationId,apis,newOperationId)
+            CompletionOperatorSection(identityId,organizationId,installationId,apis,newOperationId)
         }
     },
 )
 
 @Composable
 private fun CompletionOperatorSection(
-    org: String, installation: String, apis: FinanceEvidenceReadApis, newOperationId: () -> String,
+    identityId: String, org: String, installation: String, apis: FinanceEvidenceReadApis, newOperationId: () -> String,
 ) {
     val scope = rememberCoroutineScope()
     var kind by remember { mutableStateOf(FinanceCompletionKind.AR_INVOICE) }
@@ -301,5 +306,6 @@ private fun CompletionOperatorSection(
             }
         }
         error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
+        FinanceSignedCompletionSection(identityId,org,installation,apis,newOperationId)
     }
 }
