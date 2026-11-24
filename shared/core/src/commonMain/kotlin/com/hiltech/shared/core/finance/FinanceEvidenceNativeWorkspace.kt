@@ -374,7 +374,7 @@ fun financeEvidenceReadNativeWorkspace(
         ) {
             Text("المراجعة المالية · بيانات مصدرية",
                 style = MaterialTheme.typography.titleMedium)
-            Text("قراءة داخلية فقط. لا يوجد اعتماد أو صرف أو تحصيل أو إصدار فاتورة أو إرسال عميل من هذه المساحة.",
+            Text(if (reviewPreparationEnabled) "قراءة وتجهيز ومتابعة التسجيل الداخلي المعتمد حسب صلاحيات المصدر." else "قراءة داخلية فقط.",
                 style = MaterialTheme.typography.bodySmall)
             Text("سجل الموردين · قيود تاريخية مثبتة",
                 style = MaterialTheme.typography.titleSmall)
@@ -412,6 +412,7 @@ fun financeEvidenceReadNativeWorkspace(
                     apis = apis,
                     newOperationId = newOperationId,
                 )
+                FinanceSignedCompletionSection(identityId,organizationId,installationId,apis,newOperationId)
             }
 
             Text("تتبّع عملية برقم مصدرها", style = MaterialTheme.typography.titleSmall)
