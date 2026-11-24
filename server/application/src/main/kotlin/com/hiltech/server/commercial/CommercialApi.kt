@@ -22,7 +22,7 @@ import java.util.UUID
  */
 @RestController
 @RequestMapping("/v1/commercial")
-class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail) {
+class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail, private val connections: CommercialMailConnection) {
     private fun operation(key: String, id: String): UUID {
         val parsed = id.commercialUuid()
         IdempotencyKeyContract.requireMatches(key, parsed)
@@ -39,6 +39,18 @@ class CommercialController(private val service: CommercialService, private val e
         HiltechRequestContext.current(http).requireIdentityId(),
         HiltechRequestContext.current(http).correlationId,
     )
+
+    @GetMapping("/mail-connection")
+    fun mailConnection(http: HttpServletRequest, @RequestParam organizationId: String) =
+        connections.status(organizationId.commercialUuid(),HiltechRequestContext.current(http).requireIdentityId())
+
+    @PostMapping("/mail-connection/connect")
+    fun connectMail(http: HttpServletRequest,@RequestBody body: ConnectCommercialMailRequest) =
+        connections.connect(body,HiltechRequestContext.current(http).requireIdentityId())
+
+    @PostMapping("/mail-connection/disconnect")
+    fun disconnectMail(http: HttpServletRequest,@RequestBody body: DisconnectCommercialMailRequest) =
+        connections.disconnect(body,HiltechRequestContext.current(http).requireIdentityId())
 
     @GetMapping("/document-settings")
     fun documentSettings(http: HttpServletRequest, @RequestParam organizationId: String) =

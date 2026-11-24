@@ -10,6 +10,13 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
+data class CommercialMailConnectionDto(val configured: Boolean, val setupAvailable: Boolean, val allowedHosts: List<String>, val host: String? = null, val username: String? = null, val version: Long = 0)
+@Serializable
+class ConnectCommercialMailDto(val organizationId: String, val host: String, val username: String, val appPassword: String, val baseVersion: Long)
+@Serializable
+data class DisconnectCommercialMailDto(val organizationId: String, val baseVersion: Long)
+
+@Serializable
 data class CommercialDocumentProfileDto(
     val legalName: String = "",
     val address: String = "",
@@ -353,6 +360,18 @@ class CommercialApiClient(
     private val api: HiltechApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
 ) {
+    suspend fun mailConnection(organizationId: String, installationId: String): CommercialMailConnectionDto =
+        api.request(method = HttpMethod.Get, path = "/v1/commercial/mail-connection?organizationId=" + organizationId,
+            options = HiltechRequestOptions(installationId = installationId), decode = { json.decodeFromString(CommercialMailConnectionDto.serializer(), it) })
+    suspend fun connectMail(request: ConnectCommercialMailDto, installationId: String): CommercialMailConnectionDto =
+        api.request(method = HttpMethod.Post, path = "/v1/commercial/mail-connection/connect",
+            options = HiltechRequestOptions(installationId = installationId), requestBody = json.encodeToString(ConnectCommercialMailDto.serializer(),request),
+            decode = { json.decodeFromString(CommercialMailConnectionDto.serializer(),it) })
+    suspend fun disconnectMail(request: DisconnectCommercialMailDto, installationId: String): CommercialMailConnectionDto =
+        api.request(method = HttpMethod.Post, path = "/v1/commercial/mail-connection/disconnect",
+            options = HiltechRequestOptions(installationId = installationId), requestBody = json.encodeToString(DisconnectCommercialMailDto.serializer(),request),
+            decode = { json.decodeFromString(CommercialMailConnectionDto.serializer(),it) })
+
     suspend fun documentSettings(organizationId: String, installationId: String): CommercialDocumentSettingsDto =
         api.request(method = HttpMethod.Get, path = "/v1/commercial/document-settings?organizationId=" + organizationId,
             options = HiltechRequestOptions(installationId = installationId), decode = { json.decodeFromString(CommercialDocumentSettingsDto.serializer(), it) })

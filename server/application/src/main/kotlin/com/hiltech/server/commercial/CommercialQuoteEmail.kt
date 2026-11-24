@@ -21,6 +21,8 @@ class CommercialQuoteEmail(
     private val commercial: CommercialService,
     private val jdbc: JdbcTemplate,
     private val mail: ObjectProvider<JavaMailSender>,
+    private val connections: CommercialMailConnection,
+    @Value("\${hiltech.commercial.legacy-mail-company:}") private val legacyCompany: String,
     @Value("\${hiltech.commercial.email-from:}") private val from: String,
 ) {
     fun available(): Boolean = from.isNotBlank() && mail.ifAvailable != null
@@ -51,10 +53,11 @@ class CommercialQuoteEmail(
     fun send(quote: UUID, actor: UUID, key: UUID, recipient: String): CommercialQuoteEmailStatus {
         val projection = commercial.requireQuoteDispatch(quote, actor)
         val to = email(recipient)
-        val sender = mail.ifAvailable
-        if (!available() || sender == null)
-            throw commercialError("COMMERCIAL_EMAIL_NOT_CONFIGURED", "Company email service is not configured.", HttpStatus.SERVICE_UNAVAILABLE)
-        val senderAddress = email(from)
+        val company = commercial.quoteCompanyForDispatch(quote,actor)
+        val connected = connections.forSending(company)
+        val sender = connected?.first ?: mail.ifAvailable?.takeIf { legacyCompany == company.toString() && available() }
+            ?: throw commercialError("COMMERCIAL_EMAIL_NOT_CONFIGURED", "Company email service is not configured.", HttpStatus.SERVICE_UNAVAILABLE)
+        val senderAddress = email(connected?.second ?: from)
         val pdf = commercial.customerPdf(quote, actor)
         val message = sender.createMimeMessage()
         val helper = MimeMessageHelper(message, true, "UTF-8")
