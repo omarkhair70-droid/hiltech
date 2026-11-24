@@ -322,6 +322,11 @@ data class CommercialQuoteDispatchDto(val id: String, val channel: String, val r
 data class RecordCommercialQuoteDispatchDto(val operationId: String, val channel: String, val recipientReference: String)
 
 @Serializable
+data class CommercialQuoteEmailDto(val operationId: String, val recipient: String)
+@Serializable
+data class CommercialQuoteEmailStatusDto(val id: String, val recipient: String, val state: String, val createdAt: String)
+
+@Serializable
 data class ClientQuotePdfDto(val filename: String, val base64: String)
 
 /** Uses existing identity, device/session headers and idempotency transport. No anonymous client endpoint. */
@@ -493,6 +498,17 @@ class CommercialApiClient(
     suspend fun recordDispatch(quoteId: String, request: RecordCommercialQuoteDispatchDto, installationId: String) =
         command("/v1/commercial/quotes/" + quoteId + "/dispatch-history", request.operationId, installationId,
             json.encodeToString(RecordCommercialQuoteDispatchDto.serializer(), request))
+
+    suspend fun emailHistory(quoteId: String, installationId: String): List<CommercialQuoteEmailStatusDto> =
+        api.request(method = HttpMethod.Get, path = "/v1/commercial/quotes/" + quoteId + "/email-history",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(ListSerializer(CommercialQuoteEmailStatusDto.serializer()), it) })
+
+    suspend fun sendEmail(quoteId: String, request: CommercialQuoteEmailDto, installationId: String): CommercialQuoteEmailStatusDto =
+        api.request(method = HttpMethod.Post, path = "/v1/commercial/quotes/" + quoteId + "/email",
+            options = HiltechRequestOptions(installationId = installationId, idempotencyKey = request.operationId),
+            requestBody = json.encodeToString(CommercialQuoteEmailDto.serializer(), request),
+            decode = { json.decodeFromString(CommercialQuoteEmailStatusDto.serializer(), it) })
 
     private suspend fun command(path: String, operationId: String, installationId: String, body: String) =
         api.request(

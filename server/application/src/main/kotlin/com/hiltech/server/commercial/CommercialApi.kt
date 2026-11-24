@@ -22,7 +22,7 @@ import java.util.UUID
  */
 @RestController
 @RequestMapping("/v1/commercial")
-class CommercialController(private val service: CommercialService) {
+class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail) {
     private fun operation(key: String, id: String): UUID {
         val parsed = id.commercialUuid()
         IdempotencyKeyContract.requireMatches(key, parsed)
@@ -177,6 +177,16 @@ class CommercialController(private val service: CommercialService) {
     @PostMapping("/quotes/{quoteId}/customer-pdf")
     fun quotePdf(http: HttpServletRequest, @PathVariable quoteId: String) =
         service.customerPdf(quoteId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
+
+    @GetMapping("/quotes/{quoteId}/email-history")
+    fun emailHistory(http: HttpServletRequest, @PathVariable quoteId: String) =
+        email.history(quoteId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
+
+    @PostMapping("/quotes/{quoteId}/email")
+    fun sendEmail(http: HttpServletRequest, @PathVariable quoteId: String,
+                  @RequestHeader("Idempotency-Key") key: String, @RequestBody body: CommercialQuoteEmailRequest) =
+        email.send(quoteId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId(),
+            operation(key, body.operationId), body.recipient)
 
     @GetMapping("/quotes/{quoteId}/dispatch-history")
     fun quoteDispatchHistory(http: HttpServletRequest, @PathVariable quoteId: String) =

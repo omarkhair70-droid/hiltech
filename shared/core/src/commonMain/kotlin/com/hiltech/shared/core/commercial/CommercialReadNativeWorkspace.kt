@@ -62,6 +62,7 @@ fun commercialReadNativeWorkspace(
         val retryIds = remember(identityId, organizationId, installationId) { mutableMapOf<Any, String>() }
         var customerQuote by remember(identityId, organizationId, installationId) { mutableStateOf<ClientQuoteDto?>(null) }
         var dispatchHistory by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialQuoteDispatchDto>>(emptyList()) }
+        var emailHistory by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialQuoteEmailStatusDto>>(emptyList()) }
         var quoteBusy by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
         var feedback by remember(identityId, organizationId, installationId) { mutableStateOf<String?>(null) }
         var items by remember(identityId, organizationId, installationId) {
@@ -138,6 +139,7 @@ fun commercialReadNativeWorkspace(
             detail = null
             customerQuote = null
             dispatchHistory = emptyList()
+            emailHistory = emptyList()
             costs = emptyList()
             summaries = emptyList()
             try {
@@ -235,6 +237,7 @@ fun commercialReadNativeWorkspace(
                             customerQuote = customerQuote,
                             quoteBusy = quoteBusy,
                             dispatchHistory = dispatchHistory,
+                            emailHistory = emailHistory,
                         ),
                         onRefresh = { refreshVersion++ },
                         onAction = { action -> perform(action) { coordinator.dispatch(action, it) } },
@@ -243,16 +246,37 @@ fun commercialReadNativeWorkspace(
                                 quoteBusy = true
                                 customerQuote = null
                                 dispatchHistory = emptyList()
+                                emailHistory = emptyList()
                                 jobs.launch {
                                     try {
                                         val loaded = client.customerQuote(quoteId, installationId)
                                         val history = client.dispatchHistory(quoteId, installationId)
+                                        val emails = client.emailHistory(quoteId, installationId)
                                         if (loaded.quoteId == quoteId && detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) {
                                             customerQuote = loaded
                                             dispatchHistory = history
+                                            emailHistory = emails
                                         }
                                     } catch (cancelled: CancellationException) { throw cancelled }
                                     catch (_: Exception) { error = "QUOTE_PREVIEW_UNAVAILABLE" }
+                                    finally { quoteBusy = false }
+                                }
+                            }
+                        },
+                        onSendEmail = { quoteId, recipient ->
+                            if ((canWrite || canRelease) && !quoteBusy && customerQuote?.quoteId == quoteId && newOperationId != null) {
+                                quoteBusy = true
+                                jobs.launch {
+                                    try {
+                                        val key = listOf("email", quoteId, recipient)
+                                        val id = retryIds.getOrPut(key) { newOperationId() }
+                                        val status = client.sendEmail(quoteId, CommercialQuoteEmailDto(id, recipient), installationId)
+                                        emailHistory = client.emailHistory(quoteId, installationId)
+                                        feedback = status.state
+                                        // Retain the operation ID after ambiguous results to prevent blind repeats.
+                                        if (status.state == "SMTP_ACCEPTED") retryIds.remove(key)
+                                    } catch (cancelled: CancellationException) { throw cancelled }
+                                    catch (_: Exception) { error = "QUOTE_EMAIL_UNAVAILABLE_OR_UNCONFIRMED" }
                                     finally { quoteBusy = false }
                                 }
                             }

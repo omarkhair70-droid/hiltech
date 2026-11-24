@@ -645,6 +645,12 @@ class CommercialService(
         return CommercialQuotePdfDto(record["filename"] as String, java.util.Base64.getEncoder().encodeToString(bytes))
     }
 
+    fun requireQuoteDispatch(id: UUID, actor: UUID): ClientCommercialQuote {
+        val parent = quote(id)
+        access.require(actor, parent["organization_id"] as UUID, "SALES_WRITE", "SALES_RELEASE")
+        return customerQuote(id, actor)
+    }
+
     fun quoteDispatchHistory(id: UUID, actor: UUID): List<CommercialQuoteDispatchDto> {
         customerQuote(id, actor)
         return jdbc.queryForList(

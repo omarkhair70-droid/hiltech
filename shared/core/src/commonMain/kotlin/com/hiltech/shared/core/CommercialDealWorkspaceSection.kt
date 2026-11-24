@@ -45,6 +45,7 @@ data class CommercialDealWorkspaceState(
     val customerQuote: ClientQuoteDto? = null,
     val quoteBusy: Boolean = false,
     val dispatchHistory: List<CommercialQuoteDispatchDto> = emptyList(),
+    val emailHistory: List<com.hiltech.shared.core.commercial.CommercialQuoteEmailStatusDto> = emptyList(),
 )
 
 data class CommercialDraftLine(
@@ -118,6 +119,7 @@ fun CommercialDealWorkspaceSection(
     onPreviewQuote: ((String) -> Unit)? = null,
     onExportQuote: ((String) -> Unit)? = null,
     onRecordDispatch: ((String, String, String) -> Unit)? = null,
+    onSendEmail: ((String, String) -> Unit)? = null,
 ) {
     if (!state.enabled) {
         Text("Commercial operations are locked until company authorization is configured.")
@@ -166,7 +168,7 @@ fun CommercialDealWorkspaceSection(
                 )
                 CommercialStage.QUOTE -> CommercialQuotePanel(
                     detail, state.canWrite, state.canRelease, onAction,
-                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote, state.dispatchHistory, onRecordDispatch,
+                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote, state.dispatchHistory, onRecordDispatch, state.emailHistory, onSendEmail,
                 )
                 CommercialStage.AWARD -> CommercialAwardPanel(
                     detail, state.canAward, state.canCreateProject, onAction,
@@ -440,6 +442,8 @@ private fun CommercialQuotePanel(
     onExport: ((String) -> Unit)?,
     dispatchHistory: List<CommercialQuoteDispatchDto>,
     onRecordDispatch: ((String, String, String) -> Unit)?,
+    emailHistory: List<com.hiltech.shared.core.commercial.CommercialQuoteEmailStatusDto>,
+    onSendEmail: ((String, String) -> Unit)?,
 ) {
     val op=deal.opportunity
     Text(hiltechText("عروض الأسعار والاعتماد", "Customer quotations & approval"), style=MaterialTheme.typography.titleMedium)
@@ -451,6 +455,7 @@ private fun CommercialQuotePanel(
             if (customerQuote?.quoteId == q.id) {
                 ReleasedQuotePreview(customerQuote)
                 if (onExport != null) Button(enabled = !quoteBusy, onClick = { onExport(q.id) }) { Text(hiltechText("تصدير PDF", "Export PDF")) }
+                QuoteEmailPanel(q.id, emailHistory, quoteBusy, if (canWrite || canRelease) onSendEmail else null)
                 QuoteDispatchPanel(q.id, dispatchHistory, quoteBusy,
                     if (canWrite || canRelease) onRecordDispatch else null)
             }
@@ -491,6 +496,32 @@ private fun CommercialQuotePanel(
         ) { Text(hiltechText("إنشاء إصدار جديد لعرض السعر", "Create new quote version")) }
     }
     Text(hiltechText("نسخة العميل لا تتضمن التكلفة الداخلية أو هامش الربح.", "Customer copies exclude internal cost and margin."))
+}
+
+@Composable
+private fun QuoteEmailPanel(quoteId: String, history: List<com.hiltech.shared.core.commercial.CommercialQuoteEmailStatusDto>, busy: Boolean, send: ((String, String) -> Unit)?) {
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("الإرسال المباشر بالبريد", "Direct email"), style = MaterialTheme.typography.titleMedium)
+        history.forEach { item ->
+            val status = when (item.state) {
+                "SMTP_ACCEPTED" -> hiltechText("قبله خادم البريد؛ الاستلام غير مؤكد", "Accepted by mail server; delivery unconfirmed")
+                else -> hiltechText("نتيجة غير مؤكدة — تحقق قبل إعادة الإرسال", "Uncertain outcome — verify before resending")
+            }
+            HiltechKeyValue(item.recipient + " · " + item.createdAt, status)
+        }
+        if (send != null) {
+            var recipient by remember(quoteId) { mutableStateOf("") }
+            var confirmed by remember(quoteId) { mutableStateOf(false) }
+            OutlinedTextField(recipient, { recipient = it; confirmed = false }, label = { Text(hiltechText("البريد الإلكتروني للمستلم", "Recipient email")) }, modifier = Modifier.fillMaxWidth())
+            Row {
+                Checkbox(confirmed, { confirmed = it })
+                Text(hiltechText("أؤكد إرسال نسخة العرض المعتمدة إلى هذا العنوان.", "I confirm sending the released quote to this address."))
+            }
+            Button(enabled = confirmed && recipient.contains("@") && !busy, onClick = {
+                send(quoteId, recipient.trim()); confirmed = false
+            }) { Text(hiltechText("إرسال عرض السعر", "Send quotation")) }
+        }
+    }
 }
 
 @Composable
