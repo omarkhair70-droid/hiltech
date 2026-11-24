@@ -4,6 +4,7 @@ import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 @Serializable
@@ -80,6 +81,14 @@ class FinanceEmployeeMoneyApiClient(
         org:String,proposal:String,operation:String,installation:String,
     ):FinanceEmployeeFundingReceiptDto =
         fundingCommand(org,proposal,operation,installation,"record")
+    suspend fun fundingOperatorQueue(org:String,installation:String):List<FinanceEmployeeFundingReceiptDto> =
+        api.request(
+            method=HttpMethod.Get,
+            path="/v1/finance/organizations/"+uuid(org)+"/employee-funding-proposals/operator-queue",
+            options=HiltechRequestOptions(installationId=installation),
+            decode={json.decodeFromString(ListSerializer(FinanceEmployeeFundingReceiptDto.serializer()),it)},
+        )
+
     suspend fun fundingStatus(
         org:String,proposal:String,installation:String,
     ):FinanceEmployeeFundingReceiptDto = api.request(
@@ -123,6 +132,14 @@ class FinanceEmployeeMoneyApiClient(
         org:String,proposal:String,operation:String,installation:String,
     ):FinanceEmployeeSettlementReceiptDto =
         settlementCommand(org,proposal,operation,installation,"record")
+    suspend fun settlementOperatorQueue(org:String,installation:String):List<FinanceEmployeeSettlementReceiptDto> =
+        api.request(
+            method=HttpMethod.Get,
+            path="/v1/finance/organizations/"+uuid(org)+"/employee-settlement-proposals/operator-queue",
+            options=HiltechRequestOptions(installationId=installation),
+            decode={json.decodeFromString(ListSerializer(FinanceEmployeeSettlementReceiptDto.serializer()),it)},
+        )
+
     suspend fun settlementStatus(
         org:String,proposal:String,installation:String,
     ):FinanceEmployeeSettlementReceiptDto=api.request(

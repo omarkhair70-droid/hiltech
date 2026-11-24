@@ -197,8 +197,39 @@ class FinanceCashboxOpeningService(
    return receipt(s,"ACTIVE",approved.approvalRequestId,
       outcome.replayed).copy(cashboxId=id)
  }
+ /** A preparer can discover only their own pending opening proposals. */
+ fun openingQueue(actor:UUID,org:UUID):List<FinanceCashboxReceipt> {
+   authority(actor,org,"hiltech.finance.cashbox.preparer-authority-key")
+   val ids=jdbc.query(
+     """SELECT p.id FROM finance_cashbox_opening_proposal p
+        WHERE p.organization_id=? AND p.prepared_by_user_id=?
+        AND NOT EXISTS (SELECT 1 FROM finance_cashbox_register b
+          WHERE b.organization_id=p.organization_id AND b.id=p.id)
+        ORDER BY p.created_at DESC,p.id LIMIT 100""",
+     {rs,_->rs.getObject("id",UUID::class.java)},org,actor,
+   )
+   return ids.mapNotNull { id ->
+      val current=subject.current(org,id) ?: return@mapNotNull null
+      if(current.preparedBy!=actor) return@mapNotNull null
+      val ref=ApprovalSubjectRef(org,FINANCE_CASHBOX_OPENING_SUBJECT,id,current.version)
+      val review=engine.subjectStatus(ref,current.policyKey)
+      receipt(current,review?.state?.name ?:"PROPOSED",review?.approvalRequestId)
+   }
+ }
  fun status(actor:UUID,org:UUID,id:UUID):FinanceCashboxReceipt {
-   authority(actor,org,"hiltech.finance.cashbox.reader-authority-key")
+   val reader=try {
+     authority(actor,org,"hiltech.finance.cashbox.reader-authority-key")
+     true
+   } catch (_:ProductApiException) { false }
+   if(!reader) {
+     authority(actor,org,"hiltech.finance.cashbox.preparer-authority-key")
+     val own=jdbc.query(
+       """SELECT prepared_by_user_id FROM finance_cashbox_opening_proposal
+          WHERE organization_id=? AND id=?""",
+       {rs,_->rs.getObject("prepared_by_user_id",UUID::class.java)},org,id,
+     ).singleOrNull()
+     if(own!=actor)unavailable()
+   }
    historic(org,id)?.let{return it}
    val s=subject.current(org,id) ?:stale()
    val review=engine.subjectStatus(
@@ -288,6 +319,9 @@ class FinanceCashboxOpeningController(
    return cashboxes.activate(
      actor(http),orgId,id,body.operationId,ctx.correlationId)
  }
+ @GetMapping("/v1/finance/organizations/{orgId}/cashboxes/opening-queue")
+ fun openingQueue(http:HttpServletRequest,@PathVariable orgId:UUID):List<FinanceCashboxReceipt> =
+    cashboxes.openingQueue(actor(http),orgId)
  @GetMapping("/v1/finance/organizations/{orgId}/cashboxes/{id}")
  fun status(http:HttpServletRequest,@PathVariable orgId:UUID,
      @PathVariable id:UUID):FinanceCashboxReceipt =

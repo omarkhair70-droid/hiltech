@@ -301,11 +301,37 @@ class FinanceExpenseReimbursementService(
             approval=approved.approvalRequestId,
             recorded=recordId,replayed=outcome.replayed)
     }
+    /** Discover only currently approved, unrecorded operations for the existing operator authority. */
+    fun operatorQueue(actor: UUID, org: UUID): List<FinanceExpenseReimbursementReceipt> {
+        authority(actor,org,"hiltech.finance.expense-reimbursement.operator-authority-key")
+        val ids = jdbc.query(
+            """SELECT p.id FROM finance_expense_reimbursement_proposal p
+               WHERE p.organization_id=?
+               AND EXISTS (SELECT 1 FROM approval_request a
+                 WHERE a.organization_id=p.organization_id AND a.subject_id=p.id
+                 AND a.subject_type=? AND a.state='APPROVED'
+                 AND a.requester_user_id<>?)
+               AND NOT EXISTS (SELECT 1 FROM finance_expense_reimbursement_record r
+                 WHERE r.organization_id=p.organization_id AND r.proposal_id=p.id)
+               ORDER BY p.id LIMIT 100""",
+            { rs,_ -> rs.getObject("id",UUID::class.java) },org,FINANCE_EXPENSE_REIMBURSEMENT_SUBJECT,actor,
+        )
+        return ids.mapNotNull { id ->
+            val snapshot = subject.current(org,id) ?: return@mapNotNull null
+            if (snapshot.preparedBy == actor) return@mapNotNull null
+            val current = status(actor,org,id)
+            current.takeIf { it.state=="APPROVED" && it.approvalRequestId!=null && it.reimbursementRecordId==null }
+        }
+    }
+
     fun status(
         actor:UUID,org:UUID,id:UUID,
     ):FinanceExpenseReimbursementReceipt {
-        authority(actor,org,
-            "hiltech.finance.expense-reimbursement.preparer-authority-key")
+        val operator = try {
+            authority(actor,org,"hiltech.finance.expense-reimbursement.operator-authority-key")
+            true
+        } catch (_: ProductApiException) { false }
+        if (!operator) authority(actor,org,"hiltech.finance.expense-reimbursement.preparer-authority-key")
         historical(org,id)?.let{return it}
         val snap=subject.current(org,id) ?: stale()
         val review=engine.subjectStatus(
@@ -404,6 +430,9 @@ class FinanceExpenseReimbursementController(
    return reimbursements.record(
      actor(http),orgId,id,body.operationId,ctx.correlationId)
  }
+ @GetMapping("/v1/finance/organizations/{orgId}/expense-reimbursements/operator-queue")
+    fun operatorQueue(http:HttpServletRequest,@PathVariable orgId:UUID):List<FinanceExpenseReimbursementReceipt> =
+        reimbursements.operatorQueue(actor(http),orgId)
  @GetMapping("/v1/finance/organizations/{orgId}/expense-reimbursements/{id}")
  fun status(
    http:HttpServletRequest,@PathVariable orgId:UUID,@PathVariable id:UUID,

@@ -196,8 +196,34 @@ class FinanceGlPeriodCloseService(
             closureId=eventId,replayed=result.replayed)
     }
 
+    /** Discover only currently approved, unrecorded operations for the existing operator authority. */
+    fun operatorQueue(actor: UUID, org: UUID): List<FinancePeriodCloseReceipt> {
+        requireAuthority(actor,org,"hiltech.finance.gl-period-close.operator-authority-key")
+        val ids = jdbc.query(
+            """SELECT p.id FROM finance_gl_period p
+               WHERE p.organization_id=?
+               AND EXISTS (SELECT 1 FROM approval_request a
+                 WHERE a.organization_id=p.organization_id AND a.subject_id=p.id
+                 AND a.subject_type=? AND a.state='APPROVED'
+                 AND a.requester_user_id<>?)
+               AND NOT EXISTS (SELECT 1 FROM finance_gl_period_close r
+                 WHERE r.organization_id=p.organization_id AND r.period_id=p.id)
+               ORDER BY p.id LIMIT 100""",
+            { rs,_ -> rs.getObject("id",UUID::class.java) },org,FINANCE_GL_PERIOD_CLOSE_SUBJECT,actor,
+        )
+        return ids.mapNotNull { id ->
+            source.current(org,id) ?: return@mapNotNull null
+            val current = status(actor,org,id)
+            current.takeIf { it.state=="APPROVED" && it.approvalRequestId!=null && it.periodClosureId==null }
+        }
+    }
+
     fun status(actor: UUID,org: UUID,periodId: UUID): FinancePeriodCloseReceipt {
-        requireAuthority(actor,org,"hiltech.finance.gl-period-close.preparer-authority-key")
+        val operator = try {
+            requireAuthority(actor,org,"hiltech.finance.gl-period-close.operator-authority-key")
+            true
+        } catch (_: ProductApiException) { false }
+        if (!operator) requireAuthority(actor,org,"hiltech.finance.gl-period-close.preparer-authority-key")
         historical(org,periodId)?.let { return it }
         val current=source.current(org,periodId) ?: stale()
         val request=engine.subjectStatus(
@@ -290,6 +316,9 @@ class FinanceGlPeriodCloseController(private val service:FinanceGlPeriodCloseSer
         return service.close(actor(http),orgId,periodId,body.operationId,
             ctx.correlationId)
     }
+    @GetMapping("/v1/finance/organizations/{orgId}/periods/close/operator-queue")
+    fun operatorQueue(http:HttpServletRequest,@PathVariable orgId:UUID):List<FinancePeriodCloseReceipt> =
+        service.operatorQueue(actor(http),orgId)
     @GetMapping("/v1/finance/organizations/{orgId}/periods/{periodId}/close")
     fun status(http:HttpServletRequest,@PathVariable orgId:UUID,
         @PathVariable periodId:UUID):FinancePeriodCloseReceipt =

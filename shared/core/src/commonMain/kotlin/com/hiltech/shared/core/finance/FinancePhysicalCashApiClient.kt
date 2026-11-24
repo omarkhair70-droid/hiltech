@@ -4,6 +4,7 @@ import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 @Serializable
@@ -100,6 +101,18 @@ class FinancePhysicalCashApiClient(
        FinanceCashboxReceiptDto.serializer(),it)},
    )
  }
+ suspend fun openingQueue(org:String,installation:String):List<FinanceCashboxReceiptDto> =
+   api.request(
+     method=HttpMethod.Get,path=base(org)+"/cashboxes/opening-queue",
+     options=HiltechRequestOptions(installationId=installation),
+     decode={json.decodeFromString(ListSerializer(FinanceCashboxReceiptDto.serializer()),it)},
+   )
+ suspend fun cashboxStatus(org:String,proposal:String,installation:String):FinanceCashboxReceiptDto =
+   api.request(
+     method=HttpMethod.Get,path=base(org)+"/cashboxes/"+uuid(proposal),
+     options=HiltechRequestOptions(installationId=installation),
+     decode={json.decodeFromString(FinanceCashboxReceiptDto.serializer(),it)},
+   )
  suspend fun balance(
    org:String,box:String,installation:String,
  ):FinanceCashboxBalanceDto=api.request(
@@ -148,6 +161,15 @@ class FinancePhysicalCashApiClient(
      decode={json.decodeFromString(
        FinanceCashVoucherReceiptDto.serializer(),it)},
  )
+
+ suspend fun operatorQueue(org:String,installation:String):List<FinanceCashVoucherReceiptDto> =
+    api.request(method=HttpMethod.Get,path=base(org)+"/cash-vouchers/operator-queue",
+      options=HiltechRequestOptions(installationId=installation),
+      decode={json.decodeFromString(ListSerializer(FinanceCashVoucherReceiptDto.serializer()),it)})
+ suspend fun operatorStatus(org:String,id:String,installation:String):FinanceCashVoucherReceiptDto =
+    api.request(method=HttpMethod.Get,path=base(org)+"/cash-vouchers/"+uuid(id)+"/operator-status",
+      options=HiltechRequestOptions(installationId=installation),
+      decode={json.decodeFromString(FinanceCashVoucherReceiptDto.serializer(),it)})
  private suspend fun voucherCommand(
    org:String,proposal:String,operation:String,installation:String,
    action:String,evidence:String?,

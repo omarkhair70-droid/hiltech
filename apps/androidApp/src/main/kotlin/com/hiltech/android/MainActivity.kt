@@ -2,6 +2,8 @@ package com.hiltech.android
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
+import java.io.ByteArrayOutputStream
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import java.io.File
@@ -40,6 +42,11 @@ import com.hiltech.shared.core.payroll.payrollAdminReadNativeWorkspace
 import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
 import com.hiltech.shared.core.service.handoverReadNativeWorkspace
 import com.hiltech.shared.core.service.serviceOperationsReadNativeWorkspace
+import com.hiltech.shared.core.finance.financeEvidenceReadNativeWorkspace
+import com.hiltech.shared.core.finance.financeBankCsvIntakeNativeWorkspace
+import com.hiltech.shared.core.finance.financeCompletionOperatorWorkspace
+import com.hiltech.shared.core.finance.financeCashboxOpeningWorkspace
+import com.hiltech.shared.core.finance.FinanceBankCsvSelectedFile
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
 import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
@@ -56,6 +63,7 @@ import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.network.HiltechApiException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -87,6 +95,69 @@ class MainActivity : ComponentActivity() {
             pendingEvidenceCapture = null
             if (uri != null && request != null) captureEvidenceUri(request, uri)
         }
+
+    // Separate bounded bank CSV picker, never routed through field-work Evidence.
+    private var pendingBankCsvPicker: CompletableDeferred<FinanceBankCsvSelectedFile?>? = null
+    private val chooseBankCsvFile =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            val awaiting = pendingBankCsvPicker
+            pendingBankCsvPicker = null
+            if (awaiting != null) {
+                if (uri == null) awaiting.complete(null) else scope.launch(Dispatchers.IO) {
+                    try {
+                        var fileName: String? = null
+                        contentResolver.query(
+                            uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null,
+                        )?.use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                                if (column >= 0) fileName = cursor.getString(column)
+                            }
+                        }
+                        val name = requireNotNull(fileName) { "Original bank CSV filename missing." }
+                        require(name.endsWith(".csv", ignoreCase = true))
+                        val bytes = contentResolver.openInputStream(uri)?.use { stream ->
+                            val out = ByteArrayOutputStream()
+                            val buffer = ByteArray(8192)
+                            while (true) {
+                                val read = stream.read(buffer)
+                                if (read == -1) break
+                                out.write(buffer, 0, read)
+                                require(out.size() <= 2 * 1024 * 1024) {
+                                    "Bank CSV cannot exceed 2 MiB."
+                                }
+                            }
+                            out.toByteArray()
+                        } ?: throw IllegalArgumentException("Bank CSV URI is unavailable.")
+                        require(bytes.isNotEmpty())
+                        val sha = java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(bytes).joinToString("") { byte ->
+                                "%02x".format(byte.toInt() and 0xff)
+                            }
+                        awaiting.complete(FinanceBankCsvSelectedFile(
+                            bytes = bytes,
+                            sha256 = sha,
+                            originalFileName = name,
+                            capturedAt = Instant.now().toString(),
+                        ))
+                    } catch (failure: Exception) {
+                        awaiting.completeExceptionally(failure)
+                    }
+                }
+            }
+        }
+
+    private suspend fun pickBankCsvFile(): FinanceBankCsvSelectedFile? {
+        check(pendingBankCsvPicker == null) { "Bank file picker already open." }
+        val awaiting = CompletableDeferred<FinanceBankCsvSelectedFile?>()
+        pendingBankCsvPicker = awaiting
+        try {
+            chooseBankCsvFile.launch(arrayOf("text/*", "application/octet-stream"))
+            return awaiting.await()
+        } finally {
+            if (pendingBankCsvPicker === awaiting) pendingBankCsvPicker = null
+        }
+    }
 
     private val takeEvidencePhoto =
         registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
@@ -190,6 +261,50 @@ class MainActivity : ComponentActivity() {
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_FINANCE_REVIEW_PREPARE_ENABLED) {
+                            add(financeCashboxOpeningWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                                api = hiltechApplication.financeEvidenceReadApis.cash,
+                                newOperationId = { UUID.randomUUID().toString() },
+                            ))
+                            add(financeCompletionOperatorWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                                apis = hiltechApplication.financeEvidenceReadApis,
+                                newOperationId = { UUID.randomUUID().toString() },
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_FINANCE_BANK_CSV_ENABLED) {
+                            add(financeBankCsvIntakeNativeWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                                api = hiltechApplication.financeBankIntakeApi,
+                                uploader = hiltechApplication.financeBankCsvUploader,
+                                pickCsvFile = { pickBankCsvFile() },
+                                newOperationId = { UUID.randomUUID().toString() },
+                                deriveProposalId = { operation ->
+                                    UUID.nameUUIDFromBytes(
+                                        "hiltech:bank-statement-intake:$operation"
+                                            .toByteArray(Charsets.UTF_8),
+                                    ).toString()
+                                },
+                            ))
+                        }
+                        if (BuildConfig.HILTECH_FINANCE_EVIDENCE_READ_ENABLED ||
+                            BuildConfig.HILTECH_FINANCE_REVIEW_PREPARE_ENABLED) {
+                            add(financeEvidenceReadNativeWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                                apis = hiltechApplication.financeEvidenceReadApis,
+                                reviewPreparationEnabled = BuildConfig.HILTECH_FINANCE_REVIEW_PREPARE_ENABLED,
+                                newOperationId = { UUID.randomUUID().toString() },
                             ))
                         }
                         if (BuildConfig.HILTECH_FINANCE_INVOICE_READ_ENABLED) {

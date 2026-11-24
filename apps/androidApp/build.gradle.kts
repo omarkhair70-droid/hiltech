@@ -62,6 +62,15 @@ val serviceOperationsReadUiEnabled = providers
 val financeInvoiceReadUiEnabled = providers
     .gradleProperty("hiltech.financeInvoiceReadEnabled")
     .getOrElse("false") == "true"
+val financeEvidenceReadUiEnabled = providers
+    .gradleProperty("hiltech.financeEvidenceReadEnabled")
+    .getOrElse("false") == "true"
+val financeReviewPrepareUiEnabled = providers
+    .gradleProperty("hiltech.financeReviewPrepareEnabled")
+    .getOrElse("false") == "true"
+val financeBankCsvUiEnabled = providers
+    .gradleProperty("hiltech.financeBankCsvEnabled")
+    .getOrElse("false") == "true"
 val servicePurchasesWorkspaceUiEnabled = providers
     .gradleProperty("hiltech.servicePurchasesWorkspaceEnabled")
     .getOrElse("false") == "true"
@@ -186,6 +195,21 @@ android {
             "boolean",
             "HILTECH_FINANCE_INVOICE_READ_ENABLED",
             financeInvoiceReadUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_FINANCE_EVIDENCE_READ_ENABLED",
+            financeEvidenceReadUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_FINANCE_REVIEW_PREPARE_ENABLED",
+            financeReviewPrepareUiEnabled.toString(),
+        )
+        buildConfigField(
+            "boolean",
+            "HILTECH_FINANCE_BANK_CSV_ENABLED",
+            financeBankCsvUiEnabled.toString(),
         )
         buildConfigField(
             "boolean",

@@ -4,6 +4,7 @@ import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 @Serializable
@@ -60,6 +61,14 @@ class FinanceArInvoiceIssuanceApiClient(
         org:String,proposal:String,operation:String,installation:String,
     ):FinanceArInvoiceIssuanceReceiptDto =
         command(org,proposal,operation,installation,"record")
+
+    suspend fun operatorQueue(org:String,installation:String):List<FinanceArInvoiceIssuanceReceiptDto> =
+        api.request(
+            method=HttpMethod.Get,
+            path="/v1/finance/organizations/"+uuid(org)+"/invoice-issuance-proposals/operator-queue",
+            options=HiltechRequestOptions(installationId=installation),
+            decode={json.decodeFromString(ListSerializer(FinanceArInvoiceIssuanceReceiptDto.serializer()),it)},
+        )
 
     suspend fun status(
         org:String,proposal:String,installation:String,

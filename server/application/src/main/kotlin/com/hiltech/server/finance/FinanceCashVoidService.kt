@@ -245,8 +245,30 @@ class FinanceCashVoidService(
         return receipt(snap,"CORRECTED",approved.approvalRequestId,
             recordId,outcome.replayed)
     }
+    /** Only the original Finance operator role can discover record-ready work. */
+    fun operatorQueue(actor:UUID,org:UUID):List<FinanceCashVoidReceipt> {
+        authority(actor,org,"hiltech.finance.cash-allocation-void.operator-authority-key")
+        val ids=jdbc.query(
+            """SELECT p.id FROM finance_cash_allocation_void_proposal p
+               WHERE p.organization_id=?
+               AND NOT EXISTS (SELECT 1 FROM finance_cash_allocation_void_record r
+                   WHERE r.organization_id=p.organization_id AND r.proposal_id=p.id)
+               ORDER BY p.created_at DESC,p.id LIMIT 100""",
+            {rs,_->rs.getObject("id",UUID::class.java)},org,
+        )
+        return ids.mapNotNull { id ->
+            val snap=subject.current(org,id) ?: return@mapNotNull null
+            if (!(actor !in setOf(snap.preparedBy,snap.originalPreparedBy,snap.originalRecordedBy))) return@mapNotNull null
+            val current=status(actor,org,id)
+            current.takeIf { it.state=="APPROVED" && it.approvalRequestId!=null }
+        }
+    }
     fun status(actor:UUID,org:UUID,id:UUID):FinanceCashVoidReceipt {
-        authority(actor,org,"hiltech.finance.cash-allocation-void.preparer-authority-key")
+        val operator=try {
+            authority(actor,org,"hiltech.finance.cash-allocation-void.operator-authority-key")
+            true
+        } catch (_:ProductApiException) { false }
+        if(!operator) authority(actor,org,"hiltech.finance.cash-allocation-void.preparer-authority-key")
         historic(org,id)?.let{return it}
         val snap=subject.current(org,id) ?: stale()
         val state=engine.subjectStatus(
@@ -356,6 +378,9 @@ class FinanceCashVoidController(private val corrections:FinanceCashVoidService) 
         return corrections.record(
             actor(http),orgId,id,body.operationId,ctx.correlationId)
     }
+    @GetMapping("/v1/finance/organizations/{orgId}/cash-allocation-corrections/operator-queue")
+    fun operatorQueue(http:HttpServletRequest,@PathVariable orgId:UUID):List<FinanceCashVoidReceipt> =
+        corrections.operatorQueue(actor(http),orgId)
     @GetMapping("/v1/finance/organizations/{orgId}/cash-allocation-corrections/{id}")
     fun status(
         http:HttpServletRequest,@PathVariable orgId:UUID,@PathVariable id:UUID,

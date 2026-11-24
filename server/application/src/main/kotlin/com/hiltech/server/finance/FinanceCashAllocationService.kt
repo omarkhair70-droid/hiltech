@@ -288,8 +288,30 @@ class FinanceCashAllocationService(
         return receipt(snap,"RECORDED",approval=approved.approvalRequestId,
             recorded=allocationId,replayed=outcome.replayed)
     }
+    /** Only the original Finance operator role can discover record-ready work. */
+    fun operatorQueue(actor:UUID,org:UUID):List<FinanceCashAllocationReceipt> {
+        authority(actor,org,"hiltech.finance.cash-allocation.operator-authority-key")
+        val ids=jdbc.query(
+            """SELECT p.id FROM finance_cash_allocation_proposal p
+               WHERE p.organization_id=?
+               AND NOT EXISTS (SELECT 1 FROM finance_cash_allocation_record r
+                   WHERE r.organization_id=p.organization_id AND r.proposal_id=p.id)
+               ORDER BY p.created_at DESC,p.id LIMIT 100""",
+            {rs,_->rs.getObject("id",UUID::class.java)},org,
+        )
+        return ids.mapNotNull { id ->
+            val snap=subject.current(org,id) ?: return@mapNotNull null
+            if (!(snap.preparedBy!=actor)) return@mapNotNull null
+            val current=status(actor,org,id)
+            current.takeIf { it.state=="APPROVED" && it.approvalRequestId!=null }
+        }
+    }
     fun status(actor:UUID,org:UUID,id:UUID):FinanceCashAllocationReceipt {
-        authority(actor,org,"hiltech.finance.cash-allocation.preparer-authority-key")
+        val operator=try {
+            authority(actor,org,"hiltech.finance.cash-allocation.operator-authority-key")
+            true
+        } catch (_:ProductApiException) { false }
+        if(!operator) authority(actor,org,"hiltech.finance.cash-allocation.preparer-authority-key")
         historic(org,id)?.let{return it}
         val snap=subject.current(org,id) ?: stale()
         val status=engine.subjectStatus(
@@ -437,6 +459,9 @@ class FinanceCashAllocationController(private val finance:FinanceCashAllocationS
         IdempotencyKeyContract.requireMatches(ctx.idempotencyKey,body.operationId)
         return finance.record(actor(http),orgId,id,body.operationId,ctx.correlationId)
     }
+    @GetMapping("/v1/finance/organizations/{orgId}/cash-allocation-proposals/operator-queue")
+    fun operatorQueue(http:HttpServletRequest,@PathVariable orgId:UUID):List<FinanceCashAllocationReceipt> =
+        finance.operatorQueue(actor(http),orgId)
     @GetMapping("/v1/finance/organizations/{orgId}/cash-allocation-proposals/{id}")
     fun status(http:HttpServletRequest,@PathVariable orgId:UUID,
         @PathVariable id:UUID):FinanceCashAllocationReceipt =
