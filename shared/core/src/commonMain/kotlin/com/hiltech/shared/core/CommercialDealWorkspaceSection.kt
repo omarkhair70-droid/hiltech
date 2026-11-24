@@ -46,6 +46,7 @@ data class CommercialDealWorkspaceState(
     val quoteBusy: Boolean = false,
     val dispatchHistory: List<CommercialQuoteDispatchDto> = emptyList(),
     val emailHistory: List<com.hiltech.shared.core.commercial.CommercialQuoteEmailStatusDto> = emptyList(),
+    val whatsappHistory: List<com.hiltech.shared.core.commercial.CommercialWhatsappStatusDto> = emptyList(),
     val defaultPaymentTerms: String = "",
     val defaultDeliveryTerms: String = "",
 )
@@ -122,6 +123,7 @@ fun CommercialDealWorkspaceSection(
     onExportQuote: ((String) -> Unit)? = null,
     onRecordDispatch: ((String, String, String) -> Unit)? = null,
     onSendEmail: ((String, String) -> Unit)? = null,
+    onSendWhatsapp: ((String, String) -> Unit)? = null,
 ) {
     if (!state.enabled) {
         Text("Commercial operations are locked until company authorization is configured.")
@@ -170,7 +172,7 @@ fun CommercialDealWorkspaceSection(
                 )
                 CommercialStage.QUOTE -> CommercialQuotePanel(
                     detail, state.canWrite, state.canRelease, onAction,
-                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote, state.dispatchHistory, onRecordDispatch, state.emailHistory, onSendEmail, state.defaultPaymentTerms, state.defaultDeliveryTerms,
+                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote, state.dispatchHistory, onRecordDispatch, state.emailHistory, onSendEmail, state.defaultPaymentTerms, state.defaultDeliveryTerms, state.whatsappHistory, onSendWhatsapp,
                 )
                 CommercialStage.AWARD -> CommercialAwardPanel(
                     detail, state.canAward, state.canCreateProject, onAction,
@@ -448,6 +450,8 @@ private fun CommercialQuotePanel(
     onSendEmail: ((String, String) -> Unit)?,
     defaultPaymentTerms: String,
     defaultDeliveryTerms: String,
+    whatsappHistory: List<com.hiltech.shared.core.commercial.CommercialWhatsappStatusDto>,
+    onSendWhatsapp: ((String, String) -> Unit)?,
 ) {
     val op=deal.opportunity
     Text(hiltechText("عروض الأسعار والاعتماد", "Customer quotations & approval"), style=MaterialTheme.typography.titleMedium)
@@ -460,6 +464,7 @@ private fun CommercialQuotePanel(
                 ReleasedQuotePreview(customerQuote)
                 if (onExport != null) Button(enabled = !quoteBusy, onClick = { onExport(q.id) }) { Text(hiltechText("تصدير PDF", "Export PDF")) }
                 QuoteEmailPanel(q.id, emailHistory, quoteBusy, if (canWrite || canRelease) onSendEmail else null)
+                QuoteWhatsappPanel(q.id, whatsappHistory, quoteBusy, if (canWrite || canRelease) onSendWhatsapp else null)
                 QuoteDispatchPanel(q.id, dispatchHistory, quoteBusy,
                     if (canWrite || canRelease) onRecordDispatch else null)
             }
@@ -500,6 +505,31 @@ private fun CommercialQuotePanel(
         ) { Text(hiltechText("إنشاء إصدار جديد لعرض السعر", "Create new quote version")) }
     }
     Text(hiltechText("نسخة العميل لا تتضمن التكلفة الداخلية أو هامش الربح.", "Customer copies exclude internal cost and margin."))
+}
+
+@Composable
+private fun QuoteWhatsappPanel(quoteId: String, history: List<com.hiltech.shared.core.commercial.CommercialWhatsappStatusDto>, busy: Boolean, send: ((String, String) -> Unit)?) {
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("إرسال عبر WhatsApp Business", "Send via WhatsApp Business"), style = MaterialTheme.typography.titleMedium)
+        history.forEach { item ->
+            HiltechKeyValue(item.recipient + " · " + item.createdAt, if(item.state == "API_ACCEPTED")
+                hiltechText("قبلت Meta طلب الإرسال؛ التسليم غير مؤكد","Meta accepted the request; delivery unconfirmed")
+                else hiltechText("نتيجة غير مؤكدة — تحقق قبل إعادة الإرسال","Uncertain outcome — verify before resending"))
+        }
+        if (send != null) {
+            var recipient by remember(quoteId) { mutableStateOf("") }
+            var confirmed by remember(quoteId) { mutableStateOf(false) }
+            OutlinedTextField(recipient,{ recipient = it; confirmed = false },label={Text(hiltechText("رقم العميل الدولي","International customer number"))},modifier=Modifier.fillMaxWidth())
+            Row {
+                Checkbox(confirmed,{confirmed = it})
+                Text(hiltechText("أؤكد موافقة العميل على تلقي العرض عبر واتساب وصحة الرقم.","I confirm the recipient consented to WhatsApp delivery and the number is correct."))
+            }
+            Button(enabled=confirmed && recipient.trim().removePrefix("+").matches(Regex("[1-9][0-9]{7,14}")) && !busy,onClick={
+                send(quoteId,recipient.trim()); confirmed=false
+            }) { Text(hiltechText("إرسال نسخة العرض","Send released quotation")) }
+            Text(hiltechText("يتطلب اتصال Meta وقالب مستند معتمدًا. يمكنك استخدام المشاركة العادية بدلًا منه.","Requires a configured Meta connection and approved document template. Native sharing is also available."))
+        }
+    }
 }
 
 @Composable

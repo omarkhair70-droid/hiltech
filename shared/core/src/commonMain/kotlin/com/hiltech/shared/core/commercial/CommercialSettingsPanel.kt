@@ -122,7 +122,7 @@ private fun MailConnectionPanel(mail: CommercialMailConnectionDto?,busy: Boolean
         }
         HorizontalDivider()
         Text(hiltechText("WhatsApp","WhatsApp"))
-        Text(hiltechText("مشاركة PDF عبر تطبيقات الهاتف متاحة. الاتصال المباشر بحساب WhatsApp Business ليس مفعّلاً.","Native PDF sharing is available on mobile. Direct WhatsApp Business connection is not enabled."))
+        Text(hiltechText("مشاركة PDF عبر تطبيقات الهاتف متاحة. الاتصال المباشر بحساب WhatsApp Business ليس مفعّلاً.","Native PDF sharing is available on mobile. Direct WhatsApp requires the company Meta connection configured on the server."))
     }
 }
 

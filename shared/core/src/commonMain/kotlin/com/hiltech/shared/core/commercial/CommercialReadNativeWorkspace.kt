@@ -67,6 +67,7 @@ fun commercialReadNativeWorkspace(
         var customerQuote by remember(identityId, organizationId, installationId) { mutableStateOf<ClientQuoteDto?>(null) }
         var dispatchHistory by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialQuoteDispatchDto>>(emptyList()) }
         var emailHistory by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialQuoteEmailStatusDto>>(emptyList()) }
+        var whatsappHistory by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialWhatsappStatusDto>>(emptyList()) }
         var quoteBusy by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
         var feedback by remember(identityId, organizationId, installationId) { mutableStateOf<String?>(null) }
         var items by remember(identityId, organizationId, installationId) {
@@ -152,6 +153,7 @@ fun commercialReadNativeWorkspace(
             customerQuote = null
             dispatchHistory = emptyList()
             emailHistory = emptyList()
+            whatsappHistory = emptyList()
             costs = emptyList()
             summaries = emptyList()
             try {
@@ -289,6 +291,7 @@ fun commercialReadNativeWorkspace(
                             quoteBusy = quoteBusy,
                             dispatchHistory = dispatchHistory,
                             emailHistory = emailHistory,
+                            whatsappHistory = whatsappHistory,
                             defaultPaymentTerms = settings?.profile?.paymentTerms.orEmpty(),
                             defaultDeliveryTerms = settings?.profile?.deliveryTerms.orEmpty(),
                         ),
@@ -300,18 +303,39 @@ fun commercialReadNativeWorkspace(
                                 customerQuote = null
                                 dispatchHistory = emptyList()
                                 emailHistory = emptyList()
+                                whatsappHistory = emptyList()
                                 jobs.launch {
                                     try {
                                         val loaded = client.customerQuote(quoteId, installationId)
                                         val history = client.dispatchHistory(quoteId, installationId)
                                         val emails = client.emailHistory(quoteId, installationId)
+                                        val whatsapp = client.whatsappHistory(quoteId, installationId)
                                         if (loaded.quoteId == quoteId && detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) {
                                             customerQuote = loaded
                                             dispatchHistory = history
                                             emailHistory = emails
+                                            whatsappHistory = whatsapp
                                         }
                                     } catch (cancelled: CancellationException) { throw cancelled }
                                     catch (_: Exception) { error = "QUOTE_PREVIEW_UNAVAILABLE" }
+                                    finally { quoteBusy = false }
+                                }
+                            }
+                        },
+                        onSendWhatsapp = { quoteId, recipient ->
+                            if ((canWrite || canRelease) && !quoteBusy && customerQuote?.quoteId == quoteId && newOperationId != null) {
+                                quoteBusy = true
+                                jobs.launch {
+                                    try {
+                                        val key = listOf("whatsapp", quoteId, recipient.removePrefix("+"))
+                                        val id = retryIds.getOrPut(key) { newOperationId() }
+                                        val status = client.sendWhatsapp(quoteId,CommercialWhatsappDto(id,recipient,true),installationId)
+                                        if (customerQuote?.quoteId == quoteId) {
+                                            whatsappHistory = client.whatsappHistory(quoteId,installationId)
+                                            feedback = status.state
+                                        }
+                                    } catch (e: CancellationException) { throw e }
+                                    catch (_: Exception) { error = "WHATSAPP_UNAVAILABLE_OR_UNCONFIRMED" }
                                     finally { quoteBusy = false }
                                 }
                             }
