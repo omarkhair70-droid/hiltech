@@ -21,6 +21,9 @@ internal fun CommercialSettingsPanel(
     pickLogo: (suspend () -> ByteArray?)?,
     onSave: (CommercialDocumentProfileDto) -> Unit,
     onBack: () -> Unit,
+    mail: CommercialMailConnectionDto?,
+    onConnectMail: (String,String,String) -> Unit,
+    onDisconnectMail: () -> Unit,
 ) {
     var draft by remember(settings) { mutableStateOf(settings.profile) }
     var picking by remember { mutableStateOf(false) }
@@ -66,12 +69,63 @@ internal fun CommercialSettingsPanel(
             SettingField(hiltechText("شروط التسليم الافتراضية","Default delivery terms"), draft.deliveryTerms) { draft = draft.copy(deliveryTerms = it) }
             Text(hiltechText("يولّد النظام الرقم الفريد تلقائيًا. مبالغ الخصم والضريبة تُحدد لكل عرض.","Unique numbers are generated automatically. Discount and tax amounts are specified per quote."))
         }
+        MailConnectionPanel(mail,busy,onConnectMail,onDisconnectMail)
         Button(enabled = !busy && !picking && draft != settings.profile && draft.legalName.isNotBlank() &&
             Regex("[A-Z0-9-]{1,12}").matches(draft.quotePrefix), onClick = { onSave(draft) }) {
             Text(hiltechText("حفظ إعدادات المستندات","Save document settings"))
         }
     }
 }
+@Composable
+private fun MailConnectionPanel(mail: CommercialMailConnectionDto?,busy: Boolean,connect: (String,String,String) -> Unit,disconnect: () -> Unit) {
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("الحسابات المتصلة","Connected accounts"),style = MaterialTheme.typography.titleMedium)
+        Text(hiltechText("بريد الشركة — SMTP","Company email — SMTP"))
+        if (mail == null) {
+            Text(hiltechText("تعذر قراءة حالة الاتصال.","Connection status unavailable."))
+        } else {
+            Text(if (mail.configured) hiltechText("حساب محفوظ: ","Saved account: ") + mail.username.orEmpty() else hiltechText("غير متصل","Not connected"))
+            if (!mail.setupAvailable) Text(hiltechText("يتطلب تهيئة مفتاح تشفير السيرفر مرة واحدة.","Requires one-time server encryption setup."))
+            if (mail.setupAvailable) {
+                var host by remember(mail) { mutableStateOf(mail.host ?: mail.allowedHosts.firstOrNull().orEmpty()) }
+                var username by remember(mail) { mutableStateOf(mail.username.orEmpty()) }
+                var secret by remember(mail) { mutableStateOf("") }
+                var editing by remember(mail) { mutableStateOf(!mail.configured) }
+                var confirmDisconnect by remember(mail) { mutableStateOf(false) }
+                if (mail.configured && !editing) {
+                    TextButton(enabled = !busy,onClick = { editing = true }) { Text(hiltechText("تغيير الاتصال","Change connection")) }
+                    if (!confirmDisconnect) TextButton(enabled = !busy,onClick = { confirmDisconnect = true }) { Text(hiltechText("فصل البريد","Disconnect email")) }
+                    else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(enabled = !busy,onClick = { disconnect(); confirmDisconnect = false }) { Text(hiltechText("تأكيد الفصل","Confirm disconnect")) }
+                        TextButton(onClick = { confirmDisconnect = false }) { Text(hiltechText("إلغاء","Cancel")) }
+                    }
+                }
+                if (editing) {
+                    Text(hiltechText("اختر خادم البريد","Select mail server"))
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        mail.allowedHosts.forEach { option ->
+                            FilterChip(selected = host == option,onClick = { host = option },label = { Text(option) },enabled = !busy)
+                        }
+                    }
+                    SettingField(hiltechText("عنوان البريد","Email address"),username) { username = it }
+                    OutlinedTextField(secret,{ secret = it },label = { Text(hiltechText("كلمة مرور التطبيق","App password")) },modifier = Modifier.fillMaxWidth(),
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),singleLine = true,enabled = !busy)
+                    Text(hiltechText("استخدم بيانات SMTP التي يسمح بها مزود البريد. لا تُحفظ كلمة المرور في الجهاز.","Use SMTP credentials supported by your provider. Password is not saved on this device."))
+                    Button(enabled = !busy && host in mail.allowedHosts && username.contains("@") && secret.isNotBlank(),onClick = {
+                        val supplied = secret
+                        secret = ""
+                        connect(host,username.trim(),supplied)
+                    }) { Text(hiltechText("اختبار الاتصال وربط البريد","Test and connect")) }
+                    if (mail.configured) TextButton(onClick = { secret = ""; editing = false }) { Text(hiltechText("إلغاء","Cancel")) }
+                }
+            }
+        }
+        HorizontalDivider()
+        Text(hiltechText("WhatsApp","WhatsApp"))
+        Text(hiltechText("مشاركة PDF عبر تطبيقات الهاتف متاحة. الاتصال المباشر بحساب WhatsApp Business ليس مفعّلاً.","Native PDF sharing is available on mobile. Direct WhatsApp Business connection is not enabled."))
+    }
+}
+
 @Composable
 private fun SettingField(label: String, value: String, change: (String) -> Unit) {
     OutlinedTextField(value,change,label = { Text(label) },modifier = Modifier.fillMaxWidth())

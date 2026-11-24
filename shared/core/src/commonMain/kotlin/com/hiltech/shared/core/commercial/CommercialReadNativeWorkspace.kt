@@ -56,6 +56,7 @@ fun commercialReadNativeWorkspace(
         val jobs = rememberCoroutineScope()
         val coordinator = remember(client, installationId) { CommercialDealCoordinator(client, installationId) }
         var capabilities by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialCapabilitiesDto?>(null) }
+        var mailConnection by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialMailConnectionDto?>(null) }
         var settings by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialDocumentSettingsDto?>(null) }
         var showSettings by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
         var clients by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialClientRefDto>>(emptyList()) }
@@ -116,6 +117,7 @@ fun commercialReadNativeWorkspace(
             items = emptyList()
             capabilities = null
             settings = null
+            mailConnection = null
             clients = emptyList()
             detail = null
             error = null
@@ -124,7 +126,11 @@ fun commercialReadNativeWorkspace(
                 if (newOperationId != null) capabilities = client.capabilities(organizationId, installationId)
                 if (capabilities?.canWrite == true) clients = client.clients(organizationId, installationId)
                 if (capabilities?.canWrite == true || capabilities?.canRelease == true) settings = client.documentSettings(organizationId, installationId)
-                if (capabilities?.canRelease != true) showSettings = false
+                if (capabilities?.canRelease == true) {
+                    try { mailConnection = client.mailConnection(organizationId,installationId) }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { mailConnection = null }
+                } else showSettings = false
                 // An old source selection is invalid when the current list
                 // no longer authorizes/contains that opportunity.
                 if (selectedId !in items.map { it.id }) selectedId = null
@@ -176,7 +182,36 @@ fun commercialReadNativeWorkspace(
                 CommercialSettingsPanel(documentSettings, saving, pickLogo,
                     onSave = { profile -> perform(listOf("settings",documentSettings.version,profile)) { id ->
                         client.saveDocumentSettings(SaveCommercialDocumentSettingsDto(id,organizationId,documentSettings.version,profile),installationId)
-                    } }, onBack = { showSettings = false })
+                    } }, onBack = { showSettings = false },
+                    mail = mailConnection,
+                    onConnectMail = { host,username,secret ->
+                        val connection = mailConnection
+                        if (!saving && capabilities?.canRelease == true && connection?.setupAvailable == true) {
+                            saving = true
+                            jobs.launch {
+                                try {
+                                    mailConnection = client.connectMail(ConnectCommercialMailDto(organizationId,host,username,secret,connection.version),installationId)
+                                    feedback = "MAIL_CONNECTED"
+                                } catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { feedback = "MAIL_CONNECTION_NOT_CONFIRMED" }
+                                finally { saving = false }
+                            }
+                        }
+                    },
+                    onDisconnectMail = {
+                        val connection = mailConnection
+                        if (!saving && capabilities?.canRelease == true && connection?.configured == true) {
+                            saving = true
+                            jobs.launch {
+                                try {
+                                    mailConnection = client.disconnectMail(DisconnectCommercialMailDto(organizationId,connection.version),installationId)
+                                    feedback = "MAIL_DISCONNECTED"
+                                } catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { feedback = "MAIL_DISCONNECT_NOT_CONFIRMED" }
+                                finally { saving = false }
+                            }
+                        }
+                    })
             }
         } else if (selectedId == null) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
