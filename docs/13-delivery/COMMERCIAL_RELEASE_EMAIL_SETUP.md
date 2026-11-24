@@ -1,0 +1,16 @@
+# Commercial quote export and email deployment
+
+The released customer projection excludes private costs. The first PDF export is archived by quote version with SHA-256. The template uses embedded Plex, with rasterized A4 pages; verify real company logo, contacts and legal details before production acceptance.
+
+Direct email uses the company SMTP account. Configure Spring Boot mail properties using deployment secrets (never commit passwords):
+- SPRING_MAIL_HOST, SPRING_MAIL_PORT, SPRING_MAIL_USERNAME, SPRING_MAIL_PASSWORD
+- SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true (when required)
+- SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true and SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED=true (for STARTTLS providers)
+- SPRING_MAIL_PROPERTIES_MAIL_SMTP_CONNECTIONTIMEOUT=10000
+- SPRING_MAIL_PROPERTIES_MAIL_SMTP_TIMEOUT=10000
+- SPRING_MAIL_PROPERTIES_MAIL_SMTP_WRITETIMEOUT=10000
+- HILTECH_COMMERCIAL_EMAIL_FROM: verified company sender address
+
+Verify TLS and authentication settings for the selected provider. No recipient may be sent an actual quotation without the operator confirming the address and release. SMTP_ACCEPTED means SMTP server acceptance, not inbox delivery. SENDING/UNKNOWN means verify with the provider before trying again; no blind automatic retry. WhatsApp currently uses native Android sharing, not a WhatsApp Business API.
+
+Apply migrations in order and verify existing quote approvals, discount/tax amount reconciliation, company client isolation, PDF archive repeatability and authorized dispatch. Discount and tax are explicit monetary amounts in the quote currency, not a statutory rate calculation. Run acceptance on Windows and Android using a controlled internal recipient before enabling live sending.
