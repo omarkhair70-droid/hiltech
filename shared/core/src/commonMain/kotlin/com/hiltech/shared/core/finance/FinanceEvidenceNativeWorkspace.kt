@@ -42,6 +42,7 @@ class FinanceEvidenceReadApis(api: HiltechApiClient) {
     val apJournal = FinanceApJournalPostingApiClient(api)
     val clientAwards = FinanceClientAwardSourceApiClient(api)
     val billingEvidence = FinanceBillingEvidenceLookupApiClient(api)
+    val accountingChoices = FinanceAccountingChoicesApiClient(api)
     val arCandidate = FinanceArInvoiceCandidateApiClient(api)
     val arIssuance = FinanceArInvoiceIssuanceApiClient(api)
     val arJournal = FinanceArJournalPostingApiClient(api)
