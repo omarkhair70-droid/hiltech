@@ -16,7 +16,7 @@ import java.util.UUID
 class JdbcCommercialEvidenceTarget @Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val access: CommercialAccess,
-    @Value("\${hiltech.commercial.enabled:false}")
+    @Value("\${hiltech.commercial.enabled:true}")
     private val enabled: Boolean = false,
 ) : CommercialEvidenceTargetPort {
     override fun loadTarget(

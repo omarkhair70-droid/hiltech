@@ -17,7 +17,7 @@ import java.util.UUID
 class CommercialAccess(
     private val jdbc: JdbcTemplate,
     private val clock: Clock,
-    @Value("\${hiltech.commercial.enabled:false}")
+    @Value("\${hiltech.commercial.enabled:true}")
     private val enabled: Boolean,
 ) {
     fun require(actor: UUID, company: UUID, vararg permissions: String) {

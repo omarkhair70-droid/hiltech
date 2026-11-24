@@ -348,6 +348,11 @@ data class CommercialQuoteDispatchDto(val id: String, val channel: String, val r
 data class RecordCommercialQuoteDispatchDto(val operationId: String, val channel: String, val recipientReference: String)
 
 @Serializable
+data class CommercialWhatsappDto(val operationId: String,val recipient: String,val consentConfirmed: Boolean)
+@Serializable
+data class CommercialWhatsappStatusDto(val id: String,val recipient: String,val state: String,val createdAt: String)
+
+@Serializable
 data class CommercialQuoteEmailDto(val operationId: String, val recipient: String)
 @Serializable
 data class CommercialQuoteEmailStatusDto(val id: String, val recipient: String, val state: String, val createdAt: String)
@@ -543,6 +548,13 @@ class CommercialApiClient(
     suspend fun recordDispatch(quoteId: String, request: RecordCommercialQuoteDispatchDto, installationId: String) =
         command("/v1/commercial/quotes/" + quoteId + "/dispatch-history", request.operationId, installationId,
             json.encodeToString(RecordCommercialQuoteDispatchDto.serializer(), request))
+
+    suspend fun whatsappHistory(quoteId: String,installationId: String): List<CommercialWhatsappStatusDto> =
+        api.request(method=HttpMethod.Get,path="/v1/commercial/quotes/$quoteId/whatsapp-history",options=HiltechRequestOptions(installationId=installationId),
+            decode={json.decodeFromString(ListSerializer(CommercialWhatsappStatusDto.serializer()),it)})
+    suspend fun sendWhatsapp(quoteId: String,request: CommercialWhatsappDto,installationId: String): CommercialWhatsappStatusDto =
+        api.request(method=HttpMethod.Post,path="/v1/commercial/quotes/$quoteId/whatsapp",options=HiltechRequestOptions(installationId=installationId,idempotencyKey=request.operationId),
+            requestBody=json.encodeToString(CommercialWhatsappDto.serializer(),request),decode={json.decodeFromString(CommercialWhatsappStatusDto.serializer(),it)})
 
     suspend fun emailHistory(quoteId: String, installationId: String): List<CommercialQuoteEmailStatusDto> =
         api.request(method = HttpMethod.Get, path = "/v1/commercial/quotes/" + quoteId + "/email-history",

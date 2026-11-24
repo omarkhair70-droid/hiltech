@@ -22,7 +22,7 @@ import java.util.UUID
  */
 @RestController
 @RequestMapping("/v1/commercial")
-class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail, private val connections: CommercialMailConnection) {
+class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail, private val connections: CommercialMailConnection, private val whatsapp: CommercialQuoteWhatsapp) {
     private fun operation(key: String, id: String): UUID {
         val parsed = id.commercialUuid()
         IdempotencyKeyContract.requireMatches(key, parsed)
@@ -197,6 +197,14 @@ class CommercialController(private val service: CommercialService, private val e
     @PostMapping("/quotes/{quoteId}/customer-pdf")
     fun quotePdf(http: HttpServletRequest, @PathVariable quoteId: String) =
         service.customerPdf(quoteId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
+
+    @GetMapping("/quotes/{quoteId}/whatsapp-history")
+    fun whatsappHistory(http: HttpServletRequest,@PathVariable quoteId: String) =
+        whatsapp.history(quoteId.commercialUuid(),HiltechRequestContext.current(http).requireIdentityId())
+
+    @PostMapping("/quotes/{quoteId}/whatsapp")
+    fun sendWhatsapp(http: HttpServletRequest,@PathVariable quoteId: String,@RequestHeader("Idempotency-Key") key: String,@RequestBody body: CommercialWhatsappRequest) =
+        whatsapp.send(quoteId.commercialUuid(),HiltechRequestContext.current(http).requireIdentityId(),operation(key,body.operationId),body)
 
     @GetMapping("/quotes/{quoteId}/email-history")
     fun emailHistory(http: HttpServletRequest, @PathVariable quoteId: String) =
