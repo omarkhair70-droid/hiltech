@@ -3,6 +3,20 @@ package com.hiltech.shared.core.design
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -247,6 +261,75 @@ fun HiltechLanguagePreference(language: HiltechLanguage, onChange: (HiltechLangu
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = language == HiltechLanguage.Arabic, onClick = { onChange(HiltechLanguage.Arabic) }, label = { Text("العربية") })
             FilterChip(selected = language == HiltechLanguage.English, onClick = { onChange(HiltechLanguage.English) }, label = { Text("English") })
+        }
+    }
+}
+
+/** A source-owned choice; IDs are kept unchanged and never inferred from labels. */
+data class HiltechRecordChoice(val id: String, val title: String, val context: String = "")
+
+/** Only current supplied records are suggested; a known reference can be entered
+ * explicitly where the domain already accepts an ID. Backend authority is unchanged. */
+@Composable
+fun HiltechRecordPicker(
+    label: String,
+    value: String,
+    choices: List<HiltechRecordChoice>,
+    onChange: (String) -> Unit,
+    allowKnownReference: Boolean = true,
+    enabled: Boolean = true,
+) {
+    val palette = LocalHiltechOperationalColors.current
+    var expanded by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var referenceMode by remember { mutableStateOf(false) }
+    val records = choices.distinctBy { it.id }.filter { it.id.isNotBlank() }
+    val selected = records.firstOrNull { it.id == value }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = palette.secondaryText)
+        Surface(
+            onClick = { expanded = !expanded; query = "" },
+            enabled = enabled,
+            color = palette.surfaceElevated,
+            shape = HiltechShape.small,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(selected?.title ?: if (value.isBlank()) hiltechText("اختر سجلًا", "Choose a record") else hiltechText("مرجع محدد", "Reference selected"),
+                        style = MaterialTheme.typography.bodyLarge)
+                    selected?.context?.takeIf { it.isNotBlank() }?.let { Text(it, color = palette.secondaryText, style = MaterialTheme.typography.bodySmall) }
+                }
+                Text(if (expanded) "−" else "+", color = palette.accent)
+            }
+        }
+        if (expanded) {
+            HiltechPanel(Modifier.fillMaxWidth()) {
+                OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    label = { Text(hiltechText("بحث في السجلات المتاحة", "Search available records")) })
+                val matching = records.filter { query.isBlank() || it.title.contains(query.trim(), true) || it.context.contains(query.trim(), true) }
+                if (matching.isEmpty()) Text(hiltechText("لا توجد نتائج في السجلات المحمّلة.", "No matches in loaded records."))
+                else LazyColumn(Modifier.fillMaxWidth().heightIn(max = 260.dp)) {
+                    items(matching, key = { it.id }) { record ->
+                        Surface(onClick = { onChange(record.id); expanded = false; referenceMode = false },
+                            enabled = enabled, color = if (record.id == value) palette.selected else palette.surface,
+                            modifier = Modifier.fillMaxWidth(), shape = HiltechShape.small) {
+                            Column(Modifier.padding(10.dp)) {
+                                Text(record.title, style = MaterialTheme.typography.titleSmall)
+                                if (record.context.isNotBlank()) Text(record.context, color = palette.secondaryText, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+                if (allowKnownReference) TextButton(onClick = { referenceMode = !referenceMode }, enabled = enabled) {
+                    Text(hiltechText("استخدام مرجع معروف", "Use a known reference"))
+                }
+                if (allowKnownReference && referenceMode) OutlinedTextField(value, onChange, modifier = Modifier.fillMaxWidth(),
+                    label = { Text(hiltechText("معرّف السجل من المصدر", "Record ID from source")) }, singleLine = true, enabled = enabled)
+                if (value.isNotBlank()) TextButton(onClick = { onChange(""); expanded = false }, enabled = enabled) {
+                    Text(hiltechText("مسح الاختيار", "Clear selection"))
+                }
+            }
         }
     }
 }
