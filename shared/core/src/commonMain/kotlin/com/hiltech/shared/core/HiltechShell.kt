@@ -803,6 +803,12 @@ fun HiltechShell(
                         // never try to bring a multi-screen Column in view.
                         Spacer(Modifier.fillMaxWidth().height(1.dp).bringIntoViewRequester(projectWorkspaceRequester))
                         ProjectControlSection(
+                            employeeChoices = state.people?.directory?.items.orEmpty().filter { it.employeeState == "ACTIVE" }.map {
+                                com.hiltech.shared.core.design.HiltechRecordChoice(it.employeeId, it.displayName, it.employeeCode)
+                            },
+                            teamChoices = state.identity.teams.filter { it.organizationId == primary?.organizationId }.map {
+                                com.hiltech.shared.core.design.HiltechRecordChoice(it.teamId, it.name, it.code)
+                            },
                             reservationPort = reservationPort,
                             state = it,
                             onRefresh =
