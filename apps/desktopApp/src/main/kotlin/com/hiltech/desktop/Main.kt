@@ -2909,6 +2909,8 @@ fun main() {
                             ))
                         }
                         if (System.getenv("HILTECH_FINANCE_EVIDENCE_READ_UI_ENABLED")
+                                ?.equals("true", ignoreCase = true) == true ||
+                            System.getenv("HILTECH_FINANCE_REVIEW_PREPARE_UI_ENABLED")
                                 ?.equals("true", ignoreCase = true) == true
                         ) {
                             add(financeEvidenceReadNativeWorkspace(
