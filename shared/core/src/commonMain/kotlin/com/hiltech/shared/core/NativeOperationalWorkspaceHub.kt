@@ -1,9 +1,9 @@
 package com.hiltech.shared.core
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -140,9 +140,10 @@ fun NativeOperationalWorkspaceHub(
     if (eligible.isNotEmpty()) {
         Text("مساحات متخصصة / Specialist workspaces",
             style = MaterialTheme.typography.titleMedium)
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             visible.forEach { workspace ->
                 OutlinedButton(enabled = pendingOpen == null, onClick = {
