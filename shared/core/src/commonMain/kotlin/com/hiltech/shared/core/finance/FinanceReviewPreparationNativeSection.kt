@@ -685,6 +685,40 @@ fun FinanceReviewPreparationSection(
             },label={Text("معرّف حركة البنك المؤكدة")},enabled=editable,modifier=Modifier.fillMaxWidth())
         }
         if (journal) {
+            val ledgerKind=if(kind==FinanceReviewKind.AP_JOURNAL) "AP" else "AR"
+            OutlinedButton(enabled=editable && !accountingChoicesLoading,onClick={
+                accountingChoicesLoading=true
+                accountingChoicesError=null
+                accountingChoices=null
+                scope.launch {
+                    try {
+                        accountingChoices=financeReadAccountingChoices(
+                            apis,organizationId,ledgerKind,installationId)
+                    } catch(cancelled:CancellationException){throw cancelled}
+                    catch(_:Exception) {
+                        accountingChoicesError="تعذر جلب حسابات الدفتر والفترات المتاحة لهذا الدور."
+                    } finally {accountingChoicesLoading=false}
+                }
+            }) {
+                Text(if(accountingChoicesLoading)"جارٍ تحميل الحسابات والفترات…" else "اختيار الحسابات والفترة من دفتر الشركة")
+            }
+            accountingChoicesError?.let {Text(it,color=MaterialTheme.colorScheme.error)}
+            accountingChoices?.let { choices ->
+                Text("الفترات المحاسبية المفتوحة",style=MaterialTheme.typography.titleSmall)
+                if(choices.openPeriods.isEmpty())Text("لا توجد فترة مفتوحة متاحة لهذا الدور.")
+                choices.openPeriods.take(8).forEach {period ->
+                    OutlinedButton(enabled=editable && draft.periodId!=period.id,onClick={
+                        draft=draft.copy(periodId=period.id);resetForFormChange()
+                    }) {Text(period.dateStart+" — "+period.dateEnd)}
+                }
+                if(choices.hasMorePeriods || choices.openPeriods.size>8)
+                    Text("تظهر أول 8 فترات. يمكن إدخال معرّف فترة أخرى معتمدة.")
+                Text("حسابات دفتر الأستاذ المعتمدة",style=MaterialTheme.typography.titleSmall)
+                OutlinedTextField(value=accountSearch,onValueChange={accountSearch=it},
+                    label={Text("بحث بنوع الحساب أو العملة أو المعرّف")},
+                    enabled=editable,modifier=Modifier.fillMaxWidth())
+                if(choices.hasMoreAccounts)Text("هذه أول 100 حساب فقط من المصدر.")
+            }
             OutlinedTextField(value=draft.periodId,onValueChange={
                 draft=draft.copy(periodId=it.trim());resetForFormChange()
             },label={Text("الفترة المحاسبية")},enabled=editable,modifier=Modifier.fillMaxWidth())
@@ -699,6 +733,34 @@ fun FinanceReviewPreparationSection(
                 }
                 OutlinedTextField(value=line.accountId,onValueChange={changeLine(line.copy(accountId=it.trim()))},
                     label={Text("معرّف حساب دفتر الأستاذ")},enabled=editable,modifier=Modifier.fillMaxWidth())
+                accountingChoices?.let {choices ->
+                    var accountMenuOpen by remember(identityId,organizationId,installationId,kind,index) {
+                        mutableStateOf(false)
+                    }
+                    Box {
+                        OutlinedButton(enabled=editable && choices.approvedAccounts.isNotEmpty(),
+                            onClick={accountMenuOpen=true}) {Text("اختيار حساب معتمد")}
+                        DropdownMenu(expanded=accountMenuOpen,onDismissRequest={accountMenuOpen=false}) {
+                            val filtered=choices.approvedAccounts.filter {
+                                accountSearch.isBlank() ||
+                                    it.id.contains(accountSearch.trim(),true) ||
+                                    it.accountKind.contains(accountSearch.trim(),true) ||
+                                    (it.currency?.contains(accountSearch.trim(),true)==true)
+                            }
+                            filtered.take(12).forEach {account ->
+                                DropdownMenuItem(
+                                    text={Text(account.accountKind+" · "+(account.currency?:"كل العملات")+" · "+account.id.take(8))},
+                                    onClick={
+                                        changeLine(line.copy(accountId=account.id))
+                                        accountMenuOpen=false
+                                    },
+                                )
+                            }
+                            if(filtered.isEmpty())DropdownMenuItem(text={Text("لا توجد نتائج مطابقة")},onClick={accountMenuOpen=false})
+                            if(filtered.size>12)DropdownMenuItem(text={Text("ضيّق البحث لإظهار المزيد")},onClick={accountMenuOpen=false})
+                        }
+                    }
+                }
                 Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                     listOf("DEBIT" to "مدين","CREDIT" to "دائن").forEach { (value,label) ->
                         OutlinedButton(enabled=editable && line.side!=value,onClick={changeLine(line.copy(side=value))}) {Text(label)}
