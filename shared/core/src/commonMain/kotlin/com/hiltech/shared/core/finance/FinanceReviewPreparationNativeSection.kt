@@ -1003,6 +1003,7 @@ fun FinanceSignedCompletionSection(identityId:String,org:String,install:String,
         val scope=rememberCoroutineScope()
         var expanded by remember(embedded) {mutableStateOf(embedded)}
         var kind by remember {mutableStateOf(FinanceReviewKind.CASH_VOUCHER)}
+        var initialSelectionDone by remember {mutableStateOf(false)}
         var id by remember {mutableStateOf("")}
         var evidence by remember {mutableStateOf("")}
         var current by remember {mutableStateOf<FinanceSignedSource?>(null)}
@@ -1025,10 +1026,28 @@ fun FinanceSignedCompletionSection(identityId:String,org:String,install:String,
         LaunchedEffect(expanded,kind,revision) {
             if(!expanded)return@LaunchedEffect
             busy=true;error=null;items=emptyList()
-            try {items=financeSignedQueue(apis,org,install,kind)}
-            catch(cancelled:CancellationException){throw cancelled}
-            catch(_:Exception){error="قائمة العمليات غير متاحة لهذا الدور أو تعذر الاتصال."}
-            finally {busy=false}
+            try {
+                items=financeSignedQueue(apis,org,install,kind)
+                initialSelectionDone=true
+            } catch(cancelled:CancellationException) {
+                throw cancelled
+            } catch(_:Exception) {
+                if(!initialSelectionDone) {
+                    var alternate:FinanceReviewKind?=null
+                    for(other in listOf(FinanceReviewKind.CASH_VOUCHER,
+                        FinanceReviewKind.CASH_COUNT,FinanceReviewKind.BANK_RECONCILIATION)) {
+                        if(other==kind)continue
+                        try {
+                            financeSignedQueue(apis,org,install,other)
+                            alternate=other
+                            break
+                        } catch(cancelled:CancellationException){throw cancelled}
+                        catch(_:Exception){}
+                    }
+                    if(alternate!=null)kind=alternate
+                    else error="قائمة العمليات غير متاحة لهذا الدور أو تعذر الاتصال."
+                } else error="قائمة العمليات غير متاحة لهذا النوع أو تعذر الاتصال."
+            } finally {busy=false}
         }
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
             if(!embedded) {
