@@ -623,6 +623,36 @@ class CommercialService(
         return CommercialQuotePdfDto(record["filename"] as String, java.util.Base64.getEncoder().encodeToString(bytes))
     }
 
+    fun quoteDispatchHistory(id: UUID, actor: UUID): List<CommercialQuoteDispatchDto> {
+        customerQuote(id, actor)
+        return jdbc.queryForList(
+            """SELECT id,channel,recipient_reference,recorded_at
+               FROM commercial_quote_dispatch WHERE quote_version_id=? ORDER BY recorded_at DESC,id""", id,
+        ).map { CommercialQuoteDispatchDto(it["id"].toString(), it["channel"].toString(), it["recipient_reference"].toString(), it["recorded_at"].toString()) }
+    }
+
+    fun recordQuoteDispatch(id: UUID, request: RecordCommercialQuoteDispatchRequest, key: UUID, actor: UUID, correlation: String): CommercialCommandResult {
+        val parent = quote(id)
+        val company = parent["organization_id"] as UUID
+        access.require(actor, company, "SALES_WRITE", "SALES_RELEASE")
+        customerQuote(id, actor)
+        val channel = request.channel.trim().uppercase()
+        if (channel !in setOf("EMAIL", "WHATSAPP", "PRINT", "OTHER"))
+            throw commercialError("COMMERCIAL_DISPATCH_CHANNEL_INVALID", "Invalid dispatch channel.", HttpStatus.BAD_REQUEST)
+        val recipient = required(request.recipientReference, 240)
+        val target = this.id("quote-dispatch", key)
+        val replay = execute(key, actor, "COMMERCIAL_QUOTE_DISPATCH_RECORDED", target, "$id|$channel|$recipient", correlation) {
+            access.require(actor, company, "SALES_WRITE", "SALES_RELEASE")
+            customerQuote(id, actor)
+            if (jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM commercial_customer_pdf_archive WHERE quote_version_id=?)", Boolean::class.java, id) != true)
+                throw commercialError("COMMERCIAL_DISPATCH_ARCHIVE_REQUIRED", "Export the exact released PDF before recording dispatch.", HttpStatus.CONFLICT)
+            jdbc.update("INSERT INTO commercial_quote_dispatch(id,quote_version_id,channel,recipient_reference,recorded_at,recorded_by) VALUES (?,?,?,?,?,?)",
+                target, id, channel, recipient, now(), actor)
+            audit(actor, "COMMERCIAL_QUOTE_DISPATCH_RECORDED", id, "OPERATOR_RECORDED", correlation)
+        }
+        return result(target, replay, "OPERATOR_RECORDED", correlation)
+    }
+
     fun privateCosting(id: UUID,actor: UUID): List<Map<String, Any?>> {
         val parent = op(id,actor,"SALES_COST_VIEW")
         return jdbc.queryForList(

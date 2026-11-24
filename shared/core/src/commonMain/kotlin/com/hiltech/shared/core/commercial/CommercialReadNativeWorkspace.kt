@@ -61,6 +61,7 @@ fun commercialReadNativeWorkspace(
         var saving by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
         val retryIds = remember(identityId, organizationId, installationId) { mutableMapOf<Any, String>() }
         var customerQuote by remember(identityId, organizationId, installationId) { mutableStateOf<ClientQuoteDto?>(null) }
+        var dispatchHistory by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialQuoteDispatchDto>>(emptyList()) }
         var quoteBusy by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
         var feedback by remember(identityId, organizationId, installationId) { mutableStateOf<String?>(null) }
         var items by remember(identityId, organizationId, installationId) {
@@ -136,6 +137,7 @@ fun commercialReadNativeWorkspace(
             detailLoading = true
             detail = null
             customerQuote = null
+            dispatchHistory = emptyList()
             costs = emptyList()
             summaries = emptyList()
             try {
@@ -227,6 +229,7 @@ fun commercialReadNativeWorkspace(
                             errorCode = error,
                             customerQuote = customerQuote,
                             quoteBusy = quoteBusy,
+                            dispatchHistory = dispatchHistory,
                         ),
                         onRefresh = { refreshVersion++ },
                         onAction = { action -> perform(action) { coordinator.dispatch(action, it) } },
@@ -234,13 +237,25 @@ fun commercialReadNativeWorkspace(
                             if (!quoteBusy && detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) {
                                 quoteBusy = true
                                 customerQuote = null
+                                dispatchHistory = emptyList()
                                 jobs.launch {
                                     try {
                                         val loaded = client.customerQuote(quoteId, installationId)
-                                        if (loaded.quoteId == quoteId && detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) customerQuote = loaded
+                                        val history = client.dispatchHistory(quoteId, installationId)
+                                        if (loaded.quoteId == quoteId && detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) {
+                                            customerQuote = loaded
+                                            dispatchHistory = history
+                                        }
                                     } catch (cancelled: CancellationException) { throw cancelled }
                                     catch (_: Exception) { error = "QUOTE_PREVIEW_UNAVAILABLE" }
                                     finally { quoteBusy = false }
+                                }
+                            }
+                        },
+                        onRecordDispatch = { quoteId, channel, recipient ->
+                            if ((canWrite || canRelease) && customerQuote?.quoteId == quoteId) {
+                                perform(listOf("dispatch", quoteId, channel, recipient)) { operation ->
+                                    client.recordDispatch(quoteId, RecordCommercialQuoteDispatchDto(operation, channel, recipient), installationId)
                                 }
                             }
                         },

@@ -174,6 +174,16 @@ class CommercialController(private val service: CommercialService) {
     fun quotePdf(http: HttpServletRequest, @PathVariable quoteId: String) =
         service.customerPdf(quoteId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
 
+    @GetMapping("/quotes/{quoteId}/dispatch-history")
+    fun quoteDispatchHistory(http: HttpServletRequest, @PathVariable quoteId: String) =
+        service.quoteDispatchHistory(quoteId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
+
+    @PostMapping("/quotes/{quoteId}/dispatch-history")
+    fun recordQuoteDispatch(http: HttpServletRequest, @PathVariable quoteId: String,
+                            @RequestHeader("Idempotency-Key") key: String, @RequestBody request: RecordCommercialQuoteDispatchRequest) =
+        service.recordQuoteDispatch(quoteId.commercialUuid(), request, operation(key, request.operationId),
+            HiltechRequestContext.current(http).requireIdentityId(), HiltechRequestContext.current(http).correlationId)
+
     @GetMapping("/opportunities/{opportunityId}/costing")
     fun costing(http: HttpServletRequest, @PathVariable opportunityId: String) =
         service.privateCosting(

@@ -309,6 +309,11 @@ data class ClientQuoteDto(
 )
 
 @Serializable
+data class CommercialQuoteDispatchDto(val id: String, val channel: String, val recipientReference: String, val recordedAt: String)
+@Serializable
+data class RecordCommercialQuoteDispatchDto(val operationId: String, val channel: String, val recipientReference: String)
+
+@Serializable
 data class ClientQuotePdfDto(val filename: String, val base64: String)
 
 /** Uses existing identity, device/session headers and idempotency transport. No anonymous client endpoint. */
@@ -468,6 +473,15 @@ class CommercialApiClient(
         api.request(method = HttpMethod.Post, path = "/v1/commercial/quotes/" + quoteId + "/customer-pdf",
             options = HiltechRequestOptions(installationId = installationId),
             decode = { json.decodeFromString(ClientQuotePdfDto.serializer(), it) })
+
+    suspend fun dispatchHistory(quoteId: String, installationId: String): List<CommercialQuoteDispatchDto> =
+        api.request(method = HttpMethod.Get, path = "/v1/commercial/quotes/" + quoteId + "/dispatch-history",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(ListSerializer(CommercialQuoteDispatchDto.serializer()), it) })
+
+    suspend fun recordDispatch(quoteId: String, request: RecordCommercialQuoteDispatchDto, installationId: String) =
+        command("/v1/commercial/quotes/" + quoteId + "/dispatch-history", request.operationId, installationId,
+            json.encodeToString(RecordCommercialQuoteDispatchDto.serializer(), request))
 
     private suspend fun command(path: String, operationId: String, installationId: String, body: String) =
         api.request(

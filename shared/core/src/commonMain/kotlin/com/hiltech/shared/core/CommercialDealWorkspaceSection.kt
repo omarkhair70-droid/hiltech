@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import com.hiltech.shared.core.design.*
 import com.hiltech.shared.core.commercial.ClientQuoteDto
+import com.hiltech.shared.core.commercial.CommercialQuoteDispatchDto
+import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
@@ -42,6 +44,7 @@ data class CommercialDealWorkspaceState(
     val errorCode: String? = null,
     val customerQuote: ClientQuoteDto? = null,
     val quoteBusy: Boolean = false,
+    val dispatchHistory: List<CommercialQuoteDispatchDto> = emptyList(),
 )
 
 data class CommercialDraftLine(
@@ -114,6 +117,7 @@ fun CommercialDealWorkspaceSection(
     onAction: (CommercialDealAction) -> Unit,
     onPreviewQuote: ((String) -> Unit)? = null,
     onExportQuote: ((String) -> Unit)? = null,
+    onRecordDispatch: ((String, String, String) -> Unit)? = null,
 ) {
     if (!state.enabled) {
         Text("Commercial operations are locked until company authorization is configured.")
@@ -162,7 +166,7 @@ fun CommercialDealWorkspaceSection(
                 )
                 CommercialStage.QUOTE -> CommercialQuotePanel(
                     detail, state.canWrite, state.canRelease, onAction,
-                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote,
+                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote, state.dispatchHistory, onRecordDispatch,
                 )
                 CommercialStage.AWARD -> CommercialAwardPanel(
                     detail, state.canAward, state.canCreateProject, onAction,
@@ -434,6 +438,8 @@ private fun CommercialQuotePanel(
     quoteBusy: Boolean,
     onPreview: ((String) -> Unit)?,
     onExport: ((String) -> Unit)?,
+    dispatchHistory: List<CommercialQuoteDispatchDto>,
+    onRecordDispatch: ((String, String, String) -> Unit)?,
 ) {
     val op=deal.opportunity
     Text(hiltechText("عروض الأسعار والاعتماد", "Customer quotations & approval"), style=MaterialTheme.typography.titleMedium)
@@ -445,6 +451,8 @@ private fun CommercialQuotePanel(
             if (customerQuote?.quoteId == q.id) {
                 ReleasedQuotePreview(customerQuote)
                 if (onExport != null) Button(enabled = !quoteBusy, onClick = { onExport(q.id) }) { Text(hiltechText("تصدير PDF", "Export PDF")) }
+                QuoteDispatchPanel(q.id, dispatchHistory, quoteBusy,
+                    if (canWrite || canRelease) onRecordDispatch else null)
             }
         }
         if (canWrite && q.state == "DRAFT") {
@@ -478,6 +486,37 @@ private fun CommercialQuotePanel(
         ) { Text("Create new quote version") }
     }
     Text(hiltechText("نسخة العميل لا تتضمن التكلفة الداخلية أو هامش الربح.", "Customer copies exclude internal cost and margin."))
+}
+
+@Composable
+private fun QuoteDispatchPanel(quoteId: String, history: List<CommercialQuoteDispatchDto>, busy: Boolean, record: ((String, String, String) -> Unit)?) {
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("سجل إرسال العرض", "Recorded dispatch history"), style = MaterialTheme.typography.titleMedium)
+        history.forEach { item ->
+            HiltechKeyValue(item.channel + " · " + item.recordedAt, item.recipientReference)
+        }
+        if (history.isEmpty()) Text(hiltechText("لا يوجد إرسال مسجل.", "No dispatch recorded."))
+        if (record != null) {
+            var channel by remember(quoteId) { mutableStateOf("EMAIL") }
+            var recipient by remember(quoteId) { mutableStateOf("") }
+            var confirmed by remember(quoteId) { mutableStateOf(false) }
+            Row(Modifier.horizontalScroll(rememberScrollState())) {
+                listOf("EMAIL", "WHATSAPP", "PRINT", "OTHER").forEach { choice ->
+                    androidx.compose.material3.FilterChip(selected = channel == choice, onClick = { channel = choice; confirmed = false }, label = { Text(choice) })
+                }
+            }
+            OutlinedTextField(recipient, { recipient = it; confirmed = false }, label = { Text(hiltechText("مرجع المستلم", "Recipient reference")) }, modifier = Modifier.fillMaxWidth())
+            Row {
+                Checkbox(checked = confirmed, onCheckedChange = { confirmed = it })
+                Text(hiltechText("أؤكد أنني أرسلت نسخة PDF الصادرة بالفعل.", "I confirm I have actually sent the released PDF."))
+            }
+            Button(enabled = confirmed && recipient.isNotBlank() && !busy, onClick = {
+                record(quoteId, channel, recipient.trim())
+                confirmed = false
+            }) { Text(hiltechText("تسجيل الإرسال الفعلي", "Record actual dispatch")) }
+            Text(hiltechText("هذا سجل بإقرار المستخدم، وليس تأكيد استلام من مزود الخدمة.", "This records the operator's confirmation, not a provider delivery receipt."))
+        }
+    }
 }
 
 @Composable

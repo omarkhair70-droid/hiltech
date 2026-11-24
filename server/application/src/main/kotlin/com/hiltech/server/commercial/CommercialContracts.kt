@@ -124,6 +124,10 @@ data class CommercialCommandResult(
 )
 
 /** Deliberately no internal cost, vendor quote ID, salary, or margin fields. */
+data class RecordCommercialQuoteDispatchRequest(val operationId: String, val channel: String, val recipientReference: String)
+
+data class CommercialQuoteDispatchDto(val id: String, val channel: String, val recipientReference: String, val recordedAt: String)
+
 data class ClientCommercialQuote(
     val quoteId: String,
     val quoteCode: String,
