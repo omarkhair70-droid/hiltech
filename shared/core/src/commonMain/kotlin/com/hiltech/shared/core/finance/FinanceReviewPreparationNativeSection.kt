@@ -850,13 +850,25 @@ fun financeSignedReady(source:FinanceSignedSource,org:String):Boolean =
     source.org.equals(org,true) && financeLookupIdIsUuid(source.id) &&
     source.state=="APPROVED" && source.approvalId?.let(::financeLookupIdIsUuid)==true && source.recordId==null
 
+suspend fun financeSignedQueue(apis:FinanceEvidenceReadApis,org:String,install:String,
+    kind:FinanceReviewKind):List<FinanceSignedSource> {
+    val items=when(kind) {
+        FinanceReviewKind.CASH_VOUCHER -> apis.cash.operatorQueue(org,install).map {it.signedSource()}
+        FinanceReviewKind.CASH_COUNT -> apis.cashCount.operatorQueue(org,install).map {it.signedSource()}
+        FinanceReviewKind.BANK_RECONCILIATION -> apis.reconciliation.operatorQueue(org,install).map {it.signedSource()}
+        else -> error("Unsupported signed operation")
+    }
+    check(items.all {it.kind==kind && financeSignedReady(it,org)})
+    return items
+}
+
 suspend fun financeReadSignedSource(apis:FinanceEvidenceReadApis,org:String,install:String,
     kind:FinanceReviewKind,id:String):FinanceSignedSource {
     require(financeLookupIdIsUuid(id))
     val result=when(kind) {
-        FinanceReviewKind.CASH_VOUCHER -> apis.cash.voucherStatus(org,id,install).signedSource()
-        FinanceReviewKind.CASH_COUNT -> apis.cashCount.status(org,id,install).signedSource()
-        FinanceReviewKind.BANK_RECONCILIATION -> apis.reconciliation.status(org,id,install).signedSource()
+        FinanceReviewKind.CASH_VOUCHER -> apis.cash.operatorStatus(org,id,install).signedSource()
+        FinanceReviewKind.CASH_COUNT -> apis.cashCount.operatorStatus(org,id,install).signedSource()
+        FinanceReviewKind.BANK_RECONCILIATION -> apis.reconciliation.operatorStatus(org,id,install).signedSource()
         else -> error("Unsupported signed operation")
     }
     check(result.kind==kind && financeReadSourceMatches(org,result.org,id,result.id))
@@ -903,6 +915,8 @@ fun FinanceSignedCompletionSection(identityId:String,org:String,install:String,
         var id by remember {mutableStateOf("")}
         var evidence by remember {mutableStateOf("")}
         var current by remember {mutableStateOf<FinanceSignedSource?>(null)}
+        var items by remember {mutableStateOf<List<FinanceSignedSource>>(emptyList())}
+        var revision by remember {mutableIntStateOf(0)}
         var operation by remember {mutableStateOf<String?>(null)}
         var confirm by remember {mutableStateOf(false)}
         var busy by remember {mutableStateOf(false)}
@@ -917,6 +931,14 @@ fun FinanceSignedCompletionSection(identityId:String,org:String,install:String,
                 finally {busy=false}
             }
         }
+        LaunchedEffect(expanded,kind,revision) {
+            if(!expanded)return@LaunchedEffect
+            busy=true;error=null;items=emptyList()
+            try {items=financeSignedQueue(apis,org,install,kind)}
+            catch(cancelled:CancellationException){throw cancelled}
+            catch(_:Exception){error="قائمة العمليات غير متاحة لهذا الدور أو تعذر الاتصال."}
+            finally {busy=false}
+        }
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
             OutlinedButton(enabled=!busy,onClick={expanded=!expanded}) {
                 Text(if(expanded) "إخفاء إتمام العمليات الموقعة" else "إتمام العمليات الموقعة")
@@ -925,8 +947,21 @@ fun FinanceSignedCompletionSection(identityId:String,org:String,install:String,
             Text("سجل سند الخزنة أو نتيجة الجرد أو المطابقة الداخلية بعد الموافقة المستقلة والمستند الموقع.")
             listOf(FinanceReviewKind.CASH_VOUCHER,FinanceReviewKind.CASH_COUNT,FinanceReviewKind.BANK_RECONCILIATION).forEach { option ->
                 OutlinedButton(enabled=!busy && kind!=option,onClick={
-                    kind=option;id="";evidence="";current=null;operation=null;confirm=false;error=null
+                    kind=option;id="";evidence="";current=null;operation=null;confirm=false;error=null;items=emptyList()
                 }) {Text(option.label)}
+            }
+            Text("العمليات المعتمدة الجاهزة للتسجيل",style=MaterialTheme.typography.titleSmall)
+            OutlinedButton(enabled=!busy,onClick={revision++}) {Text("تحديث القائمة")}
+            if(items.isEmpty() && !busy && error==null) Text("لا توجد عمليات جاهزة في القائمة.")
+            items.forEach { item ->
+                val description=when(item.kind) {
+                    FinanceReviewKind.CASH_VOUCHER -> item.facts.getOrNull(3).orEmpty()+" · "+item.facts.getOrNull(4).orEmpty()+" "+item.facts.getOrNull(5).orEmpty()
+                    FinanceReviewKind.CASH_COUNT -> "جرد · "+item.facts.getOrNull(2).orEmpty()+" "+item.facts.getOrNull(1).orEmpty()
+                    else -> "مطابقة · "+item.facts.getOrNull(8).orEmpty()+" "+item.facts.getOrNull(4).orEmpty()
+                }
+                OutlinedButton(enabled=!busy,onClick={
+                    id=item.id;current=item;evidence="";operation=null;confirm=false
+                }) {Text(description+" · "+item.id.take(8))}
             }
             OutlinedTextField(value=id,onValueChange={
                 id=it.trim();current=null;operation=null;evidence="";confirm=false
@@ -956,6 +991,7 @@ fun FinanceSignedCompletionSection(identityId:String,org:String,install:String,
                             val op=operation?:newOperationId().also {operation=it}
                             perform {
                                 current=financeRecordSignedSource(apis,org,install,source,evidence,op)
+                                items=items.filterNot {it.id==source.id}
                                 confirm=false
                             }
                         }) {Text("تأكيد التسجيل")}
