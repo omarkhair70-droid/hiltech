@@ -22,13 +22,14 @@ class CommercialQuoteEmail(
     private val jdbc: JdbcTemplate,
     private val mail: ObjectProvider<JavaMailSender>,
     private val connections: CommercialMailConnection,
+    private val oauth: CommercialMailOAuth,
     @Value("\${hiltech.commercial.legacy-mail-company:}") private val legacyCompany: String,
     @Value("\${hiltech.commercial.email-from:}") private val from: String,
 ) {
     fun available(): Boolean = from.isNotBlank() && mail.ifAvailable != null
     fun available(id: UUID, actor: UUID): Boolean {
         val company = commercial.quoteCompanyForDispatch(id,actor)
-        return connections.forSending(company) != null || (legacyCompany == company.toString() && available())
+        return oauth.sender(company) != null || connections.forSending(company) != null || (legacyCompany == company.toString() && available())
     }
 
     private fun email(raw: String): String {
@@ -58,12 +59,13 @@ class CommercialQuoteEmail(
         val projection = commercial.requireQuoteDispatch(quote, actor)
         val to = email(recipient)
         val company = commercial.quoteCompanyForDispatch(quote,actor)
-        val connected = connections.forSending(company)
-        val sender = connected?.first ?: mail.ifAvailable?.takeIf { legacyCompany == company.toString() && available() }
-            ?: throw commercialError("COMMERCIAL_EMAIL_NOT_CONFIGURED", "Company email service is not configured.", HttpStatus.SERVICE_UNAVAILABLE)
-        val senderAddress = email(connected?.second ?: from)
+        val oauthSender = oauth.sender(company)
+        val connected = if(oauthSender == null) connections.forSending(company) else null
+        val sender = if(oauthSender == null) connected?.first ?: mail.ifAvailable?.takeIf { legacyCompany == company.toString() && available() } else null
+        if(sender == null && oauthSender == null) throw commercialError("COMMERCIAL_EMAIL_NOT_CONFIGURED","Company email service is not configured.",HttpStatus.SERVICE_UNAVAILABLE)
+        val senderAddress = email(oauthSender?.email ?: connected?.second ?: from)
         val pdf = commercial.customerPdf(quote, actor)
-        val message = sender.createMimeMessage()
+        val message = sender?.createMimeMessage() ?: jakarta.mail.internet.MimeMessage(jakarta.mail.Session.getInstance(java.util.Properties()))
         val helper = MimeMessageHelper(message, true, "UTF-8")
         helper.setFrom(senderAddress)
         helper.setTo(to)
@@ -83,7 +85,10 @@ class CommercialQuoteEmail(
             return status(old)
         }
         val state = try {
-            sender.send(message)
+            if(oauthSender != null) {
+                val mime = java.io.ByteArrayOutputStream().use { out -> message.saveChanges(); message.writeTo(out); out.toByteArray() }
+                oauth.send(oauthSender,mime)
+            } else requireNotNull(sender).send(message)
             "SMTP_ACCEPTED"
         } catch (_: Exception) {
             "UNKNOWN"

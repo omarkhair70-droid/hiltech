@@ -22,7 +22,7 @@ import java.util.UUID
  */
 @RestController
 @RequestMapping("/v1/commercial")
-class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail, private val connections: CommercialMailConnection, private val whatsapp: CommercialQuoteWhatsapp, private val whatsappConnections: CommercialWhatsappConnection) {
+class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail, private val connections: CommercialMailConnection, private val whatsapp: CommercialQuoteWhatsapp, private val whatsappConnections: CommercialWhatsappConnection, private val oauth: CommercialMailOAuth) {
     private fun operation(key: String, id: String): UUID {
         val parsed = id.commercialUuid()
         IdempotencyKeyContract.requireMatches(key, parsed)
@@ -51,6 +51,28 @@ class CommercialController(private val service: CommercialService, private val e
     @PostMapping("/whatsapp-connection/disconnect")
     fun disconnectWhatsapp(http: HttpServletRequest,@RequestBody body: DisconnectCommercialWhatsappRequest) =
         whatsappConnections.disconnect(body,HiltechRequestContext.current(http).requireIdentityId())
+
+    @GetMapping("/oauth/status")
+    fun oauthStatus(http: HttpServletRequest,@RequestParam organizationId: String) =
+        oauth.status(organizationId.commercialUuid(),HiltechRequestContext.current(http).requireIdentityId())
+    @PostMapping("/oauth/start")
+    fun oauthStart(http: HttpServletRequest,@RequestBody body: CommercialOAuthStartRequest) =
+        oauth.start(body,HiltechRequestContext.current(http).requireIdentityId())
+    @GetMapping("/oauth/pending")
+    fun oauthPending(http: HttpServletRequest,@RequestParam organizationId: String,@RequestParam pendingId: String) =
+        oauth.pendingStatus(organizationId.commercialUuid(),pendingId.commercialUuid(),HiltechRequestContext.current(http).requireIdentityId())
+    @PostMapping("/oauth/finish")
+    fun oauthFinish(http: HttpServletRequest,@RequestBody body: CommercialOAuthFinishRequest) =
+        oauth.finish(body,HiltechRequestContext.current(http).requireIdentityId())
+    @PostMapping("/oauth/disconnect")
+    fun oauthDisconnect(http: HttpServletRequest,@RequestBody body: CommercialOAuthDisconnectRequest) =
+        oauth.disconnect(body,HiltechRequestContext.current(http).requireIdentityId())
+    @GetMapping("/oauth/callback",produces=["text/plain"])
+    fun oauthCallback(@RequestParam(required=false) state: String?,@RequestParam(required=false) code: String?,@RequestParam(required=false) error: String?): org.springframework.http.ResponseEntity<String> {
+        val ok = oauth.callback(state,code,error)
+        return org.springframework.http.ResponseEntity.ok().header("Cache-Control","no-store").header("Referrer-Policy","no-referrer")
+            .body(if(ok) "Return to HILTECH and confirm the account. / ارجع إلى التطبيق وأكد الحساب." else "Authorization not completed. Return to HILTECH. / لم يكتمل الاتصال.")
+    }
 
     @GetMapping("/mail-connection")
     fun mailConnection(http: HttpServletRequest, @RequestParam organizationId: String) =
