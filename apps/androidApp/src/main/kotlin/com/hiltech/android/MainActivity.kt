@@ -449,58 +449,74 @@ class MainActivity : ComponentActivity() {
                         ?: identity?.organizations?.firstOrNull()
                     if (identity != null && organization != null) {
                         key(identity.identityId, organization.organizationId) {
-                            WarehousePhysicalOperatorSection(
-                                api = hiltechApplication.warehouseApi,
-                                organizationId = organization.organizationId,
-                                installationId = hiltechApplication.installationId,
-                                operatorScopeKey = identity.identityId,
-                                operationId = { fields ->
-                                    val payload = (listOf(identity.identityId, hiltechApplication.installationId) + fields)
-                                        .joinToString("") { value -> value?.toString()?.let { "${it.length}:$it" } ?: "-1:" }
-                                    java.util.UUID.nameUUIDFromBytes(payload.toByteArray(Charsets.UTF_8)).toString()
+                            NativeOperationAreas(
+                                title = "العمليات اليومية",
+                                description = "اختر نوع الحركة أو الطلب الذي تريد تنفيذه.",
+                                areas = buildList<NativeOperationArea> {
+                                    add(NativeOperationArea("movements", "حركة المخزن", "التسليم والمرتجع والاستهلاك الفعلي.") {
+                                        WarehousePhysicalOperatorSection(
+                                            api = hiltechApplication.warehouseApi,
+                                            organizationId = organization.organizationId,
+                                            installationId = hiltechApplication.installationId,
+                                            operatorScopeKey = identity.identityId,
+                                            operationId = { fields ->
+                                                val payload = (listOf(identity.identityId, hiltechApplication.installationId) + fields)
+                                                    .joinToString("") { value -> value?.toString()?.let { "${it.length}:$it" } ?: "-1:" }
+                                                java.util.UUID.nameUUIDFromBytes(payload.toByteArray(Charsets.UTF_8)).toString()
+                                            },
+                                        )
+                                    })
+                                    if (BuildConfig.HILTECH_ASSET_PURCHASE_NEEDS_ENABLED) {
+                                        add(NativeOperationArea("parts", "قطع غيار المعدات", "طلب احتياجات الصيانة والأصول.") {
+                                            key(identity.identityId, organization.organizationId, "asset-parts-needs") {
+                                                AssetPurchaseNeedSection(
+                                                    api = hiltechApplication.assetPurchaseNeedApi,
+                                                    warehouseApi = hiltechApplication.warehouseApi,
+                                                    organizationId = organization.organizationId,
+                                                    installationId = hiltechApplication.installationId,
+                                                    newOperationId = { UUID.randomUUID().toString() },
+                                                )
+                                            }
+                                        })
+                                    }
+                                    if (BuildConfig.HILTECH_OFFICE_STOCK_NEEDS_ENABLED) {
+                                        add(NativeOperationArea("office", "احتياجات المكتب", "طلب المستلزمات الداخلية.") {
+                                            key(identity.identityId, organization.organizationId, "office-needs") {
+                                                OfficeStockNeedSection(
+                                                    api = hiltechApplication.officeStockNeedApi,
+                                                    organizationId = organization.organizationId,
+                                                    installationId = hiltechApplication.installationId,
+                                                    newOperationId = { UUID.randomUUID().toString() },
+                                                )
+                                            }
+                                        })
+                                    }
+                                    if (BuildConfig.HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED) {
+                                        add(NativeOperationArea("replenishment", "إعادة التوريد", "طلبات تغطية احتياجات المخزون.") {
+                                            key(identity.identityId, organization.organizationId, "warehouse-needs") {
+                                                WarehouseReplenishmentSection(
+                                                    api = hiltechApplication.warehouseReplenishmentApi,
+                                                    warehouseApi = hiltechApplication.warehouseApi,
+                                                    organizationId = organization.organizationId,
+                                                    installationId = hiltechApplication.installationId,
+                                                    newOperationId = { UUID.randomUUID().toString() },
+                                                )
+                                            }
+                                        })
+                                    }
+                                    if (BuildConfig.HILTECH_PO_WAREHOUSE_INTAKE_ENABLED) {
+                                        add(NativeOperationArea("receiving", "استلام التوريدات", "مطابقة أمر الشراء ومستندات التسليم.") {
+                                            AndroidPoWarehouseIntakeSection(
+                                                api = hiltechApplication.poWarehouseIntakeApi,
+                                                warehouseApi = hiltechApplication.warehouseApi,
+                                                deliveryNoteUploader = hiltechApplication.poDeliveryNoteUploader,
+                                                organizationId = organization.organizationId,
+                                                installationId = hiltechApplication.installationId,
+                                            )
+                                        })
+                                    }
                                 },
                             )
-                            if (BuildConfig.HILTECH_ASSET_PURCHASE_NEEDS_ENABLED) {
-                                key(identity.identityId, organization.organizationId, "asset-parts-needs") {
-                                    AssetPurchaseNeedSection(
-                                        api = hiltechApplication.assetPurchaseNeedApi,
-                                        warehouseApi = hiltechApplication.warehouseApi,
-                                        organizationId = organization.organizationId,
-                                        installationId = hiltechApplication.installationId,
-                                        newOperationId = { UUID.randomUUID().toString() },
-                                    )
-                                }
-                            }
-                            if (BuildConfig.HILTECH_OFFICE_STOCK_NEEDS_ENABLED) {
-                                key(identity.identityId, organization.organizationId, "office-needs") {
-                                    OfficeStockNeedSection(
-                                        api = hiltechApplication.officeStockNeedApi,
-                                        organizationId = organization.organizationId,
-                                        installationId = hiltechApplication.installationId,
-                                        newOperationId = { UUID.randomUUID().toString() },
-                                    )
-                                }
-                            }
-                            if (BuildConfig.HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED) {
-                                key(identity.identityId, organization.organizationId, "warehouse-needs") {
-                                    WarehouseReplenishmentSection(
-                                        api = hiltechApplication.warehouseReplenishmentApi,
-                                        warehouseApi = hiltechApplication.warehouseApi,
-                                        organizationId = organization.organizationId,
-                                        installationId = hiltechApplication.installationId,
-                                        newOperationId = { UUID.randomUUID().toString() },
-                                    )
-                                }
-                            }
-                            if (BuildConfig.HILTECH_PO_WAREHOUSE_INTAKE_ENABLED) {
-                                AndroidPoWarehouseIntakeSection(
-                                    api = hiltechApplication.poWarehouseIntakeApi,
-                                    warehouseApi = hiltechApplication.warehouseApi,
-                                    deliveryNoteUploader = hiltechApplication.poDeliveryNoteUploader,
-                                    organizationId = organization.organizationId,
-                                    installationId = hiltechApplication.installationId,
-                                )
-                            }
                         }
                     }
                 },
