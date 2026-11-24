@@ -998,10 +998,10 @@ suspend fun financeRecordSignedSource(apis:FinanceEvidenceReadApis,org:String,in
 
 @Composable
 fun FinanceSignedCompletionSection(identityId:String,org:String,install:String,
-    apis:FinanceEvidenceReadApis,newOperationId:()->String) {
+    apis:FinanceEvidenceReadApis,newOperationId:()->String,embedded:Boolean=false) {
     key(identityId,org,install) {
         val scope=rememberCoroutineScope()
-        var expanded by remember {mutableStateOf(false)}
+        var expanded by remember(embedded) {mutableStateOf(embedded)}
         var kind by remember {mutableStateOf(FinanceReviewKind.CASH_VOUCHER)}
         var id by remember {mutableStateOf("")}
         var evidence by remember {mutableStateOf("")}
@@ -1031,8 +1031,10 @@ fun FinanceSignedCompletionSection(identityId:String,org:String,install:String,
             finally {busy=false}
         }
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(enabled=!busy,onClick={expanded=!expanded}) {
-                Text(if(expanded) "إخفاء إتمام العمليات الموقعة" else "إتمام العمليات الموقعة")
+            if(!embedded) {
+                OutlinedButton(enabled=!busy,onClick={expanded=!expanded}) {
+                    Text(if(expanded) "إخفاء إتمام العمليات الموقعة" else "إتمام العمليات الموقعة")
+                }
             }
             if(!expanded)return@Column
             Text("سجل سند الخزنة أو نتيجة الجرد أو المطابقة الداخلية بعد الموافقة المستقلة والمستند الموقع.")
