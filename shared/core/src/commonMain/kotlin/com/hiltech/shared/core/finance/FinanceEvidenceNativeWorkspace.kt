@@ -66,11 +66,20 @@ enum class FinanceReadKind(val label: String) {
     PERIOD_CLOSE("إقفال الفترة"),
 }
 
+data class FinanceReviewHandoff(val kind:FinanceReviewKind,val sourceId:String,val sourceKind:String="AR")
+
 data class FinanceSourceSnapshot(
     val title: String,
     val state: String,
     val facts: List<String>,
+    val nextActions: List<FinanceReviewHandoff> = emptyList(),
 )
+
+fun financePostedJournalHandoffs(id:String?,kind:String):List<FinanceReviewHandoff> =
+    if(id!=null && financeLookupIdIsUuid(id) && kind in setOf("AP","AR")) listOf(
+        FinanceReviewHandoff(FinanceReviewKind.CASH_ALLOCATION,id,kind),
+        FinanceReviewHandoff(FinanceReviewKind.CASH_VOUCHER,id,kind),
+    ) else emptyList()
 
 /** The requested object and organization must match the actual current source. */
 fun financeReadSourceMatches(
@@ -111,7 +120,8 @@ suspend fun financeReadSourceSnapshot(
                 "مسجل داخليًا: " + yesNo(r.internalBankStatementRecorded),
                 "مطابق بنكيًا: " + yesNo(r.bankReconciled),
                 "تحويل بدأه HILTECH: " + yesNo(r.bankTransactionInitiated),
-            ))
+            ), if(r.internalBankStatementRecorded && r.intakeId?.let(::financeLookupIdIsUuid)==true)
+                listOf(FinanceReviewHandoff(FinanceReviewKind.BANK_RECONCILIATION,r.intakeId!!)) else emptyList())
         }
         FinanceReadKind.BANK_RECONCILIATION -> {
             val r = apis.reconciliation.status(organizationId, objectId, installationId)
@@ -133,7 +143,8 @@ suspend fun financeReadSourceSnapshot(
                 "تخصيص محاسبي مسجل: " + yesNo(r.cashAllocatedToAccountingSource),
                 "تحويل منفذ بواسطة النظام: " + yesNo(r.moneyTransferredByHiltech),
                 "مطابقة بنكية: " + yesNo(r.bankReconciled),
-            ))
+            ), if(r.cashAllocatedToAccountingSource && r.recordedAllocationId?.let(::financeLookupIdIsUuid)==true)
+                listOf(FinanceReviewHandoff(FinanceReviewKind.CASH_ALLOCATION_CORRECTION,r.recordedAllocationId!!)) else emptyList())
         }
         FinanceReadKind.BANK_ALLOCATION_CORRECTION -> {
             val r = apis.allocationCorrection.status(organizationId, objectId, installationId)
@@ -153,7 +164,7 @@ suspend fun financeReadSourceSnapshot(
                 "الرصيد الدفتري: " + r.cashOnHand + " " + r.currency,
                 "عدد السندات: " + r.voucherCount,
                 "جرد فعلي مطابق: " + yesNo(r.physicalCountReconciled),
-            ))
+            ), listOf(FinanceReviewHandoff(FinanceReviewKind.CASH_COUNT,r.cashboxId)))
         }
         FinanceReadKind.CASH_VOUCHER -> {
             val r = apis.cash.voucherStatus(organizationId, objectId, installationId)
@@ -185,7 +196,7 @@ suspend fun financeReadSourceSnapshot(
                 "التزام محاسبي معترف به: " + yesNo(r.recognizedAccountsPayable),
                 "تحويل أموال: " + yesNo(r.moneyTransferred),
                 "مطابقة بنك: " + yesNo(r.bankReconciled),
-            ))
+            ), if(r.state=="POSTED_ACCOUNTS_PAYABLE" && r.recognizedAccountsPayable) financePostedJournalHandoffs(r.postedJournalId,"AP") else emptyList())
         }
         FinanceReadKind.AR_CANDIDATE -> {
             val r = apis.arCandidate.status(organizationId, objectId, installationId)
@@ -195,7 +206,7 @@ suspend fun financeReadSourceSnapshot(
                 "صدرت فاتورة: " + yesNo(r.invoiceIssued),
                 "أثبت ذمم مدينة: " + yesNo(r.receivablePosted),
                 "تم تحصيل نقدية: " + yesNo(r.cashCollected),
-            ))
+            ), if(r.state=="DRAFT_UNISSUED" && !r.invoiceIssued) listOf(FinanceReviewHandoff(FinanceReviewKind.INVOICE_ISSUANCE_PREPARE,r.candidateId)) else emptyList())
         }
         FinanceReadKind.AR_INVOICE -> {
             val r = apis.arIssuance.status(organizationId, objectId, installationId)
@@ -205,7 +216,8 @@ suspend fun financeReadSourceSnapshot(
                 "سُجلت داخليًا: " + yesNo(r.recordedInternally),
                 "أُرسلت للعميل: " + yesNo(r.invoiceSentExternally),
                 "تم تحصيلها: " + yesNo(r.paymentCollected),
-            ))
+            ), if(r.recordedInternally && r.issuedInvoiceId?.let(::financeLookupIdIsUuid)==true)
+                listOf(FinanceReviewHandoff(FinanceReviewKind.AR_JOURNAL,r.issuedInvoiceId!!)) else emptyList())
         }
         FinanceReadKind.AR_JOURNAL -> {
             val r = apis.arJournal.status(organizationId, objectId, installationId)
@@ -215,7 +227,7 @@ suspend fun financeReadSourceSnapshot(
                 "ذمم مدينة معترف بها: " + yesNo(r.receivableRecognized),
                 "نقدية محصلة: " + yesNo(r.cashCollected),
                 "مطابقة البنك: " + yesNo(r.bankReconciled),
-            ))
+            ), if(r.state=="POSTED_ACCOUNTS_RECEIVABLE" && r.receivableRecognized) financePostedJournalHandoffs(r.postedJournalId,"AR") else emptyList())
         }
         FinanceReadKind.EMPLOYEE_FUNDING -> {
             val r = apis.employeeMoney.fundingStatus(organizationId, objectId, installationId)
@@ -225,7 +237,8 @@ suspend fun financeReadSourceSnapshot(
                 "إثبات التمويل محفوظ: " + yesNo(r.fundingEvidenceRecorded),
                 "تحويل بنك جديد: " + yesNo(r.bankTransferInitiated),
                 "تسوية الموظف اكتملت: " + yesNo(r.employeeSettled),
-            ))
+            ), if(r.fundingEvidenceRecorded && !r.employeeSettled && r.fundingRecordId?.let(::financeLookupIdIsUuid)==true)
+                listOf(FinanceReviewHandoff(FinanceReviewKind.EMPLOYEE_SETTLEMENT,r.fundingRecordId!!)) else emptyList())
         }
         FinanceReadKind.EMPLOYEE_SETTLEMENT -> {
             val r = apis.employeeMoney.settlementStatus(organizationId, objectId, installationId)
@@ -326,6 +339,7 @@ fun financeEvidenceReadNativeWorkspace(
             }
         }
 
+        var handoff by remember(identityId, organizationId, installationId) { mutableStateOf<FinanceReviewHandoff?>(null) }
         var lookupKind by remember(identityId, organizationId, installationId) {
             mutableStateOf<FinanceReadKind?>(null)
         }
@@ -411,8 +425,9 @@ fun financeEvidenceReadNativeWorkspace(
                     installationId = installationId,
                     apis = apis,
                     newOperationId = newOperationId,
+                    handoff = handoff,
+                    onHandoffConsumed = { handoff = null },
                 )
-                FinanceSignedCompletionSection(identityId,organizationId,installationId,apis,newOperationId)
             }
 
             Text("تتبّع عملية برقم مصدرها", style = MaterialTheme.typography.titleSmall)
@@ -480,6 +495,9 @@ fun financeEvidenceReadNativeWorkspace(
                     Text(record.title + " · " + record.state,
                         style = MaterialTheme.typography.titleSmall)
                     record.facts.forEach { Text(it) }
+                    if(reviewPreparationEnabled) record.nextActions.forEach { action ->
+                        OutlinedButton(enabled=handoff==null,onClick={handoff=action}) {Text("متابعة: "+action.kind.label)}
+                    }
                     Text("الحالة قراءة فقط من API، ولا تعني إتمام حركة بنك أو اعتماد مستقل.",
                         style = MaterialTheme.typography.bodySmall)
                 }
