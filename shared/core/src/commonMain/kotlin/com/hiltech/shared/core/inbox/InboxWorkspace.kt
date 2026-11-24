@@ -9,6 +9,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.padding
+import com.hiltech.shared.core.design.HiltechSectionHeading
+import com.hiltech.shared.core.design.HiltechShape
+import com.hiltech.shared.core.design.LocalHiltechOperationalColors
+import com.hiltech.shared.core.design.hiltechText
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,8 +39,8 @@ import com.hiltech.shared.core.design.HiltechStateTone
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-private enum class InboxFilter(val label: String) {
-    Attention("Needs you"), Unread("Unread"), All("All"),
+private enum class InboxFilter(val label: String, val arabic: String) {
+    Attention("Needs you", "يحتاج قرارك"), Unread("Unread", "غير مقروء"), All("All", "الكل"),
 }
 
 private data class InboxDetail(
@@ -50,6 +57,8 @@ fun InboxWorkspace(
     newOperationId: () -> String,
 ) = key(sessionScope, installationId) {
     val jobs = rememberCoroutineScope()
+    val colors = LocalHiltechOperationalColors.current
+    var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(InboxFilter.Attention) }
     var items by remember { mutableStateOf<List<InboxItemDto>>(emptyList()) }
     var nextCursor by remember { mutableStateOf<String?>(null) }
@@ -128,7 +137,7 @@ fun InboxWorkspace(
                                 filter = choice
                             }
                         },
-                        label = { Text(choice.label) },
+                        label = { Text(hiltechText(choice.arabic, choice.label)) },
                     )
                 }
             }
@@ -138,18 +147,25 @@ fun InboxWorkspace(
                 HiltechPanel(Modifier.fillMaxWidth()) {
                     Text(
                         when (filter) {
-                            InboxFilter.Attention -> "You’re caught up"
-                            InboxFilter.Unread -> "No unread items"
-                            InboxFilter.All -> "Your inbox is empty"
+                            InboxFilter.Attention -> hiltechText("لا توجد قرارات تنتظرك", "You’re caught up")
+                            InboxFilter.Unread -> hiltechText("لا توجد رسائل غير مقروءة", "No unread items")
+                            InboxFilter.All -> hiltechText("الوارد فارغ", "Your inbox is empty")
                         },
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
             }
-            items.forEach { item ->
-                HiltechPanel(Modifier.fillMaxWidth()) {
+            OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                label = { Text(hiltechText("ابحث في الوارد المعروض", "Search visible inbox")) })
+            val approvalTitle = hiltechText("طلب موافقة", "Approval request")
+            val matching = items.filter { item -> query.isBlank() || (if (item.safeTitleCode == "APPROVAL_DECISION_REQUIRED") approvalTitle else humanizeInboxCode(item.safeTitleCode)).contains(query.trim(), true) || item.safeSummary?.contains(query.trim(), true) == true }
+            if (matching.isEmpty() && items.isNotEmpty()) Text(hiltechText("لا توجد نتائج مطابقة.", "No matching items."))
+            matching.forEach { item ->
+                Surface(onClick = { selectedId = item.inboxItemId }, enabled = !saving,
+                    modifier = Modifier.fillMaxWidth(), shape = HiltechShape.medium,
+                    color = if (selectedId == item.inboxItemId) colors.selected else colors.surface, contentColor = colors.primaryText) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
@@ -161,7 +177,7 @@ fun InboxWorkspace(
                             }
                         }
                         TextButton(enabled = !saving, onClick = { selectedId = item.inboxItemId }) {
-                            Text(if (selectedId == item.inboxItemId) "Selected" else "Open")
+                            Text(if (selectedId == item.inboxItemId) hiltechText("مفتوح", "Selected") else hiltechText("فتح", "Open"))
                         }
                     }
                 }
@@ -183,14 +199,14 @@ fun InboxWorkspace(
                             listing = false
                         }
                     }
-                }) { Text("Load more") }
+                }) { Text(hiltechText("تحميل المزيد", "Load more")) }
             }
         }
     }
 
     val detailPane: @Composable () -> Unit = {
         HiltechPanel(Modifier.fillMaxWidth()) {
-            TextButton(enabled = !saving, onClick = { selectedId = null }) { Text("Back to inbox") }
+            TextButton(enabled = !saving, onClick = { selectedId = null }) { Text(hiltechText("العودة إلى الوارد", "Back to inbox")) }
             if (opening) CircularProgressIndicator()
             detailError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             detail?.takeIf { it.item.inboxItemId == selectedId }?.let { entry ->
@@ -198,9 +214,9 @@ fun InboxWorkspace(
                 Text(inboxTitle(item), style = MaterialTheme.typography.titleLarge)
                 HiltechStateTag(
                     when {
-                        item.actionable -> "Needs your decision"
-                        item.state == "RESOLVED" -> "Resolved"
-                        else -> "For your information"
+                        item.actionable -> hiltechText("يحتاج قرارك", "Needs your decision")
+                        item.state == "RESOLVED" -> hiltechText("تم الحل", "Resolved")
+                        else -> hiltechText("للاطلاع", "For your information")
                     },
                     if (item.actionable) HiltechStateTone.ATTENTION else HiltechStateTone.NEUTRAL,
                 )
@@ -211,7 +227,7 @@ fun InboxWorkspace(
                     approval.safeReasonSummary?.takeIf(String::isNotBlank)?.let { Text(it) }
                 }
                 if (item.sourceType == "APPROVAL_REQUEST" && entry.approval == null) {
-                    Text("The approval details are unavailable for this session.")
+                    Text(hiltechText("تفاصيل الموافقة غير متاحة في هذه الجلسة.", "The approval details are unavailable for this session."))
                 }
                 OutlinedButton(enabled = !saving && !opening, onClick = {
                     val request = InboxReadStateRequestDto(readOperation ?: newOperationId().also { readOperation = it })
@@ -237,12 +253,15 @@ fun InboxWorkspace(
                             saving = false
                         }
                     }
-                }) { Text(if (item.read) "Mark unread" else "Mark read") }
+                }) { Text(if (item.read) hiltechText("تحديد كغير مقروء", "Mark unread") else hiltechText("تحديد كمقروء", "Mark read")) }
             }
         }
     }
 
-    TextButton(enabled = !saving && !listing && !opening, onClick = { revision += 1 }) { Text("Refresh inbox") }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) { HiltechSectionHeading("INBOX", hiltechText("الوارد والقرارات", "Inbox & decisions"), hiltechText("الطلبات والتنبيهات الموجهة إليك.", "Requests and notifications assigned to you.")) }
+        TextButton(enabled = !saving && !listing && !opening, onClick = { revision += 1 }) { Text(hiltechText("تحديث", "Refresh")) }
+    }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         if (selectedId == null) {
             listPane()
@@ -257,8 +276,9 @@ fun InboxWorkspace(
     }
 }
 
+@Composable
 private fun inboxTitle(item: InboxItemDto): String = when (item.safeTitleCode) {
-    "APPROVAL_DECISION_REQUIRED" -> "Approval request"
+    "APPROVAL_DECISION_REQUIRED" -> hiltechText("طلب موافقة", "Approval request")
     else -> humanizeInboxCode(item.safeTitleCode)
 }
 
