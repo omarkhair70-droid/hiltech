@@ -16,6 +16,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -797,6 +800,146 @@ fun FinanceReviewPreparationSection(
                 draft = FinanceReviewDraft(sourceKind = draft.sourceKind)
                 resetForFormChange()
             }) { Text("طلب جديد / إغلاق النتيجة الحالية") }
+        }
+    }
+}
+
+
+/** Signed recording is distinct from preparation, and always checks current source again. */
+data class FinanceSignedSource(
+    val kind:FinanceReviewKind,val id:String,val org:String,val state:String,
+    val approvalId:String?,val recordId:String?,val facts:List<String>,
+)
+
+private fun FinanceCashVoucherReceiptDto.signedSource()=FinanceSignedSource(
+    FinanceReviewKind.CASH_VOUCHER,proposalId,organizationId,state,approvalRequestId,voucherRecordId,
+    listOf(cashboxId,sourceKind,sourceJournalId,direction,amount,currency))
+private fun FinanceCashCountReceiptDto.signedSource()=FinanceSignedSource(
+    FinanceReviewKind.CASH_COUNT,proposalId,organizationId,state,approvalRequestId,countRecordId,
+    listOf(cashboxId,currency,countedAmount,ledgerAmount,varianceAmount,voucherCount.toString()))
+private fun FinanceBankReconciliationReceiptDto.signedSource()=FinanceSignedSource(
+    FinanceReviewKind.BANK_RECONCILIATION,proposalId,organizationId,state,approvalRequestId,reconciliationRecordId,
+    listOf(intakeId,accountId,statementSha256,matchingSha256,currency,lineCount.toString(),totalCredit,totalDebit,totalMatched))
+
+fun financeSignedReady(source:FinanceSignedSource,org:String):Boolean =
+    source.kind in setOf(FinanceReviewKind.CASH_VOUCHER,FinanceReviewKind.CASH_COUNT,FinanceReviewKind.BANK_RECONCILIATION) &&
+    source.org.equals(org,true) && financeLookupIdIsUuid(source.id) &&
+    source.state=="APPROVED" && source.approvalId?.let(::financeLookupIdIsUuid)==true && source.recordId==null
+
+suspend fun financeReadSignedSource(apis:FinanceEvidenceReadApis,org:String,install:String,
+    kind:FinanceReviewKind,id:String):FinanceSignedSource {
+    require(financeLookupIdIsUuid(id))
+    val result=when(kind) {
+        FinanceReviewKind.CASH_VOUCHER -> apis.cash.voucherStatus(org,id,install).signedSource()
+        FinanceReviewKind.CASH_COUNT -> apis.cashCount.status(org,id,install).signedSource()
+        FinanceReviewKind.BANK_RECONCILIATION -> apis.reconciliation.status(org,id,install).signedSource()
+        else -> error("Unsupported signed operation")
+    }
+    check(result.kind==kind && financeReadSourceMatches(org,result.org,id,result.id))
+    return result
+}
+
+suspend fun financeRecordSignedSource(apis:FinanceEvidenceReadApis,org:String,install:String,
+    expected:FinanceSignedSource,evidence:String,operation:String):FinanceSignedSource {
+    require(financeSignedReady(expected,org) && financeLookupIdIsUuid(evidence) && financeLookupIdIsUuid(operation))
+    val current=financeReadSignedSource(apis,org,install,expected.kind,expected.id)
+    check(current==expected && financeSignedReady(current,org)) {"FINANCE_SIGNED_SOURCE_CHANGED"}
+    val result=when(expected.kind) {
+        FinanceReviewKind.CASH_VOUCHER -> {
+            val r=apis.cash.recordVoucher(org,expected.id,operation,evidence,install)
+            check(r.physicalCustodyConfirmed && !r.bankTransactionInitiated)
+            r.signedSource()
+        }
+        FinanceReviewKind.CASH_COUNT -> {
+            val r=apis.cashCount.record(org,expected.id,operation,evidence,install)
+            check(!r.ledgerAdjusted && !r.bankTransferInitiated)
+            r.signedSource()
+        }
+        FinanceReviewKind.BANK_RECONCILIATION -> {
+            val r=apis.reconciliation.sign(org,expected.id,operation,evidence,install)
+            check(r.internallyReconciled && !r.bankTransferInitiated)
+            r.signedSource()
+        }
+        else -> error("Unsupported signed operation")
+    }
+    val terminal=if(expected.kind==FinanceReviewKind.BANK_RECONCILIATION) "SIGNED" else "RECORDED"
+    check(result.kind==expected.kind && financeReadSourceMatches(org,result.org,expected.id,result.id) &&
+        result.approvalId==expected.approvalId && result.facts==expected.facts &&
+        result.state==terminal && result.recordId?.let(::financeLookupIdIsUuid)==true)
+    return result
+}
+
+@Composable
+fun FinanceSignedCompletionSection(identityId:String,org:String,install:String,
+    apis:FinanceEvidenceReadApis,newOperationId:()->String) {
+    key(identityId,org,install) {
+        val scope=rememberCoroutineScope()
+        var expanded by remember {mutableStateOf(false)}
+        var kind by remember {mutableStateOf(FinanceReviewKind.CASH_VOUCHER)}
+        var id by remember {mutableStateOf("")}
+        var evidence by remember {mutableStateOf("")}
+        var current by remember {mutableStateOf<FinanceSignedSource?>(null)}
+        var operation by remember {mutableStateOf<String?>(null)}
+        var confirm by remember {mutableStateOf(false)}
+        var busy by remember {mutableStateOf(false)}
+        var error by remember {mutableStateOf<String?>(null)}
+        fun perform(action:suspend ()->Unit) {
+            if(busy)return
+            busy=true;error=null
+            scope.launch {
+                try {action()}
+                catch(cancelled:CancellationException){throw cancelled}
+                catch(_:Exception){error="تعذر تأكيد العملية من المصدر. حدّث الحالة قبل إعادة المحاولة."}
+                finally {busy=false}
+            }
+        }
+        Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(enabled=!busy,onClick={expanded=!expanded}) {
+                Text(if(expanded) "إخفاء إتمام العمليات الموقعة" else "إتمام العمليات الموقعة")
+            }
+            if(!expanded)return@Column
+            Text("سجل سند الخزنة أو نتيجة الجرد أو المطابقة الداخلية بعد الموافقة المستقلة والمستند الموقع.")
+            listOf(FinanceReviewKind.CASH_VOUCHER,FinanceReviewKind.CASH_COUNT,FinanceReviewKind.BANK_RECONCILIATION).forEach { option ->
+                OutlinedButton(enabled=!busy && kind!=option,onClick={
+                    kind=option;id="";evidence="";current=null;operation=null;confirm=false;error=null
+                }) {Text(option.label)}
+            }
+            OutlinedTextField(value=id,onValueChange={
+                id=it.trim();current=null;operation=null;evidence="";confirm=false
+            },label={Text("معرّف المقترح")},enabled=!busy,modifier=Modifier.fillMaxWidth())
+            OutlinedButton(enabled=!busy && financeLookupIdIsUuid(id),onClick={
+                perform {
+                    val fresh=financeReadSignedSource(apis,org,install,kind,id)
+                    if(fresh!=current)operation=null
+                    current=fresh;confirm=false
+                }
+            }) {Text("قراءة الحالة الحالية")}
+            current?.let { source ->
+                Text("الحالة: "+source.state)
+                source.facts.forEach {Text(it,style=MaterialTheme.typography.bodySmall)}
+                source.approvalId?.let {Text("الموافقة: "+it)}
+                source.recordId?.let {Text("السجل المثبت: "+it)}
+                if(financeSignedReady(source,org)) {
+                    OutlinedTextField(value=evidence,onValueChange={
+                        evidence=it.trim();operation=null;confirm=false
+                    },label={Text("معرّف المستند الموقع والجاهز")},enabled=!busy,modifier=Modifier.fillMaxWidth())
+                    if(!confirm) OutlinedButton(enabled=!busy && financeLookupIdIsUuid(evidence),onClick={confirm=true}) {
+                        Text("مراجعة التسجيل النهائي")
+                    } else {
+                        Text("تأكيد التسجيل الداخلي وفق الموافقة والمستند الموقع.")
+                        OutlinedButton(enabled=!busy,onClick={confirm=false}) {Text("رجوع")}
+                        OutlinedButton(enabled=!busy,onClick={
+                            val op=operation?:newOperationId().also {operation=it}
+                            perform {
+                                current=financeRecordSignedSource(apis,org,install,source,evidence,op)
+                                confirm=false
+                            }
+                        }) {Text("تأكيد التسجيل")}
+                    }
+                }
+            }
+            if(busy)Text("جارٍ الاتصال بالمصدر…")
+            error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
         }
     }
 }
