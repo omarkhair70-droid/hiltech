@@ -10,6 +10,13 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
+data class CommercialWhatsappConnectionDto(val configured: Boolean,val setupAvailable: Boolean,val phoneId: String? = null,val displayPhone: String? = null,val template: String? = null,val language: String? = null,val apiVersion: String? = null,val version: Long = 0)
+@Serializable
+class ConnectCommercialWhatsappDto(val organizationId: String,val phoneId: String,val token: String,val template: String,val language: String,val apiVersion: String,val baseVersion: Long)
+@Serializable
+data class DisconnectCommercialWhatsappDto(val organizationId: String,val baseVersion: Long)
+
+@Serializable
 data class CommercialMailConnectionDto(val configured: Boolean, val setupAvailable: Boolean, val allowedHosts: List<String>, val host: String? = null, val username: String? = null, val version: Long = 0)
 @Serializable
 class ConnectCommercialMailDto(val organizationId: String, val host: String, val username: String, val appPassword: String, val baseVersion: Long)
@@ -365,6 +372,13 @@ class CommercialApiClient(
     private val api: HiltechApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
 ) {
+    suspend fun whatsappConnection(organizationId: String,installationId: String): CommercialWhatsappConnectionDto =
+        api.request(method=HttpMethod.Get,path="/v1/commercial/whatsapp-connection?organizationId="+organizationId,options=HiltechRequestOptions(installationId=installationId),decode={json.decodeFromString(CommercialWhatsappConnectionDto.serializer(),it)})
+    suspend fun connectWhatsapp(request: ConnectCommercialWhatsappDto,installationId: String): CommercialWhatsappConnectionDto =
+        api.request(method=HttpMethod.Post,path="/v1/commercial/whatsapp-connection/connect",options=HiltechRequestOptions(installationId=installationId),requestBody=json.encodeToString(ConnectCommercialWhatsappDto.serializer(),request),decode={json.decodeFromString(CommercialWhatsappConnectionDto.serializer(),it)})
+    suspend fun disconnectWhatsapp(request: DisconnectCommercialWhatsappDto,installationId: String): CommercialWhatsappConnectionDto =
+        api.request(method=HttpMethod.Post,path="/v1/commercial/whatsapp-connection/disconnect",options=HiltechRequestOptions(installationId=installationId),requestBody=json.encodeToString(DisconnectCommercialWhatsappDto.serializer(),request),decode={json.decodeFromString(CommercialWhatsappConnectionDto.serializer(),it)})
+
     suspend fun mailConnection(organizationId: String, installationId: String): CommercialMailConnectionDto =
         api.request(method = HttpMethod.Get, path = "/v1/commercial/mail-connection?organizationId=" + organizationId,
             options = HiltechRequestOptions(installationId = installationId), decode = { json.decodeFromString(CommercialMailConnectionDto.serializer(), it) })

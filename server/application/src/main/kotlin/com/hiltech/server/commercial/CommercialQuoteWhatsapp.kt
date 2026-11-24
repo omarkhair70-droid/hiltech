@@ -21,6 +21,7 @@ data class CommercialWhatsappStatus(val id: String, val recipient: String, val s
 class CommercialQuoteWhatsapp(
     private val commercial: CommercialService,
     private val jdbc: JdbcTemplate,
+    private val connections: CommercialWhatsappConnection,
     @Value("\${hiltech.commercial.whatsapp.company:}") private val company: String,
     @Value("\${hiltech.commercial.whatsapp.phone-id:}") private val phoneId: String,
     @Value("\${hiltech.commercial.whatsapp.token:}") private val token: String,
@@ -35,7 +36,10 @@ class CommercialQuoteWhatsapp(
             setReadTimeout(Duration.ofSeconds(30))
         }
     ).build()
-    fun available(id: UUID, actor: UUID): Boolean = ready(commercial.quoteCompanyForDispatch(id,actor))
+    fun available(id: UUID, actor: UUID): Boolean {
+        val org = commercial.quoteCompanyForDispatch(id,actor)
+        return connections.forSending(org) != null || ready(org)
+    }
     private fun status(row: Map<String,Any?>) = CommercialWhatsappStatus(row["id"].toString(),row["recipient"].toString(),row["state"].toString(),row["created_at"].toString())
     fun history(id: UUID,actor: UUID): List<CommercialWhatsappStatus> {
         commercial.customerQuote(id,actor)
@@ -43,7 +47,8 @@ class CommercialQuoteWhatsapp(
     }
     fun send(id: UUID,actor: UUID,key: UUID,r: CommercialWhatsappRequest): CommercialWhatsappStatus {
         val org = commercial.quoteCompanyForDispatch(id,actor)
-        if (!ready(org)) throw commercialError("WHATSAPP_NOT_CONFIGURED","WhatsApp Business is not configured.",HttpStatus.SERVICE_UNAVAILABLE)
+        val connection = connections.forSending(org) ?: if (ready(org)) CommercialWhatsappCredentials(phoneId,token,template,language,apiVersion) else null
+        if (connection == null) throw commercialError("WHATSAPP_NOT_CONFIGURED","WhatsApp Business is not configured.",HttpStatus.SERVICE_UNAVAILABLE)
         val to = r.recipient.trim().removePrefix("+")
         if (!to.matches(Regex("[1-9][0-9]{7,14}")) || !r.consentConfirmed)
             throw commercialError("WHATSAPP_RECIPIENT_INVALID","Confirm recipient consent and international number.",HttpStatus.BAD_REQUEST)
@@ -60,19 +65,19 @@ class CommercialQuoteWhatsapp(
         }
         var providerId: String? = null
         try {
-            val url = "https://graph.facebook.com/$apiVersion/$phoneId"
+            val url = "https://graph.facebook.com/"+connection.apiVersion+"/"+connection.phoneId
             val form = LinkedMultiValueMap<String,Any>()
             form.add("messaging_product","whatsapp")
             form.add("type","application/pdf")
             form.add("file",object : ByteArrayResource(bytes) { override fun getFilename() = pdf.filename })
-            val uploaded = client.post().uri("$url/media").headers { it.setBearerAuth(token) }.contentType(MediaType.MULTIPART_FORM_DATA)
+            val uploaded = client.post().uri("$url/media").headers { it.setBearerAuth(connection.token) }.contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(form).retrieve().body(Map::class.java)
             val mediaId = requireNotNull(uploaded?.get("id") as? String)
             val body = mapOf("messaging_product" to "whatsapp","to" to to,"type" to "template",
-                "template" to mapOf("name" to template,"language" to mapOf("code" to language),
+                "template" to mapOf("name" to connection.template,"language" to mapOf("code" to connection.language),
                     "components" to listOf(mapOf("type" to "header","parameters" to listOf(mapOf("type" to "document",
                         "document" to mapOf("id" to mediaId,"filename" to pdf.filename)))))))
-            val sent = client.post().uri("$url/messages").headers { it.setBearerAuth(token) }.contentType(MediaType.APPLICATION_JSON)
+            val sent = client.post().uri("$url/messages").headers { it.setBearerAuth(connection.token) }.contentType(MediaType.APPLICATION_JSON)
                 .body(body).retrieve().body(Map::class.java)
             providerId = ((sent?.get("messages") as? List<*>)?.firstOrNull() as? Map<*,*>)?.get("id") as? String
         } catch (_: Exception) { /* Ambiguous provider outcome; never retry automatically. */ }

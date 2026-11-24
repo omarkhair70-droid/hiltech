@@ -26,6 +26,9 @@ class CommercialMailConnection(
 ) {
     private val hosts = configuredHosts.split(",").map { it.trim().lowercase() }.filter { it.matches(Regex("[a-z0-9.-]+")) }.distinct()
     private fun key(): ByteArray? = runCatching { Base64.getDecoder().decode(encodedKey).takeIf { it.size == 32 } }.getOrNull()
+    internal fun encryptionAvailable(): Boolean = key() != null
+    internal fun encryptProviderSecret(company: UUID, purpose: String, secret: String): ByteArray = encrypt(UUID.nameUUIDFromBytes((company.toString()+":"+purpose).toByteArray(Charsets.UTF_8)),secret)
+    internal fun decryptProviderSecret(company: UUID, purpose: String, data: ByteArray): String = decrypt(UUID.nameUUIDFromBytes((company.toString()+":"+purpose).toByteArray(Charsets.UTF_8)),data)
     private fun requireKey(): SecretKeySpec = SecretKeySpec(key() ?: throw commercialError("MAIL_SETUP_UNAVAILABLE","Server encryption key is not configured.",HttpStatus.SERVICE_UNAVAILABLE),"AES")
     private fun encrypt(company: UUID, secret: String): ByteArray {
         val nonce = ByteArray(12).also { SecureRandom().nextBytes(it) }

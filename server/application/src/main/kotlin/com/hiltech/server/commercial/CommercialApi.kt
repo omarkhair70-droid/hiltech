@@ -22,7 +22,7 @@ import java.util.UUID
  */
 @RestController
 @RequestMapping("/v1/commercial")
-class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail, private val connections: CommercialMailConnection, private val whatsapp: CommercialQuoteWhatsapp) {
+class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail, private val connections: CommercialMailConnection, private val whatsapp: CommercialQuoteWhatsapp, private val whatsappConnections: CommercialWhatsappConnection) {
     private fun operation(key: String, id: String): UUID {
         val parsed = id.commercialUuid()
         IdempotencyKeyContract.requireMatches(key, parsed)
@@ -39,6 +39,18 @@ class CommercialController(private val service: CommercialService, private val e
         HiltechRequestContext.current(http).requireIdentityId(),
         HiltechRequestContext.current(http).correlationId,
     )
+
+    @GetMapping("/whatsapp-connection")
+    fun whatsappConnection(http: HttpServletRequest,@RequestParam organizationId: String) =
+        whatsappConnections.status(organizationId.commercialUuid(),HiltechRequestContext.current(http).requireIdentityId())
+
+    @PostMapping("/whatsapp-connection/connect")
+    fun connectWhatsapp(http: HttpServletRequest,@RequestBody body: ConnectCommercialWhatsappRequest) =
+        whatsappConnections.connect(body,HiltechRequestContext.current(http).requireIdentityId())
+
+    @PostMapping("/whatsapp-connection/disconnect")
+    fun disconnectWhatsapp(http: HttpServletRequest,@RequestBody body: DisconnectCommercialWhatsappRequest) =
+        whatsappConnections.disconnect(body,HiltechRequestContext.current(http).requireIdentityId())
 
     @GetMapping("/mail-connection")
     fun mailConnection(http: HttpServletRequest, @RequestParam organizationId: String) =
