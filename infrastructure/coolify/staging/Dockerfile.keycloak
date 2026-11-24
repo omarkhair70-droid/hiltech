@@ -1,0 +1,6 @@
+# Minimal Keycloak staging runtime wrapper for Coolify Dockerfile-without-Git.
+# The upstream image has a kc.sh entrypoint but no server-mode CMD.
+# Docker Image-only Coolify applications do not honor a configured start command.
+FROM quay.io/keycloak/keycloak:26.7.4
+ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
+CMD ["start", "--import-realm"]
