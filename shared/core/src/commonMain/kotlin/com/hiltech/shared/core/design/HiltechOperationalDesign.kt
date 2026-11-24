@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
@@ -37,6 +39,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.material3.FilterChip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -135,6 +138,39 @@ object HiltechShape {
     val large = RoundedCornerShape(16.dp)
 }
 
+/**
+ * Operational text hierarchy shared by both native clients. Use the platform
+ * font fallback so Arabic shaping and mixed-language record names stay intact.
+ */
+private fun operationalText(size: Int, leading: Int, weight: FontWeight = FontWeight.Normal) =
+    TextStyle(fontSize = size.sp, lineHeight = leading.sp, fontWeight = weight, letterSpacing = 0.sp)
+
+private val OperationalTypography = Typography(
+    displayLarge = operationalText(44, 56, FontWeight.Bold),
+    displayMedium = operationalText(36, 48, FontWeight.Bold),
+    displaySmall = operationalText(30, 40, FontWeight.Bold),
+    headlineLarge = operationalText(28, 38, FontWeight.Bold),
+    headlineMedium = operationalText(24, 34, FontWeight.SemiBold),
+    headlineSmall = operationalText(22, 30, FontWeight.SemiBold),
+    titleLarge = operationalText(20, 28, FontWeight.SemiBold),
+    titleMedium = operationalText(16, 24, FontWeight.SemiBold),
+    titleSmall = operationalText(14, 21, FontWeight.SemiBold),
+    bodyLarge = operationalText(16, 24),
+    bodyMedium = operationalText(14, 22),
+    bodySmall = operationalText(12, 19),
+    labelLarge = operationalText(14, 20, FontWeight.Medium),
+    labelMedium = operationalText(12, 18, FontWeight.Medium),
+    labelSmall = operationalText(11, 17, FontWeight.Medium),
+)
+
+private val OperationalShapes = Shapes(
+    extraSmall = HiltechShape.small,
+    small = HiltechShape.small,
+    medium = HiltechShape.medium,
+    large = HiltechShape.large,
+    extraLarge = HiltechShape.large,
+)
+
 @Composable
 fun HiltechOperationalTheme(
     dark: Boolean = isSystemInDarkTheme(),
@@ -142,27 +178,42 @@ fun HiltechOperationalTheme(
     content: @Composable () -> Unit,
 ) {
     val palette = if (highContrast) HighContrast else if (dark) Dark else Light
-    val scheme = if (dark || highContrast) darkColorScheme(
+    val isDark = dark || highContrast
+    val base = if (isDark) darkColorScheme() else lightColorScheme()
+    // Set container and interaction roles too: Material components must not
+    // fall back to unrelated default purple colors in either appearance.
+    val scheme = base.copy(
         primary = palette.accent,
-        onPrimary = palette.canvas,
+        onPrimary = if (isDark) palette.canvas else Color.White,
+        primaryContainer = palette.selected,
+        onPrimaryContainer = palette.primaryText,
+        secondary = palette.secondaryText,
+        onSecondary = if (isDark) palette.canvas else Color.White,
+        secondaryContainer = palette.selected,
+        onSecondaryContainer = palette.primaryText,
+        tertiary = palette.accent,
+        onTertiary = if (isDark) palette.canvas else Color.White,
+        tertiaryContainer = palette.surfaceElevated,
+        onTertiaryContainer = palette.primaryText,
         background = palette.canvas,
         onBackground = palette.primaryText,
         surface = palette.surface,
         onSurface = palette.primaryText,
+        surfaceVariant = palette.surfaceElevated,
+        onSurfaceVariant = palette.secondaryText,
+        surfaceTint = palette.accent,
         outline = palette.divider,
+        outlineVariant = palette.divider,
+        inverseSurface = if (isDark) Light.surface else Dark.surface,
+        inverseOnSurface = if (isDark) Light.primaryText else Dark.primaryText,
+        inversePrimary = if (isDark) Light.accent else Dark.accent,
         error = palette.blockedText,
-    ) else lightColorScheme(
-        primary = palette.accent,
-        onPrimary = Color.White,
-        background = palette.canvas,
-        onBackground = palette.primaryText,
-        surface = palette.surface,
-        onSurface = palette.primaryText,
-        outline = palette.divider,
-        error = palette.blockedText,
+        onError = if (isDark) palette.canvas else Color.White,
+        errorContainer = palette.blockedSurface,
+        onErrorContainer = palette.blockedText,
     )
     CompositionLocalProvider(LocalHiltechOperationalColors provides palette) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        MaterialTheme(colorScheme = scheme, typography = OperationalTypography, shapes = OperationalShapes, content = content)
     }
 }
 
@@ -296,13 +347,13 @@ fun HiltechRecordPicker(
             shape = HiltechShape.small,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.heightIn(min = 48.dp).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(selected?.title ?: if (value.isBlank()) hiltechText("اختر سجلًا", "Choose a record") else hiltechText("مرجع محدد", "Reference selected"),
                         style = MaterialTheme.typography.bodyLarge)
                     selected?.context?.takeIf { it.isNotBlank() }?.let { Text(it, color = palette.secondaryText, style = MaterialTheme.typography.bodySmall) }
                 }
-                Text(if (expanded) "−" else "+", color = palette.accent)
+                Text(if (expanded) "▴" else "▾", color = palette.accent, style = MaterialTheme.typography.titleMedium)
             }
         }
         if (expanded) {
@@ -316,7 +367,7 @@ fun HiltechRecordPicker(
                         Surface(onClick = { onChange(record.id); expanded = false; referenceMode = false },
                             enabled = enabled, color = if (record.id == value) palette.selected else palette.surface,
                             modifier = Modifier.fillMaxWidth(), shape = HiltechShape.small) {
-                            Column(Modifier.padding(10.dp)) {
+                            Column(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text(record.title, style = MaterialTheme.typography.titleSmall)
                                 if (record.context.isNotBlank()) Text(record.context, color = palette.secondaryText, style = MaterialTheme.typography.bodySmall)
                             }
