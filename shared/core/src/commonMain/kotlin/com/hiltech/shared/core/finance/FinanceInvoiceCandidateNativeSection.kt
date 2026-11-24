@@ -3,6 +3,7 @@ package com.hiltech.shared.core.finance
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -33,6 +34,27 @@ fun financeValidCalendarDate(value:String):Boolean {
     val leap=year%4==0 && (year%100!=0 || year%400==0)
     val days=when(month){2->if(leap)29 else 28;4,6,9,11->30;else->31}
     return day in 1..days
+}
+
+
+/**
+ * A commercial award is NOT itself permission to issue an invoice.
+ * Keep server ownership and source scope, never fabricate finance totals.
+ */
+suspend fun financeReadClientAwardChoices(apis:FinanceEvidenceReadApis,org:String,install:String):
+    FinanceClientAwardSourcePageDto {
+    val page=apis.clientAwards.list(org,install)
+    check(page.organizationId.equals(org,true) &&
+        page.reportedCompanyReceivableTotal==null &&
+        page.reportedCompanyRevenueTotal==null &&
+        page.reportedCustomerCollectionsTotal==null &&
+        page.rows.all { it.organizationId.equals(org,true) &&
+            financeLookupIdIsUuid(it.opportunityId) &&
+            financeLookupIdIsUuid(it.projectId) &&
+            financeLookupIdIsUuid(it.clientOrganizationId) }) {
+        "FINANCE_AWARD_SOURCE_SCOPE_MISMATCH"
+    }
+    return page
 }
 
 fun financeInvoiceCandidateValid(d:FinanceInvoiceCandidateDraft):Boolean =
