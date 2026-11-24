@@ -296,7 +296,8 @@ class MainActivity : ComponentActivity() {
                                 },
                             ))
                         }
-                        if (BuildConfig.HILTECH_FINANCE_EVIDENCE_READ_ENABLED) {
+                        if (BuildConfig.HILTECH_FINANCE_EVIDENCE_READ_ENABLED ||
+                            BuildConfig.HILTECH_FINANCE_REVIEW_PREPARE_ENABLED) {
                             add(financeEvidenceReadNativeWorkspace(
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
