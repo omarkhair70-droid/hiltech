@@ -108,21 +108,21 @@ fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispa
     var mode by remember(warehouseId) { mutableStateOf(AssetDirectoryMode.Catalogue) }
     var detailMode by remember(state.selected?.identity?.id) { mutableStateOf(state.selected != null) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("المعدات والأصول", style = MaterialTheme.typography.titleLarge)
-        Text("سجل المعدة وحالتها وعهدتها وخدمتها.", color = colors.secondaryText, style = MaterialTheme.typography.bodyMedium)
+        Text(hiltechText("المعدات والأصول", "Equipment & assets"), style = MaterialTheme.typography.titleLarge)
+        Text(hiltechText("سجل المعدة وحالتها وعهدتها وخدمتها.", "Asset passport, condition, custody and service."), color = colors.secondaryText, style = MaterialTheme.typography.bodyMedium)
         if (warehouseId == null) {
-            Text("اختر مخزنًا.")
+            Text(hiltechText("اختر مخزنًا.", "Select a warehouse."))
             return@Column
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             AssetDirectoryMode.entries.forEach { choice ->
-                FilterChip(selected = mode == choice, onClick = { mode = choice; detailMode = false }, label = { Text(choice.title) })
+                FilterChip(selected = mode == choice, onClick = { mode = choice; detailMode = false }, label = { Text(hiltechText(choice.title, choice.english)) })
             }
         }
         state.message?.let { Text(it) }
         val detail: @Composable () -> Unit = {
             state.selected?.let { AssetPassportDetail(it, state, dispatch) }
-                ?: HiltechPanel(Modifier.fillMaxWidth()) { Text("اختر معدة لفتح سجلها.") }
+                ?: HiltechPanel(Modifier.fillMaxWidth()) { Text(hiltechText("اختر معدة لفتح سجلها.", "Select an asset to open its passport.")) }
         }
         when (mode) {
             AssetDirectoryMode.Service -> {
@@ -141,22 +141,22 @@ fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispa
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(search, { search = it }, modifier = Modifier.weight(1f),
-                                label = { Text("كود أو اسم أو مسلسل") }, singleLine = true)
+                                label = { Text(hiltechText("كود أو اسم أو مسلسل", "Code, name or serial")) }, singleLine = true)
                             Button({ dispatch(AssetAction.Search(search.trim())) }, enabled = !state.loading) {
-                                Text(if (state.loading) "تحميل" else "بحث")
+                                Text(if (state.loading) hiltechText("تحميل", "Loading") else hiltechText("بحث", "Search"))
                             }
                         }
                         val catalog = state.catalog
                         if (catalog?.canRegister == true) {
                             TextButton(onClick = { showRegistration = !showRegistration }) {
-                                Text(if (showRegistration) "إغلاق التسجيل" else "+ تسجيل معدة")
+                                Text(if (showRegistration) hiltechText("إغلاق التسجيل", "Close registration") else hiltechText("+ تسجيل معدة", "+ Register asset"))
                             }
                             if (showRegistration) HiltechPanel(Modifier.fillMaxWidth()) {
-                                if (catalog.types.isEmpty()) Text("لا توجد أنواع معدات مفعّلة.")
+                                if (catalog.types.isEmpty()) Text(hiltechText("لا توجد أنواع معدات مفعّلة.", "No active asset types."))
                                 else AssetRegistrationForm(state, dispatch)
                             }
                         }
-                        if (catalog != null && state.items.isEmpty()) Text("لا توجد معدات مطابقة في النتائج.")
+                        if (catalog != null && state.items.isEmpty()) Text(hiltechText("لا توجد معدات مطابقة في النتائج.", "No matching assets."))
                         state.items.forEach { item ->
                             Surface(onClick = { detailMode = true; dispatch(AssetAction.Select(item.id)) },
                                 enabled = !state.loading, color = if (item.id == state.selected?.identity?.id) colors.selected else colors.surface,
@@ -172,7 +172,7 @@ fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispa
                             }
                         }
                         state.nextAfterCode?.let { cursor ->
-                            OutlinedButton({ dispatch(AssetAction.More(cursor)) }, enabled = !state.loading) { Text("تحميل معدات إضافية") }
+                            OutlinedButton({ dispatch(AssetAction.More(cursor)) }, enabled = !state.loading) { Text(hiltechText("تحميل معدات إضافية", "Load more assets")) }
                         }
                     }
                 }
@@ -181,7 +181,7 @@ fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispa
                         Column(Modifier.weight(.9f)) { directory() }
                         Column(Modifier.weight(1.5f)) { detail() }
                     } else if (detailMode && state.selected != null) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        TextButton(onClick = { detailMode = false }) { Text("العودة إلى المعدات") }
+                        TextButton(onClick = { detailMode = false }) { Text(hiltechText("العودة إلى المعدات", "Back to assets")) }
                         detail()
                     } else directory()
                 }
@@ -190,8 +190,8 @@ fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispa
     }
 }
 
-private enum class AssetDirectoryMode(val title: String) {
-    Catalogue("دليل المعدات"), Service("الخدمة والمعايرة"), Returns("المرتجعات المستحقة"),
+private enum class AssetDirectoryMode(val title: String, val english: String) {
+    Catalogue("دليل المعدات", "Asset directory"), Service("الخدمة والمعايرة", "Service & calibration"), Returns("المرتجعات المستحقة", "Due returns"),
 }
 
 @Composable
@@ -237,10 +237,10 @@ private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventor
             Text(asset.name ?: asset.assetCode, style = MaterialTheme.typography.headlineSmall)
             Text(asset.typeName, color = colors.secondaryText, style = MaterialTheme.typography.bodyMedium)
             HiltechStateTag(asset.condition.name, HiltechStateTone.NEUTRAL)
-            HiltechKeyValue("العهدة الحالية", custody?.locationCode ?: custody?.employeeCode?.let { "موظف " + it }
+            HiltechKeyValue(hiltechText("العهدة الحالية", "Current custody"), custody?.locationCode ?: custody?.employeeCode?.let { "موظف " + it }
                 ?: "لم تُسجل أو لا تتوفر بيانات العهدة")
-            custody?.expectedReturnAt?.let { HiltechKeyValue("الموعد المتوقع للعودة", it) }
-            if (asset.duplicateSerial) Text("الرقم المسلسل يحتاج مراجعة", color = MaterialTheme.colorScheme.error)
+            custody?.expectedReturnAt?.let { HiltechKeyValue(hiltechText("الموعد المتوقع للعودة", "Expected return"), it) }
+            if (asset.duplicateSerial) Text(hiltechText("الرقم المسلسل يحتاج مراجعة", "Serial number needs review"), color = MaterialTheme.colorScheme.error)
         }
         val tabs = AssetDetailTab.entries.filter { choice ->
             when (choice) {
@@ -252,19 +252,19 @@ private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventor
         val current = tab.takeIf { it in tabs } ?: AssetDetailTab.Passport
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             tabs.forEach { choice ->
-                FilterChip(selected = current == choice, onClick = { tab = choice }, label = { Text(choice.title) })
+                FilterChip(selected = current == choice, onClick = { tab = choice }, label = { Text(hiltechText(choice.title, choice.english)) })
             }
         }
         when (current) {
             AssetDetailTab.Passport -> HiltechPanel(Modifier.fillMaxWidth()) {
-                HiltechKeyValue("الشركة المصنعة / الموديل", listOfNotNull(asset.manufacturer, asset.model).joinToString(" · ").ifEmpty { "غير متاح" })
-                HiltechKeyValue("الرقم المسلسل", asset.serialNumber ?: "غير متاح")
-                HiltechKeyValue("الحالة", asset.lifecycle)
-                custody?.since?.let { HiltechKeyValue("العهدة منذ", it) }
-                asset.sourceImportRowId?.let { HiltechKeyValue("مرجع سجل الاستيراد", it) }
-                custody?.projectId?.let { HiltechKeyValue("مرجع المشروع", it) }
-                custody?.siteId?.let { HiltechKeyValue("مرجع الموقع", it) }
-                custody?.workOrderId?.let { HiltechKeyValue("مرجع العمل", it) }
+                HiltechKeyValue(hiltechText("الشركة المصنعة / الموديل", "Manufacturer / model"), listOfNotNull(asset.manufacturer, asset.model).joinToString(" · ").ifEmpty { "غير متاح" })
+                HiltechKeyValue(hiltechText("الرقم المسلسل", "Serial number"), asset.serialNumber ?: "غير متاح")
+                HiltechKeyValue(hiltechText("الحالة", "Status"), asset.lifecycle)
+                custody?.since?.let { HiltechKeyValue(hiltechText("العهدة منذ", "In custody since"), it) }
+                asset.sourceImportRowId?.let { HiltechKeyValue(hiltechText("مرجع سجل الاستيراد", "Import record reference"), it) }
+                custody?.projectId?.let { HiltechKeyValue(hiltechText("مرجع المشروع", "Project reference"), it) }
+                custody?.siteId?.let { HiltechKeyValue(hiltechText("مرجع الموقع", "Site reference"), it) }
+                custody?.workOrderId?.let { HiltechKeyValue(hiltechText("مرجع العمل", "Work reference"), it) }
             }
             AssetDetailTab.Tags -> AssetTags(passport, state.loading, dispatch)
             AssetDetailTab.Operations -> {
@@ -277,8 +277,8 @@ private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventor
     }
 }
 
-private enum class AssetDetailTab(val title: String) {
-    Passport("السجل"), Tags("الملصقات"), Operations("العهدة والحركة"), Service("الخدمة"), History("التاريخ"),
+private enum class AssetDetailTab(val title: String, val english: String) {
+    Passport("السجل", "Passport"), Tags("الملصقات", "Tags"), Operations("العهدة والحركة", "Custody & movements"), Service("الخدمة", "Service"), History("التاريخ", "History"),
 }
 
 /** The same immutable movement receipts on Windows and Android. */
