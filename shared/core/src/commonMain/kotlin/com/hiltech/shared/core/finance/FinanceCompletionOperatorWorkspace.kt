@@ -218,6 +218,8 @@ private fun CompletionOperatorSection(
     identityId: String, org: String, installation: String, apis: FinanceEvidenceReadApis, newOperationId: () -> String,
 ) {
     val scope = rememberCoroutineScope()
+    var area by remember { mutableStateOf("ACCOUNTING") }
+    var initialSelectionDone by remember { mutableStateOf(false) }
     var kind by remember { mutableStateOf(FinanceCompletionKind.AR_INVOICE) }
     var items by remember { mutableStateOf<List<FinanceCompletionSource>>(emptyList()) }
     var selected by remember { mutableStateOf<FinanceCompletionSource?>(null) }
@@ -227,14 +229,46 @@ private fun CompletionOperatorSection(
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var revision by remember { mutableStateOf(0) }
-    LaunchedEffect(kind,revision) {
+    LaunchedEffect(kind,revision,area) {
+        if (area != "ACCOUNTING") return@LaunchedEffect
         busy = true
         items = emptyList()
         error = null
-        try { items = financeCompletionQueue(apis,org,installation,kind) }
-        catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { error = "القائمة غير متاحة للدور الحالي أو تعذر الاتصال." }
-        finally { busy = false }
+        try {
+            items = financeCompletionQueue(apis,org,installation,kind)
+            initialSelectionDone = true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            if (!initialSelectionDone) {
+                var alternate: FinanceCompletionKind? = null
+                for (other in FinanceCompletionKind.entries) {
+                    if (other == kind) continue
+                    try {
+                        financeCompletionQueue(apis,org,installation,other)
+                        alternate = other
+                        break
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { }
+                }
+                if (alternate != null) {
+                    kind = alternate
+                } else {
+                    var signedAllowed = false
+                    for (signedKind in listOf(FinanceReviewKind.CASH_VOUCHER,
+                        FinanceReviewKind.CASH_COUNT,FinanceReviewKind.BANK_RECONCILIATION)) {
+                        try {
+                            financeSignedQueue(apis,org,installation,signedKind)
+                            signedAllowed = true
+                            break
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { }
+                    }
+                    if (signedAllowed) area = "SIGNED"
+                    else error = "القائمة غير متاحة لهذا الدور أو تعذر الاتصال بالمصدر."
+                }
+            } else error = "القائمة غير متاحة لهذا النوع أو تعذر الاتصال."
+        } finally { busy = false }
     }
     fun perform(action: suspend () -> Unit) {
         if (busy) return
@@ -253,6 +287,18 @@ private fun CompletionOperatorSection(
     ) {
         Text("إتمام العمليات المالية المعتمدة",style=MaterialTheme.typography.titleMedium)
         Text("تسجيل داخلي وترحيل محاسبي وفق موافقة الشركة. لا ينشئ تحويلًا بنكيًا أو إرسال فاتورة خارجيًا.")
+        Row(
+            modifier=Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement=Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(enabled=!busy && area!="ACCOUNTING",onClick={
+                area="ACCOUNTING"; selected=null; operationId=null;confirmation=false
+            }) {Text("الترحيل والتسجيل المحاسبي")}
+            OutlinedButton(enabled=!busy && area!="SIGNED",onClick={
+                area="SIGNED"; selected=null; operationId=null;confirmation=false
+            }) {Text("الخزنة والجرد والمطابقة")}
+        }
+        if (area == "ACCOUNTING") {
         Row(modifier=Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             FinanceCompletionKind.entries.forEach { option ->
@@ -306,6 +352,9 @@ private fun CompletionOperatorSection(
             }
         }
         error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
-        FinanceSignedCompletionSection(identityId,org,installation,apis,newOperationId)
+        } else {
+            FinanceSignedCompletionSection(
+                identityId,org,installation,apis,newOperationId,embedded=true)
+        }
     }
 }
