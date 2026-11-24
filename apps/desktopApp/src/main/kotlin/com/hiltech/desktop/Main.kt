@@ -35,7 +35,6 @@ import com.hiltech.shared.core.service.handoverReadNativeWorkspace
 import com.hiltech.shared.core.service.serviceOperationsReadNativeWorkspace
 import com.hiltech.shared.core.finance.financeEvidenceReadNativeWorkspace
 import com.hiltech.shared.core.finance.financeBankCsvIntakeNativeWorkspace
-import com.hiltech.shared.core.finance.financeAllocationOperatorWorkspace
 import com.hiltech.shared.core.finance.financeCompletionOperatorWorkspace
 import com.hiltech.shared.core.finance.financeCashboxOpeningWorkspace
 import com.hiltech.shared.core.finance.FinanceBankCsvSelectedFile
@@ -2842,13 +2841,6 @@ fun main() {
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
                             ))
                             add(financeCompletionOperatorWorkspace(
-                                identityId = signed.identity.identityId,
-                                organizationId = org.organizationId,
-                                installationId = runtime.physicalWarehouseInstallationId,
-                                apis = runtime.financeEvidenceReadApis,
-                                newOperationId = { java.util.UUID.randomUUID().toString() },
-                            ))
-                            add(financeAllocationOperatorWorkspace(
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
