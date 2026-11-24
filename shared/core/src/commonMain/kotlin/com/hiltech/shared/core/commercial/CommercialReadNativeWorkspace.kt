@@ -94,7 +94,7 @@ fun commercialReadNativeWorkspace(
 
         fun perform(key: Any, command: suspend (String) -> CommercialCommandResultDto) {
             val generator = newOperationId ?: return
-            if (saving || listLoading || detailLoading) return
+            if (saving || listLoading || detailLoading || quoteBusy) return
             saving = true
             feedback = null
             jobs.launch {
@@ -307,9 +307,12 @@ fun commercialReadNativeWorkspace(
                                 jobs.launch {
                                     try {
                                         val loaded = client.customerQuote(quoteId, installationId)
-                                        val history = client.dispatchHistory(quoteId, installationId)
-                                        val emails = client.emailHistory(quoteId, installationId)
-                                        val whatsapp = client.whatsappHistory(quoteId, installationId)
+                                        suspend fun <T> optionalHistory(load: suspend () -> List<T>): List<T> = try { load() }
+                                        catch (e: CancellationException) { throw e }
+                                        catch (_: Exception) { emptyList() }
+                                        val history = optionalHistory { client.dispatchHistory(quoteId, installationId) }
+                                        val emails = optionalHistory { client.emailHistory(quoteId, installationId) }
+                                        val whatsapp = optionalHistory { client.whatsappHistory(quoteId, installationId) }
                                         if (loaded.quoteId == quoteId && detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) {
                                             customerQuote = loaded
                                             dispatchHistory = history
