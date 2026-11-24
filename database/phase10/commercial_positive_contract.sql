@@ -22,12 +22,21 @@ DECLARE
   partial_po uuid := gen_random_uuid();
   partial_file uuid := gen_random_uuid();
   receipt_id uuid := gen_random_uuid();
+  allocated_quote_code text;
   digest text := repeat('a',64);
   err text;
 BEGIN
   INSERT INTO organization (id,organization_code,legal_name,display_name,organization_type,status,created_at)
   VALUES (company,'PHASE10_POS_CO_'||company,'Synthetic HILTECH test','Synthetic HILTECH','HILTECH','ACTIVE',now()),
          (client,'PHASE10_POS_CLI_'||client,'Synthetic customer test','Synthetic Client','CLIENT','ACTIVE',now());
+  IF commercial_allocate_quote_code(company,2026,'TEST') <> 'TEST-2026-000001'
+     OR commercial_allocate_quote_code(company,2026,'TEST') <> 'TEST-2026-000002'
+     OR commercial_allocate_quote_code(company,2026,'NEW') <> 'NEW-2026-000003'
+     OR commercial_allocate_quote_code(client,2026,'TEST') <> 'TEST-2026-000001'
+     OR commercial_allocate_quote_code(company,2027,'TEST') <> 'TEST-2027-000001' THEN
+    RAISE EXCEPTION 'Commercial number sequence must be tenant/year scoped and prefix independent';
+  END IF;
+  allocated_quote_code := commercial_allocate_quote_code(company,2026,'TEST');
   INSERT INTO user_identity(id,auth_provider,auth_subject,status,created_at)
   VALUES(actor,'phase10-positive',actor::text,'ACTIVE',now());
   INSERT INTO commercial_opportunity
@@ -57,7 +66,7 @@ BEGIN
     (id,organization_id,opportunity_id,client_organization_id,scope_version_id,
      boq_version_id,version_number,quote_code,currency,total_price,
      payment_terms,delivery_terms,exclusions,validity_date,created_by,created_at,discount_amount,tax_amount)
-  VALUES(quote_id,company,opportunity,client,scope_id,boq_id,1,'SYNTHETIC-Q',
+  VALUES(quote_id,company,opportunity,client,scope_id,boq_id,1,allocated_quote_code,
          'EGP',42,'Synthetic 30-day payment','Synthetic on-site delivery',
          'Synthetic exclusions',CURRENT_DATE+30,actor,now(),5,7);
   INSERT INTO commercial_quote_line

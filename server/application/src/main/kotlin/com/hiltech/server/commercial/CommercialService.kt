@@ -490,6 +490,10 @@ class CommercialService(
             if (r.discountAmount > subtotal) throw commercialError("COMMERCIAL_DISCOUNT_INVALID", "Discount exceeds subtotal.", HttpStatus.BAD_REQUEST)
             val total = subtotal - r.discountAmount + r.taxAmount
             amount(total)
+            val company = parent["organization_id"] as UUID
+            val prefix = CommercialDocumentSettings.read(jdbc,company).profile.quotePrefix
+            val code = requireNotNull(jdbc.queryForObject(
+                "SELECT commercial_allocate_quote_code(?,?,?)",String::class.java,company,now().year,prefix))
             jdbc.update(
                 """INSERT INTO commercial_quote_version
                    (id,organization_id,opportunity_id,client_organization_id,scope_version_id,
@@ -497,7 +501,7 @@ class CommercialService(
                     delivery_terms,exclusions,validity_date,created_by,created_at,discount_amount,tax_amount)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 target,parent["organization_id"],id,parent["client_organization_id"],boq["scope_version_id"],
-                boqId,next("commercial_quote_version",id),CommercialDocumentSettings.read(jdbc,parent["organization_id"] as UUID).profile.quotePrefix+"-"+target.toString().uppercase(),
+                boqId,next("commercial_quote_version",id),code,
                 boq["currency"],total,payment,delivery,r.exclusions.trim(),validity,actor,now(),r.discountAmount,r.taxAmount,
             )
             lines.forEachIndexed { i,l ->
