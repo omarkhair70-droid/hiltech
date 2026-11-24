@@ -198,6 +198,10 @@ class CommercialService(
                 """SELECT id,version_number,description,inclusions,exclusions,assumptions,
                           technical_constraints,client_responsibilities
                    FROM commercial_scope_version WHERE opportunity_id=? ORDER BY version_number DESC""",id),
+            "boqVersions" to jdbc.queryForList(
+                """SELECT b.id,b.version_number,b.currency
+                   FROM commercial_boq_version b
+                   WHERE b.opportunity_id=? AND b.sealed_at IS NOT NULL ORDER BY b.version_number DESC""",id),
             "quotes" to jdbc.queryForList(
                 """SELECT id,quote_code,version_number,currency,total_price,state,validity_date
                    FROM commercial_quote_version WHERE opportunity_id=? ORDER BY version_number DESC""",id),
@@ -575,6 +579,36 @@ class CommercialService(
             exclusions=v["exclusions"] as String,validityDate=v["validity_date"].toString(),lines=lines,
             clientName=v["client_name"] as? String, issuerName=v["issuer_name"] as? String, releasedAt=v["released_at"]?.toString(),
         )
+    }
+
+    /** Archive the first exported PDF; all later exports return the identical bytes.
+     * Recheck release state and authorization before reading the archive. */
+    fun customerPdf(id: UUID, actor: UUID): CommercialQuotePdfDto {
+        val released = customerQuote(id, actor)
+        fun archived(): Map<String, Any?>? = jdbc.queryForList(
+            "SELECT filename,pdf_bytes,sha256 FROM commercial_customer_pdf_archive WHERE quote_version_id=?", id,
+        ).firstOrNull()
+        var saved = archived()
+        if (saved == null) {
+            val bytes = CommercialQuotePdf.render(released)
+            if (bytes.size > 10485760) throw commercialError("COMMERCIAL_PDF_TOO_LARGE", "Quote PDF exceeds the archive limit.", HttpStatus.UNPROCESSABLE_ENTITY)
+            val hash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes))
+            // Recheck source rights and release state after rendering.
+            customerQuote(id, actor)
+            jdbc.update(
+                """INSERT INTO commercial_customer_pdf_archive
+                    (quote_version_id,filename,template_version,pdf_bytes,sha256,created_at,created_by)
+                    VALUES (?,?,1,?,?,?,?) ON CONFLICT (quote_version_id) DO NOTHING""",
+                id, released.quoteCode + "-v" + released.versionNumber + ".pdf", bytes, hash, now(), actor,
+            )
+            saved = archived()
+        }
+        customerQuote(id, actor)
+        val record = requireNotNull(saved)
+        val bytes = record["pdf_bytes"] as ByteArray
+        val hash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes))
+        check(hash == record["sha256"].toString().trim()) { "Archived commercial PDF integrity failure." }
+        return CommercialQuotePdfDto(record["filename"] as String, java.util.Base64.getEncoder().encodeToString(bytes))
     }
 
     fun privateCosting(id: UUID,actor: UUID): List<Map<String, Any?>> {

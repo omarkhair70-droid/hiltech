@@ -162,7 +162,7 @@ fun CommercialDealWorkspaceSection(
                 )
                 CommercialStage.QUOTE -> CommercialQuotePanel(
                     detail, state.canWrite, state.canRelease, onAction,
-                    state.privateCostSummaries, state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote,
+                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote,
                 )
                 CommercialStage.AWARD -> CommercialAwardPanel(
                     detail, state.canAward, state.canCreateProject, onAction,
@@ -430,7 +430,6 @@ private fun CommercialQuotePanel(
     canWrite: Boolean,
     canRelease: Boolean,
     onAction: (CommercialDealAction) -> Unit,
-    boqVersions: List<CommercialPrivateCostSummaryDto>,
     customerQuote: ClientQuoteDto?,
     quoteBusy: Boolean,
     onPreview: ((String) -> Unit)?,
@@ -466,13 +465,13 @@ private fun CommercialQuotePanel(
         var exclusions by remember(op.id) { mutableStateOf("") }
         var validity by remember(op.id) { mutableStateOf("") }
         HiltechRecordPicker(hiltechText("إصدار البنود والأسعار", "Priced BOQ version"), boqId,
-            boqVersions.map { HiltechRecordChoice(it.boqVersionId, "v" + it.versionNumber, it.proposedSellTotal.content + " " + it.currency) }, { boqId = it }, allowKnownReference = true)
+            deal.boqVersions.map { HiltechRecordChoice(it.id, "v" + it.versionNumber, it.currency) }, { boqId = it }, allowKnownReference = false)
         OutlinedTextField(value=payment,onValueChange={payment=it},label={Text("Client payment terms")})
         OutlinedTextField(value=delivery,onValueChange={delivery=it},label={Text("Delivery terms")})
         OutlinedTextField(value=exclusions,onValueChange={exclusions=it},label={Text("Quote exclusions")})
         OutlinedTextField(value=validity,onValueChange={validity=it},label={Text("Valid until (YYYY-MM-DD)")})
         Button(
-            enabled=boqId.isNotBlank() && payment.isNotBlank() &&
+            enabled=deal.boqVersions.any { it.id == boqId } && payment.isNotBlank() &&
                 delivery.isNotBlank() && Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(validity),
             onClick={onAction(CommercialDealAction.DraftQuote(
                 op.id,boqId,payment,delivery,exclusions,validity))},

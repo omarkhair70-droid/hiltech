@@ -39,6 +39,7 @@ data class CommercialDealDetailDto(
     val visits: List<CommercialVisitSummaryDto> = emptyList(),
     val scopeVersions: List<CommercialScopeVersionDto> = emptyList(),
     val quotes: List<CommercialQuoteSummaryDto> = emptyList(),
+    val boqVersions: List<CommercialBoqVersionRefDto> = emptyList(),
     val contracts: List<CommercialContractSummaryDto> = emptyList(),
     val clientPurchaseOrders: List<CommercialClientPoSummaryDto> = emptyList(),
     val handoff: List<CommercialHandoffSummaryDto> = emptyList(),
@@ -87,6 +88,9 @@ data class CommercialScopeVersionDto(
     val exclusions: String,
     val assumptions: String,
 )
+
+@Serializable
+data class CommercialBoqVersionRefDto(val id: String, @SerialName("version_number") val versionNumber: Int, val currency: String)
 
 @Serializable
 data class CommercialQuoteSummaryDto(

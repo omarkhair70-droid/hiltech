@@ -168,7 +168,7 @@ class CommercialController(private val service: CommercialService) {
 
     @GetMapping("/quotes/{quoteId}/customer-pdf")
     fun quotePdf(http: HttpServletRequest, @PathVariable quoteId: String) =
-        CommercialQuotePdf.export(service.customerQuote(quoteId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId()))
+        service.customerPdf(quoteId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
 
     @GetMapping("/opportunities/{opportunityId}/costing")
     fun costing(http: HttpServletRequest, @PathVariable opportunityId: String) =
