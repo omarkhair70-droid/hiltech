@@ -415,4 +415,36 @@ class FinanceReviewPreparationNativeTest {
         }
     }
 
+    @Test
+    fun allocationAndCorrectionCompleteOnlyThroughApprovedOperatorSource() = runBlocking {
+        for(kind in listOf(FinanceCompletionKind.CASH_ALLOCATION,FinanceCompletionKind.CASH_CORRECTION)) {
+            val correction=kind==FinanceCompletionKind.CASH_CORRECTION
+            val route=if(correction)"cash-allocation-corrections" else "cash-allocation-proposals"
+            val approval="55555555-6666-4777-8888-999999999999"
+            var calls=0
+            val client=HttpClient(MockEngine {request ->
+                calls++
+                val terminal=calls==3
+                val path="/v1/finance/organizations/$org/$route"
+                assertEquals(path+when(calls){1->"/operator-queue";2->"/$proposal";else->"/$proposal/record"},request.url.encodedPath)
+                assertEquals(if(terminal)"POST" else "GET",request.method.value)
+                if(terminal) assertEquals(operation,request.headers["Idempotency-Key"])
+                val state=if(terminal)kind.terminal else "APPROVED"
+                val record=if(terminal)"\"$source\"" else "null"
+                val extra=if(correction) """"originalAllocationId":"$install","correctionRecordId":$record,
+                    "originalMatchStillEffective":${!terminal}""" else """"recordedAllocationId":$record,
+                    "cashAllocatedToAccountingSource":$terminal"""
+                val receipt="""{"proposalId":"$proposal","organizationId":"$org","sourceKind":"AR",
+                    "sourceJournalId":"$source","bankStatementLineId":"$install","amount":"120","currency":"EGP",
+                    "state":"$state","approvalRequestId":"$approval",$extra}"""
+                respond(if(calls==1)"[$receipt]" else receipt,HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+            })
+            val source=financeCompletionQueue(apis(client),org,install,kind).single()
+            val completed=financeCompleteApprovedSource(apis(client),org,install,source,operation)
+            assertEquals(kind.terminal,completed.state)
+            assertEquals(3,calls)
+            assertFalse(financeCompletionReady(completed,org))
+        }
+    }
+
 }
