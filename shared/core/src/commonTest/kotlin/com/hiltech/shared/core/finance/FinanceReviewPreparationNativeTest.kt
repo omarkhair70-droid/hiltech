@@ -550,4 +550,46 @@ class FinanceReviewPreparationNativeTest {
         }
     }
 
+    @Test
+    fun accountingChoicesReadApprovedChartAndOpenPeriodsForExactCompany() = runBlocking {
+        for(actualOrg in listOf(org,wrongOrg)) {
+            var requests=0
+            val client=HttpClient(MockEngine {request ->
+                requests++
+                assertEquals("GET",request.method.value)
+                assertEquals("/v1/finance/organizations/$org/accounting-choices",request.url.encodedPath)
+                assertEquals("AR",request.url.parameters["kind"])
+                respond("""{"organizationId":"$actualOrg","kind":"AR",
+                    "approvedAccounts":[{"id":"$source","accountKind":"ASSET","currency":"EGP"},
+                        {"id":"$proposal","accountKind":"REVENUE","currency":null}],
+                    "openPeriods":[{"id":"$install","dateStart":"2026-11-01","dateEnd":"2026-11-30"}],
+                    "hasMoreAccounts":false,"hasMorePeriods":false}""",
+                    HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+            })
+            if(actualOrg==org) {
+                val choices=financeReadAccountingChoices(apis(client),org,"AR",install)
+                assertEquals(2,choices.approvedAccounts.size)
+                assertEquals(install,choices.openPeriods.single().id)
+            } else {
+                assertFailsWith<IllegalStateException> {
+                    financeReadAccountingChoices(apis(client),org,"AR",install)
+                }
+            }
+            assertEquals(1,requests)
+        }
+    }
+
+    @Test
+    fun accountingChoicesDoNotInventInvalidFiscalDates() = runBlocking {
+        val client=HttpClient(MockEngine {
+            respond("""{"organizationId":"$org","kind":"AP","approvedAccounts":[],
+                "openPeriods":[{"id":"$source","dateStart":"2027-02-29","dateEnd":"2027-03-01"}],
+                "hasMoreAccounts":false,"hasMorePeriods":false}""",
+                HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+        })
+        assertFailsWith<IllegalStateException> {
+            financeReadAccountingChoices(apis(client),org,"AP",install)
+        }
+    }
+
 }
