@@ -95,6 +95,10 @@ fun WarehouseSetupSection(
     onAssetAction: (AssetAction) -> Unit = {},
     requestedAssetId: String? = null,
     onAssetFocusConsumed: () -> Unit = {},
+    readableProjects: Map<String, String> = emptyMap(),
+    readableAssignments: Map<String, String> = emptyMap(),
+    onOpenProject: (String) -> Unit = {},
+    onOpenAssignment: (String) -> Unit = {},
 ) {
     var warehouseCode by remember { mutableStateOf("") }
     var warehouseName by remember { mutableStateOf("") }
@@ -218,7 +222,7 @@ fun WarehouseSetupSection(
                         }
                     }
                     WarehouseWorkspaceTab.Stock -> state.stock?.let { StockInventorySection(it, state.selectedWarehouseId, onStockAction) }
-                    WarehouseWorkspaceTab.Assets -> state.assets?.let { AssetPassportSection(it, state.selectedWarehouseId, onAssetAction, requestedAssetId, onAssetFocusConsumed) }
+                    WarehouseWorkspaceTab.Assets -> state.assets?.let { AssetPassportSection(it, state.selectedWarehouseId, onAssetAction, requestedAssetId, onAssetFocusConsumed, readableProjects, readableAssignments, onOpenProject, onOpenAssignment) }
                     WarehouseWorkspaceTab.Reservations -> if (reservationPort != null) state.selectedWarehouseId?.let { WarehouseReservations(it, reservationPort) }
                     WarehouseWorkspaceTab.Locations -> HiltechPanel(Modifier.fillMaxWidth()) {
                         Text(hiltechText("مواقع التخزين", "Storage locations"), style = MaterialTheme.typography.titleMedium)

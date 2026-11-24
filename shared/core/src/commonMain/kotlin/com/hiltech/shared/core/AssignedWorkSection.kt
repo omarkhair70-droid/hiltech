@@ -108,6 +108,8 @@ fun AssignedWorkSection(
     onCompactFocusChanged: (Boolean) -> Unit = {},
     // The Android host increments this when System Back is pressed in focus.
     compactBackRequest: Int = 0,
+    readableProjects: Map<String, String> = emptyMap(),
+    onOpenProject: (String) -> Unit = {},
     externalFocusId: String? = null,
     onExternalFocusConsumed: () -> Unit = {},
 ) {
@@ -195,6 +197,8 @@ fun AssignedWorkSection(
                         ?.let {
                             JobBundleDetail(
                                 bundle = it,
+                                linkedProject = readableProjects[it.project.projectId],
+                                onOpenProject = onOpenProject,
                                 cached = state.cachedBundleAt != null,
                                 captureFieldIntent = captureFieldIntent,
                                 pending = state.pendingFieldIntent,
@@ -300,6 +304,8 @@ fun AssignedWorkSection(
                         ?.let {
                             JobBundleDetail(
                                 bundle = it,
+                                linkedProject = readableProjects[it.project.projectId],
+                                onOpenProject = onOpenProject,
                                 cached = state.cachedBundleAt != null,
                                 captureFieldIntent = captureFieldIntent,
                                 pending = state.pendingFieldIntent,
@@ -468,6 +474,8 @@ private enum class FieldAssignmentFilter(val ar: String, val en: String) {
 @Composable
 private fun JobBundleDetail(
     bundle: TechnicianJobBundleDto,
+    linkedProject: String?,
+    onOpenProject: (String) -> Unit,
     cached: Boolean,
     captureFieldIntent: Boolean,
     pending: FieldQueuedIntent?,
@@ -520,14 +528,14 @@ private fun JobBundleDetail(
         bundle.description?.let {
             Text(it)
         }
+        HiltechPanel(Modifier.fillMaxWidth()) {
+            HiltechKeyValue(hiltechText("المشروع", "Project"), bundle.project.projectCode + " · " + bundle.project.name)
+            if (!cached && linkedProject != null) TextButton(onClick = { onOpenProject(bundle.project.projectId) }) {
+                Text(hiltechText("فتح المشروع", "Open project"))
+            }
+        }
         Text(
-            "المشروع: " +
-                bundle.project.projectCode +
-                " · " +
-                bundle.project.name,
-        )
-        Text(
-            "الموقع: " +
+            hiltechText("الموقع: ", "Site: ") +
                 bundle.site.siteCode +
                 " · " +
                 bundle.site.name,
@@ -538,18 +546,18 @@ private fun JobBundleDetail(
             }
             ?.let {
                 Text(
-                    "تعليمات الدخول: " + it,
+                    hiltechText("تعليمات الدخول: ", "Access instructions: ") + it,
                 )
             }
         bundle.area?.let {
             Text(
-                "المنطقة: " +
+                hiltechText("المنطقة: ", "Area: ") +
                     it.label,
             )
         }
 
         Text(
-            "التكليف الحالي: " +
+            hiltechText("التكليف الحالي: ", "Current assignment: ") +
                 bundle.assignment.targetType +
                 " · " +
                 bundle.assignment.targetLabel,

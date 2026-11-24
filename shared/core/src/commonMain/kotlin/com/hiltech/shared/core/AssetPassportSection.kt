@@ -101,7 +101,7 @@ sealed interface AssetAction {
 }
 
 @Composable
-fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispatch: (AssetAction) -> Unit, requestedAssetId: String? = null, onAssetFocusConsumed: () -> Unit = {}) {
+fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispatch: (AssetAction) -> Unit, requestedAssetId: String? = null, onAssetFocusConsumed: () -> Unit = {}, readableProjects: Map<String, String> = emptyMap(), readableAssignments: Map<String, String> = emptyMap(), onOpenProject: (String) -> Unit = {}, onOpenAssignment: (String) -> Unit = {}) {
     val colors = LocalHiltechOperationalColors.current
     var search by remember(warehouseId) { mutableStateOf(state.search) }
     var showRegistration by remember(warehouseId) { mutableStateOf(false) }
@@ -130,20 +130,20 @@ fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispa
         }
         state.message?.let { Text(it) }
         val detail: @Composable () -> Unit = {
-            state.selected?.takeIf { requestedAssetId == null || it.identity.id == requestedAssetId }?.let { AssetPassportDetail(it, state, dispatch) }
+            state.selected?.takeIf { requestedAssetId == null || it.identity.id == requestedAssetId }?.let { AssetPassportDetail(it, state, dispatch, readableProjects, readableAssignments, onOpenProject, onOpenAssignment) }
                 ?: HiltechPanel(Modifier.fillMaxWidth()) { Text(hiltechText("اختر معدة لفتح سجلها.", "Select an asset to open its passport.")) }
         }
         when (mode) {
             AssetDirectoryMode.Service -> {
                 AssetServiceQueue(state, dispatch)
-                state.selected?.let { AssetPassportDetail(it, state, dispatch) }
+                state.selected?.let { AssetPassportDetail(it, state, dispatch, readableProjects, readableAssignments, onOpenProject, onOpenAssignment) }
             }
             AssetDirectoryMode.Returns -> {
                 AssetDueReturnsSection(state.dueReturns, state.loading,
                     refresh = { dispatch(AssetAction.RefreshDueReturns) },
                     more = { due, code, id -> dispatch(AssetAction.MoreDueReturns(due, code, id)) },
                     select = { dispatch(AssetAction.Select(it)) })
-                state.selected?.let { AssetPassportDetail(it, state, dispatch) }
+                state.selected?.let { AssetPassportDetail(it, state, dispatch, readableProjects, readableAssignments, onOpenProject, onOpenAssignment) }
             }
             AssetDirectoryMode.Catalogue -> {
                 val directory: @Composable () -> Unit = {
@@ -235,7 +235,7 @@ private fun AssetRegistrationForm(state: AssetInventoryState, dispatch: (AssetAc
 }
 
 @Composable
-private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventoryState, dispatch: (AssetAction) -> Unit) {
+private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventoryState, dispatch: (AssetAction) -> Unit, readableProjects: Map<String, String>, readableAssignments: Map<String, String>, onOpenProject: (String) -> Unit, onOpenAssignment: (String) -> Unit) {
     val asset = passport.identity
     val custody = passport.custody
     val colors = LocalHiltechOperationalColors.current
@@ -246,8 +246,8 @@ private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventor
             Text(asset.name ?: asset.assetCode, style = MaterialTheme.typography.headlineSmall)
             Text(asset.typeName, color = colors.secondaryText, style = MaterialTheme.typography.bodyMedium)
             HiltechStateTag(asset.condition.name, HiltechStateTone.NEUTRAL)
-            HiltechKeyValue(hiltechText("العهدة الحالية", "Current custody"), custody?.locationCode ?: custody?.employeeCode?.let { "موظف " + it }
-                ?: "لم تُسجل أو لا تتوفر بيانات العهدة")
+            HiltechKeyValue(hiltechText("العهدة الحالية", "Current custody"), custody?.locationCode ?: custody?.employeeCode?.let { hiltechText("موظف ", "Employee ") + it }
+                ?: hiltechText("لم تُسجل أو لا تتوفر بيانات العهدة", "Custody is unrecorded or unavailable"))
             custody?.expectedReturnAt?.let { HiltechKeyValue(hiltechText("الموعد المتوقع للعودة", "Expected return"), it) }
             if (asset.duplicateSerial) Text(hiltechText("الرقم المسلسل يحتاج مراجعة", "Serial number needs review"), color = MaterialTheme.colorScheme.error)
         }
@@ -266,14 +266,22 @@ private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventor
         }
         when (current) {
             AssetDetailTab.Passport -> HiltechPanel(Modifier.fillMaxWidth()) {
-                HiltechKeyValue(hiltechText("الشركة المصنعة / الموديل", "Manufacturer / model"), listOfNotNull(asset.manufacturer, asset.model).joinToString(" · ").ifEmpty { "غير متاح" })
-                HiltechKeyValue(hiltechText("الرقم المسلسل", "Serial number"), asset.serialNumber ?: "غير متاح")
+                HiltechKeyValue(hiltechText("الشركة المصنعة / الموديل", "Manufacturer / model"), listOfNotNull(asset.manufacturer, asset.model).joinToString(" · ").ifEmpty { hiltechText("غير متاح", "Unavailable") })
+                HiltechKeyValue(hiltechText("الرقم المسلسل", "Serial number"), asset.serialNumber ?: hiltechText("غير متاح", "Unavailable"))
                 HiltechKeyValue(hiltechText("الحالة", "Status"), asset.lifecycle)
                 custody?.since?.let { HiltechKeyValue(hiltechText("العهدة منذ", "In custody since"), it) }
                 asset.sourceImportRowId?.let { HiltechKeyValue(hiltechText("مرجع سجل الاستيراد", "Import record reference"), it) }
-                custody?.projectId?.let { HiltechKeyValue(hiltechText("مرجع المشروع", "Project reference"), it) }
+                custody?.projectId?.let { id ->
+                    val project = readableProjects[id]
+                    HiltechKeyValue(hiltechText("المشروع", "Project"), project ?: id)
+                    if (project != null) TextButton(onClick = { onOpenProject(id) }) { Text(hiltechText("فتح المشروع", "Open project")) }
+                }
                 custody?.siteId?.let { HiltechKeyValue(hiltechText("مرجع الموقع", "Site reference"), it) }
-                custody?.workOrderId?.let { HiltechKeyValue(hiltechText("مرجع العمل", "Work reference"), it) }
+                custody?.workOrderId?.let { id ->
+                    val work = readableAssignments[id]
+                    HiltechKeyValue(hiltechText("أمر العمل", "Work order"), work ?: id)
+                    if (work != null) TextButton(onClick = { onOpenAssignment(id) }) { Text(hiltechText("فتح التكليف", "Open assignment")) }
+                }
             }
             AssetDetailTab.Tags -> AssetTags(passport, state.loading, dispatch)
             AssetDetailTab.Operations -> {

@@ -337,6 +337,14 @@ fun HiltechShell(
         var finding by remember(shellScrollScope) { mutableStateOf(false) }
         var requestedFieldFocus by remember(shellScrollScope, nativeAuthority) { mutableStateOf<String?>(null) }
         var requestedAssetFocus by remember(shellScrollScope, nativeAuthority) { mutableStateOf<String?>(null) }
+        val readableProjects = signedIn?.projects?.list?.items.orEmpty().associate { it.projectId to it.name }
+        val readableAssignments = signedIn?.field?.today.orEmpty().associate { it.workOrderId to it.title }
+        fun openLoadedProject(projectId: String) {
+            if (ShellWorkspace.Projects !in destinations || projectId !in readableProjects) return
+            nativeSession.close()
+            requestedWorkspace = ShellWorkspace.Projects
+            onSelectProject(projectId)
+        }
         fun openLoadedAsset(assetId: String) {
             val warehouse = signedIn?.warehouse ?: return
             if (ShellWorkspace.Warehouse !in destinations || warehouse.selectedWarehouseId == null ||
@@ -773,6 +781,8 @@ fun HiltechShell(
                             }.orEmpty(),
                             onCompactFocusChanged = onFieldFocusChanged,
                             compactBackRequest = fieldBackRequest,
+                            readableProjects = readableProjects,
+                            onOpenProject = ::openLoadedProject,
                             externalFocusId = requestedFieldFocus,
                             onExternalFocusConsumed = { requestedFieldFocus = null },
                         )
@@ -821,6 +831,10 @@ fun HiltechShell(
                                             state.warehouse?.let { warehouse ->
                                                 WarehouseSetupSection(
                             state = warehouse,
+                            readableProjects = readableProjects,
+                            readableAssignments = readableAssignments,
+                            onOpenProject = ::openLoadedProject,
+                            onOpenAssignment = ::openAssignedWork,
                             requestedAssetId = requestedAssetFocus,
                             onAssetFocusConsumed = { requestedAssetFocus = null },
                             onRefresh = onRefreshWarehouse,
