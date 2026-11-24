@@ -2826,7 +2826,7 @@ fun main() {
                     val org = signed.identity.organizations.firstOrNull { it.primary }
                         ?: signed.identity.organizations.firstOrNull()
                     if (org == null) emptyList() else buildList {
-                        if (executiveHomeAvailable) {
+                        if (signed.identity.productCapabilities?.executiveHome ?: executiveHomeAvailable) {
                             add(executiveNativeWorkspace(
                                 client = runtime.executiveApi,
                                 identityId = signed.identity.identityId,

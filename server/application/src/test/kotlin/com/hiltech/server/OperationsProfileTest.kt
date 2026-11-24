@@ -1,5 +1,6 @@
 package com.hiltech.server
 
+import com.hiltech.server.identity.identityProductCapabilities
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -24,6 +25,10 @@ class OperationsProfileTest {
             assertFalse(core.getProperty(property, Boolean::class.java, false), property)
             assertTrue(product.getProperty(property, Boolean::class.java, false), property)
         }
+        val nativeCapabilities = product.identityProductCapabilities()
+        assertTrue(nativeCapabilities.assignedAssetLookup)
+        assertTrue(nativeCapabilities.executiveHome)
+        assertFalse(nativeCapabilities.engineeringTests)
 
         val overridden = environment("operations", mapOf("HILTECH_FIELD_COMPLETION_ENABLED" to "false"))
         assertFalse(overridden.getRequiredProperty("hiltech.field.completion.enabled", Boolean::class.java))

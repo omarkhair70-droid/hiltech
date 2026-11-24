@@ -21,6 +21,8 @@ Set `SPRING_PROFILES_ACTIVE=operations` in the HILTECH API environment. The runt
 
 Omit existing per-feature overrides to inherit the profile defaults. An explicit `HILTECH_FIELD_*_ENABLED=false` remains effective and can be used for rollback of an individual workflow. Keep database, OIDC, OpenFGA and evidence settings in the private HILTECH API environment. The product profile needs no `SPRING_APPLICATION_JSON`.
 
+For Executive Home, issued stock, material usage reporting, assigned AssetTag lookup, and engineering tests, updated clients read availability from the authenticated session bootstrap. Set those capabilities on the server and reopen the client session after deployment. Clients use their existing build configuration against servers that predate the capability response.
+
 ## Employee account setup
 
 Keep the native OIDC issuer on the HTTPS gateway. Configure the API's account-setup service client with a private `HILTECH_KEYCLOAK_ADMIN_BASE_URI` when the gateway only routes public sign-in. Use the Keycloak service's private network alias and port for an internal HTTP connection. Store the service client identifier and secret in Coolify, scoped to managing users in the HILTECH staging realm.

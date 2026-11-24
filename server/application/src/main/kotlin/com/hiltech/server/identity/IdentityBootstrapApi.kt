@@ -2,6 +2,7 @@ package com.hiltech.server.identity
 
 import com.hiltech.server.organizations.OrganizationIdentityContextPort
 import com.hiltech.server.platform.ProductApiException
+import org.springframework.core.env.Environment
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.oauth2.jwt.Jwt
@@ -22,6 +23,15 @@ data class IdentityBootstrapResponse(
     val organizations: List<IdentityOrganizationResponse>,
     val teams: List<IdentityTeamResponse>,
     val device: IdentityDeviceResponse?,
+    val productCapabilities: IdentityProductCapabilitiesResponse? = null,
+)
+
+data class IdentityProductCapabilitiesResponse(
+    val executiveHome: Boolean,
+    val personalIssuedStock: Boolean,
+    val materialUsageReporting: Boolean,
+    val assignedAssetLookup: Boolean,
+    val engineeringTests: Boolean,
 )
 
 data class IdentityOrganizationResponse(
@@ -289,11 +299,13 @@ class IdentityBootstrapController(
     identityRepository: IdentityRuntimeRepository,
     organizationContext: OrganizationIdentityContextPort,
     private val sessionService: IdentitySessionService,
+    environment: Environment,
 ) {
     private val service = IdentityBootstrapService(
         identityRepository = identityRepository,
         organizationContext = organizationContext,
     )
+    private val productCapabilities = environment.identityProductCapabilities()
 
     @GetMapping("/bootstrap")
     fun bootstrap(
@@ -318,7 +330,7 @@ class IdentityBootstrapController(
                             )
                         }
                 },
-        )
+        ).copy(productCapabilities = productCapabilities)
 
     @PutMapping("/device")
     fun registerDevice(
@@ -346,4 +358,16 @@ class IdentityBootstrapController(
                     status = HttpStatus.BAD_REQUEST,
                 )
             }
+}
+
+internal fun Environment.identityProductCapabilities(): IdentityProductCapabilitiesResponse {
+    fun enabled(property: String) = getProperty(property, Boolean::class.java, false)
+
+    return IdentityProductCapabilitiesResponse(
+        executiveHome = enabled("hiltech.executive.home-enabled"),
+        personalIssuedStock = enabled("hiltech.field.personal-issued-stock.enabled"),
+        materialUsageReporting = enabled("hiltech.field.material-usage-report.enabled"),
+        assignedAssetLookup = enabled("hiltech.field.assigned-asset-lookup.enabled"),
+        engineeringTests = enabled("hiltech.field.engineering-tests.enabled"),
+    )
 }

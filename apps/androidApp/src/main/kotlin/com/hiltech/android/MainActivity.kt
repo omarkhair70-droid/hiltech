@@ -190,6 +190,21 @@ class MainActivity : ComponentActivity() {
             ),
         )
 
+    private val productCapabilities
+        get() = (shellState as? HiltechShellState.SignedIn)?.identity?.productCapabilities
+
+    private val assignedAssetLookupEnabled
+        get() = productCapabilities?.assignedAssetLookup ?: BuildConfig.HILTECH_ASSIGNED_ASSET_LOOKUP_ENABLED
+
+    private val engineeringTestsEnabled
+        get() = productCapabilities?.engineeringTests ?: BuildConfig.HILTECH_ENGINEERING_TESTS_ENABLED
+
+    private val personalIssuedStockEnabled
+        get() = productCapabilities?.personalIssuedStock ?: BuildConfig.HILTECH_PERSONAL_ISSUED_STOCK_ENABLED
+
+    private val materialUsageReportingEnabled
+        get() = productCapabilities?.materialUsageReporting ?: BuildConfig.HILTECH_MATERIAL_USAGE_REPORTING_ENABLED
+
     override fun onCreate(
         savedInstanceState: Bundle?,
     ) {
@@ -232,7 +247,7 @@ class MainActivity : ComponentActivity() {
                     val org = signed.identity.organizations.firstOrNull { it.primary }
                         ?: signed.identity.organizations.firstOrNull()
                     if (org == null) emptyList() else buildList {
-                        if (BuildConfig.HILTECH_EXECUTIVE_HOME_ENABLED) {
+                        if (signed.identity.productCapabilities?.executiveHome ?: BuildConfig.HILTECH_EXECUTIVE_HOME_ENABLED) {
                             add(executiveNativeWorkspace(
                                 client = hiltechApplication.executiveApi,
                                 identityId = signed.identity.identityId,
@@ -408,13 +423,13 @@ class MainActivity : ComponentActivity() {
                 fieldBackRequest = fieldBackRequest,
                 onRefreshPersonalIssuedStock =
                     ::refreshPersonalIssuedStockSelected,
-                showPersonalIssuedStock = BuildConfig.HILTECH_PERSONAL_ISSUED_STOCK_ENABLED,
+                showPersonalIssuedStock = personalIssuedStockEnabled,
                 onQueueMaterialUsage = ::queueMaterialUsage,
-                showMaterialUsageReporting = BuildConfig.HILTECH_MATERIAL_USAGE_REPORTING_ENABLED,
+                showMaterialUsageReporting = materialUsageReportingEnabled,
                 onLookupAssignedAssetTag = ::lookupAssignedAssetTag,
-                showAssignedAssetLookup = BuildConfig.HILTECH_ASSIGNED_ASSET_LOOKUP_ENABLED,
+                showAssignedAssetLookup = assignedAssetLookupEnabled,
                 onSubmitEngineeringTest = ::submitEngineeringTest,
-                showEngineeringTests = BuildConfig.HILTECH_ENGINEERING_TESTS_ENABLED,
+                showEngineeringTests = engineeringTestsEnabled,
                 captureFieldIntent = true,
                 onQueueFieldIntent = ::queueFieldExecution,
                 onQueueCompletion = ::queueFieldCompletion,
@@ -982,7 +997,7 @@ class MainActivity : ComponentActivity() {
 
 
     private fun lookupAssignedAssetTag(workOrderId: String, code: String) {
-        if (!BuildConfig.HILTECH_ASSIGNED_ASSET_LOOKUP_ENABLED) return
+        if (!assignedAssetLookupEnabled) return
         val signed = shellState as? HiltechShellState.SignedIn ?: return
         val field = signed.field ?: return
         val actorId = signed.identity.identityId
@@ -1045,7 +1060,7 @@ class MainActivity : ComponentActivity() {
         workOrderId: String,
         draft: FieldEngineeringTestDraft,
     ) {
-        if (!BuildConfig.HILTECH_ENGINEERING_TESTS_ENABLED) return
+        if (!engineeringTestsEnabled) return
         val signed = shellState as? HiltechShellState.SignedIn ?: return
         val field = signed.field ?: return
         val bundle = field.selectedBundle ?: return
@@ -1288,7 +1303,7 @@ class MainActivity : ComponentActivity() {
 
     /** S04A: read-only, never cached, never shared across actor or WorkOrder. */
     private fun refreshPersonalIssuedStock(workOrderId: String, actorId: String) {
-        if (!BuildConfig.HILTECH_PERSONAL_ISSUED_STOCK_ENABLED) return
+        if (!personalIssuedStockEnabled) return
         val signed = shellState as? HiltechShellState.SignedIn ?: return
         val field = signed.field ?: return
         if (signed.identity.identityId != actorId ||
@@ -1448,7 +1463,7 @@ class MainActivity : ComponentActivity() {
         item: FieldPersonalIssuedStockLineDto,
         quantity: String,
     ) {
-        if (!BuildConfig.HILTECH_MATERIAL_USAGE_REPORTING_ENABLED) return
+        if (!materialUsageReportingEnabled) return
         val signed = shellState as? HiltechShellState.SignedIn ?: return
         val identityId = signed.identity.identityId
         val field = signed.field ?: return
