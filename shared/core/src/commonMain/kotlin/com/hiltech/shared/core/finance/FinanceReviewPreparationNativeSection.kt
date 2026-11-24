@@ -34,7 +34,15 @@ enum class FinanceReviewKind(val label: String) {
     CASH_COUNT("جرد الخزنة"),
     INVOICE_ISSUANCE_REVIEW("مراجعة فاتورة موجودة"),
     INVOICE_ISSUANCE_PREPARE("تجهيز إصدار فاتورة عميل"),
+    EMPLOYEE_FUNDING("تجهيز سلفة أو عهدة"),
+    EMPLOYEE_SETTLEMENT("تجهيز تسوية موظف"),
+    EXPENSE_REIMBURSEMENT("تجهيز رد مصروف"),
+    AP_JOURNAL("تجهيز قيد مورد"),
+    AR_JOURNAL("تجهيز قيد عميل"),
+    PERIOD_CLOSE("طلب مراجعة إقفال فترة"),
 }
+
+data class FinanceReviewJournalLine(val accountId:String="",val side:String="DEBIT",val amount:String="")
 
 data class FinanceReviewDraft(
     val sourceId: String = "",
@@ -43,6 +51,13 @@ data class FinanceReviewDraft(
     val amount: String = "",
     val reference: String = "",
     val documentEvidenceId: String = "",
+    val policyApprovalId: String = "",
+    val fundingKind: String = "EMPLOYEE_ADVANCE",
+    val settlementAction: String = "ADVANCE_RECOVERY_CONFIRMED",
+    val evidenceSha256: String = "",
+    val periodId: String = "",
+    val taxDisposition: String = "",
+    val lines: List<FinanceReviewJournalLine> = listOf(FinanceReviewJournalLine(),FinanceReviewJournalLine(side="CREDIT")),
 )
 
 data class FinancePreparedReview(
@@ -71,7 +86,27 @@ fun financeReviewDraftIsValid(
     if (!financeLookupIdIsUuid(draft.sourceId)) return false
     return when (kind) {
         FinanceReviewKind.BANK_STATEMENT_REVIEW,
-        FinanceReviewKind.INVOICE_ISSUANCE_REVIEW -> true
+        FinanceReviewKind.INVOICE_ISSUANCE_REVIEW, FinanceReviewKind.PERIOD_CLOSE -> true
+        FinanceReviewKind.EMPLOYEE_FUNDING ->
+            draft.fundingKind in setOf("EMPLOYEE_ADVANCE","FINANCIAL_IMPREST") &&
+                financeLookupIdIsUuid(draft.policyApprovalId) && financeLookupIdIsUuid(draft.bankLineId)
+        FinanceReviewKind.EMPLOYEE_SETTLEMENT ->
+            draft.settlementAction in setOf("ADVANCE_RECOVERY_CONFIRMED","IMPREST_CASH_RETURN_CONFIRMED","IMPREST_RECEIPTS_ACCEPTED") &&
+                financeReviewIsAmount(draft.amount,false) && financeLookupIdIsUuid(draft.documentEvidenceId) &&
+                draft.evidenceSha256.matches(Regex("^[a-f0-9]{64}$")) &&
+                (if (draft.settlementAction=="IMPREST_RECEIPTS_ACCEPTED") draft.bankLineId.isBlank()
+                 else financeLookupIdIsUuid(draft.bankLineId))
+        FinanceReviewKind.EXPENSE_REIMBURSEMENT ->
+            financeLookupIdIsUuid(draft.policyApprovalId) && financeLookupIdIsUuid(draft.bankLineId) &&
+                financeReviewIsAmount(draft.amount,false)
+        FinanceReviewKind.AP_JOURNAL, FinanceReviewKind.AR_JOURNAL ->
+            financeLookupIdIsUuid(draft.periodId) && draft.reference.isNotBlank() &&
+                draft.taxDisposition.isNotBlank() &&
+                (draft.documentEvidenceId.isBlank() || financeLookupIdIsUuid(draft.documentEvidenceId)) &&
+                draft.lines.size in 2..32 && draft.lines.all {
+                    financeLookupIdIsUuid(it.accountId) && it.side in setOf("DEBIT","CREDIT") &&
+                        financeReviewIsAmount(it.amount,false)
+                } && draft.lines.any {it.side=="DEBIT"} && draft.lines.any {it.side=="CREDIT"}
         FinanceReviewKind.INVOICE_ISSUANCE_PREPARE ->
             draft.reference.trim().length in 3..100 &&
                 financeLookupIdIsUuid(draft.documentEvidenceId)
@@ -92,6 +127,33 @@ fun financeReviewDraftIsValid(
 
 fun financeReviewCanRequest(state: String, approvalRequestId: String?): Boolean =
     state == "PROPOSED" && approvalRequestId.isNullOrBlank()
+
+fun financeReviewCanRequest(kind:FinanceReviewKind,state:String,approvalRequestId:String?):Boolean =
+    approvalRequestId.isNullOrBlank() && state == when(kind) {
+        FinanceReviewKind.AP_JOURNAL -> "SEALED_AWAITING_POSTING_REVIEW"
+        FinanceReviewKind.AR_JOURNAL -> "SEALED_AWAITING_APPROVAL"
+        FinanceReviewKind.PERIOD_CLOSE -> "NOT_REQUESTED"
+        else -> "PROPOSED"
+    }
+
+private fun FinanceEmployeeFundingReceiptDto.review() = FinancePreparedReview(
+    FinanceReviewKind.EMPLOYEE_FUNDING,proposalId,organizationId,state,approvalRequestId,
+    listOf("الموظف: $employeeId","المبلغ: $amount $currency","النوع: $kind","حركة البنك: $bankStatementLineId"))
+private fun FinanceEmployeeSettlementReceiptDto.review() = FinancePreparedReview(
+    FinanceReviewKind.EMPLOYEE_SETTLEMENT,proposalId,organizationId,state,approvalRequestId,
+    listOf("الموظف: $employeeId","المبلغ: $amount $currency","نوع التسوية: $action","التمويل: $fundingRecordId"))
+private fun FinanceExpenseReimbursementReceiptDto.review() = FinancePreparedReview(
+    FinanceReviewKind.EXPENSE_REIMBURSEMENT,proposalId,organizationId,state,approvalRequestId,
+    listOf("الموظف: $employeeId","المبلغ: $amount $currency","المصروف: $expenseDraftId"))
+private fun FinanceApPostingReceiptDto.review(org:String) = FinancePreparedReview(
+    FinanceReviewKind.AP_JOURNAL,proposalId,org,state,postingReviewRequestId,
+    listOf("مصدر المورد: $payableCandidateId","المبلغ: $invoiceAmount $currency","بصمة القيد: $ledgerFingerprintSha256"))
+private fun FinanceArJournalReceiptDto.review() = FinancePreparedReview(
+    FinanceReviewKind.AR_JOURNAL,proposalId,organizationId,state,approvalRequestId,
+    listOf("الفاتورة: $issuedInvoiceId","المبلغ: $amount $currency","بصمة القيد: $ledgerFingerprintSha256"))
+private fun FinanceGlPeriodCloseReceiptDto.review() = FinancePreparedReview(
+    FinanceReviewKind.PERIOD_CLOSE,periodId,organizationId,state,approvalRequestId,
+    listOf("عدد القيود: $journalCount","بصمة الدفتر: $ledgerSnapshotSha256"))
 
 private fun requireScopedReview(
     org: String, requestedId: String, prepared: FinancePreparedReview,
@@ -172,6 +234,12 @@ suspend fun financeReadReviewProposal(
 ): FinancePreparedReview {
     require(financeLookupIdIsUuid(proposalId))
     val receipt = when (kind) {
+        FinanceReviewKind.EMPLOYEE_FUNDING -> apis.employeeMoney.fundingStatus(org,proposalId,install).review()
+        FinanceReviewKind.EMPLOYEE_SETTLEMENT -> apis.employeeMoney.settlementStatus(org,proposalId,install).review()
+        FinanceReviewKind.EXPENSE_REIMBURSEMENT -> apis.reimbursement.status(org,proposalId,install).review()
+        FinanceReviewKind.AP_JOURNAL -> apis.apJournal.status(org,proposalId,install).review(org)
+        FinanceReviewKind.AR_JOURNAL -> apis.arJournal.status(org,proposalId,install).review()
+        FinanceReviewKind.PERIOD_CLOSE -> apis.periodClose.status(org,proposalId,install).review()
         FinanceReviewKind.BANK_STATEMENT_REVIEW ->
             apis.bankIntake.status(org, proposalId, install).review()
         FinanceReviewKind.BANK_RECONCILIATION ->
@@ -201,8 +269,47 @@ suspend fun financePrepareReviewProposal(
     require(financeReviewDraftIsValid(kind, form)) { "Incomplete Finance source fields." }
     val receipt = when (kind) {
         FinanceReviewKind.BANK_STATEMENT_REVIEW,
-        FinanceReviewKind.INVOICE_ISSUANCE_REVIEW ->
+        FinanceReviewKind.INVOICE_ISSUANCE_REVIEW, FinanceReviewKind.PERIOD_CLOSE ->
             return financeReadReviewProposal(apis, kind, org, form.sourceId, install)
+        FinanceReviewKind.EMPLOYEE_FUNDING -> {
+            val r=apis.employeeMoney.prepareFunding(org,form.fundingKind,form.sourceId,operation,
+                form.policyApprovalId,form.bankLineId,install)
+            check(r.draftId.equals(form.sourceId,true) && r.kind==form.fundingKind &&
+                r.bankStatementLineId.equals(form.bankLineId,true) && r.fundingRecordId==null &&
+                !r.fundingEvidenceRecorded && !r.bankTransferInitiated)
+            r.review()
+        }
+        FinanceReviewKind.EMPLOYEE_SETTLEMENT -> {
+            val r=apis.employeeMoney.prepareSettlement(org,form.sourceId,FinanceEmployeeSettlementPrepareDto(
+                operation,form.settlementAction,form.amount,form.documentEvidenceId,form.evidenceSha256,
+                form.bankLineId.ifBlank {null}),install)
+            check(r.fundingRecordId.equals(form.sourceId,true) && r.action==form.settlementAction &&
+                r.settlementRecordId==null && !r.settlementRecorded && !r.bankTransferInitiated && !r.payrollDeductionInitiated)
+            r.review()
+        }
+        FinanceReviewKind.EXPENSE_REIMBURSEMENT -> {
+            val r=apis.reimbursement.prepare(org,form.sourceId,FinanceExpenseReimbursementPrepareDto(
+                operation,form.policyApprovalId,form.bankLineId,form.amount),install)
+            check(r.expenseDraftId.equals(form.sourceId,true) && r.bankStatementLineId.equals(form.bankLineId,true) &&
+                r.reimbursementRecordId==null && !r.bankTransferInitiated && !r.bankDebitAllocatedToEmployeeExpense)
+            r.review()
+        }
+        FinanceReviewKind.AP_JOURNAL -> {
+            val r=apis.apJournal.propose(org,form.sourceId,FinanceApJournalProposalDto(operation,form.periodId,
+                form.reference.trim(),form.taxDisposition.trim(),form.documentEvidenceId.ifBlank {null},
+                form.lines.map {FinanceApJournalAllocationDto(it.accountId,it.side,it.amount)}),install)
+            check(r.payableCandidateId.equals(form.sourceId,true) && r.postedJournalId==null &&
+                !r.recognizedAccountsPayable && !r.paymentApproved && !r.moneyTransferred)
+            r.review(org)
+        }
+        FinanceReviewKind.AR_JOURNAL -> {
+            val r=apis.arJournal.propose(org,form.sourceId,FinanceArJournalProposalDto(operation,form.periodId,
+                form.reference.trim(),form.taxDisposition.trim(),form.documentEvidenceId.ifBlank {null},
+                form.lines.map {FinanceArJournalAllocationDto(it.accountId,it.side,it.amount)}),install)
+            check(r.issuedInvoiceId.equals(form.sourceId,true) && r.postedJournalId==null &&
+                !r.receivableRecognized && !r.cashCollected)
+            r.review()
+        }
         FinanceReviewKind.INVOICE_ISSUANCE_PREPARE -> {
             val prepared = apis.arIssuance.prepare(org, form.sourceId, operation,
                 form.reference.trim(), form.documentEvidenceId, install)
@@ -245,6 +352,9 @@ suspend fun financePrepareReviewProposal(
     }
     check(receipt.organizationId.equals(org, ignoreCase = true) &&
         financeLookupIdIsUuid(receipt.id)) { "FINANCE_REVIEW_SOURCE_SCOPE_MISMATCH" }
+    check(financeReviewCanRequest(kind,receipt.state,receipt.approvalRequestId)) {
+        "FINANCE_PREPARE_RECEIPT_NOT_READY"
+    }
     return receipt
 }
 
@@ -263,10 +373,16 @@ suspend fun financeRequestIndependentReview(
 ): FinancePreparedReview {
     require(financeLookupIdIsUuid(operationId))
     val current = financeReadReviewProposal(apis, kind, org, proposalId, install)
-    check(financeReviewCanRequest(current.state, current.approvalRequestId)) {
+    check(financeReviewCanRequest(kind,current.state, current.approvalRequestId)) {
         "FINANCE_REVIEW_NOT_PROPOSED"
     }
     val response = when (kind) {
+        FinanceReviewKind.EMPLOYEE_FUNDING -> apis.employeeMoney.requestFundingReview(org,proposalId,operationId,install).review()
+        FinanceReviewKind.EMPLOYEE_SETTLEMENT -> apis.employeeMoney.requestSettlementReview(org,proposalId,operationId,install).review()
+        FinanceReviewKind.EXPENSE_REIMBURSEMENT -> apis.reimbursement.requestReview(org,proposalId,operationId,install).review()
+        FinanceReviewKind.AP_JOURNAL -> apis.apJournal.requestPostingApproval(org,proposalId,operationId,install).review(org)
+        FinanceReviewKind.AR_JOURNAL -> apis.arJournal.requestApproval(org,proposalId,operationId,install).review()
+        FinanceReviewKind.PERIOD_CLOSE -> apis.periodClose.requestReview(org,proposalId,operationId,install).review()
         FinanceReviewKind.BANK_STATEMENT_REVIEW ->
             apis.bankIntake.requestReview(org, proposalId, operationId, install).review()
         FinanceReviewKind.BANK_RECONCILIATION ->
@@ -425,7 +541,10 @@ fun FinanceReviewPreparationSection(
             style = MaterialTheme.typography.labelMedium)
         Text(kind.label, style = MaterialTheme.typography.titleSmall)
         val existing = kind == FinanceReviewKind.BANK_STATEMENT_REVIEW ||
-            kind == FinanceReviewKind.INVOICE_ISSUANCE_REVIEW
+            kind == FinanceReviewKind.INVOICE_ISSUANCE_REVIEW || kind == FinanceReviewKind.PERIOD_CLOSE
+        val journal = kind == FinanceReviewKind.AP_JOURNAL || kind == FinanceReviewKind.AR_JOURNAL
+        val employee = kind in setOf(FinanceReviewKind.EMPLOYEE_FUNDING,FinanceReviewKind.EMPLOYEE_SETTLEMENT,FinanceReviewKind.EXPENSE_REIMBURSEMENT)
+        val editable = !preparing && !requestingReview && !refreshing && prepared == null
         val sourceLabel = when (kind) {
             FinanceReviewKind.BANK_STATEMENT_REVIEW -> "معرّف طلب كشف البنك (Proposal UUID)"
             FinanceReviewKind.BANK_RECONCILIATION -> "معرّف كشف البنك المسجل (Intake UUID)"
@@ -434,6 +553,12 @@ fun FinanceReviewPreparationSection(
             FinanceReviewKind.CASH_COUNT -> "معرّف الخزنة الحالي (Cashbox UUID)"
             FinanceReviewKind.INVOICE_ISSUANCE_REVIEW -> "معرّف طلب إصدار فاتورة قائم (Proposal UUID)"
             FinanceReviewKind.INVOICE_ISSUANCE_PREPARE -> "معرّف مسودة فاتورة العميل (Candidate UUID)"
+            FinanceReviewKind.EMPLOYEE_FUNDING -> "معرّف مسودة السلفة أو العهدة"
+            FinanceReviewKind.EMPLOYEE_SETTLEMENT -> "معرّف التمويل المسجل"
+            FinanceReviewKind.EXPENSE_REIMBURSEMENT -> "معرّف مسودة المصروف"
+            FinanceReviewKind.AP_JOURNAL -> "معرّف مرشح حساب المورد"
+            FinanceReviewKind.AR_JOURNAL -> "معرّف فاتورة العميل الصادرة"
+            FinanceReviewKind.PERIOD_CLOSE -> "معرّف الفترة المحاسبية"
         }
         OutlinedTextField(
             value = draft.sourceId,
@@ -445,6 +570,68 @@ fun FinanceReviewPreparationSection(
             singleLine = true, modifier = Modifier.fillMaxWidth(),
             enabled = !preparing && !requestingReview && prepared == null,
         )
+        if (kind == FinanceReviewKind.EMPLOYEE_FUNDING) {
+            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                listOf("EMPLOYEE_ADVANCE" to "سلفة","FINANCIAL_IMPREST" to "عهدة").forEach { (value,label) ->
+                    OutlinedButton(enabled=editable && draft.fundingKind!=value,onClick={
+                        draft=draft.copy(fundingKind=value); resetForFormChange()
+                    }) {Text(label)}
+                }
+            }
+        }
+        if (kind == FinanceReviewKind.EMPLOYEE_SETTLEMENT) {
+            Column {
+                listOf("ADVANCE_RECOVERY_CONFIRMED" to "استرداد سلفة","IMPREST_CASH_RETURN_CONFIRMED" to "رد نقد العهدة",
+                    "IMPREST_RECEIPTS_ACCEPTED" to "قبول مستندات العهدة").forEach { (value,label) ->
+                    OutlinedButton(enabled=editable && draft.settlementAction!=value,onClick={
+                        draft=draft.copy(settlementAction=value,bankLineId=""); resetForFormChange()
+                    }) {Text(label)}
+                }
+            }
+            OutlinedTextField(value=draft.evidenceSha256,onValueChange={
+                draft=draft.copy(evidenceSha256=it.trim());resetForFormChange()
+            },label={Text("بصمة مستند التسوية SHA-256")},enabled=editable,modifier=Modifier.fillMaxWidth())
+        }
+        if (kind == FinanceReviewKind.EMPLOYEE_FUNDING || kind == FinanceReviewKind.EXPENSE_REIMBURSEMENT) {
+            OutlinedTextField(value=draft.policyApprovalId,onValueChange={
+                draft=draft.copy(policyApprovalId=it.trim());resetForFormChange()
+            },label={Text("معرّف الموافقة الأصلية")},enabled=editable,modifier=Modifier.fillMaxWidth())
+        }
+        if (employee && !(kind == FinanceReviewKind.EMPLOYEE_SETTLEMENT && draft.settlementAction=="IMPREST_RECEIPTS_ACCEPTED")) {
+            OutlinedTextField(value=draft.bankLineId,onValueChange={
+                draft=draft.copy(bankLineId=it.trim());resetForFormChange()
+            },label={Text("معرّف حركة البنك المؤكدة")},enabled=editable,modifier=Modifier.fillMaxWidth())
+        }
+        if (journal) {
+            OutlinedTextField(value=draft.periodId,onValueChange={
+                draft=draft.copy(periodId=it.trim());resetForFormChange()
+            },label={Text("الفترة المحاسبية")},enabled=editable,modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(value=draft.taxDisposition,onValueChange={
+                draft=draft.copy(taxDisposition=it);resetForFormChange()
+            },label={Text("المعالجة الضريبية المعتمدة")},enabled=editable,modifier=Modifier.fillMaxWidth())
+            draft.lines.forEachIndexed { index,line ->
+                Text("بند القيد ${index+1}",style=MaterialTheme.typography.titleSmall)
+                fun changeLine(next:FinanceReviewJournalLine) {
+                    draft=draft.copy(lines=draft.lines.mapIndexed { i,l -> if(i==index) next else l })
+                    resetForFormChange()
+                }
+                OutlinedTextField(value=line.accountId,onValueChange={changeLine(line.copy(accountId=it.trim()))},
+                    label={Text("معرّف حساب دفتر الأستاذ")},enabled=editable,modifier=Modifier.fillMaxWidth())
+                Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                    listOf("DEBIT" to "مدين","CREDIT" to "دائن").forEach { (value,label) ->
+                        OutlinedButton(enabled=editable && line.side!=value,onClick={changeLine(line.copy(side=value))}) {Text(label)}
+                    }
+                }
+                OutlinedTextField(value=line.amount,onValueChange={changeLine(line.copy(amount=it.trim()))},
+                    label={Text("المبلغ")},enabled=editable,modifier=Modifier.fillMaxWidth())
+                if(draft.lines.size>2) OutlinedButton(enabled=editable,onClick={
+                    draft=draft.copy(lines=draft.lines.filterIndexed { i,_ -> i!=index });resetForFormChange()
+                }) {Text("حذف البند")}
+            }
+            OutlinedButton(enabled=editable && draft.lines.size<32,onClick={
+                draft=draft.copy(lines=draft.lines+FinanceReviewJournalLine());resetForFormChange()
+            }) {Text("إضافة بند")}
+        }
         if (kind == FinanceReviewKind.CASH_ALLOCATION) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("AR", "AP").forEach { type ->
@@ -466,7 +653,8 @@ fun FinanceReviewPreparationSection(
             )
         }
         if (kind == FinanceReviewKind.CASH_COUNT ||
-            kind == FinanceReviewKind.CASH_ALLOCATION
+            kind == FinanceReviewKind.CASH_ALLOCATION || kind == FinanceReviewKind.EMPLOYEE_SETTLEMENT ||
+            kind == FinanceReviewKind.EXPENSE_REIMBURSEMENT
         ) {
             OutlinedTextField(
                 value = draft.amount,
@@ -480,16 +668,16 @@ fun FinanceReviewPreparationSection(
                 enabled = !preparing && !requestingReview && prepared == null,
             )
         }
-        if (kind == FinanceReviewKind.INVOICE_ISSUANCE_PREPARE) {
+        if (kind == FinanceReviewKind.INVOICE_ISSUANCE_PREPARE || kind == FinanceReviewKind.EMPLOYEE_SETTLEMENT || journal) {
             OutlinedTextField(
                 value = draft.documentEvidenceId,
                 onValueChange = { draft = draft.copy(documentEvidenceId = it.trim()); resetForFormChange() },
-                label = { Text("معرّف مستند الفاتورة المحفوظ والجاهز (Evidence UUID)") },
+                label = { Text(if(journal) "معرّف المستند الضريبي (إن وجد)" else "معرّف المستند المحفوظ والجاهز (Evidence UUID)") },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
                 enabled = !preparing && !requestingReview && prepared == null,
             )
         }
-        if (!existing) {
+        if (!existing && !employee) {
             OutlinedTextField(
                 value = draft.reference,
                 onValueChange = {
@@ -498,6 +686,7 @@ fun FinanceReviewPreparationSection(
                 label = { Text(when (kind) {
                     FinanceReviewKind.BANK_RECONCILIATION -> "مرجع المطابقة المعتمد من الشركة"
                     FinanceReviewKind.INVOICE_ISSUANCE_PREPARE -> "رقم فاتورة الشركة"
+                    FinanceReviewKind.AP_JOURNAL, FinanceReviewKind.AR_JOURNAL -> "مرجع المعالجة المحاسبية"
                     else -> "مرجع/سبب العملية"
                 }) },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
@@ -550,7 +739,7 @@ fun FinanceReviewPreparationSection(
                 Text(if (refreshing) "جارٍ تحديث الحالة…" else "تحديث حالة الطلب من المصدر")
             }
             if (!requestingReview && !refreshing &&
-                financeReviewCanRequest(current.state, current.approvalRequestId)
+                financeReviewCanRequest(kind,current.state, current.approvalRequestId)
             ) {
                 OutlinedButton(onClick = {
                     if (reviewOperationId == null) reviewOperationId = newOperationId()
