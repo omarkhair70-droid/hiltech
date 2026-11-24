@@ -306,16 +306,34 @@ fun financeEvidenceReadNativeWorkspace(
             } catch (_: Exception) {
                 false
             }
-            if (supplierAllowed) true else if (reviewPreparationEnabled) try {
-                // Finance AR preparers must not need supplier-ledger permissions.
-                // The existing Sales->Finance projection checks its own authority.
-                apis.clientAwards.list(organizationId,installationId)
-                    .organizationId.equals(organizationId,ignoreCase=true)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                false
-            } else false
+            if (supplierAllowed) true else if (!reviewPreparationEnabled) false else {
+                // A Finance preparer is not necessarily a supplier-ledger reader.
+                // Use only original current-org GETs backed by the actor's real authority.
+                val commercialAllowed = try {
+                    apis.clientAwards.list(organizationId, installationId)
+                        .organizationId.equals(organizationId, ignoreCase = true)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    false
+                }
+                if (commercialAllowed) true else {
+                    var journalAllowed = false
+                    for (kind in listOf("AP", "AR")) {
+                        try {
+                            val choices = financeReadAccountingChoices(
+                                apis, organizationId, kind, installationId)
+                            if (choices.organizationId.equals(organizationId, ignoreCase = true)) {
+                                journalAllowed = true
+                                break
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { }
+                    }
+                    journalAllowed
+                }
+            }
         }
     },
     hostOwnsScroll = false,
