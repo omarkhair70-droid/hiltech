@@ -3,8 +3,6 @@ name: HILTECH unified release candidate — test and publish staging image (no d
 on:
   push:
     branches: [integration/hiltech-unified-staging-20261124]
-    paths:
-      - ".github/workflows/hiltech-unified-staging-publish.yml"
   workflow_dispatch:
     inputs:
       confirmation:
