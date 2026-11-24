@@ -332,7 +332,8 @@ fun HiltechShell(
         val nativeWorkspaces = if (nativeScope.isNotBlank()) uniqueNativeWorkspaces(operationalWorkspaces) else emptyList()
         val nativeSession = rememberNativeWorkspaceSession(nativeScope, nativeAuthority, nativeWorkspaces)
         val activeNative = nativeWorkspaces.firstOrNull { it.id == nativeSession.selectedId && nativeSession.availability[it.id] == WorkspaceAvailability.AVAILABLE }
-        var requestedWorkspace by remember(shellScrollScope) { mutableStateOf(ShellWorkspace.Home) }
+        var requestedWorkspace by remember(shellScrollScope, nativeAuthority) { mutableStateOf(ShellWorkspace.Home) }
+        var workspaceTabs by remember(shellScrollScope, nativeAuthority) { mutableStateOf(listOf(ShellWorkspace.Home)) }
         var finding by remember(shellScrollScope) { mutableStateOf(false) }
         var requestedFieldFocus by remember(shellScrollScope) { mutableStateOf<String?>(null) }
         fun openAssignedWork(workId: String) {
@@ -346,6 +347,21 @@ fun HiltechShell(
             if (desktopNavigation && signedIn != null && desktopFindRequest > 0) finding = true
         }
         val selectedWorkspace = requestedWorkspace.takeIf(destinations::contains) ?: destinations.firstOrNull()
+        LaunchedEffect(selectedWorkspace, destinations, desktopNavigation) {
+            if (desktopNavigation) {
+                val allowed = workspaceTabs.filter(destinations::contains)
+                workspaceTabs = if (selectedWorkspace != null && selectedWorkspace !in allowed) allowed + selectedWorkspace else allowed
+            }
+        }
+        fun closeWorkspaceTab(workspace: ShellWorkspace) {
+            if (workspace == ShellWorkspace.Home) return
+            val remaining = workspaceTabs.filter { it != workspace && it in destinations }
+            workspaceTabs = remaining
+            if (requestedWorkspace == workspace) {
+                nativeSession.close()
+                requestedWorkspace = remaining.lastOrNull() ?: ShellWorkspace.Home
+            }
+        }
         LaunchedEffect(selectedWorkspace, compactNavigation, activeNative?.id) {
             if (compactNavigation) onCompactNavigationChanged(
                 activeNative != null || (selectedWorkspace != null && selectedWorkspace != ShellWorkspace.Home),
@@ -390,6 +406,8 @@ fun HiltechShell(
             destinations = destinations,
             scroll = scopedShellScroll,
             compact = compactNavigation,
+            tabs = if (desktopNavigation) workspaceTabs.filter(destinations::contains) else emptyList(),
+            onCloseTab = ::closeWorkspaceTab,
             onSelect = { nativeSession.close(); requestedWorkspace = it },
             onFind = if (useWorkspaceNavigation && signedIn != null) {
                 { finding = true }

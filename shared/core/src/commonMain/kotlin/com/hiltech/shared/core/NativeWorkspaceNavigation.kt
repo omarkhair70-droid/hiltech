@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,6 +26,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.HiltechShape
 import com.hiltech.shared.core.design.HiltechMotion
@@ -52,6 +59,8 @@ internal fun NativeWorkspaceNavigation(
     destinations: List<ShellWorkspace>,
     scroll: ScrollState,
     compact: Boolean,
+    tabs: List<ShellWorkspace> = emptyList(),
+    onCloseTab: (ShellWorkspace) -> Unit = {},
     onSelect: (ShellWorkspace) -> Unit,
     onFind: (() -> Unit)? = null,
     boundedContent: (@Composable () -> Unit)? = null,
@@ -130,7 +139,16 @@ internal fun NativeWorkspaceNavigation(
         return
     }
 
-    Row(Modifier.fillMaxSize().background(colors.canvas)) {
+    Row(Modifier.fillMaxSize().background(colors.canvas).onPreviewKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown || !event.isAltPressed) return@onPreviewKeyEvent false
+        val index = tabs.indexOf(selected)
+        val next = when (event.key) {
+            Key.DirectionLeft -> tabs.getOrNull(index - 1)
+            Key.DirectionRight -> tabs.getOrNull(index + 1)
+            else -> null
+        }
+        if (next != null) { onSelect(next); true } else false
+    }) {
         Surface(
             modifier = Modifier.width(212.dp).fillMaxHeight(),
             color = colors.surfaceElevated,
@@ -187,6 +205,9 @@ internal fun NativeWorkspaceNavigation(
                     onFind?.let { TextButton(onClick = it) { SearchGlyph(colors.secondaryText); Spacer(Modifier.width(8.dp)); Text(hiltechText("بحث", "Search")) } }
                 }
             }
+            if (tabs.isNotEmpty()) {
+                DesktopWorkspaceTabs(tabs, selected, onSelect, onCloseTab)
+            }
             HorizontalDivider(color = colors.divider)
             if (boundedContent != null) {
                 Box(Modifier.weight(1f).fillMaxWidth()) { boundedContent() }
@@ -197,6 +218,49 @@ internal fun NativeWorkspaceNavigation(
                 CompositionLocalProvider(LocalContentColor provides colors.primaryText) { content() }
             }
         }
+    }
+}
+
+@Composable
+private fun DesktopWorkspaceTabs(
+    tabs: List<ShellWorkspace>,
+    selected: ShellWorkspace,
+    onSelect: (ShellWorkspace) -> Unit,
+    onClose: (ShellWorkspace) -> Unit,
+) {
+    val colors = LocalHiltechOperationalColors.current
+    Row(
+        Modifier.fillMaxWidth().background(colors.surfaceElevated)
+            .horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp)
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        tabs.forEach { workspace ->
+            val active = selected == workspace
+            val label = hiltechText(workspace.displayLabel, workspace.label)
+            Surface(color = if (active) colors.surface else colors.surfaceElevated,
+                shape = HiltechShape.small) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.selectable(active, role = Role.Tab, onClick = { onSelect(workspace) })
+                        .heightIn(min = 40.dp).padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        WorkspaceGlyph(workspace, if (active) colors.accent else colors.secondaryText)
+                        Text(label, color = colors.primaryText, style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
+                    }
+                    if (workspace != ShellWorkspace.Home) {
+                        val closeLabel = hiltechText("إغلاق ", "Close ") + label
+                        IconButton(onClick = { onClose(workspace) },
+                            modifier = Modifier.size(40.dp).semantics { contentDescription = closeLabel }) {
+                            Text("×", color = colors.secondaryText, style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                }
+            }
+        }
+        Text("Alt ← / →", color = colors.secondaryText, style = MaterialTheme.typography.labelSmall)
     }
 }
 
