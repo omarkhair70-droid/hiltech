@@ -51,6 +51,7 @@ import com.hiltech.shared.core.finance.FinanceBankCsvSelectedFile
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
 import com.hiltech.shared.core.NativeOperationArea
+import com.hiltech.shared.core.design.HiltechLanguage
 import com.hiltech.shared.core.NativeOperationAreas
 import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
 import com.hiltech.shared.core.HiltechShell
@@ -226,8 +227,15 @@ class MainActivity : ComponentActivity() {
             BackHandler(enabled = fieldFocused || workspaceBackAvailable) {
                 if (fieldFocused) fieldBackRequest += 1 else workspaceBackRequest += 1
             }
+            val languagePreferences = remember { getSharedPreferences("hiltech_ui", MODE_PRIVATE) }
+            var appLanguage by remember { mutableStateOf(HiltechLanguage.fromCode(languagePreferences.getString("appLanguage", null))) }
             HiltechShell(
                 state = shellState,
+                language = appLanguage,
+                onLanguageChange = { choice ->
+                    appLanguage = choice
+                    languagePreferences.edit().putString("appLanguage", choice.code).apply()
+                },
                 inboxWorkspace = {
                     (shellState as? HiltechShellState.SignedIn)?.let { signed ->
                         InboxWorkspace(
