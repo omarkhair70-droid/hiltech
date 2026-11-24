@@ -56,6 +56,7 @@ fun commercialReadNativeWorkspace(
         val jobs = rememberCoroutineScope()
         val coordinator = remember(client, installationId) { CommercialDealCoordinator(client, installationId) }
         var capabilities by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialCapabilitiesDto?>(null) }
+        var whatsappConnection by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialWhatsappConnectionDto?>(null) }
         var mailConnection by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialMailConnectionDto?>(null) }
         var settings by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialDocumentSettingsDto?>(null) }
         var showSettings by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
@@ -119,6 +120,7 @@ fun commercialReadNativeWorkspace(
             capabilities = null
             settings = null
             mailConnection = null
+            whatsappConnection = null
             clients = emptyList()
             detail = null
             error = null
@@ -131,6 +133,9 @@ fun commercialReadNativeWorkspace(
                     try { mailConnection = client.mailConnection(organizationId,installationId) }
                     catch (e: CancellationException) { throw e }
                     catch (_: Exception) { mailConnection = null }
+                    try { whatsappConnection = client.whatsappConnection(organizationId,installationId) }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { whatsappConnection = null }
                 } else showSettings = false
                 // An old source selection is invalid when the current list
                 // no longer authorizes/contains that opportunity.
@@ -196,6 +201,35 @@ fun commercialReadNativeWorkspace(
                                     feedback = "MAIL_CONNECTED"
                                 } catch (e: CancellationException) { throw e }
                                 catch (_: Exception) { feedback = "MAIL_CONNECTION_NOT_CONFIRMED" }
+                                finally { saving = false }
+                            }
+                        }
+                    },
+                    whatsapp = whatsappConnection,
+                    onConnectWhatsapp = { phoneId,token,template,language,apiVersion ->
+                        val connection = whatsappConnection
+                        if (!saving && capabilities?.canRelease == true && connection?.setupAvailable == true) {
+                            saving = true
+                            jobs.launch {
+                                try {
+                                    whatsappConnection = client.connectWhatsapp(ConnectCommercialWhatsappDto(organizationId,phoneId,token,template,language,apiVersion,connection.version),installationId)
+                                    feedback = "WHATSAPP_CONNECTED"
+                                } catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { feedback = "WHATSAPP_CONNECTION_NOT_CONFIRMED" }
+                                finally { saving = false }
+                            }
+                        }
+                    },
+                    onDisconnectWhatsapp = {
+                        val connection = whatsappConnection
+                        if (!saving && capabilities?.canRelease == true && connection?.configured == true) {
+                            saving = true
+                            jobs.launch {
+                                try {
+                                    whatsappConnection = client.disconnectWhatsapp(DisconnectCommercialWhatsappDto(organizationId,connection.version),installationId)
+                                    feedback = "WHATSAPP_DISCONNECTED"
+                                } catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { feedback = "WHATSAPP_DISCONNECT_NOT_CONFIRMED" }
                                 finally { saving = false }
                             }
                         }

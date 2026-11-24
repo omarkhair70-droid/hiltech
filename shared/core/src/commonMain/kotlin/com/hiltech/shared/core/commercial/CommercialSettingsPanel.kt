@@ -24,6 +24,9 @@ internal fun CommercialSettingsPanel(
     mail: CommercialMailConnectionDto?,
     onConnectMail: (String,String,String) -> Unit,
     onDisconnectMail: () -> Unit,
+    whatsapp: CommercialWhatsappConnectionDto?,
+    onConnectWhatsapp: (String,String,String,String,String) -> Unit,
+    onDisconnectWhatsapp: () -> Unit,
 ) {
     var draft by remember(settings) { mutableStateOf(settings.profile) }
     var picking by remember { mutableStateOf(false) }
@@ -70,6 +73,7 @@ internal fun CommercialSettingsPanel(
             Text(hiltechText("يولّد النظام الرقم الفريد تلقائيًا. مبالغ الخصم والضريبة تُحدد لكل عرض.","Unique numbers are generated automatically. Discount and tax amounts are specified per quote."))
         }
         MailConnectionPanel(mail,busy,onConnectMail,onDisconnectMail)
+        WhatsappConnectionPanel(whatsapp,busy,onConnectWhatsapp,onDisconnectWhatsapp)
         Button(enabled = !busy && !picking && draft != settings.profile && draft.legalName.isNotBlank() &&
             Regex("[A-Z0-9-]{1,12}").matches(draft.quotePrefix), onClick = { onSave(draft) }) {
             Text(hiltechText("حفظ إعدادات المستندات","Save document settings"))
@@ -120,9 +124,55 @@ private fun MailConnectionPanel(mail: CommercialMailConnectionDto?,busy: Boolean
                 }
             }
         }
-        HorizontalDivider()
-        Text(hiltechText("WhatsApp","WhatsApp"))
-        Text(hiltechText("مشاركة PDF عبر تطبيقات الهاتف متاحة. الإرسال المباشر يحتاج اتصال Meta الخاص بالشركة على السيرفر.","Native PDF sharing is available on mobile. Direct WhatsApp requires the company Meta connection configured on the server."))
+
+    }
+}
+
+@Composable
+private fun WhatsappConnectionPanel(connection: CommercialWhatsappConnectionDto?,busy: Boolean,connect: (String,String,String,String,String) -> Unit,disconnect: () -> Unit) {
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text("WhatsApp Business",style = MaterialTheme.typography.titleMedium)
+        Text(hiltechText("المشاركة العادية متاحة دائمًا على الهاتف. الربط المباشر يستخدم حساب Meta الخاص بالشركة.","Native sharing remains available on mobile. Direct sending uses the company's Meta account."))
+        if (connection == null) {
+            Text(hiltechText("تعذر قراءة حالة الاتصال.","Connection status unavailable."))
+            return@HiltechPanel
+        }
+        Text(if(connection.configured) hiltechText("رقم الحساب المحفوظ: ","Saved sender: ") + connection.displayPhone.orEmpty() else hiltechText("غير متصل","Not connected"))
+        if (!connection.setupAvailable) {
+            Text(hiltechText("يتطلب تهيئة مفتاح تشفير السيرفر مرة واحدة.","Requires one-time server encryption setup."))
+            return@HiltechPanel
+        }
+        var editing by remember(connection) { mutableStateOf(!connection.configured) }
+        var confirmDisconnect by remember(connection) { mutableStateOf(false) }
+        var phoneId by remember(connection) { mutableStateOf(connection.phoneId.orEmpty()) }
+        var template by remember(connection) { mutableStateOf(connection.template.orEmpty()) }
+        var language by remember(connection) { mutableStateOf(connection.language ?: "ar") }
+        var apiVersion by remember(connection) { mutableStateOf(connection.apiVersion.orEmpty()) }
+        var token by remember(connection) { mutableStateOf("") }
+        if (connection.configured && !editing) {
+            TextButton(enabled = !busy,onClick = { editing = true }) { Text(hiltechText("تغيير الاتصال","Change connection")) }
+            if (!confirmDisconnect) TextButton(enabled = !busy,onClick = { confirmDisconnect = true }) { Text(hiltechText("فصل الحساب","Disconnect")) }
+            else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled = !busy,onClick = { disconnect(); confirmDisconnect = false }) { Text(hiltechText("تأكيد الفصل","Confirm disconnect")) }
+                TextButton(onClick = { confirmDisconnect = false }) { Text(hiltechText("إلغاء","Cancel")) }
+            }
+        }
+        if (editing) {
+            SettingField("Phone number ID",phoneId) { phoneId = it.trim() }
+            SettingField(hiltechText("اسم قالب المستند المعتمد","Approved document template"),template) { template = it.trim() }
+            SettingField(hiltechText("لغة القالب","Template language"),language) { language = it.trim() }
+            SettingField("Graph API version",apiVersion) { apiVersion = it.trim() }
+            OutlinedTextField(token,{ token = it },label = { Text("Meta access token") },modifier = Modifier.fillMaxWidth(),
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),singleLine = true,enabled = !busy)
+            Text(hiltechText("يُفحص رقم المرسل لدى Meta قبل الحفظ. اعتماد القالب وصلاحية الإرسال يحتاجان حساب Meta مهيأ.","The sender number is checked with Meta before saving. An approved template and send permission are required."))
+            Button(enabled = !busy && phoneId.matches(Regex("[0-9]+")) && template.matches(Regex("[a-z0-9_]+")) &&
+                language.matches(Regex("[a-zA-Z_]+")) && apiVersion.matches(Regex("v[0-9]+[.][0-9]+")) && token.isNotBlank(),onClick = {
+                    val supplied = token
+                    token = ""
+                    connect(phoneId,supplied,template,language,apiVersion)
+                }) { Text(hiltechText("اختبار الرقم وربط الحساب","Verify number and connect")) }
+            if (connection.configured) TextButton(onClick = { token = ""; editing = false }) { Text(hiltechText("إلغاء","Cancel")) }
+        }
     }
 }
 
