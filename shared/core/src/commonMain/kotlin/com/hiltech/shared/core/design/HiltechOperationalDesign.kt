@@ -40,7 +40,14 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.material3.FilterChip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import org.jetbrains.compose.resources.Font
+import com.hiltech.shared.core.resources.Res
+import com.hiltech.shared.core.resources.plex_regular
+import com.hiltech.shared.core.resources.plex_medium
+import com.hiltech.shared.core.resources.plex_semibold
+import com.hiltech.shared.core.resources.plex_bold
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -141,12 +148,19 @@ object HiltechShape {
 
 /**
  * Operational text hierarchy shared by both native clients. Use the platform
- * font fallback so Arabic shaping and mixed-language record names stay intact.
+ * embedded Plex family with Arabic and Latin coverage on both platforms.
  */
-private fun operationalText(size: Int, leading: Int, weight: FontWeight = FontWeight.Normal) =
-    TextStyle(fontSize = size.sp, lineHeight = leading.sp, fontWeight = weight, letterSpacing = 0.sp)
-
-private val OperationalTypography = Typography(
+@Composable
+private fun operationalTypography(): Typography {
+    val family = FontFamily(
+        Font(Res.font.plex_regular, FontWeight.Normal),
+        Font(Res.font.plex_medium, FontWeight.Medium),
+        Font(Res.font.plex_semibold, FontWeight.SemiBold),
+        Font(Res.font.plex_bold, FontWeight.Bold),
+    )
+    fun operationalText(size: Int, leading: Int, weight: FontWeight = FontWeight.Normal) =
+        TextStyle(fontFamily = family, fontSize = size.sp, lineHeight = leading.sp, fontWeight = weight, letterSpacing = 0.sp)
+    return Typography(
     displayLarge = operationalText(44, 56, FontWeight.Bold),
     displayMedium = operationalText(36, 48, FontWeight.Bold),
     displaySmall = operationalText(30, 40, FontWeight.Bold),
@@ -163,6 +177,7 @@ private val OperationalTypography = Typography(
     labelMedium = operationalText(12, 18, FontWeight.Medium),
     labelSmall = operationalText(11, 17, FontWeight.Medium),
 )
+}
 
 private val OperationalShapes = Shapes(
     extraSmall = HiltechShape.small,
@@ -214,7 +229,7 @@ fun HiltechOperationalTheme(
         onErrorContainer = palette.blockedText,
     )
     CompositionLocalProvider(LocalHiltechOperationalColors provides palette) {
-        MaterialTheme(colorScheme = scheme, typography = OperationalTypography, shapes = OperationalShapes, content = content)
+        MaterialTheme(colorScheme = scheme, typography = operationalTypography(), shapes = OperationalShapes, content = content)
     }
 }
 

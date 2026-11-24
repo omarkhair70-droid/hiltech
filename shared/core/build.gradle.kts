@@ -41,6 +41,7 @@ kotlin {
             implementation(compose.animation)
             implementation(compose.material3)
             implementation(compose.ui)
+            implementation(compose.components.resources)
             api(libs.androidx.room3.runtime)
             implementation(libs.androidx.sqlite.bundled)
             implementation(libs.kotlinx.coroutines.core)
@@ -73,6 +74,10 @@ kotlin {
 dependencies {
     add("kspAndroid", libs.androidx.room3.compiler)
     add("kspDesktop", libs.androidx.room3.compiler)
+}
+
+compose.resources {
+    packageOfResClass = "com.hiltech.shared.core.resources"
 }
 
 room3 {
