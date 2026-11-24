@@ -1,5 +1,7 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -193,6 +195,54 @@ internal fun NativeWorkspacePane(
                     workspace.content(onExit)
                 }
             }
+        }
+    }
+}
+
+/** Host supplies only configured routes and retains the original source-owned
+ * API checks. Selecting a route never grants access or performs a command. */
+data class NativeOperationArea(
+    val id: String,
+    val title: String,
+    val description: String,
+    val content: @Composable () -> Unit,
+)
+
+@Composable
+fun NativeOperationAreas(title: String, description: String, areas: List<NativeOperationArea>) {
+    val colors = LocalHiltechOperationalColors.current
+    var requested by remember { mutableStateOf<String?>(null) }
+    val current = areas.firstOrNull { it.id == requested }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        if (current == null) {
+            HiltechSectionHeading("OPERATIONS", title, description)
+            if (areas.isEmpty()) Text("لا توجد عمليات متاحة في إعدادات التشغيل الحالية.")
+            areas.forEach { area ->
+                Surface(onClick = { requested = area.id }, modifier = Modifier.fillMaxWidth(),
+                    color = colors.surface, contentColor = colors.primaryText, shape = HiltechShape.medium) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text(area.title, style = MaterialTheme.typography.titleMedium)
+                            Text(area.description, color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text("فتح", color = colors.accent, style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(title, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+                    Text(current.title, style = MaterialTheme.typography.titleLarge)
+                }
+                TextButton(onClick = { requested = null }) { Text("كل العمليات") }
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                areas.forEach { area ->
+                    FilterChip(selected = current.id == area.id, onClick = { requested = area.id }, label = { Text(area.title) })
+                }
+            }
+            key(current.id) { current.content() }
         }
     }
 }
