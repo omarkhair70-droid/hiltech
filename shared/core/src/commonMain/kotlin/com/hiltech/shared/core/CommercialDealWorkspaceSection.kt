@@ -44,6 +44,7 @@ data class CommercialDealWorkspaceState(
     val errorCode: String? = null,
     val customerQuote: ClientQuoteDto? = null,
     val quoteBusy: Boolean = false,
+    val deliveryCapabilities: com.hiltech.shared.core.commercial.CommercialDeliveryCapabilitiesDto? = null,
     val dispatchHistory: List<CommercialQuoteDispatchDto> = emptyList(),
     val emailHistory: List<com.hiltech.shared.core.commercial.CommercialQuoteEmailStatusDto> = emptyList(),
     val whatsappHistory: List<com.hiltech.shared.core.commercial.CommercialWhatsappStatusDto> = emptyList(),
@@ -172,7 +173,7 @@ fun CommercialDealWorkspaceSection(
                 )
                 CommercialStage.QUOTE -> CommercialQuotePanel(
                     detail, state.canWrite, state.canRelease, onAction,
-                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote, state.dispatchHistory, onRecordDispatch, state.emailHistory, onSendEmail, state.defaultPaymentTerms, state.defaultDeliveryTerms, state.whatsappHistory, onSendWhatsapp,
+                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote, state.dispatchHistory, onRecordDispatch, state.emailHistory, onSendEmail, state.defaultPaymentTerms, state.defaultDeliveryTerms, state.whatsappHistory, onSendWhatsapp, state.deliveryCapabilities,
                 )
                 CommercialStage.AWARD -> CommercialAwardPanel(
                     detail, state.canAward, state.canCreateProject, onAction,
@@ -452,6 +453,7 @@ private fun CommercialQuotePanel(
     defaultDeliveryTerms: String,
     whatsappHistory: List<com.hiltech.shared.core.commercial.CommercialWhatsappStatusDto>,
     onSendWhatsapp: ((String, String) -> Unit)?,
+    deliveryCapabilities: com.hiltech.shared.core.commercial.CommercialDeliveryCapabilitiesDto?,
 ) {
     val op=deal.opportunity
     Text(hiltechText("عروض الأسعار والاعتماد", "Customer quotations & approval"), style=MaterialTheme.typography.titleMedium)
@@ -463,8 +465,15 @@ private fun CommercialQuotePanel(
             if (customerQuote?.quoteId == q.id) {
                 ReleasedQuotePreview(customerQuote)
                 if (onExport != null) Button(enabled = !quoteBusy, onClick = { onExport(q.id) }) { Text(hiltechText("تصدير PDF", "Export PDF")) }
-                QuoteEmailPanel(q.id, emailHistory, quoteBusy, if (canWrite || canRelease) onSendEmail else null)
-                QuoteWhatsappPanel(q.id, whatsappHistory, quoteBusy, if (canWrite || canRelease) onSendWhatsapp else null)
+                if (canWrite || canRelease) {
+                    if (deliveryCapabilities == null) Text(hiltechText("تعذر التحقق من قنوات الإرسال. حفظ المستند متاح.", "Could not verify delivery channels. Document export remains available."))
+                    else {
+                        if (!deliveryCapabilities.email) Text(hiltechText("البريد المباشر غير مهيأ؛ راجع الحسابات المتصلة.", "Direct email is not configured; review connected accounts."))
+                        if (!deliveryCapabilities.whatsapp) Text(hiltechText("واتساب المباشر غير مهيأ؛ راجع الحسابات المتصلة.", "Direct WhatsApp is not configured; review connected accounts."))
+                    }
+                }
+                QuoteEmailPanel(q.id, emailHistory, quoteBusy, if ((canWrite || canRelease) && deliveryCapabilities?.email == true) onSendEmail else null)
+                QuoteWhatsappPanel(q.id, whatsappHistory, quoteBusy, if ((canWrite || canRelease) && deliveryCapabilities?.whatsapp == true) onSendWhatsapp else null)
                 QuoteDispatchPanel(q.id, dispatchHistory, quoteBusy,
                     if (canWrite || canRelease) onRecordDispatch else null)
             }

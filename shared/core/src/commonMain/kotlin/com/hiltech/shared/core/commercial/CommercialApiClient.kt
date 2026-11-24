@@ -355,6 +355,9 @@ data class CommercialQuoteDispatchDto(val id: String, val channel: String, val r
 data class RecordCommercialQuoteDispatchDto(val operationId: String, val channel: String, val recipientReference: String)
 
 @Serializable
+data class CommercialDeliveryCapabilitiesDto(val email: Boolean = false,val whatsapp: Boolean = false)
+
+@Serializable
 data class CommercialWhatsappDto(val operationId: String,val recipient: String,val consentConfirmed: Boolean)
 @Serializable
 data class CommercialWhatsappStatusDto(val id: String,val recipient: String,val state: String,val createdAt: String)
@@ -562,6 +565,9 @@ class CommercialApiClient(
     suspend fun recordDispatch(quoteId: String, request: RecordCommercialQuoteDispatchDto, installationId: String) =
         command("/v1/commercial/quotes/" + quoteId + "/dispatch-history", request.operationId, installationId,
             json.encodeToString(RecordCommercialQuoteDispatchDto.serializer(), request))
+
+    suspend fun deliveryCapabilities(quoteId: String, installationId: String): CommercialDeliveryCapabilitiesDto =
+        api.request(method=HttpMethod.Get,path="/v1/commercial/quotes/$quoteId/delivery-capabilities",options=HiltechRequestOptions(installationId=installationId),decode={json.decodeFromString(CommercialDeliveryCapabilitiesDto.serializer(),it)})
 
     suspend fun whatsappHistory(quoteId: String,installationId: String): List<CommercialWhatsappStatusDto> =
         api.request(method=HttpMethod.Get,path="/v1/commercial/quotes/$quoteId/whatsapp-history",options=HiltechRequestOptions(installationId=installationId),

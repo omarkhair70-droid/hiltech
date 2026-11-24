@@ -210,6 +210,15 @@ class CommercialController(private val service: CommercialService, private val e
     fun quotePdf(http: HttpServletRequest, @PathVariable quoteId: String) =
         service.customerPdf(quoteId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
 
+    @GetMapping("/quotes/{quoteId}/delivery-capabilities")
+    fun deliveryCapabilities(http: HttpServletRequest,@PathVariable quoteId: String): Map<String,Boolean> {
+        val id = quoteId.commercialUuid()
+        val actor = HiltechRequestContext.current(http).requireIdentityId()
+        service.customerQuote(id,actor)
+        return mapOf("email" to runCatching { email.available(id,actor) }.getOrDefault(false),
+            "whatsapp" to runCatching { whatsapp.available(id,actor) }.getOrDefault(false))
+    }
+
     @GetMapping("/quotes/{quoteId}/whatsapp-history")
     fun whatsappHistory(http: HttpServletRequest,@PathVariable quoteId: String) =
         whatsapp.history(quoteId.commercialUuid(),HiltechRequestContext.current(http).requireIdentityId())

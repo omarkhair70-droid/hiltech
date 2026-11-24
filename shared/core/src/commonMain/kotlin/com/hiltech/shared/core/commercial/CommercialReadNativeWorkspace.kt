@@ -69,6 +69,7 @@ fun commercialReadNativeWorkspace(
         var dispatchHistory by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialQuoteDispatchDto>>(emptyList()) }
         var emailHistory by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialQuoteEmailStatusDto>>(emptyList()) }
         var whatsappHistory by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialWhatsappStatusDto>>(emptyList()) }
+        var deliveryCapabilities by remember(identityId,organizationId,installationId) { mutableStateOf<CommercialDeliveryCapabilitiesDto?>(null) }
         var quoteBusy by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
         var feedback by remember(identityId, organizationId, installationId) { mutableStateOf<String?>(null) }
         var items by remember(identityId, organizationId, installationId) {
@@ -156,6 +157,7 @@ fun commercialReadNativeWorkspace(
             detailLoading = true
             detail = null
             customerQuote = null
+            deliveryCapabilities = null
             dispatchHistory = emptyList()
             emailHistory = emptyList()
             whatsappHistory = emptyList()
@@ -181,7 +183,7 @@ fun commercialReadNativeWorkspace(
         val canWrite = !saving && capabilities?.canWrite == true
         val canRelease = !saving && capabilities?.canRelease == true
         val canAward = !saving && capabilities?.canAward == true
-        val message = feedback?.let { if (it == "COMMAND_NOT_CONFIRMED") hiltechText("لم يتم تأكيد العملية. أعد المحاولة بنفس البيانات.", "Action not confirmed. Retry with the same values.") else if (it == "PDF_EXPORT_HANDOFF") hiltechText("تم تسليم ملف PDF لنافذة الحفظ أو المشاركة. لم يُسجّل إرسال تلقائي.", "PDF handed to save/share. No automatic dispatch was recorded.") else hiltechText("حالة العملية: ", "Operation state: ") + it }
+        val message = feedback?.let { if (it in setOf("MAIL_CONNECTED","WHATSAPP_CONNECTED")) hiltechText("تم حفظ الاتصال بعد التحقق.", "Connection saved after verification.") else if (it in setOf("MAIL_DISCONNECTED","WHATSAPP_DISCONNECTED")) hiltechText("تم فصل الاتصال المحفوظ.", "Saved connection removed.") else if (it in setOf("MAIL_CONNECTION_NOT_CONFIRMED","WHATSAPP_CONNECTION_NOT_CONFIRMED","MAIL_DISCONNECT_NOT_CONFIRMED","WHATSAPP_DISCONNECT_NOT_CONFIRMED")) hiltechText("لم يتم تأكيد تغيير الاتصال. تحقق من الإعدادات.", "Connection change not confirmed. Check settings.") else if (it == "COMMAND_NOT_CONFIRMED") hiltechText("لم يتم تأكيد العملية. أعد المحاولة بنفس البيانات.", "Action not confirmed. Retry with the same values.") else if (it == "PDF_EXPORT_HANDOFF") hiltechText("تم تسليم ملف PDF لنافذة الحفظ أو المشاركة. لم يُسجّل إرسال تلقائي.", "PDF handed to save/share. No automatic dispatch was recorded.") else hiltechText("حالة العملية: ", "Operation state: ") + it }
         val documentSettings = settings
         if (showSettings && capabilities?.canRelease == true && documentSettings != null) {
             Column(Modifier.fillMaxSize()) {
@@ -323,6 +325,7 @@ fun commercialReadNativeWorkspace(
                             errorCode = error,
                             customerQuote = customerQuote,
                             quoteBusy = quoteBusy,
+                            deliveryCapabilities = deliveryCapabilities,
                             dispatchHistory = dispatchHistory,
                             emailHistory = emailHistory,
                             whatsappHistory = whatsappHistory,
@@ -335,6 +338,7 @@ fun commercialReadNativeWorkspace(
                             if (!quoteBusy && detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) {
                                 quoteBusy = true
                                 customerQuote = null
+                                deliveryCapabilities = null
                                 dispatchHistory = emptyList()
                                 emailHistory = emptyList()
                                 whatsappHistory = emptyList()
@@ -347,7 +351,9 @@ fun commercialReadNativeWorkspace(
                                         val history = optionalHistory { client.dispatchHistory(quoteId, installationId) }
                                         val emails = optionalHistory { client.emailHistory(quoteId, installationId) }
                                         val whatsapp = optionalHistory { client.whatsappHistory(quoteId, installationId) }
+                                        val channels = try { client.deliveryCapabilities(quoteId,installationId) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
                                         if (loaded.quoteId == quoteId && detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) {
+                                            deliveryCapabilities = channels
                                             customerQuote = loaded
                                             dispatchHistory = history
                                             emailHistory = emails
@@ -360,7 +366,7 @@ fun commercialReadNativeWorkspace(
                             }
                         },
                         onSendWhatsapp = { quoteId, recipient ->
-                            if ((canWrite || canRelease) && !quoteBusy && customerQuote?.quoteId == quoteId && newOperationId != null) {
+                            if (deliveryCapabilities?.whatsapp == true && (canWrite || canRelease) && !quoteBusy && customerQuote?.quoteId == quoteId && newOperationId != null) {
                                 quoteBusy = true
                                 jobs.launch {
                                     try {
@@ -378,7 +384,7 @@ fun commercialReadNativeWorkspace(
                             }
                         },
                         onSendEmail = { quoteId, recipient ->
-                            if ((canWrite || canRelease) && !quoteBusy && customerQuote?.quoteId == quoteId && newOperationId != null) {
+                            if (deliveryCapabilities?.email == true && (canWrite || canRelease) && !quoteBusy && customerQuote?.quoteId == quoteId && newOperationId != null) {
                                 quoteBusy = true
                                 jobs.launch {
                                     try {

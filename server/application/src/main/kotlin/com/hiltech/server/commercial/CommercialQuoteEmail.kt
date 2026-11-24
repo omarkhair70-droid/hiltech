@@ -26,6 +26,10 @@ class CommercialQuoteEmail(
     @Value("\${hiltech.commercial.email-from:}") private val from: String,
 ) {
     fun available(): Boolean = from.isNotBlank() && mail.ifAvailable != null
+    fun available(id: UUID, actor: UUID): Boolean {
+        val company = commercial.quoteCompanyForDispatch(id,actor)
+        return connections.forSending(company) != null || (legacyCompany == company.toString() && available())
+    }
 
     private fun email(raw: String): String {
         val address = raw.trim()
