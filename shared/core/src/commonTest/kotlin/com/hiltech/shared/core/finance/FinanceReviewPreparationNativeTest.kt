@@ -241,4 +241,85 @@ class FinanceReviewPreparationNativeTest {
         }
     }
 
+    @Test
+    fun employeePreparationRequiresCorrectBankEvidenceAndOriginalApproval() {
+        val funding=FinanceReviewDraft(sourceId=source,policyApprovalId=proposal,bankLineId=install)
+        assertTrue(financeReviewDraftIsValid(FinanceReviewKind.EMPLOYEE_FUNDING,funding))
+        assertFalse(financeReviewDraftIsValid(FinanceReviewKind.EMPLOYEE_FUNDING,funding.copy(policyApprovalId="")))
+        val settlement=funding.copy(amount="12.5",documentEvidenceId=proposal,evidenceSha256="a".repeat(64))
+        assertTrue(financeReviewDraftIsValid(FinanceReviewKind.EMPLOYEE_SETTLEMENT,settlement))
+        val receipts=settlement.copy(settlementAction="IMPREST_RECEIPTS_ACCEPTED")
+        assertFalse(financeReviewDraftIsValid(FinanceReviewKind.EMPLOYEE_SETTLEMENT,receipts))
+        assertTrue(financeReviewDraftIsValid(FinanceReviewKind.EMPLOYEE_SETTLEMENT,receipts.copy(bankLineId="")))
+        assertTrue(financeReviewDraftIsValid(FinanceReviewKind.EXPENSE_REIMBURSEMENT,settlement))
+        assertFalse(financeReviewDraftIsValid(FinanceReviewKind.EXPENSE_REIMBURSEMENT,settlement.copy(amount="0")))
+    }
+
+    @Test
+    fun journalAndPeriodReviewRequireTheirCanonicalInitialStates() {
+        val journal=FinanceReviewDraft(sourceId=source,periodId=proposal,reference="ACCOUNTING-POLICY",
+            taxDisposition="TAX-POLICY",lines=listOf(
+                FinanceReviewJournalLine(source,"DEBIT","100"),
+                FinanceReviewJournalLine(install,"CREDIT","100")))
+        assertTrue(financeReviewDraftIsValid(FinanceReviewKind.AP_JOURNAL,journal))
+        assertTrue(financeReviewDraftIsValid(FinanceReviewKind.AR_JOURNAL,journal))
+        assertFalse(financeReviewDraftIsValid(FinanceReviewKind.AR_JOURNAL,journal.copy(lines=journal.lines.take(1))))
+        assertTrue(financeReviewCanRequest(FinanceReviewKind.AP_JOURNAL,"SEALED_AWAITING_POSTING_REVIEW",null))
+        assertTrue(financeReviewCanRequest(FinanceReviewKind.AR_JOURNAL,"SEALED_AWAITING_APPROVAL",null))
+        assertTrue(financeReviewCanRequest(FinanceReviewKind.PERIOD_CLOSE,"NOT_REQUESTED",null))
+        assertFalse(financeReviewCanRequest(FinanceReviewKind.PERIOD_CLOSE,"APPROVED",null))
+        assertFalse(financeReviewCanRequest(FinanceReviewKind.AP_JOURNAL,"PROPOSED",null))
+    }
+
+    @Test
+    fun employeeFundingPrepareUsesNativeSourceAndNeverRecords() = runBlocking {
+        var requests=0
+        val client=HttpClient(MockEngine { request ->
+            requests++
+            assertEquals(1,requests)
+            assertEquals("POST",request.method.value)
+            assertEquals("/v1/finance/organizations/$org/employee-funding/EMPLOYEE_ADVANCE/$source/prepare",request.url.encodedPath)
+            assertEquals(operation,request.headers["Idempotency-Key"])
+            respond("""{"proposalId":"$proposal","organizationId":"$org","kind":"EMPLOYEE_ADVANCE",
+                "draftId":"$source","employeeId":"$source","amount":"50","currency":"EGP",
+                "state":"PROPOSED","bankStatementLineId":"$install"}""",
+                HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+        })
+        val receipt=financePrepareReviewProposal(apis(client),org,install,FinanceReviewAttempt(
+            FinanceReviewKind.EMPLOYEE_FUNDING,
+            FinanceReviewDraft(sourceId=source,policyApprovalId=proposal,bankLineId=install),operation))
+        assertEquals(proposal,receipt.id)
+        assertEquals("PROPOSED",receipt.state)
+        assertEquals(1,requests)
+    }
+
+    @Test
+    fun periodCloseReviewReadsCurrentLedgerBeforeRequest() = runBlocking {
+        var requests=0
+        val client=HttpClient(MockEngine { request ->
+            requests++
+            val state=if(requests==1) {
+                assertEquals("GET",request.method.value)
+                assertEquals("/v1/finance/organizations/$org/periods/$source/close",request.url.encodedPath)
+                "NOT_REQUESTED"
+            } else {
+                assertEquals(2,requests)
+                assertEquals("POST",request.method.value)
+                assertEquals("/v1/finance/organizations/$org/periods/$source/request-close-review",request.url.encodedPath)
+                assertEquals(operation,request.headers["Idempotency-Key"])
+                "PENDING"
+            }
+            val approval=if(requests==1) "null" else "\"$proposal\""
+            respond("""{"organizationId":"$org","periodId":"$source",
+                "ledgerSnapshotSha256":"${"a".repeat(64)}","journalCount":2,"sourceVersion":1,
+                "state":"$state","approvalRequestId":$approval}""",
+                HttpStatusCode.OK,headersOf(HttpHeaders.ContentType,"application/json"))
+        })
+        val receipt=financeRequestIndependentReview(apis(client),org,install,
+            FinanceReviewKind.PERIOD_CLOSE,source,operation)
+        assertEquals("PENDING",receipt.state)
+        assertEquals(proposal,receipt.approvalRequestId)
+        assertEquals(2,requests)
+    }
+
 }
