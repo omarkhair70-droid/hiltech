@@ -2,6 +2,7 @@ package com.hiltech.shared.core
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Alignment
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,12 +10,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -175,16 +178,26 @@ fun NativeOperationalWorkspaceHub(
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(
-                modifier = Modifier.fillMaxWidth(0.97f).fillMaxHeight(0.95f),
+                modifier = Modifier.widthIn(max = 1000.dp).fillMaxWidth(0.97f).fillMaxHeight(0.95f),
                 tonalElevation = 2.dp,
                 shape = MaterialTheme.shapes.medium,
             ) {
                 Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            selected.label,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         OutlinedButton(onClick = { selectedId = null }) {
-                            Text("الرجوع لمساحات العمل")
+                            Text("رجوع")
                         }
-                        Text(selected.label, style = MaterialTheme.typography.titleMedium)
                     }
                     Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         key(scopeKey, selected.id) {
