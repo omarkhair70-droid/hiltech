@@ -10,6 +10,25 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
+data class CommercialDocumentProfileDto(
+    val legalName: String = "",
+    val address: String = "",
+    val phone: String = "",
+    val email: String = "",
+    val website: String = "",
+    val registration: String = "",
+    val taxNumber: String = "",
+    val logoBase64: String = "",
+    val quotePrefix: String = "Q",
+    val paymentTerms: String = "",
+    val deliveryTerms: String = "",
+)
+@Serializable
+data class CommercialDocumentSettingsDto(val version: Long, val profile: CommercialDocumentProfileDto)
+@Serializable
+data class SaveCommercialDocumentSettingsDto(val operationId: String, val organizationId: String, val baseVersion: Long, val profile: CommercialDocumentProfileDto)
+
+@Serializable
 data class CommercialCapabilitiesDto(val canWrite: Boolean, val canCost: Boolean, val canRelease: Boolean, val canAward: Boolean)
 
 @Serializable
@@ -334,6 +353,13 @@ class CommercialApiClient(
     private val api: HiltechApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
 ) {
+    suspend fun documentSettings(organizationId: String, installationId: String): CommercialDocumentSettingsDto =
+        api.request(method = HttpMethod.Get, path = "/v1/commercial/document-settings?organizationId=" + organizationId,
+            options = HiltechRequestOptions(installationId = installationId), decode = { json.decodeFromString(CommercialDocumentSettingsDto.serializer(), it) })
+
+    suspend fun saveDocumentSettings(request: SaveCommercialDocumentSettingsDto, installationId: String) =
+        command("/v1/commercial/document-settings", request.operationId, installationId, json.encodeToString(SaveCommercialDocumentSettingsDto.serializer(),request))
+
     suspend fun capabilities(organizationId: String, installationId: String): CommercialCapabilitiesDto =
         api.request(method = HttpMethod.Get, path = "/v1/commercial/capabilities?organizationId=" + organizationId,
             options = HiltechRequestOptions(installationId = installationId),

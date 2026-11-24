@@ -26,6 +26,8 @@ internal object CommercialQuotePdf {
     fun render(quote: ClientCommercialQuote): ByteArray {
         val regular = requireNotNull(javaClass.getResourceAsStream("/commercial-fonts/plex_regular.ttf"))
             .use { Font.createFont(Font.TRUETYPE_FONT, it) }
+        val profile = quote.issuerProfile
+        val logo = profile?.logoBase64?.takeIf { it.isNotBlank() }?.let { javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(Base64.getDecoder().decode(it))) }
         val width = 1190
         val height = 1684
         val margin = 85
@@ -48,7 +50,10 @@ internal object CommercialQuotePdf {
                 graphics.color = accent
                 graphics.fillRect(margin, 50, 64, 8)
                 graphics.font = regular.deriveFont(36f)
-                graphics.drawString("HILTECH", margin, 106)
+                if (logo != null) {
+                    val scale = minOf(280.0 / logo.width, 90.0 / logo.height)
+                    graphics.drawImage(logo, margin, 60, (logo.width*scale).toInt().coerceAtLeast(1), (logo.height*scale).toInt().coerceAtLeast(1), null)
+                } else graphics.drawString("HILTECH", margin, 106)
                 graphics.font = regular.deriveFont(21f)
                 graphics.color = ink
                 graphics.drawString(quote.quoteCode + "  /  v" + quote.versionNumber, margin, 148)
@@ -61,8 +66,10 @@ internal object CommercialQuotePdf {
                 graphics.font = regular.deriveFont(20f)
                 graphics.drawString("HILTECH  /  " + pageNumber, margin, height - 58)
                 graphics.font = regular.deriveFont(17f)
-                graphics.drawString("D1 Tiba Building - Zahraa El Maadi - Cairo, Egypt", margin + 190, height - 60)
-                graphics.drawString("01000087808   |   info@hiltech-eg.com   |   hiltech-eg.com", margin + 190, height - 34)
+                if (profile == null) {
+                    graphics.drawString("D1 Tiba Building - Zahraa El Maadi - Cairo, Egypt", margin + 190, height - 60)
+                    graphics.drawString("01000087808   |   info@hiltech-eg.com   |   hiltech-eg.com", margin + 190, height - 34)
+                }
                 graphics.dispose()
                 val page = PDPage(PDRectangle.A4)
                 document.addPage(page)
@@ -92,7 +99,12 @@ internal object CommercialQuotePdf {
             begin()
             paragraph("QUOTATION  /  عرض سعر", 42f, true)
             paragraph("Client / العميل: " + (quote.clientName ?: quote.clientOrganizationId))
-            paragraph("Issuer / جهة الإصدار: " + (quote.issuerName ?: "HILTECH"))
+            paragraph("Issuer / جهة الإصدار: " + (profile?.legalName ?: quote.issuerName ?: "HILTECH"))
+            profile?.let { p ->
+                listOf(p.address, listOf(p.phone,p.email,p.website).filter { it.isNotBlank() }.joinToString(" | "),
+                    p.registration.takeIf { it.isNotBlank() }?.let { "Registration / السجل التجاري: " + it }.orEmpty(),
+                    p.taxNumber.takeIf { it.isNotBlank() }?.let { "Tax ID / الرقم الضريبي: " + it }.orEmpty()).filter { it.isNotBlank() }.forEach { paragraph(it,22f) }
+            }
             paragraph("Issued / تاريخ الإصدار: " + (quote.releasedAt ?: "—"))
             paragraph("Valid until / صالح حتى: " + quote.validityDate)
             paragraph("ITEMS / البنود", 30f, true)

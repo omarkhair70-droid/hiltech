@@ -40,6 +40,14 @@ class CommercialController(private val service: CommercialService, private val e
         HiltechRequestContext.current(http).correlationId,
     )
 
+    @GetMapping("/document-settings")
+    fun documentSettings(http: HttpServletRequest, @RequestParam organizationId: String) =
+        service.documentSettings(organizationId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())
+
+    @PostMapping("/document-settings")
+    fun saveDocumentSettings(http: HttpServletRequest, @RequestHeader("Idempotency-Key") key: String, @RequestBody body: SaveCommercialDocumentSettingsRequest) =
+        service.saveDocumentSettings(body,operation(key,body.operationId),HiltechRequestContext.current(http).requireIdentityId(),HiltechRequestContext.current(http).correlationId)
+
     @GetMapping("/capabilities")
     fun capabilities(http: HttpServletRequest, @RequestParam organizationId: String) =
         service.capabilities(organizationId.commercialUuid(), HiltechRequestContext.current(http).requireIdentityId())

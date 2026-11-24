@@ -165,6 +165,27 @@ class CommercialService(
         return result(target,replay,"OPEN",correlation)
     }
 
+    fun documentSettings(company: UUID, actor: UUID): CommercialDocumentSettingsDto {
+        access.require(actor, company, "SALES_RELEASE")
+        return CommercialDocumentSettings.read(jdbc, company)
+    }
+
+    fun saveDocumentSettings(r: SaveCommercialDocumentSettingsRequest,key: UUID,actor: UUID,correlation: String): CommercialCommandResult {
+        val company = r.organizationId.commercialUuid()
+        access.require(actor, company, "SALES_RELEASE")
+        CommercialDocumentSettings.validate(r.profile)
+        val fingerprint = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(r.toString().toByteArray(Charsets.UTF_8)))
+        val replay = execute(key,actor,"COMMERCIAL_DOCUMENT_SETTINGS",company,fingerprint,correlation) {
+            access.require(actor, company, "SALES_RELEASE")
+            jdbc.queryForObject("SELECT id FROM organization WHERE id=? FOR UPDATE", UUID::class.java,company)
+            val current = CommercialDocumentSettings.read(jdbc,company)
+            if (current.version != r.baseVersion) throw commercialError("COMMERCIAL_SETTINGS_STALE","Reload settings before saving.",HttpStatus.CONFLICT)
+            CommercialDocumentSettings.save(jdbc,company,current.version+1,r.profile,actor,now())
+            audit(actor,"COMMERCIAL_DOCUMENT_SETTINGS_SAVED",company,"SAVED",correlation)
+        }
+        return result(company,replay,"SAVED",correlation)
+    }
+
     fun capabilities(company: UUID, actor: UUID): Map<String, Boolean> = access.capabilities(actor, company)
 
     fun createClient(r: CreateCommercialClientRequest, key: UUID, actor: UUID, correlation: String): CommercialCommandResult {
@@ -476,7 +497,7 @@ class CommercialService(
                     delivery_terms,exclusions,validity_date,created_by,created_at,discount_amount,tax_amount)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 target,parent["organization_id"],id,parent["client_organization_id"],boq["scope_version_id"],
-                boqId,next("commercial_quote_version",id),"Q-"+target.toString().uppercase(),
+                boqId,next("commercial_quote_version",id),CommercialDocumentSettings.read(jdbc,parent["organization_id"] as UUID).profile.quotePrefix+"-"+target.toString().uppercase(),
                 boq["currency"],total,payment,delivery,r.exclusions.trim(),validity,actor,now(),r.discountAmount,r.taxAmount,
             )
             lines.forEachIndexed { i,l ->
@@ -576,6 +597,7 @@ class CommercialService(
                 """UPDATE commercial_quote_version SET state='RELEASED',released_at=?,version=version+1
                    WHERE id=? AND version=? AND state='APPROVAL_PENDING'""",now(),id,q["version"]!!,
             ) != 1) throw commercialError("COMMERCIAL_QUOTE_STALE","Quote changed.",HttpStatus.CONFLICT)
+            CommercialDocumentSettings.freeze(jdbc,id,company)
             audit(actor,"COMMERCIAL_QUOTE_RELEASED",id,"RELEASED",correlation)
         }
         return result(id,replay,"RELEASED",correlation)
@@ -612,6 +634,7 @@ class CommercialService(
             clientName=v["client_name"] as? String, issuerName=v["issuer_name"] as? String, releasedAt=v["released_at"]?.toString(),
             subtotal=lines.fold(BigDecimal.ZERO) { sum,l -> sum + commercialExactLineTotal(l.quantity,l.unitPrice) },
             discountAmount=v["discount_amount"] as BigDecimal, taxAmount=v["tax_amount"] as BigDecimal,
+            issuerProfile=CommercialDocumentSettings.snapshot(jdbc,id),
         )
     }
 

@@ -150,6 +150,7 @@ data class ClientCommercialQuote(
     val subtotal: BigDecimal? = null,
     val discountAmount: BigDecimal = BigDecimal.ZERO,
     val taxAmount: BigDecimal = BigDecimal.ZERO,
+    val issuerProfile: CommercialDocumentProfile? = null,
 )
 data class ClientCommercialQuoteLine(
     val lineCode: String,
