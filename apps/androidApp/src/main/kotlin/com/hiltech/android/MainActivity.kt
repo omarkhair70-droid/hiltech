@@ -296,6 +296,20 @@ class MainActivity : ComponentActivity() {
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
+                                exportPdf = { filename, bytes ->
+                                    val safe = filename.replace(Regex("[^A-Za-z0-9._-]"), "_")
+                                    val folder = File(cacheDir, "commercial-exports").apply { mkdirs() }
+                                    val file = File(folder, safe)
+                                    file.writeBytes(bytes)
+                                    val uri = FileProvider.getUriForFile(this@MainActivity, packageName + ".field-evidence", file)
+                                    val share = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/pdf"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    startActivity(Intent.createChooser(share, null))
+                                    true
+                                },
                             ))
                         }
                         if (BuildConfig.HILTECH_HANDOVER_READ_ENABLED) {

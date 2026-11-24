@@ -17,6 +17,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import com.hiltech.shared.core.CommercialDealAction
 import com.hiltech.shared.core.design.hiltechText
 import kotlinx.coroutines.launch
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -32,12 +34,14 @@ import kotlinx.coroutines.CancellationException
  * Phase 10 native workbench. Capabilities come from current company authority;
  * every mutation is still independently authorized by the server.
  */
+@OptIn(ExperimentalEncodingApi::class)
 fun commercialReadNativeWorkspace(
     client: CommercialApiClient,
     identityId: String,
     organizationId: String,
     installationId: String,
     newOperationId: (() -> String)? = null,
+    exportPdf: (suspend (String, ByteArray) -> Boolean)? = null,
 ): NativeOperationalWorkspace = NativeOperationalWorkspace(
     id = "commercial-read",
     label = "المبيعات والمناقصات",
@@ -54,6 +58,8 @@ fun commercialReadNativeWorkspace(
         var summaries by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialPrivateCostSummaryDto>>(emptyList()) }
         var saving by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
         val retryIds = remember(identityId, organizationId, installationId) { mutableMapOf<Any, String>() }
+        var customerQuote by remember(identityId, organizationId, installationId) { mutableStateOf<ClientQuoteDto?>(null) }
+        var quoteBusy by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
         var feedback by remember(identityId, organizationId, installationId) { mutableStateOf<String?>(null) }
         var items by remember(identityId, organizationId, installationId) {
             mutableStateOf<List<CommercialOpportunityDto>>(emptyList())
@@ -125,6 +131,7 @@ fun commercialReadNativeWorkspace(
             if (id !in items.map { it.id }) return@LaunchedEffect
             detailLoading = true
             detail = null
+            customerQuote = null
             costs = emptyList()
             summaries = emptyList()
             try {
@@ -212,9 +219,43 @@ fun commercialReadNativeWorkspace(
                             privateCostSummaries = summaries,
                             deal = detail,
                             errorCode = error,
+                            customerQuote = customerQuote,
+                            quoteBusy = quoteBusy,
                         ),
                         onRefresh = { refreshVersion++ },
                         onAction = { action -> perform(action) { coordinator.dispatch(action, it) } },
+                        onPreviewQuote = { quoteId ->
+                            if (!quoteBusy && detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) {
+                                quoteBusy = true
+                                customerQuote = null
+                                jobs.launch {
+                                    try {
+                                        val loaded = client.customerQuote(quoteId, installationId)
+                                        if (loaded.quoteId == quoteId && detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) customerQuote = loaded
+                                    } catch (cancelled: CancellationException) { throw cancelled }
+                                    catch (_: Exception) { error = "QUOTE_PREVIEW_UNAVAILABLE" }
+                                    finally { quoteBusy = false }
+                                }
+                            }
+                        },
+                        onExportQuote = exportPdf?.let { exporter -> { quoteId: String ->
+                            if (!quoteBusy && customerQuote?.quoteId == quoteId &&
+                                detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) {
+                                quoteBusy = true
+                                jobs.launch {
+                                    try {
+                                        val pdf = client.customerPdf(quoteId, installationId)
+                                        val bytes = Base64.decode(pdf.base64)
+                                        require(bytes.size > 5 && bytes.copyOfRange(0, 5).decodeToString() == "%PDF-")
+                                        if (customerQuote?.quoteId == quoteId && detail?.quotes?.any { it.id == quoteId && it.state == "RELEASED" } == true) {
+                                            if (exporter(pdf.filename, bytes)) feedback = "PDF_EXPORTED"
+                                        }
+                                    } catch (cancelled: CancellationException) { throw cancelled }
+                                    catch (_: Exception) { error = "QUOTE_EXPORT_UNAVAILABLE" }
+                                    finally { quoteBusy = false }
+                                }
+                            }
+                        } },
                     )
                 }
             }

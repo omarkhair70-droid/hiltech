@@ -2877,6 +2877,21 @@ fun main() {
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
+                                exportPdf = { filename, bytes ->
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                        SwingUtilities.invokeAndWait {
+                                            val picker = javax.swing.JFileChooser()
+                                            picker.selectedFile = java.io.File(filename.replace(Regex("[^A-Za-z0-9._-]"), "_"))
+                                            if (picker.showSaveDialog(null) == javax.swing.JFileChooser.APPROVE_OPTION) {
+                                                val selected = picker.selectedFile
+                                                val target = if (selected.name.endsWith(".pdf", true)) selected else java.io.File(selected.parentFile, selected.name + ".pdf")
+                                                if (!target.exists() || javax.swing.JOptionPane.showConfirmDialog(null, "Replace existing PDF?", "HILTECH", javax.swing.JOptionPane.YES_NO_OPTION) == javax.swing.JOptionPane.YES_OPTION) chosen.set(target)
+                                            }
+                                        }
+                                        chosen.get()?.let { it.writeBytes(bytes); true } ?: false
+                                    }
+                                },
                             ))
                         }
                         if (System.getenv("HILTECH_HANDOVER_READ_UI_ENABLED")

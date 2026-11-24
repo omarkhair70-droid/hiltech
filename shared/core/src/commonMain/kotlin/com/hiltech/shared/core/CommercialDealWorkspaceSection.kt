@@ -4,6 +4,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import com.hiltech.shared.core.design.*
+import com.hiltech.shared.core.commercial.ClientQuoteDto
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
@@ -37,6 +40,8 @@ data class CommercialDealWorkspaceState(
     val privateCostLines: List<CommercialPrivateCostLineDto> = emptyList(),
     val privateCostSummaries: List<CommercialPrivateCostSummaryDto> = emptyList(),
     val errorCode: String? = null,
+    val customerQuote: ClientQuoteDto? = null,
+    val quoteBusy: Boolean = false,
 )
 
 data class CommercialDraftLine(
@@ -107,6 +112,8 @@ fun CommercialDealWorkspaceSection(
     state: CommercialDealWorkspaceState,
     onRefresh: () -> Unit,
     onAction: (CommercialDealAction) -> Unit,
+    onPreviewQuote: ((String) -> Unit)? = null,
+    onExportQuote: ((String) -> Unit)? = null,
 ) {
     if (!state.enabled) {
         Text("Commercial operations are locked until company authorization is configured.")
@@ -155,6 +162,7 @@ fun CommercialDealWorkspaceSection(
                 )
                 CommercialStage.QUOTE -> CommercialQuotePanel(
                     detail, state.canWrite, state.canRelease, onAction,
+                    state.privateCostSummaries, state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote,
                 )
                 CommercialStage.AWARD -> CommercialAwardPanel(
                     detail, state.canAward, state.canCreateProject, onAction,
@@ -372,8 +380,9 @@ private fun CommercialBoqPanel(
     var internalCost by remember(op.id) { mutableStateOf("") }
     var sellPrice by remember(op.id) { mutableStateOf("") }
     val lines = remember(op.id) { mutableStateListOf<CommercialDraftLine>() }
-    OutlinedTextField(value=scopeVersionId,onValueChange={scopeVersionId=it},label={Text("Scope version ID")})
-    OutlinedTextField(value=currency,onValueChange={currency=it.uppercase()},label={Text("ISO currency")})
+    HiltechRecordPicker(hiltechText("إصدار نطاق العمل", "Scope version"), scopeVersionId,
+        deal.scopeVersions.map { HiltechRecordChoice(it.id, "v" + it.versionNumber, it.description) }, { scopeVersionId = it }, allowKnownReference = false)
+    OutlinedTextField(value=currency,onValueChange={currency=it.uppercase()},label={Text(hiltechText("رمز العملة", "ISO currency"))})
     Text("Draft lines: " + lines.size)
     OutlinedTextField(value=code,onValueChange={code=it},label={Text("Line code")})
     OutlinedTextField(value=description,onValueChange={description=it},label={Text("Work / material description")})
@@ -399,7 +408,13 @@ private fun CommercialBoqPanel(
             code=""; description=""; quantity=""; unit=""; internalCost=""; sellPrice=""
         },
     ) { Text("Add line to draft") }
-    lines.forEach { Text(it.lineCode + " · " + it.description) }
+    lines.toList().forEach { line ->
+        HiltechPanel(Modifier.fillMaxWidth()) {
+            Text(line.lineCode + " · " + line.description)
+            Text(line.quantity + " " + line.unit + " × " + line.sellUnitPrice + " " + currency)
+            OutlinedButton(onClick = { lines.remove(line) }) { Text(hiltechText("حذف البند", "Remove line")) }
+        }
+    }
     Button(
         enabled = lines.isNotEmpty() && scopeVersionId.isNotBlank() &&
             currency.matches(Regex("^[A-Z]{3}$")),
@@ -415,12 +430,24 @@ private fun CommercialQuotePanel(
     canWrite: Boolean,
     canRelease: Boolean,
     onAction: (CommercialDealAction) -> Unit,
+    boqVersions: List<CommercialPrivateCostSummaryDto>,
+    customerQuote: ClientQuoteDto?,
+    quoteBusy: Boolean,
+    onPreview: ((String) -> Unit)?,
+    onExport: ((String) -> Unit)?,
 ) {
     val op=deal.opportunity
-    Text("Customer quotation / approval", style=MaterialTheme.typography.titleMedium)
+    Text(hiltechText("عروض الأسعار والاعتماد", "Customer quotations & approval"), style=MaterialTheme.typography.titleMedium)
     deal.quotes.forEach { q ->
         Text(q.quoteCode + " · v" + q.versionNumber + " · " + q.state)
         Text(q.totalPrice.content + " " + q.currency)
+        if (q.state == "RELEASED" && onPreview != null) {
+            OutlinedButton(enabled = !quoteBusy, onClick = { onPreview(q.id) }) { Text(hiltechText("معاينة نسخة العميل", "Preview customer copy")) }
+            if (customerQuote?.quoteId == q.id) {
+                ReleasedQuotePreview(customerQuote)
+                if (onExport != null) Button(enabled = !quoteBusy, onClick = { onExport(q.id) }) { Text(hiltechText("تصدير PDF", "Export PDF")) }
+            }
+        }
         if (canWrite && q.state == "DRAFT") {
             OutlinedButton(onClick={onAction(CommercialDealAction.RequestApproval(q.id))}) {
                 Text("Request independent approval")
@@ -438,7 +465,8 @@ private fun CommercialQuotePanel(
         var delivery by remember(op.id) { mutableStateOf("") }
         var exclusions by remember(op.id) { mutableStateOf("") }
         var validity by remember(op.id) { mutableStateOf("") }
-        OutlinedTextField(value=boqId,onValueChange={boqId=it},label={Text("BOQ version ID")})
+        HiltechRecordPicker(hiltechText("إصدار البنود والأسعار", "Priced BOQ version"), boqId,
+            boqVersions.map { HiltechRecordChoice(it.boqVersionId, "v" + it.versionNumber, it.proposedSellTotal.content + " " + it.currency) }, { boqId = it }, allowKnownReference = true)
         OutlinedTextField(value=payment,onValueChange={payment=it},label={Text("Client payment terms")})
         OutlinedTextField(value=delivery,onValueChange={delivery=it},label={Text("Delivery terms")})
         OutlinedTextField(value=exclusions,onValueChange={exclusions=it},label={Text("Quote exclusions")})
@@ -450,7 +478,28 @@ private fun CommercialQuotePanel(
                 op.id,boqId,payment,delivery,exclusions,validity))},
         ) { Text("Create new quote version") }
     }
-    Text("Client-visible quote projections never contain internal cost, supplier quote or margin.")
+    Text(hiltechText("نسخة العميل لا تتضمن التكلفة الداخلية أو هامش الربح.", "Customer copies exclude internal cost and margin."))
+}
+
+@Composable
+private fun ReleasedQuotePreview(quote: ClientQuoteDto) {
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        HiltechSectionHeading("HILTECH / " + quote.quoteCode, hiltechText("عرض سعر", "Quotation"), "v" + quote.versionNumber)
+        HiltechKeyValue(hiltechText("العميل", "Customer"), quote.clientName ?: quote.clientOrganizationId)
+        HiltechKeyValue(hiltechText("جهة الإصدار", "Issuer"), quote.issuerName ?: "HILTECH")
+        HiltechKeyValue(hiltechText("صالح حتى", "Valid until"), quote.validityDate)
+        HiltechRecordTable(listOf(
+            HiltechTableColumn(hiltechText("البند", "Item"), 2f),
+            HiltechTableColumn(hiltechText("الكمية", "Quantity"), numeric = true),
+            HiltechTableColumn(hiltechText("الوحدة", "Unit")),
+            HiltechTableColumn(hiltechText("سعر الوحدة", "Unit price"), numeric = true),
+        ), quote.lines.map { HiltechTableRecord(listOf(it.lineCode + " · " + it.description, it.quantity.content, it.unit, it.unitPrice.content + " " + quote.currency)) },
+            hiltechText("لا توجد بنود", "No lines"))
+        HiltechKeyValue(hiltechText("الإجمالي المعتمد", "Released total"), quote.totalPrice.content + " " + quote.currency)
+        HiltechKeyValue(hiltechText("شروط الدفع", "Payment terms"), quote.paymentTerms)
+        HiltechKeyValue(hiltechText("شروط التسليم", "Delivery terms"), quote.deliveryTerms)
+        if (quote.exclusions.isNotBlank()) HiltechKeyValue(hiltechText("الاستبعادات", "Exclusions"), quote.exclusions)
+    }
 }
 
 @Composable
@@ -475,7 +524,8 @@ private fun CommercialAwardPanel(
     var contractCode by remember(op.id) { mutableStateOf("") }
     var warranty by remember(op.id) { mutableStateOf("") }
     var maintenance by remember(op.id) { mutableStateOf("") }
-    OutlinedTextField(value=quoteId,onValueChange={quoteId=it},label={Text("Released quote ID")})
+    HiltechRecordPicker(hiltechText("عرض السعر الصادر", "Released quote"), quoteId,
+        deal.quotes.filter { it.state == "RELEASED" }.map { HiltechRecordChoice(it.id, it.quoteCode, "v" + it.versionNumber + " · " + it.totalPrice.content + " " + it.currency) }, { quoteId = it }, allowKnownReference = false)
     OutlinedTextField(value=contractCode,onValueChange={contractCode=it},label={Text("Contract reference")})
     OutlinedTextField(value=warranty,onValueChange={warranty=it},label={Text("Actual warranty terms (optional)")})
     OutlinedTextField(value=maintenance,onValueChange={maintenance=it},label={Text("Actual support terms (optional)")})
