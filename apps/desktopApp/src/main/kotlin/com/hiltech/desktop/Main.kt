@@ -48,6 +48,7 @@ import com.hiltech.shared.core.finance.FinanceBankCsvSelectedFile
 import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
 import com.hiltech.shared.core.NativeOperationalWorkspace
 import com.hiltech.shared.core.NativeOperationArea
+import com.hiltech.shared.core.design.HiltechLanguage
 import com.hiltech.shared.core.NativeOperationAreas
 import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
 import com.hiltech.shared.core.HiltechShell
@@ -2795,8 +2796,15 @@ fun main() {
             val nativeProjectScope = navigationIdentity?.identityId.orEmpty() + ":" +
                 navigationOrganization?.organizationId.orEmpty()
             var executiveProjectFocus by remember(nativeProjectScope) { mutableIntStateOf(0) }
+            val languagePreferences = remember { java.util.prefs.Preferences.userRoot().node("com/hiltech/desktop/preferences") }
+            var appLanguage by remember { mutableStateOf(HiltechLanguage.fromCode(languagePreferences.get("appLanguage", null))) }
             HiltechShell(
                 state = shellState.value,
+                language = appLanguage,
+                onLanguageChange = { choice ->
+                    appLanguage = choice
+                    languagePreferences.put("appLanguage", choice.code)
+                },
                 projectFocusRequest = executiveProjectFocus,
                 desktopNavigation = true,
                 desktopFindRequest = desktopFindRequest,
