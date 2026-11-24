@@ -230,7 +230,7 @@ private fun StockItemDetail(item: StockItemDto, state: StockInventoryState, disp
     Text(hiltechText("الأرصدة حسب الموقع", "On hand by location"), style = MaterialTheme.typography.titleMedium)
     HiltechRecordTable(
         columns = listOf(HiltechTableColumn(hiltechText("موقع التخزين", "Storage location"), 1.4f),
-            HiltechTableColumn(hiltechText("الرصيد", "On hand")), HiltechTableColumn(hiltechText("الوحدة", "Unit"), .65f)),
+            HiltechTableColumn(hiltechText("الرصيد", "On hand"), numeric = true), HiltechTableColumn(hiltechText("الوحدة", "Unit"), .65f)),
         records = state.balances.map { HiltechTableRecord(listOf(it.locationCode, it.onHandQuantity, item.baseUnitCode)) },
         emptyMessage = hiltechText("لا توجد أرصدة معروضة.", "No visible balances."),
     )
@@ -238,7 +238,7 @@ private fun StockItemDetail(item: StockItemDto, state: StockInventoryState, disp
     HiltechRecordTable(
         columns = listOf(HiltechTableColumn(hiltechText("التاريخ", "Date"), 1.4f),
             HiltechTableColumn(hiltechText("الحركة", "Movement")),
-            HiltechTableColumn(hiltechText("الكمية", "Quantity"), .8f),
+            HiltechTableColumn(hiltechText("الكمية", "Quantity"), .8f, numeric = true),
             HiltechTableColumn(hiltechText("من / إلى", "From / to"), 1.2f)),
         records = state.movements.map { movement ->
             val route = listOfNotNull(locations[movement.fromStorageLocationId], locations[movement.toStorageLocationId]).joinToString(" → ")

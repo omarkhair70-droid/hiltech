@@ -482,9 +482,9 @@ fun financeEvidenceReadNativeWorkspace(
                         HiltechRecordTable(
                             columns = listOf(
                                 HiltechTableColumn(hiltechText("مرجع المورد", "Supplier reference")),
-                                HiltechTableColumn(hiltechText("القيود التاريخية", "Historical gross"), 1.4f),
+                                HiltechTableColumn(hiltechText("القيود التاريخية", "Historical gross"), 1.4f, numeric = true),
                                 HiltechTableColumn(hiltechText("العملة", "Currency"), .7f),
-                                HiltechTableColumn(hiltechText("عدد القيود", "Journal count")),
+                                HiltechTableColumn(hiltechText("عدد القيود", "Journal count"), numeric = true),
                             ),
                             records = current.groups.map { item -> HiltechTableRecord(listOf(
                                 item.supplierOrganizationId.take(8), item.historicallyRecognizedGross.toString(),

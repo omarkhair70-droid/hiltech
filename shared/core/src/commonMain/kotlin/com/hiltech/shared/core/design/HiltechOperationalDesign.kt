@@ -49,6 +49,7 @@ import com.hiltech.shared.core.resources.plex_medium
 import com.hiltech.shared.core.resources.plex_semibold
 import com.hiltech.shared.core.resources.plex_bold
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -402,7 +403,7 @@ fun HiltechRecordPicker(
 }
 
 /** One record presentation, two layout densities. No synthetic totals. */
-data class HiltechTableColumn(val title: String, val weight: Float = 1f)
+data class HiltechTableColumn(val title: String, val weight: Float = 1f, val numeric: Boolean = false)
 data class HiltechTableRecord(val values: List<String>)
 
 @Composable
@@ -412,30 +413,48 @@ fun HiltechRecordTable(columns: List<HiltechTableColumn>, records: List<HiltechT
         Text(emptyMessage, color = palette.secondaryText, style = MaterialTheme.typography.bodyMedium)
         return
     }
+    var query by remember(columns.map { it.title }) { mutableStateOf("") }
+    val term = query.trim()
+    val visible = records.filter { record -> term.isEmpty() || record.values.any { it.contains(term, ignoreCase = true) } }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val wide = maxWidth >= 640.dp && columns.size <= 6
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (wide) 0.dp else 10.dp)) {
-            if (wide) {
+            if (records.size >= 8 || query.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(query, { query = it }, modifier = Modifier.weight(1f), singleLine = true,
+                        label = { Text(hiltechText("بحث في السجلات المعروضة", "Filter visible records")) })
+                    if (query.isNotEmpty()) TextButton(onClick = { query = "" }) { Text(hiltechText("مسح", "Clear")) }
+                }
+                Text(hiltechText("المعروض: ", "Visible: ") + visible.size + " / " + records.size,
+                    modifier = Modifier.padding(bottom = 8.dp), style = MaterialTheme.typography.labelMedium, color = palette.secondaryText)
+            }
+            if (visible.isEmpty()) {
+                Text(hiltechText("لا توجد سجلات مطابقة.", "No matching records."), color = palette.secondaryText)
+            } else if (wide) {
                 Surface(color = palette.surfaceElevated, shape = HiltechShape.small) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         columns.forEach { column ->
-                            Text(column.title, Modifier.weight(column.weight.coerceAtLeast(.2f)), style = MaterialTheme.typography.labelMedium, color = palette.secondaryText)
+                            Text(column.title, Modifier.weight(column.weight.coerceAtLeast(.2f)), style = MaterialTheme.typography.labelMedium, color = palette.secondaryText,
+                                textAlign = if (column.numeric) TextAlign.Right else TextAlign.Start)
                         }
                     }
                 }
-                records.forEachIndexed { index, record ->
+                visible.forEachIndexed { index, record ->
                     Surface(color = if (index % 2 == 0) palette.surface else palette.canvas) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             columns.forEachIndexed { cell, column ->
                                 Text(record.values.getOrNull(cell).orEmpty().ifBlank { "—" },
-                                    Modifier.weight(column.weight.coerceAtLeast(.2f)), style = MaterialTheme.typography.bodyMedium,
+                                    Modifier.weight(column.weight.coerceAtLeast(.2f)),
+                                    style = if (column.numeric) MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Ltr) else MaterialTheme.typography.bodyMedium,
+                                    textAlign = if (column.numeric) TextAlign.Right else TextAlign.Start,
                                     color = palette.primaryText)
                             }
                         }
                     }
                     HorizontalDivider(color = palette.divider)
                 }
-            } else records.forEach { record ->
+            } else visible.forEach { record ->
                 HiltechPanel(Modifier.fillMaxWidth()) {
                     columns.forEachIndexed { index, column ->
                         val value = record.values.getOrNull(index).orEmpty().ifBlank { "—" }
