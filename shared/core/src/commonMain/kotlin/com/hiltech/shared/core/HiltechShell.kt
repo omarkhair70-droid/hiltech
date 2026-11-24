@@ -382,7 +382,7 @@ fun HiltechShell(
             } else null,
         ) {
             Text(
-                selectedWorkspace?.label ?: "HILTECH OS",
+                selectedWorkspace?.displayLabel ?: "HILTECH OS",
                 style = MaterialTheme.typography.headlineMedium,
             )
             if (selectedWorkspace == null) {
@@ -1151,204 +1151,207 @@ private fun PeopleSection(
     offboardingAvailable: Boolean,
     accountWorkspace: (@Composable (EmployeeDetailDto) -> Unit)?,
 ) {
-    Text(
-        "People",
-        style = MaterialTheme.typography.titleMedium,
-    )
+    val colors = com.hiltech.shared.core.design.LocalHiltechOperationalColors.current
+    var query by remember { mutableStateOf("") }
+    var creating by remember { mutableStateOf(false) }
+    var directoryMode by remember { mutableStateOf(true) }
+    val employee = state.selectedEmployee
+    var showDetail by remember(employee?.employeeId) { mutableStateOf(employee != null) }
+    var tab by remember(employee?.employeeId) { mutableStateOf(PeopleWorkspaceTab.Profile) }
 
-    if (state.loading) {
-        Text("Loading People context…")
-    }
-
-    state.errorMessage?.let {
-        Text(it)
-    }
-
-    state.ownProfile?.let { own ->
-        Text(
-            "My employee profile",
-            style = MaterialTheme.typography.titleSmall,
-        )
-        Text(
-            own.displayName +
-                " · " +
-                own.employeeCode +
-                " · " +
-                own.employeeState,
-        )
-        own.employmentTypeCode?.let {
-            Text("Employment: $it")
-        }
-    }
-
-    state.ownWorkforceAssignment?.let { assignment ->
-        Text(
-            "My workforce context",
-            style = MaterialTheme.typography.titleSmall,
-        )
-        Text(
-            assignment.roleLabel
-                ?: assignment.roleCode,
-        )
-        assignment.teamName?.let {
-            Text("Team: $it")
-        }
-        assignment.reportsToDisplayName
-            ?.let {
-                Text("Reports to: $it")
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                com.hiltech.shared.core.design.HiltechSectionHeading("PEOPLE / ORGANIZATION", "الأفراد",
+                    "دليل الفريق، المسؤوليات، وحسابات العمل.")
             }
-        Text(
-            "Effective from: " +
-                assignment.effectiveFrom,
-        )
-    }
-
-    state.workforceStructure?.let { structure ->
-        Text(
-            "Organization structure",
-            style = MaterialTheme.typography.titleSmall,
-        )
-        structure.items.forEach { assignment ->
-            Text(
-                buildString {
-                    append(
-                        assignment.employeeCode,
-                    )
-                    append(" · ")
-                    append(
-                        assignment.employeeDisplayName,
-                    )
-                    append(" · ")
-                    append(
-                        assignment.roleLabel
-                            ?: assignment.roleCode,
-                    )
-                    assignment.teamName?.let {
-                        append(" · ")
-                        append(it)
-                    }
-                    assignment.reportsToDisplayName
-                        ?.let {
-                            append(" · reports to ")
-                            append(it)
-                        }
-                },
-            )
+            androidx.compose.material3.TextButton(onClick = onRefresh, enabled = !state.loading) { Text("تحديث") }
         }
-    }
-
-    state.directory?.let { directory ->
-        var query by remember { mutableStateOf("") }
-        var creating by remember { mutableStateOf(false) }
-        val term = query.trim()
-        val matches = directory.items.filter { employee ->
-            term.isEmpty() || employee.displayName.contains(term, ignoreCase = true) ||
-                employee.employeeCode.contains(term, ignoreCase = true)
-        }
-        HiltechPanel(Modifier.fillMaxWidth()) {
-            Text("Employee directory", style = MaterialTheme.typography.titleMedium)
-            if (directory.canManagePeople) {
-                OutlinedButton(enabled = !state.loading, onClick = { creating = !creating }) {
-                    Text(if (creating) "Close new employee form" else "New employee")
-                }
-                if (creating) {
-                    PeopleCreateForm(
-                        onCreateEmployee = onCreateEmployee,
-                        canSubmit = !state.loading,
-                    )
-                }
-            }
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Search by name or employee code") },
-                singleLine = true,
-            )
-            if (matches.isEmpty()) {
-                Text(if (term.isEmpty()) "No employees available" else "No matching employees")
-            }
-        }
-        matches.forEach { employee ->
+        if (state.loading) Text("جارٍ تحديث بيانات الفريق…", color = colors.secondaryText)
+        state.errorMessage?.let {
             HiltechPanel(Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(employee.displayName, style = MaterialTheme.typography.titleSmall)
-                        Text(employee.employeeCode, style = MaterialTheme.typography.bodySmall)
+                HiltechStateTag("تعذر تحديث البيانات", HiltechStateTone.ATTENTION)
+                Text(it)
+            }
+        }
+        val directory = state.directory
+        if (directory != null) {
+            val browser: @Composable () -> Unit = {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        androidx.compose.material3.FilterChip(selected = directoryMode, onClick = { directoryMode = true },
+                            label = { Text("الموظفون") })
+                        if (state.workforceStructure != null) {
+                            androidx.compose.material3.FilterChip(selected = !directoryMode, onClick = { directoryMode = false },
+                                label = { Text("هيكل الفريق") })
+                        }
                     }
-                    if (directory.canManagePeople) {
-                        OutlinedButton(
-                            enabled = !state.loading,
-                            onClick = { onSelectEmployee(employee.employeeId) },
-                        ) { Text("Open") }
+                    if (directoryMode || state.workforceStructure == null) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Text("دليل الموظفين", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                            if (directory.canManagePeople) Button(enabled = !state.loading, onClick = { creating = !creating }) {
+                                Text(if (creating) "إغلاق" else "+ موظف")
+                            }
+                        }
+                        if (creating && directory.canManagePeople) HiltechPanel(Modifier.fillMaxWidth()) {
+                            PeopleCreateForm(onCreateEmployee = onCreateEmployee, canSubmit = !state.loading)
+                        }
+                        OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
+                            label = { Text("الاسم أو كود الموظف") }, singleLine = true)
+                        val matches = directory.items.filter { item ->
+                            query.isBlank() || item.displayName.contains(query.trim(), ignoreCase = true) ||
+                                item.employeeCode.contains(query.trim(), ignoreCase = true)
+                        }
+                        Text("المعروض: " + matches.size, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+                        if (matches.isEmpty()) Text(if (query.isBlank()) "لا توجد سجلات متاحة." else "لا توجد نتائج مطابقة.")
+                        matches.forEach { item ->
+                            androidx.compose.material3.Surface(
+                                onClick = { creating = false; showDetail = true; onSelectEmployee(item.employeeId) },
+                                enabled = directory.canManagePeople && !state.loading,
+                                modifier = Modifier.fillMaxWidth(),
+                                color = if (employee?.employeeId == item.employeeId) colors.selected else colors.surface,
+                                contentColor = colors.primaryText,
+                                shape = com.hiltech.shared.core.design.HiltechShape.medium,
+                            ) {
+                                Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                    androidx.compose.material3.Surface(color = colors.surfaceElevated,
+                                        shape = com.hiltech.shared.core.design.HiltechShape.small) {
+                                        Text(item.displayName.trim().take(2), Modifier.padding(12.dp),
+                                            style = MaterialTheme.typography.titleMedium, color = colors.accent)
+                                    }
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(item.displayName, style = MaterialTheme.typography.titleMedium)
+                                        Text(item.employeeCode, color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+                                        Text(if (item.linkedIdentity) "حساب مرتبط" else "حساب غير مرتبط",
+                                            color = colors.secondaryText, style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    HiltechStateTag(employeeStateLabel(item.employeeState),
+                                        if (item.employeeState == "ACTIVE") HiltechStateTone.CURRENT else HiltechStateTone.NEUTRAL)
+                                }
+                            }
+                        }
+                    } else {
+                        val groups = state.workforceStructure?.items.orEmpty().groupBy { it.teamName ?: "بدون فريق" }
+                        if (groups.isEmpty()) Text("لا توجد تعيينات متاحة.")
+                        groups.forEach { (team, assignments) ->
+                            HiltechPanel(Modifier.fillMaxWidth()) {
+                                Text(team, style = MaterialTheme.typography.titleMedium)
+                                assignments.forEach { assignment ->
+                                    androidx.compose.material3.HorizontalDivider(color = colors.divider)
+                                    Text(assignment.employeeDisplayName, style = MaterialTheme.typography.titleSmall)
+                                    Text(assignment.roleLabel ?: assignment.roleCode, color = colors.secondaryText)
+                                    assignment.reportsToDisplayName?.let { Text("المسؤول المباشر: " + it,
+                                        style = MaterialTheme.typography.bodySmall) }
+                                }
+                            }
+                        }
                     }
                 }
-                HiltechStateTag(
-                    label = employee.employeeState.lowercase().replaceFirstChar { it.uppercaseChar() },
-                    tone = if (employee.employeeState == "ACTIVE") HiltechStateTone.CURRENT else HiltechStateTone.NEUTRAL,
-                )
+            }
+
+            val detail: @Composable () -> Unit = {
+                if (employee == null || !directory.canManagePeople) {
+                    HiltechPanel(Modifier.fillMaxWidth()) {
+                        Text("اختر موظفًا", style = MaterialTheme.typography.titleLarge)
+                        Text("افتح سجل الموظف للاطلاع على ملفه، مسؤولياته، وحساب العمل.")
+                    }
+                } else {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        HiltechPanel(Modifier.fillMaxWidth()) {
+                            Text(employee.employeeCode, style = MaterialTheme.typography.labelMedium, color = colors.secondaryText)
+                            Text(employee.displayName, style = MaterialTheme.typography.headlineSmall)
+                            HiltechStateTag(employeeStateLabel(employee.employeeState),
+                                if (employee.employeeState == "ACTIVE") HiltechStateTone.CURRENT else HiltechStateTone.NEUTRAL)
+                            state.selectedWorkforceAssignment?.let {
+                                Text(it.roleLabel ?: it.roleCode, style = MaterialTheme.typography.titleMedium)
+                                it.teamName?.let { name -> Text(name, color = colors.secondaryText) }
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            PeopleWorkspaceTab.entries.filter {
+                                (it != PeopleWorkspaceTab.Account || accountWorkspace != null) &&
+                                    (it != PeopleWorkspaceTab.Offboarding || offboardingAvailable)
+                            }.forEach { item ->
+                                androidx.compose.material3.FilterChip(selected = tab == item, onClick = { tab = item },
+                                    label = { Text(item.title) })
+                            }
+                        }
+                        when (tab) {
+                            PeopleWorkspaceTab.Profile -> HiltechPanel(Modifier.fillMaxWidth()) {
+                                Text("بيانات الموظف", style = MaterialTheme.typography.titleMedium)
+                                employee.legalName?.takeUnless { it == employee.displayName }?.let { com.hiltech.shared.core.design.HiltechKeyValue("الاسم الرسمي", it) }
+                                employee.employmentTypeCode?.let { com.hiltech.shared.core.design.HiltechKeyValue("نوع التوظيف", it) }
+                                employee.mobile?.let { com.hiltech.shared.core.design.HiltechKeyValue("الهاتف", it) }
+                                employee.email?.let { com.hiltech.shared.core.design.HiltechKeyValue("البريد الإلكتروني", it) }
+                                employee.hireDate?.let { com.hiltech.shared.core.design.HiltechKeyValue("تاريخ التعيين", it) }
+                                com.hiltech.shared.core.design.HiltechKeyValue("حساب العمل",
+                                    if (employee.linkedIdentityId != null) "مرتبط" else "لم يتم ربطه")
+                            }
+                            PeopleWorkspaceTab.Assignment -> {
+                                val assignment = state.selectedWorkforceAssignment
+                                if (assignment != null) WorkforceAssignmentChangeSection(employee = employee, current = assignment,
+                                    structure = state.workforceStructure, history = state.selectedWorkforceHistory,
+                                    onChange = onChangeWorkforceAssignment)
+                                else Text("لم تتوفر بيانات التعيين الحالي.")
+                            }
+                            PeopleWorkspaceTab.Account -> if (!state.loading) accountWorkspace?.invoke(employee)
+                            PeopleWorkspaceTab.Offboarding -> if (offboardingAvailable) OffboardingAdminSection(
+                                employee = employee, offboarding = state.selectedOffboarding,
+                                onStart = onStartOffboarding, onRevokeAccess = onRevokeOffboardingAccess,
+                                onResolveClearance = onResolveOffboardingClearance, onComplete = onCompleteOffboarding)
+                        }
+                    }
+                }
+            }
+
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+                if (maxWidth >= 900.dp) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Column(Modifier.weight(.9f)) { browser() }
+                        Column(Modifier.weight(1.6f)) { detail() }
+                    }
+                } else {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (showDetail && employee != null && directory.canManagePeople) {
+                            androidx.compose.material3.TextButton(onClick = { showDetail = false }) { Text("العودة إلى الدليل") }
+                            detail()
+                        } else browser()
+                    }
+                }
+            }
+        }
+
+        state.ownProfile?.let { own ->
+            HiltechPanel(Modifier.fillMaxWidth()) {
+                Text("ملفي الشخصي", style = MaterialTheme.typography.titleMedium)
+                Text(own.displayName, style = MaterialTheme.typography.titleLarge)
+                Text(own.employeeCode, color = colors.secondaryText)
+                HiltechStateTag(employeeStateLabel(own.employeeState), HiltechStateTone.NEUTRAL)
+                own.employmentTypeCode?.let { Text(it) }
+                state.ownWorkforceAssignment?.let { assignment ->
+                    com.hiltech.shared.core.design.HiltechKeyValue("المسؤولية", assignment.roleLabel ?: assignment.roleCode)
+                    assignment.teamName?.let { com.hiltech.shared.core.design.HiltechKeyValue("الفريق", it) }
+                    assignment.reportsToDisplayName?.let { com.hiltech.shared.core.design.HiltechKeyValue("المسؤول المباشر", it) }
+                    Text(assignment.effectiveFrom, style = MaterialTheme.typography.labelSmall, color = colors.secondaryText)
+                }
             }
         }
     }
+}
 
-    state.selectedEmployee?.let { employee ->
-        val detailAnchor = remember(employee.employeeId) { BringIntoViewRequester() }
-        LaunchedEffect(employee.employeeId) { detailAnchor.bringIntoView() }
-        HiltechPanel(Modifier.fillMaxWidth().bringIntoViewRequester(detailAnchor)) {
-            Text(employee.displayName, style = MaterialTheme.typography.titleLarge)
-            Text(employee.employeeCode, style = MaterialTheme.typography.bodySmall)
-            HiltechStateTag(
-                label = employee.employeeState.lowercase().replaceFirstChar { it.uppercaseChar() },
-                tone = if (employee.employeeState == "ACTIVE") HiltechStateTone.CURRENT else HiltechStateTone.NEUTRAL,
-            )
-            employee.employmentTypeCode?.let { Text("Employment: $it") }
-            employee.legalName?.takeUnless { it == employee.displayName }?.let { Text("Legal name: $it") }
-            employee.mobile?.let { Text("Mobile: $it") }
-            employee.email?.let { Text("Email: $it") }
-        }
+private enum class PeopleWorkspaceTab(val title: String) {
+    Profile("الملف"), Assignment("المسؤوليات"), Account("حساب العمل"), Offboarding("إنهاء الخدمة"),
+}
 
-        state.selectedWorkforceAssignment
-            ?.let { assignment ->
-                WorkforceAssignmentChangeSection(
-                    employee = employee,
-                    current = assignment,
-                    structure =
-                        state.workforceStructure,
-                    history =
-                        state.selectedWorkforceHistory,
-                    onChange =
-                        onChangeWorkforceAssignment,
-                )
-            }
-
-        if (!state.loading && state.directory?.canManagePeople == true) {
-            accountWorkspace?.invoke(employee)
-        }
-
-        if (offboardingAvailable) OffboardingAdminSection(
-            employee = employee,
-            offboarding =
-                state.selectedOffboarding,
-            onStart =
-                onStartOffboarding,
-            onRevokeAccess =
-                onRevokeOffboardingAccess,
-            onResolveClearance =
-                onResolveOffboardingClearance,
-            onComplete =
-                onCompleteOffboarding,
-        )
-    }
-
-    OutlinedButton(
-        onClick = onRefresh,
-        enabled = !state.loading,
-    ) {
-        Text("Refresh People")
-    }
+private fun employeeStateLabel(state: String): String = when (state) {
+    "ACTIVE" -> "نشط"
+    "PREBOARDING" -> "قيد التجهيز"
+    "OFFBOARDING" -> "إنهاء الخدمة"
+    "TERMINATED" -> "منتهي"
+    "INACTIVE" -> "غير نشط"
+    else -> state
 }
 
 
