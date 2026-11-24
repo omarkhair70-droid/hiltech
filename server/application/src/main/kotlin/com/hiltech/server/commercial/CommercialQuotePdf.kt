@@ -116,7 +116,7 @@ internal object CommercialQuotePdf {
                 graphics.color = Color.WHITE
                 graphics.font = regular.deriveFont(19f)
                 listOf("No. / رقم","Item / البند","Qty / الكمية","Unit price / السعر","Total / الإجمالي").forEachIndexed { i,label ->
-                    graphics.drawString(label,edges[i]+9,y+34)
+                    graphics.drawString(label,(edges[i]+9).toFloat(),y+34)
                 }
                 y += 54
             }
