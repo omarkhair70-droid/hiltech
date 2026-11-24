@@ -22,7 +22,7 @@ import java.util.UUID
  */
 @RestController
 @RequestMapping("/v1/commercial")
-class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail, private val connections: CommercialMailConnection, private val whatsapp: CommercialQuoteWhatsapp, private val whatsappConnections: CommercialWhatsappConnection, private val oauth: CommercialMailOAuth, private val metaSignup: CommercialMetaSignup) {
+class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail, private val connections: CommercialMailConnection, private val whatsapp: CommercialQuoteWhatsapp, private val whatsappConnections: CommercialWhatsappConnection, private val oauth: CommercialMailOAuth, private val metaSignup: CommercialMetaSignup, private val whatsappWebhook: CommercialWhatsappWebhook) {
     private fun operation(key: String, id: String): UUID {
         val parsed = id.commercialUuid()
         IdempotencyKeyContract.requireMatches(key, parsed)
@@ -39,6 +39,15 @@ class CommercialController(private val service: CommercialService, private val e
         HiltechRequestContext.current(http).requireIdentityId(),
         HiltechRequestContext.current(http).correlationId,
     )
+
+    @GetMapping("/meta/webhook",produces=["text/plain"])
+    fun verifyWebhook(@RequestParam("hub.mode",required=false) mode:String?,@RequestParam("hub.verify_token",required=false) token:String?,@RequestParam("hub.challenge",required=false) challenge:String?):org.springframework.http.ResponseEntity<String> {
+        val verified=whatsappWebhook.verify(mode,token,challenge)
+        return if(verified!=null) org.springframework.http.ResponseEntity.ok(verified) else org.springframework.http.ResponseEntity.status(403).build()
+    }
+    @PostMapping("/meta/webhook")
+    fun whatsappReceipt(@RequestHeader("X-Hub-Signature-256",required=false) signature:String?,@RequestBody raw:ByteArray):org.springframework.http.ResponseEntity<Void> =
+        if(whatsappWebhook.receive(raw,signature)) org.springframework.http.ResponseEntity.ok().build() else org.springframework.http.ResponseEntity.status(403).build()
 
     @GetMapping("/meta/status")
     fun metaStatus(http: HttpServletRequest,@RequestParam organizationId: String):Map<String,Boolean> {

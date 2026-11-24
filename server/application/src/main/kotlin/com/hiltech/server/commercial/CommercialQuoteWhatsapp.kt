@@ -55,7 +55,7 @@ class CommercialQuoteWhatsapp(
         val pdf = commercial.customerPdf(id,actor)
         val bytes = Base64.getDecoder().decode(pdf.base64)
         commercial.quoteCompanyForDispatch(id,actor)
-        val inserted = jdbc.update("INSERT INTO commercial_quote_whatsapp_attempt(id,quote_version_id,recipient,actor_id,state) VALUES (?,?,?,?,'SENDING') ON CONFLICT DO NOTHING",key,id,to,actor)
+        val inserted = jdbc.update("INSERT INTO commercial_quote_whatsapp_attempt(id,quote_version_id,recipient,actor_id,state,sender_phone_id) VALUES (?,?,?,?,'SENDING',?) ON CONFLICT DO NOTHING",key,id,to,actor,connection.phoneId)
         fun current() = jdbc.queryForList("SELECT id,recipient,state,created_at,quote_version_id,actor_id FROM commercial_quote_whatsapp_attempt WHERE id=?",key).single()
         if (inserted == 0) {
             val old = current()
@@ -73,7 +73,7 @@ class CommercialQuoteWhatsapp(
             val uploaded = client.post().uri("$url/media").headers { it.setBearerAuth(connection.token) }.contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(form).retrieve().body(Map::class.java)
             val mediaId = requireNotNull(uploaded?.get("id") as? String)
-            val body = mapOf("messaging_product" to "whatsapp","to" to to,"type" to "template",
+            val body = mapOf("messaging_product" to "whatsapp","to" to to,"type" to "template","biz_opaque_callback_data" to key.toString(),
                 "template" to mapOf("name" to connection.template,"language" to mapOf("code" to connection.language),
                     "components" to listOf(mapOf("type" to "header","parameters" to listOf(mapOf("type" to "document",
                         "document" to mapOf("id" to mediaId,"filename" to pdf.filename)))))))

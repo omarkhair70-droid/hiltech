@@ -524,9 +524,14 @@ private fun QuoteWhatsappPanel(quoteId: String, history: List<com.hiltech.shared
     HiltechPanel(Modifier.fillMaxWidth()) {
         Text(hiltechText("إرسال عبر WhatsApp Business", "Send via WhatsApp Business"), style = MaterialTheme.typography.titleMedium)
         history.forEach { item ->
-            HiltechKeyValue(item.recipient + " · " + item.createdAt, if(item.state == "API_ACCEPTED")
-                hiltechText("قبلت Meta طلب الإرسال؛ التسليم غير مؤكد","Meta accepted the request; delivery unconfirmed")
-                else hiltechText("نتيجة غير مؤكدة — تحقق قبل إعادة الإرسال","Uncertain outcome — verify before resending"))
+            HiltechKeyValue(item.recipient + " · " + item.createdAt, when(item.state) {
+                "API_ACCEPTED" -> hiltechText("قبلت Meta طلب الإرسال؛ التسليم غير مؤكد","Meta accepted the request; delivery unconfirmed")
+                "SENT" -> hiltechText("أرسل واتساب الرسالة","WhatsApp sent the message")
+                "DELIVERED" -> hiltechText("تم التسليم للعميل","Delivered to recipient")
+                "READ" -> hiltechText("قرأ العميل الرسالة","Read by recipient")
+                "FAILED" -> hiltechText("تعذر التسليم حسب Meta","Delivery failed according to Meta")
+                else -> hiltechText("نتيجة غير مؤكدة — تحقق قبل إعادة الإرسال","Uncertain outcome — verify before resending")
+            })
         }
         if (send != null) {
             var recipient by remember(quoteId) { mutableStateOf("") }
