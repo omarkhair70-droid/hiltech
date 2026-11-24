@@ -43,6 +43,7 @@ fun commercialReadNativeWorkspace(
     installationId: String,
     newOperationId: (() -> String)? = null,
     exportPdf: (suspend (String, ByteArray) -> Boolean)? = null,
+    pickLogo: (suspend () -> ByteArray?)? = null,
 ): NativeOperationalWorkspace = NativeOperationalWorkspace(
     id = "commercial-read",
     label = "المبيعات والمناقصات",
@@ -55,6 +56,8 @@ fun commercialReadNativeWorkspace(
         val jobs = rememberCoroutineScope()
         val coordinator = remember(client, installationId) { CommercialDealCoordinator(client, installationId) }
         var capabilities by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialCapabilitiesDto?>(null) }
+        var settings by remember(identityId, organizationId, installationId) { mutableStateOf<CommercialDocumentSettingsDto?>(null) }
+        var showSettings by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
         var clients by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialClientRefDto>>(emptyList()) }
         var costs by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialPrivateCostLineDto>>(emptyList()) }
         var summaries by remember(identityId, organizationId, installationId) { mutableStateOf<List<CommercialPrivateCostSummaryDto>>(emptyList()) }
@@ -112,6 +115,7 @@ fun commercialReadNativeWorkspace(
             listLoading = true
             items = emptyList()
             capabilities = null
+            settings = null
             clients = emptyList()
             detail = null
             error = null
@@ -119,6 +123,8 @@ fun commercialReadNativeWorkspace(
                 items = client.opportunities(organizationId, installationId)
                 if (newOperationId != null) capabilities = client.capabilities(organizationId, installationId)
                 if (capabilities?.canWrite == true) clients = client.clients(organizationId, installationId)
+                if (capabilities?.canWrite == true || capabilities?.canRelease == true) settings = client.documentSettings(organizationId, installationId)
+                if (capabilities?.canRelease != true) showSettings = false
                 // An old source selection is invalid when the current list
                 // no longer authorizes/contains that opportunity.
                 if (selectedId !in items.map { it.id }) selectedId = null
@@ -163,9 +169,19 @@ fun commercialReadNativeWorkspace(
         val canRelease = !saving && capabilities?.canRelease == true
         val canAward = !saving && capabilities?.canAward == true
         val message = feedback?.let { if (it == "COMMAND_NOT_CONFIRMED") hiltechText("لم يتم تأكيد العملية. أعد المحاولة بنفس البيانات.", "Action not confirmed. Retry with the same values.") else if (it == "PDF_EXPORT_HANDOFF") hiltechText("تم تسليم ملف PDF لنافذة الحفظ أو المشاركة. لم يُسجّل إرسال تلقائي.", "PDF handed to save/share. No automatic dispatch was recorded.") else hiltechText("حالة العملية: ", "Operation state: ") + it }
-        if (selectedId == null) {
+        val documentSettings = settings
+        if (showSettings && capabilities?.canRelease == true && documentSettings != null) {
+            Column(Modifier.fillMaxSize()) {
+                message?.let { Text(it) }
+                CommercialSettingsPanel(documentSettings, saving, pickLogo,
+                    onSave = { profile -> perform(listOf("settings",documentSettings.version,profile)) { id ->
+                        client.saveDocumentSettings(SaveCommercialDocumentSettingsDto(id,organizationId,documentSettings.version,profile),installationId)
+                    } }, onBack = { showSettings = false })
+            }
+        } else if (selectedId == null) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 message?.let { Text(it) }
+                if (canRelease && settings != null) OutlinedButton(onClick = { showSettings = true }) { Text(hiltechText("إعدادات الشركة والمستندات","Company & document settings")) }
                 CommercialWorkbenchSection(
                     state = CommercialWorkbenchState(
                         enabled = true,
@@ -238,6 +254,8 @@ fun commercialReadNativeWorkspace(
                             quoteBusy = quoteBusy,
                             dispatchHistory = dispatchHistory,
                             emailHistory = emailHistory,
+                            defaultPaymentTerms = settings?.profile?.paymentTerms.orEmpty(),
+                            defaultDeliveryTerms = settings?.profile?.deliveryTerms.orEmpty(),
                         ),
                         onRefresh = { refreshVersion++ },
                         onAction = { action -> perform(action) { coordinator.dispatch(action, it) } },

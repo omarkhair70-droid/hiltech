@@ -105,6 +105,39 @@ class MainActivity : ComponentActivity() {
             if (uri != null && request != null) captureEvidenceUri(request, uri)
         }
 
+    private var pendingCommercialLogo: CompletableDeferred<ByteArray?>? = null
+    private val chooseCommercialLogo = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        val pending = pendingCommercialLogo
+        pendingCommercialLogo = null
+        if (pending != null) {
+            if (uri == null) pending.complete(null) else scope.launch(Dispatchers.IO) {
+                try {
+                    val bytes = contentResolver.openInputStream(uri)?.use { input ->
+                        val output = ByteArrayOutputStream()
+                        val buffer = ByteArray(8192)
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            output.write(buffer, 0, n)
+                            require(output.size() <= 1048576)
+                        }
+                        output.toByteArray()
+                    }
+                    pending.complete(bytes)
+                } catch (e: Exception) { pending.completeExceptionally(e) }
+            }
+        }
+    }
+    private suspend fun selectCommercialLogo(): ByteArray? {
+        if (pendingCommercialLogo != null) return null
+        val pending = CompletableDeferred<ByteArray?>()
+        pendingCommercialLogo = pending
+        try {
+            chooseCommercialLogo.launch(arrayOf("image/png", "image/jpeg"))
+            return pending.await()
+        } finally { if (pendingCommercialLogo === pending) pendingCommercialLogo = null }
+    }
+
     // Separate bounded bank CSV picker, never routed through field-work Evidence.
     private var pendingBankCsvPicker: CompletableDeferred<FinanceBankCsvSelectedFile?>? = null
     private val chooseBankCsvFile =
@@ -296,6 +329,7 @@ class MainActivity : ComponentActivity() {
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
+                                pickLogo = { selectCommercialLogo() },
                                 exportPdf = { filename, bytes ->
                                     val safe = filename.replace(Regex("[^A-Za-z0-9._-]"), "_")
                                     val folder = File(cacheDir, "commercial-exports").apply { mkdirs() }

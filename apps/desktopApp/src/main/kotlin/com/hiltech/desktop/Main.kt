@@ -2877,6 +2877,17 @@ fun main() {
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
+                                pickLogo = {
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                        SwingUtilities.invokeAndWait {
+                                            val picker = javax.swing.JFileChooser()
+                                            picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter("PNG / JPEG", "png", "jpg", "jpeg")
+                                            if (picker.showOpenDialog(null) == javax.swing.JFileChooser.APPROVE_OPTION) chosen.set(picker.selectedFile)
+                                        }
+                                        chosen.get()?.let { file -> require(file.length() in 1L..1048576L); file.readBytes().also { require(it.size <= 1048576) } }
+                                    }
+                                },
                                 exportPdf = { filename, bytes ->
                                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                                         val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()

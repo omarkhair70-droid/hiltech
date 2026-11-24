@@ -166,7 +166,7 @@ class CommercialService(
     }
 
     fun documentSettings(company: UUID, actor: UUID): CommercialDocumentSettingsDto {
-        access.require(actor, company, "SALES_RELEASE")
+        access.require(actor, company, "SALES_WRITE", "SALES_RELEASE")
         return CommercialDocumentSettings.read(jdbc, company)
     }
 

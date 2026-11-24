@@ -46,6 +46,8 @@ data class CommercialDealWorkspaceState(
     val quoteBusy: Boolean = false,
     val dispatchHistory: List<CommercialQuoteDispatchDto> = emptyList(),
     val emailHistory: List<com.hiltech.shared.core.commercial.CommercialQuoteEmailStatusDto> = emptyList(),
+    val defaultPaymentTerms: String = "",
+    val defaultDeliveryTerms: String = "",
 )
 
 data class CommercialDraftLine(
@@ -168,7 +170,7 @@ fun CommercialDealWorkspaceSection(
                 )
                 CommercialStage.QUOTE -> CommercialQuotePanel(
                     detail, state.canWrite, state.canRelease, onAction,
-                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote, state.dispatchHistory, onRecordDispatch, state.emailHistory, onSendEmail,
+                    state.customerQuote, state.quoteBusy, onPreviewQuote, onExportQuote, state.dispatchHistory, onRecordDispatch, state.emailHistory, onSendEmail, state.defaultPaymentTerms, state.defaultDeliveryTerms,
                 )
                 CommercialStage.AWARD -> CommercialAwardPanel(
                     detail, state.canAward, state.canCreateProject, onAction,
@@ -444,6 +446,8 @@ private fun CommercialQuotePanel(
     onRecordDispatch: ((String, String, String) -> Unit)?,
     emailHistory: List<com.hiltech.shared.core.commercial.CommercialQuoteEmailStatusDto>,
     onSendEmail: ((String, String) -> Unit)?,
+    defaultPaymentTerms: String,
+    defaultDeliveryTerms: String,
 ) {
     val op=deal.opportunity
     Text(hiltechText("عروض الأسعار والاعتماد", "Customer quotations & approval"), style=MaterialTheme.typography.titleMedium)
@@ -473,8 +477,8 @@ private fun CommercialQuotePanel(
     }
     if (canWrite && op.state in setOf("OPEN","QUALIFIED")) {
         var boqId by remember(op.id) { mutableStateOf("") }
-        var payment by remember(op.id) { mutableStateOf("") }
-        var delivery by remember(op.id) { mutableStateOf("") }
+        var payment by remember(op.id) { mutableStateOf(defaultPaymentTerms) }
+        var delivery by remember(op.id) { mutableStateOf(defaultDeliveryTerms) }
         var exclusions by remember(op.id) { mutableStateOf("") }
         var validity by remember(op.id) { mutableStateOf("") }
         var discount by remember(op.id) { mutableStateOf("0") }
