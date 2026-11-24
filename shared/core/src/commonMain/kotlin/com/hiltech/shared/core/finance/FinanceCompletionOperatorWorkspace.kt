@@ -311,7 +311,7 @@ private fun CompletionOperatorSection(
         if (busy) Text("جارٍ الاتصال بالمصدر…")
         if (items.isEmpty() && !busy && error==null) Text("لا توجد عمليات جاهزة في القائمة (حتى 100 عملية).")
         items.forEach { item ->
-            OutlinedButton(enabled=!busy,onClick={
+            OutlinedButton(modifier=Modifier.fillMaxWidth(),enabled=!busy,onClick={
                 selected=item; lookup=item.id; operationId=null; confirmation=false
             }) { Column { Text(item.details.firstOrNull().orEmpty()); item.details.getOrNull(1)?.let {Text(it,style=MaterialTheme.typography.bodySmall)}; Text(item.id.take(8),style=MaterialTheme.typography.labelSmall) } }
         }
