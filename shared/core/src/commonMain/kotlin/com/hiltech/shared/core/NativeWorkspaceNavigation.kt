@@ -45,6 +45,7 @@ internal fun NativeWorkspaceNavigation(
     scroll: ScrollState,
     compact: Boolean,
     onSelect: (ShellWorkspace) -> Unit,
+    onFind: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalHiltechOperationalColors.current
@@ -95,6 +96,11 @@ internal fun NativeWorkspaceNavigation(
                         modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 16.dp),
                         style = MaterialTheme.typography.titleLarge,
                     )
+                    onFind?.let { open ->
+                        TextButton(onClick = open, modifier = Modifier.fillMaxWidth()) {
+                            Text("Find · Ctrl+K")
+                        }
+                    }
                     destinations.forEach { destination ->
                         if (destination == selected) {
                             FilledTonalButton(

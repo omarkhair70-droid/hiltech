@@ -10,6 +10,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -2764,6 +2769,7 @@ fun main() {
     }
 
     application {
+        var desktopFindRequest by remember { mutableIntStateOf(0) }
         Window(
             onCloseRequest = {
                 scope.cancel()
@@ -2772,6 +2778,14 @@ fun main() {
             },
             title = "HILTECH",
             state = rememberWindowState(width = 1120.dp, height = 760.dp),
+            onPreviewKeyEvent = { event ->
+                if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.K &&
+                    shellState.value is HiltechShellState.SignedIn
+                ) {
+                    desktopFindRequest += 1
+                    true
+                } else false
+            },
         ) {
             val navigationIdentity = (shellState.value as? HiltechShellState.SignedIn)?.identity
             val navigationOrganization = navigationIdentity?.organizations?.firstOrNull { it.primary }
@@ -2783,6 +2797,7 @@ fun main() {
                 state = shellState.value,
                 projectFocusRequest = executiveProjectFocus,
                 desktopNavigation = true,
+                desktopFindRequest = desktopFindRequest,
                 desktopPurchasingAvailable = purchasingAvailable,
                 employeeAccountWorkspace = { employee ->
                     navigationIdentity?.let { identity ->

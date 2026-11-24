@@ -85,6 +85,7 @@ hiltech:
         enabled: ${HILTECH_KEYCLOAK_PROVISIONING_ENABLED:false}
         admin-client-id: ${HILTECH_KEYCLOAK_ADMIN_CLIENT_ID:}
         admin-client-secret: ${HILTECH_KEYCLOAK_ADMIN_CLIENT_SECRET:}
+        admin-base-uri: ${HILTECH_KEYCLOAK_ADMIN_BASE_URI:}
         email-action-link-enabled: ${HILTECH_KEYCLOAK_EMAIL_ACTION_LINK_ENABLED:false}
     session:
       ttl-seconds: ${HILTECH_SESSION_TTL_SECONDS:43200}

@@ -6,6 +6,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +17,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -285,6 +288,7 @@ fun HiltechShell(
     peopleOffboardingAvailable: Boolean = true,
     inboxWorkspace: (@Composable () -> Unit)? = null,
     employeeAccountWorkspace: (@Composable (EmployeeDetailDto) -> Unit)? = null,
+    desktopFindRequest: Int = 0,
 ) {
     HiltechOperationalTheme {
         // Never inherit a different actor's previous desktop/mobile scroll
@@ -312,6 +316,10 @@ fun HiltechShell(
             add(ShellWorkspace.Account)
         } else emptyList()
         var requestedWorkspace by remember(shellScrollScope) { mutableStateOf(ShellWorkspace.Home) }
+        var finding by remember(shellScrollScope) { mutableStateOf(false) }
+        LaunchedEffect(desktopFindRequest) {
+            if (desktopNavigation && signedIn != null && desktopFindRequest > 0) finding = true
+        }
         val selectedWorkspace = requestedWorkspace.takeIf(destinations::contains) ?: destinations.firstOrNull()
         LaunchedEffect(selectedWorkspace, compactNavigation) {
             if (compactNavigation) onCompactNavigationChanged(
@@ -353,6 +361,9 @@ fun HiltechShell(
             scroll = scopedShellScroll,
             compact = compactNavigation,
             onSelect = { requestedWorkspace = it },
+            onFind = if (desktopNavigation && signedIn != null) {
+                { finding = true }
+            } else null,
         ) {
             Text(
                 selectedWorkspace?.label ?: "HILTECH OS",
@@ -795,6 +806,33 @@ fun HiltechShell(
                 }
             }
         }
+
+        if (finding && desktopNavigation && signedIn != null) {
+            val commands = buildList {
+                destinations.forEach { workspace ->
+                    add(WorkspaceSearchResult("workspace:${workspace.name}", workspace.label, "Workspace") {
+                        requestedWorkspace = workspace
+                    })
+                }
+                signedIn.projects?.list?.items.orEmpty().forEach { project ->
+                    add(WorkspaceSearchResult(
+                        "project:${project.projectId}", project.name, "Project · ${project.projectCode}",
+                    ) {
+                        requestedWorkspace = ShellWorkspace.Projects
+                        onSelectProject(project.projectId)
+                    })
+                }
+                signedIn.people?.directory?.takeIf { it.canManagePeople }?.items.orEmpty().forEach { employee ->
+                    add(WorkspaceSearchResult(
+                        "employee:${employee.employeeId}", employee.displayName, "People · ${employee.employeeCode}",
+                    ) {
+                        requestedWorkspace = ShellWorkspace.People
+                        onSelectEmployee(employee.employeeId)
+                    })
+                }
+            }
+            WorkspaceSearch(commands, onDismiss = { finding = false })
+        }
     }
 }
 
@@ -1224,35 +1262,19 @@ private fun PeopleSection(
     }
 
     state.selectedEmployee?.let { employee ->
-        Text(
-            "Employee detail",
-            style = MaterialTheme.typography.titleSmall,
-        )
-        Text(
-            employee.displayName +
-                " · " +
-                employee.employeeCode,
-        )
-        Text(
-            "State: " +
-                employee.employeeState +
-                " · version " +
-                employee.version,
-        )
-        employee.employmentTypeCode
-            ?.let {
-                Text(
-                    "Employment: $it",
-                )
-            }
-        employee.legalName?.let {
-            Text("Legal name: $it")
-        }
-        employee.mobile?.let {
-            Text("Mobile: $it")
-        }
-        employee.email?.let {
-            Text("Email: $it")
+        val detailAnchor = remember(employee.employeeId) { BringIntoViewRequester() }
+        LaunchedEffect(employee.employeeId) { detailAnchor.bringIntoView() }
+        HiltechPanel(Modifier.fillMaxWidth().bringIntoViewRequester(detailAnchor)) {
+            Text(employee.displayName, style = MaterialTheme.typography.titleLarge)
+            Text(employee.employeeCode, style = MaterialTheme.typography.bodySmall)
+            HiltechStateTag(
+                label = employee.employeeState.lowercase().replaceFirstChar { it.uppercaseChar() },
+                tone = if (employee.employeeState == "ACTIVE") HiltechStateTone.CURRENT else HiltechStateTone.NEUTRAL,
+            )
+            employee.employmentTypeCode?.let { Text("Employment: $it") }
+            employee.legalName?.takeUnless { it == employee.displayName }?.let { Text("Legal name: $it") }
+            employee.mobile?.let { Text("Mobile: $it") }
+            employee.email?.let { Text("Email: $it") }
         }
 
         state.selectedWorkforceAssignment
@@ -1685,6 +1707,9 @@ private fun WorkforceAssignmentChangeSection(
         remember(current.assignmentId) {
             mutableStateOf(false)
         }
+    var rolesExpanded by remember(current.assignmentId) { mutableStateOf(false) }
+    var customRole by remember(current.assignmentId) { mutableStateOf(false) }
+    val knownRoles = (listOf(current) + structure?.items.orEmpty()).distinctBy { it.roleCode }
 
     val knownTeams =
         structure
@@ -1799,17 +1824,39 @@ private fun WorkforceAssignmentChangeSection(
         }
     }
 
-    OutlinedTextField(
-        value = proposedRoleCode,
-        onValueChange = {
-            proposedRoleCode = it
-            confirming = false
-        },
-        label = {
-            Text("New role code")
-        },
-        singleLine = true,
-    )
+    if (customRole) {
+        OutlinedTextField(
+            value = proposedRoleCode,
+            onValueChange = {
+                proposedRoleCode = it
+                confirming = false
+            },
+            label = { Text("Role code") },
+            singleLine = true,
+        )
+        OutlinedButton(onClick = { customRole = false }) { Text("Choose an existing role") }
+    } else {
+        Box {
+            OutlinedButton(onClick = { rolesExpanded = true }) {
+                Text(proposedRoleLabel.ifBlank { proposedRoleCode })
+            }
+            DropdownMenu(expanded = rolesExpanded, onDismissRequest = { rolesExpanded = false }) {
+                knownRoles.forEach { role ->
+                    DropdownMenuItem(text = { Text(role.roleLabel ?: role.roleCode) }, onClick = {
+                        proposedRoleCode = role.roleCode
+                        proposedRoleLabel = role.roleLabel.orEmpty()
+                        confirming = false
+                        rolesExpanded = false
+                    })
+                }
+                DropdownMenuItem(text = { Text("Enter a new role") }, onClick = {
+                    rolesExpanded = false
+                    customRole = true
+                    confirming = false
+                })
+            }
+        }
+    }
     OutlinedTextField(
         value = proposedRoleLabel,
         onValueChange = {

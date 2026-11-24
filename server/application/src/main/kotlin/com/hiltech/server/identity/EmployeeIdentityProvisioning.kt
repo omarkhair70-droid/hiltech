@@ -112,6 +112,7 @@ data class KeycloakProvisioningProperties(
     var adminClientId: String = "",
     var adminClientSecret: String = "",
     var emailActionLinkEnabled: Boolean = false,
+    var adminBaseUri: String = "",
 ) {
     fun validateEnabled() {
         if (!enabled) {
@@ -123,6 +124,21 @@ data class KeycloakProvisioningProperties(
         require(adminClientSecret.isNotBlank()) {
             "hiltech.identity.provisioning.keycloak.admin-client-secret must be configured when provisioning is enabled."
         }
+        privateAdminBaseUri()
+    }
+
+    internal fun privateAdminBaseUri(): URI? {
+        if (adminBaseUri.isBlank()) return null
+        val base = runCatching { URI.create(adminBaseUri.trim().trimEnd('/')) }.getOrNull()
+        require(base != null && base.scheme in setOf("https", "http") && !base.host.isNullOrBlank() &&
+            base.userInfo == null && base.query == null && base.fragment == null
+        ) {
+            "hiltech.identity.provisioning.keycloak.admin-base-uri must be an HTTP(S) service base URI."
+        }
+        require(base.scheme == "https" || base.host.matches(Regex("[A-Za-z0-9][A-Za-z0-9-]*"))) {
+            "HTTP Keycloak administration requires a private network service alias."
+        }
+        return base
     }
 }
 
@@ -1001,8 +1017,8 @@ internal class KeycloakIdentityAdminClient(
             try {
                 http.post()
                     .uri(
-                        issuer() +
-                            "/protocol/openid-connect/token",
+                        providerBaseUri().toString().trimEnd('/') +
+                            "/realms/" + encode(realm()) + "/protocol/openid-connect/token",
                     )
                     .contentType(
                         MediaType
@@ -1053,18 +1069,8 @@ internal class KeycloakIdentityAdminClient(
             .trimEnd('/')
 
     private fun providerBaseUri(): URI {
-        val uri = URI.create(
-            issuer(),
-        )
-        return URI(
-            uri.scheme,
-            uri.userInfo,
-            uri.host,
-            uri.port,
-            "",
-            null,
-            null,
-        )
+        return properties.privateAdminBaseUri()
+            ?: URI.create(issuer().substringBeforeLast("/realms/"))
     }
 
     private fun realm(): String {

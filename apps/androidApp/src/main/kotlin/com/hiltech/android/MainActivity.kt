@@ -66,6 +66,7 @@ import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.inbox.InboxWorkspace
 import com.hiltech.shared.core.network.HiltechApiException
 import com.hiltech.shared.core.people.CreateEmployeeRequestDto
+import com.hiltech.shared.core.people.ChangeWorkforceAssignmentRequestDto
 import com.hiltech.shared.core.people.EmployeeDetailDto
 import com.hiltech.shared.core.people.EmployeeAccountWorkspace
 import kotlinx.coroutines.CompletableDeferred
@@ -378,6 +379,7 @@ class MainActivity : ComponentActivity() {
                 onRefreshPeople = ::refreshPeople,
                 onSelectEmployee = ::selectEmployee,
                 onCreateEmployee = ::createEmployee,
+                onChangeWorkforceAssignment = ::changeWorkforceAssignment,
                 peopleOffboardingAvailable = false,
                 employeeAccountWorkspace = { employee ->
                     (shellState as? HiltechShellState.SignedIn)?.let { signed ->
@@ -1797,6 +1799,11 @@ class MainActivity : ComponentActivity() {
             val directory = runCatching {
                 hiltechApplication.peopleApi.directory(organizationId, hiltechApplication.installationId)
             }.getOrNull()
+            val structure = if (directory?.canManagePeople == true) {
+                runCatching {
+                    hiltechApplication.workforceAssignmentApi.structure(organizationId, hiltechApplication.installationId)
+                }.getOrNull()
+            } else null
 
             updatePeople(peopleScope, requestSequence) { people ->
                 val profileFailure =
@@ -1842,6 +1849,9 @@ class MainActivity : ComponentActivity() {
                 HiltechPeopleState(
                     directory = directory,
                     selectedEmployee = people.selectedEmployee.takeIf { directory?.canManagePeople == true },
+                    selectedWorkforceAssignment = people.selectedWorkforceAssignment.takeIf { directory?.canManagePeople == true },
+                    selectedWorkforceHistory = people.selectedWorkforceHistory.takeIf { directory?.canManagePeople == true },
+                    workforceStructure = structure,
                     ownProfile = ownProfileResult.getOrNull(),
                     ownWorkforceAssignment = ownAssignmentResult.getOrNull(),
                     errorMessage = listOfNotNull(profileMessage, assignmentMessage)
@@ -1888,6 +1898,7 @@ class MainActivity : ComponentActivity() {
 
     private fun loadPeopleEmployee(
         refreshDirectory: Boolean = false,
+        keepSelection: Boolean = false,
         command: suspend (String, String) -> EmployeeDetailDto,
     ) {
         val signed = shellState as? HiltechShellState.SignedIn ?: return
@@ -1896,25 +1907,88 @@ class MainActivity : ComponentActivity() {
         val peopleScope = signed.peopleScope() ?: return
         val (identityId, organizationId) = peopleScope
         val requestSequence = ++peopleRequestSequence
-        shellState = signed.copy(people = people.copy(loading = true, errorMessage = null, selectedEmployee = null))
+        shellState = signed.copy(people = people.copy(
+            loading = true,
+            errorMessage = null,
+            selectedEmployee = people.selectedEmployee.takeIf { keepSelection },
+            selectedWorkforceAssignment = null,
+            selectedWorkforceHistory = null,
+        ))
         scope.launch {
             val result = runCatching { command(identityId, organizationId) }
+            val employee = result.getOrNull()?.takeIf { it.organizationId == organizationId }
+            val assignment = employee?.let {
+                runCatching {
+                    hiltechApplication.workforceAssignmentApi.currentForEmployee(it.employeeId, hiltechApplication.installationId)
+                }.getOrNull()?.takeIf { row -> row.organizationId == organizationId && row.employeeId == it.employeeId }
+            }
+            val history = employee?.let {
+                runCatching { hiltechApplication.workforceAssignmentApi.history(it.employeeId, hiltechApplication.installationId) }
+                    .getOrNull()?.takeIf { history ->
+                        history.items.all { row -> row.organizationId == organizationId && row.employeeId == it.employeeId }
+                    }
+            }
+            val structure = if (employee != null && keepSelection) {
+                runCatching {
+                    hiltechApplication.workforceAssignmentApi.structure(organizationId, hiltechApplication.installationId)
+                }.getOrNull()
+            } else null
             val refreshedDirectory = if (refreshDirectory && result.isSuccess) {
                 runCatching {
                     hiltechApplication.peopleApi.directory(organizationId, hiltechApplication.installationId)
-                }.getOrNull()
+                }
             } else null
             updatePeople(peopleScope, requestSequence) { current ->
-                val directory = refreshedDirectory ?: current.directory
+                val directory = if (refreshedDirectory == null) current.directory else refreshedDirectory.getOrNull()
                 current.copy(
                     loading = false,
                     directory = directory,
-                    selectedEmployee = result.getOrNull()?.takeIf {
-                        it.organizationId == organizationId && directory?.canManagePeople == true
-                    },
-                    errorMessage = result.exceptionOrNull()?.let { it.message ?: "Employee details are unavailable." },
+                    selectedEmployee = employee.takeIf { directory?.canManagePeople == true },
+                    selectedWorkforceAssignment = assignment.takeIf { directory?.canManagePeople == true },
+                    selectedWorkforceHistory = history.takeIf { directory?.canManagePeople == true },
+                    workforceStructure = (structure ?: current.workforceStructure).takeIf { directory?.canManagePeople == true },
+                    errorMessage = result.exceptionOrNull()?.let { it.message ?: "Employee details are unavailable." }
+                        ?: refreshedDirectory?.exceptionOrNull()?.let { "Refresh People to load the current employee directory." },
                 )
             }
+        }
+    }
+
+    private fun changeWorkforceAssignment(
+        employeeId: String,
+        assignmentId: String,
+        baseVersion: Long,
+        teamId: String?,
+        roleCode: String,
+        roleLabel: String?,
+        reportsToEmployeeId: String?,
+    ) {
+        val signed = shellState as? HiltechShellState.SignedIn ?: return
+        val employee = signed.people?.selectedEmployee?.takeIf { it.employeeId == employeeId } ?: return
+        val current = signed.people?.selectedWorkforceAssignment ?: return
+        if (current.assignmentId != assignmentId || current.version != baseVersion) return
+
+        loadPeopleEmployee(refreshDirectory = true, keepSelection = true) { identityId, organizationId ->
+            val fields = listOf(
+                "android-workforce-change", identityId, organizationId, employeeId, assignmentId,
+                baseVersion.toString(), teamId, roleCode, roleLabel, reportsToEmployeeId,
+            ).joinToString("") { value -> value?.let { "${it.length}:$it" } ?: "-1:" }
+            hiltechApplication.workforceAssignmentApi.change(
+                employeeId = employeeId,
+                request = ChangeWorkforceAssignmentRequestDto(
+                    operationId = UUID.nameUUIDFromBytes(fields.encodeToByteArray()).toString(),
+                    currentAssignmentId = assignmentId,
+                    baseAssignmentVersion = baseVersion,
+                    teamId = teamId,
+                    roleCode = roleCode,
+                    roleLabel = roleLabel,
+                    reportsToEmployeeId = reportsToEmployeeId,
+                ),
+                installationId = hiltechApplication.installationId,
+            )
+            runCatching {
+                hiltechApplication.peopleApi.detail(employeeId, hiltechApplication.installationId)
+            }.getOrDefault(employee)
         }
     }
 
