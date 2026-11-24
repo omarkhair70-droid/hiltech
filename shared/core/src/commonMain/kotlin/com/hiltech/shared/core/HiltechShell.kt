@@ -440,26 +440,61 @@ fun HiltechShell(
                             ?: state.identity.organizations.firstOrNull()
 
                     if (show(ShellWorkspace.Home)) {
-                        Text(
-                            primary?.displayName ?: "HILTECH",
-                            style = MaterialTheme.typography.titleLarge,
-                        )
                         if (selectedWorkspace == null) {
-                            Text("Identity ${state.identity.identityId.take(8)} · ${state.identity.identityStatus}")
-                        }
-                        if (state.identity.teams.isNotEmpty()) {
-                            Text("Teams: " + state.identity.teams.joinToString { it.name })
-                        }
-                        if (selectedWorkspace != null && nativeSession.availability["executive-home"] == WorkspaceAvailability.AVAILABLE) {
-                            OutlinedButton(onClick = {
-                                requestedWorkspace = ShellWorkspace.Explore
-                                nativeSession.open("executive-home")
-                            }) { Text(hiltechText("نظرة عامة على الشركة", "Open company overview")) }
-                        }
-                        if (selectedWorkspace != null && inboxWorkspace != null) {
-                            OutlinedButton(onClick = { requestedWorkspace = ShellWorkspace.Inbox }) {
-                                Text(hiltechText("فتح الوارد", "Open inbox"))
+                            Text(primary?.displayName ?: "HILTECH", style = MaterialTheme.typography.titleLarge)
+                            Text("Identity " + state.identity.identityId.take(8) + " · " + state.identity.identityStatus)
+                        } else {
+                            val colors = com.hiltech.shared.core.design.LocalHiltechOperationalColors.current
+                            HiltechPanel(Modifier.fillMaxWidth()) {
+                                Text("HILTECH / " + (primary?.organizationCode ?: "WORKSPACE"),
+                                    color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+                                Text(state.people?.ownProfile?.displayName?.let { hiltechText("أهلًا، ", "Welcome, ") + it }
+                                    ?: (primary?.displayName ?: "HILTECH"), style = MaterialTheme.typography.headlineMedium)
+                                Text(hiltechText("مساحة عملك", "Your workspace"), style = MaterialTheme.typography.titleMedium)
+                                state.people?.ownWorkforceAssignment?.let { assignment ->
+                                    Text(assignment.roleLabel ?: assignment.roleCode, color = colors.secondaryText)
+                                }
+                                if (state.identity.teams.isNotEmpty()) Text(state.identity.teams.joinToString { it.name },
+                                    color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
                             }
+                            if (nativeSession.availability["executive-home"] == WorkspaceAvailability.AVAILABLE) {
+                                HomeWorkspaceLink(
+                                    title = hiltechText("الشركة اليوم", "Company today"),
+                                    detail = hiltechText("القرارات والمشروعات وإشارات التشغيل", "Decisions, projects and operational signals"),
+                                    workspace = ShellWorkspace.Home,
+                                    onOpen = { requestedWorkspace = ShellWorkspace.Explore; nativeSession.open("executive-home") },
+                                )
+                            }
+                            if (ShellWorkspace.Work in destinations) {
+                                HomeWorkspaceLink(
+                                    title = hiltechText("شغلي اليوم", "My work today"),
+                                    detail = hiltechText("التكليفات المعروضة: ", "Visible assignments: ") + (state.field?.today?.size ?: 0),
+                                    workspace = ShellWorkspace.Work,
+                                    onOpen = { requestedWorkspace = ShellWorkspace.Work },
+                                )
+                            }
+                            if (ShellWorkspace.Inbox in destinations) {
+                                HomeWorkspaceLink(hiltechText("الوارد والقرارات", "Inbox & decisions"),
+                                    hiltechText("المراجعات والطلبات الموجهة إليك", "Reviews and requests assigned to you"),
+                                    ShellWorkspace.Inbox) { requestedWorkspace = ShellWorkspace.Inbox }
+                            }
+                            val areas = destinations.filter { it in setOf(ShellWorkspace.Projects, ShellWorkspace.People, ShellWorkspace.Warehouse, ShellWorkspace.Purchasing) }
+                            if (areas.isNotEmpty()) {
+                                Text(hiltechText("مساحات عملك", "Your workspaces"), style = MaterialTheme.typography.titleLarge)
+                                areas.forEach { area ->
+                                    val detail = when (area) {
+                                        ShellWorkspace.Projects -> hiltechText("المشاريع والتنفيذ والتخطيط", "Projects, execution and planning")
+                                        ShellWorkspace.People -> hiltechText("الأفراد والمسؤوليات", "People and responsibilities")
+                                        ShellWorkspace.Warehouse -> hiltechText("الأصناف والمعدات والحركات", "Stock, equipment and movements")
+                                        else -> hiltechText("طلبات التوريد والموردون", "Supply requests and suppliers")
+                                    }
+                                    HomeWorkspaceLink(language.text(area.displayLabel, area.label), detail, area) { requestedWorkspace = area }
+                                }
+                            }
+                            if (ShellWorkspace.Explore in destinations) HomeWorkspaceLink(
+                                hiltechText("استكشف الشركة", "Explore the company"),
+                                hiltechText("باقي المساحات المتاحة لحسابك", "Other workspaces available to your account"),
+                                ShellWorkspace.Explore) { requestedWorkspace = ShellWorkspace.Explore }
                         }
                     }
 
@@ -877,7 +912,7 @@ fun HiltechShell(
                     })
                 }
                 nativeWorkspaces.filter { nativeSession.availability[it.id] == WorkspaceAvailability.AVAILABLE }.forEach { workspace ->
-                    add(WorkspaceSearchResult("specialist:${workspace.id}", workspace.label, "Operations") {
+                    add(WorkspaceSearchResult("specialist:${workspace.id}", nativeWorkspaceTitle(workspace, language), language.text("العمليات", "Operations")) {
                         requestedWorkspace = ShellWorkspace.Explore
                         nativeSession.open(workspace.id)
                     })
@@ -907,6 +942,24 @@ fun HiltechShell(
     }
 }
 
+
+@Composable
+private fun HomeWorkspaceLink(title: String, detail: String, workspace: ShellWorkspace, onOpen: () -> Unit) {
+    val colors = com.hiltech.shared.core.design.LocalHiltechOperationalColors.current
+    androidx.compose.material3.Surface(onClick = onOpen, modifier = Modifier.fillMaxWidth(),
+        shape = com.hiltech.shared.core.design.HiltechShape.medium, color = colors.surface,
+        contentColor = colors.primaryText) {
+        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            WorkspaceGlyph(workspace, colors.accent)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(detail, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+            }
+            Text(hiltechText("فتح", "Open"), color = colors.accent)
+        }
+    }
+}
 
 @Composable
 private fun EmployeeOnboardingSection(
@@ -1200,15 +1253,15 @@ private fun PeopleSection(
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                com.hiltech.shared.core.design.HiltechSectionHeading("PEOPLE / ORGANIZATION", "الأفراد",
-                    "دليل الفريق، المسؤوليات، وحسابات العمل.")
+                com.hiltech.shared.core.design.HiltechSectionHeading("PEOPLE / ORGANIZATION", hiltechText("الأفراد", "People"),
+                    hiltechText("دليل الفريق، المسؤوليات، وحسابات العمل.", "Team directory, responsibilities and work accounts."))
             }
-            androidx.compose.material3.TextButton(onClick = onRefresh, enabled = !state.loading) { Text("تحديث") }
+            androidx.compose.material3.TextButton(onClick = onRefresh, enabled = !state.loading) { Text(hiltechText("تحديث", "Refresh")) }
         }
-        if (state.loading) Text("جارٍ تحديث بيانات الفريق…", color = colors.secondaryText)
+        if (state.loading) Text(hiltechText("جارٍ تحديث بيانات الفريق…", "Refreshing team data…"), color = colors.secondaryText)
         state.errorMessage?.let {
             HiltechPanel(Modifier.fillMaxWidth()) {
-                HiltechStateTag("تعذر تحديث البيانات", HiltechStateTone.ATTENTION)
+                HiltechStateTag(hiltechText("تعذر تحديث البيانات", "Unable to refresh data"), HiltechStateTone.ATTENTION)
                 Text(it)
             }
         }
@@ -1218,30 +1271,30 @@ private fun PeopleSection(
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         androidx.compose.material3.FilterChip(selected = directoryMode, onClick = { directoryMode = true },
-                            label = { Text("الموظفون") })
+                            label = { Text(hiltechText("الموظفون", "Employees")) })
                         if (state.workforceStructure != null) {
                             androidx.compose.material3.FilterChip(selected = !directoryMode, onClick = { directoryMode = false },
-                                label = { Text("هيكل الفريق") })
+                                label = { Text(hiltechText("هيكل الفريق", "Team structure")) })
                         }
                     }
                     if (directoryMode || state.workforceStructure == null) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Text("دليل الموظفين", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                            Text(hiltechText("دليل الموظفين", "Employee directory"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                             if (directory.canManagePeople) Button(enabled = !state.loading, onClick = { creating = !creating }) {
-                                Text(if (creating) "إغلاق" else "+ موظف")
+                                Text(if (creating) hiltechText("إغلاق", "Close") else hiltechText("+ موظف", "+ Employee"))
                             }
                         }
                         if (creating && directory.canManagePeople) HiltechPanel(Modifier.fillMaxWidth()) {
                             PeopleCreateForm(onCreateEmployee = onCreateEmployee, canSubmit = !state.loading)
                         }
                         OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
-                            label = { Text("الاسم أو كود الموظف") }, singleLine = true)
+                            label = { Text(hiltechText("الاسم أو كود الموظف", "Employee name or code")) }, singleLine = true)
                         val matches = directory.items.filter { item ->
                             query.isBlank() || item.displayName.contains(query.trim(), ignoreCase = true) ||
                                 item.employeeCode.contains(query.trim(), ignoreCase = true)
                         }
-                        Text("المعروض: " + matches.size, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
-                        if (matches.isEmpty()) Text(if (query.isBlank()) "لا توجد سجلات متاحة." else "لا توجد نتائج مطابقة.")
+                        Text(hiltechText("المعروض: ", "Visible: ") + matches.size, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+                        if (matches.isEmpty()) Text(if (query.isBlank()) hiltechText("لا توجد سجلات متاحة.", "No available records.") else hiltechText("لا توجد نتائج مطابقة.", "No matching results."))
                         matches.forEach { item ->
                             androidx.compose.material3.Surface(
                                 onClick = { creating = false; showDetail = true; onSelectEmployee(item.employeeId) },
@@ -1261,7 +1314,7 @@ private fun PeopleSection(
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Text(item.displayName, style = MaterialTheme.typography.titleMedium)
                                         Text(item.employeeCode, color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
-                                        Text(if (item.linkedIdentity) "حساب مرتبط" else "حساب غير مرتبط",
+                                        Text(if (item.linkedIdentity) hiltechText("حساب مرتبط", "Account linked") else "حساب غير مرتبط",
                                             color = colors.secondaryText, style = MaterialTheme.typography.labelSmall)
                                     }
                                     HiltechStateTag(employeeStateLabel(item.employeeState),
@@ -1271,7 +1324,7 @@ private fun PeopleSection(
                         }
                     } else {
                         val groups = state.workforceStructure?.items.orEmpty().groupBy { it.teamName ?: "بدون فريق" }
-                        if (groups.isEmpty()) Text("لا توجد تعيينات متاحة.")
+                        if (groups.isEmpty()) Text(hiltechText("لا توجد تعيينات متاحة.", "No assignments available."))
                         groups.forEach { (team, assignments) ->
                             HiltechPanel(Modifier.fillMaxWidth()) {
                                 Text(team, style = MaterialTheme.typography.titleMedium)
@@ -1279,7 +1332,7 @@ private fun PeopleSection(
                                     androidx.compose.material3.HorizontalDivider(color = colors.divider)
                                     Text(assignment.employeeDisplayName, style = MaterialTheme.typography.titleSmall)
                                     Text(assignment.roleLabel ?: assignment.roleCode, color = colors.secondaryText)
-                                    assignment.reportsToDisplayName?.let { Text("المسؤول المباشر: " + it,
+                                    assignment.reportsToDisplayName?.let { Text(hiltechText("المسؤول المباشر: ", "Reports to: ") + it,
                                         style = MaterialTheme.typography.bodySmall) }
                                 }
                             }
@@ -1291,8 +1344,8 @@ private fun PeopleSection(
             val detail: @Composable () -> Unit = {
                 if (employee == null || !directory.canManagePeople) {
                     HiltechPanel(Modifier.fillMaxWidth()) {
-                        Text("اختر موظفًا", style = MaterialTheme.typography.titleLarge)
-                        Text("افتح سجل الموظف للاطلاع على ملفه، مسؤولياته، وحساب العمل.")
+                        Text(hiltechText("اختر موظفًا", "Select an employee"), style = MaterialTheme.typography.titleLarge)
+                        Text(hiltechText("افتح سجل الموظف للاطلاع على ملفه، مسؤولياته، وحساب العمل.", "Open an employee to view their profile, responsibilities and account."))
                     }
                 } else {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1313,26 +1366,26 @@ private fun PeopleSection(
                                     (it != PeopleWorkspaceTab.Offboarding || offboardingAvailable)
                             }.forEach { item ->
                                 androidx.compose.material3.FilterChip(selected = tab == item, onClick = { tab = item },
-                                    label = { Text(item.title) })
+                                    label = { Text(hiltechText(item.title, item.english)) })
                             }
                         }
                         when (tab) {
                             PeopleWorkspaceTab.Profile -> HiltechPanel(Modifier.fillMaxWidth()) {
-                                Text("بيانات الموظف", style = MaterialTheme.typography.titleMedium)
-                                employee.legalName?.takeUnless { it == employee.displayName }?.let { com.hiltech.shared.core.design.HiltechKeyValue("الاسم الرسمي", it) }
-                                employee.employmentTypeCode?.let { com.hiltech.shared.core.design.HiltechKeyValue("نوع التوظيف", it) }
-                                employee.mobile?.let { com.hiltech.shared.core.design.HiltechKeyValue("الهاتف", it) }
-                                employee.email?.let { com.hiltech.shared.core.design.HiltechKeyValue("البريد الإلكتروني", it) }
-                                employee.hireDate?.let { com.hiltech.shared.core.design.HiltechKeyValue("تاريخ التعيين", it) }
-                                com.hiltech.shared.core.design.HiltechKeyValue("حساب العمل",
-                                    if (employee.linkedIdentityId != null) "مرتبط" else "لم يتم ربطه")
+                                Text(hiltechText("بيانات الموظف", "Employee information"), style = MaterialTheme.typography.titleMedium)
+                                employee.legalName?.takeUnless { it == employee.displayName }?.let { com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("الاسم الرسمي", "Legal name"), it) }
+                                employee.employmentTypeCode?.let { com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("نوع التوظيف", "Employment type"), it) }
+                                employee.mobile?.let { com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("الهاتف", "Phone"), it) }
+                                employee.email?.let { com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("البريد الإلكتروني", "Email"), it) }
+                                employee.hireDate?.let { com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("تاريخ التعيين", "Hire date"), it) }
+                                com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("حساب العمل", "Work account"),
+                                    if (employee.linkedIdentityId != null) hiltechText("مرتبط", "Linked") else hiltechText("لم يتم ربطه", "Not linked"))
                             }
                             PeopleWorkspaceTab.Assignment -> {
                                 val assignment = state.selectedWorkforceAssignment
                                 if (assignment != null) WorkforceAssignmentChangeSection(employee = employee, current = assignment,
                                     structure = state.workforceStructure, history = state.selectedWorkforceHistory,
                                     onChange = onChangeWorkforceAssignment)
-                                else Text("لم تتوفر بيانات التعيين الحالي.")
+                                else Text(hiltechText("لم تتوفر بيانات التعيين الحالي.", "Current assignment data is unavailable."))
                             }
                             PeopleWorkspaceTab.Account -> if (!state.loading) accountWorkspace?.invoke(employee)
                             PeopleWorkspaceTab.Offboarding -> if (offboardingAvailable) OffboardingAdminSection(
@@ -1353,7 +1406,7 @@ private fun PeopleSection(
                 } else {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (showDetail && employee != null && directory.canManagePeople) {
-                            androidx.compose.material3.TextButton(onClick = { showDetail = false }) { Text("العودة إلى الدليل") }
+                            androidx.compose.material3.TextButton(onClick = { showDetail = false }) { Text(hiltechText("العودة إلى الدليل", "Back to directory")) }
                             detail()
                         } else browser()
                     }
@@ -1363,15 +1416,15 @@ private fun PeopleSection(
 
         state.ownProfile?.let { own ->
             HiltechPanel(Modifier.fillMaxWidth()) {
-                Text("ملفي الشخصي", style = MaterialTheme.typography.titleMedium)
+                Text(hiltechText("ملفي الشخصي", "My profile"), style = MaterialTheme.typography.titleMedium)
                 Text(own.displayName, style = MaterialTheme.typography.titleLarge)
                 Text(own.employeeCode, color = colors.secondaryText)
                 HiltechStateTag(employeeStateLabel(own.employeeState), HiltechStateTone.NEUTRAL)
                 own.employmentTypeCode?.let { Text(it) }
                 state.ownWorkforceAssignment?.let { assignment ->
-                    com.hiltech.shared.core.design.HiltechKeyValue("المسؤولية", assignment.roleLabel ?: assignment.roleCode)
-                    assignment.teamName?.let { com.hiltech.shared.core.design.HiltechKeyValue("الفريق", it) }
-                    assignment.reportsToDisplayName?.let { com.hiltech.shared.core.design.HiltechKeyValue("المسؤول المباشر", it) }
+                    com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("المسؤولية", "Responsibility"), assignment.roleLabel ?: assignment.roleCode)
+                    assignment.teamName?.let { com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("الفريق", "Team"), it) }
+                    assignment.reportsToDisplayName?.let { com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("المسؤول المباشر", "Reports to"), it) }
                     Text(assignment.effectiveFrom, style = MaterialTheme.typography.labelSmall, color = colors.secondaryText)
                 }
             }
@@ -1379,8 +1432,8 @@ private fun PeopleSection(
     }
 }
 
-private enum class PeopleWorkspaceTab(val title: String) {
-    Profile("الملف"), Assignment("المسؤوليات"), Account("حساب العمل"), Offboarding("إنهاء الخدمة"),
+private enum class PeopleWorkspaceTab(val title: String, val english: String) {
+    Profile("الملف", "Profile"), Assignment("المسؤوليات", "Responsibilities"), Account("حساب العمل", "Work account"), Offboarding("إنهاء الخدمة", "Offboarding"),
 }
 
 private fun employeeStateLabel(state: String): String = when (state) {
