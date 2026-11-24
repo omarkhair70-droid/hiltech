@@ -295,13 +295,25 @@ fun financeEvidenceReadNativeWorkspace(
         } catch (_: Exception) {
             false
         }
-        if (apAllowed) true else try {
-            apis.supplierInvoices.list(organizationId, installationId)
-            true // even an empty list proves this original current-org GET succeeded
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            false
+        if (apAllowed) true else {
+            val supplierAllowed = try {
+                apis.supplierInvoices.list(organizationId, installationId)
+                true // an empty authorized GET is still source proof
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
+            if (supplierAllowed) true else if (reviewPreparationEnabled) try {
+                // Finance AR preparers must not need supplier-ledger permissions.
+                // The existing Sales->Finance projection checks its own authority.
+                apis.clientAwards.list(organizationId,installationId)
+                    .organizationId.equals(organizationId,ignoreCase=true)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            } else false
         }
     },
     hostOwnsScroll = false,
