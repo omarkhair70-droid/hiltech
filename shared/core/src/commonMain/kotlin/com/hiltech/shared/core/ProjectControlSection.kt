@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.HiltechRecordChoice
+import com.hiltech.shared.core.design.HiltechRecordPicker
 import com.hiltech.shared.core.design.HiltechSectionHeading
 import com.hiltech.shared.core.design.HiltechShape
 import com.hiltech.shared.core.design.HiltechStateTag
@@ -131,6 +133,8 @@ fun ProjectControlSection(
     onWorkReadinessAction: (WorkReadinessUiAction) -> Unit = {},
     reservationPort: ReservationUiPort? = null,
     onProjectCommandCenterAction: (ProjectCommandCenterUiAction) -> Unit = {},
+    employeeChoices: List<HiltechRecordChoice> = emptyList(),
+    teamChoices: List<HiltechRecordChoice> = emptyList(),
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides com.hiltech.shared.core.design.LocalHiltechLanguage.current.direction) {
         val colors = LocalHiltechOperationalColors.current
@@ -174,7 +178,9 @@ fun ProjectControlSection(
                     if (creating) {
                         HiltechPanel(Modifier.fillMaxWidth()) {
                             Text(hiltechText("إنشاء مشروع", "Create project"), style = MaterialTheme.typography.titleLarge)
-                            ProjectCreateForm(onCreateProject = onCreateProject)
+                            ProjectCreateForm(onCreateProject = onCreateProject,
+                                clientChoices = state.list?.items.orEmpty().map { HiltechRecordChoice(it.clientOrganizationId, it.clientDisplayName) }.distinctBy { it.id },
+                                employeeChoices = employeeChoices, teamChoices = teamChoices)
                         }
                     }
                     OutlinedTextField(value = query, onValueChange = { query = it },
@@ -264,7 +270,8 @@ fun ProjectControlSection(
                                     TextButton(onClick = { showManager = !showManager }) {
                                         Text(if (showManager) hiltechText("إغلاق تغيير المسؤول", "Close manager change") else hiltechText("تغيير مسؤول المشروع", "Change project manager"))
                                     }
-                                    if (showManager) ProjectManagerChangeForm(project = selected, onChangeManager = onChangeManager)
+                                    if (showManager) ProjectManagerChangeForm(project = selected, onChangeManager = onChangeManager,
+                                        employeeChoices = employeeChoices, teamChoices = teamChoices)
                                     Text("المصدر: " + selected.sourceType + (selected.sourceExternalReference?.let { " · " + it } ?: ""),
                                         style = MaterialTheme.typography.labelSmall, color = colors.secondaryText)
                                 }
@@ -351,6 +358,9 @@ private fun projectStateTone(state: String): HiltechStateTone = when (state) {
 
 @Composable
 private fun ProjectCreateForm(
+    clientChoices: List<HiltechRecordChoice>,
+    employeeChoices: List<HiltechRecordChoice>,
+    teamChoices: List<HiltechRecordChoice>,
     onCreateProject:
         (
             String,
@@ -401,67 +411,50 @@ private fun ProjectCreateForm(
     OutlinedTextField(
         value = name,
         onValueChange = { name = it },
-        label = { Text("اسم المشروع") },
+        label = { Text(hiltechText("اسم المشروع", "Project name")) },
     )
-    OutlinedTextField(
-        value = clientId,
-        onValueChange = { clientId = it },
-        label = {
-            Text(
-                "Client Organization ID",
-            )
-        },
-    )
-    OutlinedTextField(
-        value = sourceType,
-        onValueChange = {
-            sourceType = it
-        },
-        label = {
-            Text("Source: INTERNAL / IMPORT")
-        },
-    )
-    OutlinedTextField(
+    HiltechRecordPicker(hiltechText("العميل", "Client"), clientId, clientChoices, { clientId = it })
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = sourceType == "INTERNAL", onClick = { sourceType = "INTERNAL"; sourceReference = "" },
+            label = { Text(hiltechText("مشروع داخلي", "Internal project")) })
+        FilterChip(selected = sourceType == "IMPORT", onClick = { sourceType = "IMPORT" },
+            label = { Text(hiltechText("مشروع مستورد", "Imported project")) })
+    }
+    if (sourceType == "IMPORT") OutlinedTextField(
         value = sourceReference,
         onValueChange = {
             sourceReference = it
         },
         label = {
-            Text("مرجع الاستيراد — لو IMPORT")
+            Text(hiltechText("مرجع الاستيراد — لو IMPORT", "Import reference"))
         },
     )
     OutlinedTextField(
         value = code,
         onValueChange = { code = it },
         label = {
-            Text("Project code يدوي — لو السياسة تسمح")
+            Text(hiltechText("Project code يدوي — لو السياسة تسمح", "Project code (if policy permits)"))
         },
     )
-    OutlinedTextField(
-        value = principalType,
-        onValueChange = {
-            principalType = it
-        },
-        label = {
-            Text("المسؤول: EMPLOYEE / TEAM — اختياري")
-        },
+    Text(hiltechText("مسؤول المشروع (اختياري)", "Project owner (optional)"), style = MaterialTheme.typography.titleSmall)
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf("" to hiltechText("لاحقًا", "Later"), "EMPLOYEE" to hiltechText("موظف", "Employee"),
+            "TEAM" to hiltechText("فريق", "Team")).forEach { (type, title) ->
+            FilterChip(selected = principalType == type, onClick = { principalType = type; principalId = "" }, label = { Text(title) })
+        }
+    }
+    if (principalType.isNotBlank()) HiltechRecordPicker(
+        hiltechText("المسؤول", "Owner"), principalId,
+        if (principalType == "EMPLOYEE") employeeChoices else teamChoices, { principalId = it },
     )
-    OutlinedTextField(
-        value = principalId,
-        onValueChange = {
-            principalId = it
-        },
-        label = {
-            Text("Responsibility principal ID")
-        },
-    )
+    Text(hiltechText("الجدول المخطط", "Planned schedule"), style = MaterialTheme.typography.titleSmall)
     OutlinedTextField(
         value = startDate,
         onValueChange = {
             startDate = it
         },
         label = {
-            Text("بداية مخططة YYYY-MM-DD")
+            Text(hiltechText("بداية مخططة YYYY-MM-DD", "Planned start YYYY-MM-DD"))
         },
     )
     OutlinedTextField(
@@ -470,13 +463,14 @@ private fun ProjectCreateForm(
             endDate = it
         },
         label = {
-            Text("نهاية مخططة YYYY-MM-DD")
+            Text(hiltechText("نهاية مخططة YYYY-MM-DD", "Planned end YYYY-MM-DD"))
         },
     )
     Button(
         enabled =
             name.isNotBlank() &&
-                clientId.isNotBlank(),
+                clientId.isNotBlank() &&
+                (principalType.isBlank() || principalId.isNotBlank()),
         onClick = {
             onCreateProject(
                 name,
@@ -517,13 +511,15 @@ private fun ProjectCreateForm(
             )
         },
     ) {
-        Text("إنشاء المشروع")
+        Text(hiltechText("إنشاء المشروع", "Create project"))
     }
 }
 
 @Composable
 private fun ProjectManagerChangeForm(
     project: ProjectSummaryDto,
+    employeeChoices: List<HiltechRecordChoice>,
+    teamChoices: List<HiltechRecordChoice>,
     onChangeManager:
         (
             String,
@@ -549,27 +545,19 @@ private fun ProjectManagerChangeForm(
             MaterialTheme.typography
                 .titleSmall,
     )
-    OutlinedTextField(
-        value = type,
-        onValueChange = { type = it },
-        label = {
-            Text("EMPLOYEE / TEAM")
-        },
-    )
-    OutlinedTextField(
-        value = principalId,
-        onValueChange = {
-            principalId = it
-        },
-        label = {
-            Text("Principal ID")
-        },
-    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = type == "EMPLOYEE", onClick = { type = "EMPLOYEE"; principalId = "" },
+            label = { Text(hiltechText("موظف", "Employee")) })
+        FilterChip(selected = type == "TEAM", onClick = { type = "TEAM"; principalId = "" },
+            label = { Text(hiltechText("فريق", "Team")) })
+    }
+    HiltechRecordPicker(hiltechText("المسؤول الجديد", "New owner"), principalId,
+        if (type == "EMPLOYEE") employeeChoices else teamChoices, { principalId = it })
     OutlinedTextField(
         value = reason,
         onValueChange = { reason = it },
         label = {
-            Text("سبب التغيير — اختياري")
+            Text(hiltechText("سبب التغيير — اختياري", "Reason for change (optional)"))
         },
     )
     OutlinedButton(
@@ -588,7 +576,7 @@ private fun ProjectManagerChangeForm(
             )
         },
     ) {
-        Text("تغيير المسؤول")
+        Text(hiltechText("تغيير المسؤول", "Change owner"))
     }
 }
 
