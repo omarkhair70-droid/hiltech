@@ -1,6 +1,12 @@
 package com.hiltech.shared.core
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.TextButton
+import com.hiltech.shared.core.design.*
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
@@ -141,8 +147,11 @@ fun ProjectPlanningSection(
     plan: ProjectPlanDto,
     onAction: (PlanningUiAction) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("هيكل تخطيط المشروع", style = MaterialTheme.typography.titleMedium)
+    var tab by remember(plan.project.projectId) { mutableStateOf(PlanningArea.Sites) }
+    var creating by remember(plan.project.projectId, tab) { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        HiltechSectionHeading("PROJECT / PLAN", hiltechText("هيكل تخطيط المشروع", "Project plan"),
+            hiltechText("المواقع والمعالم وحزم العمل والاعتماديات.", "Sites, milestones, work packages and dependencies."))
         Text(
             "Baseline ${plan.project.baselineVersion} · v${plan.project.version} · " +
                 if (plan.canEditPlan) "قابل للتعديل" else "مجمّد للقراءة",
@@ -174,54 +183,81 @@ fun ProjectPlanningSection(
             ) { Text("تجميد الخطة والانتقال إلى READY") }
         }
 
-        Text("المواقع والمناطق", style = MaterialTheme.typography.titleSmall)
-        plan.projectSites.forEach { site ->
-            Text("${site.siteCode} · ${site.name} · ${site.lifecycleState}")
-            plan.areas.filter { it.siteId == site.siteId }.forEach { area ->
-                AreaRow(plan, area, onAction)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            PlanningArea.entries.forEach { area ->
+                FilterChip(selected = tab == area, onClick = { tab = area }, label = { Text(hiltechText(area.ar, area.en)) })
             }
         }
-        if (plan.canEditPlan && plan.projectSites.isNotEmpty()) {
-            CreateAreaForm(plan, onAction)
+        if (plan.canEditPlan) TextButton(onClick = { creating = !creating }) {
+            Text(if (creating) hiltechText("إغلاق الإنشاء", "Close creation") else hiltechText("+ إضافة", "+ Add"))
         }
+        when (tab) {
+            PlanningArea.Sites -> HiltechPanel(Modifier.fillMaxWidth()) {
+                Text(hiltechText("المواقع والمناطق", "Sites & areas"), style = MaterialTheme.typography.titleSmall)
+                plan.projectSites.forEach { site ->
+                    Text("${site.siteCode} · ${site.name} · ${site.lifecycleState}")
+                    plan.areas.filter { it.siteId == site.siteId }.forEach { area ->
+                        AreaRow(plan, area, onAction)
+                    }
+                }
+                if (plan.canEditPlan && creating && plan.projectSites.isNotEmpty()) {
+                    CreateAreaForm(plan, onAction)
+                }
 
-        Text("المعالم", style = MaterialTheme.typography.titleSmall)
-        if (plan.milestones.isEmpty()) Text("لا توجد معالم مخططة بعد.")
-        plan.milestones.forEach { milestone -> MilestoneRow(plan, milestone, onAction) }
-        if (plan.canEditPlan) CreateMilestoneForm(plan, onAction)
 
-        Text("حزم العمل", style = MaterialTheme.typography.titleSmall)
-        if (plan.workPackages.isEmpty()) Text("لا توجد حزم عمل مخططة بعد.")
-        plan.workPackages.forEach { workPackage -> WorkPackageRow(plan, workPackage, onAction) }
-        if (plan.canEditPlan) CreateWorkPackageForm(plan, onAction)
-
-        Text("اعتماديات الخطة", style = MaterialTheme.typography.titleSmall)
-        if (plan.dependencies.isEmpty()) Text("لا توجد اعتماديات.")
-        plan.dependencies.forEach { dependency ->
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("من ${dependency.predecessor.type} · ${dependency.predecessor.id.take(8)}")
-                Text(
-                    "إلى ${dependency.successor.type} · ${dependency.successor.id.take(8)} · " +
-                        "${dependency.dependencyType} · ${dependency.lagMinutes} دقيقة",
-                )
             }
-            if (plan.canEditPlan) {
-                OutlinedButton(onClick = {
-                    onAction(
-                        PlanningUiAction.RemoveDependency(
-                            projectId = plan.project.projectId,
-                            dependencyId = dependency.dependencyId,
-                            baseProjectVersion = plan.project.version,
-                            baseObjectVersion = dependency.version,
-                            expectedBaselineVersion = plan.project.baselineVersion,
-                        ),
-                    )
-                }) { Text("إزالة") }
+            PlanningArea.Milestones -> HiltechPanel(Modifier.fillMaxWidth()) {
+                Text(hiltechText("المعالم", "Milestones"), style = MaterialTheme.typography.titleSmall)
+                if (plan.milestones.isEmpty()) Text(hiltechText("لا توجد معالم مخططة بعد.", "No planned milestones."))
+                plan.milestones.forEach { milestone -> MilestoneRow(plan, milestone, onAction) }
+                if (plan.canEditPlan && creating) CreateMilestoneForm(plan, onAction)
+
+
+            }
+            PlanningArea.Packages -> HiltechPanel(Modifier.fillMaxWidth()) {
+                Text(hiltechText("حزم العمل", "Work packages"), style = MaterialTheme.typography.titleSmall)
+                if (plan.workPackages.isEmpty()) Text(hiltechText("لا توجد حزم عمل مخططة بعد.", "No planned work packages."))
+                plan.workPackages.forEach { workPackage -> WorkPackageRow(plan, workPackage, onAction) }
+                if (plan.canEditPlan && creating) CreateWorkPackageForm(plan, onAction)
+
+
+            }
+            PlanningArea.Dependencies -> HiltechPanel(Modifier.fillMaxWidth()) {
+                Text(hiltechText("اعتماديات الخطة", "Plan dependencies"), style = MaterialTheme.typography.titleSmall)
+                if (plan.dependencies.isEmpty()) Text(hiltechText("لا توجد اعتماديات.", "No dependencies."))
+                plan.dependencies.forEach { dependency ->
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("من ${dependency.predecessor.type} · ${dependency.predecessor.id.take(8)}")
+                        Text(
+                            "إلى ${dependency.successor.type} · ${dependency.successor.id.take(8)} · " +
+                                "${dependency.dependencyType} · ${dependency.lagMinutes} دقيقة",
+                        )
+                    }
+                    if (plan.canEditPlan) {
+                        OutlinedButton(onClick = {
+                            onAction(
+                                PlanningUiAction.RemoveDependency(
+                                    projectId = plan.project.projectId,
+                                    dependencyId = dependency.dependencyId,
+                                    baseProjectVersion = plan.project.version,
+                                    baseObjectVersion = dependency.version,
+                                    expectedBaselineVersion = plan.project.baselineVersion,
+                                ),
+                            )
+                        }) { Text(hiltechText("إزالة", "Remove")) }
+                    }
+                }
+                if (plan.canEditPlan && creating) AddDependencyForm(plan, onAction)
+
             }
         }
-        if (plan.canEditPlan) AddDependencyForm(plan, onAction)
-
     }
+}
+private enum class PlanningArea(val ar: String, val en: String) {
+    Sites("المواقع والمناطق", "Sites & areas"),
+    Milestones("المعالم", "Milestones"),
+    Packages("حزم العمل", "Work packages"),
+    Dependencies("الاعتماديات", "Dependencies"),
 }
 
 @Composable
@@ -249,6 +285,9 @@ private fun AreaRow(plan: ProjectPlanDto, area: AreaDto, onAction: (PlanningUiAc
 @Composable
 private fun CreateAreaForm(plan: ProjectPlanDto, onAction: (PlanningUiAction) -> Unit) {
     var projectSiteId by remember(plan.project.projectId) { mutableStateOf(plan.projectSites.first().projectSiteId) }
+    HiltechRecordPicker(hiltechText("الموقع", "Project site"), projectSiteId,
+        plan.projectSites.map { HiltechRecordChoice(it.projectSiteId, it.name, it.siteCode) },
+        { projectSiteId = it }, allowKnownReference = false)
     AreaFields("", "", "ZONE", "", "") { code, name, type, parent, sequence ->
         onAction(
             PlanningUiAction.CreateArea(
@@ -257,7 +296,6 @@ private fun CreateAreaForm(plan: ProjectPlanDto, onAction: (PlanningUiAction) ->
             ),
         )
     }
-    OutlinedTextField(projectSiteId, { projectSiteId = it }, label = { Text("Project Site ID للمنطقة الجديدة") })
 }
 
 @Composable
@@ -274,11 +312,11 @@ private fun AreaFields(
     var type by remember(initialType) { mutableStateOf(initialType) }
     var parent by remember(initialParent) { mutableStateOf(initialParent) }
     var sequence by remember(initialSequence) { mutableStateOf(initialSequence) }
-    OutlinedTextField(code, { code = it }, label = { Text("كود المنطقة") })
-    OutlinedTextField(name, { name = it }, label = { Text("اسم المنطقة") })
-    OutlinedTextField(type, { type = it }, label = { Text("نوع المنطقة") })
+    OutlinedTextField(code, { code = it }, label = { Text(hiltechText("كود المنطقة", "Area code")) })
+    OutlinedTextField(name, { name = it }, label = { Text(hiltechText("اسم المنطقة", "Area name")) })
+    OutlinedTextField(type, { type = it }, label = { Text(hiltechText("نوع المنطقة", "Area type")) })
     OutlinedTextField(parent, { parent = it }, label = { Text("Parent Area ID — اختياري") })
-    OutlinedTextField(sequence, { sequence = it }, label = { Text("الترتيب — اختياري") })
+    OutlinedTextField(sequence, { sequence = it }, label = { Text(hiltechText("الترتيب — اختياري", "Sequence (optional)")) })
     Button(enabled = code.isNotBlank() && name.isNotBlank() && type.isNotBlank(), onClick = {
         submit(code.trim(), name.trim(), type.trim(), parent.trim(), sequence.trim())
     }) { Text(if (initialCode.isBlank()) "إضافة منطقة" else "حفظ المنطقة") }
@@ -406,7 +444,7 @@ private fun WorkPackageFields(
     OutlinedTextField(ownerId, { ownerId = it }, label = { Text("Owner ID — اختياري") })
     OutlinedTextField(start, { start = it }, label = { Text("بداية مخططة — اختياري") })
     OutlinedTextField(end, { end = it }, label = { Text("نهاية مخططة — اختياري") })
-    OutlinedTextField(sequence, { sequence = it }, label = { Text("الترتيب — اختياري") })
+    OutlinedTextField(sequence, { sequence = it }, label = { Text(hiltechText("الترتيب — اختياري", "Sequence (optional)")) })
     Button(enabled = code.isNotBlank() && name.isNotBlank(), onClick = {
         submit(
             WorkPackageValues(
