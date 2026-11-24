@@ -1,6 +1,14 @@
 package com.hiltech.shared.core
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import com.hiltech.shared.core.design.*
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
@@ -62,56 +70,34 @@ fun ProjectCommandCenterSection(
         verticalArrangement =
             Arrangement.spacedBy(8.dp),
     ) {
-        Text(
-            "مركز قيادة المشروع",
-            style =
-                MaterialTheme.typography
-                    .titleMedium,
-        )
-        Text(
-            commandCenter.projectCode +
-                " · " +
-                commandCenter.projectName +
-                " · baseline " +
-                commandCenter.baselineVersion,
-        )
-
-        val progress =
-            commandCenter.progress
-        Text(
-            "التقدم التشغيلي المقبول: " +
-                (
-                    progress.progressPercent
-                        ?.let { it + "%" }
-                        ?: "غير متاح — لا يوجد وزن داخل المقام"
-                ),
-        )
-        Text(
-            "Accepted weight " +
-                progress.acceptedWeight +
-                " / " +
-                progress.totalWeight +
-                " · الأعمال المقبولة " +
-                progress.acceptedWorkCount +
-                "/" +
-                progress.includedWorkCount,
-        )
-        Text(
-            "Project version " +
-                progress.projectVersion +
-                " · baseline " +
-                progress.baselineVersion,
-        )
-
-        val health =
-            commandCenter.health
-        Text(
-            "صحة المشروع: " +
-                health.state,
-            style =
-                MaterialTheme.typography
-                    .titleSmall,
-        )
+        val colors = LocalHiltechOperationalColors.current
+        val progress = commandCenter.progress
+        val health = commandCenter.health
+        var sourceDetails by remember(project.projectId) { mutableStateOf(false) }
+        var lifecycleAction by remember(project.projectId, project.version) { mutableStateOf(false) }
+        HiltechSectionHeading("PROJECT / EXECUTION", hiltechText("مركز قيادة المشروع", "Project command center"),
+            commandCenter.projectCode + " · " + commandCenter.projectName)
+        HiltechPanel(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(hiltechText("التقدم المقبول", "Accepted progress"), style = MaterialTheme.typography.labelLarge, color = colors.secondaryText)
+                    Text(progress.progressPercent?.let { it + "%" } ?: "—", style = MaterialTheme.typography.displaySmall)
+                }
+                HiltechStateTag(health.state, when (health.state) {
+                    "HEALTHY", "ON_TRACK" -> HiltechStateTone.CURRENT
+                    "CRITICAL", "BLOCKED" -> HiltechStateTone.BLOCKED
+                    else -> HiltechStateTone.ATTENTION
+                })
+            }
+            val fraction = progress.progressPercent?.toDoubleOrNull()?.takeIf { it.isFinite() && it in 0.0..100.0 }
+            if (fraction != null) LinearProgressIndicator(progress = { (fraction / 100.0).toFloat() }, modifier = Modifier.fillMaxWidth(), color = colors.accent)
+            else Text(hiltechText("التقدم غير متاح من المصدر الحالي.", "Progress is unavailable from the current source."), color = colors.secondaryText)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HiltechKeyValue(hiltechText("الأعمال المقبولة", "Accepted work"), progress.acceptedWorkCount.toString() + " / " + progress.includedWorkCount, Modifier.weight(1f))
+                HiltechKeyValue(hiltechText("الوزن المقبول", "Accepted weight"), progress.acceptedWeight.toString() + " / " + progress.totalWeight, Modifier.weight(1f))
+            }
+        }
+        Text(hiltechText("صحة المشروع", "Project health"), style = MaterialTheme.typography.titleMedium)
         if (health.signals.isEmpty()) {
             Text(
                 if (health.state == "UNKNOWN") {
@@ -121,7 +107,7 @@ fun ProjectCommandCenterSection(
                 },
             )
         } else {
-            Text("لماذا؟")
+            Text(hiltechText("لماذا؟", "Why?"))
             health.signals.forEach {
                 Text(
                     "• " +
@@ -155,7 +141,7 @@ fun ProjectCommandCenterSection(
 
         if (commandCenter.waitingOn.isNotEmpty()) {
             Text(
-                "Waiting On",
+                hiltechText("Waiting On", "Waiting on"),
                 style =
                     MaterialTheme.typography
                         .titleSmall,
@@ -182,7 +168,7 @@ fun ProjectCommandCenterSection(
                 .isNotEmpty()
         ) {
             Text(
-                "مراجعات منتظرة",
+                hiltechText("مراجعات منتظرة", "Pending reviews"),
                 style =
                     MaterialTheme.typography
                         .titleSmall,
@@ -202,7 +188,7 @@ fun ProjectCommandCenterSection(
                 .isNotEmpty()
         ) {
             Text(
-                "إعادة العمل",
+                hiltechText("إعادة العمل", "Rework"),
                 style =
                     MaterialTheme.typography
                         .titleSmall,
@@ -220,31 +206,42 @@ fun ProjectCommandCenterSection(
                 }
         }
 
-        Text(
-            "Drill references: " +
-                commandCenter
-                    .projectSiteIds.size +
-                " ProjectSite · " +
-                commandCenter
-                    .workPackageIds.size +
-                " WorkPackage",
-        )
-        commandCenter.projectSiteIds
-            .take(4)
-            .forEach {
-                Text(
-                    "• PROJECT_SITE/" + it,
-                )
-            }
-        commandCenter.workPackageIds
-            .take(4)
-            .forEach {
-                Text(
-                    "• WORK_PACKAGE/" + it,
-                )
-            }
+        TextButton(onClick = { sourceDetails = !sourceDetails }) {
+            Text(if (sourceDetails) hiltechText("إخفاء مراجع المصدر", "Hide source references") else hiltechText("مراجع المصدر", "Source references"))
+        }
+        if (sourceDetails) HiltechPanel(Modifier.fillMaxWidth()) {
+            Text("Project v" + progress.projectVersion + " · Baseline " + progress.baselineVersion)
+            Text(
+                "Drill references: " +
+                    commandCenter
+                        .projectSiteIds.size +
+                    " ProjectSite · " +
+                    commandCenter
+                        .workPackageIds.size +
+                    " WorkPackage",
+            )
+            commandCenter.projectSiteIds
+                .take(4)
+                .forEach {
+                    Text(
+                        "• PROJECT_SITE/" + it,
+                    )
+                }
+            commandCenter.workPackageIds
+                .take(4)
+                .forEach {
+                    Text(
+                        "• WORK_PACKAGE/" + it,
+                    )
+                }
 
-        when (project.lifecycleState) {
+
+        }
+
+        if (project.lifecycleState in setOf("ACTIVE", "ON_HOLD")) TextButton(onClick = { lifecycleAction = !lifecycleAction }) {
+            Text(if (lifecycleAction) hiltechText("إغلاق", "Close") else hiltechText("إدارة حالة المشروع", "Manage project state"))
+        }
+        if (lifecycleAction) when (project.lifecycleState) {
             "ACTIVE" -> {
                 OutlinedTextField(
                     value = holdReason,
@@ -253,7 +250,7 @@ fun ProjectCommandCenterSection(
                     },
                     label = {
                         Text(
-                            "سبب إيقاف المشروع",
+                            hiltechText("سبب إيقاف المشروع", "Reason to put project on hold"),
                         )
                     },
                 )
@@ -275,7 +272,7 @@ fun ProjectCommandCenterSection(
                     },
                 ) {
                     Text(
-                        "وضع المشروع On Hold",
+                        hiltechText("وضع المشروع On Hold", "Put project on hold"),
                     )
                 }
             }
@@ -288,7 +285,7 @@ fun ProjectCommandCenterSection(
                     },
                     label = {
                         Text(
-                            "قرار/حل سبب الإيقاف",
+                            hiltechText("قرار/حل سبب الإيقاف", "Resolution of hold reason"),
                         )
                     },
                 )
@@ -309,7 +306,7 @@ fun ProjectCommandCenterSection(
                         )
                     },
                 ) {
-                    Text("استئناف المشروع")
+                    Text(hiltechText("استئناف المشروع", "Resume project"))
                 }
             }
         }
@@ -329,10 +326,7 @@ private fun ReviewWorkItemCard(
             mutableStateOf("")
         }
 
-    Column(
-        verticalArrangement =
-            Arrangement.spacedBy(4.dp),
-    ) {
+    HiltechPanel(Modifier.fillMaxWidth()) {
         Text(
             item.workOrderCode +
                 " · " +
@@ -392,7 +386,7 @@ private fun ReviewWorkItemCard(
         )
 
         if (item.decisions.isNotEmpty()) {
-            Text("سجل قرارات المراجعة")
+            Text(hiltechText("سجل قرارات المراجعة", "Review decision history"))
             item.decisions.forEach {
                 Text(
                     "• " +
@@ -422,7 +416,7 @@ private fun ReviewWorkItemCard(
             },
             label = {
                 Text(
-                    "سبب/ملاحظة القرار",
+                    hiltechText("سبب/ملاحظة القرار", "Decision reason / note"),
                 )
             },
         )
@@ -453,7 +447,7 @@ private fun ReviewWorkItemCard(
                     )
                 },
             ) {
-                Text("قبول")
+                Text(hiltechText("قبول", "Accept"))
             }
 
             OutlinedButton(
@@ -477,7 +471,7 @@ private fun ReviewWorkItemCard(
                     )
                 },
             ) {
-                Text("طلب إعادة عمل")
+                Text(hiltechText("طلب إعادة عمل", "Request rework"))
             }
         }
     }
