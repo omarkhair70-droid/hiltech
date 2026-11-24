@@ -22,7 +22,7 @@ import java.util.UUID
  */
 @RestController
 @RequestMapping("/v1/commercial")
-class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail, private val connections: CommercialMailConnection, private val whatsapp: CommercialQuoteWhatsapp, private val whatsappConnections: CommercialWhatsappConnection, private val oauth: CommercialMailOAuth) {
+class CommercialController(private val service: CommercialService, private val email: CommercialQuoteEmail, private val connections: CommercialMailConnection, private val whatsapp: CommercialQuoteWhatsapp, private val whatsappConnections: CommercialWhatsappConnection, private val oauth: CommercialMailOAuth, private val metaSignup: CommercialMetaSignup) {
     private fun operation(key: String, id: String): UUID {
         val parsed = id.commercialUuid()
         IdempotencyKeyContract.requireMatches(key, parsed)
@@ -39,6 +39,26 @@ class CommercialController(private val service: CommercialService, private val e
         HiltechRequestContext.current(http).requireIdentityId(),
         HiltechRequestContext.current(http).correlationId,
     )
+
+    @GetMapping("/meta/status")
+    fun metaStatus(http: HttpServletRequest,@RequestParam organizationId: String):Map<String,Boolean> {
+        whatsappConnections.status(organizationId.commercialUuid(),HiltechRequestContext.current(http).requireIdentityId())
+        return mapOf("available" to metaSignup.available())
+    }
+    @PostMapping("/meta/start")
+    fun metaStart(http: HttpServletRequest,@RequestBody body:MetaSignupStartRequest) =
+        metaSignup.start(body,HiltechRequestContext.current(http).requireIdentityId())
+    @GetMapping("/meta/launch",produces=["text/html"])
+    fun metaLaunch()=org.springframework.http.ResponseEntity.ok().header("Cache-Control","no-store").header("Referrer-Policy","no-referrer").body(metaSignup.browserPage())
+    @PostMapping("/meta/complete")
+    fun metaComplete(@RequestBody body:MetaSignupBrowserResult):org.springframework.http.ResponseEntity<Void> =
+        if(metaSignup.complete(body)) org.springframework.http.ResponseEntity.noContent().build() else org.springframework.http.ResponseEntity.badRequest().build()
+    @GetMapping("/meta/pending")
+    fun metaPending(http:HttpServletRequest,@RequestParam organizationId:String,@RequestParam pendingId:String) =
+        metaSignup.pendingStatus(organizationId.commercialUuid(),pendingId.commercialUuid(),HiltechRequestContext.current(http).requireIdentityId())
+    @PostMapping("/meta/finish")
+    fun metaFinish(http:HttpServletRequest,@RequestBody body:MetaSignupFinishRequest) =
+        metaSignup.finish(body,HiltechRequestContext.current(http).requireIdentityId())
 
     @GetMapping("/whatsapp-connection")
     fun whatsappConnection(http: HttpServletRequest,@RequestParam organizationId: String) =
