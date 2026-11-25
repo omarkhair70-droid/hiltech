@@ -41,12 +41,17 @@ class SupplierInvoiceMatchingServiceTest {
         Mockito.verifyNoInteractions(jdbc, po, approval, commands, audit)
     }
 
-    @Test fun enabledWithoutActualFinanceAuthorityKeyFailsClosed() {
+    @Test fun enabledWithoutAnAssignedFinanceReviewerFailsClosed() {
+        val org = UUID.randomUUID()
+        Mockito.`when`(approval.isActiveOrganizationMember(org, actor, now)).thenReturn(true)
         assertEquals("PROCUREMENT_SUPPLIER_INVOICE_UNAVAILABLE",
             assertThrows<ProductApiException> {
-                service(true).list(actor, UUID.randomUUID())
+                service(true).list(actor, org)
             }.code)
-        Mockito.verifyNoInteractions(jdbc, po, approval, commands, audit)
+        Mockito.verify(approval).isActiveOrganizationMember(org, actor, now)
+        Mockito.verify(approval).resolveCurrentAuthority(org, "FINANCE_SUPPLIER_REVIEW", now)
+        Mockito.verifyNoMoreInteractions(approval)
+        Mockito.verifyNoInteractions(jdbc, po, commands, audit)
     }
 
     @Test fun untrustedInvoiceNumberCannotBecomeFinanceEvidence() {

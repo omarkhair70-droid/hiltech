@@ -39,12 +39,19 @@ class FinanceEmployeeReviewServiceTest {
         Mockito.verifyNoInteractions(jdbc, approval)
     }
 
-    @Test fun noConfiguredCompanyReviewerMeansNoAccess() {
+    @Test fun defaultResponsibilityNameWithoutAnAssignedReviewerMeansNoAccess() {
+        val actor = UUID.randomUUID()
+        val org = UUID.randomUUID()
+        val now = Instant.parse("2026-11-23T10:00:00Z")
+        Mockito.`when`(approval.isActiveOrganizationMember(org, actor, now)).thenReturn(true)
         val denied = assertThrows<ProductApiException> {
-            service(true, "").list(UUID.randomUUID(), UUID.randomUUID())
+            service(true, "").list(actor, org)
         }
         assertEquals("FINANCE_EMPLOYEE_REVIEW_UNAVAILABLE", denied.code)
-        Mockito.verifyNoInteractions(jdbc, approval)
+        Mockito.verify(approval).isActiveOrganizationMember(org, actor, now)
+        Mockito.verify(approval).resolveCurrentAuthority(org, "FINANCE_EMPLOYEE_REVIEW", now)
+        Mockito.verifyNoMoreInteractions(approval)
+        Mockito.verifyNoInteractions(jdbc)
     }
 
     @Test fun currentOrganizationMembershipIsMandatoryForReviewer() {

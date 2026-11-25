@@ -128,7 +128,7 @@ class CompanyReviewPolicyMaintenancePostgresTest {
         val stalePolicy = impact.pendingPolicies.single()
         assertEquals("APPROVAL_POLICY_CHANGED", assertThrows<ProductApiException> {
             engine.supersedePolicyRequests(administrator, UUID.randomUUID(), ApprovalPolicyMaintenanceScope(org, UUID.fromString(stalePolicy.policyId),
-                configured.key, stalePolicy.policyRevision, stalePolicy.policyVersion, workflow.subjectType, 0), "Synthetic stale policy version", "synthetic")
+                configured.key, stalePolicy.policyRevision, stalePolicy.policyVersion, workflow.subjectType, stalePolicy.pendingReviews), "Synthetic stale policy version", "synthetic")
         }.code)
         jdbc.update("UPDATE organization_administration_authority_binding SET active=false WHERE organization_id=? AND identity_id=?", org, administrator)
         assertEquals("APPROVAL_POLICY_ADMINISTRATION_DENIED", assertThrows<ProductApiException> { setup.configure(command) }.code)

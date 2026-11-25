@@ -47,12 +47,19 @@ class FinancePayableCandidateServiceTest {
         Mockito.verifyNoInteractions(jdbc, approval, purchases, invoices, commands, audit)
     }
 
-    @Test fun flagWithoutCompanyDefinedAuthorityFailsClosed() {
+    @Test fun enabledWithoutAnAssignedCompanyReviewerFailsClosed() {
+        val actor = UUID.randomUUID()
+        val org = UUID.randomUUID()
+        val now = Instant.parse("2026-11-22T20:00:00Z")
+        Mockito.`when`(approval.isActiveOrganizationMember(org, actor, now)).thenReturn(true)
         val error = assertThrows<ProductApiException> {
-            service(enabled = true).candidates(UUID.randomUUID(), UUID.randomUUID())
+            service(enabled = true).candidates(actor, org)
         }
         assertEquals("FINANCE_PAYABLE_UNAVAILABLE", error.code)
-        Mockito.verifyNoInteractions(jdbc, approval, purchases, invoices, commands, audit)
+        Mockito.verify(approval).isActiveOrganizationMember(org, actor, now)
+        Mockito.verify(approval).resolveCurrentAuthority(org, "FINANCE_SUPPLIER_REVIEW", now)
+        Mockito.verifyNoMoreInteractions(approval)
+        Mockito.verifyNoInteractions(jdbc, purchases, invoices, commands, audit)
     }
 
     @Test fun currentCompanyMembershipIsMandatoryBeforeQuery() {
@@ -70,11 +77,17 @@ class FinancePayableCandidateServiceTest {
     }
 
     @Test fun rejectedPermissionKeyNeverEnablesFinance() {
+        val actor = UUID.randomUUID()
+        val org = UUID.randomUUID()
+        val now = Instant.parse("2026-11-22T20:00:00Z")
+        Mockito.`when`(approval.isActiveOrganizationMember(org, actor, now)).thenReturn(true)
         val error = assertThrows<ProductApiException> {
             service(enabled = true, key = "finance guessed")
-                .candidates(UUID.randomUUID(), UUID.randomUUID())
+                .candidates(actor, org)
         }
         assertEquals("FINANCE_PAYABLE_UNAVAILABLE", error.code)
-        Mockito.verifyNoInteractions(jdbc, approval, purchases, invoices, commands, audit)
+        Mockito.verify(approval).isActiveOrganizationMember(org, actor, now)
+        Mockito.verifyNoMoreInteractions(approval)
+        Mockito.verifyNoInteractions(jdbc, purchases, invoices, commands, audit)
     }
 }

@@ -29,6 +29,7 @@ import org.springframework.beans.factory.support.StaticListableBeanFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
+import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.support.TransactionTemplate
 import java.math.BigDecimal
 import java.security.MessageDigest
@@ -69,6 +70,11 @@ object FinancePayrollResultPostgresScenario {
                 val subject = FinancePayrollResultSubject(repo, authority, persistence,
                     StaticListableBeanFactory(mapOf("publication" to publication)).getBeanProvider(PayrollRunPublicationPort::class.java), clock)
                 val manager = DataSourceTransactionManager(requireNotNull(jdbc.dataSource))
+                // Expected command failures need their own savepoint inside this rollback-only fixture.
+                // Keep the production executor's REQUIRED rollback behavior unchanged.
+                val negativeCommand = TransactionTemplate(manager).apply {
+                    propagationBehavior = TransactionDefinition.PROPAGATION_NESTED
+                }
                 val commands = JdbcIdempotentCommandExecutor(jdbc, manager, clock, HiltechTelemetryRuntime(OpenTelemetry.noop()) {})
                 val audit = JdbcAuditEventWriter(jdbc)
                 var beforeStorageRead: (() -> Unit)? = null
@@ -106,9 +112,14 @@ object FinancePayrollResultPostgresScenario {
                 val reviewSubject = ApprovalSubjectRef(org, FINANCE_PAYROLL_RESULT_SUBJECT, successProposal.targetId,
                     repo.proposal(org, successProposal.targetId)!!.reviewVersion)
                 val approvalRequest = engine.subjectStatus(reviewSubject, FINANCE_PAYROLL_RESULT_POLICY)!!
-                assertThrows<ProductApiException> {
-                    engine.decide(reviewer, UUID.randomUUID(), approvalRequest.approvalRequestId, ApprovalDecisionType.APPROVE, null, "synthetic-generic-proof-gate")
-                }
+                val deniedOperation = UUID.randomUUID()
+                assertEquals("APPROVAL_SOURCE_REVIEW_NOT_ALLOWED", assertThrows<ProductApiException> {
+                    negativeCommand.executeWithoutResult {
+                        engine.decide(reviewer, deniedOperation, approvalRequest.approvalRequestId, ApprovalDecisionType.APPROVE, null, "synthetic-generic-proof-gate")
+                    }
+                }.code)
+                assertFalse(transaction.isRollbackOnly, "An isolated expected rejection must not poison the rest of the source journey")
+                assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM idempotent_operation WHERE operation_id=?", Int::class.java, deniedOperation))
                 assertEquals(ApprovalRequestState.PENDING, engine.subjectStatus(reviewSubject, FINANCE_PAYROLL_RESULT_POLICY)!!.state)
                 assertTrue(adapter.paymentEvents(org, run).isEmpty())
                 val ownProof = evidence.read(preparer, org, successProposal.targetId, "synthetic-payroll-proof")
@@ -250,8 +261,13 @@ object FinancePayrollResultPostgresScenario {
                 assertTrue(adapter.paymentEvents(UUID.randomUUID(), run).isEmpty())
                 assertThrows<ProductApiException> { service.review(preparer, org, returnProposal.targetId,
                     FinancePayrollReviewResult(UUID.randomUUID(), "APPROVE"), "synthetic-payroll-result") }
-                assertThrows<ProductApiException> { service.propose(preparer, org, instruction.id,
-                    successRequest.copy(operationId = UUID.randomUUID(), baseResultVersion = 4), "synthetic-payroll-result") }
+                assertThrows<ProductApiException> {
+                    negativeCommand.executeWithoutResult {
+                        service.propose(preparer, org, instruction.id,
+                            successRequest.copy(operationId = UUID.randomUUID(), baseResultVersion = 4), "synthetic-payroll-result")
+                    }
+                }
+                assertFalse(transaction.isRollbackOnly)
             } finally {
                 transaction.setRollbackOnly()
             }

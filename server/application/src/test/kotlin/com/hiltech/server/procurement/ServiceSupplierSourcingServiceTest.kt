@@ -48,12 +48,16 @@ class ServiceSupplierSourcingServiceTest {
         Mockito.verifyNoInteractions(jdbc,approvals,suppliers,documentTarget,commands,audit)
     }
 
-    @Test fun buyerKeyMustBeExplicitNotDerivedFromTeamOrReviewerLabel() {
+    @Test fun defaultBuyerResponsibilityWithoutAnActualAssignmentDoesNotExposeNeeds() {
+        Mockito.`when`(approvals.isActiveOrganizationMember(org, actor, clock.instant())).thenReturn(true)
         val exception=assertThrows<ProductApiException> {
             service(true,true,"").eligibleNeeds(actor,org)
         }
         assertEquals("SERVICE_SOURCING_UNAVAILABLE",exception.code)
-        Mockito.verifyNoInteractions(jdbc,approvals,suppliers,documentTarget,commands,audit)
+        Mockito.verify(approvals).isActiveOrganizationMember(org, actor, clock.instant())
+        Mockito.verify(approvals).resolveCurrentAuthority(org, "PROCUREMENT_BUYER", clock.instant())
+        Mockito.verifyNoMoreInteractions(approvals)
+        Mockito.verifyNoInteractions(jdbc,suppliers,documentTarget,commands,audit)
     }
 
     @Test fun unverifiedBuyerCannotEnumerateCandidateServiceNeeds() {
@@ -110,18 +114,23 @@ class ServiceSupplierSourcingServiceTest {
         Mockito.verifyNoInteractions(jdbc,approvals,suppliers)
     }
 
-    @Test fun supplierSearchRequiresTheServiceGatesAndAnExplicitServiceBuyerKey() {
+    @Test fun supplierSearchRequiresAvailabilityAndAnAssignedBuyer() {
         for ((needsEnabled,sourcingEnabled) in listOf(false to false,false to true,true to false)) {
             val error = assertThrows<ProductApiException> {
                 service(needsEnabled, sourcingEnabled, "SERVICE_BUYER").searchSuppliers(actor, org, "Supplier")
             }
             assertEquals("SERVICE_SOURCING_UNAVAILABLE", error.code)
         }
+        Mockito.verifyNoInteractions(jdbc,approvals,suppliers,documentTarget,commands,audit)
+        Mockito.`when`(approvals.isActiveOrganizationMember(org, actor, clock.instant())).thenReturn(true)
         val error = assertThrows<ProductApiException> {
             service(true, true, "").searchSuppliers(actor, org, "Supplier")
         }
         assertEquals("SERVICE_SOURCING_UNAVAILABLE", error.code)
-        Mockito.verifyNoInteractions(jdbc,approvals,suppliers,documentTarget,commands,audit)
+        Mockito.verify(approvals).isActiveOrganizationMember(org, actor, clock.instant())
+        Mockito.verify(approvals).resolveCurrentAuthority(org, "PROCUREMENT_BUYER", clock.instant())
+        Mockito.verifyNoMoreInteractions(approvals)
+        Mockito.verifyNoInteractions(jdbc,suppliers,documentTarget,commands,audit)
     }
 
     @Test fun currentServiceBuyerSearchesLinkedSuppliersWithoutMasterDataOrCommandAccess() {

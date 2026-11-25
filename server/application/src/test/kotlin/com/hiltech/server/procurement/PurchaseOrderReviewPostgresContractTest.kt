@@ -69,8 +69,9 @@ class PurchaseOrderReviewPostgresContractTest {
         jdbc.update("""INSERT INTO config_revision(id,scope_type,scope_organization_id,family,code,name,lifecycle_state,revision_number,
             created_at,created_by) VALUES(?,'ORGANIZATION',?,'stock-categories','SYNTHETIC','Synthetic category','ACTIVE',1,?,?)""", category, org, at, buyer)
         jdbc.update("INSERT INTO stock_item_category_definition(config_revision_id,default_unit_of_measure_code) VALUES(?,'EA')", category)
-        jdbc.update("""INSERT INTO stock_item(id,organization_id,item_code,name,category_definition_id,category_revision,unit_of_measure_code)
-            VALUES(?,?,'ITEM-SYNTHETIC','Synthetic component',?,1,'EA')""", item, org, category)
+        jdbc.update("INSERT INTO stock_unit(organization_id,code,name,active) VALUES(?,'EA','Each',true)", org)
+        jdbc.update("""INSERT INTO stock_item(id,organization_id,item_code,name,category_definition_id,category_revision,unit_of_measure_code,classification)
+            VALUES(?,?,'ITEM-SYNTHETIC','Synthetic component',?,1,'EA','STOCK_QUANTITY')""", item, org, category)
         jdbc.update("INSERT INTO warehouse(id,organization_id,code,name) VALUES(?,?,'WH-SYNTHETIC','Synthetic warehouse')", warehouseId, org)
         jdbc.update("""INSERT INTO storage_location(id,organization_id,code,name,kind,warehouse_id,lifecycle_state)
             VALUES(?,?,'STORE-SYNTHETIC','Synthetic receiving location','MAIN_WAREHOUSE',?,'ACTIVE')""", location, org, warehouseId)

@@ -352,10 +352,11 @@ class ServiceDeliveryPostgresContractTest {
             jdbc.update("INSERT INTO employee(id,organization_id,person_id,employee_code,state,created_at,updated_at) VALUES (?,?,?,?,'ACTIVE',?,?)", UUID.randomUUID(), org, person, "EMP-$id", timestamp, timestamp)
         }
         private fun policy(key: String, authority: String, required: Boolean) {
-            jdbc.update("""INSERT INTO approval_authority_binding(id,organization_id,authority_key,principal_type,principal_user_id,effective_from,active,created_by_user_id,created_at)
+            if (required) jdbc.update("""INSERT INTO approval_authority_binding(id,organization_id,authority_key,principal_type,principal_user_id,effective_from,active,created_by_user_id,created_at)
                 VALUES (?,?,?,'USER',?,?,true,?,?)""", UUID.randomUUID(), org, authority, reviewer, timestamp.minusDays(1), maker, timestamp)
             jdbc.update("""INSERT INTO approval_policy_version(id,organization_id,policy_key,version_number,lifecycle_state,approval_required,step_mode,authority_key,reason_required,effective_from,created_by_user_id,created_at)
-                VALUES (?,?,?,1,'ACTIVE',?,'SINGLE',?,true,?,?,?)""", UUID.randomUUID(), org, key, required, authority, timestamp.minusDays(1), maker, timestamp)
+                VALUES (?,?,?,1,'ACTIVE',?,?,?,true,?,?,?)""", UUID.randomUUID(), org, key, required,
+                if (required) "SINGLE" else "NO_APPROVAL_REQUIRED", if (required) authority else null, timestamp.minusDays(1), maker, timestamp)
         }
         fun rejectSql(tx: TransactionStatus, block: () -> Unit) {
             val save = tx.createSavepoint()
