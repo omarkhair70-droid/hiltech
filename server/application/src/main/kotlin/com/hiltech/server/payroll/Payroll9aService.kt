@@ -1,5 +1,6 @@
 package com.hiltech.server.payroll
 
+import org.springframework.beans.factory.annotation.Autowired
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.ProductApiException
@@ -101,7 +102,7 @@ object Payroll9aPolicy {
  * files, creates Finance payment instructions, or treats missing source as zero.
  */
 @Component
-class Payroll9aService(
+class Payroll9aService @Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val authority: Payroll9aAuthorityPort,
     private val audit: AuditEventWriter,

@@ -65,6 +65,8 @@ import com.hiltech.shared.core.ProjectCommandCenterUiAction
 import com.hiltech.shared.core.WorkPlanningUiAction
 import com.hiltech.shared.core.WorkReadinessUiAction
 import com.hiltech.shared.core.identity.IdentityApiException
+import com.hiltech.shared.core.identity.ProductOperation
+import com.hiltech.shared.core.identity.operationAvailable
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.inbox.InboxWorkspace
@@ -79,21 +81,6 @@ import kotlinx.coroutines.launch
 import javax.swing.SwingUtilities
 
 fun main() {
-    val operationsProfile = (System.getenv("HILTECH_PRODUCT_PROFILE")
-        ?: System.getProperty("hiltech.productProfile")) == "operations"
-    val executiveHomeAvailable = System.getenv("HILTECH_EXECUTIVE_HOME_UI_ENABLED")
-        ?.equals("true", ignoreCase = true) ?: operationsProfile
-    val purchasingAvailable = listOf(
-        "HILTECH_SERVICE_PURCHASES_UI_ENABLED",
-        "HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED",
-        "HILTECH_SUPPLIER_SOURCING_UI_ENABLED",
-        "HILTECH_PO_ISSUER_UI_ENABLED",
-        "HILTECH_ASSET_PURCHASE_NEEDS_ENABLED",
-        "HILTECH_OFFICE_STOCK_NEEDS_ENABLED",
-        "HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED",
-        "HILTECH_PO_WAREHOUSE_INTAKE_UI_ENABLED",
-        "HILTECH_SUPPLIER_INVOICE_FINANCE_UI_ENABLED",
-    ).any { System.getenv(it).equals("true", ignoreCase = true) }
     val runtime = DesktopIdentityRuntime(
         apiBaseUrl =
             System.getenv("HILTECH_API_BASE_URL")
@@ -125,6 +112,23 @@ fun main() {
                 )
             },
         )
+
+    fun operationAvailable(operation: ProductOperation): Boolean =
+        (shellState.value as? HiltechShellState.SignedIn)?.identity.operationAvailable(operation)
+
+    fun serviceOperationsAvailable(): Boolean = listOf(
+        ProductOperation.SERVICE_SUPPORT, ProductOperation.SERVICE_MAINTENANCE,
+        ProductOperation.SERVICE_WARRANTY,
+    ).any(::operationAvailable)
+
+    fun financeOperationsAvailable(): Boolean = listOf(
+        ProductOperation.FINANCE_PAYABLE_CANDIDATES, ProductOperation.FINANCE_AP_POSTING,
+        ProductOperation.FINANCE_RECEIVABLES_INVOICE_ISSUANCE,
+        ProductOperation.FINANCE_RECEIVABLES_AR_POSTING, ProductOperation.FINANCE_EMPLOYEE_FUNDING,
+        ProductOperation.FINANCE_EMPLOYEE_SETTLEMENT, ProductOperation.FINANCE_EXPENSE_REIMBURSEMENT,
+        ProductOperation.FINANCE_CASHBOX, ProductOperation.FINANCE_CASH_ALLOCATION,
+        ProductOperation.FINANCE_CASH_ALLOCATION_VOID, ProductOperation.FINANCE_GL_PERIOD_CLOSE,
+    ).any(::operationAvailable)
 
     fun setState(
         state: HiltechShellState,
@@ -2833,7 +2837,12 @@ fun main() {
                 projectFocusRequest = executiveProjectFocus,
                 desktopNavigation = true,
                 desktopFindRequest = desktopFindRequest,
-                desktopPurchasingAvailable = purchasingAvailable,
+                desktopPurchasingAvailable = listOf(
+                    ProductOperation.PROCUREMENT_REQUIREMENTS, ProductOperation.PROCUREMENT_SOURCING,
+                    ProductOperation.PROCUREMENT_PO_ISSUE, ProductOperation.PROCUREMENT_ASSET_PARTS,
+                    ProductOperation.PROCUREMENT_OFFICE_STOCK, ProductOperation.PROCUREMENT_WAREHOUSE_REPLENISHMENT,
+                    ProductOperation.PROCUREMENT_PO_RECEIVING, ProductOperation.PROCUREMENT_SUPPLIER_INVOICES,
+                ).any(::operationAvailable),
                 employeeAccountWorkspace = { employee ->
                     navigationIdentity?.let { identity ->
                         employeeDrafts.SaveableStateProvider("$employeeSessionScope:${employee.employeeId}") {
@@ -2905,7 +2914,7 @@ fun main() {
                     val org = signed.identity.organizations.firstOrNull { it.primary }
                         ?: signed.identity.organizations.firstOrNull()
                     if (org == null) emptyList() else buildList {
-                        if (signed.identity.productCapabilities?.executiveHome ?: executiveHomeAvailable) {
+                        if (operationAvailable(ProductOperation.EXECUTIVE_HOME)) {
                             add(executiveNativeWorkspace(
                                 client = runtime.executiveApi,
                                 identityId = signed.identity.identityId,
@@ -2921,7 +2930,7 @@ fun main() {
                                 },
                             ))
                         }
-                        run {
+                        if (operationAvailable(ProductOperation.PAYROLL_PAYSLIPS)) {
                             add(ownPayslipNativeWorkspace(
                                 client = runtime.payrollOwnApi,
                                 identityId = signed.identity.identityId,
@@ -2929,7 +2938,7 @@ fun main() {
                                 installationId = runtime.physicalWarehouseInstallationId,
                             ))
                         }
-                        run {
+                        if (operationAvailable(ProductOperation.PAYROLL_PERIODS)) {
                             val payrollWorkspace = remember(employeeSessionScope, org.organizationId, payrollAdministration, payrollRuns) {
                                 payrollAdminReadNativeWorkspace(
                                 client = payrollAdministration,
@@ -2994,27 +3003,29 @@ fun main() {
                                 }
                             },
                         ))
-                        add(NativeOperationalWorkspace(
-                            id = "supplier-registry",
-                            label = "سجل الموردين",
-                            canReadSource = {
-                                supplierRegistry.capabilities(org.organizationId, runtime.physicalWarehouseInstallationId).canMaintain
-                            },
-                            hostOwnsScroll = true,
-                            content = { _ ->
-                                employeeDrafts.SaveableStateProvider("suppliers:$employeeSessionScope") {
-                                    com.hiltech.shared.core.procurement.SupplierRegistryWorkspace(
-                                        organizationId = org.organizationId,
-                                        sessionScope = employeeSessionScope,
-                                        client = supplierRegistry,
-                                        installationId = runtime.physicalWarehouseInstallationId,
-                                        newOperationId = { java.util.UUID.randomUUID().toString() },
-                                        onReauthenticate = { signIn(true) },
-                                    )
-                                }
-                            },
-                        ))
-                        run {
+                        if (operationAvailable(ProductOperation.PROCUREMENT_SUPPLIER_MASTER_DATA)) {
+                            add(NativeOperationalWorkspace(
+                                id = "supplier-registry",
+                                label = "سجل الموردين",
+                                canReadSource = {
+                                    supplierRegistry.capabilities(org.organizationId, runtime.physicalWarehouseInstallationId).canMaintain
+                                },
+                                hostOwnsScroll = true,
+                                content = { _ ->
+                                    employeeDrafts.SaveableStateProvider("suppliers:$employeeSessionScope") {
+                                        com.hiltech.shared.core.procurement.SupplierRegistryWorkspace(
+                                            organizationId = org.organizationId,
+                                            sessionScope = employeeSessionScope,
+                                            client = supplierRegistry,
+                                            installationId = runtime.physicalWarehouseInstallationId,
+                                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                                            onReauthenticate = { signIn(true) },
+                                        )
+                                    }
+                                },
+                            ))
+                        }
+                        if (operationAvailable(ProductOperation.COMMERCIAL)) {
                             add(commercialReadNativeWorkspace(
                                 client = runtime.commercialApi,
                                 identityId = signed.identity.identityId,
@@ -3049,9 +3060,7 @@ fun main() {
                                 },
                             ))
                         }
-                        if (System.getenv("HILTECH_HANDOVER_READ_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true
-                        ) {
+                        if (operationAvailable(ProductOperation.SERVICE_HANDOVER)) {
                             add(handoverReadNativeWorkspace(
                                 projects = runtime.readProjectsApi,
                                 handover = runtime.handoverApi,
@@ -3060,9 +3069,7 @@ fun main() {
                                 installationId = runtime.physicalWarehouseInstallationId,
                             ))
                         }
-                        if (System.getenv("HILTECH_SERVICE_OPERATIONS_READ_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true
-                        ) {
+                        if (serviceOperationsAvailable()) {
                             add(serviceOperationsReadNativeWorkspace(
                                 projects = runtime.readProjectsApi,
                                 ticketsApi = runtime.supportServiceApi,
@@ -3074,9 +3081,7 @@ fun main() {
                                 installationId = runtime.physicalWarehouseInstallationId,
                             ))
                         }
-                        if (System.getenv("HILTECH_FINANCE_REVIEW_PREPARE_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true
-                        ) {
+                        if (operationAvailable(ProductOperation.FINANCE_CASHBOX)) {
                             add(financeCashboxOpeningWorkspace(
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
@@ -3084,6 +3089,8 @@ fun main() {
                                 api = runtime.financeEvidenceReadApis.cash,
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
                             ))
+                        }
+                        if (financeOperationsAvailable()) {
                             add(financeCompletionOperatorWorkspace(
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
@@ -3092,9 +3099,7 @@ fun main() {
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
                             ))
                         }
-                        if (System.getenv("HILTECH_FINANCE_BANK_CSV_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true
-                        ) {
+                        if (operationAvailable(ProductOperation.FINANCE_BANK_STATEMENT_INTAKE)) {
                             add(financeBankCsvIntakeNativeWorkspace(
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
@@ -3152,25 +3157,17 @@ fun main() {
                                 },
                             ))
                         }
-                        if (System.getenv("HILTECH_FINANCE_EVIDENCE_READ_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true ||
-                            System.getenv("HILTECH_FINANCE_REVIEW_PREPARE_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true
-                        ) {
+                        if (financeOperationsAvailable()) {
                             add(financeEvidenceReadNativeWorkspace(
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
                                 apis = runtime.financeEvidenceReadApis,
-                                reviewPreparationEnabled = System.getenv(
-                                    "HILTECH_FINANCE_REVIEW_PREPARE_UI_ENABLED"
-                                )?.equals("true", ignoreCase = true) == true,
+                                reviewPreparationEnabled = financeOperationsAvailable(),
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
                             ))
                         }
-                        if (System.getenv("HILTECH_FINANCE_INVOICE_READ_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true
-                        ) {
+                        if (operationAvailable(ProductOperation.PROCUREMENT_SUPPLIER_INVOICES)) {
                             add(supplierInvoiceFinanceReadWorkspace(
                                 client = runtime.supplierInvoiceFinanceApi,
                                 organizationId = org.organizationId,
@@ -3178,11 +3175,7 @@ fun main() {
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
                             ))
                         }
-                        if (System.getenv("HILTECH_SERVICE_PURCHASES_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true &&
-                            System.getenv("HILTECH_SERVICE_PURCHASES_WORKSPACE_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true
-                        ) {
+                        if (operationAvailable(ProductOperation.PROCUREMENT_SERVICE_NEEDS)) {
                             add(NativeOperationalWorkspace(
                                 id = "service-purchasing",
                                 label = "مشتريات الخدمات",
@@ -3284,31 +3277,8 @@ fun main() {
                         title = "المشتريات",
                         description = "اختر العملية المطلوبة وتابعها في مساحتها المستقلة.",
                         areas = buildList<NativeOperationArea> {
-                            if (System.getenv("HILTECH_SERVICE_PURCHASES_UI_ENABLED")
-                                    ?.equals("true", ignoreCase = true) == true &&
-                                System.getenv("HILTECH_SERVICE_PURCHASES_WORKSPACE_UI_ENABLED")
-                                    ?.equals("true", ignoreCase = true) != true
-                            ) {
-                                add(NativeOperationArea("services", "شراء الخدمات", "طلبات الخدمات وعروض الأسعار وأوامر الخدمة") {
-                                    val signed = shellState.value as? HiltechShellState.SignedIn
-                                    val identity = signed?.identity
-                                    val organization = identity?.organizations?.firstOrNull { it.primary }
-                                        ?: identity?.organizations?.firstOrNull()
-                                    if (identity != null && organization != null) {
-                                        androidx.compose.runtime.key(
-                                            identity.identityId, organization.organizationId, "service-purchases",
-                                        ) {
-                                            DesktopServicePurchaseSections(
-                                                runtime = runtime,
-                                                organizationId = organization.organizationId,
-                                            )
-                                        }
-                                    }
-                                })
-                            }
-                            if (System.getenv("HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED")
-                                    ?.equals("true", ignoreCase = true) == true
-                            ) {
+
+                            if (operationAvailable(ProductOperation.PROCUREMENT_REQUIREMENTS)) {
                                 add(NativeOperationArea("requirements", "احتياجات المشاريع", "طلبات الخامات المرتبطة بالأعمال والمشاريع") {
                                     val signed = shellState.value as? HiltechShellState.SignedIn
                                     val identity = signed?.identity
@@ -3328,9 +3298,7 @@ fun main() {
                                     }
                                 })
                             }
-                            if (System.getenv("HILTECH_SUPPLIER_SOURCING_UI_ENABLED")
-                                    ?.equals("true", ignoreCase = true) == true
-                            ) {
+                            if (operationAvailable(ProductOperation.PROCUREMENT_SOURCING)) {
                                 add(NativeOperationArea("sourcing", "الموردون وعروض الأسعار", "مقارنة عروض الموردين وإعداد طلب الشراء") {
                                     val signed = shellState.value as? HiltechShellState.SignedIn
                                     val identity = signed?.identity
@@ -3344,12 +3312,10 @@ fun main() {
                                                 installationId = runtime.physicalWarehouseInstallationId,
                                                 newOperationId = { java.util.UUID.randomUUID().toString() },
                                                 purchaseCandidateApi = runtime.purchaseOrderCandidateApi.takeIf {
-                                                    System.getenv("HILTECH_PO_CANDIDATES_UI_ENABLED")
-                                                        ?.equals("true", ignoreCase = true) == true
+                                                    operationAvailable(ProductOperation.PROCUREMENT_PO_CANDIDATES)
                                                 },
                                                 purchaseApprovalRequestEnabled =
-                                                    System.getenv("HILTECH_PO_APPROVAL_REQUEST_UI_ENABLED")
-                                                        ?.equals("true", ignoreCase = true) == true,
+                                                    operationAvailable(ProductOperation.PROCUREMENT_APPROVAL_REQUEST),
                                                 quoteDocumentUploader = runtime.supplierQuoteDocumentUploader,
                                                 pickQuoteFile = {
                                                     kotlinx.coroutines.withContext(Dispatchers.IO) {
@@ -3407,9 +3373,7 @@ fun main() {
                                     }
                                 })
                             }
-                            if (System.getenv("HILTECH_PO_ISSUER_UI_ENABLED")
-                                    ?.equals("true", ignoreCase = true) == true
-                            ) {
+                            if (operationAvailable(ProductOperation.PROCUREMENT_PO_ISSUE)) {
                                 add(NativeOperationArea("orders", "أوامر الشراء", "الإصدار والتعديلات والإلغاء والتواصل مع المورد") {
                                     val signed = shellState.value as? HiltechShellState.SignedIn
                                     val identity = signed?.identity
@@ -3422,20 +3386,16 @@ fun main() {
                                             PurchaseOrderIssuerSection(
                                                 api = runtime.purchaseOrderIssueApi,
                                                 amendmentApi = runtime.purchaseOrderDeliveryAmendmentApi.takeIf {
-                                                    System.getenv("HILTECH_PO_AMENDMENT_UI_ENABLED")
-                                                        ?.equals("true", ignoreCase = true) == true
+                                                    operationAvailable(ProductOperation.PROCUREMENT_PO_DELIVERY_AMENDMENTS)
                                                 },
                                                 cancellationEnabled =
-                                                    System.getenv("HILTECH_PO_CANCELLATION_UI_ENABLED")
-                                                        ?.equals("true", ignoreCase = true) == true,
+                                                    operationAvailable(ProductOperation.PROCUREMENT_PO_CANCELLATION),
                                                 organizationId = organization.organizationId,
                                                 installationId = runtime.physicalWarehouseInstallationId,
                                                 newOperationId = { java.util.UUID.randomUUID().toString() },
                                             )
                                         }
-                                        if (System.getenv("HILTECH_PO_SUPPLIER_COMMUNICATION_UI_ENABLED")
-                                                ?.equals("true", ignoreCase = true) == true
-                                        ) {
+                                        if (operationAvailable(ProductOperation.PROCUREMENT_PO_SUPPLIER_COMMUNICATIONS)) {
                                             androidx.compose.runtime.key(
                                                 identity.identityId, organization.organizationId, "po-dispatch-evidence",
                                             ) {
@@ -3452,9 +3412,7 @@ fun main() {
                                     }
                                 })
                             }
-                            if (System.getenv("HILTECH_ASSET_PURCHASE_NEEDS_ENABLED")
-                                    ?.equals("true", ignoreCase = true) == true
-                            ) {
+                            if (operationAvailable(ProductOperation.PROCUREMENT_ASSET_PARTS)) {
                                 add(NativeOperationArea("asset-parts", "قطع غيار المعدات", "احتياجات الأصول والصيانة") {
                                     val signed = shellState.value as? HiltechShellState.SignedIn
                                     val identity = signed?.identity
@@ -3475,9 +3433,7 @@ fun main() {
                                     }
                                 })
                             }
-                            if (System.getenv("HILTECH_OFFICE_STOCK_NEEDS_ENABLED")
-                                    ?.equals("true", ignoreCase = true) == true
-                            ) {
+                            if (operationAvailable(ProductOperation.PROCUREMENT_OFFICE_STOCK)) {
                                 add(NativeOperationArea("office-stock", "احتياجات المكتب", "طلبات المستلزمات الداخلية") {
                                     val signed = shellState.value as? HiltechShellState.SignedIn
                                     val identity = signed?.identity
@@ -3497,9 +3453,7 @@ fun main() {
                                     }
                                 })
                             }
-                            if (System.getenv("HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED")
-                                    ?.equals("true", ignoreCase = true) == true
-                            ) {
+                            if (operationAvailable(ProductOperation.PROCUREMENT_WAREHOUSE_REPLENISHMENT)) {
                                 add(NativeOperationArea("replenishment", "إعادة التوريد", "احتياجات إعادة تعبئة المخزون") {
                                     val signed = shellState.value as? HiltechShellState.SignedIn
                                     val identity = signed?.identity
@@ -3520,9 +3474,7 @@ fun main() {
                                     }
                                 })
                             }
-                            if (System.getenv("HILTECH_PO_WAREHOUSE_INTAKE_UI_ENABLED")
-                                    ?.equals("true", ignoreCase = true) == true
-                            ) {
+                            if (operationAvailable(ProductOperation.PROCUREMENT_PO_RECEIVING)) {
                                 add(NativeOperationArea("receiving", "استلام المشتريات", "استلام التوريدات ومستندات التسليم") {
                                     val signed = shellState.value as? HiltechShellState.SignedIn
                                     val identity = signed?.identity
@@ -3593,9 +3545,7 @@ fun main() {
                                     }
                                 })
                             }
-                            if (System.getenv("HILTECH_SUPPLIER_INVOICE_FINANCE_UI_ENABLED")
-                                    ?.equals("true", ignoreCase = true) == true
-                            ) {
+                            if (operationAvailable(ProductOperation.PROCUREMENT_SUPPLIER_INVOICES)) {
                                 add(NativeOperationArea("invoices", "فواتير الموردين", "تسجيل الفواتير ومراجعتها") {
                                     val signed = shellState.value as? HiltechShellState.SignedIn
                                     val identity = signed?.identity

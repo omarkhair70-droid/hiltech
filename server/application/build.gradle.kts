@@ -51,6 +51,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-jooq")
+    implementation("org.apache.httpcomponents.client5:httpclient5")
     implementation("org.springframework.modulith:spring-modulith-starter-jdbc")
     // Boot 4 modularizes Flyway auto-configuration; core alone does not migrate on startup.
     implementation("org.springframework.boot:spring-boot-starter-flyway")

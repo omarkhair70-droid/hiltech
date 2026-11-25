@@ -327,6 +327,7 @@ jobs:
             --tests com.hiltech.server.procurement.SupplierRegistryPostgresIntegrationTest \
             --tests com.hiltech.server.administration.CompanyResponsibilityPostgresContractTest \
             --tests com.hiltech.server.identity.EmployeeAccountProvisioningPostgresContractTest \
+            --tests com.hiltech.server.people.EmployeeAccountAccessPostgresContractTest \
             --tests com.hiltech.server.payroll.PayrollSourcePostgresContractTest \
             --tests com.hiltech.server.payroll.Payroll9bDraftPostgresContractTest \
             --tests com.hiltech.server.people.OffboardingPostgresContractTest \
@@ -340,8 +341,9 @@ jobs:
           suites = {
               "com.hiltech.server.procurement.ServiceSourcingPostgresIntegrationTest": 2,
               "com.hiltech.server.procurement.SupplierRegistryPostgresIntegrationTest": 5,
-              "com.hiltech.server.administration.CompanyResponsibilityPostgresContractTest": 6,
+              "com.hiltech.server.administration.CompanyResponsibilityPostgresContractTest": 9,
               "com.hiltech.server.identity.EmployeeAccountProvisioningPostgresContractTest": 11,
+              "com.hiltech.server.people.EmployeeAccountAccessPostgresContractTest": 11,
               "com.hiltech.server.payroll.PayrollSourcePostgresContractTest": 1,
               "com.hiltech.server.payroll.Payroll9bDraftPostgresContractTest": 1,
               "com.hiltech.server.people.OnboardingPostgresContractTest": 1,

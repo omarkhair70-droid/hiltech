@@ -16,6 +16,7 @@ class OnboardingApiClient(
             explicitNulls = false
         },
 ) {
+    val accountAccess = EmployeeAccountAccessApiClient(api, json)
     suspend fun workspace(employeeId: String, installationId: String): OnboardingWorkspaceDto {
         requireId(employeeId)
         return api.request(

@@ -64,6 +64,8 @@ import com.hiltech.shared.core.procurement.AssetPurchaseNeedSection
 import com.hiltech.shared.core.procurement.PoWarehouseIntakeSection
 import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceSection
 import com.hiltech.shared.core.identity.IdentityApiException
+import com.hiltech.shared.core.identity.ProductOperation
+import com.hiltech.shared.core.identity.operationAvailable
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.inbox.InboxWorkspace
@@ -229,20 +231,31 @@ class MainActivity : ComponentActivity() {
             ),
         )
 
-    private val productCapabilities
-        get() = (shellState as? HiltechShellState.SignedIn)?.identity?.productCapabilities
+    private fun operationAvailable(operation: ProductOperation): Boolean =
+        (shellState as? HiltechShellState.SignedIn)?.identity.operationAvailable(operation)
+
+    private fun serviceOperationsAvailable(): Boolean = listOf(
+        ProductOperation.SERVICE_SUPPORT, ProductOperation.SERVICE_MAINTENANCE,
+        ProductOperation.SERVICE_WARRANTY,
+    ).any(::operationAvailable)
+
+    private fun financeOperationsAvailable(): Boolean = listOf(
+        ProductOperation.FINANCE_PAYABLE_CANDIDATES, ProductOperation.FINANCE_AP_POSTING,
+        ProductOperation.FINANCE_RECEIVABLES_INVOICE_ISSUANCE,
+        ProductOperation.FINANCE_RECEIVABLES_AR_POSTING, ProductOperation.FINANCE_EMPLOYEE_FUNDING,
+        ProductOperation.FINANCE_EMPLOYEE_SETTLEMENT, ProductOperation.FINANCE_EXPENSE_REIMBURSEMENT,
+        ProductOperation.FINANCE_CASHBOX, ProductOperation.FINANCE_CASH_ALLOCATION,
+        ProductOperation.FINANCE_CASH_ALLOCATION_VOID, ProductOperation.FINANCE_GL_PERIOD_CLOSE,
+    ).any(::operationAvailable)
 
     private val assignedAssetLookupEnabled
-        get() = productCapabilities?.assignedAssetLookup ?: BuildConfig.HILTECH_ASSIGNED_ASSET_LOOKUP_ENABLED
-
+        get() = operationAvailable(ProductOperation.FIELD_ASSIGNED_ASSET_LOOKUP)
     private val engineeringTestsEnabled
-        get() = productCapabilities?.engineeringTests ?: BuildConfig.HILTECH_ENGINEERING_TESTS_ENABLED
-
+        get() = operationAvailable(ProductOperation.FIELD_ENGINEERING_TESTS)
     private val personalIssuedStockEnabled
-        get() = productCapabilities?.personalIssuedStock ?: BuildConfig.HILTECH_PERSONAL_ISSUED_STOCK_ENABLED
-
+        get() = operationAvailable(ProductOperation.FIELD_PERSONAL_ISSUED_STOCK)
     private val materialUsageReportingEnabled
-        get() = productCapabilities?.materialUsageReporting ?: BuildConfig.HILTECH_MATERIAL_USAGE_REPORTING_ENABLED
+        get() = operationAvailable(ProductOperation.FIELD_MATERIAL_USAGE_REPORT)
 
     override fun onCreate(
         savedInstanceState: Bundle?,
@@ -315,9 +328,8 @@ class MainActivity : ComponentActivity() {
                 },
                 compactNavigation = true,
                 warehouseOperatorAvailable = true,
-                desktopPurchasingAvailable = BuildConfig.HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED ||
-                    BuildConfig.HILTECH_SUPPLIER_INVOICE_FINANCE_ENABLED ||
-                    (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED && !BuildConfig.HILTECH_SERVICE_PURCHASES_WORKSPACE_ENABLED),
+                desktopPurchasingAvailable = operationAvailable(ProductOperation.PROCUREMENT_REQUIREMENTS) ||
+                    operationAvailable(ProductOperation.PROCUREMENT_SUPPLIER_INVOICES),
                 compactBackRequest = workspaceBackRequest,
                 onCompactNavigationChanged = { canGoBack, inWork ->
                     workspaceBackAvailable = canGoBack
@@ -345,7 +357,7 @@ class MainActivity : ComponentActivity() {
                             teamChoices = signed.identity.teams.filter { it.organizationId == org.organizationId }
                                 .map { com.hiltech.shared.core.design.HiltechRecordChoice(it.teamId, it.name, it.code) },
                         ))
-                        if (signed.identity.productCapabilities?.executiveHome ?: BuildConfig.HILTECH_EXECUTIVE_HOME_ENABLED) {
+                        if (operationAvailable(ProductOperation.EXECUTIVE_HOME)) {
                             add(executiveNativeWorkspace(
                                 client = hiltechApplication.executiveApi,
                                 identityId = signed.identity.identityId,
@@ -357,7 +369,7 @@ class MainActivity : ComponentActivity() {
                                 // Android original Projects detail route not mounted yet.
                             ))
                         }
-                        run {
+                        if (operationAvailable(ProductOperation.PAYROLL_PAYSLIPS)) {
                             add(ownPayslipNativeWorkspace(
                                 client = hiltechApplication.payrollOwnApi,
                                 identityId = signed.identity.identityId,
@@ -365,7 +377,7 @@ class MainActivity : ComponentActivity() {
                                 installationId = hiltechApplication.installationId,
                             ))
                         }
-                        run {
+                        if (operationAvailable(ProductOperation.PAYROLL_PERIODS)) {
                             val payrollWorkspace = remember(employeeSessionScope, org.organizationId, payrollAdministration, payrollRuns) {
                                 payrollAdminReadNativeWorkspace(
                                 client = payrollAdministration,
@@ -429,27 +441,29 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                         ))
-                        add(NativeOperationalWorkspace(
-                            id = "supplier-registry",
-                            label = "سجل الموردين",
-                            canReadSource = {
-                                supplierRegistry.capabilities(org.organizationId, hiltechApplication.installationId).canMaintain
-                            },
-                            hostOwnsScroll = true,
-                            content = { _ ->
-                                employeeDrafts.SaveableStateProvider("suppliers:$employeeSessionScope") {
-                                    com.hiltech.shared.core.procurement.SupplierRegistryWorkspace(
-                                        organizationId = org.organizationId,
-                                        sessionScope = employeeSessionScope,
-                                        client = supplierRegistry,
-                                        installationId = hiltechApplication.installationId,
-                                        newOperationId = { UUID.randomUUID().toString() },
-                                        onReauthenticate = ::startReauthentication,
-                                    )
-                                }
-                            },
-                        ))
-                        run {
+                        if (operationAvailable(ProductOperation.PROCUREMENT_SUPPLIER_MASTER_DATA)) {
+                            add(NativeOperationalWorkspace(
+                                id = "supplier-registry",
+                                label = "سجل الموردين",
+                                canReadSource = {
+                                    supplierRegistry.capabilities(org.organizationId, hiltechApplication.installationId).canMaintain
+                                },
+                                hostOwnsScroll = true,
+                                content = { _ ->
+                                    employeeDrafts.SaveableStateProvider("suppliers:$employeeSessionScope") {
+                                        com.hiltech.shared.core.procurement.SupplierRegistryWorkspace(
+                                            organizationId = org.organizationId,
+                                            sessionScope = employeeSessionScope,
+                                            client = supplierRegistry,
+                                            installationId = hiltechApplication.installationId,
+                                            newOperationId = { UUID.randomUUID().toString() },
+                                            onReauthenticate = ::startReauthentication,
+                                        )
+                                    }
+                                },
+                            ))
+                        }
+                        if (operationAvailable(ProductOperation.COMMERCIAL)) {
                             add(commercialReadNativeWorkspace(
                                 client = hiltechApplication.commercialApi,
                                 identityId = signed.identity.identityId,
@@ -473,7 +487,7 @@ class MainActivity : ComponentActivity() {
                                 },
                             ))
                         }
-                        if (BuildConfig.HILTECH_HANDOVER_READ_ENABLED) {
+                        if (operationAvailable(ProductOperation.SERVICE_HANDOVER)) {
                             add(handoverReadNativeWorkspace(
                                 projects = hiltechApplication.readProjectsApi,
                                 handover = hiltechApplication.handoverApi,
@@ -482,7 +496,7 @@ class MainActivity : ComponentActivity() {
                                 installationId = hiltechApplication.installationId,
                             ))
                         }
-                        if (BuildConfig.HILTECH_SERVICE_OPERATIONS_READ_ENABLED) {
+                        if (serviceOperationsAvailable()) {
                             add(serviceOperationsReadNativeWorkspace(
                                 projects = hiltechApplication.readProjectsApi,
                                 ticketsApi = hiltechApplication.supportServiceApi,
@@ -494,7 +508,7 @@ class MainActivity : ComponentActivity() {
                                 installationId = hiltechApplication.installationId,
                             ))
                         }
-                        if (BuildConfig.HILTECH_FINANCE_REVIEW_PREPARE_ENABLED) {
+                        if (operationAvailable(ProductOperation.FINANCE_CASHBOX)) {
                             add(financeCashboxOpeningWorkspace(
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
@@ -502,6 +516,8 @@ class MainActivity : ComponentActivity() {
                                 api = hiltechApplication.financeEvidenceReadApis.cash,
                                 newOperationId = { UUID.randomUUID().toString() },
                             ))
+                        }
+                        if (financeOperationsAvailable()) {
                             add(financeCompletionOperatorWorkspace(
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
@@ -510,7 +526,7 @@ class MainActivity : ComponentActivity() {
                                 newOperationId = { UUID.randomUUID().toString() },
                             ))
                         }
-                        if (BuildConfig.HILTECH_FINANCE_BANK_CSV_ENABLED) {
+                        if (operationAvailable(ProductOperation.FINANCE_BANK_STATEMENT_INTAKE)) {
                             add(financeBankCsvIntakeNativeWorkspace(
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
@@ -527,18 +543,17 @@ class MainActivity : ComponentActivity() {
                                 },
                             ))
                         }
-                        if (BuildConfig.HILTECH_FINANCE_EVIDENCE_READ_ENABLED ||
-                            BuildConfig.HILTECH_FINANCE_REVIEW_PREPARE_ENABLED) {
+                        if (financeOperationsAvailable()) {
                             add(financeEvidenceReadNativeWorkspace(
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
                                 apis = hiltechApplication.financeEvidenceReadApis,
-                                reviewPreparationEnabled = BuildConfig.HILTECH_FINANCE_REVIEW_PREPARE_ENABLED,
+                                reviewPreparationEnabled = financeOperationsAvailable(),
                                 newOperationId = { UUID.randomUUID().toString() },
                             ))
                         }
-                        if (BuildConfig.HILTECH_FINANCE_INVOICE_READ_ENABLED) {
+                        if (operationAvailable(ProductOperation.PROCUREMENT_SUPPLIER_INVOICES)) {
                             add(supplierInvoiceFinanceReadWorkspace(
                                 client = hiltechApplication.supplierInvoiceFinanceApi,
                                 organizationId = org.organizationId,
@@ -546,9 +561,7 @@ class MainActivity : ComponentActivity() {
                                 newOperationId = { UUID.randomUUID().toString() },
                             ))
                         }
-                        if (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED &&
-                            BuildConfig.HILTECH_SERVICE_PURCHASES_WORKSPACE_ENABLED
-                        ) {
+                        if (operationAvailable(ProductOperation.PROCUREMENT_SERVICE_NEEDS)) {
                             add(NativeOperationalWorkspace(
                                 id = "service-purchasing",
                                 label = "مشتريات الخدمات",
@@ -694,7 +707,7 @@ class MainActivity : ComponentActivity() {
                                             },
                                         )
                                     })
-                                    if (BuildConfig.HILTECH_ASSET_PURCHASE_NEEDS_ENABLED) {
+                                    if (operationAvailable(ProductOperation.PROCUREMENT_ASSET_PARTS)) {
                                         add(NativeOperationArea("parts", "قطع غيار المعدات", "طلب احتياجات الصيانة والأصول.") {
                                             key(identity.identityId, organization.organizationId, "asset-parts-needs") {
                                                 AssetPurchaseNeedSection(
@@ -707,7 +720,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                         })
                                     }
-                                    if (BuildConfig.HILTECH_OFFICE_STOCK_NEEDS_ENABLED) {
+                                    if (operationAvailable(ProductOperation.PROCUREMENT_OFFICE_STOCK)) {
                                         add(NativeOperationArea("office", "احتياجات المكتب", "طلب المستلزمات الداخلية.") {
                                             key(identity.identityId, organization.organizationId, "office-needs") {
                                                 OfficeStockNeedSection(
@@ -719,7 +732,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                         })
                                     }
-                                    if (BuildConfig.HILTECH_WAREHOUSE_REPLENISHMENT_ENABLED) {
+                                    if (operationAvailable(ProductOperation.PROCUREMENT_WAREHOUSE_REPLENISHMENT)) {
                                         add(NativeOperationArea("replenishment", "إعادة التوريد", "طلبات تغطية احتياجات المخزون.") {
                                             key(identity.identityId, organization.organizationId, "warehouse-needs") {
                                                 WarehouseReplenishmentSection(
@@ -732,7 +745,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                         })
                                     }
-                                    if (BuildConfig.HILTECH_PO_WAREHOUSE_INTAKE_ENABLED) {
+                                    if (operationAvailable(ProductOperation.PROCUREMENT_PO_RECEIVING)) {
                                         add(NativeOperationArea("receiving", "استلام التوريدات", "مطابقة أمر الشراء ومستندات التسليم.") {
                                             AndroidPoWarehouseIntakeSection(
                                                 api = hiltechApplication.poWarehouseIntakeApi,
@@ -753,25 +766,8 @@ class MainActivity : ComponentActivity() {
                         title = "المشتريات",
                         description = "اختر العملية المطلوبة وتابعها في مساحتها المستقلة.",
                         areas = buildList<NativeOperationArea> {
-                            if (BuildConfig.HILTECH_SERVICE_PURCHASES_ENABLED &&
-                                !BuildConfig.HILTECH_SERVICE_PURCHASES_WORKSPACE_ENABLED
-                            ) {
-                                add(NativeOperationArea("services", "شراء الخدمات", "طلبات الخدمات وعروض الأسعار وأوامر الخدمة") {
-                                    val signed = shellState as? HiltechShellState.SignedIn
-                                    val identity = signed?.identity
-                                    val organization = identity?.organizations?.firstOrNull { it.primary }
-                                        ?: identity?.organizations?.firstOrNull()
-                                    if (identity != null && organization != null) {
-                                        key(identity.identityId, organization.organizationId, "service-purchases") {
-                                            AndroidServicePurchaseSections(
-                                                application = hiltechApplication,
-                                                organizationId = organization.organizationId,
-                                            )
-                                        }
-                                    }
-                                })
-                            }
-                            if (BuildConfig.HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED) {
+
+                            if (operationAvailable(ProductOperation.PROCUREMENT_REQUIREMENTS)) {
                                 add(NativeOperationArea("requirements", "احتياجات المشاريع", "طلبات الخامات المرتبطة بالأعمال والمشاريع") {
                                     val signed = shellState as? HiltechShellState.SignedIn
                                     val identity = signed?.identity
@@ -790,7 +786,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 })
                             }
-                            if (BuildConfig.HILTECH_SUPPLIER_INVOICE_FINANCE_ENABLED) {
+                            if (operationAvailable(ProductOperation.PROCUREMENT_SUPPLIER_INVOICES)) {
                                 add(NativeOperationArea("invoices", "فواتير الموردين", "تسجيل الفواتير ومراجعتها") {
                                     val signed = shellState as? HiltechShellState.SignedIn
                                     val identity = signed?.identity

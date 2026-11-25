@@ -21,6 +21,7 @@ data class IdentityProductCapabilitiesDto(
     val materialUsageReporting: Boolean = false,
     val assignedAssetLookup: Boolean = false,
     val engineeringTests: Boolean = false,
+    val operationAvailability: Map<String, Boolean> = emptyMap(),
 )
 
 @Serializable

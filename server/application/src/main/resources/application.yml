@@ -36,8 +36,13 @@ management:
           include: readinessState,db
 
 hiltech:
+  # Default availability for the implemented internal product. Each explicit
+  # operation setting still takes precedence, including an incident OFF override.
+  product:
+    internal-operations-enabled: ${HILTECH_INTERNAL_OPERATIONS_ENABLED:true}
+
   commercial:
-    enabled: ${HILTECH_COMMERCIAL_ENABLED:true}
+    enabled: ${HILTECH_COMMERCIAL_ENABLED:${hiltech.product.internal-operations-enabled}}
     mail-encryption-key: ${HILTECH_COMMERCIAL_MAIL_ENCRYPTION_KEY:}
     smtp-allowed-hosts: ${HILTECH_COMMERCIAL_SMTP_ALLOWED_HOSTS:smtp.gmail.com,smtp.office365.com}
     legacy-mail-company: ${HILTECH_COMMERCIAL_LEGACY_MAIL_COMPANY:}
@@ -63,34 +68,166 @@ hiltech:
       language: ${HILTECH_COMMERCIAL_WHATSAPP_LANGUAGE:ar}
       api-version: ${HILTECH_COMMERCIAL_WHATSAPP_API_VERSION:}
 
-  # Human authorization gate: disabled by default even when Android code is merged.
-  # Enable only after S04A ownership/custody visibility review and rollout signoff.
+  # Route availability is independent of organization authority, approved
+  # source records, evidence and provider readiness checked by each service.
+  executive:
+    home-enabled: ${HILTECH_EXECUTIVE_HOME_ENABLED:${hiltech.product.internal-operations-enabled}}
   field:
     personal-issued-stock:
-      enabled: ${HILTECH_FIELD_PERSONAL_ISSUED_STOCK_ENABLED:false}
-    # S04B: pending-only reports, NOT a stock consumption.
-    # OFF until role, review and warehouse reconciliation are approved.
+      enabled: ${HILTECH_FIELD_PERSONAL_ISSUED_STOCK_ENABLED:${hiltech.product.internal-operations-enabled}}
     material-usage-report:
-      enabled: ${HILTECH_FIELD_MATERIAL_USAGE_REPORT_ENABLED:false}
-    # Read-only reviewer queue, OFF until authorized origin visibility is approved.
+      enabled: ${HILTECH_FIELD_MATERIAL_USAGE_REPORT_ENABLED:${hiltech.product.internal-operations-enabled}}
     material-usage-review-read:
-      enabled: ${HILTECH_FIELD_MATERIAL_USAGE_REVIEW_READ_ENABLED:false}
-    # Terminal review -> canonical consume/reject, OFF until reviewer authority is owner-approved.
+      enabled: ${HILTECH_FIELD_MATERIAL_USAGE_REVIEW_READ_ENABLED:${hiltech.product.internal-operations-enabled}}
     material-usage-reconciliation:
-      enabled: ${HILTECH_FIELD_MATERIAL_USAGE_RECONCILIATION_ENABLED:false}
-    # Assigned-work AssetTag lookup. Reuses canonical Asset authorization and narrows to exact WorkOrder custody.
+      enabled: ${HILTECH_FIELD_MATERIAL_USAGE_RECONCILIATION_ENABLED:${hiltech.product.internal-operations-enabled}}
     assigned-asset-lookup:
-      enabled: ${HILTECH_FIELD_ASSIGNED_ASSET_LOOKUP_ENABLED:false}
-    # Configurable structured engineering tests. No test family is hard-coded or seeded.
+      enabled: ${HILTECH_FIELD_ASSIGNED_ASSET_LOOKUP_ENABLED:${hiltech.product.internal-operations-enabled}}
     engineering-tests:
-      enabled: ${HILTECH_FIELD_ENGINEERING_TESTS_ENABLED:false}
-    # Canonical Work document/drawing revisions. OFF until an organization binds an approval policy.
+      enabled: ${HILTECH_FIELD_ENGINEERING_TESTS_ENABLED:${hiltech.product.internal-operations-enabled}}
     work-documents:
-      enabled: ${HILTECH_FIELD_WORK_DOCUMENTS_ENABLED:false}
-    # Phase 6 completion submission. OFF until dependency/replay proof is green.
+      enabled: ${HILTECH_FIELD_WORK_DOCUMENTS_ENABLED:${hiltech.product.internal-operations-enabled}}
     completion:
-      enabled: ${HILTECH_FIELD_COMPLETION_ENABLED:false}
-
+      enabled: ${HILTECH_FIELD_COMPLETION_ENABLED:${hiltech.product.internal-operations-enabled}}
+  procurement:
+    requirements:
+      enabled: ${HILTECH_PROCUREMENT_REQUIREMENTS_ENABLED:${hiltech.product.internal-operations-enabled}}
+    warehouse-replenishment:
+      enabled: ${HILTECH_PROCUREMENT_WAREHOUSE_REPLENISHMENT_ENABLED:${hiltech.product.internal-operations-enabled}}
+    office-stock:
+      enabled: ${HILTECH_PROCUREMENT_OFFICE_STOCK_ENABLED:${hiltech.product.internal-operations-enabled}}
+    asset-parts:
+      enabled: ${HILTECH_PROCUREMENT_ASSET_PARTS_ENABLED:${hiltech.product.internal-operations-enabled}}
+    sourcing:
+      enabled: ${HILTECH_PROCUREMENT_SOURCING_ENABLED:${hiltech.product.internal-operations-enabled}}
+    po-candidates:
+      enabled: ${HILTECH_PROCUREMENT_PO_CANDIDATES_ENABLED:${hiltech.product.internal-operations-enabled}}
+    approval-request:
+      enabled: ${HILTECH_PROCUREMENT_APPROVAL_REQUEST_ENABLED:${hiltech.product.internal-operations-enabled}}
+    po-issue:
+      enabled: ${HILTECH_PROCUREMENT_PO_ISSUE_ENABLED:${hiltech.product.internal-operations-enabled}}
+    po-receiving:
+      enabled: ${HILTECH_PROCUREMENT_PO_RECEIVING_ENABLED:${hiltech.product.internal-operations-enabled}}
+    supplier-invoices:
+      enabled: ${HILTECH_PROCUREMENT_SUPPLIER_INVOICES_ENABLED:${hiltech.product.internal-operations-enabled}}
+    po-cancellation:
+      enabled: ${HILTECH_PROCUREMENT_PO_CANCELLATION_ENABLED:${hiltech.product.internal-operations-enabled}}
+    po:
+      delivery-amendments:
+        enabled: ${HILTECH_PROCUREMENT_PO_DELIVERY_AMENDMENTS_ENABLED:${hiltech.product.internal-operations-enabled}}
+      commercial-replacement:
+        enabled: ${HILTECH_PROCUREMENT_PO_COMMERCIAL_REPLACEMENT_ENABLED:${hiltech.product.internal-operations-enabled}}
+      supplier-communications:
+        enabled: ${HILTECH_PROCUREMENT_PO_SUPPLIER_COMMUNICATIONS_ENABLED:${hiltech.product.internal-operations-enabled}}
+    service-needs:
+      enabled: ${HILTECH_PROCUREMENT_SERVICE_NEEDS_ENABLED:${hiltech.product.internal-operations-enabled}}
+    service-sourcing:
+      enabled: ${HILTECH_PROCUREMENT_SERVICE_SOURCING_ENABLED:${hiltech.product.internal-operations-enabled}}
+    service-orders:
+      enabled: ${HILTECH_PROCUREMENT_SERVICE_ORDERS_ENABLED:${hiltech.product.internal-operations-enabled}}
+    service-acceptance:
+      enabled: ${HILTECH_PROCUREMENT_SERVICE_ACCEPTANCE_ENABLED:${hiltech.product.internal-operations-enabled}}
+    service-invoices:
+      enabled: ${HILTECH_PROCUREMENT_SERVICE_INVOICES_ENABLED:${hiltech.product.internal-operations-enabled}}
+    service-supplier-communications:
+      enabled: ${HILTECH_PROCUREMENT_SERVICE_SUPPLIER_COMMUNICATIONS_ENABLED:${hiltech.product.internal-operations-enabled}}
+    supplier-master-data:
+      enabled: ${HILTECH_PROCUREMENT_SUPPLIER_MASTER_DATA_ENABLED:${hiltech.product.internal-operations-enabled}}
+  finance:
+    employee-requests:
+      enabled: ${HILTECH_FINANCE_EMPLOYEE_REQUESTS_ENABLED:${hiltech.product.internal-operations-enabled}}
+    employee-review:
+      enabled: ${HILTECH_FINANCE_EMPLOYEE_REVIEW_ENABLED:${hiltech.product.internal-operations-enabled}}
+    advances:
+      policy-review:
+        enabled: ${HILTECH_FINANCE_ADVANCES_POLICY_REVIEW_ENABLED:${hiltech.product.internal-operations-enabled}}
+    imprests:
+      policy-review:
+        enabled: ${HILTECH_FINANCE_IMPRESTS_POLICY_REVIEW_ENABLED:${hiltech.product.internal-operations-enabled}}
+    expense-receipts:
+      readiness-enabled: ${HILTECH_FINANCE_EXPENSE_RECEIPTS_READINESS_ENABLED:${hiltech.product.internal-operations-enabled}}
+    expenses:
+      documentation-review:
+        enabled: ${HILTECH_FINANCE_EXPENSES_DOCUMENTATION_REVIEW_ENABLED:${hiltech.product.internal-operations-enabled}}
+    employee-funding:
+      enabled: ${HILTECH_FINANCE_EMPLOYEE_FUNDING_ENABLED:${hiltech.product.internal-operations-enabled}}
+    employee-settlement:
+      enabled: ${HILTECH_FINANCE_EMPLOYEE_SETTLEMENT_ENABLED:${hiltech.product.internal-operations-enabled}}
+    expense-reimbursement:
+      enabled: ${HILTECH_FINANCE_EXPENSE_REIMBURSEMENT_ENABLED:${hiltech.product.internal-operations-enabled}}
+    payable-candidates:
+      enabled: ${HILTECH_FINANCE_PAYABLE_CANDIDATES_ENABLED:${hiltech.product.internal-operations-enabled}}
+    supplier-accounting-review:
+      enabled: ${HILTECH_FINANCE_SUPPLIER_ACCOUNTING_REVIEW_ENABLED:${hiltech.product.internal-operations-enabled}}
+    payment-preflight:
+      enabled: ${HILTECH_FINANCE_PAYMENT_PREFLIGHT_ENABLED:${hiltech.product.internal-operations-enabled}}
+    ap-posting:
+      enabled: ${HILTECH_FINANCE_AP_POSTING_ENABLED:${hiltech.product.internal-operations-enabled}}
+    ap-reversal:
+      enabled: ${HILTECH_FINANCE_AP_REVERSAL_ENABLED:${hiltech.product.internal-operations-enabled}}
+    ap-reporting:
+      enabled: ${HILTECH_FINANCE_AP_REPORTING_ENABLED:${hiltech.product.internal-operations-enabled}}
+    ap-ar-balances:
+      enabled: ${HILTECH_FINANCE_AP_AR_BALANCES_ENABLED:${hiltech.product.internal-operations-enabled}}
+    project-sources:
+      enabled: ${HILTECH_FINANCE_PROJECT_SOURCES_ENABLED:${hiltech.product.internal-operations-enabled}}
+    receivables:
+      invoice-candidate:
+        enabled: ${HILTECH_FINANCE_RECEIVABLES_INVOICE_CANDIDATE_ENABLED:${hiltech.product.internal-operations-enabled}}
+      invoice-issuance:
+        enabled: ${HILTECH_FINANCE_RECEIVABLES_INVOICE_ISSUANCE_ENABLED:${hiltech.product.internal-operations-enabled}}
+      sales-award-source-readiness:
+        enabled: ${HILTECH_FINANCE_RECEIVABLES_SALES_AWARD_SOURCE_READINESS_ENABLED:${hiltech.product.internal-operations-enabled}}
+      ar-posting:
+        enabled: ${HILTECH_FINANCE_RECEIVABLES_AR_POSTING_ENABLED:${hiltech.product.internal-operations-enabled}}
+    cashbox:
+      enabled: ${HILTECH_FINANCE_CASHBOX_ENABLED:${hiltech.product.internal-operations-enabled}}
+      count-enabled: ${HILTECH_FINANCE_CASHBOX_COUNT_ENABLED:${hiltech.product.internal-operations-enabled}}
+    cash-allocation:
+      enabled: ${HILTECH_FINANCE_CASH_ALLOCATION_ENABLED:${hiltech.product.internal-operations-enabled}}
+    cash-allocation-void:
+      enabled: ${HILTECH_FINANCE_CASH_ALLOCATION_VOID_ENABLED:${hiltech.product.internal-operations-enabled}}
+    bank-statement-intake:
+      enabled: ${HILTECH_FINANCE_BANK_STATEMENT_INTAKE_ENABLED:${hiltech.product.internal-operations-enabled}}
+      # Canonical CSV intake matches recorded rows to protected uploaded bytes.
+      manual-entry-enabled: ${HILTECH_FINANCE_BANK_STATEMENT_INTAKE_MANUAL_ENTRY_ENABLED:false}
+    bank-reconciliation:
+      report-enabled: ${HILTECH_FINANCE_BANK_RECONCILIATION_REPORT_ENABLED:${hiltech.product.internal-operations-enabled}}
+      signoff-enabled: ${HILTECH_FINANCE_BANK_RECONCILIATION_SIGNOFF_ENABLED:${hiltech.product.internal-operations-enabled}}
+    gl-period-close:
+      enabled: ${HILTECH_FINANCE_GL_PERIOD_CLOSE_ENABLED:${hiltech.product.internal-operations-enabled}}
+      # This attests actual completeness of all accounting sources.
+      full-ledger-ready:
+        enabled: ${HILTECH_FINANCE_GL_PERIOD_CLOSE_FULL_LEDGER_READY_ENABLED:false}
+    payroll-review-intake-enabled: ${HILTECH_FINANCE_PAYROLL_REVIEW_INTAKE_ENABLED:${hiltech.product.internal-operations-enabled}}
+  phase11:
+    contract:
+      enabled: ${HILTECH_PHASE11_CONTRACT_ENABLED:${hiltech.product.internal-operations-enabled}}
+    handover:
+      enabled: ${HILTECH_PHASE11_HANDOVER_ENABLED:${hiltech.product.internal-operations-enabled}}
+    maintenance:
+      enabled: ${HILTECH_PHASE11_MAINTENANCE_ENABLED:${hiltech.product.internal-operations-enabled}}
+      assigned-findings:
+        enabled: ${HILTECH_PHASE11_MAINTENANCE_ASSIGNED_FINDINGS_ENABLED:${hiltech.product.internal-operations-enabled}}
+      review:
+        enabled: ${HILTECH_PHASE11_MAINTENANCE_REVIEW_ENABLED:${hiltech.product.internal-operations-enabled}}
+    support:
+      enabled: ${HILTECH_PHASE11_SUPPORT_ENABLED:${hiltech.product.internal-operations-enabled}}
+      time:
+        enabled: ${HILTECH_PHASE11_SUPPORT_TIME_ENABLED:${hiltech.product.internal-operations-enabled}}
+    warranty:
+      enabled: ${HILTECH_PHASE11_WARRANTY_ENABLED:${hiltech.product.internal-operations-enabled}}
+  payroll:
+    periods-enabled: ${HILTECH_PAYROLL_PERIODS_ENABLED:${hiltech.product.internal-operations-enabled}}
+    draft-runs-enabled: ${HILTECH_PAYROLL_DRAFT_RUNS_ENABLED:${hiltech.product.internal-operations-enabled}}
+    approval-request-enabled: ${HILTECH_PAYROLL_APPROVAL_REQUEST_ENABLED:${hiltech.product.internal-operations-enabled}}
+    release-enabled: ${HILTECH_PAYROLL_RELEASE_ENABLED:${hiltech.product.internal-operations-enabled}}
+    finance-handoff-enabled: ${HILTECH_PAYROLL_FINANCE_HANDOFF_ENABLED:${hiltech.product.internal-operations-enabled}}
+    finance-results-enabled: ${HILTECH_PAYROLL_FINANCE_RESULTS_ENABLED:${hiltech.product.internal-operations-enabled}}
+    payslips-enabled: ${HILTECH_PAYROLL_PAYSLIPS_ENABLED:${hiltech.product.internal-operations-enabled}}
+    # Final-pay eligibility requires a real approved entitlement scope source.
+    final-pay-review-enabled: ${HILTECH_PAYROLL_FINAL_PAY_REVIEW_ENABLED:false}
+    separation-source-enabled: ${HILTECH_PAYROLL_SEPARATION_SOURCE_ENABLED:false}
 
   activity:
     cursor-signing-key: ${HILTECH_ACTIVITY_CURSOR_SIGNING_KEY:}

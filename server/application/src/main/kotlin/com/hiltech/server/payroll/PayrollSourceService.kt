@@ -1,5 +1,6 @@
 package com.hiltech.server.payroll
 
+import org.springframework.beans.factory.annotation.Autowired
 import com.hiltech.server.approval.ApprovalDecisionType
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -19,7 +20,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 @Component
-class PayrollSourceService(
+class PayrollSourceService @Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val periods: Payroll9aService,
     private val authority: Payroll9aAuthorityPort,

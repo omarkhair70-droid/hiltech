@@ -1,5 +1,6 @@
 package com.hiltech.server.administration
 
+import org.springframework.beans.factory.annotation.Autowired
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.payroll.PayrollRunPolicyConfiguration
 import org.springframework.http.HttpStatus
@@ -11,7 +12,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 @Component
-class JdbcPayrollReviewPolicyPersistence(private val jdbc: JdbcTemplate,
+class JdbcPayrollReviewPolicyPersistence @Autowired constructor(private val jdbc: JdbcTemplate,
     private val runPolicy: PayrollRunPolicyConfiguration = PayrollRunPolicyConfiguration("PAYROLL_RUN_REVIEW")) : PayrollReviewPolicyPersistencePort {
     private fun policyKey(workflow: CompanyReviewWorkflow): String {
         val key = if (workflow == CompanyReviewWorkflow.PAYROLL_RUN) runPolicy.key else workflow.policyKey

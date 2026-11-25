@@ -93,6 +93,27 @@ inside the safe content bounds, exercise language changes using observed UI
 bounds, and retain the UI hierarchy alongside screenshots. Text presence alone
 does not establish that a control is visible or reachable.
 
+## Availability and account recovery
+
+Implemented internal operations use the server's operation availability catalog.
+Both native hosts consume the same catalog instead of requiring a second set of
+desktop environment or Android build switches. An explicit server pause wins;
+an unknown key in a supplied catalog is unavailable. Availability is separate
+from source permission, independent approval, provider configuration and actual
+source completeness. Do not turn a readiness assertion into a feature switch.
+
+The managed account recovery flow is described in
+`EMPLOYEE_ACCOUNT_RECOVERY_CONTRACT.md`. Provider administration dispatches each
+mutation once, with bounded timeouts and no automatic retry or redirect. A lost
+or unsuccessful password-reset response remains unconfirmed. Replaying a stored
+operation returns its recorded metadata and never dispatches another reset or
+recovers a previously displayed secret.
+
+Exercise Spring construction of managed workflow services as well as direct
+domain fixtures. Kotlin default constructor parameters can create overloads
+which direct tests accept but the application container cannot select. The
+packaged server startup against migrated PostgreSQL is a separate required gate.
+
 ## Completion discipline
 
 Update the existing private closeout record with new defects, results and

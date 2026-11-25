@@ -1,21 +1,28 @@
 package com.hiltech.server.identity
 
+import jakarta.annotation.PreDestroy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.apache.hc.client5.http.config.ConnectionConfig
+import org.apache.hc.client5.http.impl.classic.HttpClients
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder
+import org.apache.hc.core5.util.Timeout
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.MediaType
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import org.springframework.transaction.PlatformTransactionManager
@@ -26,6 +33,7 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.security.SecureRandom
 import java.time.Clock
+import java.time.Duration
 import java.time.ZoneOffset
 import java.util.Base64
 import java.util.UUID
@@ -616,15 +624,64 @@ internal class KeycloakIdentityAdminClient(
         KeycloakProvisioningProperties,
     private val oidc:
         HiltechOidcProperties,
-) : KeycloakIdentityAdminPort {
+) : KeycloakIdentityAdminPort, KeycloakCredentialReplacementGateway {
     private val json =
         Json {
             ignoreUnknownKeys = true
         }
     private val secureRandom =
         SecureRandom()
-    private val http =
-        RestClient.create()
+    // Provider mutations must be dispatched once. A 503, 429 or lost response
+    // may follow an applied password change; recovery belongs to the recorded
+    // application operation, never the HTTP client's automatic retry strategy.
+    private val requestFactory = HttpComponentsClientHttpRequestFactory(
+        HttpClients.custom()
+            .disableAutomaticRetries()
+            .disableRedirectHandling()
+            .setConnectionManager(PoolingHttpClientConnectionManagerBuilder.create()
+                .setDefaultConnectionConfig(ConnectionConfig.custom()
+                    .setConnectTimeout(Timeout.ofSeconds(10)).build())
+                .build())
+            .build(),
+    ).apply {
+        setConnectionRequestTimeout(Duration.ofSeconds(5))
+        setReadTimeout(Duration.ofSeconds(20))
+    }
+    private val http = RestClient.builder().requestFactory(requestFactory)
+        .defaultStatusHandler({ status -> !status.is2xxSuccessful }) { _, _ ->
+            throw KeycloakProvisioningException("IDENTITY_PROVIDER_REQUEST_UNCONFIRMED", "Identity provider request did not complete.")
+        }.build()
+
+    @PreDestroy
+    fun close() = requestFactory.destroy()
+
+    override fun replaceCurrentPassword(subject: String): EmployeeCredentialReplacementResult {
+        val token: String
+        val user: JsonObject
+        try {
+            validate()
+            token = adminToken()
+            val response = http.get().uri(adminBase() + "/users/" + encode(subject))
+                .header("Authorization", "Bearer $token").retrieve().body(String::class.java)
+            user = json.parseToJsonElement(requireNotNull(response)).jsonObject
+        } catch (_: Exception) {
+            return EmployeeCredentialReplacementResult.Rejected("ACCOUNT_CREDENTIAL_PROVIDER_UNAVAILABLE")
+        }
+        if (user["id"]?.jsonPrimitive?.content != subject || user["enabled"]?.jsonPrimitive?.booleanOrNull != true) {
+            return EmployeeCredentialReplacementResult.Rejected("ACCOUNT_CREDENTIAL_PROVIDER_ACCOUNT_RESTRICTED")
+        }
+        val temporary = temporaryCredential()
+        return try {
+            http.put().uri(adminBase() + "/users/" + encode(subject) + "/reset-password")
+                .contentType(MediaType.APPLICATION_JSON).header("Authorization", "Bearer $token")
+                .body(buildJsonObject { put("type", "password"); put("value", temporary); put("temporary", true) }.toString())
+                .retrieve().toBodilessEntity()
+            EmployeeCredentialReplacementResult.Issued(temporary)
+        } catch (_: Exception) {
+            // The server may have applied the password before the response was lost.
+            EmployeeCredentialReplacementResult.Unconfirmed("ACCOUNT_CREDENTIAL_PROVIDER_OUTCOME_UNCONFIRMED")
+        }
+    }
 
     override fun createOrRecoverDisabledUser(
         invitationId: UUID,

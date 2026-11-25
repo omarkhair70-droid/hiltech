@@ -57,6 +57,7 @@ fun EmployeeAccountWorkspace(
     var availability by remember { mutableStateOf<EmployeeIdentityInvitationAvailabilityDto?>(null) }
     var credential by remember { mutableStateOf<String?>(null) }
     var credentialVisible by remember { mutableStateOf(false) }
+    var recoveryCredentialVisible by remember { mutableStateOf(false) }
     var deliveryState by remember { mutableStateOf<String?>(null) }
     var login by remember { mutableStateOf(employee.email.orEmpty()) }
     var method by remember { mutableStateOf<AccountDelivery?>(null) }
@@ -69,7 +70,7 @@ fun EmployeeAccountWorkspace(
     var message by remember { mutableStateOf<String?>(null) }
     var needsReauthentication by remember { mutableStateOf(false) }
 
-    val showingCredential = credentialVisible
+    val showingCredential = credentialVisible || recoveryCredentialVisible
     DisposableEffect(showingCredential) {
         if (showingCredential) onCredentialVisibilityChanged(true)
         onDispose { if (showingCredential) onCredentialVisibilityChanged(false) }
@@ -220,6 +221,12 @@ fun EmployeeAccountWorkspace(
             TextButton(onClick = { refresh += 1 }) { Text(hiltechText("إعادة التحقق", "Check again")) }
         }
     }
+    EmployeeAccountAccessWorkspace(employee, client.accountAccess, installationId, newOperationId, onReauthenticate,
+        onCredentialVisibilityChanged = { recoveryCredentialVisible = it },
+        onAccountChanged = {
+            credential = null; credentialVisible = false; deliveryState = null; refresh += 1
+            onAccountReady()
+        })
 }
 
 internal fun accountSetupCanSubmit(availability: EmployeeIdentityInvitationAvailabilityDto): Boolean =
