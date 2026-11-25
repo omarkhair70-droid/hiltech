@@ -249,6 +249,13 @@ require a separately authorized, company-approved policy. There is no
 automatic document export from the Windows buyer screen; this endpoint is
 for an explicitly authorized internal client operation only.
 
+Current implementation update: the separately curated nonfinancial packet and
+technical-original workflow is described in
+`docs/13-delivery/SUPPLIER_TECHNICAL_REVIEW_CONTRACT.md` (V0125). It reuses the
+existing technical responsibility and requires explicit buyer disclosure of the
+technical-only source. It does not relax this priced-original boundary or claim
+automatic redaction of the commercial quotation.
+
 The S3 private-read adapter is intentionally bounded to 16 MiB and does not
 manufacture signed URLs. Disposable mock tests cover cross-tenant,
 nonbuyer, quarantine and altered-object rejection. The real S3 contract

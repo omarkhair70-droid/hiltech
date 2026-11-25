@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -106,7 +108,7 @@ class FinanceMoneyDraftPolicyApprovalSubject(
                 Boolean::class.java, false,
             )) return null
 
-        val key = environment.getProperty(kind.policyKeySetting, "").trim()
+        val key = CompanyReviewPolicyKeys.resolve(environment, kind.policyKeySetting)
         if (!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) return null
         val now = clock.instant()
         val policy = approvals.loadActivePolicy(org, key, now)

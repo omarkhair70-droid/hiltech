@@ -1,19 +1,29 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.hiltech.shared.core.administration
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,6 +43,10 @@ import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.HiltechPanel
 import com.hiltech.shared.core.design.HiltechRecordChoice
 import com.hiltech.shared.core.design.HiltechRecordPicker
+import com.hiltech.shared.core.design.HiltechShape
+import com.hiltech.shared.core.design.HiltechStateTag
+import com.hiltech.shared.core.design.HiltechStateTone
+import com.hiltech.shared.core.design.LocalHiltechOperationalColors
 import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.network.HiltechApiException
 import com.hiltech.shared.core.people.companyResponsibilityFailureDisposition
@@ -73,35 +87,55 @@ fun CompanyAdministrationWorkspace(
         if (capabilities?.canManageCompanySettings == true) add("OPERATIONAL_SETTINGS")
     }
     LaunchedEffect(options) { if (section !in options) section = options.firstOrNull().orEmpty() }
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        HiltechPanel(Modifier.fillMaxWidth()) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(hiltechText("إدارة الشركة", "Company administration"), Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
                 TextButton(onClick = { refresh += 1 }, enabled = !checking) { Text(hiltechText("تحديث", "Refresh")) }
             }
-            Text(hiltechText("إسناد مسؤوليات الموظفين ونقل إدارتها وإعداد المراجعين وإعدادات التشغيل، كلٌّ ضمن تفويضك الحالي.",
-                "Assign employee responsibilities, transfer their administration, configure reviewers, and manage operating settings within your current authority."))
+            Text(hiltechText("الموظفون، والمراجعون، وإعدادات التشغيل في مساحة واحدة؛ كل تغيير ضمن تفويضك الحالي.",
+                "Employees, reviewers and operating settings in one place, with each change within your current authority."),
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (checking) CircularProgressIndicator()
             if (capabilityError) Text(hiltechText("تعذر التحقق من صلاحيات الإدارة. حدّث الصفحة لإعادة المحاولة.",
                 "Couldn’t verify administration access. Refresh to retry."), color = MaterialTheme.colorScheme.error)
             if (!checking && capabilities?.available == false) Text(hiltechText("لا توجد مسؤوليات إدارة شركة مخوّلة لهذا الحساب حاليًا.",
                 "This account currently has no company administration responsibilities."))
-            if (options.size > 1) HiltechRecordPicker(hiltechText("مساحة الإدارة", "Administration area"), section,
-                options.map { HiltechRecordChoice(it, when (it) {
+            if (options.size > 1) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                options.forEach { option -> FilterChip(selected = section == option, onClick = { section = option }, label = { Text(when (option) {
                     "RESPONSIBILITIES" -> hiltechText("الموظفون والمسؤوليات", "Employees and responsibilities")
                     "OPERATIONAL_SETTINGS" -> hiltechText("إعدادات التشغيل", "Operating settings")
                     else -> hiltechText("مسارات الاعتماد", "Approval workflows")
-                }) }, onChange = { section = it }, allowKnownReference = false, allowClear = false)
-            if (section == "REVIEW_WORKFLOWS" && section in options) HiltechRecordPicker(hiltechText("مسار الاعتماد", "Approval workflow"), workflow,
-                companyReviewWorkflows.map { HiltechRecordChoice(it, workflowLabel(it)) }, onChange = { workflow = it }, allowKnownReference = false, allowClear = false)
+                }) }) }
+            }
         }
         OwnPeopleAdministrationWorkspace(organizationId, capabilities?.ownPeopleAdministrationStatus ?: "CHECKING",
             client, installationId, newOperationId, { refresh += 1 }, onReauthenticate, onOpenPeople)
         if (section == "RESPONSIBILITIES" && section in options) state.SaveableStateProvider("EMPLOYEE_RESPONSIBILITIES") {
-            CompanyEmployeeAdministrationWorkspace(organizationId, sessionScope, client, installationId, newOperationId, onReauthenticate)
+            CompanyEmployeeAdministrationWorkspace(organizationId, sessionScope, client, installationId, newOperationId, onReauthenticate, refresh)
         }
-        if (section == "REVIEW_WORKFLOWS" && section in options) state.SaveableStateProvider("REVIEW:$workflow") {
-            CompanyReviewSetupWorkspace(organizationId, workflow, client, installationId, newOperationId, onReauthenticate)
+        if (section == "REVIEW_WORKFLOWS" && section in options) {
+            CompanyAdministrationColumns(context = {
+                HiltechPanel(Modifier.fillMaxWidth()) {
+                    Text(hiltechText("مراجعات الشركة", "Company reviews"), style = MaterialTheme.typography.titleMedium)
+                    Text(hiltechText("اختر مجال العمل ثم مسار الاعتماد لتراجع المسؤول عنه وتغيّر تعيينه.",
+                        "Choose a work area and approval workflow to review or change its designated reviewer."),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val group = workflowGroup(workflow)
+                    val groups = companyReviewWorkflows.map(::workflowGroup).distinct()
+                    HiltechRecordPicker(hiltechText("مجال المراجعة", "Review area"), group,
+                        groups.map { HiltechRecordChoice(it, workflowGroupLabel(it)) },
+                        onChange = { selectedGroup -> workflow = companyReviewWorkflows.first { workflowGroup(it) == selectedGroup } },
+                        allowKnownReference = false, allowClear = false)
+                    HiltechRecordPicker(hiltechText("مسار الاعتماد", "Approval workflow"), workflow,
+                        companyReviewWorkflows.filter { workflowGroup(it) == group }.map { HiltechRecordChoice(it, workflowLabel(it)) },
+                        onChange = { workflow = it }, allowKnownReference = false, allowClear = false)
+                }
+            }, workspace = {
+                state.SaveableStateProvider("REVIEW:$workflow") {
+                    CompanyReviewSetupWorkspace(organizationId, workflow, client, installationId, newOperationId, onReauthenticate, refresh)
+                }
+            })
         }
         if (section == "OPERATIONAL_SETTINGS" && section in options) state.SaveableStateProvider("OPERATIONAL_SETTINGS") {
             CompanyOperationalSettingsWorkspace(organizationId, client.operationalSettings, installationId, newOperationId, onReauthenticate)
@@ -111,7 +145,8 @@ fun CompanyAdministrationWorkspace(
 
 @Composable
 private fun CompanyEmployeeAdministrationWorkspace(organizationId: String, sessionScope: String,
-    client: CompanyAdministrationApiClient, installationId: String, newOperationId: () -> String, onReauthenticate: (() -> Unit)?) {
+    client: CompanyAdministrationApiClient, installationId: String, newOperationId: () -> String, onReauthenticate: (() -> Unit)?,
+    refreshToken: Int) {
     var query by rememberSaveable { mutableStateOf("") }
     var selectedJson by rememberSaveable { mutableStateOf<String?>(null) }
     var rows by remember { mutableStateOf<ResponsibilityEmployeeDirectoryDto?>(null) }
@@ -120,30 +155,33 @@ private fun CompanyEmployeeAdministrationWorkspace(organizationId: String, sessi
     var refresh by remember { mutableIntStateOf(0) }
     val state = rememberSaveableStateHolder()
     val selected = selectedJson?.let { Json.decodeFromString(EmployeeResponsibilityTargetDto.serializer(), it) }
-    LaunchedEffect(query, refresh) {
+    LaunchedEffect(query, refresh, refreshToken) {
         loading = true; failed = false
         try { delay(250); rows = client.employees(organizationId, query, installationId) }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { rows = null; failed = true }
         finally { loading = false }
     }
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    CompanyAdministrationColumns(context = {
         HiltechPanel(Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(hiltechText("اختيار موظف", "Choose an employee"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                TextButton(onClick = { refresh += 1 }, enabled = !loading) { Text(hiltechText("تحديث", "Refresh")) }
-            }
+            Text(hiltechText("اختيار موظف", "Choose an employee"), style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(query, { query = it.take(120) }, Modifier.fillMaxWidth(), singleLine = true,
                 label = { Text(hiltechText("ابحث بالاسم أو كود الموظف", "Search by name or employee code")) })
             if (loading) CircularProgressIndicator()
-            if (failed) Text(hiltechText("تعذر تحميل الموظفين. تحقق من الاتصال والتفويض ثم أعد المحاولة.",
-                "Couldn’t load employees. Check your connection and delegation, then retry."), color = MaterialTheme.colorScheme.error)
+            if (failed) {
+                Text(hiltechText("تعذر تحميل الموظفين. تحقق من الاتصال والتفويض ثم أعد المحاولة.",
+                    "Couldn’t load employees. Check your connection and delegation, then retry."), color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { refresh += 1 }, enabled = !loading) { Text(hiltechText("إعادة المحاولة", "Retry")) }
+            }
             if (!loading && rows?.items?.isEmpty() == true) Text(hiltechText("لا يوجد موظف مطابق للبحث.", "No employee matches this search."))
             rows?.let { directory ->
-                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 280.dp)) {
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(directory.items, key = { it.employeeId }) { employee ->
-                        TextButton(onClick = { selectedJson = Json.encodeToString(EmployeeResponsibilityTargetDto.serializer(), employee) }, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.fillMaxWidth()) {
+                        Surface(onClick = { selectedJson = Json.encodeToString(EmployeeResponsibilityTargetDto.serializer(), employee) },
+                            color = if (selected?.employeeId == employee.employeeId) LocalHiltechOperationalColors.current.selected
+                                else LocalHiltechOperationalColors.current.surface,
+                            shape = HiltechShape.small, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(employee.displayName, style = MaterialTheme.typography.titleSmall)
                                 Text(employee.employeeCode + " · " + if (employee.accountStatus == "CURRENT") hiltechText("حساب نشط", "Current account")
                                     else hiltechText("الحساب يحتاج تجهيزًا", "Account setup needed"), style = MaterialTheme.typography.bodySmall)
@@ -153,12 +191,46 @@ private fun CompanyEmployeeAdministrationWorkspace(organizationId: String, sessi
                 }
                 if (directory.hasMore) Text(hiltechText("اكتب اسمًا أدق للوصول إلى بقية الموظفين.", "Use a more specific name to find other employees."))
             }
+            selected?.let { employee ->
+                HorizontalDivider()
+                Text(hiltechText("الموظف المحدد", "Selected employee"), style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(employee.displayName, style = MaterialTheme.typography.titleMedium)
+                if (employee.employeeCode.isNotBlank()) Text(employee.employeeCode, style = MaterialTheme.typography.bodySmall)
+                HiltechStateTag(if (employee.accountStatus == "CURRENT") hiltechText("حساب نشط", "Current account")
+                    else hiltechText("الحساب يحتاج تجهيزًا", "Account setup needed"),
+                    if (employee.accountStatus == "CURRENT") HiltechStateTone.CURRENT else HiltechStateTone.ATTENTION)
+            }
         }
+    }, workspace = {
         selected?.let { employee ->
             state.SaveableStateProvider(employee.employeeId) {
-                Text(employee.displayName, style = MaterialTheme.typography.headlineSmall)
-                EmployeeCompanyResponsibilitiesWorkspace(employee, sessionScope, client.responsibilities, installationId, newOperationId, onReauthenticate)
+                EmployeeCompanyResponsibilitiesWorkspace(employee, sessionScope, client.responsibilities, installationId, newOperationId, onReauthenticate,
+                    refreshToken = refreshToken, showRefreshAction = false)
             }
+        } ?: HiltechPanel(Modifier.fillMaxWidth()) {
+            Text(hiltechText("مسؤوليات كل موظف في مكانها", "Each employee’s responsibilities in one place"), style = MaterialTheme.typography.titleLarge)
+            Text(hiltechText("اختر موظفًا لعرض تكليفاته الحالية، وإضافة مسؤولية، أو نقل إدارة أدوار محددة إليه.",
+                "Choose an employee to see current assignments, add a responsibility or delegate administration of specified roles."))
+            Text(hiltechText("ستظهر فقط الإجراءات المتاحة ضمن تفويضك، مع بقاء اعتماد المعاملات في مساراته المستقلة.",
+                "Available actions follow your current delegation, while transaction approvals retain their separate workflows."),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    })
+}
+
+/** Context remains beside the working surface on Windows, and above it on a narrow screen. */
+@Composable
+private fun CompanyAdministrationColumns(context: @Composable () -> Unit, workspace: @Composable () -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val availableWidth = maxWidth
+        val wide = availableWidth >= 1000.dp
+        // Keep the same composition slots during a resize: an in-flight or saved
+        // employee command must not be recreated when the columns wrap.
+        FlowRow(Modifier.fillMaxWidth(), maxItemsInEachRow = if (wide) 2 else 1,
+            horizontalArrangement = Arrangement.spacedBy(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.width(if (wide) 300.dp else availableWidth), verticalArrangement = Arrangement.spacedBy(16.dp)) { context() }
+            Column(Modifier.width(if (wide) availableWidth - 320.dp else availableWidth), verticalArrangement = Arrangement.spacedBy(16.dp)) { workspace() }
         }
     }
 }
@@ -166,7 +238,7 @@ private fun CompanyEmployeeAdministrationWorkspace(organizationId: String, sessi
 @Composable
 private fun CompanyReviewSetupWorkspace(
     organizationId: String, workflow: String, client: CompanyAdministrationApiClient, installationId: String,
-    newOperationId: () -> String, onReauthenticate: (() -> Unit)?,
+    newOperationId: () -> String, onReauthenticate: (() -> Unit)?, refreshToken: Int,
 ) {
     val jobs = rememberCoroutineScope()
     var current by remember { mutableStateOf<CompanyReviewSetupDto?>(null) }
@@ -189,7 +261,7 @@ private fun CompanyReviewSetupWorkspace(
     val selected = selectedJson?.let { Json.decodeFromString(CompanyReviewerCandidateDto.serializer(), it) }
     val pending = pendingJson?.let { Json.decodeFromString(CompanyReviewSetupIntent.serializer(), it) }
 
-    LaunchedEffect(refresh) {
+    LaunchedEffect(refresh, refreshToken) {
         loading = true
         loadError = null
         try { current = client.reviewSetup(organizationId, workflow, installationId) }
@@ -197,7 +269,7 @@ private fun CompanyReviewSetupWorkspace(
         catch (failure: Exception) { current = null; loadError = (failure as? HiltechApiException)?.code ?: "LOAD_FAILED" }
         finally { loading = false }
     }
-    LaunchedEffect(query, refresh, current != null) {
+    LaunchedEffect(query, refresh, refreshToken, current != null) {
         if (current?.canConfigure != true) { candidates = null; return@LaunchedEffect }
         searching = true
         candidateError = false
@@ -209,10 +281,7 @@ private fun CompanyReviewSetupWorkspace(
         finally { searching = false }
     }
     HiltechPanel(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(workflowLabel(workflow), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-            TextButton(onClick = { refresh += 1 }, enabled = !loading && !submitting) { Text(hiltechText("تحديث", "Refresh")) }
-        }
+        Text(workflowLabel(workflow), style = MaterialTheme.typography.titleMedium)
         Text(hiltechText("يتطلب كل طلب مراجعة مستقلة. لا يستطيع من أعد السجل اعتماد السجل نفسه.",
             "Each request requires an independent review. The person who prepared a record cannot approve that same record."))
         if (loading) CircularProgressIndicator()
@@ -231,7 +300,8 @@ private fun CompanyReviewSetupWorkspace(
                 "READY" -> hiltechText("المسار جاهز", "Workflow ready")
                 "NOT_CONFIGURED" -> hiltechText("لم يُحدّد المراجع بعد", "Reviewer not configured")
                 "REVIEWER_UNAVAILABLE" -> hiltechText("المراجع الحالي غير متاح", "Current reviewer unavailable")
-                "PROTECTED_EXISTING_AUTHORITY" -> hiltechText("مسار اعتماد قائم بسلطة مستقلة", "Existing independently governed approval workflow")
+                "PROTECTED_EXISTING_AUTHORITY", "EXTERNAL_CONFIGURATION_DEPENDENCY" -> hiltechText("المسار مرتبط بإعدادات أخرى", "Workflow has other configuration dependencies")
+                "LEGACY_AUTHORITY_PRESERVED" -> hiltechText("مسار قائم يحتاج تأكيد نطاق التغيير", "Existing workflow needs its change scope confirmed")
                 else -> hiltechText("إعداد الاعتماد يحتاج تحديثًا", "Approval setup needs an update")
             }, style = MaterialTheme.typography.titleSmall)
             setup.reviewerDisplayName?.let { name ->
@@ -240,10 +310,21 @@ private fun CompanyReviewSetupWorkspace(
             }
             setup.policyRevision?.let { Text(hiltechText("نسخة المسار $it", "Workflow revision $it"),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            val affectedWorkflows = setup.affectedWorkflows.ifEmpty { listOf(workflow) }
             if (!setup.canConfigure) Text(hiltechText(
-                "هذا المسار مرتبط بسلطة اعتماد مستقلة سبق تحديدها للشركة. يظل إعدادها محفوظًا ولا يُستبدل من هذه الشاشة.",
-                "This workflow uses an independently governed approval authority already set for the company. Its configuration is preserved and cannot be replaced here.",
+                "الإعداد الحالي يخدم أيضًا مصدرًا خارج نطاق هذه المسارات، أو يستخدم مراجعًا مشتركًا مع إعداد آخر. يلزم تسوية هذا الارتباط قبل تغييره؛ تظل الاعتمادات السابقة محفوظة.",
+                "The installed setup also serves a source outside these workflows, or its managed reviewer is shared with another setup. Reconcile that dependency before replacing it. Prior approvals remain preserved.",
             ))
+            if (affectedWorkflows.size > 1) {
+                Text(hiltechText("مسارات تشترك في هذا المراجع", "Workflows sharing this reviewer"), style = MaterialTheme.typography.titleSmall)
+                affectedWorkflows.forEach { Text(workflowLabel(it), style = MaterialTheme.typography.bodySmall) }
+                Text(hiltechText("ينطبق الاختيار الجديد على كل المسارات المعروضة.",
+                    "The new selection applies to every workflow listed here."), style = MaterialTheme.typography.bodySmall)
+            }
+            if (setup.replacesLegacyAuthority) Text(hiltechText(
+                "عند التأكيد سيُخصَّص مراجع لهذه المسارات مع حفظ السلطة السابقة واستخدامها في بقية الشركة.",
+                "Confirmation assigns a dedicated reviewer to these workflows and preserves the previous authority used elsewhere in the company.",
+            ), style = MaterialTheme.typography.bodySmall)
             if (setup.pendingReviews > 0) Text(hiltechText(
                 "هناك ${setup.pendingReviews} طلبات معلقة. قبل تغيير المراجع ستؤكد إنهاء هذه الطلبات وإعادة إرسال مصادرها للمراجعة الجديدة. تبقى الاعتمادات المكتملة محفوظة.",
                 "There are ${setup.pendingReviews} pending requests. Before replacing the reviewer, confirm ending these requests so their sources can be resubmitted. Completed approvals are preserved.",
@@ -251,10 +332,10 @@ private fun CompanyReviewSetupWorkspace(
             if (setup.canConfigure) {
             HorizontalDivider()
             Text(hiltechText("اختيار موظف مراجع", "Choose a reviewer"), style = MaterialTheme.typography.titleSmall)
-            Text(if (workflow in setOf("PAYROLL_SOURCE", "PAYROLL_RUN")) hiltechText(
+            Text(if (affectedWorkflows.any { it in setOf("PAYROLL_SOURCE", "PAYROLL_RUN") }) hiltechText(
                 "يظهر الموظفون النشطون الذين لديهم مسؤولية مراجعة الرواتب. يمكنك إسناد هذه المسؤولية من سجل الموظف أولًا.",
                 "Active employees with Payroll review responsibility appear here. You can assign that responsibility from the employee record first.",
-            ) else if (workflow == "FINANCE_PAYROLL_RESULT") hiltechText(
+            ) else if ("FINANCE_PAYROLL_RESULT" in affectedWorkflows) hiltechText(
                 "يظهر الموظفون النشطون الذين لديهم مسؤولية مراجعة نتائج صرف الرواتب.",
                 "Active employees with Payroll disbursement review responsibility appear here.",
             ) else hiltechText(
@@ -289,12 +370,19 @@ private fun CompanyReviewSetupWorkspace(
                     setup.reviewerPrincipalType != "USER" || setup.reviewerEmployeeId != chosen.employeeId)
                 var pendingClosureConfirmed by remember(setup.policyId, setup.policyVersion, chosen.employeeId, setup.pendingPolicies) { mutableStateOf(false) }
                 var pendingClosureReason by remember(setup.policyId, setup.policyVersion, chosen.employeeId, setup.pendingPolicies) { mutableStateOf("") }
+                val needsGroupConfirmation = affectedWorkflows.size > 1 || setup.replacesLegacyAuthority
+                var groupConfirmed by remember(setup.policyId, setup.policyVersion, chosen.employeeId, affectedWorkflows, setup.replacesLegacyAuthority) { mutableStateOf(false) }
                 Text(hiltechText("الاختيار: ", "Selected: ") + chosen.displayName, style = MaterialTheme.typography.titleSmall)
+                if (needsGroupConfirmation) Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(groupConfirmed, { groupConfirmed = it }, enabled = pending == null && !submitting)
+                    Text(hiltechText("أوافق على تعيين المراجع لكل المسارات المعروضة وحفظ السلطات الأخرى دون تغيير.",
+                        "I confirm this reviewer for every listed workflow while preserving other company authorities."))
+                }
                 if (needsPendingClosure) {
                     Text(hiltechText("الطلبات التي ستنتهي: ${setup.pendingReviews}", "Requests that will be ended: ${setup.pendingReviews}"), style = MaterialTheme.typography.titleSmall)
-                    setup.pendingPolicies.forEach { scope -> Text(hiltechText(
-                        "نسخة المسار ${scope.policyRevision}: ${scope.pendingReviews} طلبات",
-                        "Workflow revision ${scope.policyRevision}: ${scope.pendingReviews} requests")) }
+                    setup.pendingPolicies.forEach { scope -> Text(workflowLabel(scope.workflow ?: workflow) + " · " + hiltechText(
+                        "نسخة ${scope.policyRevision}: ${scope.pendingReviews} طلبات",
+                        "Revision ${scope.policyRevision}: ${scope.pendingReviews} requests")) }
                     OutlinedTextField(pendingClosureReason, { pendingClosureReason = it.take(1000) }, Modifier.fillMaxWidth(),
                         enabled = pending == null && !submitting, label = { Text(hiltechText("سبب تغيير مسار الطلبات المعلقة", "Reason for replacing the pending review workflow")) })
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -305,12 +393,13 @@ private fun CompanyReviewSetupWorkspace(
                 }
                 val impactConfirmed = !needsPendingClosure || (pendingClosureConfirmed && pendingClosureReason.trim().length in 3..1000 &&
                     setup.pendingPolicies.isNotEmpty() && setup.pendingPolicies.sumOf { it.pendingReviews } == setup.pendingReviews)
-                Button(enabled = pending == null && !submitting && impactConfirmed, onClick = {
+                Button(enabled = pending == null && !submitting && impactConfirmed && (!needsGroupConfirmation || groupConfirmed), onClick = {
                     pendingJson = Json.encodeToString(CompanyReviewSetupIntent.serializer(), CompanyReviewSetupIntent(
                         newOperationId(), organizationId, workflow, chosen.employeeId, chosen.identityId, chosen.employeeVersion,
                         chosen.displayName, setup.policyId, setup.policyVersion, setup.bindingId, setup.bindingVersion, setup.pendingReviews,
                         if (needsPendingClosure) setup.pendingPolicies else emptyList(),
                         pendingClosureReason.trim().takeIf { needsPendingClosure },
+                        affectedWorkflows, setup.replacesLegacyAuthority && groupConfirmed,
                     ))
                     attempted = false; unknownOutcome = false; rejectionConfirmed = false
                     commandError = null; acknowledgement = null; dialogVisible = true
@@ -323,8 +412,10 @@ private fun CompanyReviewSetupWorkspace(
         fun close() { dialogVisible = false; if (!attempted) pendingJson = null }
         AlertDialog(onDismissRequest = { if (!submitting) close() },
             title = { Text(hiltechText("تأكيد المراجع", "Confirm reviewer")) },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(workflowLabel(intent.workflow), style = MaterialTheme.typography.titleSmall)
+            text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                intent.affectedWorkflowsToConfirm.ifEmpty { listOf(intent.workflow) }.forEach {
+                    Text(workflowLabel(it), style = MaterialTheme.typography.titleSmall)
+                }
                 Text(intent.reviewerDisplayName, style = MaterialTheme.typography.titleMedium)
                 Text(hiltechText("يظل الاعتماد مطلوبًا، مع مراجع مستقل عن مُعدّ السجل. يتم حفظ تاريخ الإعداد السابق.",
                     "Approval remains required from a reviewer independent of the preparer. The prior setup history is retained."))
@@ -378,9 +469,45 @@ private fun workflowLabel(workflow: String): String = when (workflow) {
     "PAYROLL_RUN" -> hiltechText("اعتماد كشف الرواتب", "Payroll run approval")
     "FINANCE_PAYROLL_RESULT" -> hiltechText("مراجعة نتائج صرف الرواتب", "Payroll disbursement review")
     "PROCUREMENT_PO" -> hiltechText("اعتماد مقترحات الشراء", "Purchase proposal approval")
+    "PROCUREMENT_PO_DELIVERY" -> hiltechText("اعتماد تعديل تسليم أمر الشراء", "Purchase delivery amendment approval")
+    "PROCUREMENT_SERVICE_ORDER" -> hiltechText("اعتماد أوامر خدمات الموردين", "Supplier service order approval")
+    "FINANCE_EMPLOYEE_ADVANCE" -> hiltechText("مراجعة سلف الموظفين", "Employee advance review")
+    "FINANCE_IMPREST" -> hiltechText("مراجعة العهد المالية", "Financial imprest review")
+    "FINANCE_EXPENSE_DOCUMENTATION" -> hiltechText("مراجعة مستندات المصروف", "Expense documentation review")
+    "FINANCE_SUPPLIER_ACCOUNTING" -> hiltechText("مراجعة حسابات الموردين", "Supplier accounting review")
+    "FINANCE_AP_POSTING" -> hiltechText("اعتماد قيد المورد", "Supplier journal posting approval")
+    "FINANCE_AP_REVERSAL" -> hiltechText("اعتماد عكس قيد المورد", "Supplier journal reversal approval")
+    "FINANCE_AR_INVOICE" -> hiltechText("اعتماد إصدار فاتورة العميل", "Customer invoice issuance approval")
+    "FINANCE_AR_POSTING" -> hiltechText("اعتماد قيد العميل", "Customer journal posting approval")
+    "FINANCE_EMPLOYEE_FUNDING" -> hiltechText("اعتماد صرف سلفة أو عهدة", "Employee funding approval")
+    "FINANCE_EMPLOYEE_SETTLEMENT" -> hiltechText("اعتماد تسوية سلفة أو عهدة", "Employee settlement approval")
+    "FINANCE_EXPENSE_REIMBURSEMENT" -> hiltechText("اعتماد رد المصروفات", "Expense reimbursement approval")
+    "FINANCE_BANK_STATEMENT" -> hiltechText("مراجعة كشف الحساب البنكي", "Bank statement intake review")
+    "FINANCE_BANK_RECONCILIATION" -> hiltechText("اعتماد التسوية البنكية", "Bank reconciliation sign-off")
+    "FINANCE_CASHBOX_OPENING" -> hiltechText("اعتماد فتح خزينة", "Cashbox opening approval")
+    "FINANCE_CASH_VOUCHER" -> hiltechText("اعتماد سند نقدي", "Cash voucher approval")
+    "FINANCE_CASH_COUNT" -> hiltechText("اعتماد جرد الخزينة", "Cash count approval")
+    "FINANCE_CASH_ALLOCATION" -> hiltechText("اعتماد تخصيص تحصيل أو سداد", "Cash allocation approval")
+    "FINANCE_CASH_ALLOCATION_VOID" -> hiltechText("اعتماد إلغاء تخصيص نقدي", "Cash allocation void approval")
+    "FINANCE_GL_PERIOD_CLOSE" -> hiltechText("اعتماد إغلاق الفترة المحاسبية", "Accounting period close approval")
     "SERVICE_HANDOVER" -> hiltechText("اعتماد التسليم", "Handover approval")
     "SERVICE_WARRANTY" -> hiltechText("اعتماد الضمان", "Warranty approval")
     else -> hiltechText("مسار المراجعة", "Review workflow")
+}
+
+private fun workflowGroup(workflow: String): String = when {
+    workflow.startsWith("PAYROLL") || workflow == "FINANCE_PAYROLL_RESULT" -> "PAYROLL"
+    workflow.startsWith("FINANCE") -> "FINANCE"
+    workflow.startsWith("PROCUREMENT") -> "PROCUREMENT"
+    else -> "SERVICE"
+}
+
+@Composable
+private fun workflowGroupLabel(group: String): String = when (group) {
+    "PAYROLL" -> hiltechText("الرواتب", "Payroll")
+    "FINANCE" -> hiltechText("المالية", "Finance")
+    "PROCUREMENT" -> hiltechText("المشتريات", "Procurement")
+    else -> hiltechText("التسليم والضمان", "Handover and warranty")
 }
 
 @Composable
@@ -393,8 +520,11 @@ private fun setupError(code: String): String = when (code) {
         "The workflow changed since it was displayed. Refresh before saving another selection.")
     "PAYROLL_REVIEWER_CHANGED" -> hiltechText("تغير حساب الموظف أو مسؤوليته في المراجعة. حدّث القائمة واختر مراجعًا حاليًا.",
         "The employee’s account or review responsibility changed. Refresh and choose a current reviewer.")
-    "REVIEW_WORKFLOW_PROTECTED_AUTHORITY" -> hiltechText("هذا المسار يستخدم سلطة اعتماد مستقلة لا يمكن استبدالها من هذه الشاشة.",
-        "This workflow uses independently governed approval authority that cannot be replaced here.")
+    "REVIEW_WORKFLOW_PROTECTED_AUTHORITY", "REVIEW_WORKFLOW_EXTERNAL_DEPENDENCY" -> hiltechText("الإعداد مرتبط بمصدر أو سلطة خارج المسارات المعروضة. يلزم تسوية الارتباط قبل تغييره.",
+        "The setup is linked to a source or authority outside the listed workflows. Reconcile that dependency before replacing it.")
+    "REVIEW_WORKFLOW_GROUP_CONFIRMATION_REQUIRED", "REVIEW_WORKFLOW_LEGACY_CONFIRMATION_REQUIRED" -> hiltechText(
+        "حدّث الإعداد وراجع كل المسارات المتأثرة، ثم أكد نطاق التغيير.",
+        "Refresh the setup, review every affected workflow, then confirm the scope of the change.")
     "APPROVAL_POLICY_PENDING_CONFIRMATION_REQUIRED", "APPROVAL_POLICY_PENDING_CHANGED", "APPROVAL_POLICY_CHANGED" -> hiltechText(
         "تغيرت الطلبات المعلقة أو نسخة المسار. حدّث الحالة وراجع عدد الطلبات التي ستنتهي قبل التأكيد.",
         "Pending requests or the workflow version changed. Refresh and review the affected request count before confirming.")

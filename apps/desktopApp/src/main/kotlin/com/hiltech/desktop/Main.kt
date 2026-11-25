@@ -2835,6 +2835,9 @@ fun main() {
             val serviceEvidence = remember(workspaceApi) {
                 runtime.evidenceApiForSession(workspaceApi)
             }
+            val sessionCash = remember(workspaceApi) {
+                com.hiltech.shared.core.finance.FinancePhysicalCashApiClient(workspaceApi)
+            }
             val stockPurchasing = remember(workspaceApi, serviceEvidence) {
                 com.hiltech.shared.core.procurement.StockPurchasingNativeClients(workspaceApi, serviceEvidence)
             }
@@ -3066,6 +3069,18 @@ fun main() {
                                 },
                             ))
                         }
+                        if (operationAvailable(ProductOperation.PROCUREMENT_SOURCING)) {
+                            add(com.hiltech.shared.core.procurement.supplierTechnicalReviewNativeWorkspace(
+                                client = stockPurchasing.technical,
+                                evidence = serviceEvidence,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                pickDocument = { serviceDocuments.pickDocument() },
+                                onReauthenticate = { signIn(true) },
+                            ))
+                        }
                         if (operationAvailable(ProductOperation.COMMERCIAL)) {
                             add(commercialReadNativeWorkspace(
                                 client = runtime.commercialApi,
@@ -3134,7 +3149,8 @@ fun main() {
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
-                                api = runtime.financeEvidenceReadApis.cash,
+                                api = sessionCash,
+                                onOpenCompanySettings = { companySettingsFocusRequest += 1 },
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
                             ))
                         }
@@ -3364,6 +3380,21 @@ fun main() {
                                                 },
                                                 purchaseApprovalRequestEnabled =
                                                     operationAvailable(ProductOperation.PROCUREMENT_APPROVAL_REQUEST),
+                                                technicalPacketEditor = { quoteId, close, changed ->
+                                                    com.hiltech.shared.core.procurement.SupplierTechnicalPacketEditor(
+                                                        client = stockPurchasing.technical,
+                                                        evidence = serviceEvidence,
+                                                        quoteId = quoteId,
+                                                        identityId = identity.identityId,
+                                                        organizationId = organization.organizationId,
+                                                        installationId = runtime.physicalWarehouseInstallationId,
+                                                        newOperationId = { java.util.UUID.randomUUID().toString() },
+                                                        pickDocument = { serviceDocuments.pickDocument() },
+                                                        onReauthenticate = { signIn(true) },
+                                                        onClose = close,
+                                                        onChanged = changed,
+                                                    )
+                                                },
                                                 quoteDocumentUploader = stockPurchasing.quoteDocuments,
                                                 pickQuoteFile = {
                                                     serviceDocuments.pickDocument()?.let { file ->

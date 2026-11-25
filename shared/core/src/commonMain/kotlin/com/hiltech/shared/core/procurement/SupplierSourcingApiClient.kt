@@ -17,6 +17,7 @@ class SupplierSourcingApiClient(
     private val api: HiltechApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
 ) {
+    internal val commands = SupplierSourcingCommandSession()
     suspend fun openRfq(
         requirementId: String,
         request: OpenSupplierRfqDto,

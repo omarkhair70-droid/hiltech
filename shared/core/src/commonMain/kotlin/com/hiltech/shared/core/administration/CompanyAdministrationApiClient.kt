@@ -9,7 +9,18 @@ import io.ktor.http.encodeURLParameter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-val companyReviewWorkflows = setOf("PAYROLL_SOURCE", "PAYROLL_RUN", "FINANCE_PAYROLL_RESULT", "PROCUREMENT_PO", "SERVICE_HANDOVER", "SERVICE_WARRANTY")
+val companyReviewWorkflows = linkedSetOf(
+    "PAYROLL_SOURCE", "PAYROLL_RUN", "FINANCE_PAYROLL_RESULT",
+    "PROCUREMENT_PO", "PROCUREMENT_PO_DELIVERY", "PROCUREMENT_SERVICE_ORDER",
+    "FINANCE_EMPLOYEE_ADVANCE", "FINANCE_IMPREST", "FINANCE_EXPENSE_DOCUMENTATION",
+    "FINANCE_SUPPLIER_ACCOUNTING", "FINANCE_AP_POSTING", "FINANCE_AP_REVERSAL",
+    "FINANCE_AR_INVOICE", "FINANCE_AR_POSTING", "FINANCE_EMPLOYEE_FUNDING",
+    "FINANCE_EMPLOYEE_SETTLEMENT", "FINANCE_EXPENSE_REIMBURSEMENT",
+    "FINANCE_BANK_STATEMENT", "FINANCE_BANK_RECONCILIATION",
+    "FINANCE_CASHBOX_OPENING", "FINANCE_CASH_VOUCHER", "FINANCE_CASH_COUNT",
+    "FINANCE_CASH_ALLOCATION", "FINANCE_CASH_ALLOCATION_VOID", "FINANCE_GL_PERIOD_CLOSE",
+    "SERVICE_HANDOVER", "SERVICE_WARRANTY",
+)
 
 @Serializable
 data class CompanyAdministrationCapabilitiesDto(
@@ -40,9 +51,15 @@ data class CompanyReviewSetupDto(
     val reviewerEmployeeId: String?, val pendingReviews: Int, val asOf: String, val workflow: String,
     val canConfigure: Boolean = true,
     val pendingPolicies: List<CompanyPendingReviewPolicyDto> = emptyList(),
+    val affectedWorkflows: List<String> = emptyList(),
+    val replacesLegacyAuthority: Boolean = false,
+    val configurationBlockedReason: String? = null,
 )
 @Serializable
-data class CompanyPendingReviewPolicyDto(val policyId: String, val policyRevision: Int, val policyVersion: Long, val pendingReviews: Int)
+data class CompanyPendingReviewPolicyDto(
+    val policyId: String, val policyRevision: Int, val policyVersion: Long, val pendingReviews: Int,
+    val workflow: String? = null,
+)
 @Serializable
 data class CompanyReviewerCandidateDto(
     val employeeId: String, val identityId: String, val employeeVersion: Long, val displayName: String, val employeeCode: String,
@@ -57,6 +74,8 @@ data class CompanyReviewSetupIntent(
     val expectedBindingId: String?, val expectedBindingVersion: Long?, val pendingReviews: Int,
     val pendingPoliciesToSupersede: List<CompanyPendingReviewPolicyDto> = emptyList(),
     val supersedeReason: String? = null,
+    val affectedWorkflowsToConfirm: List<String> = emptyList(),
+    val legacyAuthorityReplacementConfirmed: Boolean = false,
 )
 @Serializable
 private data class ConfigureCompanyReviewRequest(
@@ -64,6 +83,8 @@ private data class ConfigureCompanyReviewRequest(
     val expectedPolicyId: String?, val expectedPolicyVersion: Long?, val expectedBindingId: String?, val expectedBindingVersion: Long?,
     val pendingPoliciesToSupersede: List<CompanyPendingReviewPolicyDto> = emptyList(),
     val supersedeReason: String? = null,
+    val affectedWorkflowsToConfirm: List<String> = emptyList(),
+    val legacyAuthorityReplacementConfirmed: Boolean = false,
 )
 @Serializable
 data class CompanyReviewSetupReceiptDto(
@@ -124,18 +145,23 @@ class CompanyAdministrationApiClient(
             (intent.expectedBindingId == null) == (intent.expectedBindingVersion == null))
         if (intent.pendingPoliciesToSupersede.isNotEmpty()) {
             require(intent.supersedeReason.orEmpty().trim().length in 3..1000)
-            require(intent.pendingPoliciesToSupersede.map { it.policyId }.distinct().size == intent.pendingPoliciesToSupersede.size)
+            require(intent.pendingPoliciesToSupersede.map { it.policyId to (it.workflow ?: intent.workflow) }.distinct().size == intent.pendingPoliciesToSupersede.size)
             intent.pendingPoliciesToSupersede.forEach { pending ->
                 requireUuid(pending.policyId)
                 require(pending.policyRevision > 0 && pending.policyVersion > 0 && pending.pendingReviews > 0)
+                require(pending.workflow == null || pending.workflow in companyReviewWorkflows)
             }
             require(intent.pendingPoliciesToSupersede.sumOf { it.pendingReviews } == intent.pendingReviews)
         }
+        require(intent.affectedWorkflowsToConfirm.all { it in companyReviewWorkflows } &&
+            intent.affectedWorkflowsToConfirm.distinct().size == intent.affectedWorkflowsToConfirm.size)
+        require(intent.affectedWorkflowsToConfirm.isEmpty() || intent.workflow in intent.affectedWorkflowsToConfirm)
         val endpoint = path(intent.organizationId, intent.workflow)
         val body = json.encodeToString(ConfigureCompanyReviewRequest.serializer(), ConfigureCompanyReviewRequest(
             intent.operationId, intent.reviewerEmployeeId, intent.expectedReviewerIdentityId, intent.baseEmployeeVersion,
             intent.expectedPolicyId, intent.expectedPolicyVersion, intent.expectedBindingId, intent.expectedBindingVersion,
             intent.pendingPoliciesToSupersede, intent.supersedeReason,
+            intent.affectedWorkflowsToConfirm, intent.legacyAuthorityReplacementConfirmed,
         ))
         onCommandSending()
         return api.request(HttpMethod.Post, endpoint, HiltechRequestOptions(installationId, intent.operationId), body,

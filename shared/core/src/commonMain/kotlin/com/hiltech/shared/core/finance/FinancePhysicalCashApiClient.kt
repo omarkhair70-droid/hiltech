@@ -3,14 +3,16 @@ package com.hiltech.shared.core.finance
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
+import io.ktor.http.encodeURLParameter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 @Serializable
 data class FinanceCashboxOpeningPrepareDto(
- val operationId:String,val cashboxCode:String,val currency:String,
+ val operationId:String,val cashboxCode:String?=null,val currency:String,
  val custodianUserId:String,val companyCustodyReference:String,
+ val expectedCustodianVersion:Long?=null,val expectedReviewVersion:Long?=null,
 )
 @Serializable
 data class FinanceCashboxOperationDto(val operationId:String)
@@ -20,7 +22,49 @@ data class FinanceCashboxReceiptDto(
  val currency:String,val custodianUserId:String,val state:String,
  val approvalRequestId:String?=null,val replayed:Boolean=false,
  val cashboxId:String?=null,val openingBalance:String="0.000000",
+ val custodianDisplayName:String="",val custodianEmployeeCode:String="",
+ val companyCustodyReference:String="",val createdAt:String?=null,val sourceVersion:Long?=null,
+ val codeSource:String="MANUAL",val canRequestReview:Boolean=false,val canActivate:Boolean=false,
+ val sourceIssueCode:String?=null,val confirmedOperationId:String?=null,
 )
+@Serializable
+data class FinanceCashboxCustodianChoiceDto(
+ val identityId:String,val employeeId:String,val employeeCode:String,val displayName:String,val sourceVersion:Long,
+)
+@Serializable
+data class FinanceCashboxCustodianDirectoryDto(
+ val organizationId:String,val items:List<FinanceCashboxCustodianChoiceDto>,val hasMore:Boolean,
+ val reviewSourceVersion:Long?,val issueCode:String?,
+)
+@Serializable
+data class FinanceCashboxOpeningWorkbenchDto(
+ val organizationId:String,val canPrepare:Boolean,val canReadCompanyHistory:Boolean,
+ val reviewReady:Boolean,val reviewSourceVersion:Long?,val preparationIssueCode:String?,
+ val items:List<FinanceCashboxReceiptDto>,val hasMore:Boolean,
+)
+@Serializable
+enum class FinanceCashboxOpeningAction { PREPARE, REQUEST_REVIEW, ACTIVATE }
+@Serializable
+data class FinanceCashboxOpeningIntent(
+ val operationId:String,val organizationId:String,val action:FinanceCashboxOpeningAction,
+ val prepare:FinanceCashboxOpeningPrepareDto?=null,val source:FinanceCashboxReceiptDto?=null,
+ val custodianDisplayName:String="",val custodianEmployeeCode:String="",
+)
+
+fun validOpeningReceipt(value:FinanceCashboxReceiptDto,organizationId:String):Boolean =
+ value.organizationId==organizationId && financeLookupIdIsUuid(value.proposalId) && financeLookupIdIsUuid(value.custodianUserId) &&
+ value.cashboxCode.length in 3..64 && value.currency.matches(Regex("^[A-Z]{3}$")) &&
+ value.openingBalance.matches(Regex("^0(\\.0+)?$")) &&
+ value.state in setOf("PROPOSED","PENDING","APPROVED","ACTIVE","REJECTED","CHANGE_REQUESTED","SUPERSEDED","CANCELLED","REVIEW_REQUIRED") &&
+ (value.approvalRequestId==null || financeLookupIdIsUuid(value.approvalRequestId)) &&
+ (value.cashboxId==null || value.cashboxId==value.proposalId)
+
+/** Display names and current action availability may change without changing the pinned financial source. */
+fun sameCashboxOpeningSource(value:FinanceCashboxReceiptDto,expected:FinanceCashboxReceiptDto):Boolean =
+ validOpeningReceipt(value,expected.organizationId) && value.proposalId==expected.proposalId && value.cashboxCode==expected.cashboxCode &&
+ value.currency==expected.currency && value.custodianUserId==expected.custodianUserId &&
+ (expected.sourceVersion==null || value.sourceVersion==expected.sourceVersion) &&
+ (expected.companyCustodyReference.isBlank() || value.companyCustodyReference==expected.companyCustodyReference)
 @Serializable
 data class FinanceCashboxBalanceDto(
  val cashboxId:String,val organizationId:String,val code:String,
@@ -56,28 +100,36 @@ class FinancePhysicalCashApiClient(
 ) {
  suspend fun prepareCashbox(
    org:String,req:FinanceCashboxOpeningPrepareDto,installation:String,
+   onCommandSending:()->Unit={},
  ):FinanceCashboxReceiptDto {
    val op=uuid(req.operationId)
    uuid(req.custodianUserId)
    require(req.currency.matches(Regex("^[A-Z]{3}$")))
-   require(req.cashboxCode.trim().length in 3..64)
+   require(req.cashboxCode==null || req.cashboxCode.trim().length in 3..64)
+   require(req.companyCustodyReference.trim().length in 8..180)
+   require(req.cashboxCode!=null || ((req.expectedCustodianVersion ?: 0)>0 && (req.expectedReviewVersion ?: 0)>0))
+   val path=base(org)+"/cashboxes/prepare-opening"
+   val body=json.encodeToString(FinanceCashboxOpeningPrepareDto.serializer(),req)
+   onCommandSending()
    return api.request(
      method=HttpMethod.Post,
-     path=base(org)+"/cashboxes/prepare-opening",
+     path=path,
      options=options(installation,op),
-     requestBody=json.encodeToString(
-       FinanceCashboxOpeningPrepareDto.serializer(),req),
+     requestBody=body,
      decode={json.decodeFromString(
        FinanceCashboxReceiptDto.serializer(),it)},
    )
  }
  suspend fun reviewCashbox(
    org:String,box:String,operation:String,installation:String,
+   onCommandSending:()->Unit={},
  ):FinanceCashboxReceiptDto {
    val op=uuid(operation)
+   val path=base(org)+"/cashboxes/"+uuid(box)+"/request-opening-review"
+   onCommandSending()
    return api.request(
      method=HttpMethod.Post,
-     path=base(org)+"/cashboxes/"+uuid(box)+"/request-opening-review",
+     path=path,
      options=options(installation,op),
      requestBody=json.encodeToString(
        FinanceCashboxOperationDto.serializer(),
@@ -88,11 +140,14 @@ class FinancePhysicalCashApiClient(
  }
  suspend fun activateCashbox(
    org:String,box:String,operation:String,installation:String,
+   onCommandSending:()->Unit={},
  ):FinanceCashboxReceiptDto {
    val op=uuid(operation)
+   val path=base(org)+"/cashboxes/"+uuid(box)+"/activate"
+   onCommandSending()
    return api.request(
      method=HttpMethod.Post,
-     path=base(org)+"/cashboxes/"+uuid(box)+"/activate",
+     path=path,
      options=options(installation,op),
      requestBody=json.encodeToString(
        FinanceCashboxOperationDto.serializer(),
@@ -107,6 +162,64 @@ class FinancePhysicalCashApiClient(
      options=HiltechRequestOptions(installationId=installation),
      decode={json.decodeFromString(ListSerializer(FinanceCashboxReceiptDto.serializer()),it)},
    )
+ suspend fun openingWorkbench(org:String,installation:String,query:String=""):FinanceCashboxOpeningWorkbenchDto {
+   require(query.length<=120)
+   return api.request(HttpMethod.Get,base(org)+"/cashboxes/opening-workbench?query="+query.encodeURLParameter(),
+     HiltechRequestOptions(installationId=installation),
+     decode={json.decodeFromString(FinanceCashboxOpeningWorkbenchDto.serializer(),it)}).also { value ->
+       check(value.organizationId==org && (value.canPrepare || value.canReadCompanyHistory) &&
+         value.items.all { validOpeningReceipt(it,org) }) { "FINANCE_CASHBOX_SOURCE_INVALID" }
+     }
+ }
+ suspend fun custodianChoices(org:String,installation:String,query:String=""):FinanceCashboxCustodianDirectoryDto {
+   require(query.length<=120)
+   return api.request(HttpMethod.Get,base(org)+"/cashboxes/custodian-choices?query="+query.encodeURLParameter(),
+     HiltechRequestOptions(installationId=installation),
+     decode={json.decodeFromString(FinanceCashboxCustodianDirectoryDto.serializer(),it)}).also { value ->
+       check(value.organizationId==org && value.items.all { financeLookupIdIsUuid(it.identityId) &&
+         financeLookupIdIsUuid(it.employeeId) && it.displayName.isNotBlank() && it.employeeCode.isNotBlank() && it.sourceVersion>0 }) {
+         "FINANCE_CASHBOX_CUSTODIAN_SOURCE_INVALID"
+       }
+     }
+ }
+ suspend fun submitOpeningIntent(intent:FinanceCashboxOpeningIntent,installation:String,onCommandSending:()->Unit={}):FinanceCashboxReceiptDto {
+   uuid(intent.operationId);uuid(intent.organizationId)
+   val result=when(intent.action) {
+     FinanceCashboxOpeningAction.PREPARE -> {
+       val request=requireNotNull(intent.prepare)
+       require(intent.source==null && request.operationId==intent.operationId)
+       prepareCashbox(intent.organizationId,request,installation,onCommandSending).also {
+         check(validOpeningReceipt(it,intent.organizationId) && it.currency==request.currency && it.custodianUserId==request.custodianUserId &&
+           it.companyCustodyReference==request.companyCustodyReference && (if(request.cashboxCode==null)
+             it.codeSource=="AUTOMATIC" && it.cashboxCode.matches(Regex("^CBX-[0-9]{6,19}$")) else it.cashboxCode==request.cashboxCode)) {
+           "FINANCE_CASHBOX_PREPARATION_UNCONFIRMED"
+         }
+       }
+     }
+     FinanceCashboxOpeningAction.REQUEST_REVIEW,FinanceCashboxOpeningAction.ACTIVATE -> {
+       val expected=requireNotNull(intent.source)
+       require(intent.prepare==null && validOpeningReceipt(expected,intent.organizationId))
+       val before=cashboxStatus(intent.organizationId,expected.proposalId,installation)
+       check(sameCashboxOpeningSource(before,expected)) { "FINANCE_CASHBOX_SOURCE_CHANGED" }
+       if(intent.action==FinanceCashboxOpeningAction.REQUEST_REVIEW) {
+         require(expected.state=="PROPOSED" && before.state in setOf("PROPOSED","PENDING"))
+         reviewCashbox(intent.organizationId,expected.proposalId,intent.operationId,installation,onCommandSending).also {
+           check(sameCashboxOpeningSource(it,expected) && it.state=="PENDING" && financeLookupIdIsUuid(it.approvalRequestId.orEmpty())) {
+             "FINANCE_CASHBOX_REVIEW_UNCONFIRMED"
+           }
+         }
+       } else {
+         require(expected.state=="APPROVED" && before.state in setOf("APPROVED","ACTIVE") && before.approvalRequestId==expected.approvalRequestId)
+         activateCashbox(intent.organizationId,expected.proposalId,intent.operationId,installation,onCommandSending).also {
+           check(sameCashboxOpeningSource(it,expected) && it.state=="ACTIVE" && it.cashboxId==expected.proposalId &&
+             it.approvalRequestId==expected.approvalRequestId) { "FINANCE_CASHBOX_ACTIVATION_UNCONFIRMED" }
+         }
+       }
+     }
+   }
+   check(result.confirmedOperationId==intent.operationId) { "FINANCE_CASHBOX_OPERATION_UNCONFIRMED" }
+   return result
+ }
  suspend fun cashboxStatus(org:String,proposal:String,installation:String):FinanceCashboxReceiptDto =
    api.request(
      method=HttpMethod.Get,path=base(org)+"/cashboxes/"+uuid(proposal),

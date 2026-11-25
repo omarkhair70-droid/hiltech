@@ -12,6 +12,9 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+import com.hiltech.shared.core.network.HiltechApiException
+import io.ktor.http.content.TextContent
 
 class SupplierQuoteDocumentUploaderTest {
     private val rfq = "11111111-1111-1111-1111-111111111111"
@@ -110,5 +113,46 @@ class SupplierQuoteDocumentUploaderTest {
             ).upload(input(), device)
         }
         assertEquals(0, uploads)
+    }
+
+    @Test fun aLostFinalizeResponseResumesTheExactFinalizeWithoutASecondReservationOrUpload() = runBlocking {
+        var slots = 0; var reservations = 0; var uploads = 0
+        val finalizeBodies = mutableListOf<String>()
+        val finalizeKeys = mutableListOf<String?>()
+        val apiHttp = HttpClient(MockEngine { call ->
+            val json = headersOf(HttpHeaders.ContentType, "application/json")
+            when (call.url.encodedPath) {
+                "/v1/sourcing/rfqs/$rfq/document-slots" -> {
+                    slots++
+                    respond("""{"documentSlotId":"$slot","rfqId":"$rfq","supplierOrganizationId":"$supplier","replayed":false}""", HttpStatusCode.OK, json)
+                }
+                "/v1/evidence/reservations" -> {
+                    reservations++
+                    respond("""{"evidence":${meta(slot, "RESERVED")},"upload":{"uploadUrl":"https://private-storage.test/file","requiredHeaders":{},"expiresAt":"2026-11-22T09:10:00Z","expectedSizeBytes":3},"correlationId":"test","replayed":false}""", HttpStatusCode.OK, json)
+                }
+                "/v1/evidence/$evidenceId/finalize" -> {
+                    finalizeBodies += (call.body as TextContent).text
+                    finalizeKeys += call.headers["Idempotency-Key"]
+                    if (finalizeBodies.size == 1) respond("""{"code":"EVIDENCE_STORAGE_UNAVAILABLE","message":"Synthetic lost confirmation","correlationId":"synthetic","retryable":true}""", HttpStatusCode.ServiceUnavailable, json)
+                    else respond("""{"evidence":${meta(slot, "READY")},"correlationId":"test","replayed":true}""", HttpStatusCode.OK, json)
+                }
+                else -> error("Unexpected request")
+            }
+        })
+        val binary = HttpClient(MockEngine { uploads++; respond("", HttpStatusCode.OK) })
+        val api = HiltechApiClient(apiHttp, "https://api.hiltech.test", { "synthetic-buyer" }, { "synthetic" })
+        val uploader = SupplierQuoteDocumentUploader(SupplierSourcingApiClient(api), EvidenceApiClient(api, binary))
+        val request = input()
+        assertFailsWith<HiltechApiException> { uploader.upload(request, device) }
+        assertEquals(request.finalizeOperationId, uploader.pendingInput?.finalizeOperationId)
+        assertFailsWith<IllegalArgumentException> { uploader.upload(request.copy(bytes = "xyz".encodeToByteArray()), device) }
+        val result = uploader.upload(request, device)
+        assertEquals(1, slots); assertEquals(1, reservations); assertEquals(1, uploads)
+        assertEquals(2, finalizeBodies.size); assertEquals(1, finalizeBodies.distinct().size)
+        assertEquals<List<String?>>(listOf(request.finalizeOperationId, request.finalizeOperationId), finalizeKeys)
+        assertEquals("evidence:$evidenceId", result.evidenceReference)
+        assertEquals(result, uploader.verified(rfq, supplier)); assertNull(uploader.pendingInput)
+        uploader.consumed(rfq, supplier); assertNull(uploader.verified(rfq, supplier))
+        apiHttp.close(); binary.close()
     }
 }

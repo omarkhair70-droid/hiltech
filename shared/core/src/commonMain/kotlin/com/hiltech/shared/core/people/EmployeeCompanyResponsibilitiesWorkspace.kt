@@ -1,14 +1,21 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.hiltech.shared.core.people
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -20,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +35,10 @@ import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.HiltechPanel
 import com.hiltech.shared.core.design.HiltechRecordChoice
 import com.hiltech.shared.core.design.HiltechRecordPicker
+import com.hiltech.shared.core.design.HiltechShape
+import com.hiltech.shared.core.design.HiltechStateTag
+import com.hiltech.shared.core.design.HiltechStateTone
+import com.hiltech.shared.core.design.LocalHiltechOperationalColors
 import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.network.HiltechApiException
 import kotlinx.coroutines.CancellationException
@@ -42,9 +54,11 @@ fun EmployeeCompanyResponsibilitiesWorkspace(
     installationId: String,
     newOperationId: () -> String,
     onReauthenticate: (() -> Unit)? = null,
+    refreshToken: Int = 0,
+    showRefreshAction: Boolean = true,
 ) = EmployeeCompanyResponsibilitiesWorkspace(
     EmployeeResponsibilityTargetDto(employee.employeeId, employee.organizationId, employee.version, employee.displayName),
-    sessionScope, client, installationId, newOperationId, onReauthenticate,
+    sessionScope, client, installationId, newOperationId, onReauthenticate, refreshToken, showRefreshAction,
 )
 
 @Composable
@@ -55,6 +69,8 @@ fun EmployeeCompanyResponsibilitiesWorkspace(
     installationId: String,
     newOperationId: () -> String,
     onReauthenticate: (() -> Unit)? = null,
+    refreshToken: Int = 0,
+    showRefreshAction: Boolean = true,
 ) = key(sessionScope, employee.organizationId, employee.employeeId) {
     val jobs = rememberCoroutineScope()
     var snapshot by remember { mutableStateOf<EmployeeCompanyResponsibilitiesDto?>(null) }
@@ -72,9 +88,11 @@ fun EmployeeCompanyResponsibilitiesWorkspace(
     var commandError by remember { mutableStateOf<String?>(null) }
     var acknowledgement by remember { mutableStateOf<String?>(null) }
     var delegationWasVisible by rememberSaveable { mutableStateOf(false) }
+    var view by rememberSaveable { mutableStateOf("WORK") }
+    val delegatedState = rememberSaveableStateHolder()
     val pending = pendingJson?.let { Json.decodeFromString(EmployeeCompanyResponsibilityIntent.serializer(), it) }
 
-    LaunchedEffect(employee.version, refresh) {
+    LaunchedEffect(employee.version, refresh, refreshToken) {
         loading = true
         loadFailed = false
         try {
@@ -120,102 +138,138 @@ fun EmployeeCompanyResponsibilitiesWorkspace(
         dialogVisible = true
     }
 
-    HiltechPanel(Modifier.fillMaxWidth()) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(hiltechText("مسؤوليات الموظف", "Employee responsibilities"), style = MaterialTheme.typography.titleMedium)
+                Text(hiltechText("مسؤوليات الموظف", "Employee responsibilities"), style = MaterialTheme.typography.titleLarge)
                 Text(hiltechText("أدوار العمل داخل الشركة", "Company-wide operational roles"),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            TextButton(onClick = { refresh += 1 }, enabled = !loading && !submitting) { Text(hiltechText("تحديث", "Refresh")) }
+            if (showRefreshAction) TextButton(onClick = { refresh += 1 }, enabled = !loading && !submitting) {
+                Text(hiltechText("تحديث", "Refresh"))
+            }
         }
-        Text(hiltechText(
-            "يمكن جمع أكثر من مسؤولية في الحساب نفسه. تظهر تكليفات المشاريع والمخازن المحددة في مساحاتها، وتظل اعتمادات العمليات منفصلة.",
-            "An account can hold several responsibilities. Project and warehouse assignments appear in their own sections; transaction approvals remain separate.",
-        ), style = MaterialTheme.typography.bodyMedium)
-        if (current?.viewScope == "DELEGATED_KEYS") Text(hiltechText(
-            "تظهر التكليفات ضمن مسؤوليات الإدارة المفوضة لك فقط.", "Assignments are shown only within your delegated administration scope.",
-        ), style = MaterialTheme.typography.bodySmall)
-        if (loading) CircularProgressIndicator()
-        if (loadFailed) Text(hiltechText(
-            "تعذر تحميل المسؤوليات. تحقق من الاتصال وصلاحيتك ثم حدّث الصفحة.",
-            "Couldn’t load responsibilities. Check your connection and access, then refresh.",
-        ), color = MaterialTheme.colorScheme.error)
-        acknowledgement?.let { code -> Text(when (code) {
-            "GRANT_ENDED" -> hiltechText("تأكد تسجيل الإسناد، لكنه انتهى بعد ذلك. يعرض التحديث الحالة الحالية.",
-                "The assignment was recorded and later ended. Refresh shows current access.")
-            "END_REMAINING" -> hiltechText("تم إنهاء هذا التكليف المباشر. لا يزال للحساب وصول من فريق أو مصدر سابق ظاهر في القائمة.",
-                "This direct assignment ended. The account still has access from a team or an existing source shown below.")
-            "END" -> hiltechText("تم إنهاء هذا التكليف المباشر. يعرض التحديث المسؤوليات الحالية.",
-                "This direct assignment ended. Refresh shows current responsibilities.")
-            else -> hiltechText("تم إسناد المسؤولية. يُعاد التحقق من الصلاحية عند استخدام الوظائف التابعة لها.",
-                "The responsibility was assigned. Its access is checked again when the employee uses the related functions.")
-        }, color = MaterialTheme.colorScheme.primary) }
-        if (pending != null && !dialogVisible) {
-            Text(hiltechText("يوجد طلب محفوظ يحتاج تأكيد النتيجة.", "A saved request needs its outcome confirmed."))
-            TextButton(onClick = { dialogVisible = true }) { Text(hiltechText("متابعة الطلب", "Continue request")) }
+        if (delegationWasVisible) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            FilterChip(selected = view == "WORK", onClick = { view = "WORK" }, enabled = !submitting,
+                label = { Text(hiltechText("مسؤوليات العمل", "Work responsibilities")) })
+            FilterChip(selected = view == "DELEGATION", onClick = { view = "DELEGATION" }, enabled = !submitting,
+                label = { Text(hiltechText("تفويض الإدارة", "Administration delegation")) })
         }
-        if (!loading && current != null) {
-            if (current.accountStatus != "CURRENT") {
-                Text(hiltechText("جهّز الحساب المرتبط وعضويته أولًا، ثم أسند مسؤوليات الموظف.",
-                    "Prepare the linked account and membership first, then assign responsibilities."))
-            } else {
-                if (current.bindings.isEmpty()) Text(hiltechText(
-                    "لم تُسند لهذا الحساب مسؤوليات من أدوار الشركة المعروضة هنا بعد.",
-                    "This account has no assignments from the company roles shown here yet.",
-                ))
-                current.bindings.forEach { binding ->
-                    HorizontalDivider()
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(companyResponsibilityLabel(binding.authorityKey), style = MaterialTheme.typography.titleSmall)
-                        Text(companyResponsibilityDescription(binding.authorityKey),
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (binding.assignmentSource == "LEGACY") Text(hiltechText(
-                            "مصدر قائم · قد يتيح بعض عمليات هذه المسؤولية. إنهاء تكليف جديد هنا لا يغيّر هذا المصدر أو اعتمادات المعاملات المرتبطة به.",
-                            "Existing source · may cover some operations in this responsibility. Ending a new assignment here does not change this source or its transaction approvals.",
-                        ), style = MaterialTheme.typography.labelMedium)
-                        else if (binding.assignmentSource == "TEAM") Text(hiltechText(
-                            "من عضوية فريق — تُدار من تكليف الفريق.", "Inherited from a team — managed through that team’s assignment.",
-                        ), style = MaterialTheme.typography.labelMedium)
-                        else if (binding.canEnd && binding.authorityKey in employeeCompanyResponsibilityKeys) {
-                            TextButton(onClick = { prepare(binding.authorityKey, binding) }, enabled = pending == null && !submitting) {
-                                Text(hiltechText("إنهاء التكليف", "End assignment"))
+        if (view == "WORK") HiltechPanel(Modifier.fillMaxWidth()) {
+            Text(hiltechText(
+                "يمكن جمع أكثر من مسؤولية في الحساب نفسه. تظهر تكليفات المشاريع والمخازن المحددة في مساحاتها، وتظل اعتمادات العمليات منفصلة.",
+                "An account can hold several responsibilities. Project and warehouse assignments appear in their own sections; transaction approvals remain separate.",
+            ), style = MaterialTheme.typography.bodyMedium)
+            if (current?.viewScope == "DELEGATED_KEYS") Text(hiltechText(
+                "تظهر التكليفات ضمن مسؤوليات الإدارة المفوضة لك فقط.", "Assignments are shown only within your delegated administration scope.",
+            ), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (loading) CircularProgressIndicator()
+            if (loadFailed) Text(hiltechText(
+                "تعذر تحميل المسؤوليات. تحقق من الاتصال وصلاحيتك ثم حدّث الصفحة.",
+                "Couldn’t load responsibilities. Check your connection and access, then refresh.",
+            ), color = MaterialTheme.colorScheme.error)
+            acknowledgement?.let { code -> Text(when (code) {
+                "GRANT_ENDED" -> hiltechText("تأكد تسجيل الإسناد، لكنه انتهى بعد ذلك. يعرض التحديث الحالة الحالية.",
+                    "The assignment was recorded and later ended. Refresh shows current access.")
+                "END_REMAINING" -> hiltechText("تم إنهاء هذا التكليف المباشر. لا يزال للحساب وصول من فريق أو مصدر سابق ظاهر في القائمة.",
+                    "This direct assignment ended. The account still has access from a team or an existing source shown below.")
+                "END" -> hiltechText("تم إنهاء هذا التكليف المباشر. يعرض التحديث المسؤوليات الحالية.",
+                    "This direct assignment ended. Refresh shows current responsibilities.")
+                else -> hiltechText("تم إسناد المسؤولية. يُعاد التحقق من الصلاحية عند استخدام الوظائف التابعة لها.",
+                    "The responsibility was assigned. Its access is checked again when the employee uses the related functions.")
+            }, color = MaterialTheme.colorScheme.primary) }
+            if (pending != null && !dialogVisible) {
+                Text(hiltechText("يوجد طلب محفوظ يحتاج تأكيد النتيجة.", "A saved request needs its outcome confirmed."))
+                TextButton(onClick = { dialogVisible = true }) { Text(hiltechText("متابعة الطلب", "Continue request")) }
+            }
+            if (!loading && current != null) {
+                if (current.accountStatus != "CURRENT") {
+                    Text(hiltechText("جهّز الحساب المرتبط وعضويته أولًا، ثم أسند مسؤوليات الموظف.",
+                        "Prepare the linked account and membership first, then assign responsibilities."))
+                } else {
+                    val directCount = current.bindings.count { it.assignmentSource == "DIRECT" && it.current }
+                    val inheritedCount = current.bindings.count { it.assignmentSource != "DIRECT" && it.current }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        HiltechStateTag(hiltechText("$directCount تكليفات مباشرة", "$directCount direct assignments"), HiltechStateTone.NEUTRAL)
+                        if (inheritedCount > 0) HiltechStateTag(hiltechText("$inheritedCount من فرق أو مصادر قائمة", "$inheritedCount team or existing sources"), HiltechStateTone.NEUTRAL)
+                    }
+                    val assignments: @Composable () -> Unit = {
+                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(hiltechText("التكليفات الحالية", "Current assignments"), style = MaterialTheme.typography.titleMedium)
+                            if (current.bindings.isEmpty()) Text(hiltechText(
+                                "لم تُسند لهذا الحساب مسؤوليات من أدوار الشركة المعروضة هنا بعد.",
+                                "This account has no assignments from the company roles shown here yet.",
+                            ), style = MaterialTheme.typography.bodyMedium)
+                            current.bindings.groupBy { companyResponsibilityCategory(it.authorityKey) }.forEach { (category, bindings) ->
+                                Text(companyResponsibilityCategoryLabel(category), style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary)
+                                bindings.forEach { binding ->
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(companyResponsibilityLabel(binding.authorityKey), style = MaterialTheme.typography.titleSmall)
+                                        Text(companyResponsibilityDescription(binding.authorityKey),
+                                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        if (binding.assignmentSource == "LEGACY") Text(hiltechText(
+                                            "مصدر قائم · قد يتيح بعض عمليات هذه المسؤولية. إنهاء تكليف جديد هنا لا يغيّر هذا المصدر أو اعتمادات المعاملات المرتبطة به.",
+                                            "Existing source · may cover some operations in this responsibility. Ending a new assignment here does not change this source or its transaction approvals.",
+                                        ), style = MaterialTheme.typography.labelMedium)
+                                        else if (binding.assignmentSource == "TEAM") Text(hiltechText(
+                                            "من عضوية فريق — تُدار من تكليف الفريق.", "Inherited from a team — managed through that team’s assignment.",
+                                        ), style = MaterialTheme.typography.labelMedium)
+                                        else if (binding.canEnd && binding.authorityKey in employeeCompanyResponsibilityKeys) {
+                                            TextButton(onClick = { prepare(binding.authorityKey, binding) }, enabled = pending == null && !submitting) {
+                                                Text(hiltechText("إنهاء التكليف", "End assignment"))
+                                            }
+                                        } else Text(hiltechText("تكليف مباشر · خارج تفويضك الحالي", "Direct assignment · outside your current delegation"),
+                                            style = MaterialTheme.typography.labelMedium)
+                                    }
+                                    HorizontalDivider()
+                                }
                             }
-                        } else Text(hiltechText("تكليف مباشر · خارج تفويضك الحالي", "Direct assignment · outside your current delegation"),
-                            style = MaterialTheme.typography.labelMedium)
+                        }
                     }
-                }
-                if (choices.isNotEmpty()) {
-                    HorizontalDivider()
-                    HiltechRecordPicker(
-                        label = hiltechText("مجال المسؤولية", "Responsibility area"), value = selectedCategory,
-                        choices = categories.map { HiltechRecordChoice(it, companyResponsibilityCategoryLabel(it)) },
-                        onChange = { selectedCategory = it }, allowKnownReference = false, allowClear = false,
-                        enabled = pending == null && !submitting,
-                    )
-                    HiltechRecordPicker(
-                        label = hiltechText("إضافة مسؤولية", "Add responsibility"), value = selectedKey,
-                        choices = categoryChoices.map { HiltechRecordChoice(it.authorityKey,
-                            companyResponsibilityLabel(it.authorityKey), companyResponsibilityDescription(it.authorityKey)) },
-                        onChange = { selectedKey = it }, allowKnownReference = false, allowClear = false,
-                        enabled = pending == null && !submitting,
-                    )
-                    Button(onClick = { prepare(selectedKey) }, enabled = pending == null && !submitting && choices.any { it.authorityKey == selectedKey }) {
-                        Text(hiltechText("مراجعة الإسناد", "Review assignment"))
+                    val assignmentAction: @Composable () -> Unit = {
+                        if (choices.isNotEmpty()) Surface(color = LocalHiltechOperationalColors.current.surfaceElevated, shape = HiltechShape.small) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text(hiltechText("إسناد مسؤولية جديدة", "Assign a responsibility"), style = MaterialTheme.typography.titleMedium)
+                                HiltechRecordPicker(
+                                    label = hiltechText("مجال المسؤولية", "Responsibility area"), value = selectedCategory,
+                                    choices = categories.map { HiltechRecordChoice(it, companyResponsibilityCategoryLabel(it)) },
+                                    onChange = { selectedCategory = it }, allowKnownReference = false, allowClear = false,
+                                    enabled = pending == null && !submitting,
+                                )
+                                HiltechRecordPicker(
+                                    label = hiltechText("إضافة مسؤولية", "Add responsibility"), value = selectedKey,
+                                    choices = categoryChoices.map { HiltechRecordChoice(it.authorityKey,
+                                        companyResponsibilityLabel(it.authorityKey), companyResponsibilityDescription(it.authorityKey)) },
+                                    onChange = { selectedKey = it }, allowKnownReference = false, allowClear = false,
+                                    enabled = pending == null && !submitting,
+                                )
+                                Button(onClick = { prepare(selectedKey) }, enabled = pending == null && !submitting && choices.any { it.authorityKey == selectedKey }) {
+                                    Text(hiltechText("مراجعة الإسناد", "Review assignment"))
+                                }
+                            }
+                        } else if (current.catalog.none { it.canGrant } && current.bindings.none { it.canEnd }) {
+                            Text(hiltechText(
+                                "يعرض هذا الحساب المسؤوليات فقط. إسنادها وتعديلها يتطلب تفويضًا صريحًا بإدارة هذه الأدوار.",
+                                "Your current access permits viewing these responsibilities. Assigning or changing them requires explicit delegation for these roles.",
+                            ), style = MaterialTheme.typography.bodySmall)
+                        }
                     }
-                } else if (current.catalog.none { it.canGrant } && current.bindings.none { it.canEnd }) {
-                    Text(hiltechText(
-                        "يعرض هذا الحساب المسؤوليات فقط. إسنادها وتعديلها يتطلب تفويضًا صريحًا بإدارة هذه الأدوار.",
-                        "Your current access permits viewing these responsibilities. Assigning or changing them requires explicit delegation for these roles.",
-                    ), style = MaterialTheme.typography.bodySmall)
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        if (maxWidth >= 760.dp && choices.isNotEmpty()) Row(Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.Top) {
+                            Column(Modifier.weight(0.48f)) { assignments() }
+                            Column(Modifier.weight(0.52f)) { assignmentAction() }
+                        } else Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { assignments(); assignmentAction() }
+                    }
                 }
             }
         }
+        if (delegationWasVisible && view == "DELEGATION") delegatedState.SaveableStateProvider("DELEGATION") {
+            EmployeeResponsibilityDelegationWorkspace(employee, client.delegation, installationId, newOperationId, onReauthenticate,
+                refreshToken = refreshToken + refresh, showRefreshAction = false)
+        }
     }
-
-    if (delegationWasVisible) EmployeeResponsibilityDelegationWorkspace(
-        employee, client.delegation, installationId, newOperationId, onReauthenticate,
-    )
 
     pending?.takeIf { dialogVisible }?.let { intent ->
         fun close() {

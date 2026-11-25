@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -71,9 +73,7 @@ class FinanceBankStatementIntakeApprovalSubject(
         "hiltech.finance.bank-statement-intake.enabled",
         Boolean::class.java,false,
     )
-    fun policyKey():String?=environment.getProperty(
-        "hiltech.finance.bank-statement-intake.policy-key","",
-    ).trim().takeIf {Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
+    fun policyKey():String?=CompanyReviewPolicyKeys.resolve(environment, "hiltech.finance.bank-statement-intake.policy-key").takeIf {Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
 
     fun evidenceReady(org:UUID,proposal:UUID,id:UUID,sha:String):Boolean =
         jdbc.queryForObject(

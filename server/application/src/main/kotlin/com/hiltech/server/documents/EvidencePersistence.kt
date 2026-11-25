@@ -301,6 +301,10 @@ interface EvidencePersistencePort {
         throw UnsupportedOperationException("Service delivery Evidence requires its canonical persistence adapter.")
     }
 
+    fun insertSupplierTechnicalReservation(value: PrivateDocumentEvidenceReservationInsert) {
+        throw UnsupportedOperationException("Supplier technical Evidence requires its canonical persistence adapter.")
+    }
+
     fun findReservationByOperationId(
         operationId: UUID,
     ): EvidenceReservationRecord?

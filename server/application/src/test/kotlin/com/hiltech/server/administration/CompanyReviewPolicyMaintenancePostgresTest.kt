@@ -130,6 +130,7 @@ class CompanyReviewPolicyMaintenancePostgresTest {
             engine.supersedePolicyRequests(administrator, UUID.randomUUID(), ApprovalPolicyMaintenanceScope(org, UUID.fromString(stalePolicy.policyId),
                 configured.key, stalePolicy.policyRevision, stalePolicy.policyVersion, workflow.subjectType, stalePolicy.pendingReviews), "Synthetic stale policy version", "synthetic")
         }.code)
+        CompanyReviewCatalogPostgresScenario.verify(jdbc, manager, org, administrator, newReviewer, clock)
         jdbc.update("UPDATE organization_administration_authority_binding SET active=false WHERE organization_id=? AND identity_id=?", org, administrator)
         assertEquals("APPROVAL_POLICY_ADMINISTRATION_DENIED", assertThrows<ProductApiException> { setup.configure(command) }.code)
         assertFalse(authority.canManageApprovalPolicies(newReviewer, org))

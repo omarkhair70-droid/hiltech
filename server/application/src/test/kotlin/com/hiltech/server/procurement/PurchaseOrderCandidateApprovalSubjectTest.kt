@@ -8,6 +8,7 @@ import com.hiltech.server.warehouse.StockLedgerPersistence
 import com.hiltech.server.work.WorkOrderLifecycle
 import com.hiltech.server.work.WorkOrderSnapshot
 import com.hiltech.server.work.WorkPersistencePort
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -29,6 +30,7 @@ class PurchaseOrderCandidateApprovalSubjectTest {
     private val quoteId = UUID.randomUUID()
     private val supplierId = UUID.randomUUID()
     private val candidateId = UUID.randomUUID()
+    private val technicalAssessmentId = UUID.randomUUID()
     private val slotId = UUID.randomUUID()
     private val evidenceId = UUID.randomUUID()
     private val actor = UUID.randomUUID()
@@ -46,7 +48,7 @@ class PurchaseOrderCandidateApprovalSubjectTest {
         candidateId, UUID.randomUUID(), org, rfqId, requirementId,
         3, quoteId, 2, supplierId, itemId, BigDecimal("100.000000"), "M",
         "EGP", BigDecimal("12.5"), BigDecimal("20"), BigDecimal("1270"),
-        sha, "Explicit supplier choice", actor, at, "test",
+        sha, "Explicit supplier choice", actor, at, "test", technicalAssessmentId = technicalAssessmentId,
     )
     private val rfq = SupplierRfqRecord(
         rfqId, UUID.randomUUID(), org, requirementId, 3, itemId,
@@ -110,6 +112,7 @@ class PurchaseOrderCandidateApprovalSubjectTest {
         Mockito.`when`(sourcing.quotes(rfqId)).thenReturn(listOf(quote))
         Mockito.`when`(sourcing.latestTechnicalAssessments(rfqId))
             .thenReturn(mapOf(quoteId to "COMPLIANT"))
+        Mockito.`when`(sourcing.effectiveTechnicalAssessmentId(quoteId)).thenReturn(technicalAssessmentId)
         Mockito.`when`(evidence.loadEvidenceRecord(evidenceId)).thenReturn(recorded)
         Mockito.`when`(sourcing.quoteDocumentSlot(slotId)).thenReturn(slot)
     }
@@ -149,6 +152,20 @@ class PurchaseOrderCandidateApprovalSubjectTest {
         assertFalse(guard().isCurrent(subject))
         Mockito.`when`(evidence.loadEvidenceRecord(evidenceId))
             .thenReturn(recorded.copy(targetId = UUID.randomUUID()))
+        assertFalse(guard().isCurrent(subject))
+    }
+
+    @Test fun correctedTechnicalPacketAndNewComplianceNeverReviveTheEarlierCandidate() {
+        allow()
+        assertTrue(guard().isCurrent(subject))
+        Mockito.`when`(sourcing.effectiveTechnicalAssessmentId(quoteId)).thenReturn(null)
+        assertFalse(guard().isCurrent(subject))
+        Mockito.`when`(sourcing.effectiveTechnicalAssessmentId(quoteId)).thenReturn(UUID.randomUUID())
+        assertEquals("COMPLIANT", sourcing.latestTechnicalAssessments(rfqId)[quoteId])
+        assertFalse(guard().isCurrent(subject))
+        assertEquals(technicalAssessmentId, candidates.byId(candidateId)?.technicalAssessmentId)
+        Mockito.`when`(sourcing.effectiveTechnicalAssessmentId(quoteId)).thenReturn(technicalAssessmentId)
+        Mockito.`when`(candidates.byId(candidateId)).thenReturn(candidate.copy(technicalAssessmentId = null))
         assertFalse(guard().isCurrent(subject))
     }
 

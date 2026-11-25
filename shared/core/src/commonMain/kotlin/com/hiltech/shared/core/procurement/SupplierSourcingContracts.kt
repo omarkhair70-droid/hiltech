@@ -19,6 +19,8 @@ data class SourcingEligibleNeedDto(
     val technicalState: String,
     val sourceCurrent: Boolean,
     val sourcingRoundExists: Boolean,
+    val stockItemName: String? = null,
+    val stockItemCode: String? = null,
 )
 
 @Serializable
@@ -125,6 +127,8 @@ data class SupplierQuoteComparisonRowDto(
     val evidenceSha256: String,
     val technicalCompliance: String,
     val issues: List<String>,
+    val supplierName: String? = null,
+    val supplierCode: String? = null,
 )
 
 @Serializable

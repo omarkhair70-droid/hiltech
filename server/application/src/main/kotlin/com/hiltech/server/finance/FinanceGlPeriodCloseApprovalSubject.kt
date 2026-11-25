@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -113,9 +115,7 @@ class FinanceGlPeriodCloseApprovalSubject(
         )
     }
 
-    fun policyKey(): String? = environment.getProperty(
-        "hiltech.finance.gl-period-close.policy-key","",
-    ).trim().takeIf {
+    fun policyKey(): String? = CompanyReviewPolicyKeys.resolve(environment, "hiltech.finance.gl-period-close.policy-key").takeIf {
         Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)
     }
 

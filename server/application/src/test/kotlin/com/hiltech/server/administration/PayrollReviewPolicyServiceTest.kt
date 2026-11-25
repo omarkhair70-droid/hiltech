@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.Mockito
+import org.springframework.mock.env.MockEnvironment
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -196,12 +197,19 @@ class PayrollReviewPolicyServiceTest {
         val finance = Mockito.mock(FinancePayrollAuthorityPort::class.java)
         val procurement = Mockito.mock(ProcurementCandidateReviewEligibilityPort::class.java)
         val delivery = Mockito.mock(ServiceDeliveryReviewEligibilityPort::class.java)
-        val domain = DomainCompanyReviewCandidateAuthority(payroll, finance, procurement, delivery)
+        val company = Mockito.mock(CompanyEmployeeReviewEligibilityPort::class.java)
+        val domain = DomainCompanyReviewCandidateAuthority(payroll, finance, procurement, delivery, company)
         Mockito.`when`(payroll.canReview(identity, organization)).thenReturn(true)
         assertTrue(domain.canReview(CompanyReviewWorkflow.PAYROLL_SOURCE, identity, organization))
         assertFalse(domain.canReview(CompanyReviewWorkflow.FINANCE_PAYROLL_RESULT, identity, organization))
-        assertEquals(setOf("PAYROLL_SOURCE_REVIEW", "FINANCE_PAYROLL_RESULT_REVIEW", "PAYROLL_RUN_REVIEW", "PROCUREMENT_PO_REVIEW",
-            "SERVICE_HANDOVER_REVIEW", "SERVICE_WARRANTY_REVIEW"), CompanyReviewWorkflow.entries.map { it.policyKey }.toSet())
+        assertEquals(27, CompanyReviewWorkflow.entries.size)
+        assertEquals(27, CompanyReviewWorkflow.entries.map { it.policyKey }.toSet().size)
+        assertEquals(27, CompanyReviewWorkflow.entries.map { it.subjectType }.toSet().size)
+        assertFalse(domain.canReview(CompanyReviewWorkflow.FINANCE_AP_POSTING, identity, organization))
+        Mockito.`when`(company.isEligible(identity, organization)).thenReturn(true)
+        assertTrue(domain.canReview(CompanyReviewWorkflow.FINANCE_AP_POSTING, identity, organization))
+        assertTrue(domain.canReview(CompanyReviewWorkflow.PROCUREMENT_SERVICE_ORDER, identity, organization))
+        assertEquals(1, Mockito.mockingDetails(finance).invocations.size) // Only the explicit payroll result check above.
         assertFalse(domain.canReview(CompanyReviewWorkflow.PROCUREMENT_PO, identity, organization))
         Mockito.`when`(procurement.isEligible(identity, organization)).thenReturn(true)
         assertTrue(domain.canReview(CompanyReviewWorkflow.PROCUREMENT_PO, identity, organization))
@@ -213,20 +221,89 @@ class PayrollReviewPolicyServiceTest {
     }
 
     @Test
-    fun independentlyGovernedExistingRunAuthorityIsVisibleAndCannotBeReplaced() {
+    fun legacyAuthorityNeedsExplicitMigrationConfirmationAndIsNeverSilentlyReplaced() {
         authorized()
         val prior = PayrollReviewSetupRecord(PayrollReviewPolicyRecord(UUID.randomUUID(), 1, 1, false, true, "OWNER_FINAL"),
-            PayrollReviewerBindingRecord(UUID.randomUUID(), 1, "USER", identity, "Synthetic final reviewer", employee, true), 1)
+            PayrollReviewerBindingRecord(UUID.randomUUID(), 1, "USER", identity, "Synthetic final reviewer", employee, true), 0)
         persistence.currentState[CompanyReviewWorkflow.PAYROLL_RUN] = prior
         val state = service.current(actor, organization, CompanyReviewWorkflow.PAYROLL_RUN)
-        assertEquals("PROTECTED_EXISTING_AUTHORITY", state.status)
+        assertEquals("LEGACY_AUTHORITY_PRESERVED", state.status)
         assertEquals("Synthetic final reviewer", state.reviewerDisplayName)
-        assertFalse(state.canConfigure)
-        assertEquals("REVIEW_WORKFLOW_PROTECTED_AUTHORITY", assertThrows<ProductApiException> {
+        assertTrue(state.canConfigure)
+        assertTrue(state.replacesLegacyAuthority)
+        assertEquals("REVIEW_WORKFLOW_LEGACY_CONFIRMATION_REQUIRED", assertThrows<ProductApiException> {
             service.configure(command(previous = prior, workflow = CompanyReviewWorkflow.PAYROLL_RUN))
         }.code)
         assertEquals(0, persistence.replacements)
         assertEquals(prior, persistence.currentState[CompanyReviewWorkflow.PAYROLL_RUN])
+        Mockito.`when`(reviewers.canReview(CompanyReviewWorkflow.PAYROLL_RUN, identity, organization)).thenReturn(true)
+        service.configure(command(previous = prior, workflow = CompanyReviewWorkflow.PAYROLL_RUN)
+            .copy(legacyAuthorityReplacementConfirmed = true))
+        assertEquals(prior, persistence.lastPrevious)
+        assertEquals(1, persistence.replacements)
+    }
+
+    @Test
+    fun sharedInstalledKeyRequiresEveryAffectedWorkflowAndEligibleReviewer() {
+        authorized()
+        val first = CompanyReviewWorkflow.FINANCE_EMPLOYEE_ADVANCE
+        val second = CompanyReviewWorkflow.FINANCE_IMPREST
+        val environment = MockEnvironment().withProperty(first.configurationProperty!!, "SYNTHETIC_SHARED_REVIEW")
+            .withProperty(second.configurationProperty!!, "SYNTHETIC_SHARED_REVIEW")
+        val shared = PayrollReviewPolicyService(authority, reviewers, persistence, commands, audit, Clock.fixed(at, ZoneOffset.UTC), engine,
+            workflowConfiguration = CompanyReviewWorkflowConfiguration(environment))
+        val state = shared.current(actor, organization, first)
+        assertEquals(setOf(first.name, second.name), state.affectedWorkflows.toSet())
+        assertEquals("REVIEW_WORKFLOW_GROUP_CONFIRMATION_REQUIRED", assertThrows<ProductApiException> {
+            shared.configure(command(workflow = first))
+        }.code)
+        Mockito.`when`(reviewers.canReview(first, identity, organization)).thenReturn(true)
+        val confirmed = command(workflow = first).copy(affectedWorkflowsToConfirm = state.affectedWorkflows)
+        assertEquals("PAYROLL_REVIEWER_CHANGED", assertThrows<ProductApiException> { shared.configure(confirmed) }.code)
+        Mockito.`when`(reviewers.canReview(second, identity, organization)).thenReturn(true)
+        assertTrue(shared.configure(confirmed).current)
+        assertEquals(1, persistence.replacements)
+    }
+
+    @Test
+    fun pendingMaintenanceKeepsTwoSourceScopesOnTheSamePolicyDistinct() {
+        authorized()
+        val first = CompanyReviewWorkflow.FINANCE_EMPLOYEE_ADVANCE
+        val second = CompanyReviewWorkflow.FINANCE_IMPREST
+        val environment = MockEnvironment().withProperty(first.configurationProperty!!, "SYNTHETIC_SHARED_REVIEW")
+            .withProperty(second.configurationProperty!!, "SYNTHETIC_SHARED_REVIEW")
+        val config = CompanyReviewWorkflowConfiguration(environment)
+        val shared = PayrollReviewPolicyService(authority, reviewers, persistence, commands, audit, Clock.fixed(at, ZoneOffset.UTC), engine,
+            workflowConfiguration = config)
+        val policyId = UUID.randomUUID()
+        val scopes = listOf(CompanyPendingReviewPolicy(policyId.toString(), 1, 1, 1, first.name),
+            CompanyPendingReviewPolicy(policyId.toString(), 1, 1, 2, second.name))
+        val prior = PayrollReviewSetupRecord(PayrollReviewPolicyRecord(policyId, 1, 1, true, true, config.authorityKey(first)),
+            PayrollReviewerBindingRecord(UUID.randomUUID(), 1, "USER", UUID.randomUUID(), "Synthetic previous reviewer", UUID.randomUUID(), true), 3, scopes)
+        persistence.currentState[first] = prior
+        Mockito.`when`(reviewers.canReview(first, identity, organization)).thenReturn(true)
+        Mockito.`when`(reviewers.canReview(second, identity, organization)).thenReturn(true)
+        val request = command(prior, first).copy(pendingPoliciesToSupersede = scopes,
+            supersedeReason = "Replace the shared reviewer with current independent employee", affectedWorkflowsToConfirm = listOf(first.name, second.name))
+        shared.configure(request)
+        val invocations = Mockito.mockingDetails(engine).invocations.filter { it.method.name == "supersedePolicyRequests" }
+        assertEquals(2, invocations.size)
+        assertEquals(2, invocations.map { it.arguments[1] }.toSet().size)
+        assertEquals(setOf(first.subjectType, second.subjectType), invocations.map {
+            (it.arguments[2] as com.hiltech.server.approval.ApprovalPolicyMaintenanceScope).subjectType }.toSet())
+    }
+
+    @Test
+    fun unlistedSourceDependencyCannotBeChangedEvenWithLegacyConfirmation() {
+        authorized()
+        val previous = PayrollReviewSetupRecord(null, null, 0, configurationBlockedReason = "EXTERNAL_SOURCE_DEPENDENCY")
+        persistence.currentState[CompanyReviewWorkflow.PAYROLL_SOURCE] = previous
+        assertFalse(service.current(actor, organization, CompanyReviewWorkflow.PAYROLL_SOURCE).canConfigure)
+        assertEquals("REVIEW_WORKFLOW_EXTERNAL_DEPENDENCY", assertThrows<ProductApiException> {
+            service.configure(command().copy(legacyAuthorityReplacementConfirmed = true))
+        }.code)
+        assertEquals(0, persistence.replacements)
+        Mockito.verifyNoInteractions(audit)
     }
 
     private fun authorized() {

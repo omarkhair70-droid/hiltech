@@ -60,9 +60,15 @@ class FinanceSupplierAccountingApprovalSubjectTest {
     }
 
     @Test fun invalidPolicyKeyBlocksApprovalAndSourceReading() {
-        assertNull(source(enabled = true, candidates = true, policyKey = "")
+        assertNull(source(enabled = true, candidates = true, policyKey = "invalid configured policy")
             .current(org, candidate))
-        Mockito.verifyNoInteractions(jdbc, approvals)
+        Mockito.verifyNoInteractions(jdbc, approvals, matches)
+    }
+
+    @Test fun blankPolicyKeyUsesTheCompanyWorkflowWithoutInventingAnApproval() {
+        assertNull(source(enabled = true, candidates = true, policyKey = "").current(org, candidate))
+        Mockito.verify(approvals).loadActivePolicy(org, "FINANCE_SUPPLIER_ACCOUNTING_REVIEW", clock.instant())
+        Mockito.verifyNoInteractions(jdbc, matches)
     }
 
     @Test fun canonicalCompanyPolicyIsRequiredBeforeAnySourceCanBeReviewed() {

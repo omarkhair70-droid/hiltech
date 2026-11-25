@@ -4,6 +4,12 @@ import com.hiltech.shared.core.evidence.EvidenceApiClient
 import com.hiltech.shared.core.evidence.EvidenceMetadataDto
 import com.hiltech.shared.core.evidence.FinalizeEvidenceRequestDto
 import com.hiltech.shared.core.evidence.ReserveEvidenceUploadRequestDto
+import com.hiltech.shared.core.evidence.ReserveEvidenceUploadResponseDto
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.sync.Mutex
 
 /**
  * Online-only restricted quotation document pipeline shared by Android/Windows.
@@ -31,6 +37,7 @@ data class VerifiedSupplierQuoteDocument(
     val evidenceReference: String,
     val sha256: String,
     val sizeBytes: Long,
+    val fileName: String? = null,
 )
 
 class SupplierQuoteDocumentNotReady(val storageState: String) :
@@ -40,10 +47,30 @@ class SupplierQuoteDocumentUploader(
     private val sourcing: SupplierSourcingApiClient,
     private val evidence: EvidenceApiClient,
 ) {
+    private data class Progress(
+        val input: SupplierQuoteDocumentUploadInput,
+        var slot: SupplierQuoteDocumentSlotReceiptDto? = null,
+        var reservation: ReserveEvidenceUploadResponseDto? = null,
+        var bytesUploaded: Boolean = false,
+    )
+    private var progress by mutableStateOf<Progress?>(null)
+    private val mutex = Mutex()
+    val pendingInput: SupplierQuoteDocumentUploadInput? get() = progress?.input
+    private val documents = mutableStateMapOf<Pair<String, String>, VerifiedSupplierQuoteDocument>()
+    fun verified(rfqId: String, supplierId: String): VerifiedSupplierQuoteDocument? = documents[rfqId to supplierId]
+    fun consumed(rfqId: String, supplierId: String) { documents.remove(rfqId to supplierId) }
+
+    /** An abandoned upload cannot create a quotation. No business record is silently retried. */
+    fun discardPendingUpload() {
+        if (!mutex.isLocked) progress = null
+    }
+
     suspend fun upload(
         input: SupplierQuoteDocumentUploadInput,
         installationId: String,
     ): VerifiedSupplierQuoteDocument {
+        check(mutex.tryLock()) { "A quotation document upload is already in progress." }
+        try {
         require(input.bytes.isNotEmpty() && input.bytes.size <= 16 * 1024 * 1024) {
             "Quotation files must be between 1 byte and 16 MiB."
         }
@@ -59,18 +86,24 @@ class SupplierQuoteDocumentUploader(
             input.finalizeOperationId,
         ).size == 3) { "Each stage requires a separate idempotency operation." }
 
-        val slot = sourcing.createQuoteDocumentSlot(
+        val saved = progress?.also {
+            require(it.input.copy(bytes = input.bytes) == input && it.input.bytes.contentEquals(input.bytes)) {
+                "Resolve or discard the saved upload before choosing another file."
+            }
+        } ?: Progress(input.copy(bytes = input.bytes.copyOf())).also { progress = it }
+
+        val slot = saved.slot ?: sourcing.createQuoteDocumentSlot(
             input.rfqId,
             CreateSupplierQuoteDocumentSlotDto(
                 input.slotOperationId, input.supplierOrganizationId,
             ),
             installationId,
-        )
+        ).also { saved.slot = it }
         require(slot.rfqId == input.rfqId &&
             slot.supplierOrganizationId == input.supplierOrganizationId
         ) { "Quotation document slot was not bound to the requested RFQ and supplier." }
 
-        val reserved = evidence.reserve(
+        val reserved = saved.reservation ?: evidence.reserve(
             ReserveEvidenceUploadRequestDto(
                 operationId = input.reserveOperationId,
                 targetType = "SUPPLIER_QUOTE_DOCUMENT",
@@ -84,12 +117,19 @@ class SupplierQuoteDocumentUploader(
                 capturedAt = input.capturedAt,
             ),
             installationId,
-        )
+        ).also { saved.reservation = it }
         verifyScope(reserved.evidence, slot.documentSlotId, input.sha256, input.bytes.size.toLong())
+        if (reserved.evidence.storageState == "READY") {
+            progress = null
+            return verifiedDocument(slot.documentSlotId, reserved.evidence, input)
+        }
         if (reserved.evidence.storageState != "RESERVED") {
             throw SupplierQuoteDocumentNotReady(reserved.evidence.storageState)
         }
-        evidence.uploadBytes(reserved.upload, input.contentType, input.bytes)
+        if (!saved.bytesUploaded) {
+            evidence.uploadBytes(reserved.upload, input.contentType, saved.input.bytes)
+            saved.bytesUploaded = true
+        }
         val finalized = evidence.finalize(
             reserved.evidence.evidenceId,
             FinalizeEvidenceRequestDto(
@@ -104,14 +144,16 @@ class SupplierQuoteDocumentUploader(
         if (finalized.evidence.storageState != "READY") {
             throw SupplierQuoteDocumentNotReady(finalized.evidence.storageState)
         }
-        return VerifiedSupplierQuoteDocument(
-            documentSlotId = slot.documentSlotId,
-            evidenceId = finalized.evidence.evidenceId,
-            evidenceReference = "evidence:" + finalized.evidence.evidenceId,
-            sha256 = finalized.evidence.sha256,
-            sizeBytes = finalized.evidence.sizeBytes,
-        )
+        progress = null
+        return verifiedDocument(slot.documentSlotId, finalized.evidence, input)
+        } finally { mutex.unlock() }
     }
+
+    private fun verifiedDocument(slotId: String, metadata: EvidenceMetadataDto, input: SupplierQuoteDocumentUploadInput) = VerifiedSupplierQuoteDocument(
+        documentSlotId = slotId, evidenceId = metadata.evidenceId,
+        evidenceReference = "evidence:" + metadata.evidenceId, sha256 = metadata.sha256, sizeBytes = metadata.sizeBytes,
+        fileName = input.originalFileName,
+    ).also { documents[input.rfqId to input.supplierOrganizationId] = it }
 
     private fun verifyScope(
         metadata: EvidenceMetadataDto,

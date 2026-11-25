@@ -10,6 +10,7 @@ import com.hiltech.server.platform.IdempotentCommandOutcome
 import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.procurement.ProcurementCandidateReviewEligibilityPort
+import com.hiltech.server.procurement.ProcurementIndependentReviewDecisionConstraint
 import com.hiltech.server.procurement.ProcurementReviewPolicyConfiguration
 import com.hiltech.server.procurement.PurchaseOrderCandidatePersistence
 import com.hiltech.server.procurement.PurchaseOrderCandidateRecord
@@ -23,6 +24,7 @@ import org.mockito.Mockito
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
+import org.springframework.mock.env.MockEnvironment
 import java.math.BigDecimal
 import java.time.Clock
 import java.time.Instant
@@ -96,6 +98,36 @@ class ApprovalSourceDecisionConstraintTest {
         }
     }
 
+    @Test fun deliveryAmendmentAndServiceOrderCannotBeSelfApprovedThroughTheGenericDecisionRoute() {
+        for ((type, key) in listOf("PROCUREMENT_PO_DELIVERY_AMENDMENT" to "PROCUREMENT_PO_DELIVERY_REVIEW",
+            "SERVICE_ORDER_CANDIDATE" to "PROCUREMENT_SERVICE_ORDER_REVIEW")) {
+            val maker = Fixture(type, key, "SYNTHETIC_INSTALLED_REVIEWER")
+            maker.maker = maker.actor
+            maker.rejects(maker.otherProcurementConstraint())
+            val requester = Fixture(type, key, "SYNTHETIC_INSTALLED_REVIEWER")
+            requester.context = requester.context.copy(requesterUserId = requester.actor)
+            requester.rejects(requester.otherProcurementConstraint(), ApprovalDecisionType.REQUEST_CHANGE)
+        }
+    }
+
+    @Test fun deliveryAndServiceReviewKeepInstalledPolicyAndCurrentIndependentReviewerChecks() {
+        for ((type, key) in listOf("PROCUREMENT_PO_DELIVERY_AMENDMENT" to "PROCUREMENT_PO_DELIVERY_REVIEW",
+            "SERVICE_ORDER_CANDIDATE" to "PROCUREMENT_SERVICE_ORDER_REVIEW")) {
+            val fixture = Fixture(type, key, "SYNTHETIC_INSTALLED_REVIEWER")
+            val constraint = fixture.otherProcurementConstraint()
+            fixture.eligible = false
+            fixture.rejects(constraint)
+            fixture.eligible = true; fixture.policy = fixture.policy.copy(versionNumber = 2)
+            fixture.rejects(constraint)
+            fixture.policy = fixture.policy.copy(versionNumber = 1)
+            assertEquals(ApprovalRequestState.APPROVED, fixture.decide(constraint).state)
+            val changed = Fixture(type, key, "SYNTHETIC_INSTALLED_REVIEWER")
+            val property = if (type == "SERVICE_ORDER_CANDIDATE") "hiltech.procurement.service-orders.approval-policy-key"
+                else "hiltech.procurement.po.delivery-amendment-policy-key"
+            changed.rejects(changed.otherProcurementConstraint(MockEnvironment().withProperty(property, "DIFFERENT_INSTALLED_KEY")))
+        }
+    }
+
     @Test fun sourceWorkflowCanCommitTheRecordedSupersededOutcomeWithoutApplyingABusinessDecision() {
         val fixture = Fixture("PROCUREMENT_PO_CANDIDATE", "PROCUREMENT_PO_REVIEW", "PROCUREMENT_PO_REVIEWER")
         fixture.current = false
@@ -155,6 +187,14 @@ class ApprovalSourceDecisionConstraintTest {
                 override fun canReview(actorId: UUID, organizationId: UUID) = eligible
             }
             return PayrollReviewDecisionConstraint(jdbc, authority, persistence, PayrollRunPolicyConfiguration(""), clock)
+        }
+
+        fun otherProcurementConstraint(environment: MockEnvironment = MockEnvironment()): ApprovalDecisionConstraint {
+            val jdbc = Mockito.mock(JdbcTemplate::class.java)
+            Mockito.`when`(jdbc.query(Mockito.anyString(), Mockito.any<RowMapper<UUID>>() ?: RowMapper { _, _ -> maker },
+                Mockito.eq(context.subjectId) ?: context.subjectId, Mockito.eq(org) ?: org)).thenAnswer { listOf(maker) }
+            return ProcurementIndependentReviewDecisionConstraint(jdbc, persistence,
+                ProcurementCandidateReviewEligibilityPort { _, _ -> eligible }, environment, clock)
         }
 
         fun decide(constraint: ApprovalDecisionConstraint, decision: ApprovalDecisionType = ApprovalDecisionType.APPROVE,

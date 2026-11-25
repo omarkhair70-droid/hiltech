@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -72,9 +74,7 @@ class FinanceExpenseReimbursementApprovalSubject(
    "hiltech.finance.expense-reimbursement.enabled",
    Boolean::class.java,false,
  )
- fun policyKey():String?=environment.getProperty(
-   "hiltech.finance.expense-reimbursement.policy-key","",
- ).trim().takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
+ fun policyKey():String?=CompanyReviewPolicyKeys.resolve(environment, "hiltech.finance.expense-reimbursement.policy-key").takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
  fun current(org:UUID,id:UUID):FinanceExpenseReimbursementVerified? {
    if(!enabled())return null
    val key=policyKey() ?: return null

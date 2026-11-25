@@ -328,7 +328,9 @@ jobs:
             --tests com.hiltech.server.administration.CompanyResponsibilityPostgresContractTest \
             --tests com.hiltech.server.operationalaccess.OperationalAuthorityPostgresContractTest \
             --tests com.hiltech.server.companysettings.PurchaseOrderNumberingPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceCashboxOpeningPostgresContractTest \
             --tests com.hiltech.server.procurement.PurchaseOrderReviewPostgresContractTest \
+            --tests com.hiltech.server.procurement.SupplierTechnicalPostgresContractTest \
             --tests com.hiltech.server.administration.CompanyReviewPolicyMaintenancePostgresTest \
             --tests com.hiltech.server.service.ServiceDeliveryPostgresContractTest \
             --tests com.hiltech.server.identity.EmployeeAccountProvisioningPostgresContractTest \
@@ -349,7 +351,9 @@ jobs:
               "com.hiltech.server.administration.CompanyResponsibilityPostgresContractTest": 9,
               "com.hiltech.server.operationalaccess.OperationalAuthorityPostgresContractTest": 6,
               "com.hiltech.server.companysettings.PurchaseOrderNumberingPostgresContractTest": 5,
+              "com.hiltech.server.finance.FinanceCashboxOpeningPostgresContractTest": 9,
               "com.hiltech.server.procurement.PurchaseOrderReviewPostgresContractTest": 1,
+              "com.hiltech.server.procurement.SupplierTechnicalPostgresContractTest": 4,
               "com.hiltech.server.administration.CompanyReviewPolicyMaintenancePostgresTest": 1,
               "com.hiltech.server.service.ServiceDeliveryPostgresContractTest": 3,
               "com.hiltech.server.identity.EmployeeAccountProvisioningPostgresContractTest": 11,

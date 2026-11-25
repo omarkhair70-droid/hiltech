@@ -12,6 +12,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -162,6 +163,70 @@ class CompanyAdministrationApiClientTest {
         assertFailsWith<IllegalArgumentException> {
             client(http).activateOwnPeopleAdministration(OwnPeopleAdministrationIntent(operation, organization), installation)
         }
+        http.close()
+    }
+
+    @Test
+    fun everyBoundedWorkflowIsAddressableWithoutAnArbitraryAuthorityField() = runBlocking {
+        val seen = mutableSetOf<String>()
+        val http = HttpClient(MockEngine { request ->
+            val workflow = request.url.encodedPath.substringAfterLast('/')
+            seen += workflow
+            respond("""{"organizationId":"$organization","status":"NOT_CONFIGURED","policyId":null,"policyRevision":null,"policyVersion":null,
+                "bindingId":null,"bindingVersion":null,"reviewerPrincipalType":null,"reviewerDisplayName":null,"reviewerEmployeeId":null,
+                "pendingReviews":0,"asOf":"2026-11-25T12:00:00Z","workflow":"$workflow","affectedWorkflows":["$workflow"]}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val api = client(http)
+        assertEquals(27, companyReviewWorkflows.size)
+        for (workflow in companyReviewWorkflows) {
+            assertEquals(workflow, api.reviewSetup(organization, workflow, installation).affectedWorkflows.single())
+        }
+        assertEquals(companyReviewWorkflows, seen)
+        http.close()
+    }
+
+    @Test
+    fun sharedLegacyWorkflowRetryRetainsAllSourceCountsAndExplicitScopeConfirmation() = runBlocking {
+        val workflows = listOf("FINANCE_EMPLOYEE_ADVANCE", "FINANCE_IMPREST")
+        val bodies = mutableListOf<String>()
+        val http = HttpClient(MockEngine { request ->
+            assertTrue(request.url.encodedPath.endsWith("/FINANCE_EMPLOYEE_ADVANCE"))
+            assertEquals(operation, request.headers["Idempotency-Key"])
+            bodies += (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            if (bodies.size == 1) throw IllegalStateException("Synthetic shared setup response lost")
+            respond(receipt(workflows.first()), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val api = client(http)
+        val saved = intent().copy(workflow = workflows.first(), pendingPoliciesToSupersede = workflows.map {
+            CompanyPendingReviewPolicyDto(policy, 2, 4, 1, it)
+        }, supersedeReason = "Replace the shared reviewer for both displayed workflows", affectedWorkflowsToConfirm = workflows,
+            legacyAuthorityReplacementConfirmed = true)
+        assertFailsWith<HiltechApiException> { api.configureReview(saved, installation) }
+        val restored = Json.decodeFromString(CompanyReviewSetupIntent.serializer(), Json.encodeToString(CompanyReviewSetupIntent.serializer(), saved))
+        assertTrue(api.configureReview(restored, installation).replayed)
+        assertEquals(bodies[0], bodies[1])
+        val request = Json.parseToJsonElement(bodies[0]).jsonObject
+        assertEquals("true", request.getValue("legacyAuthorityReplacementConfirmed").jsonPrimitive.content)
+        assertEquals(workflows, request.getValue("affectedWorkflowsToConfirm").jsonArray.map { it.jsonPrimitive.content })
+        assertEquals(workflows, request.getValue("pendingPoliciesToSupersede").jsonArray.map { it.jsonObject.getValue("workflow").jsonPrimitive.content })
+        assertFalse("authorityKey" in request || "policyKey" in request)
+        http.close()
+    }
+
+    @Test
+    fun unknownAffectedWorkflowOrDuplicateSourceScopeCannotBeSent() = runBlocking {
+        var sent = false
+        val http = HttpClient(MockEngine { sent = true; error("No call expected") })
+        val api = client(http)
+        assertFailsWith<IllegalArgumentException> {
+            api.configureReview(intent().copy(affectedWorkflowsToConfirm = listOf("PAYROLL_SOURCE", "UNRELATED_EXTERNAL_SOURCE")), installation)
+        }
+        val scope = CompanyPendingReviewPolicyDto(policy, 2, 4, 1, "PAYROLL_SOURCE")
+        assertFailsWith<IllegalArgumentException> {
+            api.configureReview(intent().copy(pendingPoliciesToSupersede = listOf(scope, scope), supersedeReason = "Synthetic duplicate"), installation)
+        }
+        assertFalse(sent)
         http.close()
     }
 

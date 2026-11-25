@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -60,9 +62,7 @@ class FinanceCashVoucherApprovalSubject(
        ?.version==subject.subjectVersion
  fun enabled():Boolean=environment.getProperty(
     "hiltech.finance.cashbox.enabled",Boolean::class.java,false)
- fun policyKey():String?=environment.getProperty(
-    "hiltech.finance.cashbox.voucher-policy-key","",
- ).trim().takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
+ fun policyKey():String?=CompanyReviewPolicyKeys.resolve(environment, "hiltech.finance.cashbox.voucher-policy-key").takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
  fun source(org:UUID,kind:String,journal:UUID):Triple<BigDecimal,String,String>? {
    val table=when(kind){
       "AP"->"finance_ap_posted_journal"

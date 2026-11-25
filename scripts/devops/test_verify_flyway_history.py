@@ -52,6 +52,35 @@ class FlywayHistoryGateTests(unittest.TestCase):
         with self.assertRaisesRegex(MigrationGateError, "malformed"):
             verify_history(self.base, candidate)
 
+    def test_additive_minor_repair_orders_before_next_major(self):
+        repair = f"{PREFIX}V0002_1__guard_repair.sql"
+        candidate = {**self.base, repair: b"SELECT 1;", **dict([migration(3)])}
+        self.assertEqual(verify_history(self.base, candidate), (2, 2, 3))
+
+    def test_minor_repair_cannot_rewrite_applied_migration(self):
+        repair = f"{PREFIX}V0002_1__guard_repair.sql"
+        baseline = {**self.base, repair: b"SELECT 1;"}
+        with self.assertRaisesRegex(MigrationGateError, "removed or changed"):
+            verify_history(baseline, {**baseline, repair: b"SELECT 2;"})
+
+    def test_lower_minor_cannot_be_backfilled_after_next_major(self):
+        baseline = {**self.base, **dict([migration(3)])}
+        with self.assertRaisesRegex(MigrationGateError, "backfills"):
+            verify_history(baseline, {**baseline, f"{PREFIX}V0002_1__late.sql": b"SELECT 1;"})
+
+    def test_minor_sequence_and_major_predecessor_are_required(self):
+        with self.assertRaisesRegex(MigrationGateError, "missing lower Flyway minor"):
+            verify_history(self.base, {**self.base, f"{PREFIX}V0002_2__skipped.sql": b"SELECT 1;"})
+        with self.assertRaisesRegex(MigrationGateError, "missing lower Flyway versions"):
+            verify_history(self.base, {**self.base, f"{PREFIX}V0003_1__without_major.sql": b"SELECT 1;"})
+
+    def test_noncanonical_minor_and_duplicate_versions_are_rejected(self):
+        for suffix in ("_0", "_01", "_1_1", ".1"):
+            with self.assertRaisesRegex(MigrationGateError, "malformed"):
+                verify_history(self.base, {**self.base, f"{PREFIX}V0002{suffix}__bad.sql": b"SELECT 1;"})
+        with self.assertRaisesRegex(MigrationGateError, "duplicate V0002_1"):
+            verify_history(self.base, {**self.base, f"{PREFIX}V0002_1__first.sql": b"SELECT 1;", f"{PREFIX}V0002_1__second.sql": b"SELECT 1;"})
+
 
 if __name__ == "__main__":
     unittest.main()

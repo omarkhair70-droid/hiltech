@@ -117,6 +117,8 @@ data class SourcingEligibleNeed(
     val technicalState: String,
     val sourceCurrent: Boolean,
     val sourcingRoundExists: Boolean,
+    val stockItemName: String? = null,
+    val stockItemCode: String? = null,
 )
 
 data class SupplierRfqComparisonView(
@@ -141,6 +143,7 @@ class SupplierSourcingService @Autowired constructor(
     @Value("\${hiltech.procurement.sourcing.enabled:false}")
     private val enabled: Boolean = false,
     private val sourceVerifier: ProcurementDemandSourceVerifier? = null,
+    private val technicalSourceProvider: org.springframework.beans.factory.ObjectProvider<SupplierTechnicalAssessmentSourcePort>? = null,
 ) {
     fun openRfq(
         ctx: ProcurementDraftContext,
@@ -323,7 +326,7 @@ class SupplierSourcingService @Autowired constructor(
         val target = sourcing.quoteTechnicalTarget(quoteEvidenceId) ?: unavailable()
         requireTechnicalReviewer(ctx.actor, target)
         val id = deterministicId("supplier-quote-technical-assessment", ctx.operationId)
-        val fp = fingerprint(quoteEvidenceId, request.expectedReviewRevision, decision, justification)
+        val fp = fingerprint(quoteEvidenceId, request.expectedReviewRevision, decision, justification, request.technicalPacketId, request.packetReviewed)
         val execution = commands.execute(IdempotentCommandSpec(
             ctx.operationId, ctx.actor, "PROCUREMENT_QUOTE_TECHNICAL_ASSESSED",
             "SUPPLIER_QUOTE_TECHNICAL_ASSESSMENT", id, fp, ctx.correlationId,
@@ -342,11 +345,15 @@ class SupplierSourcingService @Autowired constructor(
             if (sourcing.latestTechnicalReviewRevision(quoteEvidenceId) + 1 !=
                 request.expectedReviewRevision
             ) stale()
+            val technicalSource = technicalSourceProvider?.ifAvailable
+                ?: technicalFail("SUPPLIER_TECHNICAL_SOURCE_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE)
+            technicalSource.requireCurrentAssessment(ctx.actor, quoteEvidenceId, request.technicalPacketId, request.packetReviewed, decision)
             val now = clock.instant()
             sourcing.insertTechnicalAssessment(SupplierQuoteTechnicalAssessmentRecord(
                 id, ctx.operationId, quoteEvidenceId, rfq.id, rfq.organizationId,
                 request.expectedReviewRevision, decision, justification,
                 ctx.actor, now, ctx.correlationId,
+                request.technicalPacketId, request.packetReviewed,
             ))
             audit.append(AuditEventRecord(
                 actorUserId = ctx.actor, action = "PROCUREMENT_QUOTE_TECHNICAL_ASSESSED",
@@ -371,6 +378,7 @@ class SupplierSourcingService @Autowired constructor(
             val source = currentSource(id)
             if (source.root.organizationId != organizationId) unavailable()
             if (source.state != "READY_FOR_SOURCING") return@mapNotNull null
+            val item = stock.item(source.root.stockItemId)?.takeIf { it.organizationId == organizationId }
             SourcingEligibleNeed(
                 requirementId = id,
                 technicalVersion = source.version,
@@ -380,6 +388,8 @@ class SupplierSourcingService @Autowired constructor(
                 technicalState = source.state,
                 sourceCurrent = source.sourceCurrent,
                 sourcingRoundExists = sourcing.byRequirementAndVersion(id, source.version) != null,
+                stockItemName = item?.name,
+                stockItemCode = item?.itemCode,
             )
         }
     }
@@ -420,8 +430,12 @@ class SupplierSourcingService @Autowired constructor(
             root.sourceQuantity, root.sourceUnitCode, assessed,
             LocalDate.now(clock.withZone(ZoneOffset.UTC)),
         )
+        val supplierNames = sourcing.supplierNamesForRfq(root.organizationId, rfqId)
         return SupplierRfqComparisonView(
-            rfqView(actor, root, all.size), compared, all.size,
+            rfqView(actor, root, all.size), compared.copy(latestBySupplier = compared.latestBySupplier.map { row ->
+                val name = supplierNames[row.supplierOrganizationId]
+                row.copy(supplierName = name?.first, supplierCode = name?.second)
+            }), all.size,
             all.map { it.supplierOrganizationId }.distinct().size,
         )
     }

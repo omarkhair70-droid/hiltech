@@ -37,6 +37,7 @@ data class PurchaseOrderCandidateRecord(
     val correlationId: String,
     val revisionNumber: Int = 1,
     val replacesCandidateId: UUID? = null,
+    val technicalAssessmentId: UUID? = null,
 )
 
 data class PurchaseCandidateReviewState(val requestId: UUID, val state: String, val requestVersion: Long, val policyVersion: Int, val comment: String?)
@@ -86,6 +87,7 @@ class PurchaseOrderCandidatePersistence(private val jdbc: JdbcTemplate) {
         getBigDecimal("unit_price"), getBigDecimal("tax_amount"), getBigDecimal("total_amount"), getString("quote_evidence_sha256"),
         getString("rationale"), getObject("selected_by_user_id", UUID::class.java), getObject("created_at", OffsetDateTime::class.java).toInstant(),
         getString("correlation_id"), getInt("revision_number"), getObject("replaces_candidate_id", UUID::class.java),
+        getObject("technical_assessment_id", UUID::class.java),
     )
 
     fun insert(candidate: PurchaseOrderCandidateRecord) {
@@ -98,10 +100,10 @@ class PurchaseOrderCandidatePersistence(private val jdbc: JdbcTemplate) {
                 stock_item_id, quantity, unit_code, currency,
                 unit_price, tax_amount, total_amount, quote_evidence_sha256,
                 rationale, selected_by_user_id, created_at, correlation_id,
-                state, version, revision_number, replaces_candidate_id
+                state, version, revision_number, replaces_candidate_id, technical_assessment_id
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT_FOR_APPROVAL', 1, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT_FOR_APPROVAL', 1, ?, ?, ?
             )
             """.trimIndent(),
             candidate.id, candidate.operationId, candidate.organizationId,
@@ -112,7 +114,7 @@ class PurchaseOrderCandidatePersistence(private val jdbc: JdbcTemplate) {
             candidate.totalAmount, candidate.sourceSha256, candidate.rationale,
             candidate.proposedBy, candidate.createdAt.atOffset(ZoneOffset.UTC),
             candidate.correlationId,
-            candidate.revisionNumber, candidate.replacesCandidateId,
+            candidate.revisionNumber, candidate.replacesCandidateId, candidate.technicalAssessmentId,
         ) == 1)
     }
 }

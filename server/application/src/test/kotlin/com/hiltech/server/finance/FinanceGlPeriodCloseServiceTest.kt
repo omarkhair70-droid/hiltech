@@ -141,9 +141,15 @@ class FinanceGlPeriodCloseApprovalSubjectTest {
         Mockito.verifyNoInteractions(jdbc)
     }
 
-    @Test fun missingExplicitReviewPolicyKeyFailsClosed() {
+    @Test fun blankReviewPolicyKeyUsesCompanyDefaultAndStillRequiresAnActivePolicy() {
         val s=subject(true,true,"")
         assertNull(s.current(org,period))
+        Mockito.verify(approvals).loadActivePolicy(org,"FINANCE_GL_PERIOD_CLOSE_REVIEW",clock.instant())
+        Mockito.verifyNoInteractions(jdbc)
+    }
+
+    @Test fun malformedExplicitReviewPolicyKeyFailsBeforeReadingSources() {
+        assertNull(subject(true,true,"invalid configured policy").current(org,period))
         Mockito.verifyNoInteractions(jdbc,approvals)
     }
 }

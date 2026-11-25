@@ -322,8 +322,10 @@ fun hiltechText(arabic: String, english: String): String = LocalHiltechLanguage.
 
 @Composable
 fun HiltechLanguageProvider(language: HiltechLanguage, content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalHiltechLanguage provides language, LocalLayoutDirection provides language.direction) {
-        content()
+    HiltechPlatformLanguageProvider(language) {
+        CompositionLocalProvider(LocalHiltechLanguage provides language, LocalLayoutDirection provides language.direction) {
+            content()
+        }
     }
 }
 

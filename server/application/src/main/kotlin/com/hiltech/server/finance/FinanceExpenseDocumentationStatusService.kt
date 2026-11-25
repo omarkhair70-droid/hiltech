@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalSubjectRef
 import com.hiltech.server.platform.HiltechRequestContext
@@ -41,9 +43,7 @@ class FinanceExpenseDocumentationStatusService(
                 "hiltech.finance.expenses.documentation-review.enabled",
                 Boolean::class.java, false,
             )) unavailable()
-        val key = environment.getProperty(
-            "hiltech.finance.expenses.documentation-review.policy-key", "",
-        ).trim()
+        val key = CompanyReviewPolicyKeys.resolve(environment, "hiltech.finance.expenses.documentation-review.policy-key")
         if (!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) unavailable()
 
         val own = employees.expense(actor, org, expenseId)

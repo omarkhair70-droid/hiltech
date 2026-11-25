@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -40,7 +42,7 @@ data class FinanceCashboxOpeningVerified(
 private data class FinanceCashboxOpeningRow(
  val id:UUID,val code:String,val currency:String,val custodian:UUID,
  val companyReference:String,val opening:String,val version:Long,
- val policyKey:String,val preparer:UUID,
+ val policyKey:String,val preparer:UUID,val codeSource:String,
 )
 @Component
 class FinanceCashboxOpeningApprovalSubject(
@@ -56,9 +58,7 @@ class FinanceCashboxOpeningApprovalSubject(
         ?.version==subject.subjectVersion
  fun enabled():Boolean=environment.getProperty(
     "hiltech.finance.cashbox.enabled",Boolean::class.java,false)
- fun policyKey():String?=environment.getProperty(
-    "hiltech.finance.cashbox.opening-policy-key",""
- ).trim().takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
+ fun policyKey():String?=CompanyReviewPolicyKeys.resolve(environment, "hiltech.finance.cashbox.opening-policy-key").takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
  fun current(org:UUID,id:UUID):FinanceCashboxOpeningVerified? {
    if(!enabled())return null
    val key=policyKey() ?: return null
@@ -74,7 +74,7 @@ class FinanceCashboxOpeningApprovalSubject(
    val p=jdbc.query(
      """SELECT id,cashbox_code,currency,custodian_user_id,
         approved_company_reference,opening_balance,subject_version,
-        policy_key,prepared_by_user_id
+        policy_key,prepared_by_user_id,code_source
         FROM finance_cashbox_opening_proposal
         WHERE id=? AND organization_id=?""",
      {rs,_ ->FinanceCashboxOpeningRow(
@@ -84,15 +84,22 @@ class FinanceCashboxOpeningApprovalSubject(
        rs.getString("approved_company_reference"),
        rs.getBigDecimal("opening_balance").toPlainString(),
        rs.getLong("subject_version"),rs.getString("policy_key"),
-       rs.getObject("prepared_by_user_id",UUID::class.java),
+       rs.getObject("prepared_by_user_id",UUID::class.java),rs.getString("code_source"),
      )},id,org).singleOrNull() ?: return null
    if(p.policyKey!=key || p.opening.toBigDecimal().signum()!=0 ||
-     p.preparer==p.custodian ||
      !approvals.isActiveOrganizationMember(org,p.preparer,now) ||
      !approvals.isActiveOrganizationMember(org,p.custodian,now) ||
      approvals.actorMatchesAuthority(p.preparer,reviewer,now) ||
      approvals.actorMatchesAuthority(p.custodian,reviewer,now))
      return null
+   if(p.codeSource=="AUTOMATIC" && jdbc.queryForObject(
+      """SELECT EXISTS(SELECT 1 FROM employee e JOIN user_identity u ON u.person_id=e.person_id
+         JOIN organization_membership m ON m.user_identity_id=u.id AND m.organization_id=e.organization_id
+         WHERE e.organization_id=? AND u.id=? AND e.state='ACTIVE' AND u.status='ACTIVE'
+           AND m.membership_type='EMPLOYEE' AND m.state='ACTIVE' AND m.valid_from<=?
+           AND (m.valid_until IS NULL OR m.valid_until>?))""", Boolean::class.java, org,p.custodian,
+      now.atOffset(java.time.ZoneOffset.UTC),now.atOffset(java.time.ZoneOffset.UTC))!=true)
+      return null
    if(jdbc.queryForObject(
       """SELECT EXISTS(SELECT 1 FROM finance_cashbox_register
          WHERE id=? AND organization_id=?)""",Boolean::class.java,id,org)==true)

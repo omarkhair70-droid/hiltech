@@ -106,12 +106,14 @@ class PurchaseOrderReviewPostgresContractTest {
             BigDecimal("25"), BigDecimal.ZERO, 3, LocalDate.now(clock).plusDays(14), "Synthetic delivery terms", "Synthetic payment terms", null,
             "evidence:$evidenceId", sha)
         sourcing.insertQuote(SupplierQuoteRecord(quote, UUID.randomUUID(), org, buyer, now, "synthetic"))
-        sourcing.insertTechnicalAssessment(SupplierQuoteTechnicalAssessmentRecord(UUID.randomUUID(), UUID.randomUUID(), quote.id, rfq.id, org,
-            1, "COMPLIANT", "Synthetic technical verification", buyer, now, "synthetic"))
+        val technical = SupplierTechnicalPostgresWorkflow(jdbc, clock, org, buyer, other)
+        val technicalPacket = technical.publish(quote.id)
+        val technicalAssessment = technical.assess(quote.id, technicalPacket.packetId)
+
         val candidates = PurchaseOrderCandidatePersistence(jdbc)
         val original = PurchaseOrderCandidateRecord(UUID.randomUUID(), UUID.randomUUID(), org, rfq.id, source.id, 3, quote.id, 1,
             supplier, item, BigDecimal("4"), "EA", "EGP", BigDecimal("25"), BigDecimal.ZERO, BigDecimal("100"), sha,
-            "Synthetic initial quotation selection", buyer, now, "synthetic")
+            "Synthetic initial quotation selection", buyer, now, "synthetic", technicalAssessmentId = technicalAssessment.id)
         candidates.insert(original)
         val stock = StockLedgerPersistence(jdbc)
         val work = Mockito.mock(WorkPersistencePort::class.java)
@@ -237,5 +239,23 @@ class PurchaseOrderReviewPostgresContractTest {
         assertEquals("SUPERSEDED", jdbc.queryForObject("SELECT state FROM approval_request WHERE id=?", String::class.java, genericRequest))
         assertEquals(0L, jdbc.queryForObject("SELECT count(*) FROM approval_decision WHERE approval_request_id=?", Long::class.java, genericRequest))
         assertEquals(0L, jdbc.queryForObject("SELECT count(*) FROM procurement_purchase_order WHERE organization_id=?", Long::class.java, org))
+
+        // Correcting the technical source invalidates the exact candidate pin.
+        // Re-reviewing that source cannot silently resurrect the old proposal.
+        supplierState(5, "ACTIVE")
+        val packetTwo = technical.publish(quote.id, technical.fields().copy(model = "MODEL-CORRECTED", correctionReason = "Synthetic corrected model identification"))
+        assertNull(sourcing.effectiveTechnicalAssessmentId(quote.id))
+        assertFalse(guard.isCurrent(ApprovalSubjectRef(org, "PROCUREMENT_PO_CANDIDATE", genericCandidate.id, 1)))
+        val assessmentTwo = technical.assess(quote.id, packetTwo.packetId)
+        assertEquals(assessmentTwo.id, sourcing.effectiveTechnicalAssessmentId(quote.id))
+        assertFalse(guard.isCurrent(ApprovalSubjectRef(org, "PROCUREMENT_PO_CANDIDATE", genericCandidate.id, 1)))
+        assertEquals(technicalAssessment.id, candidates.byId(genericCandidate.id)?.technicalAssessmentId)
+        val propose = ProposePurchaseOrderCandidateRequest(UUID.randomUUID(), quote.id, quote.revisionNumber,
+            "Synthetic selection of the reviewed corrected technical source", genericCandidate.id, genericCandidate.revisionNumber)
+        val successor = technical.candidateService.propose(ProcurementDraftContext(propose.operationId, buyer, "synthetic-technical-successor"), rfq.id, propose)
+        val successorSource = requireNotNull(candidates.byId(successor.candidateId))
+        assertEquals(assessmentTwo.id, successorSource.technicalAssessmentId)
+        assertTrue(guard.isCurrent(ApprovalSubjectRef(org, "PROCUREMENT_PO_CANDIDATE", successorSource.id, 1)))
+        assertEquals(technicalAssessment.id, candidates.byId(original.id)?.technicalAssessmentId)
     }
 }

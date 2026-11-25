@@ -640,6 +640,11 @@ class JdbcEvidencePersistence(
         insertPrivateDocumentReservation(value)
     }
 
+    override fun insertSupplierTechnicalReservation(value: PrivateDocumentEvidenceReservationInsert) {
+        require(value.targetType == "SUPPLIER_TECHNICAL_DOCUMENT" && value.evidenceTypeCode == "SUPPLIER_TECHNICAL_SOURCE")
+        insertPrivateDocumentReservation(value)
+    }
+
     private fun insertPrivateDocumentReservation(value: PrivateDocumentEvidenceReservationInsert) {
         require(
             (value.contentType == "application/pdf" && value.securityScanClass == "SIGNED_DOCUMENT") ||

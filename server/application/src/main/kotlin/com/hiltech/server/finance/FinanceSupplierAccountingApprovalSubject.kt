@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -85,9 +87,7 @@ class FinanceSupplierAccountingApprovalSubject(
                 "hiltech.finance.payable-candidates.enabled",
                 Boolean::class.java, false,
             )) return null
-        val key = environment.getProperty(
-            "hiltech.finance.supplier-accounting-review.policy-key", "",
-        ).trim()
+        val key = CompanyReviewPolicyKeys.resolve(environment, "hiltech.finance.supplier-accounting-review.policy-key")
         if (!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) return null
         val now = clock.instant()
         val policy = approvals.loadActivePolicy(org, key, now)?.takeIf {

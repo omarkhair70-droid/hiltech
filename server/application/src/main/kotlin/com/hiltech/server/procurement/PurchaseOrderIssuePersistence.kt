@@ -484,8 +484,13 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
         """
         SELECT a.id, a.policy_version, a.state,
           (SELECT count(*) FROM approval_decision d
-           WHERE d.approval_request_id = a.id AND d.decision = 'APPROVE') AS approved_decision_count
+           WHERE d.approval_request_id = a.id AND d.decision = 'APPROVE'
+             AND d.subject_version = a.subject_version
+             AND d.actor_user_id <> a.requester_user_id
+             AND d.actor_user_id <> p.proposed_by_user_id) AS approved_decision_count
         FROM approval_request a
+        JOIN procurement_po_delivery_amendment_proposal p
+          ON p.id = a.subject_id AND p.organization_id = a.organization_id
         WHERE a.organization_id = ? AND a.subject_type = 'PROCUREMENT_PO_DELIVERY_AMENDMENT'
           AND a.subject_id = ? AND a.subject_version = 1 AND a.policy_key = ?
         FOR UPDATE OF a

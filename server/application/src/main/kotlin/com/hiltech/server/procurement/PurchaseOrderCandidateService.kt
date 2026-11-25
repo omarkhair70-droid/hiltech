@@ -101,6 +101,7 @@ class PurchaseOrderCandidateService @Autowired constructor(
                 row.evidenceRef, row.evidenceSha256,
             )) problems += "QUOTE_DOCUMENT_UNVERIFIED"
             problems.addAll(row.issues)
+            if (sourcing.effectiveTechnicalAssessmentId(row.quoteId) == null) problems += "TECHNICAL_ASSESSMENT_REQUIRED"
         }
         val existing = candidates.byRfq(rfqId)
         val issued = candidates.hasIssuedOrder(rfqId)
@@ -180,6 +181,7 @@ class PurchaseOrderCandidateService @Autowired constructor(
                 quote.sourceSha256 != chosen.evidenceSha256 ||
                 quote.sourceEvidenceRef != chosen.evidenceRef
             ) stale()
+            val technicalAssessment = sourcing.effectiveTechnicalAssessmentId(quote.id) ?: stale()
             val moneyTotal = quote.unitPrice.multiply(quote.quantity)
                 .add(quote.taxAmount).setScale(6, RoundingMode.HALF_UP)
             if (quote.quantity.compareTo(lockedRfq.sourceQuantity) != 0 ||
@@ -212,6 +214,7 @@ class PurchaseOrderCandidateService @Autowired constructor(
                 correlationId = context.correlationId,
                 revisionNumber = (previous?.revisionNumber ?: 0) + 1,
                 replacesCandidateId = previous?.id,
+                technicalAssessmentId = technicalAssessment,
             ))
             audit.append(AuditEventRecord(
                 actorUserId = context.actor,

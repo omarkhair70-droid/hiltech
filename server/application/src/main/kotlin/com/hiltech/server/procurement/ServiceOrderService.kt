@@ -1,5 +1,7 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.operationalaccess.OperationalAuthorityOrigin
 import com.hiltech.server.operationalaccess.OperationalAuthorityProof
 import com.hiltech.server.operationalaccess.OperationalAuthorityPort
@@ -72,7 +74,7 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
     private val buyerKey:String="",
     @Value("\${hiltech.procurement.service-orders.issuer-authority-key:PROCUREMENT_ORDER_ISSUE}")
     private val issuerKey:String="",
-    @Value("\${hiltech.procurement.service-orders.approval-policy-key:}")
+    @Value("\${hiltech.procurement.service-orders.approval-policy-key:PROCUREMENT_SERVICE_ORDER_REVIEW}")
     private val policyKey:String="",
     private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
@@ -129,7 +131,7 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
         if(ctx.operationId!=input.operationId)invalid()
         val candidate=candidate(candidateId)?:hidden()
         requireBuyer(ctx.actor,candidate.org)
-        val key=policyKey.trim()
+        val key=CompanyReviewPolicyKeys.resolve(policyKey, "hiltech.procurement.service-orders.approval-policy-key")
         if(!validKey(key) || !sourceGuard.isCurrent(subject(candidate)))stale()
         val policy=approvals.loadActivePolicy(candidate.org,key,clock.instant())?:hidden()
         if(!policy.approvalRequired || policy.mode!=ApprovalPolicyMode.SINGLE)hidden()
@@ -163,7 +165,7 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
             lockRfq(current.rfq)
             val binding=requireIssuer(ctx.actor,current.org)
             if(!sourceGuard.isCurrent(subject(current)))stale()
-            val policy=approvals.loadActivePolicy(current.org,policyKey.trim(),clock.instant())
+            val policy=approvals.loadActivePolicy(current.org,CompanyReviewPolicyKeys.resolve(policyKey, "hiltech.procurement.service-orders.approval-policy-key"),clock.instant())
                 ?:hidden()
             if(!policy.approvalRequired || policy.mode!=ApprovalPolicyMode.SINGLE)hidden()
             val approval=jdbc.query(
@@ -175,7 +177,7 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
                 """.trimIndent(),
                 {rs,_->Approval(rs.getObject("id",UUID::class.java),
                     rs.getString("state"),rs.getInt("policy_version"))},
-                current.org,current.id,policyKey.trim(),
+                current.org,current.id,CompanyReviewPolicyKeys.resolve(policyKey, "hiltech.procurement.service-orders.approval-policy-key"),
             ).singleOrNull()?:hidden()
             if(approval.state!="APPROVED" || approval.policyVersion!=policy.versionNumber)
                 stale()
@@ -190,7 +192,7 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """.trimIndent(),
                 id,ctx.operationId,current.org,current.id,current.rfq,current.quote,current.supplier,
-                approval.id,policyKey.trim(),policy.versionNumber,
+                approval.id,CompanyReviewPolicyKeys.resolve(policyKey, "hiltech.procurement.service-orders.approval-policy-key"),policy.versionNumber,
                 binding.bindingId.takeIf { binding.origin == OperationalAuthorityOrigin.LEGACY_APPROVAL_BINDING },
                 binding.bindingId.takeIf { binding.origin == OperationalAuthorityOrigin.OPERATIONAL }, binding.authorityKey,
                 current.currency,current.amount,ctx.actor,at.atOffset(ZoneOffset.UTC),
@@ -219,7 +221,7 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
         val candidate=candidate(id)?:hidden()
         if(!authorized(actor,candidate.org,"hiltech.procurement.service-orders.buyer-authority-key",buyerKey) &&
             !authorized(actor,candidate.org,"hiltech.procurement.service-orders.issuer-authority-key",issuerKey))hidden()
-        val request=approvals.loadSubjectApproval(subject(candidate),policyKey.trim())
+        val request=approvals.loadSubjectApproval(subject(candidate),CompanyReviewPolicyKeys.resolve(policyKey, "hiltech.procurement.service-orders.approval-policy-key"))
         val orderId=jdbc.query(
             "SELECT id FROM procurement_service_order WHERE candidate_id=?",
             {rs,_->rs.getObject("id",UUID::class.java)},id,
@@ -350,7 +352,7 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
     }
 
     private fun requireIssuer(actor:UUID,org:UUID):OperationalAuthorityProof {
-        if(!enabled || !sourcingEnabled || !validKey(policyKey.trim()))hidden()
+        if(!enabled || !sourcingEnabled || !validKey(CompanyReviewPolicyKeys.resolve(policyKey, "hiltech.procurement.service-orders.approval-policy-key")))hidden()
         return currentOperationalAuthority(operationalAuthority, approvals, actor, org,
             "hiltech.procurement.service-orders.issuer-authority-key", issuerKey, clock.instant()) ?: hidden()
     }

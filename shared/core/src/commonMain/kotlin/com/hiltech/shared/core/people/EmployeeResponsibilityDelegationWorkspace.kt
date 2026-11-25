@@ -1,6 +1,7 @@
 package com.hiltech.shared.core.people
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,7 +37,8 @@ import kotlinx.serialization.json.Json
 
 @Composable
 internal fun EmployeeResponsibilityDelegationWorkspace(employee: EmployeeResponsibilityTargetDto,
-    client: ResponsibilityDelegationApiClient, installationId: String, newOperationId: () -> String, onReauthenticate: (() -> Unit)?) {
+    client: ResponsibilityDelegationApiClient, installationId: String, newOperationId: () -> String, onReauthenticate: (() -> Unit)?,
+    refreshToken: Int = 0, showRefreshAction: Boolean = true) {
     val jobs = rememberCoroutineScope()
     var current by remember { mutableStateOf<EmployeeResponsibilityDelegationDto?>(null) }
     var refresh by remember { mutableIntStateOf(0) }
@@ -54,7 +56,7 @@ internal fun EmployeeResponsibilityDelegationWorkspace(employee: EmployeeRespons
     var acknowledged by remember { mutableStateOf(false) }
     val selected = selectedCsv.split(',').filter { it in employeeCompanyResponsibilityKeys }.toSet()
     val pending = pendingJson?.let { Json.decodeFromString(ResponsibilityDelegationIntent.serializer(), it) }
-    LaunchedEffect(employee.version, refresh) {
+    LaunchedEffect(employee.version, refresh, refreshToken) {
         loading = true; loadError = null
         try { current = client.current(employee.employeeId, installationId).also { require(it.organizationId == employee.organizationId) } }
         catch (cancelled: CancellationException) { throw cancelled }
@@ -72,7 +74,7 @@ internal fun EmployeeResponsibilityDelegationWorkspace(employee: EmployeeRespons
     HiltechPanel(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(hiltechText("تفويض إدارة المسؤوليات", "Delegate responsibility administration"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-            TextButton(onClick = { refresh += 1 }, enabled = !loading && !submitting) { Text(hiltechText("تحديث", "Refresh")) }
+            if (showRefreshAction) TextButton(onClick = { refresh += 1 }, enabled = !loading && !submitting) { Text(hiltechText("تحديث", "Refresh")) }
         }
         Text(hiltechText("هذا التفويض يسمح بإسناد أدوار محددة للموظفين وإنهائها. لا يمنح تنفيذ تلك الأدوار تلقائيًا.",
             "This delegation permits assigning and ending specified employee roles. It does not automatically grant the roles themselves."))
@@ -100,14 +102,27 @@ internal fun EmployeeResponsibilityDelegationWorkspace(employee: EmployeeRespons
                 TextButton(enabled = pending == null && !submitting, onClick = { selectedCsv = choices.sorted().joinToString(",") }) {
                     Text(hiltechText("اختيار الأدوار المتاحة", "Select available roles"))
                 }
-                choices.groupBy(::companyResponsibilityCategory).forEach { (category, roles) ->
-                    Text(companyResponsibilityCategoryLabel(category), style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary)
-                    roles.forEach { role -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(role in selected, onCheckedChange = { checked -> selectedCsv = (if (checked) selected + role else selected - role).sorted().joinToString(",") },
-                            enabled = pending == null && !submitting)
-                        Text(companyResponsibilityLabel(role))
-                    } }
+                Text(hiltechText("${selected.count { it in choices }} مسؤوليات محددة", "${selected.count { it in choices }} responsibilities selected"),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val groups = choices.groupBy(::companyResponsibilityCategory).entries.toList()
+                    val columns = if (maxWidth >= 720.dp) 2 else 1
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        groups.chunked(columns).forEach { row ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
+                                row.forEach { (category, roles) -> Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(companyResponsibilityCategoryLabel(category), style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.primary)
+                                    roles.forEach { role -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(role in selected, onCheckedChange = { checked -> selectedCsv = (if (checked) selected + role else selected - role).sorted().joinToString(",") },
+                                            enabled = pending == null && !submitting)
+                                        Text(companyResponsibilityLabel(role), Modifier.weight(1f))
+                                    } }
+                                } }
+                                if (row.size < columns) Column(Modifier.weight(1f)) {}
+                            }
+                        }
+                    }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(onward, onCheckedChange = { onward = it }, enabled = pending == null && !submitting)

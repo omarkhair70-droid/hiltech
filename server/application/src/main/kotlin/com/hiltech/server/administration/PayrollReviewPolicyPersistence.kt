@@ -16,14 +16,13 @@ import java.util.UUID
 class JdbcPayrollReviewPolicyPersistence @Autowired constructor(private val jdbc: JdbcTemplate,
     private val runPolicy: PayrollRunPolicyConfiguration = PayrollRunPolicyConfiguration("PAYROLL_RUN_REVIEW"),
     private val procurementPolicy: ProcurementReviewPolicyConfiguration = ProcurementReviewPolicyConfiguration("PROCUREMENT_PO_REVIEW"),
+    workflowConfiguration: CompanyReviewWorkflowConfiguration? = null,
 ) : PayrollReviewPolicyPersistencePort {
+    private val workflows = workflowConfiguration ?: CompanyReviewWorkflowConfiguration(null, runPolicy, procurementPolicy)
     private fun policyKey(workflow: CompanyReviewWorkflow): String {
-        val key = when (workflow) {
-            CompanyReviewWorkflow.PAYROLL_RUN -> runPolicy.key
-            CompanyReviewWorkflow.PROCUREMENT_PO -> procurementPolicy.key
-            else -> workflow.policyKey
-        }
-        if (!Regex("^[A-Z][A-Z0-9_]{2,95}$").matches(key)) throw ProductApiException(
+        val key = workflows.key(workflow)
+        val suffixLimit = if (workflows.group(workflow).all { it == CompanyReviewWorkflow.PAYROLL_RUN || it.configurationProperty == null }) 95 else 79
+        if (!Regex("^[A-Z][A-Z0-9_]{2,$suffixLimit}$").matches(key)) throw ProductApiException(
             "COMPANY_REVIEW_WORKFLOW_CONFIGURATION_INVALID", "The installed workflow configuration is invalid.", HttpStatus.CONFLICT)
         return key
     }
@@ -42,6 +41,9 @@ class JdbcPayrollReviewPolicyPersistence @Autowired constructor(private val jdbc
 
     override fun current(organizationId: UUID, workflow: CompanyReviewWorkflow, at: Instant): PayrollReviewSetupRecord {
         val now = at.atOffset(ZoneOffset.UTC)
+        val key = policyKey(workflow)
+        val group = workflows.group(workflow)
+        val managedAuthority = workflows.authorityKey(workflow)
         val policy = jdbc.query(
             """SELECT id,version_number,version,authority_key,
                  (approval_required = true AND step_mode = 'SINGLE' AND authority_key = ? AND reason_required = true) AS contract_matches,
@@ -49,9 +51,50 @@ class JdbcPayrollReviewPolicyPersistence @Autowired constructor(private val jdbc
                FROM approval_policy_version WHERE organization_id = ? AND policy_key = ? AND lifecycle_state = 'ACTIVE'""".trimIndent(),
             { rs, _ -> PayrollReviewPolicyRecord(rs.getObject("id", UUID::class.java), rs.getInt("version_number"),
                 rs.getLong("version"), rs.getBoolean("contract_matches"), rs.getBoolean("policy_current"), rs.getString("authority_key")) },
-            workflow.authorityKey, now, now, organizationId, policyKey(workflow),
+            managedAuthority, now, now, organizationId, key,
         ).singleOrNull()
-        val reviewer = jdbc.query(
+        val reviewer = binding(organizationId, policy?.authorityKey ?: managedAuthority, at)
+        val pending = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM approval_request WHERE organization_id=? AND policy_key=? AND state='PENDING'",
+            Int::class.java, organizationId, key,
+        ) ?: 0
+        val pendingPolicies = jdbc.query(
+            """SELECT p.id,p.version_number,p.version,r.subject_type,COUNT(r.id) AS pending_count
+               FROM approval_policy_version p JOIN approval_request r
+                 ON r.organization_id=p.organization_id AND r.policy_key=p.policy_key AND r.policy_version=p.version_number
+               WHERE p.organization_id=? AND p.policy_key=? AND r.state='PENDING'
+               GROUP BY p.id,p.version_number,p.version,r.subject_type ORDER BY p.version_number,p.id,r.subject_type""".trimIndent(),
+            { rs, _ -> CompanyPendingReviewPolicy(rs.getObject("id", UUID::class.java).toString(),
+                rs.getInt("version_number"), rs.getLong("version"), rs.getInt("pending_count"),
+                CompanyReviewWorkflow.entries.singleOrNull { it.subjectType == rs.getString("subject_type") }?.name) },
+            organizationId, key,
+        )
+        if (pendingPolicies.sumOf { it.pendingReviews } != pending) throw ProductApiException(
+            "COMPANY_REVIEW_WORKFLOW_CONFIGURATION_INVALID", "Pending reviews do not match their recorded policy history.", HttpStatus.CONFLICT,
+        )
+        val sourceTypes = jdbc.query(
+            "SELECT DISTINCT subject_type FROM approval_request WHERE organization_id=? AND policy_key=?",
+            { rs, _ -> rs.getString(1) }, organizationId, key,
+        )
+        val externalSource = sourceTypes.any { source -> group.none { it.subjectType == source } }
+        val managedAuthorityShared = jdbc.queryForObject(
+            """SELECT EXISTS (SELECT 1 FROM approval_policy_version p
+                WHERE p.organization_id=? AND p.authority_key=? AND p.policy_key<>?
+                  AND (p.lifecycle_state='ACTIVE' OR EXISTS (
+                    SELECT 1 FROM approval_request r WHERE r.organization_id=p.organization_id
+                      AND r.policy_key=p.policy_key AND r.policy_version=p.version_number AND r.state='PENDING')))""".trimIndent(),
+            Boolean::class.java, organizationId, managedAuthority, key,
+        ) == true
+        return PayrollReviewSetupRecord(policy, reviewer, pending, pendingPolicies, group, when {
+            externalSource -> "EXTERNAL_SOURCE_DEPENDENCY"
+            managedAuthorityShared -> "SHARED_MANAGED_AUTHORITY"
+            else -> null
+        })
+    }
+
+    private fun binding(organizationId: UUID, authorityKey: String, at: Instant): PayrollReviewerBindingRecord? {
+        val now = at.atOffset(ZoneOffset.UTC)
+        return jdbc.query(
             """SELECT b.id,b.version,b.principal_type,COALESCE(b.principal_user_id,b.principal_team_id) AS principal_id,
                   COALESCE(p.display_name,t.name) AS display_name,e.id AS employee_id,
                   (b.effective_from <= ? AND (b.effective_to IS NULL OR b.effective_to > ?)
@@ -66,26 +109,8 @@ class JdbcPayrollReviewPolicyPersistence @Autowired constructor(private val jdbc
             { rs, _ -> PayrollReviewerBindingRecord(rs.getObject("id", UUID::class.java), rs.getLong("version"),
                 rs.getString("principal_type"), rs.getObject("principal_id", UUID::class.java), rs.getString("display_name"),
                 rs.getObject("employee_id", UUID::class.java), rs.getBoolean("binding_current")) },
-            now, now, organizationId, policy?.authorityKey ?: workflow.authorityKey,
+            now, now, organizationId, authorityKey,
         ).singleOrNull()
-        val pending = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM approval_request WHERE organization_id=? AND policy_key=? AND subject_type=? AND state='PENDING'",
-            Int::class.java, organizationId, policyKey(workflow), workflow.subjectType,
-        ) ?: 0
-        val pendingPolicies = jdbc.query(
-            """SELECT p.id,p.version_number,p.version,COUNT(r.id) AS pending_count
-               FROM approval_policy_version p JOIN approval_request r
-                 ON r.organization_id=p.organization_id AND r.policy_key=p.policy_key AND r.policy_version=p.version_number
-               WHERE p.organization_id=? AND p.policy_key=? AND r.subject_type=? AND r.state='PENDING'
-               GROUP BY p.id,p.version_number,p.version ORDER BY p.version_number,p.id""".trimIndent(),
-            { rs, _ -> CompanyPendingReviewPolicy(rs.getObject("id", UUID::class.java).toString(),
-                rs.getInt("version_number"), rs.getLong("version"), rs.getInt("pending_count")) },
-            organizationId, policyKey(workflow), workflow.subjectType,
-        )
-        if (pendingPolicies.sumOf { it.pendingReviews } != pending) throw ProductApiException(
-            "COMPANY_REVIEW_WORKFLOW_CONFIGURATION_INVALID", "Pending reviews do not match their recorded policy history.", HttpStatus.CONFLICT,
-        )
-        return PayrollReviewSetupRecord(policy, reviewer, pending, pendingPolicies)
     }
 
     override fun candidates(organizationId: UUID, workflow: CompanyReviewWorkflow, query: String, at: Instant, limit: Int): List<PayrollReviewerCandidate> {
@@ -156,16 +181,24 @@ class JdbcPayrollReviewPolicyPersistence @Autowired constructor(private val jdbc
                          actor: UUID, operationId: UUID, at: Instant): PayrollReviewPolicyInstallation {
         val now = at.atOffset(ZoneOffset.UTC)
         previous.policy?.let { policy ->
-            check(jdbc.update("""UPDATE approval_policy_version SET lifecycle_state='RETIRED',
-                    effective_to=GREATEST(?,effective_from + interval '1 microsecond'),version=version+1
-                  WHERE id=? AND organization_id=? AND policy_key=? AND version=? AND lifecycle_state='ACTIVE'""".trimIndent(),
+            // The end is exclusive. A completed decision in the same clock tick
+            // must remain inside its historical policy interval after retirement.
+            check(jdbc.update("""UPDATE approval_policy_version p SET lifecycle_state='RETIRED',
+                    effective_to=GREATEST(?,p.effective_from + interval '1 microsecond',
+                      (SELECT max(r.completed_at) + interval '1 microsecond' FROM approval_request r
+                       WHERE r.organization_id=p.organization_id AND r.policy_key=p.policy_key AND r.policy_version=p.version_number)),
+                    version=p.version+1
+                  WHERE p.id=? AND p.organization_id=? AND p.policy_key=? AND p.version=? AND p.lifecycle_state='ACTIVE'""".trimIndent(),
                 now, policy.id, organizationId, policyKey(workflow), policy.version) == 1)
         }
-        previous.reviewer?.let { binding ->
+        // An installed legacy authority may also govern other departments. Keep
+        // it intact; only this bounded group's dedicated binding is replaced.
+        val managedAuthority = workflows.authorityKey(workflow)
+        binding(organizationId, managedAuthority, at)?.let { binding ->
             check(jdbc.update("""UPDATE approval_authority_binding SET active=false,
                     effective_to=GREATEST(?,effective_from + interval '1 microsecond'),version=version+1
                   WHERE id=? AND organization_id=? AND authority_key=? AND version=? AND active=true""".trimIndent(),
-                now, binding.id, organizationId, workflow.authorityKey, binding.version) == 1)
+                now, binding.id, organizationId, managedAuthority, binding.version) == 1)
         }
         val revision = (jdbc.queryForObject(
             "SELECT COALESCE(MAX(version_number),0) FROM approval_policy_version WHERE organization_id=? AND policy_key=?",
@@ -178,11 +211,11 @@ class JdbcPayrollReviewPolicyPersistence @Autowired constructor(private val jdbc
              reason_required,effective_from,created_by_user_id,created_at,version)
             VALUES (?,?,?,?,'ACTIVE',true,'SINGLE',?,true,?,?,?,1)""".trimIndent(),
             policyId, organizationId, policyKey(workflow), revision,
-            workflow.authorityKey, now, actor, now)
+            managedAuthority, now, actor, now)
         jdbc.update("""INSERT INTO approval_authority_binding
             (id,organization_id,authority_key,principal_type,principal_user_id,effective_from,active,created_by_user_id,created_at,version)
             VALUES (?,?,?,'USER',?,?,true,?,?,1)""".trimIndent(),
-            bindingId, organizationId, workflow.authorityKey, reviewer.identityId, now, actor, now)
+            bindingId, organizationId, managedAuthority, reviewer.identityId, now, actor, now)
         return PayrollReviewPolicyInstallation(policyId, revision, bindingId)
     }
 }

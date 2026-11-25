@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -73,9 +75,7 @@ class FinanceCashVoidApprovalSubject(
 
     fun enabled()=environment.getProperty(
         "hiltech.finance.cash-allocation-void.enabled",Boolean::class.java,false)
-    fun policyKey():String?=environment.getProperty(
-        "hiltech.finance.cash-allocation-void.policy-key","",
-    ).trim().takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
+    fun policyKey():String?=CompanyReviewPolicyKeys.resolve(environment, "hiltech.finance.cash-allocation-void.policy-key").takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
 
     /** Company org, immutable original, no closed-period financial changes. */
     fun original(org:UUID,id:UUID):FinanceCashVoidSource? {

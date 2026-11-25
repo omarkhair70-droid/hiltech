@@ -24,6 +24,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
 import org.springframework.jdbc.datasource.DriverManagerDataSource
 import org.springframework.transaction.TransactionStatus
+import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.support.TransactionTemplate
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
@@ -52,10 +53,10 @@ class ServiceDeliveryPostgresContractTest {
         val source = f.lifecycle
         val evidence = UUID.fromString(reserved.evidence.evidenceId)
         val request = FinalizeEvidenceRequest(UUID.randomUUID().toString(), reserved.evidence.uploadSessionId, reserved.evidence.sha256, reserved.evidence.sizeBytes)
-        assertThrows<ProductApiException> { source.finalize(f.reviewer, evidence, request.operationId, "synthetic-not-creator", request) }
+        f.rejectCommand { source.finalize(f.reviewer, evidence, request.operationId, "synthetic-not-creator", request) }
         assertEquals(0, f.verificationReads)
         f.beforeVerification = { f.jdbc.update("UPDATE organization_membership SET state='SUSPENDED' WHERE organization_id=? AND user_identity_id=?", f.org, f.maker) }
-        assertEquals("OBJECT_NOT_VISIBLE", assertThrows<ProductApiException> {
+        assertEquals("OBJECT_NOT_VISIBLE", f.rejectCommand {
             source.finalize(f.maker, evidence, request.operationId, "synthetic-revoked-during-verification", request)
         }.code)
         assertEquals(1, f.verificationReads)
@@ -73,10 +74,14 @@ class ServiceDeliveryPostgresContractTest {
         assertTrue(f.service.reviewQueue(f.reviewer, f.org).items.single().canReview)
         assertTrue(f.service.proposal(f.reviewer, f.org, prepared.id).viewedEvidenceIds.isEmpty())
         val request = f.engine.subjectStatus(ApprovalSubjectRef(f.org, prepared.workflow.subjectType, prepared.id, prepared.reviewVersion), prepared.workflow.policyKey)!!
-        assertThrows<ProductApiException> { f.engine.decide(f.reviewer, UUID.randomUUID(), request.approvalRequestId, ApprovalDecisionType.APPROVE, null, "synthetic-no-proof") }
+        assertEquals("APPROVAL_SOURCE_REVIEW_NOT_ALLOWED", f.rejectCommand {
+            f.engine.decide(f.reviewer, UUID.randomUUID(), request.approvalRequestId, ApprovalDecisionType.APPROVE, null, "synthetic-no-proof")
+        }.code)
         val page = f.reader.proposalPage(f.reviewer, f.org, prepared.id, agreement, 0, "synthetic-delivered-page")
         assertTrue(f.repository.viewed(f.reviewer, prepared).isEmpty(), "Page delivery alone must not confirm native display")
-        assertThrows<ProductApiException> { f.engine.decide(f.reviewer, UUID.randomUUID(), request.approvalRequestId, ApprovalDecisionType.APPROVE, null, "synthetic-not-displayed") }
+        assertEquals("APPROVAL_SOURCE_REVIEW_NOT_ALLOWED", f.rejectCommand {
+            f.engine.decide(f.reviewer, UUID.randomUUID(), request.approvalRequestId, ApprovalDecisionType.APPROVE, null, "synthetic-not-displayed")
+        }.code)
         f.reader.confirmDisplayed(f.reviewer, f.org, prepared.id, UUID.fromString(page.viewReceiptId), "synthetic-displayed-page")
         assertEquals(ApprovalRequestState.APPROVED, f.engine.decide(f.reviewer, UUID.randomUUID(), request.approvalRequestId, ApprovalDecisionType.APPROVE, null, "synthetic-generic-approval").state)
         assertNull(f.repository.activeRelease(f.org, f.project), "Generic approval alone does not issue a package")
@@ -115,7 +120,9 @@ class ServiceDeliveryPostgresContractTest {
         val replacement = f.propose("HANDOVER_RELEASE", 4, f.releaseDetails(snapshot, agreement))
         f.approve(replacement)
         val replacementRelease = f.repository.activeRelease(f.org, f.project)!!
-        assertThrows<ProductApiException> { f.propose("HANDOVER_CLIENT_RESPONSE", 5, response.copy(releaseEventId = replacementRelease.id.toString())) }
+        assertEquals("SERVICE_DELIVERY_RESPONSE_PROOF_ALREADY_LINKED", f.rejectCommand {
+            f.propose("HANDOVER_CLIENT_RESPONSE", 5, response.copy(releaseEventId = replacementRelease.id.toString()))
+        }.code)
 
         val terms = ServiceDeliveryDetails(agreementEvidenceId = agreement.toString(), contractReference = "SYNTHETIC-AGREEMENT",
             scopeType = "SITE", scopeId = f.site.toString(), coveredItem = "Installed control equipment",
@@ -166,12 +173,12 @@ class ServiceDeliveryPostgresContractTest {
         assertThrows<ProductApiException> { f.reader.proposalPage(f.reviewer, UUID.randomUUID(), next, agreement, 0, "synthetic-other-company") }
         assertThrows<ProductApiException> { f.reader.proposalPage(f.reviewer, f.org, next, UUID.randomUUID(), 0, "synthetic-other-proof") }
         assertEquals(reads, f.storageReads)
-        assertThrows<ProductApiException> { f.service.review(f.maker, f.org, next, ServiceDeliveryReviewRequest(UUID.randomUUID().toString(), "APPROVE", null), "synthetic-self-review") }
+        f.rejectCommand { f.service.review(f.maker, f.org, next, ServiceDeliveryReviewRequest(UUID.randomUUID().toString(), "APPROVE", null), "synthetic-self-review") }
         f.beforeRead = { f.jdbc.update("UPDATE organization_membership SET state='SUSPENDED' WHERE organization_id=? AND user_identity_id=?", f.org, f.reviewer) }
         assertThrows<ProductApiException> { f.reader.proposalPage(f.reviewer, f.org, next, agreement, 0, "synthetic-during-revoke") }
         assertTrue(f.repository.viewed(f.reviewer, f.repository.proposal(f.org, next)!!).isEmpty())
         assertFalse(f.service.reviewQueue(f.reviewer, f.org).canReview)
-        assertThrows<ProductApiException> { f.service.review(f.reviewer, f.org, next, ServiceDeliveryReviewRequest(UUID.randomUUID().toString(), "APPROVE", null), "synthetic-revoked") }
+        f.rejectCommand { f.service.review(f.reviewer, f.org, next, ServiceDeliveryReviewRequest(UUID.randomUUID().toString(), "APPROVE", null), "synthetic-revoked") }
         assertTrue(f.repository.events(f.org, f.project).isEmpty())
     }
 
@@ -181,11 +188,16 @@ class ServiceDeliveryPostgresContractTest {
             System.getenv("HILTECH_DB_USER") ?: "hiltech", System.getenv("HILTECH_DB_PASSWORD") ?: "hiltech")
         Flyway.configure().dataSource(ds).locations("filesystem:" + (System.getenv("HILTECH_MIGRATIONS_PATH") ?: "database/migrations")).load().migrate()
         TransactionTemplate(DataSourceTransactionManager(ds)).execute { tx ->
-            try { block(Fixture(ds), tx) } finally { tx.setRollbackOnly() }
+            try { block(Fixture(ds, tx), tx) } finally { tx.setRollbackOnly() }
         }
     }
 
-    private class Fixture(ds: DriverManagerDataSource) {
+    private class Fixture(ds: DriverManagerDataSource, private val parentTransaction: TransactionStatus) {
+        // An expected REQUIRED command rejection must roll back to its own savepoint,
+        // leaving the enclosing source-journey fixture usable. Production semantics stay unchanged.
+        private val negativeCommand = TransactionTemplate(DataSourceTransactionManager(ds)).apply {
+            propagationBehavior = TransactionDefinition.PROPAGATION_NESTED
+        }
         val jdbc = JdbcTemplate(ds)
         val at = Instant.now(); private val timestamp = at.atOffset(ZoneOffset.UTC); val today = timestamp.toLocalDate().toString()
         val clock = Clock.fixed(at, ZoneOffset.UTC)
@@ -357,6 +369,23 @@ class ServiceDeliveryPostgresContractTest {
             jdbc.update("""INSERT INTO approval_policy_version(id,organization_id,policy_key,version_number,lifecycle_state,approval_required,step_mode,authority_key,reason_required,effective_from,created_by_user_id,created_at)
                 VALUES (?,?,?,1,'ACTIVE',?,?,?,true,?,?,?)""", UUID.randomUUID(), org, key, required,
                 if (required) "SINGLE" else "NO_APPROVAL_REQUIRED", if (required) authority else null, timestamp.minusDays(1), maker, timestamp)
+        }
+        fun rejectCommand(block: () -> Unit): ProductApiException {
+            val eventsBefore = repository.events(org, project).map { it.id }
+            val operationsBefore = jdbc.queryForObject("SELECT count(*) FROM idempotent_operation WHERE actor_user_id IN (?,?,?)",
+                Int::class.java, maker, reviewer, outsider)
+            val decisionsBefore = jdbc.queryForObject("SELECT count(*) FROM approval_decision WHERE actor_user_id IN (?,?,?)",
+                Int::class.java, maker, reviewer, outsider)
+            val rejected = assertThrows<ProductApiException> {
+                negativeCommand.executeWithoutResult { block() }
+            }
+            assertFalse(parentTransaction.isRollbackOnly, "An isolated expected rejection must not poison the source journey")
+            assertEquals(eventsBefore, repository.events(org, project).map { it.id }, "Rejected commands must not record delivery or warranty events")
+            assertEquals(operationsBefore, jdbc.queryForObject("SELECT count(*) FROM idempotent_operation WHERE actor_user_id IN (?,?,?)",
+                Int::class.java, maker, reviewer, outsider), "A rejected command must not leave an applied operation")
+            assertEquals(decisionsBefore, jdbc.queryForObject("SELECT count(*) FROM approval_decision WHERE actor_user_id IN (?,?,?)",
+                Int::class.java, maker, reviewer, outsider), "A rejected command must not record an approval decision")
+            return rejected
         }
         fun rejectSql(tx: TransactionStatus, block: () -> Unit) {
             val save = tx.createSavepoint()

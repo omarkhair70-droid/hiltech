@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -79,9 +81,7 @@ class FinanceApReversalApprovalSubject(
         "hiltech.finance.ap-reversal.enabled",Boolean::class.java,false,
     )
 
-    fun policyKey(): String? = environment.getProperty(
-        "hiltech.finance.ap-reversal.policy-key","",
-    ).trim().takeIf { Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it) }
+    fun policyKey(): String? = CompanyReviewPolicyKeys.resolve(environment, "hiltech.finance.ap-reversal.policy-key").takeIf { Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it) }
 
     fun current(org: UUID, id: UUID): FinanceApReversalVerifiedSnapshot? {
         if(!enabled()) return null

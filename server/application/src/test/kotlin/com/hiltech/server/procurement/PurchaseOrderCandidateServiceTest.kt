@@ -29,6 +29,7 @@ class PurchaseOrderCandidateServiceTest {
     private val itemId = UUID.randomUUID()
     private val supplier = UUID.randomUUID()
     private val quoteId = UUID.randomUUID()
+    private val technicalAssessmentId = UUID.randomUUID()
     private val operation = UUID.randomUUID()
     private val ctx = ProcurementDraftContext(operation, actor, "s03-test")
     private val sourceSha = "a".repeat(64)
@@ -95,6 +96,7 @@ class PurchaseOrderCandidateServiceTest {
         Mockito.`when`(document.isVerified(actor, org, rfqId, supplier, sourceRef, sourceSha))
             .thenReturn(true)
         Mockito.`when`(sourcing.quotes(rfqId)).thenReturn(listOf(quote))
+        Mockito.`when`(sourcing.effectiveTechnicalAssessmentId(quoteId)).thenReturn(technicalAssessmentId)
         Mockito.doAnswer {
             submitted = it.getArgument(0)
             submitted?.let { candidate -> history[candidate.id] = candidate }
@@ -137,6 +139,7 @@ class PurchaseOrderCandidateServiceTest {
         assertFalse(receipt.purchaseOrderIssued)
         val saved = requireNotNull(submitted)
         assertEquals(quoteId, saved.quoteId)
+        assertEquals(technicalAssessmentId, saved.technicalAssessmentId)
         assertEquals(supplier, saved.supplierOrganizationId)
         assertEquals(0, saved.quantity.compareTo(BigDecimal("100.000000")))
         assertEquals(0, saved.totalAmount.compareTo(BigDecimal("1270.000000")))
@@ -146,6 +149,16 @@ class PurchaseOrderCandidateServiceTest {
             .map { it.arguments.single() as AuditEventRecord }
         assertEquals(1, events.size)
         assertEquals("PROCUREMENT_PO_CANDIDATE_PROPOSED", events.single().action)
+    }
+
+    @Test fun historicalCompliantLabelCannotReplaceAnExactCurrentTechnicalSource() {
+        allow()
+        Mockito.`when`(sourcing.effectiveTechnicalAssessmentId(quoteId)).thenReturn(null)
+        val preview = service().preview(actor, rfqId, quoteId)
+        assertFalse(preview.canPropose)
+        assertTrue("TECHNICAL_ASSESSMENT_REQUIRED" in preview.blockers)
+        assertThrows<ProductApiException> { service().propose(ctx, rfqId, request()) }
+        assertEquals(null, submitted)
     }
 
     @Test fun revokedSupplierAndUnverifiedDocumentBlockCandidate() {

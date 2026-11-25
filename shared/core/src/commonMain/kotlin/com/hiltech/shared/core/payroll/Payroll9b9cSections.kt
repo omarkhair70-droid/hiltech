@@ -1,6 +1,7 @@
 package com.hiltech.shared.core.payroll
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,8 +21,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
 import com.hiltech.shared.core.design.LocalHiltechLanguage
+import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.HiltechKeyValue
+import com.hiltech.shared.core.design.HiltechRecordChoice
+import com.hiltech.shared.core.design.HiltechRecordPicker
+import com.hiltech.shared.core.design.HiltechRecordTable
+import com.hiltech.shared.core.design.HiltechTableColumn
+import com.hiltech.shared.core.design.HiltechTableRecord
+import com.hiltech.shared.core.design.HiltechStateTag
+import com.hiltech.shared.core.design.HiltechStateTone
 import com.hiltech.shared.core.design.hiltechText
 import androidx.compose.ui.unit.dp
 
@@ -54,121 +66,163 @@ fun PayrollRunReviewSection(
     retainedDecisionComment: String? = null,
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LocalHiltechLanguage.current.direction) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = if (hostOwnsVerticalScroll) Modifier else Modifier.verticalScroll(rememberScrollState()),
-        ) {
-            Text(hiltechText("مراجعة المرتبات", "Payroll review"), style = MaterialTheme.typography.titleMedium)
-            Text(hiltechText("راجع الحساب من مصادره المعتمدة، ثم أرسل النسخة للمراجعة وثبّت اعتمادها.", "Review the calculation from approved sources, then submit and release the exact version."))
-            if (state.loading) CircularProgressIndicator()
-            state.errorCode?.let { Text(payrollMessage(it)) }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onRefresh, enabled = !state.loading && !state.commandLocked) { Text(hiltechText("تحديث", "Refresh")) }
-                if (state.mayPrepare && periodId.isNotBlank()) {
-                    Button(onClick = { onPrepareDraft(periodId) }, enabled = !state.loading && !state.commandLocked) {
-                        Text(hiltechText("تجهيز مسودة من المدخلات المعتمدة", "Calculate from approved inputs"))
-                    }
+        Column(Modifier.fillMaxWidth().then(if (hostOwnsVerticalScroll) Modifier else Modifier.verticalScroll(rememberScrollState())),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(state.run?.let { hiltechText("كشف الرواتب · النسخة ${it.generation}", "Payroll run · version ${it.generation}") }
+                        ?: hiltechText("حساب الرواتب", "Payroll calculation"), style = MaterialTheme.typography.titleLarge)
+                    Text(hiltechText("قيم محسوبة من المصادر المعتمدة للفترة.", "Values calculated from the period’s approved sources."),
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                TextButton(onClick = onRefresh, enabled = !state.loading) { Text(hiltechText("تحديث", "Refresh")) }
+            }
+            if (state.loading && !hostOwnsVerticalScroll) CircularProgressIndicator()
+            state.errorCode?.let { Text(payrollMessage(it), color = MaterialTheme.colorScheme.error) }
+            if (state.mayPrepare && periodId.isNotBlank()) OutlinedButton(onClick = { onPrepareDraft(periodId) },
+                enabled = !state.loading && !state.commandLocked) {
+                Text(hiltechText("تجهيز مسودة من المدخلات المعتمدة", "Calculate from approved inputs"))
             }
             state.run?.let { run ->
-                Text(hiltechText("التشغيل رقم ", "Run ") + run.generation, style = MaterialTheme.typography.titleSmall)
-                Text(hiltechText("الحالة: ", "Status: ") + payrollLifecycleLabel(state.releaseState))
-                Text(hiltechText("الصافي: ", "Net: ") + run.net + " " + run.currency,
-                    style = MaterialTheme.typography.titleMedium)
-                Text(hiltechText("الاستحقاقات ", "Earnings ") + run.gross + hiltechText(" | الخصومات ", " | Deductions ") + run.deductions +
-                    hiltechText(" | المستردات ", " | Reimbursements ") + run.reimbursements)
-
-                run.lines.forEach { line ->
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(
-                            line.displayName + " — " + line.employeeCode,
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        Text(hiltechText("إجمالي ", "Gross ") + line.gross + hiltechText(" | خصم ", " | Deductions ") + line.deductions)
-                        Text(hiltechText("صافي ", "Net ") + line.net + " " + line.currency)
-                    }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    HiltechStateTag(payrollLifecycleLabel(state.releaseState),
+                        if (state.releaseState in setOf("RELEASED", "RELEASED_FOR_FINANCE_REVIEW")) HiltechStateTone.CURRENT else HiltechStateTone.NEUTRAL)
+                    Text(hiltechText("${run.lines.size} موظفين", "${run.lines.size} employees"), style = MaterialTheme.typography.labelLarge)
                 }
-                state.review?.takeIf { it.runVersionId == run.runVersionId }?.let { review ->
-                    Text(hiltechText("مراجعة النسخة: ", "Run review: ") + payrollRunReviewLabel(review.approvalState))
-                    if (review.approvalState in setOf("POLICY_REVIEW_REQUIRED", "REJECTED", "CHANGE_REQUESTED", "SOURCE_CHANGED", "SUPERSEDED")) {
-                        Text(hiltechText("راجع المصادر وأعد حساب نسخة جديدة لعرضها على المراجع الحالي.", "Review the sources and calculate a new version for the current reviewer."))
-                    }
-                    if (review.canDecide && review.approvalRequestId != null) {
-                        var note by remember(run.runVersionId, review.approvalRequestId) { mutableStateOf(retainedDecisionComment.orEmpty()) }
-                        Text(hiltechText("قرارك يخص القيم والموظفين في هذه النسخة فقط.", "Your decision applies to the values and employees in this version only."))
-                        OutlinedTextField(note, { note = it.take(1000) }, modifier = Modifier.fillMaxWidth(),
-                            enabled = !state.loading && !state.commandLocked, label = { Text(hiltechText("ملاحظة المراجعة", "Review note")) },
-                            supportingText = { Text(hiltechText("السبب مطلوب لطلب تعديل أو رفض النسخة.", "A reason is required to request changes or reject this version.")) })
-                        Button(onClick = { onDecide(run.runVersionId, review.approvalRequestId, "APPROVE", note.trim().takeIf(String::isNotBlank)) },
-                            enabled = !state.loading && !state.commandLocked) { Text(hiltechText("اعتماد حساب هذه النسخة", "Approve this payroll calculation")) }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { onDecide(run.runVersionId, review.approvalRequestId, "REQUEST_CHANGE", note.trim()) },
-                                enabled = !state.loading && !state.commandLocked && note.isNotBlank()) { Text(hiltechText("طلب تعديل الحساب", "Request calculation changes")) }
-                            TextButton(onClick = { onDecide(run.runVersionId, review.approvalRequestId, "REJECT", note.trim()) },
-                                enabled = !state.loading && !state.commandLocked && note.isNotBlank()) { Text(hiltechText("رفض النسخة", "Reject version")) }
+                PayrollAmounts(run.net, run.gross, run.deductions, run.reimbursements, run.currency)
+                HiltechPanel(Modifier.fillMaxWidth()) {
+                    Text(hiltechText("تفاصيل الموظفين", "Employee breakdown"), style = MaterialTheme.typography.titleMedium)
+                    Text(hiltechText("تشمل الموافقة جميع الموظفين في هذه النسخة.", "Approval covers every employee in this version."),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    HiltechRecordTable(listOf(
+                        HiltechTableColumn(hiltechText("الموظف", "Employee"), 2.2f),
+                        HiltechTableColumn(hiltechText("الاستحقاقات", "Earnings"), numeric = true),
+                        HiltechTableColumn(hiltechText("الخصومات", "Deductions"), numeric = true),
+                        HiltechTableColumn(hiltechText("المستردات", "Reimbursements"), numeric = true),
+                        HiltechTableColumn(hiltechText("الصافي", "Net"), 1.2f, numeric = true),
+                    ), run.lines.map { line -> HiltechTableRecord(listOf(
+                        line.displayName + "\n" + line.employeeCode, line.gross, line.deductions, line.reimbursements, line.net + " " + line.currency,
+                    )) }, hiltechText("لا توجد بنود موظفين في هذه النسخة.", "This version contains no employee lines."))
+                }
+                HiltechPanel(Modifier.fillMaxWidth()) {
+                    Text(hiltechText("المراجعة والاعتماد", "Review and release"), style = MaterialTheme.typography.titleMedium)
+                    state.review?.takeIf { it.runVersionId == run.runVersionId }?.let { review ->
+                        HiltechStateTag(payrollRunReviewLabel(review.approvalState), when (review.approvalState) {
+                            "APPROVED", "RELEASED" -> HiltechStateTone.CURRENT
+                            "PENDING" -> HiltechStateTone.ATTENTION
+                            "POLICY_REVIEW_REQUIRED", "REJECTED", "CHANGE_REQUESTED", "SOURCE_CHANGED", "SUPERSEDED" -> HiltechStateTone.BLOCKED
+                            else -> HiltechStateTone.NEUTRAL
+                        })
+                        if (review.approvalState in setOf("POLICY_REVIEW_REQUIRED", "REJECTED", "CHANGE_REQUESTED", "SOURCE_CHANGED", "SUPERSEDED")) {
+                            Text(hiltechText("راجع المصادر وأعد حساب نسخة جديدة لعرضها على المراجع الحالي.",
+                                "Review the sources and calculate a new version for the current reviewer."))
+                        }
+                        if (review.canDecide && review.approvalRequestId != null) {
+                            var note by remember(run.runVersionId, review.approvalRequestId) { mutableStateOf(retainedDecisionComment.orEmpty()) }
+                            Text(hiltechText("قرارك يخص القيم والموظفين في هذه النسخة فقط.", "Your decision applies to the values and employees in this version only."),
+                                style = MaterialTheme.typography.bodyMedium)
+                            OutlinedTextField(note, { note = it.take(1000) }, modifier = Modifier.fillMaxWidth(),
+                                enabled = !state.loading && !state.commandLocked, label = { Text(hiltechText("ملاحظة المراجعة", "Review note")) },
+                                supportingText = { Text(hiltechText("السبب مطلوب لطلب تعديل أو رفض النسخة.", "A reason is required to request changes or reject this version.")) })
+                            Button(onClick = { onDecide(run.runVersionId, review.approvalRequestId, "APPROVE", note.trim().takeIf(String::isNotBlank)) },
+                                enabled = !state.loading && !state.commandLocked) { Text(hiltechText("اعتماد حساب هذه النسخة", "Approve this payroll calculation")) }
+                            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                                val actions: @Composable () -> Unit = {
+                                    OutlinedButton(onClick = { onDecide(run.runVersionId, review.approvalRequestId, "REQUEST_CHANGE", note.trim()) },
+                                        enabled = !state.loading && !state.commandLocked && note.isNotBlank()) { Text(hiltechText("طلب تعديل الحساب", "Request calculation changes")) }
+                                    TextButton(onClick = { onDecide(run.runVersionId, review.approvalRequestId, "REJECT", note.trim()) },
+                                        enabled = !state.loading && !state.commandLocked && note.isNotBlank()) { Text(hiltechText("رفض النسخة", "Reject version")) }
+                                }
+                                if (maxWidth < 560.dp) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { actions() }
+                                else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { actions() }
+                            }
                         }
                     }
-                }
-                if (state.mayRequestApproval) {
-                    OutlinedButton(onClick = { onRequestApproval(run.runVersionId) }, enabled = !state.loading && !state.commandLocked) {
+                    if (state.mayRequestApproval) OutlinedButton(onClick = { onRequestApproval(run.runVersionId) },
+                        enabled = !state.loading && !state.commandLocked) {
                         Text(hiltechText("إحالة النسخة للموافقة حسب سياسة الشركة", "Request review under company policy"))
                     }
-                }
-                if (state.mayReleaseForFinanceReview) {
-                    Button(onClick = { onReleaseForFinanceReview(run.runVersionId) }, enabled = !state.loading && !state.commandLocked) {
+                    if (state.mayReleaseForFinanceReview) Button(onClick = { onReleaseForFinanceReview(run.runVersionId) },
+                        enabled = !state.loading && !state.commandLocked) {
                         Text(hiltechText("تثبيت اعتماد النسخة للمراجعة المالية", "Release this version for Finance review"))
                     }
-                }
-                state.approval?.takeIf { state.review == null }?.let {
-                    Text(hiltechText("طلب الموافقة: ", "Approval request: ") +
-                        (it.approvalState?.let { state -> payrollSourceStateLabel(state) } ?: if (it.approvalRequired) hiltechText("معلّق", "Pending") else hiltechText("اعتماد إضافي غير مطلوب", "No additional approval required")))
-                }
-                state.release?.let {
-                    Text(if (it.status == "RELEASED_FOR_FINANCE_REVIEW") hiltechText(
-                        "تم تثبيت اعتماد هذه النسخة للمراجعة المالية.", "This version was released for Finance review.")
-                    else hiltechText("راجع حالة اعتماد النسخة الحالية.", "Review the release status of the current version."))
-                }
-                state.finance?.let { finance ->
-                    Text(hiltechText("المطابقة المالية", "Finance reconciliation"), style = MaterialTheme.typography.titleSmall)
-                    Text(hiltechText("الحالة: ", "Status: ") + when (finance.status) {
-                        "PAID" -> hiltechText("مؤكد بالكامل من المالية", "Fully confirmed by Finance")
-                        "PARTIALLY_PAID" -> hiltechText("صرف جزئي", "Partially paid")
-                        "NO_PAYMENT_REQUIRED" -> hiltechText("لا توجد مبالغ تحتاج تحويلًا", "No transfer required")
-                        "REQUIRES_REVIEW" -> hiltechText("مراجعة نتائج الصرف مطلوبة", "Payment results require review")
-                        "NOT_RELEASED" -> hiltechText("لم يُعتمد التسليم للمالية", "Not yet released for Finance review")
-                        "FINANCE_NOT_CONNECTED", "PAYMENT_STATUS_UNAVAILABLE" -> hiltechText("حالة الصرف غير متاحة الآن", "Payment status is currently unavailable")
-                        "PAYMENT_NOT_RECORDED" -> hiltechText("لم تُسجّل نتيجة صرف بعد", "No payment result has been recorded")
-                        else -> hiltechText("لم يُنفّذ صرف مؤكد", "Payment has not been confirmed")
-                    })
-                    val noTransferCount = finance.employeeOutcomes.count {
-                        it.outcome == "NOT_APPLICABLE"
+                    state.approval?.takeIf { state.review == null }?.let {
+                        Text(hiltechText("طلب الموافقة: ", "Approval request: ") +
+                            (it.approvalState?.let { status -> payrollSourceStateLabel(status) } ?: if (it.approvalRequired)
+                                hiltechText("معلّق", "Pending") else hiltechText("اعتماد إضافي غير مطلوب", "No additional approval required")))
                     }
-                    Text(hiltechText("تحويلات مؤكدة ", "Confirmed transfers ") + finance.settledCount +
-                        hiltechText(" | لم تكتمل ", " | Unresolved ") + finance.unresolvedCount +
-                        hiltechText(" | لا تحتاج تحويلًا ", " | No transfer required ") + noTransferCount +
-                        hiltechText(" | إجمالي الموظفين ", " | Employees ") + finance.employeeCount)
-                    finance.employeeOutcomes.forEach { person ->
-                        val label = run.lines.firstOrNull {
-                            it.employeeId == person.employeeId
-                        }?.displayName ?: hiltechText("موظف من النسخة", "Employee in this run")
-                        Text(label + ": " + when (person.outcome) {
-                            "SUCCESS" -> hiltechText("مؤكد", "Confirmed")
-                            "FAILED" -> hiltechText("فشل", "Failed")
-                            "RETURNED" -> hiltechText("مرتجع", "Returned")
-                            "PENDING" -> hiltechText("معلّق", "Pending")
-                            "UNKNOWN" -> hiltechText("نتيجة التحويل غير محسومة", "Transfer outcome is unknown")
-                            "PAYMENT_NOT_RECORDED" -> hiltechText("لم تُسجّل نتيجة صرف بعد", "No payment result has been recorded")
-                            "PAYMENT_STATUS_UNAVAILABLE" -> hiltechText("حالة الصرف غير متاحة الآن", "Payment status is currently unavailable")
-                            "NOT_APPLICABLE" -> hiltechText("لا يوجد مبلغ مطلوب تحويله", "No transfer required")
-                            else -> hiltechText("غير معروف", "Unknown")
-                        })
+                    state.release?.let {
+                        Text(if (it.status == "RELEASED_FOR_FINANCE_REVIEW") hiltechText(
+                            "تم تثبيت اعتماد هذه النسخة للمراجعة المالية.", "This version was released for Finance review.")
+                        else hiltechText("راجع حالة اعتماد النسخة الحالية.", "Review the release status of the current version."),
+                            color = MaterialTheme.colorScheme.primary)
                     }
                 }
-                Text(hiltechText("تسجّل المالية نتيجة الصرف الفعلية وتطابقها.", "Finance records and reconciles the actual payment outcome."))
-
+                state.finance?.let { finance -> PayrollFinanceResultPanel(run, finance) }
             }
         }
     }
+}
+
+@Composable
+private fun PayrollAmounts(net: String, gross: String, deductions: String, reimbursements: String, currency: String) {
+    val values = listOf(hiltechText("الصافي", "Net") to net, hiltechText("الاستحقاقات", "Earnings") to gross,
+        hiltechText("الخصومات", "Deductions") to deductions, hiltechText("المستردات", "Reimbursements") to reimbursements)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val groups = if (maxWidth >= 760.dp) listOf(values) else values.chunked(2)
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            groups.forEach { group -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                group.forEach { (label, amount) -> HiltechPanel(Modifier.weight(1f)) {
+                    Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(amount, style = MaterialTheme.typography.headlineSmall.copy(textDirection = TextDirection.Ltr),
+                        color = if (label == values.first().first) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                    Text(currency, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } }
+            } }
+        }
+    }
+}
+
+@Composable
+private fun PayrollFinanceResultPanel(run: PayrollRunDto, finance: PayrollRunFinanceStatusDto) {
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("المطابقة المالية", "Finance reconciliation"), style = MaterialTheme.typography.titleMedium)
+        Text(when (finance.status) {
+            "PAID" -> hiltechText("مؤكد بالكامل من المالية", "Fully confirmed by Finance")
+            "PARTIALLY_PAID" -> hiltechText("صرف جزئي", "Partially paid")
+            "NO_PAYMENT_REQUIRED" -> hiltechText("لا توجد مبالغ تحتاج تحويلًا", "No transfer required")
+            "REQUIRES_REVIEW" -> hiltechText("مراجعة نتائج الصرف مطلوبة", "Payment results require review")
+            "NOT_RELEASED" -> hiltechText("لم يُعتمد التسليم للمالية", "Not yet released for Finance review")
+            "FINANCE_NOT_CONNECTED", "PAYMENT_STATUS_UNAVAILABLE" -> hiltechText("حالة الصرف غير متاحة الآن", "Payment status is currently unavailable")
+            "PAYMENT_NOT_RECORDED" -> hiltechText("لم تُسجّل نتيجة صرف بعد", "No payment result has been recorded")
+            else -> hiltechText("لم يُنفّذ صرف مؤكد", "Payment has not been confirmed")
+        }, style = MaterialTheme.typography.titleSmall)
+        val noTransfer = finance.employeeOutcomes.count { it.outcome == "NOT_APPLICABLE" }
+        Text(hiltechText("تحويلات مؤكدة: ${finance.settledCount} · تحتاج متابعة: ${finance.unresolvedCount} · لا تحتاج تحويلًا: $noTransfer",
+            "Confirmed transfers: ${finance.settledCount} · Unresolved: ${finance.unresolvedCount} · No transfer required: $noTransfer"),
+            style = MaterialTheme.typography.bodyMedium)
+        HiltechRecordTable(listOf(HiltechTableColumn(hiltechText("الموظف", "Employee"), 1.4f),
+            HiltechTableColumn(hiltechText("نتيجة الصرف", "Payment outcome"))),
+            finance.employeeOutcomes.map { outcome -> HiltechTableRecord(listOf(
+                run.lines.firstOrNull { it.employeeId == outcome.employeeId }?.displayName ?: hiltechText("موظف من النسخة", "Employee in this run"),
+                payrollPaymentOutcome(outcome.outcome),
+            )) }, hiltechText("لا توجد نتائج صرف متاحة لهذه النسخة.", "No payment outcomes are available for this version."))
+        Text(hiltechText("تسجّل المالية نتيجة الصرف الفعلية وتطابقها.", "Finance records and reconciles the actual payment outcome."),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun payrollPaymentOutcome(outcome: String): String = when (outcome) {
+    "SUCCESS" -> hiltechText("مؤكد من المالية", "Confirmed by Finance")
+    "FAILED" -> hiltechText("فشل الصرف", "Payment failed")
+    "RETURNED" -> hiltechText("عاد التحويل", "Transfer returned")
+    "PENDING" -> hiltechText("قيد التنفيذ", "In progress")
+    "UNKNOWN" -> hiltechText("نتيجة التحويل غير محسومة", "Transfer outcome is unknown")
+    "PAYMENT_NOT_RECORDED" -> hiltechText("لم تُسجّل نتيجة صرف بعد", "No payment result has been recorded")
+    "PAYMENT_STATUS_UNAVAILABLE" -> hiltechText("حالة الصرف غير متاحة الآن", "Payment status is currently unavailable")
+    "NOT_APPLICABLE" -> hiltechText("لا يوجد مبلغ مطلوب تحويله", "No transfer required")
+    else -> hiltechText("غير مؤكدة — قيد المراجعة", "Unconfirmed — under review")
 }
 
 data class OwnPayslipUiState(
@@ -184,39 +238,41 @@ fun OwnPayslipSection(
     hostOwnsVerticalScroll: Boolean = false,
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LocalHiltechLanguage.current.direction) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = if (hostOwnsVerticalScroll) Modifier else Modifier.verticalScroll(rememberScrollState()),
-        ) {
-            Text(hiltechText("كشوف مرتباتي", "My payslips"), style = MaterialTheme.typography.titleMedium)
-            Text(hiltechText("يتم عرض كشوفك المعتمدة المرتبطة بحسابك فقط.", "Approved payslips linked to your signed-in account."))
+        Column(Modifier.fillMaxWidth().then(if (hostOwnsVerticalScroll) Modifier else Modifier.verticalScroll(rememberScrollState())),
+            verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(hiltechText("كشوف مرتباتي", "My payslips"), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                TextButton(onClick = onRefresh, enabled = !state.loading) { Text(hiltechText("تحديث", "Refresh")) }
+            }
+            Text(hiltechText("يتم عرض كشوفك المعتمدة المرتبطة بحسابك فقط.", "Approved payslips linked to your signed-in account."),
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (state.loading) CircularProgressIndicator()
-            state.errorCode?.let { Text(payrollMessage(it)) }
-            OutlinedButton(onClick = onRefresh, enabled = !state.loading) { Text(hiltechText("تحديث", "Refresh")) }
+            state.errorCode?.let { Text(payrollMessage(it), color = MaterialTheme.colorScheme.error) }
             state.payslips?.let { data ->
                 if (data.items.isEmpty()) Text(hiltechText("لا يوجد كشف معتمد متاح حاليًا.", "No released payslip is currently available."))
-                data.items.forEach { slip ->
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(hiltechText("الفترة ", "Period ") + payrollDisplayDate(slip.periodStart) + " — " + payrollDisplayDate(slip.periodEnd),
-                            style = MaterialTheme.typography.titleSmall)
-                        Text(hiltechText("الاستحقاقات: ", "Earnings: ") + slip.gross + " " + slip.currency)
-                        Text(hiltechText("الخصومات: ", "Deductions: ") + slip.deductions + " " + slip.currency)
-                        Text(hiltechText("المستردات: ", "Reimbursements: ") + slip.reimbursements + " " + slip.currency)
-                        Text(hiltechText("الصافي: ", "Net: ") + slip.net + " " + slip.currency,
-                            style = MaterialTheme.typography.titleMedium)
-                        Text(hiltechText("حالة الصرف: ", "Payment status: ") + when (slip.paymentStatus) {
-                            "SUCCESS" -> hiltechText("تم التأكيد من المالية", "Confirmed by Finance")
-                            "FAILED" -> hiltechText("فشل الصرف", "Payment failed")
-                            "RETURNED" -> hiltechText("عاد التحويل", "Transfer returned")
-                            "PENDING" -> hiltechText("قيد التنفيذ", "In progress")
-                            "UNKNOWN" -> hiltechText("نتيجة التحويل غير محسومة", "Transfer outcome is unknown")
-                            "PAYMENT_NOT_RECORDED" -> hiltechText("لم تُسجّل نتيجة صرف بعد", "No payment result has been recorded")
-                            "PAYMENT_STATUS_UNAVAILABLE" -> hiltechText("حالة الصرف غير متاحة الآن", "Payment status is currently unavailable")
-                            "NOT_APPLICABLE" -> hiltechText("لا يوجد مبلغ مطلوب تحويله", "No transfer required")
-                            else -> hiltechText("غير مؤكدة — قيد المراجعة", "Unconfirmed — under review")
-                        })
+                data.items.forEach { slip -> HiltechPanel(Modifier.fillMaxWidth()) {
+                    Text(payrollDisplayDate(slip.periodStart) + " — " + payrollDisplayDate(slip.periodEnd), style = MaterialTheme.typography.titleMedium)
+                    Text(hiltechText("الصافي", "Net"), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(slip.net + " " + slip.currency, style = MaterialTheme.typography.headlineMedium.copy(textDirection = TextDirection.Ltr),
+                        color = MaterialTheme.colorScheme.primary)
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        val values = listOf(hiltechText("الاستحقاقات", "Earnings") to slip.gross,
+                            hiltechText("الخصومات", "Deductions") to slip.deductions,
+                            hiltechText("المستردات", "Reimbursements") to slip.reimbursements)
+                        if (maxWidth >= 640.dp) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            values.forEach { (label, amount) -> HiltechKeyValue(label, "$amount ${slip.currency}", Modifier.weight(1f)) }
+                        } else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            values.forEach { (label, amount) -> HiltechKeyValue(label, "$amount ${slip.currency}") }
+                        }
                     }
-                }
+                    Text(hiltechText("حالة الصرف", "Payment status"), style = MaterialTheme.typography.labelLarge)
+                    HiltechStateTag(payrollPaymentOutcome(slip.paymentStatus), when (slip.paymentStatus) {
+                        "SUCCESS" -> HiltechStateTone.CURRENT
+                        "FAILED", "RETURNED" -> HiltechStateTone.BLOCKED
+                        "PENDING", "UNKNOWN" -> HiltechStateTone.ATTENTION
+                        else -> HiltechStateTone.NEUTRAL
+                    })
+                } }
             }
         }
     }
@@ -231,27 +287,34 @@ fun PayrollRunHistorySection(
     onOpenRun: (String) -> Unit,
     onRefresh: () -> Unit,
     hostOwnsVerticalScroll: Boolean = false,
+    compact: Boolean = false,
+    selectedRunVersionId: String? = null,
+    selectionEnabled: Boolean = true,
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LocalHiltechLanguage.current.direction) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = if (hostOwnsVerticalScroll) Modifier else Modifier.verticalScroll(rememberScrollState()),
-        ) {
+        if (compact) {
+            if (history?.items?.isNotEmpty() == true) HiltechRecordPicker(
+                hiltechText("نسخة كشف الرواتب", "Payroll version"), selectedRunVersionId.orEmpty(),
+                history.items.map { run -> HiltechRecordChoice(run.runVersionId,
+                    hiltechText("النسخة ${run.generation}", "Version ${run.generation}") + " · " + payrollLifecycleLabel(run.releaseState),
+                    run.net + " " + run.currency + hiltechText(" · ${run.employeeCount} موظفين", " · ${run.employeeCount} employees")) },
+                onChange = onOpenRun, enabled = !loading && selectionEnabled, allowKnownReference = false, allowClear = false,
+            )
+        } else Column(verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = if (hostOwnsVerticalScroll) Modifier else Modifier.verticalScroll(rememberScrollState())) {
             Text(hiltechText("سجل نسخ المرتبات", "Payroll run history"), style = MaterialTheme.typography.titleMedium)
-            OutlinedButton(onClick = onRefresh) { Text(hiltechText("تحديث", "Refresh")) }
+            OutlinedButton(onClick = onRefresh, enabled = !loading) { Text(hiltechText("تحديث", "Refresh")) }
             if (loading) CircularProgressIndicator()
             if (history?.items?.isEmpty() == true) Text(hiltechText("لم تُجهّز نسخ لهذه الفترة.", "No run has been prepared for this period."))
-            history?.items?.forEach { run ->
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(hiltechText("النسخة ", "Version ") + run.generation +
-                        " — " + payrollLifecycleLabel(run.releaseState), style = MaterialTheme.typography.titleSmall)
-                    Text(hiltechText("صافي ", "Net ") + run.net + " " + run.currency +
-                        hiltechText(" | عدد الموظفين ", " | Employees ") + run.employeeCount)
-                    OutlinedButton(onClick = { onOpenRun(run.runVersionId) }) {
-                        Text(hiltechText("فتح نسخة التشغيل", "Open run"))
-                    }
+            history?.items?.forEach { run -> HiltechPanel(Modifier.fillMaxWidth()) {
+                Text(hiltechText("النسخة ", "Version ") + run.generation + " · " + payrollLifecycleLabel(run.releaseState),
+                    style = MaterialTheme.typography.titleSmall)
+                Text(hiltechText("صافي ", "Net ") + run.net + " " + run.currency +
+                    hiltechText(" · عدد الموظفين ", " · Employees ") + run.employeeCount)
+                OutlinedButton(onClick = { onOpenRun(run.runVersionId) }, enabled = !loading && selectionEnabled) {
+                    Text(hiltechText("فتح نسخة التشغيل", "Open run"))
                 }
-            }
+            } }
         }
     }
 }

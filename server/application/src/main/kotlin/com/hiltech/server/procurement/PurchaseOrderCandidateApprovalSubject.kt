@@ -105,7 +105,9 @@ class PurchaseOrderCandidateApprovalSubject @Autowired constructor(
             quote.validUntil?.isBefore(LocalDate.now(clock.withZone(ZoneOffset.UTC))) != false ||
             quote.unitPrice.multiply(quote.quantity).add(quote.taxAmount)
                 .setScale(6, RoundingMode.HALF_UP).compareTo(candidate.totalAmount) != 0 ||
-            sourcing.latestTechnicalAssessments(candidate.rfqId)[candidate.quoteId] != "COMPLIANT"
+            sourcing.latestTechnicalAssessments(candidate.rfqId)[candidate.quoteId] != "COMPLIANT" ||
+            candidate.technicalAssessmentId == null ||
+            sourcing.effectiveTechnicalAssessmentId(candidate.quoteId) != candidate.technicalAssessmentId
         ) return false
 
         if (!quote.sourceEvidenceRef.startsWith("evidence:")) return false

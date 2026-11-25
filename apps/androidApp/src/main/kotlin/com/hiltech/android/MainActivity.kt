@@ -318,6 +318,9 @@ class MainActivity : ComponentActivity() {
             val serviceEvidence = remember(workspaceApi) {
                 hiltechApplication.evidenceApiForSession(workspaceApi)
             }
+            val sessionCash = remember(workspaceApi) {
+                com.hiltech.shared.core.finance.FinancePhysicalCashApiClient(workspaceApi)
+            }
             val stockPurchasing = remember(workspaceApi, serviceEvidence) {
                 com.hiltech.shared.core.procurement.StockPurchasingNativeClients(workspaceApi, serviceEvidence)
             }
@@ -503,6 +506,18 @@ class MainActivity : ComponentActivity() {
                                 },
                             ))
                         }
+                        if (operationAvailable(ProductOperation.PROCUREMENT_SOURCING)) {
+                            add(com.hiltech.shared.core.procurement.supplierTechnicalReviewNativeWorkspace(
+                                client = stockPurchasing.technical,
+                                evidence = serviceEvidence,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = hiltechApplication.installationId,
+                                newOperationId = { UUID.randomUUID().toString() },
+                                pickDocument = { serviceDocuments.pickDocument() },
+                                onReauthenticate = ::startReauthentication,
+                            ))
+                        }
                         if (operationAvailable(ProductOperation.COMMERCIAL)) {
                             add(commercialReadNativeWorkspace(
                                 client = hiltechApplication.commercialApi,
@@ -560,7 +575,8 @@ class MainActivity : ComponentActivity() {
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
-                                api = hiltechApplication.financeEvidenceReadApis.cash,
+                                api = sessionCash,
+                                onOpenCompanySettings = { companySettingsFocusRequest += 1 },
                                 newOperationId = { UUID.randomUUID().toString() },
                             ))
                         }
@@ -846,6 +862,21 @@ class MainActivity : ComponentActivity() {
                                                     operationAvailable(ProductOperation.PROCUREMENT_PO_CANDIDATES)
                                                 },
                                                 purchaseApprovalRequestEnabled = operationAvailable(ProductOperation.PROCUREMENT_APPROVAL_REQUEST),
+                                                technicalPacketEditor = { quoteId, close, changed ->
+                                                    com.hiltech.shared.core.procurement.SupplierTechnicalPacketEditor(
+                                                        client = stockPurchasing.technical,
+                                                        evidence = serviceEvidence,
+                                                        quoteId = quoteId,
+                                                        identityId = requireNotNull(employeeIdentity).identityId,
+                                                        organizationId = organization.organizationId,
+                                                        installationId = hiltechApplication.installationId,
+                                                        newOperationId = { UUID.randomUUID().toString() },
+                                                        pickDocument = { serviceDocuments.pickDocument() },
+                                                        onReauthenticate = ::startReauthentication,
+                                                        onClose = close,
+                                                        onChanged = changed,
+                                                    )
+                                                },
                                                 quoteDocumentUploader = stockPurchasing.quoteDocuments,
                                                 pickQuoteFile = {
                                                     serviceDocuments.pickDocument()?.let { file ->

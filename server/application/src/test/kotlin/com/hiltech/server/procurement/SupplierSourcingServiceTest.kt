@@ -20,6 +20,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
+import org.springframework.beans.factory.support.StaticListableBeanFactory
+import org.springframework.http.HttpStatus
 import java.math.BigDecimal
 import java.time.Clock
 import java.time.Instant
@@ -46,6 +48,8 @@ class SupplierSourcingServiceTest {
     private val stock = Mockito.mock(StockLedgerPersistence::class.java)
     private val auth = Mockito.mock(SupplierSourcingAuthorizationPort::class.java)
     private val reviewerAuth = Mockito.mock(SupplierQuoteTechnicalReviewerAuthorizationPort::class.java)
+    private val technicalSource = Mockito.mock(SupplierTechnicalAssessmentSourcePort::class.java)
+    private val packetId = UUID.randomUUID()
     private val quoteDocumentVerification = Mockito.mock(SupplierQuoteDocumentVerificationPort::class.java)
     private var capturedReview: SupplierQuoteTechnicalAssessmentRecord? = null
     private val audit = Mockito.mock(AuditEventWriter::class.java)
@@ -77,6 +81,7 @@ class SupplierSourcingServiceTest {
     private fun service(enabled: Boolean = true) = SupplierSourcingService(
         sourcing, requirements, work, stock, auth, reviewerAuth, quoteDocumentVerification, commands, audit,
         Clock.fixed(at, ZoneOffset.UTC), enabled,
+        technicalSourceProvider = StaticListableBeanFactory(mapOf("technicalSource" to technicalSource)).getBeanProvider(SupplierTechnicalAssessmentSourcePort::class.java),
     )
 
     private fun allow() {
@@ -347,7 +352,7 @@ class SupplierSourcingServiceTest {
         allow()
         service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
         val cmd = RecordSupplierQuoteTechnicalAssessmentRequest(
-            UUID.randomUUID(), 1, "COMPLIANT", "Matches the specified cable",
+            UUID.randomUUID(), 1, "COMPLIANT", "Matches the specified cable", packetId, true,
         )
         val receipt = service().recordTechnicalAssessment(
             ProcurementDraftContext(cmd.operationId, actor, "review-test"),
@@ -357,6 +362,9 @@ class SupplierSourcingServiceTest {
         assertEquals(1, receipt.reviewRevision)
         assertEquals("COMPLIANT", capturedReview?.decision)
         assertEquals(org, capturedReview?.organizationId)
+        assertEquals(packetId, capturedReview?.technicalPacketId)
+        assertEquals(true, capturedReview?.packetReviewed)
+        Mockito.verify(technicalSource).requireCurrentAssessment(actor, supplierQuoteId, packetId, true, "COMPLIANT")
 
         Mockito.`when`(reviewerAuth.canReviewQuote(actor, org, rfqId)).thenReturn(false)
         val denied = cmd.copy(operationId = UUID.randomUUID())
@@ -366,6 +374,18 @@ class SupplierSourcingServiceTest {
                 supplierQuoteId, denied,
             )
         }.code)
+    }
+
+    @Test fun canonicalTechnicalAssessmentRouteCannotBypassPacketSourceGuard() {
+        allow()
+        service().openRfq(context, requirementId, OpenSupplierRfqRequest(op, 3))
+        Mockito.doThrow(ProductApiException("SUPPLIER_TECHNICAL_PACKET_REQUIRED", "A packet is required", HttpStatus.CONFLICT))
+            .`when`(technicalSource).requireCurrentAssessment(actor, supplierQuoteId, null, false, "COMPLIANT")
+        val cmd = RecordSupplierQuoteTechnicalAssessmentRequest(UUID.randomUUID(), 1, "COMPLIANT", "Unsupported direct approval attempt")
+        assertEquals("SUPPLIER_TECHNICAL_PACKET_REQUIRED", assertThrows<ProductApiException> {
+            service().recordTechnicalAssessment(ProcurementDraftContext(cmd.operationId, actor, "packet-required"), supplierQuoteId, cmd)
+        }.code)
+        assertEquals(null, capturedReview)
     }
 
     @Test fun technicalReviewRequiresUnchangedSourceSequentialRevisionAndJustification() {

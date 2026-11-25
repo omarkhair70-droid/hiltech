@@ -1,5 +1,7 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -101,7 +103,7 @@ class PurchaseOrderDeliveryAmendmentService @Autowired constructor(
     private val clock: Clock,
     @Value("\${hiltech.procurement.po.delivery-amendments.enabled:false}")
     private val enabled: Boolean = false,
-    @Value("\${hiltech.procurement.po.delivery-amendment-policy-key:}")
+    @Value("\${hiltech.procurement.po.delivery-amendment-policy-key:PROCUREMENT_PO_DELIVERY_REVIEW}")
     private val policyKey: String = "",
 ) {
     fun destinations(
@@ -359,7 +361,7 @@ class PurchaseOrderDeliveryAmendmentService @Autowired constructor(
     }
 
     private fun requirePolicyKey(): String {
-        val value = policyKey.trim()
+        val value = CompanyReviewPolicyKeys.resolve(policyKey, "hiltech.procurement.po.delivery-amendment-policy-key")
         if (!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(value)) unavailable()
         return value
     }

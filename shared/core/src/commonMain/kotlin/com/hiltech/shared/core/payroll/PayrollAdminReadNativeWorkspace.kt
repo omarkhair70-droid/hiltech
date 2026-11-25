@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.NativeOperationalWorkspace
 import com.hiltech.shared.core.design.hiltechText
+import com.hiltech.shared.core.design.HiltechPanel
 import com.hiltech.shared.core.network.HiltechApiException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -59,6 +60,7 @@ fun payrollAdminReadNativeWorkspace(
             var finance by remember(identityId, organizationId, installationId) { mutableStateOf<PayrollRunFinanceStatusDto?>(null) }
             var approval by remember(identityId, organizationId, installationId) { mutableStateOf<PayrollApprovalResultDto?>(null) }
             var release by remember(identityId, organizationId, installationId) { mutableStateOf<PayrollReleaseResultDto?>(null) }
+            var handoff by remember(identityId, organizationId, installationId) { mutableStateOf<PayrollFinanceHandoffResultDto?>(null) }
             var loading by remember(identityId, organizationId, installationId) { mutableStateOf(false) }
             var error by remember(identityId, organizationId, installationId) { mutableStateOf<String?>(null) }
             var sourceError by remember(identityId, organizationId, installationId) { mutableStateOf<String?>(null) }
@@ -203,6 +205,7 @@ fun payrollAdminReadNativeWorkspace(
                             is PayrollNativeAction.HandoffRun -> {
                                 val result = requireNotNull(runClient).handoffToFinanceReview(action.runId, command.operationId, installationId)
                                 check(result.runVersionId == action.runId && !result.bankExecutionAvailable)
+                                handoff = result
                             }
                         }
                         if (commands.succeed(command)) { success = true; refresh++ }
@@ -279,7 +282,8 @@ fun payrollAdminReadNativeWorkspace(
                     else {
                         PayrollRunHistorySection(history, loading,
                             onOpenRun = { if (!locked) { selectedRunId = it; approval = null; release = null } },
-                            onRefresh = { refresh++ }, hostOwnsVerticalScroll = true)
+                            onRefresh = { refresh++ }, hostOwnsVerticalScroll = true, compact = true,
+                            selectedRunVersionId = run?.runVersionId, selectionEnabled = !locked)
                         PayrollRunReviewSection(PayrollRunReviewUiState(
                             loading = loading || commands.busy, commandLocked = commands.locked || runError != null, run = run, errorCode = runError,
                             releaseState = history?.items?.firstOrNull { it.runVersionId == run?.runVersionId }?.releaseState ?: "NOT_RELEASED",
@@ -297,8 +301,21 @@ fun payrollAdminReadNativeWorkspace(
                         val currentRun = run
                         if (currentRun != null && capabilities?.canReview == true && finance?.publicationApproved == true && newOperationId != null) {
                             if (capabilities?.financeHandoffAvailable == false) Text(payrollMessage("PAYROLL_FINANCE_HANDOFF_PAUSED"))
-                            OutlinedButton(onClick = { submit(PayrollNativeAction.HandoffRun(currentRun.runVersionId, currentRun.payrollPeriodId)) }, enabled = !locked && capabilities?.financeHandoffAvailable == true) {
-                                Text(hiltechText("إرسال النسخة المعتمدة للمراجعة المالية", "Send the released run to Finance review"))
+                            val recordedHandoff = handoff?.takeIf { it.runVersionId == currentRun.runVersionId }
+                            HiltechPanel(Modifier.fillMaxWidth()) {
+                                Text(hiltechText("التسليم للمالية", "Finance handoff"), style = MaterialTheme.typography.titleMedium)
+                                if (recordedHandoff == null) OutlinedButton(onClick = {
+                                    submit(PayrollNativeAction.HandoffRun(currentRun.runVersionId, currentRun.payrollPeriodId))
+                                }, enabled = !locked && capabilities?.financeHandoffAvailable == true) {
+                                    Text(hiltechText("إرسال النسخة المعتمدة للمراجعة المالية", "Send the released run to Finance review"))
+                                } else {
+                                    Text(hiltechText("تم تأكيد استلام المالية لهذه النسخة.", "Finance receipt of this version is confirmed."),
+                                        color = MaterialTheme.colorScheme.primary)
+                                    Text(hiltechText("${recordedHandoff.employeeCount} موظفين · ${recordedHandoff.transferCandidates} مبالغ تحتاج تحويلًا",
+                                        "${recordedHandoff.employeeCount} employees · ${recordedHandoff.transferCandidates} transfers required"))
+                                    Text(hiltechText("صافي الدفعة: ", "Batch net: ") + recordedHandoff.payableTotal + " " + recordedHandoff.currency,
+                                        style = MaterialTheme.typography.titleSmall)
+                                }
                             }
                         }
                     }

@@ -47,6 +47,8 @@ data class SupplierQuoteComparisonRow(
     val evidenceSha256: String,
     val technicalCompliance: String,
     val issues: List<String>,
+    val supplierName: String? = null,
+    val supplierCode: String? = null,
 )
 
 data class SupplierQuoteComparison(

@@ -6,6 +6,7 @@ import java.util.UUID
 
 /** Technical assessment is not a purchasing approval or a supplier award. */
 interface SupplierQuoteTechnicalReviewerAuthorizationPort {
+    fun canReviewOrganization(actor: UUID, organizationId: UUID): Boolean = false
     fun canReviewQuote(actor: UUID, organizationId: UUID, rfqId: UUID): Boolean
 }
 
@@ -20,6 +21,8 @@ data class RecordSupplierQuoteTechnicalAssessmentRequest(
     val expectedReviewRevision: Int,
     val decision: String,
     val justification: String,
+    val technicalPacketId: UUID? = null,
+    val packetReviewed: Boolean = false,
 )
 
 data class SupplierQuoteTechnicalTarget(
@@ -40,7 +43,14 @@ data class SupplierQuoteTechnicalAssessmentRecord(
     val reviewedBy: UUID,
     val reviewedAt: Instant,
     val correlationId: String,
+    val technicalPacketId: UUID? = null,
+    val packetReviewed: Boolean = false,
 )
+
+/** Called inside the canonical RFQ lock, including the original assessment API. */
+interface SupplierTechnicalAssessmentSourcePort {
+    fun requireCurrentAssessment(actor: UUID, quoteId: UUID, packetId: UUID?, packetReviewed: Boolean, decision: String)
+}
 
 data class SupplierQuoteTechnicalAssessmentReceipt(
     val id: UUID,

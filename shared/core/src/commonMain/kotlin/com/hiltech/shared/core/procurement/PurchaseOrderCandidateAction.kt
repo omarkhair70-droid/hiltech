@@ -160,6 +160,7 @@ fun PurchaseOrderCandidateAction(
 
 @Composable
 private fun purchaseCandidateBlocker(code: String): String = when (code) {
+    "TECHNICAL_ASSESSMENT_REQUIRED" -> hiltechText("يلزم استكمال المراجعة الفنية الحالية", "Complete the current technical review.")
     "CANDIDATE_REVIEW_PENDING" -> hiltechText("المقترح الحالي ينتظر قرار المراجع. حدّث الحالة بعد صدور القرار.", "The current proposal is waiting for a review decision. Refresh after the decision.")
     "PURCHASE_ORDER_ALREADY_ISSUED" -> hiltechText("صدر أمر شراء لهذا الطلب. تابع التوريد أو التصحيح من سجل أمر الشراء.", "A purchase order was issued. Continue delivery or correction from its order record.")
     "SOURCE_NOT_CURRENT", "PROCUREMENT_PO_CANDIDATE_STALE", "PROCUREMENT_PO_CANDIDATE_SOURCE_CHANGED", "PROCUREMENT_APPROVAL_SOURCE_CHANGED" -> hiltechText("تغيّر الاحتياج أو المقترح. حدّث المقارنة وحدد النسخة الحالية.", "The requirement or proposal changed. Refresh the comparison and select the current revision.")

@@ -95,14 +95,18 @@ class DatabaseMigrationContractTest {
         val versionNumbers = Files.list(Path.of(migrationPath)).use { entries ->
             entries.filter { file ->
                 Files.isRegularFile(file) &&
-                    Regex("^V[0-9]+__.+[.]sql$").matches(file.fileName.toString())
+                    Regex("^V[0-9]{4}(?:_[1-9][0-9]*)?__.+[.]sql$").matches(file.fileName.toString())
             }.map { file ->
-                file.fileName.toString().substringAfter("V")
-                    .substringBefore("__").toInt()
-            }.sorted().toList()
+                val parts = file.fileName.toString().substringAfter("V").substringBefore("__").split("_")
+                parts[0].toInt() to (parts.getOrNull(1)?.toInt() ?: 0)
+            }.toList().sortedWith(compareBy({ it.first }, { it.second }))
         }
         assertTrue(versionNumbers.isNotEmpty())
-        assertEquals((1..versionNumbers.last()).toList(), versionNumbers)
+        assertEquals(versionNumbers.distinct(), versionNumbers)
+        assertEquals((1..versionNumbers.last().first).toList(), versionNumbers.filter { it.second == 0 }.map { it.first })
+        versionNumbers.groupBy { it.first }.values.forEach { revisions ->
+            assertEquals((0..revisions.last().second).toList(), revisions.map { it.second })
+        }
         assertEquals(versionNumbers.size - priorSliceResult.migrationsExecuted,
             result.migrationsExecuted)
 

@@ -39,26 +39,30 @@ class PayrollReviewPolicyService @Autowired constructor(
     private val approvalEngine: ApprovalEngineService? = null,
     private val payrollPolicy: PayrollRunPolicyConfiguration = PayrollRunPolicyConfiguration("PAYROLL_RUN_REVIEW"),
     private val procurementPolicy: ProcurementReviewPolicyConfiguration = ProcurementReviewPolicyConfiguration("PROCUREMENT_PO_REVIEW"),
+    workflowConfiguration: CompanyReviewWorkflowConfiguration? = null,
 ) {
+    private val workflows = workflowConfiguration ?: CompanyReviewWorkflowConfiguration(null, payrollPolicy, procurementPolicy)
     fun current(actor: UUID, organizationId: UUID, workflow: CompanyReviewWorkflow): PayrollReviewSetupResponse {
         requireAuthority(actor, organizationId)
         val now = clock.instant()
         val state = persistence.current(organizationId, workflow, now)
-        val protectedAuthority = state.policy?.authorityKey?.let { it != workflow.authorityKey } == true
+        val legacyAuthority = state.policy?.authorityKey?.let { it != workflows.authorityKey(workflow) } == true
+        val group = workflows.group(workflow)
         val ready = state.policy?.let { it.current && it.contractMatches } == true && state.reviewer?.current == true &&
             persistence.reviewerIdentities(organizationId, workflow, requireNotNull(state.reviewer), now)
-                .any { reviewers.canReview(workflow, it, organizationId) }
+                .any { reviewer -> group.all { reviewers.canReview(it, reviewer, organizationId) } }
         return PayrollReviewSetupResponse(
             organizationId.toString(), when {
-                protectedAuthority -> "PROTECTED_EXISTING_AUTHORITY"
+                state.configurationBlockedReason != null -> "EXTERNAL_CONFIGURATION_DEPENDENCY"
+                legacyAuthority -> "LEGACY_AUTHORITY_PRESERVED"
                 ready -> "READY"
                 state.policy == null -> "NOT_CONFIGURED"
                 state.policy.contractMatches && state.policy.current -> "REVIEWER_UNAVAILABLE"
                 else -> "POLICY_REPAIR_REQUIRED"
             }, state.policy?.id?.toString(), state.policy?.revision, state.policy?.version,
             state.reviewer?.id?.toString(), state.reviewer?.version, state.reviewer?.principalType,
-            state.reviewer?.displayName, state.reviewer?.employeeId?.toString(), state.pendingReviews, now.toString(), workflow.name, !protectedAuthority,
-            state.pendingPolicies,
+            state.reviewer?.displayName, state.reviewer?.employeeId?.toString(), state.pendingReviews, now.toString(), workflow.name, state.configurationBlockedReason == null,
+            state.pendingPolicies, group.map { it.name }, legacyAuthority, state.configurationBlockedReason,
         )
     }
 
@@ -66,7 +70,8 @@ class PayrollReviewPolicyService @Autowired constructor(
         requireAuthority(actor, organizationId)
         if (query.length > 120 || limit !in 1..100) throw invalid("REVIEWER_SEARCH_INVALID", "The reviewer search is invalid.")
         val rows = persistence.candidates(organizationId, workflow, query.trim(), clock.instant(), limit + 1)
-        val visible = rows.filter { reviewers.canReview(workflow, it.identityId, organizationId) }
+        val group = workflows.group(workflow)
+        val visible = rows.filter { candidate -> group.all { reviewers.canReview(it, candidate.identityId, organizationId) } }
         return PayrollReviewerCandidatesResponse(visible.take(limit).map { row ->
             PayrollReviewerCandidateResponse(row.employeeId.toString(), row.identityId.toString(), row.employeeVersion, row.displayName, row.employeeCode)
         }, rows.size > limit)
@@ -91,12 +96,15 @@ class PayrollReviewPolicyService @Autowired constructor(
             put("bindingId", command.expectedBindingId?.toString())
             command.expectedBindingVersion?.let { put("bindingVersion", it) }
             put("pendingPoliciesToSupersede", buildJsonArray {
-                command.pendingPoliciesToSupersede.sortedBy { it.policyId }.forEach { pending -> add(buildJsonObject {
+                normalizedPending(command.pendingPoliciesToSupersede, command.workflow).forEach { pending -> add(buildJsonObject {
                     put("policyId", pending.policyId); put("policyRevision", pending.policyRevision)
                     put("policyVersion", pending.policyVersion); put("pendingReviews", pending.pendingReviews)
+                    put("workflow", pending.workflow)
                 }) }
             })
             put("supersedeReason", command.supersedeReason?.trim())
+            put("affectedWorkflowsToConfirm", buildJsonArray { command.affectedWorkflowsToConfirm.sorted().forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
+            put("legacyAuthorityReplacementConfirmed", command.legacyAuthorityReplacementConfirmed)
         }.toString())
         val execution = commands.execute(IdempotentCommandSpec(
             command.operationId, command.actorUserId, "CONFIGURE_COMPANY_REVIEW_WORKFLOW", "ORGANIZATION",
@@ -107,8 +115,17 @@ class PayrollReviewPolicyService @Autowired constructor(
             requireAuthority(command.actorUserId, command.organizationId)
             val now = clock.instant()
             val previous = persistence.current(command.organizationId, command.workflow, now)
-            if (previous.policy?.authorityKey?.let { it != command.workflow.authorityKey } == true) {
-                throw conflict("REVIEW_WORKFLOW_PROTECTED_AUTHORITY", "The existing workflow uses separately governed approval authority and cannot be replaced by this bounded setup.")
+            val group = workflows.group(command.workflow)
+            if (previous.configurationBlockedReason != null) {
+                throw conflict("REVIEW_WORKFLOW_EXTERNAL_DEPENDENCY", "The installed review route also serves a source outside this bounded setup and must be reconciled before replacement.")
+            }
+            val legacyAuthority = previous.policy?.authorityKey?.let { it != workflows.authorityKey(command.workflow) } == true
+            if ((group.size > 1 || command.affectedWorkflowsToConfirm.isNotEmpty()) &&
+                command.affectedWorkflowsToConfirm.sorted() != group.map { it.name }.sorted()) {
+                throw conflict("REVIEW_WORKFLOW_GROUP_CONFIRMATION_REQUIRED", "Confirm every current workflow sharing this review route before replacement.")
+            }
+            if (legacyAuthority && !command.legacyAuthorityReplacementConfirmed) {
+                throw conflict("REVIEW_WORKFLOW_LEGACY_CONFIRMATION_REQUIRED", "Confirm the new dedicated reviewer for this workflow; the unrelated legacy authority will be preserved.")
             }
             if (previous.policy?.id != command.expectedPolicyId || previous.policy?.version != command.expectedPolicyVersion ||
                 previous.reviewer?.id != command.expectedBindingId || previous.reviewer?.version != command.expectedBindingVersion) {
@@ -116,17 +133,17 @@ class PayrollReviewPolicyService @Autowired constructor(
             }
             val reviewer = persistence.candidate(command.organizationId, command.workflow, command.reviewerEmployeeId, command.expectedReviewerIdentityId, now)
             if (reviewer == null || reviewer.employeeVersion != command.baseEmployeeVersion ||
-                !reviewers.canReview(command.workflow, reviewer.identityId, command.organizationId)) {
+                !group.all { reviewers.canReview(it, reviewer.identityId, command.organizationId) }) {
                 throw conflict("PAYROLL_REVIEWER_CHANGED", "The selected employee account or domain review responsibility is no longer current.")
             }
-            val unchanged = previous.policy?.let { it.current && it.contractMatches } == true &&
+            val unchanged = !legacyAuthority && previous.policy?.let { it.current && it.contractMatches } == true &&
                 previous.reviewer?.let { it.current && it.principalType == "USER" && it.principalId == reviewer.identityId } == true
             if (!unchanged) {
                 if (previous.pendingReviews > 0 && (previous.pendingPolicies.isEmpty() ||
                     previous.pendingPolicies.sumOf { it.pendingReviews } != previous.pendingReviews)) {
                     throw conflict("APPROVAL_POLICY_PENDING_CHANGED", "Refresh the exact pending policy versions before replacing the reviewer.")
                 }
-                if (command.pendingPoliciesToSupersede.sortedBy { it.policyId } != previous.pendingPolicies.sortedBy { it.policyId }) {
+                if (normalizedPending(command.pendingPoliciesToSupersede, command.workflow) != normalizedPending(previous.pendingPolicies, command.workflow)) {
                     throw conflict("APPROVAL_POLICY_PENDING_CONFIRMATION_REQUIRED", "Review and confirm the exact pending policy versions affected by this change.")
                 }
                 if (previous.pendingPolicies.isNotEmpty()) {
@@ -135,19 +152,17 @@ class PayrollReviewPolicyService @Autowired constructor(
                         throw invalid("APPROVAL_POLICY_MAINTENANCE_REASON_REQUIRED", "A reason is required to end pending reviews before replacing the reviewer.")
                     }
                     val engine = approvalEngine ?: throw conflict("APPROVAL_POLICY_MAINTENANCE_UNAVAILABLE", "Review workflow maintenance is unavailable.")
-                    val key = when (command.workflow) {
-                        CompanyReviewWorkflow.PAYROLL_RUN -> payrollPolicy.key
-                        CompanyReviewWorkflow.PROCUREMENT_PO -> procurementPolicy.key
-                        else -> command.workflow.policyKey
-                    }
-                    previous.pendingPolicies.sortedBy { it.policyId }.forEach { pending ->
+                    val key = workflows.key(command.workflow)
+                    normalizedPending(previous.pendingPolicies, command.workflow).forEach { pending ->
+                        val sourceWorkflow = group.singleOrNull { it.name == pending.workflow }
+                            ?: throw conflict("REVIEW_WORKFLOW_EXTERNAL_DEPENDENCY", "A pending source is outside the confirmed workflow group.")
                         val policyId = runCatching { UUID.fromString(pending.policyId) }.getOrElse {
                             throw invalid("APPROVAL_POLICY_MAINTENANCE_INVALID", "A pending policy identifier is invalid.")
                         }
                         engine.supersedePolicyRequests(command.actorUserId,
-                            UUID.nameUUIDFromBytes("company-review-maintenance:${command.operationId}:$policyId".toByteArray(Charsets.UTF_8)),
+                            UUID.nameUUIDFromBytes("company-review-maintenance:${command.operationId}:$policyId:${sourceWorkflow.name}".toByteArray(Charsets.UTF_8)),
                             ApprovalPolicyMaintenanceScope(command.organizationId, policyId, key, pending.policyRevision,
-                                pending.policyVersion, command.workflow.subjectType, pending.pendingReviews), reason, command.correlationId)
+                                pending.policyVersion, sourceWorkflow.subjectType, pending.pendingReviews), reason, command.correlationId)
                     }
                 }
             }
@@ -178,6 +193,9 @@ class PayrollReviewPolicyService @Autowired constructor(
             execution.replayed, command.workflow.name)
     }
 
+    private fun normalizedPending(scopes: List<CompanyPendingReviewPolicy>, fallback: CompanyReviewWorkflow): List<CompanyPendingReviewPolicy> =
+        scopes.map { it.copy(workflow = it.workflow ?: fallback.name) }.sortedWith(compareBy({ it.policyId }, { it.workflow }))
+
     private fun requireAuthority(actor: UUID, organizationId: UUID) {
         if (!authority.canManageApprovalPolicies(actor, organizationId)) throw ProductApiException(
             "APPROVAL_POLICY_ADMINISTRATION_DENIED", "Current approval workflow setup authority is required.", HttpStatus.FORBIDDEN,
@@ -193,6 +211,7 @@ class DomainCompanyReviewCandidateAuthority @Autowired constructor(
     private val finance: FinancePayrollAuthorityPort,
     private val procurement: ProcurementCandidateReviewEligibilityPort? = null,
     private val service: ServiceDeliveryReviewEligibilityPort? = null,
+    private val company: CompanyEmployeeReviewEligibilityPort? = null,
 ) : CompanyReviewCandidateAuthorityPort {
     override fun canReview(workflow: CompanyReviewWorkflow, actor: UUID, organizationId: UUID): Boolean = when (workflow) {
         CompanyReviewWorkflow.PAYROLL_SOURCE -> payroll.canReview(actor, organizationId)
@@ -200,5 +219,6 @@ class DomainCompanyReviewCandidateAuthority @Autowired constructor(
         CompanyReviewWorkflow.FINANCE_PAYROLL_RESULT -> finance.canReview(actor, organizationId)
         CompanyReviewWorkflow.PROCUREMENT_PO -> procurement?.isEligible(actor, organizationId) == true
         CompanyReviewWorkflow.SERVICE_HANDOVER, CompanyReviewWorkflow.SERVICE_WARRANTY -> service?.isEligible(actor, organizationId) == true
+        else -> company?.isEligible(actor, organizationId) == true
     }
 }

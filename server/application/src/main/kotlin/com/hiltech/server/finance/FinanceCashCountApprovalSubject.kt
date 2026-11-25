@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -60,9 +62,7 @@ class FinanceCashCountApprovalSubject(
      "hiltech.finance.cashbox.enabled",Boolean::class.java,false) &&
    environment.getProperty(
      "hiltech.finance.cashbox.count-enabled",Boolean::class.java,false)
- fun policyKey():String?=environment.getProperty(
-   "hiltech.finance.cashbox.count-policy-key",""
- ).trim().takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
+ fun policyKey():String?=CompanyReviewPolicyKeys.resolve(environment, "hiltech.finance.cashbox.count-policy-key").takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
 
  fun current(org:UUID,id:UUID):FinanceCashCountVerified? {
    if(!enabled())return null

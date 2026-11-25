@@ -293,7 +293,7 @@ internal fun nativeWorkspaceGroup(id: String): NativeWorkspaceGroup = when {
     id.startsWith("commercial") -> NativeWorkspaceGroup.Sales
     id.startsWith("project-") -> NativeWorkspaceGroup.Projects
     id.startsWith("handover") || id.startsWith("service-operations") -> NativeWorkspaceGroup.Delivery
-    id.contains("purchase") || id.contains("procurement") || id == "supplier-registry" -> NativeWorkspaceGroup.Purchasing
+    id.contains("purchase") || id.contains("procurement") || id.startsWith("supplier-") -> NativeWorkspaceGroup.Purchasing
     else -> NativeWorkspaceGroup.Other
 }
 
@@ -304,6 +304,7 @@ internal fun nativeWorkspaceTitle(workspace: NativeOperationalWorkspace, languag
         "payroll-admin-read" -> "إدارة الرواتب" to "Payroll administration"
         "company-administration" -> "إدارة الشركة" to "Company administration"
         "supplier-registry" -> "سجل الموردين" to "Supplier register"
+        "supplier-technical-review" -> "المراجعة الفنية للموردين" to "Supplier technical review"
         "service-purchasing" -> "مشتريات الخدمات" to "Service purchasing"
         "commercial-read" -> "المبيعات والمناقصات" to "Sales & tenders"
         "project-planning" -> "المشاريع وخطط التنفيذ" to "Projects & delivery plans"

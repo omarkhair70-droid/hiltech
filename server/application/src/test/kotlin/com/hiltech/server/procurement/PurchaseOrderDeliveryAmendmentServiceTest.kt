@@ -228,7 +228,7 @@ class PurchaseOrderDeliveryAmendmentServiceTest {
         assertEquals(1L, row.baseVersion)
     }
 
-    @Test fun disabledFeatureAndUnconfiguredPolicyCannotRequestOrApplyApproval() {
+    @Test fun disabledFeatureAndMalformedPolicyCannotRequestOrApplyApproval() {
         allowed()
         assertEquals("PROCUREMENT_PO_DELIVERY_AMENDMENT_UNAVAILABLE",
             assertThrows<ProductApiException> {
@@ -237,8 +237,28 @@ class PurchaseOrderDeliveryAmendmentServiceTest {
             }.code)
         assertEquals("PROCUREMENT_PO_DELIVERY_AMENDMENT_UNAVAILABLE",
             assertThrows<ProductApiException> {
-                service(policyKey = "").requestApproval(ctx, proposalId,
+                service(policyKey = "invalid configured policy").requestApproval(ctx, proposalId,
                     RequestPurchaseOrderDeliveryAmendmentApproval(op))
             }.code)
+        Mockito.verifyNoInteractions(approvals)
+    }
+
+    @Test fun blankPolicyUsesCompanyDefaultWithCurrentSourceAndIndependentEngineReview() {
+        allowed()
+        Mockito.`when`(guard.isCurrent(subject)).thenReturn(false)
+        assertEquals("PROCUREMENT_PO_DELIVERY_AMENDMENT_STALE", assertThrows<ProductApiException> {
+            service(policyKey = "").requestApproval(ctx, proposalId, RequestPurchaseOrderDeliveryAmendmentApproval(op))
+        }.code)
+        Mockito.verifyNoInteractions(approvals)
+        Mockito.`when`(guard.isCurrent(subject)).thenReturn(true)
+        val defaultKey = "PROCUREMENT_PO_DELIVERY_REVIEW"
+        Mockito.`when`(approvals.requestException(actor, op, subject, defaultKey, "PROCUREMENT_PO_DELIVERY_CHANGE", null,
+            ctx.correlationId, allowAuthorityBypass = false)).thenReturn(ApprovalRequestResult(true, approvalId,
+            ApprovalRequestState.PENDING, defaultKey, 1, "PROCUREMENT_PO_DELIVERY_REVIEWER", false))
+        val result = service(policyKey = "").requestApproval(ctx, proposalId, RequestPurchaseOrderDeliveryAmendmentApproval(op))
+        assertEquals(defaultKey, result.policyKey)
+        assertEquals("PENDING", result.approvalState)
+        assertEquals(approvalId, result.approvalRequestId)
+        assertEquals(null, applied)
     }
 }

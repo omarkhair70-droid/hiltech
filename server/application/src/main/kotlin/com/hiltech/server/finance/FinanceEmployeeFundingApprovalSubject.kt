@@ -1,5 +1,7 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.approval.CompanyReviewPolicyKeys
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -85,9 +87,7 @@ class FinanceEmployeeFundingApprovalSubject(
     fun enabled():Boolean=environment.getProperty(
         "hiltech.finance.employee-funding.enabled",Boolean::class.java,false,
     )
-    fun policyKey():String?=environment.getProperty(
-        "hiltech.finance.employee-funding.policy-key","",
-    ).trim().takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
+    fun policyKey():String?=CompanyReviewPolicyKeys.resolve(environment, "hiltech.finance.employee-funding.policy-key").takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
 
     fun current(org:UUID,id:UUID):FinanceEmployeeFundingVerified? {
         if(!enabled())return null

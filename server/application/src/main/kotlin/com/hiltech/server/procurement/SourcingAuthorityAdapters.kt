@@ -53,11 +53,14 @@ class CurrentQuoteTechnicalReviewAuthority @Autowired constructor(
     private val technicalAuthorityKey: String = "",
     private val operationalAuthority: OperationalAuthorityPort? = null,
 ) : SupplierQuoteTechnicalReviewerAuthorizationPort {
+    override fun canReviewOrganization(actor: UUID, organizationId: UUID): Boolean = enabled &&
+        currentOperationalAuthority(operationalAuthority, approvals, actor, organizationId,
+            "hiltech.procurement.sourcing.technical-review-authority-key", technicalAuthorityKey, clock.instant()) != null
+
     override fun canReviewQuote(actor: UUID, organizationId: UUID, rfqId: UUID): Boolean {
         if (!enabled) return false
         val rfq = sourcing.rfq(rfqId) ?: return false
         if (rfq.organizationId != organizationId) return false
-        return currentOperationalAuthority(operationalAuthority, approvals, actor, organizationId,
-            "hiltech.procurement.sourcing.technical-review-authority-key", technicalAuthorityKey, clock.instant()) != null
+        return canReviewOrganization(actor, organizationId)
     }
 }

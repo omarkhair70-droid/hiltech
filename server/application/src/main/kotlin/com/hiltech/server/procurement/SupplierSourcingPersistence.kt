@@ -87,6 +87,22 @@ data class SupplierQuoteRecord(
 
 @Repository
 class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
+    /** Names for this organization's recorded quotations, including now-suspended suppliers. */
+    fun supplierNamesForRfq(organizationId: UUID, rfqId: UUID): Map<UUID, Pair<String, String>> = jdbc.query(
+        """
+        SELECT DISTINCT q.supplier_organization_id,
+            coalesce(p.display_name, o.display_name) AS supplier_name,
+            coalesce(p.supplier_code, o.organization_code) AS supplier_code
+        FROM procurement_supplier_quote_evidence q
+        JOIN organization o ON o.id = q.supplier_organization_id
+        LEFT JOIN procurement_supplier_profile p ON p.organization_id = q.organization_id
+            AND p.supplier_organization_id = q.supplier_organization_id
+        WHERE q.organization_id = ? AND q.rfq_id = ?
+        """.trimIndent(),
+        { row, _ -> row.getObject("supplier_organization_id", UUID::class.java) to
+            (row.getString("supplier_name") to row.getString("supplier_code")) }, organizationId, rfqId,
+    ).toMap()
+
     fun insertRfq(record: SupplierRfqRecord) {
         check(jdbc.update(
             """
@@ -371,28 +387,34 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
             INSERT INTO procurement_supplier_quote_technical_assessment (
                 id, operation_id, quote_evidence_id, rfq_id, organization_id,
                 review_revision, decision, justification, reviewed_by_user_id,
-                reviewed_at, correlation_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                reviewed_at, correlation_id, technical_packet_id, packet_reviewed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
             record.id, record.operationId, record.quoteEvidenceId, record.rfqId,
             record.organizationId, record.reviewRevision, record.decision,
             record.justification, record.reviewedBy,
             record.reviewedAt.atOffset(ZoneOffset.UTC), record.correlationId,
+            record.technicalPacketId, record.packetReviewed,
         ) == 1)
     }
 
     /** Restricted buyer projection, latest event per exact quote evidence revision. */
     fun latestTechnicalAssessments(rfqId: UUID): Map<UUID, String> = jdbc.query(
         """
-        SELECT DISTINCT ON (quote_evidence_id) quote_evidence_id, decision
-        FROM procurement_supplier_quote_technical_assessment
+        SELECT quote_evidence_id, decision
+        FROM procurement_effective_quote_technical_assessment
         WHERE rfq_id = ?
-        ORDER BY quote_evidence_id, review_revision DESC
         """.trimIndent(),
         { row, _ ->
             row.getObject("quote_evidence_id", UUID::class.java) to row.getString("decision")
         }, rfqId,
     ).toMap()
+
+    /** Immutable assessment identity, including its exact packet lineage when present. */
+    fun effectiveTechnicalAssessmentId(quoteId: UUID): UUID? = jdbc.query(
+        "SELECT id FROM procurement_effective_quote_technical_assessment WHERE quote_evidence_id=? AND decision='COMPLIANT'",
+        { row, _ -> row.getObject("id", UUID::class.java) }, quoteId,
+    ).singleOrNull()
 
     fun latestRevision(rfqId: UUID, supplierId: UUID): Int = jdbc.query(
         """
