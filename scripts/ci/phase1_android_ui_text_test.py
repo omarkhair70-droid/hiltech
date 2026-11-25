@@ -32,7 +32,19 @@ class AndroidUiTextTest(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertTrue(has_ui_text(dump(text), expected))
         self.assertFalse(has_ui_text(dump("حدث خطأ"), expected))
+        self.assertFalse(has_ui_text(dump("لم يكتمل تسجيل الدخول"), expected))
         self.assertFalse(has_ui_text(dump("Reference: OIDC_STATE_MISMATCH"), expected))
+
+    def test_callback_recovery_requires_its_specific_title_and_action(self):
+        title = ("لم يكتمل تسجيل الدخول", "Sign-in was not completed")
+        action = ("تسجيل الدخول من جديد", "Start sign-in again")
+        for labels in (title, action):
+            for text in labels:
+                with self.subTest(text=text):
+                    self.assertTrue(has_ui_text(dump(text), labels))
+            for unrelated in ("حدث خطأ", "Something went wrong", "تسجيل الدخول", "Sign in", "Retry"):
+                with self.subTest(unrelated=unrelated):
+                    self.assertFalse(has_ui_text(dump(unrelated), labels))
 
     def test_missing_hidden_or_metadata_text_cannot_pass(self):
         expected = ("Sign in",)

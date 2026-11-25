@@ -515,6 +515,30 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 },
+                employeeOnboardingWorkspace = { employee ->
+                    val expectedScope = employeeSessionScope
+                    val expectedEmployeeId = employee.employeeId
+                    val sessionCurrent = {
+                        activePlanningSessionScope() == expectedScope &&
+                            (shellState as? HiltechShellState.SignedIn)?.people?.selectedEmployee?.employeeId == expectedEmployeeId
+                    }
+                    employeeDrafts.SaveableStateProvider("onboarding:$expectedScope:$expectedEmployeeId") {
+                        com.hiltech.shared.core.people.EmployeeOnboardingWorkspace(
+                            employee = employee,
+                            sessionScope = expectedScope,
+                            client = hiltechApplication.onboardingApi,
+                            installationId = hiltechApplication.installationId,
+                            newOperationId = { UUID.randomUUID().toString() },
+                            isSessionCurrent = sessionCurrent,
+                            submitCommand = { intent, unknown, sending ->
+                                hiltechApplication.submitEmployeeOnboarding(intent, unknown, sessionCurrent, sending)
+                            },
+                            onEmployeeChanged = {
+                                if (sessionCurrent()) selectEmployee(expectedEmployeeId)
+                            },
+                        )
+                    }
+                },
                 onRefreshOnboarding =
                     ::refreshOnboarding,
                 onLookupAssetTag = ::lookupAssetTag,

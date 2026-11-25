@@ -56,8 +56,9 @@ adb shell am start -W   -a android.intent.action.VIEW   -c android.intent.catego
 cat /tmp/hiltech-android-callback.out
 
 grep -q "com.hiltech.android/.MainActivity" /tmp/hiltech-android-callback.out
-wait_for_text 30 "حدث خطأ" "Something went wrong"
+wait_for_text 30 "لم يكتمل تسجيل الدخول" "Sign-in was not completed"
 wait_for_text 10 "المرجع: OIDC_ATTEMPT_MISSING" "Reference: OIDC_ATTEMPT_MISSING"
+wait_for_text 10 "تسجيل الدخول من جديد" "Start sign-in again"
 adb exec-out screencap -p > "$REPORT_DIR/android-callback-failure.png"
 test -s "$REPORT_DIR/android-callback-failure.png"
 

@@ -256,7 +256,14 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
      * Latest link event is authoritative: a later INACTIVE event must revoke
      * an earlier ACTIVE event. Never list global suppliers to a buyer.
      */
-    fun eligibleSuppliers(organizationId: UUID): List<SourcingSupplierCandidate> = jdbc.query(
+    fun eligibleSuppliers(organizationId: UUID): List<SourcingSupplierCandidate> =
+        searchEligibleSuppliers(organizationId, "")
+
+    /** Match the literal name before limiting; '%' and '_' are not search wildcards. */
+    fun searchEligibleSuppliers(
+        organizationId: UUID,
+        nameContains: String,
+    ): List<SourcingSupplierCandidate> = jdbc.query(
         """
         SELECT current.supplier_organization_id, current.revision_number, o.display_name
         FROM (
@@ -270,6 +277,7 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
         WHERE current.state = 'ACTIVE'
           AND o.organization_type = 'SUPPLIER'
           AND o.status = 'ACTIVE'
+          AND position(lower(?) in lower(o.display_name)) > 0
         ORDER BY o.display_name, current.supplier_organization_id
         LIMIT 100
         """.trimIndent(),
@@ -277,7 +285,7 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
             row.getObject("supplier_organization_id", UUID::class.java),
             row.getString("display_name"),
             row.getInt("revision_number"),
-        ) }, organizationId,
+        ) }, organizationId, nameContains,
     )
 
     /** Do not use a globally active supplier without a current local link. */

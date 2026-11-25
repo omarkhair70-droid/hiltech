@@ -34,6 +34,7 @@ data class OnboardingRequirementDto(
     val actionCode: String? = null,
     val sourceStateCode: String? = null,
     val sortOrder: Int,
+    val allowedResolutions: List<String> = emptyList(),
 )
 
 @Serializable
@@ -55,6 +56,27 @@ data class OnboardingCaseDto(
     val caseVersion: Long,
     val startedAt: String,
     val activatedAt: String? = null,
+    val canActivate: Boolean = false,
+)
+
+@Serializable
+data class OnboardingPolicyOptionDto(
+    val configRevisionId: String,
+    val code: String,
+    val name: String,
+    val revisionNumber: Int,
+)
+
+@Serializable
+data class OnboardingWorkspaceDto(
+    val employeeId: String,
+    val organizationId: String,
+    val employeeDisplayName: String,
+    val employeeState: String,
+    val employeeVersion: Long,
+    val startAvailability: String,
+    val policies: List<OnboardingPolicyOptionDto>,
+    val currentCase: OnboardingCaseDto? = null,
 )
 
 @Serializable
@@ -62,6 +84,7 @@ data class OnboardingCommandResponseDto(
     val onboarding: OnboardingCaseDto,
     val replayed: Boolean,
     val correlationId: String,
+    val operationId: String? = null,
 )
 
 @Serializable

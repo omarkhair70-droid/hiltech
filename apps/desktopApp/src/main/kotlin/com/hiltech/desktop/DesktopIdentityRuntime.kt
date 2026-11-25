@@ -241,6 +241,21 @@ class DesktopIdentityRuntime(
     internal val onboardingApi =
         OnboardingApiClient(productApi)
 
+    internal suspend fun submitEmployeeOnboarding(
+        intent: com.hiltech.shared.core.people.OnboardingWorkspaceIntent,
+        priorOutcomeUnknown: Boolean,
+        sessionCurrent: () -> Boolean,
+        onCommandSending: () -> Unit,
+    ): com.hiltech.shared.core.people.OnboardingCommandResponseDto {
+        ensureConfigured()
+        return com.hiltech.shared.core.people.submitOnboardingInSession(
+            httpClient, apiBaseUrl, installationId, intent, priorOutcomeUnknown, sessionCurrent,
+            accessToken = { session?.currentAccessToken() },
+            correlationId = { UUID.randomUUID().toString() },
+            onCommandSending = onCommandSending,
+        )
+    }
+
     private val hrDocumentsApi =
         HrDocumentsApiClient(productApi)
 

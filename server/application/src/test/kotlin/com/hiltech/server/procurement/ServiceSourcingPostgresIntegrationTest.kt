@@ -1,6 +1,8 @@
 package com.hiltech.server.procurement
 
 import org.flywaydb.core.Flyway
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -22,15 +24,7 @@ import java.util.UUID
 class ServiceSourcingPostgresIntegrationTest {
     @Test
     fun reviewedTeamServiceCanSourceCurrentSupplierButNeverSkipIndependentApproval() {
-        assumeTrue(System.getenv("HILTECH_DB_CONTRACT_TEST")=="1")
-        val url=System.getenv("HILTECH_DB_URL")?:"jdbc:postgresql://localhost:5432/hiltech"
-        val user=System.getenv("HILTECH_DB_USER")?:"hiltech"
-        val password=System.getenv("HILTECH_DB_PASSWORD")?:"hiltech"
-        val migrations=System.getenv("HILTECH_MIGRATIONS_PATH")?:"database/migrations"
-        val ds=DriverManagerDataSource(url,user,password)
-        Flyway.configure().dataSource(ds).locations("filesystem:"+migrations)
-            .load().migrate()
-        val db=JdbcTemplate(ds)
+        val db=database()
         val org=UUID.randomUUID()
         val supplier=UUID.randomUUID()
         val requester=UUID.randomUUID()
@@ -158,9 +152,109 @@ class ServiceSourcingPostgresIntegrationTest {
             """.trimIndent(),id,UUID.randomUUID(),org,rfq,supplier,reviewer,at,
         )
         slot(UUID.randomUUID())
+        // Selection is not authority: a later supplier-link revocation also
+        // rejects a slot even while the reviewed service source stays current.
+        fun link(revision:Int,state:String) = db.update(
+            """
+            INSERT INTO procurement_supplier_link_event
+             (id,organization_id,supplier_organization_id,revision_number,state,
+              source_reference,recorded_by_user_id,recorded_at,correlation_id)
+             VALUES (?,?,?,?,?,?,?,?,'service-postgres-integration')
+            """.trimIndent(),UUID.randomUUID(),org,supplier,revision,state,
+            "Synthetic supplier lifecycle change",reviewer,at,
+        )
+        val directory=SupplierSourcingPersistence(db)
+        link(2,"INACTIVE")
+        assertTrue(directory.searchEligibleSuppliers(org,"Synthetic").isEmpty())
+        assertFalse(directory.isEligibleSupplier(org,supplier))
+        refused {slot(UUID.randomUUID())}
+        link(3,"ACTIVE")
+        assertEquals(3,directory.searchEligibleSuppliers(org,"Synthetic").single().relationshipRevision)
+        slot(UUID.randomUUID())
         // A later company team revision invalidates the frozen source. No
         // further supplier quote slot can be opened against old approval.
         db.update("UPDATE team SET version=2 WHERE id=?",team)
         refused {slot(UUID.randomUUID())}
+    }
+
+    @Test
+    fun supplierSearchUsesLatestScopedLinksAndFiltersLiteralNamesBeforeLimiting() {
+        val db=database()
+        val at=OffsetDateTime.now(ZoneOffset.UTC)
+        fun organization(name:String,type:String="SUPPLIER",status:String="ACTIVE"):UUID {
+            val id=UUID.randomUUID()
+            db.update(
+                """
+                INSERT INTO organization
+                 (id,organization_code,legal_name,display_name,organization_type,status,created_at)
+                 VALUES (?,?,?,?,?,?,?)
+                """.trimIndent(),id,"TEST-DIRECTORY-"+id,name,name,type,status,at,
+            )
+            return id
+        }
+        val org=organization("Synthetic purchasing organization","HILTECH")
+        val otherOrg=organization("Synthetic other purchasing organization","HILTECH")
+        val recorder=UUID.randomUUID()
+        db.update(
+            """
+            INSERT INTO user_identity
+             (id,auth_provider,auth_subject,status,primary_organization_id,created_at)
+             VALUES (?,?,?,'ACTIVE',?,?)
+            """.trimIndent(),recorder,"PHASE7-TEST","supplier-directory-"+recorder,org,at,
+        )
+        fun link(supplier:UUID,revision:Int=1,state:String="ACTIVE",purchaser:UUID=org) {
+            db.update(
+                """
+                INSERT INTO procurement_supplier_link_event
+                 (id,organization_id,supplier_organization_id,revision_number,state,
+                  source_reference,recorded_by_user_id,recorded_at,correlation_id)
+                 VALUES (?,?,?,?,?,?,?,?,'service-directory-integration')
+                """.trimIndent(),UUID.randomUUID(),purchaser,supplier,revision,state,
+                "Synthetic directory fixture",recorder,at,
+            )
+        }
+        val eligible=organization("Scope Eligible Supplier")
+        val revoked=organization("Scope Revoked Supplier")
+        val inactive=organization("Scope Inactive Supplier",status="INACTIVE")
+        val client=organization("Scope Client Organization",type="CLIENT")
+        val foreign=organization("Scope Foreign Supplier")
+        organization("Scope Unlinked Supplier")
+        listOf(eligible,revoked,inactive,client).forEach { link(it) }
+        link(revoked,2,"INACTIVE")
+        link(foreign,purchaser=otherOrg)
+        val directory=SupplierSourcingPersistence(db)
+
+        assertEquals(listOf(eligible),directory.searchEligibleSuppliers(org,"sCoPe").map { it.supplierOrganizationId })
+        assertEquals(listOf(foreign),directory.searchEligibleSuppliers(otherOrg,"Scope").map { it.supplierOrganizationId })
+        link(revoked,3,"ACTIVE")
+        assertEquals(setOf(eligible,revoked),directory.searchEligibleSuppliers(org,"Scope").map { it.supplierOrganizationId }.toSet())
+        assertEquals(3,directory.searchEligibleSuppliers(org,"Revoked").single().relationshipRevision)
+
+        val literal=organization("Synthetic %_ Supplier")
+        val wildcardLookalike=organization("Synthetic XY Supplier")
+        val arabic=organization("مورد خدمات تجريبي")
+        listOf(literal,wildcardLookalike,arabic).forEach { link(it) }
+        assertEquals(listOf(literal),directory.searchEligibleSuppliers(org,"%_").map { it.supplierOrganizationId })
+        assertEquals(listOf(arabic),directory.searchEligibleSuppliers(org,"خدمات").map { it.supplierOrganizationId })
+
+        repeat(101) { index -> link(organization("Limit A " + index.toString().padStart(3,'0'))) }
+        val last=organization("Limit Z uniquely searchable")
+        link(last)
+        val limited=directory.searchEligibleSuppliers(org,"Limit")
+        assertEquals(100,limited.size)
+        assertFalse(limited.any { it.supplierOrganizationId==last })
+        assertEquals(listOf(last),directory.searchEligibleSuppliers(org,"uniquely").map { it.supplierOrganizationId })
+        assertEquals(100,directory.eligibleSuppliers(org).size)
+    }
+
+    private fun database():JdbcTemplate {
+        assumeTrue(System.getenv("HILTECH_DB_CONTRACT_TEST")=="1")
+        val url=System.getenv("HILTECH_DB_URL")?:"jdbc:postgresql://localhost:5432/hiltech"
+        val user=System.getenv("HILTECH_DB_USER")?:"hiltech"
+        val password=System.getenv("HILTECH_DB_PASSWORD")?:"hiltech"
+        val migrations=System.getenv("HILTECH_MIGRATIONS_PATH")?:"database/migrations"
+        val ds=DriverManagerDataSource(url,user,password)
+        Flyway.configure().dataSource(ds).locations("filesystem:"+migrations).load().migrate()
+        return JdbcTemplate(ds)
     }
 }

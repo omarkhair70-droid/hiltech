@@ -40,6 +40,10 @@ import com.hiltech.shared.core.design.HiltechLanguage
 import com.hiltech.shared.core.design.HiltechLanguageProvider
 import com.hiltech.shared.core.design.HiltechLanguagePreference
 import com.hiltech.shared.core.design.LocalHiltechLanguage
+import com.hiltech.shared.core.identity.IdentityErrorSection
+import com.hiltech.shared.core.identity.IdentityLanguageChoice
+import com.hiltech.shared.core.identity.IdentityRecoveryAction
+import com.hiltech.shared.core.identity.identityErrorPresentation
 import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.design.HiltechPanel
 import com.hiltech.shared.core.design.HiltechStateTag
@@ -295,6 +299,7 @@ fun HiltechShell(
     peopleOffboardingAvailable: Boolean = true,
     inboxWorkspace: (@Composable () -> Unit)? = null,
     employeeAccountWorkspace: (@Composable (EmployeeDetailDto) -> Unit)? = null,
+    employeeOnboardingWorkspace: (@Composable (EmployeeDetailDto) -> Unit)? = null,
     desktopFindRequest: Int = 0,
     language: HiltechLanguage = HiltechLanguage.Arabic,
     onLanguageChange: (HiltechLanguage) -> Unit = {},
@@ -441,9 +446,18 @@ fun HiltechShell(
             )
             if (selectedWorkspace == null) {
                 Text(
-                    "Identity / Organization / Permissions",
+                    hiltechText("إدارة أعمال الشركة", "Company operations"),
                     style = MaterialTheme.typography.labelLarge,
                 )
+            }
+
+            when (state) {
+                HiltechShellState.SignedOut,
+                is HiltechShellState.Working,
+                is HiltechShellState.AccessDenied,
+                is HiltechShellState.ConfigurationRequired,
+                is HiltechShellState.Failure -> IdentityLanguageChoice(language, onLanguageChange)
+                else -> Unit
             }
 
             when (state) {
@@ -740,6 +754,7 @@ fun HiltechShell(
                                 onCreateEmployee,
                             offboardingAvailable = peopleOffboardingAvailable,
                             accountWorkspace = employeeAccountWorkspace,
+                            onboardingWorkspace = employeeOnboardingWorkspace,
                             relatedProjects = state.projects?.list?.items.orEmpty().filter { it.organizationId == primary?.organizationId },
                             openRelatedProject = if (useWorkspaceNavigation && ShellWorkspace.Projects in destinations) { projectId ->
                                 nativeSession.close()
@@ -943,39 +958,20 @@ fun HiltechShell(
                     }
                 }
 
-                is HiltechShellState.AccessDenied -> {
-                    Text(
-                        hiltechText("الوصول غير متاح", "Access unavailable"),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(state.message)
-                    Text(hiltechText("المرجع: ", "Reference: ") + state.code)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Button(onClick = onRetry) { Text(hiltechText("حاول مرة أخرى", "Try again")) }
-                        OutlinedButton(onClick = onSignOut) {
-                            Text(hiltechText("تسجيل الخروج", "Sign out"))
+                is HiltechShellState.AccessDenied,
+                is HiltechShellState.ConfigurationRequired,
+                is HiltechShellState.Failure -> {
+                    identityErrorPresentation(state, language)?.let { presentation ->
+                        IdentityErrorSection(presentation) { action ->
+                            when (action) {
+                                IdentityRecoveryAction.SignIn -> onSignIn()
+                                IdentityRecoveryAction.Reauthenticate -> onReauthenticate()
+                                IdentityRecoveryAction.Retry -> onRetry()
+                                IdentityRecoveryAction.SignOut -> onSignOut()
+                                IdentityRecoveryAction.None -> Unit
+                            }
                         }
                     }
-                }
-
-                is HiltechShellState.ConfigurationRequired -> {
-                    Text(
-                        hiltechText("لم يتم إعداد HILTECH", "HILTECH is not configured"),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(state.message)
-                }
-
-                is HiltechShellState.Failure -> {
-                    Text(
-                        hiltechText("حدث خطأ", "Something went wrong"),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(state.message)
-                    Text(hiltechText("المرجع: ", "Reference: ") + state.code)
-                    Button(onClick = onRetry) { Text(hiltechText("إعادة المحاولة", "Retry")) }
                 }
             }
         }
@@ -1330,6 +1326,7 @@ private fun PeopleSection(
         ) -> Unit,
     offboardingAvailable: Boolean,
     accountWorkspace: (@Composable (EmployeeDetailDto) -> Unit)?,
+    onboardingWorkspace: (@Composable (EmployeeDetailDto) -> Unit)?,
     relatedProjects: List<com.hiltech.shared.core.projects.ProjectSummaryDto> = emptyList(),
     openRelatedProject: ((String) -> Unit)? = null,
 ) {
@@ -1454,6 +1451,7 @@ private fun PeopleSection(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             PeopleWorkspaceTab.entries.filter {
                                 (it != PeopleWorkspaceTab.Account || accountWorkspace != null) &&
+                                    (it != PeopleWorkspaceTab.Onboarding || onboardingWorkspace != null) &&
                                     (it != PeopleWorkspaceTab.Offboarding || offboardingAvailable)
                             }.forEach { item ->
                                 androidx.compose.material3.FilterChip(selected = tab == item, onClick = { tab = item },
@@ -1503,6 +1501,7 @@ private fun PeopleSection(
                             // The host clears the selection when changing employees; the workspace
                             // is also keyed by employee and actor/session, never saved with credentials.
                             PeopleWorkspaceTab.Account -> accountWorkspace?.invoke(employee)
+                            PeopleWorkspaceTab.Onboarding -> onboardingWorkspace?.invoke(employee)
                             PeopleWorkspaceTab.Offboarding -> if (offboardingAvailable) OffboardingAdminSection(
                                 employee = employee, offboarding = state.selectedOffboarding,
                                 onStart = onStartOffboarding, onRevokeAccess = onRevokeOffboardingAccess,
@@ -1548,7 +1547,8 @@ private fun PeopleSection(
 }
 
 private enum class PeopleWorkspaceTab(val title: String, val english: String) {
-    Profile("الملف", "Profile"), Assignment("المسؤوليات", "Responsibilities"), Account("حساب العمل", "Work account"), Offboarding("إنهاء الخدمة", "Offboarding"),
+    Profile("الملف", "Profile"), Assignment("المسؤوليات", "Responsibilities"), Account("حساب العمل", "Work account"),
+    Onboarding("تجهيز الانضمام", "Onboarding"), Offboarding("إنهاء الخدمة", "Offboarding"),
 }
 
 @Composable

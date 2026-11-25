@@ -59,7 +59,6 @@ fun DesktopServicePurchaseSections(runtime: DesktopIdentityRuntime, organization
     ServicePurchaseNativeJourney(
         needApi = runtime.servicePurchaseNeedApi,
         sourcing = runtime.serviceSupplierSourcingApi,
-        supplierRegistry = runtime.supplierMasterDataApi,
         quoteUploader = runtime.serviceSupplierQuoteUploader,
         api = runtime.serviceOrderAndInvoiceApi,
         organizationId = organizationId,

@@ -321,9 +321,34 @@ jobs:
             --tests com.hiltech.server.people.WorkforceAssignmentPostgresOpenFgaContractTest \
             --tests com.hiltech.server.people.HrDocumentsPostgresEvidenceContractTest \
             --tests com.hiltech.server.people.OnboardingPostgresContractTest \
+            --tests com.hiltech.server.procurement.ServiceSourcingPostgresIntegrationTest \
             --tests com.hiltech.server.people.OffboardingPostgresContractTest \
             --tests com.hiltech.server.projects.ProjectsPostgresOpenFgaContractTest \
             --rerun-tasks --no-configuration-cache
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          suites = {
+              "com.hiltech.server.procurement.ServiceSourcingPostgresIntegrationTest": 2,
+              "com.hiltech.server.people.OnboardingPostgresContractTest": 1,
+          }
+          for suite, minimum_tests in suites.items():
+              report = Path("server/application/build/test-results/test") / f"TEST-{suite}.xml"
+              if not report.is_file():
+                  raise SystemExit(f"Missing PostgreSQL contract report: {suite}")
+              result = ET.parse(report).getroot()
+              if result.tag != "testsuite" or result.attrib.get("name") != suite:
+                  raise SystemExit(f"Unexpected PostgreSQL contract report: {suite}")
+              try:
+                  counts = {key: int(result.attrib[key]) for key in ("tests", "failures", "errors", "skipped")}
+              except (KeyError, ValueError):
+                  raise SystemExit(f"Invalid PostgreSQL contract counts: {suite}") from None
+              print(suite + ": " + " ".join(f"{key}={value}" for key, value in counts.items()))
+              if counts["tests"] < minimum_tests or any(counts[key] != 0 for key in ("failures", "errors", "skipped")):
+                  raise SystemExit(f"PostgreSQL contract cases must execute and pass: {suite}")
+          PY
 
           if PGPASSWORD=hiltech-keycloak-local \
             psql -h 127.0.0.1 -U hiltech_keycloak -d hiltech \

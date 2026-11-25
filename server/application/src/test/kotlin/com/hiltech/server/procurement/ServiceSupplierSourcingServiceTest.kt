@@ -1,6 +1,8 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.approval.ApprovalAuthorityBindingSnapshot
 import com.hiltech.server.approval.ApprovalPersistencePort
+import com.hiltech.server.approval.ApprovalPrincipalType
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.IdempotentCommandExecutor
 import com.hiltech.server.platform.ProductApiException
@@ -106,5 +108,126 @@ class ServiceSupplierSourcingServiceTest {
         assertFalse(adapter.canReserve(actor,target))
         assertFalse(adapter.canAccess(actor,target))
         Mockito.verifyNoInteractions(jdbc,approvals,suppliers)
+    }
+
+    @Test fun supplierSearchRequiresTheServiceGatesAndAnExplicitServiceBuyerKey() {
+        for ((needsEnabled,sourcingEnabled) in listOf(false to false,false to true,true to false)) {
+            val error = assertThrows<ProductApiException> {
+                service(needsEnabled, sourcingEnabled, "SERVICE_BUYER").searchSuppliers(actor, org, "Supplier")
+            }
+            assertEquals("SERVICE_SOURCING_UNAVAILABLE", error.code)
+        }
+        val error = assertThrows<ProductApiException> {
+            service(true, true, "").searchSuppliers(actor, org, "Supplier")
+        }
+        assertEquals("SERVICE_SOURCING_UNAVAILABLE", error.code)
+        Mockito.verifyNoInteractions(jdbc,approvals,suppliers,documentTarget,commands,audit)
+    }
+
+    @Test fun currentServiceBuyerSearchesLinkedSuppliersWithoutMasterDataOrCommandAccess() {
+        allowBuyer()
+        val candidate = SourcingSupplierCandidate(UUID.randomUUID(), "مورد خدمات تجريبي", 3)
+        Mockito.`when`(suppliers.searchEligibleSuppliers(org, "خدمات")).thenReturn(listOf(candidate))
+
+        val result = service(true, true, "SERVICE_BUYER").searchSuppliers(actor, org, "  خدمات  ")
+
+        assertEquals(org, result.organizationId)
+        assertEquals("خدمات", result.query)
+        assertEquals(listOf(candidate), result.suppliers)
+        Mockito.verify(suppliers).searchEligibleSuppliers(org, "خدمات")
+        Mockito.verifyNoMoreInteractions(suppliers)
+        Mockito.verifyNoInteractions(jdbc,documentTarget,commands,audit)
+    }
+
+    @Test fun missingMembershipOrCurrentAuthorityCannotEnumerateSuppliers() {
+        val service = service(true, true, "SERVICE_BUYER")
+        assertEquals("SERVICE_SOURCING_UNAVAILABLE", assertThrows<ProductApiException> {
+            service.searchSuppliers(actor, org, "Supplier")
+        }.code)
+        Mockito.verify(approvals, Mockito.never()).resolveCurrentAuthority(org, "SERVICE_BUYER", clock.instant())
+        Mockito.`when`(approvals.isActiveOrganizationMember(org, actor, clock.instant())).thenReturn(true)
+        assertEquals("SERVICE_SOURCING_UNAVAILABLE", assertThrows<ProductApiException> {
+            service.searchSuppliers(actor, org, "Supplier")
+        }.code)
+        Mockito.verifyNoInteractions(jdbc,suppliers,documentTarget,commands,audit)
+    }
+
+    @Test fun foreignOrganizationAndDifferentAuthorityBindingsCannotAuthorizeSearch() {
+        val binding = allowBuyer()
+        val service = service(true, true, "SERVICE_BUYER")
+        for (wrong in listOf(binding.copy(organizationId = UUID.randomUUID()),
+            binding.copy(authorityKey = "MATERIAL_BUYER"))) {
+            Mockito.`when`(approvals.resolveCurrentAuthority(org, "SERVICE_BUYER", clock.instant()))
+                .thenReturn(wrong)
+            assertEquals("SERVICE_SOURCING_UNAVAILABLE", assertThrows<ProductApiException> {
+                service.searchSuppliers(actor, org, "Supplier")
+            }.code)
+            Mockito.verify(approvals, Mockito.never()).actorMatchesAuthority(actor, wrong, clock.instant())
+        }
+        Mockito.verifyNoInteractions(jdbc,suppliers,documentTarget,commands,audit)
+    }
+
+    @Test fun teamBuyerMustStillMatchTheCurrentSourceOnEverySearch() {
+        val binding = allowBuyer(ApprovalPrincipalType.TEAM)
+        Mockito.`when`(suppliers.searchEligibleSuppliers(org, "Supplier")).thenReturn(emptyList())
+        val service = service(true, true, "SERVICE_BUYER")
+        assertEquals(emptyList<SourcingSupplierCandidate>(), service.searchSuppliers(actor, org, "Supplier").suppliers)
+
+        Mockito.`when`(approvals.actorMatchesAuthority(actor, binding, clock.instant())).thenReturn(false)
+        assertEquals("SERVICE_SOURCING_UNAVAILABLE", assertThrows<ProductApiException> {
+            service.searchSuppliers(actor, org, "Supplier")
+        }.code)
+        Mockito.verify(suppliers, Mockito.times(1)).searchEligibleSuppliers(org, "Supplier")
+        Mockito.verifyNoInteractions(jdbc,documentTarget,commands,audit)
+    }
+
+    @Test fun aRevokedBuyerBindingCannotReuseAnEarlierSuccessfulDirectoryRead() {
+        allowBuyer()
+        Mockito.`when`(suppliers.searchEligibleSuppliers(org, "Supplier")).thenReturn(emptyList())
+        val service = service(true, true, "SERVICE_BUYER")
+        service.searchSuppliers(actor, org, "Supplier")
+
+        Mockito.`when`(approvals.resolveCurrentAuthority(org, "SERVICE_BUYER", clock.instant())).thenReturn(null)
+        assertEquals("SERVICE_SOURCING_UNAVAILABLE", assertThrows<ProductApiException> {
+            service.searchSuppliers(actor, org, "Supplier")
+        }.code)
+        Mockito.verify(suppliers, Mockito.times(1)).searchEligibleSuppliers(org, "Supplier")
+        Mockito.verifyNoInteractions(jdbc,documentTarget,commands,audit)
+    }
+
+    @Test fun supplierLinkChangesAreReadAgainRatherThanCachedForTheBuyer() {
+        allowBuyer()
+        val candidate = SourcingSupplierCandidate(UUID.randomUUID(), "Synthetic supplier", 1)
+        Mockito.`when`(suppliers.searchEligibleSuppliers(org, "Supplier"))
+            .thenReturn(listOf(candidate), emptyList())
+        val service = service(true, true, "SERVICE_BUYER")
+        assertEquals(listOf(candidate), service.searchSuppliers(actor, org, "Supplier").suppliers)
+        assertEquals(emptyList<SourcingSupplierCandidate>(), service.searchSuppliers(actor, org, "Supplier").suppliers)
+        Mockito.verify(suppliers, Mockito.times(2)).searchEligibleSuppliers(org, "Supplier")
+        Mockito.verifyNoInteractions(jdbc,documentTarget,commands,audit)
+    }
+
+    @Test fun invalidSupplierQueriesDoNotReachTheSourceDirectory() {
+        allowBuyer()
+        val service = service(true, true, "SERVICE_BUYER")
+        for (query in listOf("", "   ", "a", "a".repeat(81), "ab\ncd", "ab\u007fcd")) {
+            assertEquals("SERVICE_SOURCING_INVALID", assertThrows<ProductApiException> {
+                service.searchSuppliers(actor, org, query)
+            }.code)
+        }
+        Mockito.verifyNoInteractions(jdbc,suppliers,documentTarget,commands,audit)
+    }
+
+    private fun allowBuyer(principalType: ApprovalPrincipalType = ApprovalPrincipalType.USER): ApprovalAuthorityBindingSnapshot {
+        val at = clock.instant()
+        val binding = ApprovalAuthorityBindingSnapshot(
+            UUID.randomUUID(), org, "SERVICE_BUYER", principalType,
+            if (principalType == ApprovalPrincipalType.USER) actor else UUID.randomUUID(),
+            at.minusSeconds(100), null, 1,
+        )
+        Mockito.`when`(approvals.isActiveOrganizationMember(org, actor, at)).thenReturn(true)
+        Mockito.`when`(approvals.resolveCurrentAuthority(org, "SERVICE_BUYER", at)).thenReturn(binding)
+        Mockito.`when`(approvals.actorMatchesAuthority(actor, binding, at)).thenReturn(true)
+        return binding
     }
 }

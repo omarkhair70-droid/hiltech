@@ -30,6 +30,11 @@ data class ServiceEligibleNeedView(
     val specification: String, val acceptanceCriteria: String,
     val rfqId: UUID?, val sourceCurrent: Boolean,
 )
+data class ServiceSupplierDirectoryView(
+    val organizationId: UUID,
+    val query: String,
+    val suppliers: List<SourcingSupplierCandidate>,
+)
 data class ServiceRfqReceipt(val rfq: ServiceRfqView, val replayed: Boolean)
 data class CreateServiceQuoteSlotRequest(
     val operationId: UUID, val supplierOrganizationId: UUID,
@@ -92,6 +97,13 @@ class ServiceSupplierSourcingService @org.springframework.beans.factory.annotati
         val serviceAmount: BigDecimal, val tax: BigDecimal, val total: BigDecimal,
         val terms: String, val validUntil: LocalDate?, val evidenceId: UUID,
     )
+
+    /** Operational selection only; maintaining supplier links requires separate authority. */
+    fun searchSuppliers(actor: UUID, org: UUID, rawQuery: String): ServiceSupplierDirectoryView {
+        requireBuyer(actor, org)
+        val query = validated(rawQuery, 2, 80)
+        return ServiceSupplierDirectoryView(org, query, suppliers.searchEligibleSuppliers(org, query))
+    }
 
     fun eligibleNeeds(actor: UUID, org: UUID): List<ServiceEligibleNeedView> {
         requireBuyer(actor,org)

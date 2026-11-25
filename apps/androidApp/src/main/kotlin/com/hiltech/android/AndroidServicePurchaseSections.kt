@@ -72,7 +72,6 @@ fun AndroidServicePurchaseSections(application: HiltechApplication, organization
     ServicePurchaseNativeJourney(
         needApi = application.servicePurchaseNeedApi,
         sourcing = application.serviceSupplierSourcingApi,
-        supplierRegistry = application.supplierMasterDataApi,
         quoteUploader = application.serviceSupplierQuoteUploader,
         api = application.serviceOrderAndInvoiceApi,
         organizationId = organizationId,

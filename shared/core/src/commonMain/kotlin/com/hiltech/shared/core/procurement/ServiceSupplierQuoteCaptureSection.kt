@@ -20,13 +20,12 @@ import kotlinx.coroutines.launch
 
 /**
  * Actual online buyer entry for non-stock supplier quotes. A supplier is
- * selected from the canonical registry and the native host supplies real
+ * selected from current organization-linked suppliers and the native host supplies real
  * bounded bytes. A successful quote is neither an award nor an automatic send.
  */
 @Composable
 fun ServiceSupplierQuoteCaptureSection(
     sourcing: ServiceSupplierSourcingApiClient,
-    supplierRegistry: SupplierMasterDataApiClient,
     uploader: ServiceSupplierQuoteUploader,
     organizationId: String,
     installationId: String,
@@ -42,11 +41,11 @@ fun ServiceSupplierQuoteCaptureSection(
     var supplierSearchLoaded by remember(organizationId, installationId) { mutableStateOf(false) }
     var rfqId by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
     var supplierSearch by remember(organizationId, installationId) { mutableStateOf("") }
-    var suppliers by remember(organizationId, installationId) { mutableStateOf<List<SupplierRegistryCandidateDto>>(emptyList()) }
+    var suppliers by remember(organizationId, installationId) { mutableStateOf<List<SourcingSupplierCandidateDto>>(emptyList()) }
     var supplierResultsQuery by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
     var supplierResultsRfq by remember(organizationId, installationId) { mutableStateOf<String?>(null) }
     var supplierSearchGeneration by remember(organizationId, installationId) { mutableStateOf(0L) }
-    var selectedSupplier by remember(organizationId, installationId) { mutableStateOf<SupplierRegistryCandidateDto?>(null) }
+    var selectedSupplier by remember(organizationId, installationId) { mutableStateOf<SourcingSupplierCandidateDto?>(null) }
     var reference by remember(organizationId, installationId) { mutableStateOf("") }
     var revision by remember(organizationId, installationId) { mutableStateOf("1") }
     var currency by remember(organizationId, installationId) { mutableStateOf("EGP") }
@@ -138,7 +137,7 @@ fun ServiceSupplierQuoteCaptureSection(
                             selectedSupplier = null
                         }
                     },
-                    label = { Text("ابحث عن مورد مسجل بالاسم / Registered supplier") },
+                    label = { Text("ابحث عن مورد مؤهل بالاسم / Eligible supplier") },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busy,
                 )
@@ -156,7 +155,7 @@ fun ServiceSupplierQuoteCaptureSection(
                         busy = true; error = null
                         scope.launch {
                             try {
-                                val results = supplierRegistry.search(
+                                val results = sourcing.searchSuppliers(
                                     organizationId, query, installationId)
                                 if (serviceSupplierSearchResponseIsCurrent(
                                         currentGeneration = supplierSearchGeneration,
@@ -179,7 +178,7 @@ fun ServiceSupplierQuoteCaptureSection(
                             } finally { busy = false }
                         }
                     },
-                ) { Text("بحث في سجل الموردين / Search suppliers") }
+                ) { Text("بحث عن الموردين المؤهلين / Search eligible suppliers") }
                 val visibleSuppliers = suppliers.takeIf {
                     serviceSupplierResultsBelongToCurrentQuery(
                         input = supplierSearch,
@@ -189,16 +188,16 @@ fun ServiceSupplierQuoteCaptureSection(
                     )
                 }.orEmpty()
                 if(supplierSearchLoaded && visibleSuppliers.isEmpty()) {
-                    Text("لم يظهر مورد مسجل مطابق لهذا البحث؛ راجع الاسم أو حدّث المصدر.")
+                    Text("لا يوجد مورد نشط مرتبط بالمنظمة يطابق هذا البحث؛ راجع الاسم أو حدّث النتائج.")
                 }
                 visibleSuppliers.forEach { supplier ->
                     OutlinedButton(enabled = !busy, onClick = { selectedSupplier = supplier }) {
                         Text((if (selectedSupplier?.supplierOrganizationId == supplier.supplierOrganizationId) "✓ " else "") +
-                            supplier.displayName + " · " + supplier.supplierStatus)
+                            supplier.displayName)
                     }
                 }
                 selectedSupplier?.let {
-                    Text("المورد المختار من السجل · " + it.displayName +
+                    Text("المورد المختار · " + it.displayName +
                         " · الأهلية الفعلية يعيد السيرفر فحصها عند التسجيل.")
                 }
                 OutlinedTextField(value = reference, onValueChange = { reference = it },

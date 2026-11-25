@@ -114,6 +114,18 @@ class HiltechApplication : Application() {
         OnboardingApiClient(productApi)
     }
 
+    suspend fun submitEmployeeOnboarding(
+        intent: com.hiltech.shared.core.people.OnboardingWorkspaceIntent,
+        priorOutcomeUnknown: Boolean,
+        sessionCurrent: () -> Boolean,
+        onCommandSending: () -> Unit,
+    ) = com.hiltech.shared.core.people.submitOnboardingInSession(
+        httpClient, BuildConfig.HILTECH_API_BASE_URL, installationId, intent, priorOutcomeUnknown, sessionCurrent,
+        accessToken = { identityRuntime.currentAccessToken() },
+        correlationId = { UUID.randomUUID().toString() },
+        onCommandSending = onCommandSending,
+    )
+
     val hrDocumentsApi:
         HrDocumentsApiClient by lazy {
         HrDocumentsApiClient(productApi)

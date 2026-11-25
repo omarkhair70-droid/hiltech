@@ -2831,6 +2831,31 @@ fun main() {
                         }
                     }
                 },
+                employeeOnboardingWorkspace = { employee ->
+                    val expectedScope = employeeSessionScope
+                    val expectedEmployeeId = employee.employeeId
+                    val sessionCurrent = {
+                        val current = shellState.value as? HiltechShellState.SignedIn
+                        current != null && planningSessionScope(current) == expectedScope &&
+                            current.people?.selectedEmployee?.employeeId == expectedEmployeeId
+                    }
+                    employeeDrafts.SaveableStateProvider("onboarding:$expectedScope:$expectedEmployeeId") {
+                        com.hiltech.shared.core.people.EmployeeOnboardingWorkspace(
+                            employee = employee,
+                            sessionScope = expectedScope,
+                            client = runtime.onboardingApi,
+                            installationId = runtime.physicalWarehouseInstallationId,
+                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                            isSessionCurrent = sessionCurrent,
+                            submitCommand = { intent, unknown, sending ->
+                                runtime.submitEmployeeOnboarding(intent, unknown, sessionCurrent, sending)
+                            },
+                            onEmployeeChanged = {
+                                if (sessionCurrent()) selectEmployee(expectedEmployeeId)
+                            },
+                        )
+                    }
+                },
                 inboxWorkspace = {
                     navigationIdentity?.let { identity ->
                         InboxWorkspace(

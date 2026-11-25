@@ -35,7 +35,6 @@ import kotlinx.coroutines.launch
 fun ServicePurchaseNativeJourney(
     needApi: ServicePurchaseNeedApiClient,
     sourcing: ServiceSupplierSourcingApiClient,
-    supplierRegistry: SupplierMasterDataApiClient,
     quoteUploader: ServiceSupplierQuoteUploader,
     api: ServiceOrderAndInvoiceApiClient,
     organizationId: String,
@@ -86,7 +85,6 @@ fun ServicePurchaseNativeJourney(
         ServiceJourneyAnchor(quoteAnchor)
         ServiceSupplierQuoteCaptureSection(
             sourcing = sourcing,
-            supplierRegistry = supplierRegistry,
             uploader = quoteUploader,
             organizationId = organizationId,
             installationId = installationId,

@@ -3,6 +3,7 @@ package com.hiltech.shared.core.procurement
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
+import io.ktor.http.encodeURLParameter
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -19,6 +20,12 @@ data class ServiceEligibleNeedDto(
     val needId:String,val needVersion:Long,val organizationId:String,
     val specification:String,val acceptanceCriteria:String,
     val rfqId:String?=null,val sourceCurrent:Boolean,
+)
+@Serializable
+data class ServiceSupplierDirectoryDto(
+    val organizationId: String,
+    val query: String,
+    val suppliers: List<SourcingSupplierCandidateDto>,
 )
 @Serializable
 data class ServiceRfqReceiptDto(val rfq:ServiceRfqDto,val replayed:Boolean)
@@ -57,6 +64,33 @@ class ServiceSupplierSourcingApiClient(
     private val api:HiltechApiClient,
     private val json:Json=Json {ignoreUnknownKeys=true;explicitNulls=false},
 ) {
+    suspend fun searchSuppliers(
+        org: String,
+        rawQuery: String,
+        install: String,
+    ): List<SourcingSupplierCandidateDto> {
+        val organizationId = uuid(org)
+        val query = rawQuery.trim()
+        require(query.length in 2..80 && query.none { it.code < 32 || it.code == 127 })
+        val result = get(
+            "/v1/service-procurement/organizations/$organizationId/sourcing-suppliers" +
+                "?query=" + query.encodeURLParameter(),
+            install, ServiceSupplierDirectoryDto.serializer(),
+        )
+        require(result.organizationId.equals(organizationId, ignoreCase = true) && result.query == query) {
+            "Supplier search response does not match the requested organization and query."
+        }
+        require(result.suppliers.size <= 100 &&
+            result.suppliers.map { it.supplierOrganizationId.lowercase() }.distinct().size == result.suppliers.size) {
+            "Supplier search response is not a bounded distinct directory."
+        }
+        result.suppliers.forEach {
+            uuid(it.supplierOrganizationId)
+            require(it.displayName.isNotBlank() && it.relationshipRevision >= 1)
+        }
+        return result.suppliers
+    }
+
     suspend fun eligibleNeeds(org:String,install:String):List<ServiceEligibleNeedDto> =
         get("/v1/service-procurement/organizations/"+uuid(org)+"/sourcing-eligible-needs",
             install,ListSerializer(ServiceEligibleNeedDto.serializer()))

@@ -49,17 +49,6 @@ class OnboardingService(
             command.actorUserId,
             employee.organizationId,
         )
-        requirePreboarding(employee)
-        requireEmployeeVersion(
-            command.baseEmployeeVersion,
-            employee.employeeVersion,
-        )
-
-        val policy =
-            requireApplicablePolicy(
-                command.onboardingPolicyRevisionId,
-                employee.organizationId,
-            )
         val caseId =
             deterministicId(
                 "onboarding-case",
@@ -70,8 +59,8 @@ class OnboardingService(
                 listOf(
                     employee.employeeId,
                     employee.organizationId,
-                    employee.employeeVersion,
-                    policy.configRevisionId,
+                    command.baseEmployeeVersion,
+                    command.onboardingPolicyRevisionId,
                 ).joinToString("|"),
             )
 
@@ -106,7 +95,7 @@ class OnboardingService(
                     command.baseEmployeeVersion,
                     current.employeeVersion,
                 )
-                requireApplicablePolicy(
+                val policy = requireApplicablePolicy(
                     command.onboardingPolicyRevisionId,
                     current.organizationId,
                 )
@@ -782,6 +771,38 @@ class OnboardingService(
         return evaluate(case, employee)
     }
 
+    /** Current People authority is required before disclosing employee policy or case data. */
+    fun workspace(
+        actorUserId: UUID,
+        employeeId: UUID,
+    ): OnboardingWorkspaceView {
+        val employee = requireEmployee(employeeId)
+        requireManage(actorUserId, employee.organizationId)
+        val current = persistence.latestCaseForEmployee(employeeId)?.let { evaluate(it, employee) }
+        val policies = if (employee.employeeState == EmployeeState.PREBOARDING && current == null) {
+            persistence.activePolicies(employee.organizationId).filter {
+                it.lifecycleState == "ACTIVE" &&
+                    ((it.scopeType == "SYSTEM" && it.scopeOrganizationId == null) ||
+                        (it.scopeType == "ORGANIZATION" && it.scopeOrganizationId == employee.organizationId))
+            }
+        } else emptyList()
+        return OnboardingWorkspaceView(
+            employeeId = employee.employeeId,
+            organizationId = employee.organizationId,
+            employeeDisplayName = employee.displayName,
+            employeeState = employee.employeeState,
+            employeeVersion = employee.employeeVersion,
+            startAvailability = when {
+                current != null -> "CASE_EXISTS"
+                employee.employeeState != EmployeeState.PREBOARDING -> "NOT_PREBOARDING"
+                policies.isEmpty() -> "POLICY_NOT_CONFIGURED"
+                else -> "AVAILABLE"
+            },
+            policies = policies,
+            currentCase = current,
+        )
+    }
+
     fun adminCaseById(
         actorUserId: UUID,
         caseId: UUID,
@@ -864,12 +885,22 @@ class OnboardingService(
                 policy.configRevisionId,
             )
         val evaluated =
-            definitions.map {
-                evaluateRequirement(
+            definitions.map { definition ->
+                val requirement = evaluateRequirement(
                     case = case,
                     employee = employee,
-                    definition = it,
+                    definition = definition,
                 )
+                val actions = if (!selfServiceOnly && case.state == OnboardingCaseState.OPEN &&
+                    employee.employeeState == EmployeeState.PREBOARDING) {
+                    buildList {
+                        if (definition.requirementType == OnboardingRequirementType.MANUAL_CONFIRMATION) {
+                            add(OnboardingManualResolutionType.SATISFIED)
+                        }
+                        if (definition.waiverAllowed) add(OnboardingManualResolutionType.WAIVED)
+                    }
+                } else emptyList()
+                requirement.copy(allowedResolutions = actions)
             }
         val visible =
             if (selfServiceOnly) {
@@ -882,6 +913,9 @@ class OnboardingService(
                 evaluated
             }
 
+        val blockingSatisfied = evaluated.filter { it.blocking }.all {
+            it.status in setOf(OnboardingRequirementStatus.SATISFIED, OnboardingRequirementStatus.WAIVED)
+        }
         return OnboardingCaseView(
             caseId = case.caseId,
             organizationId =
@@ -903,26 +937,13 @@ class OnboardingService(
                 policy.revisionNumber,
             state = case.state,
             requirements = visible,
-            blockingSatisfied =
-                evaluated
-                    .filterIndexed {
-                        index, _ ->
-                        definitions[index]
-                            .blocking
-                    }
-                    .all {
-                        it.status in
-                            setOf(
-                                OnboardingRequirementStatus
-                                    .SATISFIED,
-                                OnboardingRequirementStatus
-                                    .WAIVED,
-                            )
-                    },
+            blockingSatisfied = blockingSatisfied,
             caseVersion = case.version,
             startedAt = case.startedAt,
             activatedAt =
                 case.activatedAt,
+            canActivate = !selfServiceOnly && case.state == OnboardingCaseState.OPEN &&
+                employee.employeeState == EmployeeState.PREBOARDING && blockingSatisfied,
         )
     }
 

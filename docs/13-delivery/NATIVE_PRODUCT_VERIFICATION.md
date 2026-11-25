@@ -57,6 +57,34 @@ failure when capture fails. Registry publication is not deployment.
 - Preserve source guards, independent approvals, current membership, audit and
   idempotency. No bypass is justified by making a screen easier to reach.
 
+## Onboarding and operational choices
+
+The native employee onboarding workspace reads applicable active policy choices
+and the current case from an authorized source. It offers only the requirement
+resolutions returned by that source. Document verification and employee legal
+acknowledgment are separate operations; an administrator must not satisfy them
+with a generic manual checkbox.
+
+Preserve a prepared or uncertain onboarding operation when its tab is removed
+from composition. Scope that saved state to the employee and full authenticated
+session. A matching command receipt confirms the operation, while a subsequent
+current-state read establishes the displayed employee state. A failed read after
+a successful command must not announce activation or cause a second operation.
+Current authority is checked before idempotent replay; mutable policy or employee
+state must not prevent an authorized replay of an already recorded start.
+
+Operational supplier search uses the existing buyer authority and organization
+scope. Only a currently active supplier and its latest active organization link
+qualify. Search before applying the bounded result limit, invalidate choices
+when context changes, and recheck eligibility when executing the command.
+Selecting a supplier does not grant authority to create or maintain supplier
+identities or links.
+
+Identity errors use typed, localized presentation and an appropriate recovery
+action. Raw provider or server messages are not product copy. Retain a separate
+sanitized support reference and preserve callback, session and authorization
+checks. Re-run native shell assertions when changing these visible messages.
+
 ## Completion discipline
 
 Update the existing private closeout record with new defects, results and

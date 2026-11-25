@@ -14,6 +14,14 @@ It distinguishes source changes, tests, device results and deployment. Internal
 audit reports and the canonical product closeout register are maintained
 privately. They must not be copied into this public repository.
 
+The current review also connects employee onboarding to both native hosts,
+separates operational supplier selection from supplier-master administration,
+and presents identity failures through localized recovery actions. These changes
+reuse current source authority. They do not supply company policy, make supplier
+administration available, or establish complete authenticated role acceptance.
+Keep local test, disposable-server, native-device and deployment evidence
+separate when evaluating the review.
+
 ## Historical status snapshot — 2026-09-21
 
 The remainder preserves an earlier checkpoint. Its completion and next-phase
