@@ -1,7 +1,6 @@
 package com.hiltech.server.payroll
 
 import org.springframework.beans.factory.ObjectProvider
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import java.util.UUID
@@ -53,17 +52,11 @@ interface PayrollApprovedFinanceInputSourcePort {
 }
 
 /**
- * OFF until separate lane implementations and approved policy exist.
- * Each source bundle is one canonical owner read, including an explicit
- * signed NO-INPUT attestation where the true amount is zero.
+ * Each source bundle is one approved owner read, including an explicit
+ * NO-INPUT attestation where the true amount is zero. Availability is governed
+ * by current source approval and coverage, not a second hidden feature switch.
  */
 @Component
-@ConditionalOnProperty(
-    prefix = "hiltech.payroll",
-    name = ["source-assembly-enabled"],
-    havingValue = "true",
-    matchIfMissing = false,
-)
 class PayrollVerifiedInputAssembler(
     private val accounting: ObjectProvider<PayrollValidatedStatutoryPolicySourcePort>,
     private val compensation: ObjectProvider<PayrollApprovedCompensationSourcePort>,

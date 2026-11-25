@@ -26,7 +26,7 @@ data class PayrollRunReleaseRequestDto(
     prefix = "hiltech.payroll",
     name = ["release-enabled"],
     havingValue = "true",
-    matchIfMissing = false,
+    matchIfMissing = true,
 )
 class Payroll9bRunReleaseController(
     private val releases: Payroll9bRunReleaseService,

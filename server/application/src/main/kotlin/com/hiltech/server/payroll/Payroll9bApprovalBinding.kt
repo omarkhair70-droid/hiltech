@@ -26,25 +26,51 @@ class PayrollRunApprovalVersionSource(
         subjectType == "PAYROLL_RUN_VERSION"
 
     override fun isCurrent(subject: ApprovalSubjectRef): Boolean =
-        runCatching { validate(subject, forPublication = false) }.getOrDefault(false)
+        runCatching { validate(subject) }.getOrDefault(false)
 
     fun isCurrentForPublication(subject: ApprovalSubjectRef): Boolean =
-        runCatching { validate(subject, forPublication = true) }.getOrDefault(false)
+        runCatching { historicalReleaseSource(subject) }.getOrDefault(false)
 
-    private fun validate(subject: ApprovalSubjectRef, forPublication: Boolean): Boolean {
+    /** Frozen, released truth is independent of today's employment or draft input changes. */
+    private fun historicalReleaseSource(subject: ApprovalSubjectRef): Boolean {
+        if (subject.subjectVersion != 1L) return false
+        val source = jdbc.query(
+            """
+            SELECT rv.organization_id,rv.payroll_period_id,rv.policy_version_id,rv.source_fingerprint
+            FROM payroll_run_version rv JOIN payroll_run_release released
+              ON released.run_version_id = rv.id AND released.organization_id = rv.organization_id
+             AND released.run_source_fingerprint = rv.source_fingerprint
+            WHERE rv.id = ? AND rv.organization_id = ? AND rv.state = 'DRAFT'
+              AND NOT EXISTS (SELECT 1 FROM payroll_run_version newer
+                  JOIN payroll_run_release completed ON completed.run_version_id = newer.id
+                  WHERE newer.payroll_period_id = rv.payroll_period_id
+                    AND newer.organization_id = rv.organization_id AND newer.generation > rv.generation)
+              AND EXISTS (SELECT 1 FROM payroll_run_employee_line line WHERE line.run_version_id = rv.id)
+              AND (SELECT count(*) FROM payroll_run_employee_line line WHERE line.run_version_id = rv.id) =
+                  (SELECT count(*) FROM payroll_employee_input_snapshot snap WHERE snap.payroll_period_id = rv.payroll_period_id)
+              AND rv.gross = (SELECT sum(line.gross) FROM payroll_run_employee_line line WHERE line.run_version_id = rv.id)
+              AND rv.deductions = (SELECT sum(line.deductions) FROM payroll_run_employee_line line WHERE line.run_version_id = rv.id)
+              AND rv.reimbursements = (SELECT sum(line.reimbursements) FROM payroll_run_employee_line line WHERE line.run_version_id = rv.id)
+              AND rv.net = (SELECT sum(line.net) FROM payroll_run_employee_line line WHERE line.run_version_id = rv.id)
+            """.trimIndent(),
+            { rs, _ -> listOf(rs.getObject(1, UUID::class.java).toString(), rs.getObject(2, UUID::class.java).toString(),
+                rs.getObject(3, UUID::class.java).toString(), rs.getString(4)) },
+            subject.subjectId, subject.organizationId,
+        ).singleOrNull() ?: return false
+        val fingerprints = jdbc.query("SELECT source_fingerprint FROM payroll_run_employee_line WHERE run_version_id = ?",
+            { rs, _ -> rs.getString(1) }, subject.subjectId)
+        return PayrollRunSourceFingerprint.of(UUID.fromString(source[0]), UUID.fromString(source[1]),
+            UUID.fromString(source[2]), fingerprints) == source[3]
+    }
+
+    private fun validate(subject: ApprovalSubjectRef): Boolean {
         if (subject.subjectVersion != 1L) return false
         val run = jdbc.query(
             """
             SELECT rv.organization_id, rv.payroll_period_id, rv.policy_version_id,
                    rv.policy_version, rv.source_fingerprint, rv.generation, rv.state,
                    (SELECT MAX(generation) FROM payroll_run_version
-                    WHERE payroll_period_id = rv.payroll_period_id) AS newest,
-                   (SELECT MAX(released.generation)
-                    FROM payroll_run_version released
-                    JOIN payroll_run_release approval ON
-                        approval.run_version_id = released.id
-                    WHERE released.payroll_period_id = rv.payroll_period_id)
-                       AS newest_published
+                    WHERE payroll_period_id = rv.payroll_period_id) AS newest
             FROM payroll_run_version rv WHERE rv.id = ?
             """.trimIndent(),
             { rs, _ ->
@@ -56,15 +82,13 @@ class PayrollRunApprovalVersionSource(
                     fingerprint = rs.getString("source_fingerprint"),
                     generation = rs.getInt("generation"),
                     newest = rs.getInt("newest"),
-                    newestPublished = rs.getObject("newest_published", Integer::class.java)?.toInt(),
                     state = rs.getString("state"),
                 )
             }, subject.subjectId,
         ).singleOrNull() ?: return false
         if (run.organizationId != subject.organizationId ||
             run.state != "DRAFT" ||
-            (forPublication && run.generation != run.newestPublished) ||
-            (!forPublication && run.generation != run.newest)
+            run.generation != run.newest
         ) return false
         val provider = providers.ifAvailable ?: return false
         val policy = provider.policyFor(run.organizationId, run.periodId) ?: return false
@@ -153,7 +177,6 @@ class PayrollRunApprovalVersionSource(
         val fingerprint: String,
         val generation: Int,
         val newest: Int,
-        val newestPublished: Int?,
         val state: String,
     )
 
@@ -191,63 +214,59 @@ object PayrollRunSourceFingerprint {
 }
 
 /**
- * A private payslip is exposed only if the exact run has a durable, current
- * company release record. ApprovalEngine approval alone is insufficient:
- * an explicit Finance-review release was not necessarily signed.
+ * A private payslip is exposed only for an exact immutable company release.
+ * Policy/authority were checked when that release was recorded. Later employee
+ * changes, reviewer rotation and unapproved correction drafts do not erase it;
+ * a completed replacement release supersedes the displayed version.
  */
 @Component
 class ApprovalBackedPayrollPublication(
     private val guard: PayrollRunApprovalVersionSource,
-    private val decisions: PayrollRunReleaseDecisionPort,
+    @Suppress("UNUSED_PARAMETER") decisions: PayrollRunReleaseDecisionPort,
     private val jdbc: JdbcTemplate,
-    @Value("\${hiltech.payroll.run-approval-policy-key:}") private val policyKey: String,
+    @Suppress("UNUSED_PARAMETER") @Value("\${hiltech.payroll.run-approval-policy-key:}") policyKey: String,
 ) : PayrollRunPublicationPort {
     override fun canPublish(
         organizationId: UUID,
         runVersionId: UUID,
         exactSourceFingerprint: String,
     ): Boolean = runCatching {
-        if (!Regex("^[A-Z][A-Z0-9_]{2,95}$").matches(policyKey)) return@runCatching false
-        val record = jdbc.query(
+        if (!Regex("^[0-9a-f]{64}$").matches(exactSourceFingerprint)) return@runCatching false
+        val approvedRelease = jdbc.queryForObject(
             """
-            SELECT r.run_source_fingerprint, r.policy_version,
-                   r.decision_path, r.approval_request_id, r.released_by_user_id
+            SELECT EXISTS (SELECT 1
             FROM payroll_run_release r
             JOIN payroll_run_version rv
               ON rv.id = r.run_version_id AND rv.organization_id = r.organization_id
+             AND rv.source_fingerprint = r.run_source_fingerprint
+            JOIN approval_policy_version p ON p.organization_id = r.organization_id
+              AND p.policy_key = r.policy_key AND p.version_number = r.policy_version
+              AND p.lifecycle_state IN ('ACTIVE','RETIRED')
+              AND p.effective_from <= r.released_at AND (p.effective_to IS NULL OR p.effective_to > r.released_at)
             WHERE r.organization_id = ? AND r.run_version_id = ?
-              AND r.policy_key = ? AND rv.source_fingerprint = ?
+              AND rv.source_fingerprint = ?
+              AND ((r.decision_path = 'ROUTINE_AUTHORIZED' AND r.approval_request_id IS NULL
+                    AND p.approval_required = false AND p.step_mode = 'NO_APPROVAL_REQUIRED')
+                   OR (r.decision_path = 'APPROVED_EXCEPTION' AND p.approval_required = true AND p.step_mode = 'SINGLE'
+                       AND EXISTS (SELECT 1 FROM approval_request a
+                           WHERE a.id = r.approval_request_id AND a.organization_id = r.organization_id
+                             AND a.subject_type = 'PAYROLL_RUN_VERSION' AND a.subject_id = r.run_version_id
+                             AND a.subject_version = 1 AND a.policy_key = r.policy_key AND a.policy_version = r.policy_version
+                             AND a.state = 'APPROVED' AND a.completed_at <= r.released_at
+                             AND EXISTS (SELECT 1 FROM approval_decision d WHERE d.approval_request_id = a.id
+                                 AND d.subject_version = 1 AND d.decision = 'APPROVE'
+                                 AND d.actor_user_id <> a.requester_user_id AND d.actor_user_id <> rv.created_by_user_id))))
+            )
             """.trimIndent(),
-            { rs, _ ->
-                PayrollReleaseReadModel(
-                    fingerprint = rs.getString("run_source_fingerprint"),
-                    policyVersion = rs.getInt("policy_version"),
-                    path = rs.getString("decision_path"),
-                    approvalId = rs.getObject("approval_request_id", UUID::class.java),
-                    actorId = rs.getObject("released_by_user_id", UUID::class.java),
-                )
-            },
-            organizationId, runVersionId, policyKey, exactSourceFingerprint,
-        ).singleOrNull() ?: return@runCatching false
-        if (record.fingerprint != exactSourceFingerprint) return@runCatching false
+            Boolean::class.java, organizationId, runVersionId, exactSourceFingerprint,
+        ) == true
+        if (!approvedRelease) return@runCatching false
         val subject = ApprovalSubjectRef(
             organizationId = organizationId,
             subjectType = "PAYROLL_RUN_VERSION",
             subjectId = runVersionId,
             subjectVersion = 1,
         )
-        if (!guard.isCurrentForPublication(subject)) return@runCatching false
-        val current = decisions.resolve(record.actorId, subject, policyKey) ?: return@runCatching false
-        current.policyVersion == record.policyVersion &&
-            current.path == record.path &&
-            current.approvalRequestId == record.approvalId
+        guard.isCurrentForPublication(subject)
     }.getOrDefault(false)
-
-    private data class PayrollReleaseReadModel(
-        val fingerprint: String,
-        val policyVersion: Int,
-        val path: String,
-        val approvalId: UUID?,
-        val actorId: UUID,
-    )
 }

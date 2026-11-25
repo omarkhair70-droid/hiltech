@@ -30,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.hiltech.shared.core.design.LocalHiltechLanguage
+import com.hiltech.shared.core.design.hiltechText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.joinAll
@@ -73,6 +75,7 @@ fun NativeOperationalWorkspaceHub(
     authorityRevisionKey: String,
     workspaces: List<NativeOperationalWorkspace>,
 ) {
+    val language = LocalHiltechLanguage.current
     // An ambiguous route key must never select a different privileged pane.
     val eligible = workspaces.groupBy { it.id }
         .filter { (id, entries) -> id.isNotBlank() && entries.size == 1 }
@@ -138,7 +141,7 @@ fun NativeOperationalWorkspaceHub(
     val selected = visible.firstOrNull { it.id == selectedId }
 
     if (eligible.isNotEmpty()) {
-        Text("مساحات متخصصة / Specialist workspaces",
+        Text(hiltechText("مساحات العمل", "Workspaces"),
             style = MaterialTheme.typography.titleMedium)
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
@@ -151,7 +154,7 @@ fun NativeOperationalWorkspaceHub(
                     // was visible from an earlier successful read.
                     selectedId = null
                     pendingOpen = workspace.id
-                }) { Text(workspace.label) }
+                }) { Text(nativeWorkspaceTitle(workspace, language)) }
             }
             OutlinedButton(enabled = !checking && pendingOpen == null, onClick = {
                 selectedId = null
@@ -159,18 +162,19 @@ fun NativeOperationalWorkspaceHub(
                 accessMessage = null
                 revision += 1
             }) {
-                Text(if (checking) "جارٍ التحقق" else "تحديث الصلاحيات")
+                Text(if (checking) hiltechText("جارٍ التحقق", "Checking access") else hiltechText("تحديث المساحات", "Refresh workspaces"))
             }
         }
         when {
             checking || pendingOpen != null ->
-                Text("جارٍ التحقق من المساحات والصلاحيات الحالية…",
+                Text(hiltechText("جارٍ التحقق من المساحات والصلاحيات الحالية…", "Checking available workspaces and access…"),
                     style = MaterialTheme.typography.bodySmall)
             visible.isEmpty() ->
-                Text("لا توجد مساحات متخصصة متاحة لهذا الحساب الآن؛ يمكن تحديث المصدر.",
+                Text(hiltechText("لا توجد مساحات متاحة لهذا الحساب الآن. يمكنك إعادة التحقق.", "No workspaces are currently available to this account. You can refresh access."),
                     style = MaterialTheme.typography.bodySmall)
         }
-        accessMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        accessMessage?.let { Text(hiltechText("تعذر تأكيد الوصول الحالي لهذه المساحة. حدّث وحاول مرة أخرى.",
+            "Current access could not be confirmed. Refresh and try again."), color = MaterialTheme.colorScheme.error) }
     }
 
     if (selected != null) {
@@ -190,14 +194,14 @@ fun NativeOperationalWorkspaceHub(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            selected.label,
+                            nativeWorkspaceTitle(selected, language),
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.titleMedium,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
                         OutlinedButton(onClick = { selectedId = null }) {
-                            Text("رجوع")
+                            Text(hiltechText("رجوع", "Back"))
                         }
                     }
                     Box(modifier = Modifier.fillMaxWidth().weight(1f)) {

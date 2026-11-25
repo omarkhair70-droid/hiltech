@@ -258,6 +258,8 @@ internal class JdbcEmployeeIdentityProvisioning(
                         userIdentityId,
                     organizationId =
                         request.organizationId,
+                    invitationId = request.invitationId,
+                    personId = request.personId,
                 )
             }
 
@@ -294,6 +296,18 @@ internal class JdbcEmployeeIdentityProvisioning(
         issuer: String,
         providerSubject: String,
     ): UUID {
+        val now = clock.instant().atOffset(ZoneOffset.UTC)
+        val eligibleEmployee = jdbc.query(
+            """SELECT p.id FROM person p JOIN employee e ON e.person_id = p.id
+               JOIN organization o ON o.id = e.organization_id
+               WHERE p.id = ? AND e.organization_id = ? AND e.state IN ('PREBOARDING','ACTIVE')
+                 AND o.status = 'ACTIVE' AND o.organization_type = 'HILTECH'
+               FOR UPDATE OF p, e""".trimIndent(),
+            { rs, _ -> rs.getObject(1, UUID::class.java) }, request.personId, request.organizationId,
+        ).singleOrNull()
+        if (eligibleEmployee == null) {
+            throw KeycloakProvisioningException("IDENTITY_EMPLOYEE_NOT_ELIGIBLE", "The employee is no longer eligible for account setup.")
+        }
         val existing =
             jdbc.query(
                 """
@@ -304,6 +318,7 @@ internal class JdbcEmployeeIdentityProvisioning(
                 FROM user_identity
                 WHERE auth_provider = ?
                   AND auth_subject = ?
+                FOR UPDATE
                 """.trimIndent(),
                 { rs, _ ->
                     ExistingIdentity(
@@ -326,6 +341,19 @@ internal class JdbcEmployeeIdentityProvisioning(
                 issuer,
                 providerSubject,
             ).singleOrNull()
+
+        if (existing != null && existing.status !in setOf("PENDING", "ACTIVE")) {
+            throw KeycloakProvisioningException("IDENTITY_ACCOUNT_RESTRICTED", "The existing account is restricted.")
+        }
+        // Creating an account cannot replace another account, including revoked history.
+        val otherIdentity = jdbc.queryForObject(
+            """SELECT EXISTS (SELECT 1 FROM user_identity WHERE person_id = ?
+               AND id <> ?)""".trimIndent(),
+            Boolean::class.java, request.personId, existing?.id ?: UUID(0L, 0L),
+        ) == true
+        if (otherIdentity) {
+            throw KeycloakProvisioningException("IDENTITY_PERSON_ALREADY_LINKED", "The employee already has a different account.")
+        }
 
         val identityId =
             if (existing != null) {
@@ -376,15 +404,12 @@ internal class JdbcEmployeeIdentityProvisioning(
                         providerSubject,
                         request.personId,
                         request.organizationId,
-                        clock.instant()
-                            .atOffset(
-                                ZoneOffset.UTC,
-                            ),
+                        now,
                     )
                 }
             }
 
-        jdbc.update(
+        val identityLinked = jdbc.update(
             """
             UPDATE user_identity
             SET person_id = ?,
@@ -405,6 +430,9 @@ internal class JdbcEmployeeIdentityProvisioning(
             identityId,
             request.personId,
         )
+        if (identityLinked != 1) {
+            throw KeycloakProvisioningException("IDENTITY_ACCOUNT_RESTRICTED", "The existing account cannot be linked.")
+        }
 
         val membershipId =
             UUID.nameUUIDFromBytes(
@@ -415,6 +443,17 @@ internal class JdbcEmployeeIdentityProvisioning(
                     StandardCharsets.UTF_8,
                 ),
             )
+
+        // Resume only the membership owned by this invitation. An ended or suspended
+        // membership cannot be bypassed by inserting a second one for the same account.
+        val existingMemberships = jdbc.query(
+            """SELECT id FROM organization_membership WHERE organization_id = ?
+               AND user_identity_id = ? FOR UPDATE""".trimIndent(),
+            { rs, _ -> rs.getObject(1, UUID::class.java) }, request.organizationId, identityId,
+        )
+        if (existingMemberships.isNotEmpty() && membershipId !in existingMemberships) {
+            throw KeycloakProvisioningException("IDENTITY_MEMBERSHIP_CONFLICT", "The existing membership belongs to another account setup.")
+        }
 
         jdbc.update(
             """
@@ -443,8 +482,7 @@ internal class JdbcEmployeeIdentityProvisioning(
             membershipId,
             request.organizationId,
             identityId,
-            clock.instant()
-                .atOffset(ZoneOffset.UTC),
+            now,
             request.actorIdentityId,
         )
 
@@ -461,12 +499,17 @@ internal class JdbcEmployeeIdentityProvisioning(
                           'PENDING',
                           'ACTIVE'
                       )
+                      AND membership_type = 'EMPLOYEE'
+                      AND valid_from <= ?
+                      AND (valid_until IS NULL OR valid_until > ?)
                 )
                 """.trimIndent(),
                 Boolean::class.java,
                 membershipId,
                 request.organizationId,
                 identityId,
+                now,
+                now,
             ) == true
 
         if (!validMembership) {
@@ -484,6 +527,8 @@ internal class JdbcEmployeeIdentityProvisioning(
     private fun activateLocalIdentity(
         userIdentityId: UUID,
         organizationId: UUID,
+        invitationId: UUID,
+        personId: UUID,
     ) {
         val identityUpdated =
             jdbc.update(
@@ -492,12 +537,21 @@ internal class JdbcEmployeeIdentityProvisioning(
                 SET status = 'ACTIVE',
                     version = version + 1
                 WHERE id = ?
+                  AND person_id = ?
                   AND status IN (
                       'PENDING',
                       'ACTIVE'
                   )
+                  AND EXISTS (
+                      SELECT 1 FROM employee e JOIN organization o ON o.id = e.organization_id
+                      WHERE e.person_id = ? AND e.organization_id = ? AND e.state IN ('PREBOARDING','ACTIVE')
+                        AND o.status = 'ACTIVE' AND o.organization_type = 'HILTECH'
+                  )
                 """.trimIndent(),
                 userIdentityId,
+                personId,
+                personId,
+                organizationId,
             )
 
         if (identityUpdated != 1) {
@@ -517,16 +571,23 @@ internal class JdbcEmployeeIdentityProvisioning(
                     version = version + 1
                 WHERE organization_id = ?
                   AND user_identity_id = ?
+                  AND id = ?
+                  AND membership_type = 'EMPLOYEE'
                   AND state IN (
                       'PENDING',
                       'ACTIVE'
                   )
+                  AND valid_from <= ?
+                  AND (valid_until IS NULL OR valid_until > ?)
                 """.trimIndent(),
                 organizationId,
                 userIdentityId,
+                UUID.nameUUIDFromBytes(("identity-membership:" + invitationId).toByteArray(StandardCharsets.UTF_8)),
+                clock.instant().atOffset(ZoneOffset.UTC),
+                clock.instant().atOffset(ZoneOffset.UTC),
             )
 
-        if (membershipUpdated < 1) {
+        if (membershipUpdated != 1) {
             throw KeycloakProvisioningException(
                 safeCode =
                     "IDENTITY_MEMBERSHIP_ACTIVATION_FAILED",

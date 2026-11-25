@@ -1,5 +1,42 @@
 # Phase 7 / Slice 02 — Supplier RFQ and quotation evidence
 
+## Current supplier register contract
+
+This section supersedes the historic default-deny implementation and the
+coupling between supplier administration and the sourcing rollout switch.
+`SUPPLIER_MASTER_DATA_ADMIN` is a separately delegated, current company
+responsibility. Its source is `supplier_master_data_authority_binding`; it is
+neither a buyer grant nor an ApprovalEngine approval slot. Every read and write
+requires an active HILTECH organization, active identity, current organization
+membership and an effective direct registrar binding. Administration of that
+binding belongs to the responsibility administration service.
+
+The internal register is available by default; an explicit
+`hiltech.procurement.supplier-master-data.enabled=false` remains an operational
+kill switch. Buyer sourcing availability and approval requirements are
+unchanged. Creating a supplier atomically creates its SUPPLIER identity,
+company-local profile, first ACTIVE relationship event and audit record. Codes
+and recording dates are assigned by the server. The command has a stable
+operation ID and replayable receipt.
+
+New company supplier codes use a transactional per-company sequence such as
+`SUP-000123`. Buyer search and the register display the same local code. The
+global technical identity remains immutable and separate. Existing linked
+supplier codes are preserved and reserved; profile edits never renumber them.
+Concurrent creation, command replay and rollback cannot duplicate issued codes.
+
+Profiles and directory results are purchasing-organization scoped. Existing
+linked suppliers may gain a local profile; changing that profile never renames
+another company's global identity. Unrelated global suppliers are neither
+listed nor linkable by guessing an ID. Profile corrections use a checked
+version and immutable profile history. Active and inactive relationship events
+remain append-only; suspension prevents new sourcing without deleting historic
+quotes, orders or invoices. Reasons are operator attestations, not fabricated
+verified documents. The native flow provides name search, create/edit, review,
+confirmation, suspension/reactivation and exact-request retry after an unknown
+network outcome. A command receipt and a subsequent directory refresh are
+reported separately.
+
 Date: 2026-11-22
 Base: stacked on Phase 7 S01 branch at `6b592b9a`, NOT main.
 Status: engineering checkpoint; no production buyer authority or RFQ issuance.

@@ -29,6 +29,7 @@ data class ProvisionEmployeeIdentityRequest(
 
 data class EmployeeIdentityInvitationResponse(
     val invitationId: String,
+    val operationId: String,
     val organizationId: String,
     val employeeId: String,
     val state: String,
@@ -173,6 +174,7 @@ class EmployeeIdentityInvitationController(
                 invitationId =
                     invitation.invitationId
                         .toString(),
+                operationId = invitation.operationId.toString(),
                 organizationId =
                     invitation.organizationId
                         .toString(),

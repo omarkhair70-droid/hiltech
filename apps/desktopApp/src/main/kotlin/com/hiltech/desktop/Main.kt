@@ -219,9 +219,11 @@ fun main() {
     }
 
     var planningSessionEpoch by mutableIntStateOf(0)
+    var companyPeopleFocusRequest by mutableIntStateOf(0)
     var employeeReadSequence = 0L
     var planningCommandsJob = SupervisorJob(scope.coroutineContext[kotlinx.coroutines.Job])
     fun invalidatePlanningCommands() {
+        companyPeopleFocusRequest = 0
         planningSessionEpoch += 1
         planningCommandsJob.cancel()
         planningCommandsJob = SupervisorJob(scope.coroutineContext[kotlinx.coroutines.Job])
@@ -2795,6 +2797,30 @@ fun main() {
             val employeeDrafts = androidx.compose.runtime.key(employeeSessionScope) {
                 androidx.compose.runtime.saveable.rememberSaveableStateHolder()
             }
+            val workspaceApi = remember(employeeSessionScope) {
+                runtime.productApiForSession {
+                    val current = shellState.value as? HiltechShellState.SignedIn
+                    current != null && planningSessionScope(current) == employeeSessionScope
+                }
+            }
+            val companyResponsibilities = remember(workspaceApi) {
+                com.hiltech.shared.core.people.CompanyResponsibilitiesApiClient(workspaceApi)
+            }
+            val companyAdministration = remember(workspaceApi) {
+                com.hiltech.shared.core.administration.CompanyAdministrationApiClient(workspaceApi)
+            }
+            val supplierRegistry = remember(workspaceApi) {
+                com.hiltech.shared.core.procurement.SupplierMasterDataApiClient(workspaceApi)
+            }
+            val payrollAdministration = remember(workspaceApi) {
+                com.hiltech.shared.core.payroll.Payroll9aApiClient(workspaceApi)
+            }
+            val payrollDisbursements = remember(workspaceApi) {
+                com.hiltech.shared.core.finance.FinancePayrollDisbursementApiClient(workspaceApi)
+            }
+            val payrollRuns = remember(workspaceApi) {
+                com.hiltech.shared.core.payroll.Payroll9b9cApiClient(workspaceApi)
+            }
             val languagePreferences = remember { java.util.prefs.Preferences.userRoot().node("com/hiltech/desktop/preferences") }
             var appLanguage by remember { mutableStateOf(HiltechLanguage.fromCode(languagePreferences.get("appLanguage", null))) }
             HiltechShell(
@@ -2819,6 +2845,14 @@ fun main() {
                             newOperationId = { java.util.UUID.randomUUID().toString() },
                             onReauthenticate = { signIn(true) },
                             onAccountReady = { selectEmployee(employee.employeeId) },
+                        )
+                        com.hiltech.shared.core.people.EmployeeCompanyResponsibilitiesWorkspace(
+                            employee = employee,
+                            sessionScope = employeeSessionScope,
+                            client = companyResponsibilities,
+                            installationId = runtime.physicalWarehouseInstallationId,
+                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                            onReauthenticate = { signIn(true) },
                         )
                         EmployeeWarehouseResponsibilitiesWorkspace(
                             employee = employee,
@@ -2895,16 +2929,91 @@ fun main() {
                                 installationId = runtime.physicalWarehouseInstallationId,
                             ))
                         }
-                        if (System.getenv("HILTECH_PAYROLL_ADMIN_READ_UI_ENABLED")
-                                ?.equals("true", ignoreCase = true) == true
-                        ) {
-                            add(payrollAdminReadNativeWorkspace(
-                                client = runtime.payrollAdminApi,
+                        run {
+                            val payrollWorkspace = remember(employeeSessionScope, org.organizationId, payrollAdministration, payrollRuns) {
+                                payrollAdminReadNativeWorkspace(
+                                client = payrollAdministration,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
-                            ))
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                runClient = payrollRuns,
+                                )
+                            }
+                            add(payrollWorkspace.copy(content = { exit ->
+                                employeeDrafts.SaveableStateProvider("payroll:$employeeSessionScope") {
+                                    payrollWorkspace.content(exit)
+                                }
+                            }))
                         }
+                        add(NativeOperationalWorkspace(
+                            id = "company-administration",
+                            label = "إدارة الشركة",
+                            canReadSource = {
+                                companyAdministration.capabilities(org.organizationId, runtime.physicalWarehouseInstallationId).available
+                            },
+                            hostOwnsScroll = true,
+                            content = { _ ->
+                                employeeDrafts.SaveableStateProvider("administration:$employeeSessionScope") {
+                                    com.hiltech.shared.core.administration.CompanyAdministrationWorkspace(
+                                        organizationId = org.organizationId,
+                                        sessionScope = employeeSessionScope,
+                                        client = companyAdministration,
+                                        installationId = runtime.physicalWarehouseInstallationId,
+                                        newOperationId = { java.util.UUID.randomUUID().toString() },
+                                        onReauthenticate = { signIn(true) },
+                                        onOpenPeople = {
+                                            val current = shellState.value as? HiltechShellState.SignedIn
+                                            if (current != null && planningSessionScope(current) == employeeSessionScope) {
+                                                refreshPeople()
+                                                companyPeopleFocusRequest += 1
+                                            }
+                                        },
+                                    )
+                                }
+                            },
+                        ))
+                        add(NativeOperationalWorkspace(
+                            id = "finance-payroll-disbursement",
+                            label = "صرف الرواتب",
+                            canReadSource = {
+                                val access = payrollDisbursements.capabilities(org.organizationId, runtime.physicalWarehouseInstallationId)
+                                access.canPrepare || access.canReview
+                            },
+                            hostOwnsScroll = true,
+                            content = { _ ->
+                                employeeDrafts.SaveableStateProvider("payroll-disbursements:$employeeSessionScope") {
+                                    com.hiltech.shared.core.finance.FinancePayrollDisbursementWorkspace(
+                                        organizationId = org.organizationId,
+                                        sessionScope = employeeSessionScope,
+                                        client = payrollDisbursements,
+                                        installationId = runtime.physicalWarehouseInstallationId,
+                                        newOperationId = { java.util.UUID.randomUUID().toString() },
+                                        onReauthenticate = { signIn(true) },
+                                    )
+                                }
+                            },
+                        ))
+                        add(NativeOperationalWorkspace(
+                            id = "supplier-registry",
+                            label = "سجل الموردين",
+                            canReadSource = {
+                                supplierRegistry.capabilities(org.organizationId, runtime.physicalWarehouseInstallationId).canMaintain
+                            },
+                            hostOwnsScroll = true,
+                            content = { _ ->
+                                employeeDrafts.SaveableStateProvider("suppliers:$employeeSessionScope") {
+                                    com.hiltech.shared.core.procurement.SupplierRegistryWorkspace(
+                                        organizationId = org.organizationId,
+                                        sessionScope = employeeSessionScope,
+                                        client = supplierRegistry,
+                                        installationId = runtime.physicalWarehouseInstallationId,
+                                        newOperationId = { java.util.UUID.randomUUID().toString() },
+                                        onReauthenticate = { signIn(true) },
+                                    )
+                                }
+                            },
+                        ))
                         run {
                             add(commercialReadNativeWorkspace(
                                 client = runtime.commercialApi,
@@ -3109,6 +3218,7 @@ fun main() {
                 onRevokeSession = ::revokeSession,
                 onRevokeDevice = ::revokeDevice,
                 onRefreshPeople = ::refreshPeople,
+                peopleFocusRequest = companyPeopleFocusRequest,
                 onRefreshOnboarding =
                     ::refreshOnboarding,
                 onSelectEmployee = ::selectEmployee,

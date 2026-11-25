@@ -188,17 +188,11 @@ class FinanceEmployeeSettlementApprovalSubject(
                 return null
             val total=jdbc.queryForObject(
                 """SELECT coalesce(sum(amount),0)
-                   FROM finance_employee_settlement_record
+                   FROM finance_bank_committed_usage
                    WHERE organization_id=? AND bank_statement_line_id=?""",
                 BigDecimal::class.java,org,row.bankLine,
             ) ?: BigDecimal.ZERO
-            val cash=jdbc.queryForObject(
-                """SELECT coalesce(sum(allocated_amount),0)
-                   FROM finance_cash_allocation_effective
-                   WHERE organization_id=? AND bank_statement_line_id=?""",
-                BigDecimal::class.java,org,row.bankLine,
-            ) ?: BigDecimal.ZERO
-            if(total.add(cash).add(row.amount)>bank.amount)return null
+            if(total.add(row.amount)>bank.amount)return null
         }
         val expected=FinanceEmployeeSettlementReviewVersion.derive(
             org,row.fundingId,row.employee,row.action,

@@ -39,15 +39,17 @@ data class PayrollApprovalRequestResultDto(
     prefix = "hiltech.payroll",
     name = ["approval-request-enabled"],
     havingValue = "true",
-    matchIfMissing = false,
+    matchIfMissing = true,
 )
 class Payroll9bApprovalController(
     private val drafts: Payroll9bDraftService,
     private val authority: Payroll9aAuthorityPort,
     private val guard: PayrollRunApprovalVersionSource,
     private val approvals: ApprovalEngineService,
-    @Value("\${hiltech.payroll.run-approval-policy-key:}") private val policyKey: String,
+    @Value("\${hiltech.payroll.run-approval-policy-key:PAYROLL_RUN_REVIEW}") policyKey: String,
 ) {
+    private val policyKey = payrollRunPolicyKey(policyKey)
+
     @PostMapping("/v1/payroll/runs/{runId}/approval-requests")
     fun requestReview(
         servletRequest: HttpServletRequest,
@@ -69,7 +71,7 @@ class Payroll9bApprovalController(
         }
         val draft = drafts.read(actor, runIdParsed)
         val org = UUID.fromString(draft.organizationId)
-        if (!authority.canReview(actor, org) || policyKey.isBlank()) {
+        if ((!authority.canPrepare(actor, org) && !authority.canReview(actor, org)) || policyKey.isBlank()) {
             Payroll9aPolicy.fail("PAYROLL_APPROVAL_NOT_CONFIGURED", HttpStatus.FORBIDDEN)
         }
         val subject = ApprovalSubjectRef(

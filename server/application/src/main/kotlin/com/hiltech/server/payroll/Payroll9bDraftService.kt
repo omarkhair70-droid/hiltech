@@ -61,6 +61,7 @@ data class Payroll9bRunSummaryDto(
     val net: String,
     val employeeCount: Int,
     val sourceFingerprint: String,
+    val releaseState: String = "NOT_RELEASED",
 )
 
 data class Payroll9bRunHistoryDto(
@@ -244,7 +245,12 @@ class Payroll9bDraftService(
             items = jdbc.query(
                 """
                 SELECT r.id, r.generation, r.state, r.currency, r.net,
-                       r.source_fingerprint, COUNT(l.id) AS employee_count
+                       r.source_fingerprint, COUNT(l.id) AS employee_count,
+                       CASE WHEN NOT EXISTS (SELECT 1 FROM payroll_run_release released WHERE released.run_version_id = r.id)
+                         THEN 'NOT_RELEASED'
+                         WHEN EXISTS (SELECT 1 FROM payroll_run_version newer JOIN payroll_run_release completed ON completed.run_version_id = newer.id
+                                      WHERE newer.payroll_period_id = r.payroll_period_id AND newer.generation > r.generation)
+                         THEN 'SUPERSEDED' ELSE 'RELEASED' END AS release_state
                 FROM payroll_run_version r
                 LEFT JOIN payroll_run_employee_line l ON l.run_version_id = r.id
                 WHERE r.payroll_period_id = ? AND r.organization_id = ?
@@ -261,6 +267,7 @@ class Payroll9bDraftService(
                         net = rs.getBigDecimal("net").toPlainString(),
                         employeeCount = rs.getInt("employee_count"),
                         sourceFingerprint = rs.getString("source_fingerprint"),
+                        releaseState = rs.getString("release_state"),
                     )
                 }, periodId, org,
             ),

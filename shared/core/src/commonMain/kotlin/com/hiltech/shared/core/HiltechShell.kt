@@ -290,6 +290,7 @@ fun HiltechShell(
     // Host requests a source-owned Projects workspace focus after selecting
     // a canonical Executive project, never a new permission or API route.
     projectFocusRequest: Int = 0,
+    peopleFocusRequest: Int = 0,
     desktopNavigation: Boolean = false,
     desktopPurchasingAvailable: Boolean = false,
     warehouseOperatorAvailable: Boolean = false,
@@ -422,6 +423,17 @@ fun HiltechShell(
                     requestedWorkspace = ShellWorkspace.Projects
                 } else {
                     projectWorkspaceRequester.bringIntoView()
+                }
+            }
+        }
+        val canFocusPeople = state is HiltechShellState.SignedIn && state.people != null
+        LaunchedEffect(shellScrollScope, peopleFocusRequest, canFocusPeople) {
+            if (peopleFocusRequest > 0 && canFocusPeople) {
+                if (useWorkspaceNavigation) {
+                    nativeSession.close()
+                    requestedWorkspace = ShellWorkspace.People
+                } else {
+                    peopleWorkspaceRequester.bringIntoView()
                 }
             }
         }

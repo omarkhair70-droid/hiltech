@@ -247,7 +247,7 @@ class OnboardingApiClient(
             path = "/v1/employees/$employeeId/identity-invitations/availability",
             options = HiltechRequestOptions(installationId = installationId),
             decode = { json.decodeFromString(EmployeeIdentityInvitationAvailabilityDto.serializer(), it) },
-        )
+        ).also { require(it.employeeId == employeeId) }
     }
 
     suspend fun provisionIdentity(
@@ -261,6 +261,8 @@ class OnboardingApiClient(
         require(
             request.baseEmployeeVersion >= 1,
         )
+        require(request.deliveryMode in setOf("EMAIL_ACTION_LINK", "TEMPORARY_PASSWORD_HANDOFF"))
+        require(request.requestedLogin.trim().length in 3..320 && request.requestedLogin.none(Char::isISOControl))
 
         return api.request(
             method = HttpMethod.Post,
@@ -288,7 +290,15 @@ class OnboardingApiClient(
                     it,
                 )
             },
-        )
+        ).also { receipt ->
+            require(receipt.employeeId == employeeId && receipt.operationId == request.operationId)
+            require(receipt.deliveryMode == request.deliveryMode && receipt.state == "READY" && receipt.version >= 1)
+            require(!receipt.userIdentityId.isNullOrBlank())
+            when (request.deliveryMode) {
+                "EMAIL_ACTION_LINK" -> require(receipt.deliveryState == "SENT" && receipt.temporaryCredential == null)
+                "TEMPORARY_PASSWORD_HANDOFF" -> require(receipt.deliveryState == "READY" && !receipt.temporaryCredential.isNullOrBlank())
+            }
+        }
     }
 
     private suspend fun command(

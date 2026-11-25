@@ -26,7 +26,11 @@ data class SourcingSupplierCandidateDto(
     val supplierOrganizationId: String,
     val displayName: String,
     val relationshipRevision: Int,
+    val organizationCode: String = "",
 )
+
+internal fun SourcingSupplierCandidateDto.displayLabel(): String =
+    displayName + organizationCode.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
 
 @Serializable
 data class SupplierRfqDto(

@@ -15,13 +15,13 @@ import java.util.UUID
 
 data class PayrollFinanceHandoffRequestDto(val operationId: String)
 
-/** FINANCE REVIEW, not bank payout. Disabled until Finance implements intake. */
+/** Transfers the exact released manifest to Finance review without executing payment. */
 @RestController
 @ConditionalOnProperty(
     prefix = "hiltech.payroll",
     name = ["finance-handoff-enabled"],
     havingValue = "true",
-    matchIfMissing = false,
+    matchIfMissing = true,
 )
 class Payroll9cFinanceHandoffController(
     private val service: Payroll9cFinanceHandoffService,

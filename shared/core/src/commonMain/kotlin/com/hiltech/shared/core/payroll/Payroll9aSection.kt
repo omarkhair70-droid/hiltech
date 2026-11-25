@@ -40,6 +40,7 @@ data class Payroll9aUiState(
     val errorCode: String? = null,
     val canPrepare: Boolean = false,
     val canReview: Boolean = false,
+    val commandLocked: Boolean = false,
 )
 
 @Composable
@@ -51,18 +52,21 @@ fun Payroll9aAdminSection(
     onCaptureInputs: (String) -> Unit,
     onReviewException: (String, String, String) -> Unit,
     hostOwnsVerticalScroll: Boolean = false,
+    onBackToPeriods: () -> Unit = {},
+    retainedCreateRequest: CreatePayrollPeriodRequestDto? = null,
 ) {
     val colors = LocalHiltechOperationalColors.current
-    var creating by remember { mutableStateOf(false) }
+    val blocked = state.loading || state.commandLocked
+    var creating by remember { mutableStateOf(retainedCreateRequest != null) }
     var query by remember { mutableStateOf("") }
     var openDetail by remember(state.selected?.period?.periodId) { mutableStateOf(state.selected != null) }
     var exceptionsOnly by remember(state.selected?.period?.periodId) { mutableStateOf(false) }
-    var periodCode by remember { mutableStateOf("") }
-    var startDate by remember { mutableStateOf("") }
-    var endDate by remember { mutableStateOf("") }
-    var cutoffDate by remember { mutableStateOf("") }
-    var targetPayment by remember { mutableStateOf("") }
-    var reviewNote by remember { mutableStateOf("") }
+    var periodCode by remember { mutableStateOf(retainedCreateRequest?.periodCode.orEmpty()) }
+    var startDate by remember { mutableStateOf(retainedCreateRequest?.startDate.orEmpty()) }
+    var endDate by remember { mutableStateOf(retainedCreateRequest?.endDate.orEmpty()) }
+    var cutoffDate by remember { mutableStateOf(retainedCreateRequest?.cutoffDate.orEmpty()) }
+    var targetPayment by remember { mutableStateOf(retainedCreateRequest?.targetPaymentDate.orEmpty()) }
+    val validDates = payrollPeriodDatesValid(startDate, endDate, cutoffDate, targetPayment.takeIf(String::isNotBlank))
 
     CompositionLocalProvider(LocalLayoutDirection provides LocalHiltechLanguage.current.direction) {
         Column(
@@ -74,7 +78,7 @@ fun Payroll9aAdminSection(
                     HiltechSectionHeading("PAYROLL", hiltechText("فترات المرتبات", "Payroll periods"),
                         hiltechText("راجع فترات المرتبات وبيانات الموظفين واستثناءات المدخلات.", "Review payroll periods, employees and input exceptions."))
                 }
-                TextButton(onClick = onRefresh, enabled = !state.loading) { Text(hiltechText("تحديث", "Refresh")) }
+                TextButton(onClick = onRefresh, enabled = !blocked) { Text(hiltechText("تحديث", "Refresh")) }
             }
             if (state.loading) CircularProgressIndicator()
             state.errorCode?.let { Text(hiltechText("تعذر تنفيذ العملية: ", "Unable to complete operation: ") + it) }
@@ -85,20 +89,20 @@ fun Payroll9aAdminSection(
                 val matching = state.periods?.items.orEmpty().filter { period ->
                     query.isBlank() || listOf(period.periodCode, period.startDate, period.endDate).any { it.contains(query.trim(), true) }
                 }
-                if (!state.loading && matching.isEmpty()) Text(hiltechText("لا توجد فترات مطابقة.", "No matching periods."))
+                if (!blocked && state.periods != null && matching.isEmpty()) Text(hiltechText("لا توجد فترات مطابقة.", "No matching periods."))
                 matching.forEach { period ->
                     Surface(onClick = { openDetail = true; onSelect(period.periodId) },
-                        enabled = !state.loading, modifier = Modifier.fillMaxWidth(),
+                        enabled = !blocked, modifier = Modifier.fillMaxWidth(),
                         color = colors.surface, contentColor = colors.primaryText, shape = HiltechShape.medium) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Text(period.periodCode, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                                HiltechStateTag(period.state, HiltechStateTone.NEUTRAL)
+                                HiltechStateTag(payrollLifecycleLabel(period.state), HiltechStateTone.NEUTRAL)
                             }
-                            Text(period.startDate + " — " + period.endDate, color = colors.secondaryText)
+                            Text(payrollDisplayDate(period.startDate) + " — " + payrollDisplayDate(period.endDate), color = colors.secondaryText)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 HiltechKeyValue(hiltechText("الموظفون", "Employees"), period.employeeCount.toString(), Modifier.weight(1f))
-                                HiltechKeyValue(hiltechText("استثناءات المدخلات", "Input exceptions"), period.exceptionCount.toString(), Modifier.weight(1f))
+                                HiltechKeyValue(hiltechText("ملاحظات اللقطة", "Snapshot notes"), period.exceptionCount.toString(), Modifier.weight(1f))
                             }
                         }
                     }
@@ -110,17 +114,21 @@ fun Payroll9aAdminSection(
             }
             if (state.canPrepare && creating && (!openDetail || state.selected == null)) {
                 Text(hiltechText("فترة جديدة", "New period"), style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(value = periodCode, onValueChange = { periodCode = it }, label = { Text(hiltechText("رمز الفترة", "Period code")) })
-                OutlinedTextField(value = startDate, onValueChange = { startDate = it }, label = { Text(hiltechText("من YYYY-MM-DD", "From YYYY-MM-DD")) })
-                OutlinedTextField(value = endDate, onValueChange = { endDate = it }, label = { Text(hiltechText("إلى YYYY-MM-DD", "To YYYY-MM-DD")) })
-                OutlinedTextField(value = cutoffDate, onValueChange = { cutoffDate = it }, label = { Text(hiltechText("آخر يوم لتجميع المدخلات", "Input cutoff date")) })
-                OutlinedTextField(value = targetPayment, onValueChange = { targetPayment = it }, label = { Text(hiltechText("تاريخ الصرف المستهدف — اختياري، ليس أمر صرف", "Target payment date (optional, not a payment order)")) })
+                HiltechDateField(hiltechText("بداية الفترة", "Period start"), startDate, { startDate = it }, optional = false, enabled = !blocked)
+                HiltechDateField(hiltechText("نهاية الفترة", "Period end"), endDate, { endDate = it; if (cutoffDate.isBlank()) cutoffDate = it }, optional = false, enabled = !blocked)
+                HiltechDateField(hiltechText("آخر يوم للمدخلات", "Input cutoff"), cutoffDate, { cutoffDate = it }, optional = false, enabled = !blocked)
+                HiltechDateField(hiltechText("موعد الصرف المستهدف", "Target payment date"), targetPayment, { targetPayment = it }, enabled = !blocked)
+                OutlinedTextField(value = periodCode, onValueChange = { periodCode = it.uppercase() }, modifier = Modifier.fillMaxWidth(),
+                    label = { Text(hiltechText("رمز الفترة، اختياري", "Period code, optional")) }, enabled = !blocked,
+                    supportingText = { Text(hiltechText("يُنشأ تلقائيًا من تاريخي الفترة إن تركته فارغًا.", "Generated from the period dates when left blank.")) })
+                if (startDate.isNotBlank() && endDate.isNotBlank() && cutoffDate.isNotBlank() && !validDates) Text(
+                    hiltechText("راجع التواريخ: النهاية بعد البداية، وآخر يوم للمدخلات داخل الفترة، والصرف لا يسبق البداية.",
+                        "Check the dates: end follows start, cutoff falls within the period, and payment is on or after the start."), color = MaterialTheme.colorScheme.error)
                 Button(
-                    enabled = periodCode.isNotBlank() && startDate.isNotBlank() &&
-                        endDate.isNotBlank() && cutoffDate.isNotBlank(),
+                    enabled = !blocked && validDates && (periodCode.isBlank() || Regex("^[A-Z][A-Z0-9_-]{0,63}$").matches(periodCode)),
                     onClick = {
                         onCreatePeriod(
-                            periodCode,
+                            periodCode.ifBlank { "PAY_${startDate.replace("-", "")}_${endDate.replace("-", "")}" },
                             startDate,
                             endDate,
                             cutoffDate,
@@ -131,57 +139,58 @@ fun Payroll9aAdminSection(
             }
 
             state.selected?.takeIf { openDetail }?.let { detail ->
-                TextButton(onClick = { openDetail = false }) { Text(hiltechText("العودة إلى الفترات", "Back to periods")) }
+                TextButton(onClick = { openDetail = false; onBackToPeriods() }, enabled = !blocked) { Text(hiltechText("العودة إلى الفترات", "Back to periods")) }
                 HiltechPanel(Modifier.fillMaxWidth()) {
                     Text(detail.period.periodCode, style = MaterialTheme.typography.headlineSmall)
-                    Text(detail.period.startDate + " — " + detail.period.endDate, color = colors.secondaryText)
-                    HiltechStateTag(detail.period.state, HiltechStateTone.NEUTRAL)
+                    Text(payrollDisplayDate(detail.period.startDate) + " — " + payrollDisplayDate(detail.period.endDate), color = colors.secondaryText)
+                    HiltechStateTag(payrollLifecycleLabel(detail.period.state), HiltechStateTone.NEUTRAL)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = !exceptionsOnly, onClick = { exceptionsOnly = false }, label = { Text(hiltechText("كل الموظفين", "All employees")) })
                     FilterChip(selected = exceptionsOnly, onClick = { exceptionsOnly = true }, label = { Text(hiltechText("الاستثناءات", "Exceptions")) })
                 }
                 if (detail.period.state == "OPEN" && state.canPrepare) {
-                    Button(onClick = { onCaptureInputs(detail.period.periodId) }) {
+                    Button(onClick = { onCaptureInputs(detail.period.periodId) }, enabled = !blocked) {
                         Text(hiltechText("تثبيت لقطة البيانات الحالية", "Capture current input snapshot"))
                     }
                 }
-                Text(hiltechText("المدخلات الناقصة لا تعني صفرًا. لا يمكن حساب أو اعتماد الرواتب من هنا.", "Missing inputs are not zero. Payroll calculation and approval are not available here."))
+                Text(hiltechText("تثبت اللقطة هوية الموظفين وتوظيفهم. سجّل مصادر القيم واعتمدها من قسم مصادر المرتبات قبل تجهيز الحساب.", "The snapshot fixes employee and employment facts. Record and approve monetary sources in Payroll sources before calculation."))
                 if (detail.employees.isEmpty()) {
                     Text(hiltechText("لا توجد لقطة موظفين لهذه الفترة.", "No employee snapshot for this period."))
                 }
-                detail.employees.filter { !exceptionsOnly || it.sourceChanged || it.exceptions.isNotEmpty() }.forEach { employee ->
+                detail.employees.filter { !exceptionsOnly || it.sourceChanged || it.exceptions.any { exception -> exception.blocksCalculation } }.forEach { employee ->
                     Text(
                         employee.displayName + " · " + employee.employeeCode,
                         style = MaterialTheme.typography.titleSmall,
                     )
-                    Text("حالة التوظيف: " + employee.employeeState)
+                    Text(hiltechText("حالة التوظيف: ", "Employment status: ") + payrollLifecycleLabel(employee.employeeState))
                     if (employee.sourceChanged) {
                         Text(hiltechText("تغيّرت بيانات المصدر بعد أخذ اللقطة — يجب مراجعة التغيير", "Source data changed after the snapshot; review the change."))
                     }
                     employee.exceptions.forEach { exception ->
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("مدخل غير جاهز: " + exception.code)
-                            Text("المصدر: " + exception.sourceDomain +
-                                " · لا يُسمح بالحساب حتى حلّ مصدر البيانات")
+                            Text(if (exception.blocksCalculation) payrollMessage(exception.code) else
+                                hiltechText("تم تسجيل المصدر واعتماده.", "The source has been recorded and approved."))
+                            Text(hiltechText("المصدر: ", "Source: ") + exception.sourceDomain)
                             if (exception.reviews.isNotEmpty()) {
-                                Text("مراجعات موثقة: " + exception.reviews.size)
+                                Text(hiltechText("مراجعات موثقة: ", "Recorded reviews: ") + exception.reviews.size)
                             }
                             if (state.canReview) {
+                                var reviewNote by remember(exception.exceptionId, exception.reviews.size) { mutableStateOf("") }
                                 OutlinedTextField(
                                     value = reviewNote,
                                     onValueChange = { reviewNote = it },
                                     label = { Text(hiltechText("ملاحظة مراجعة، لا تُزيل الاستثناء", "Review note (does not clear the exception)")) },
+                                    enabled = !blocked,
                                 )
                                 OutlinedButton(
-                                    enabled = reviewNote.isNotBlank(),
+                                    enabled = reviewNote.isNotBlank() && !blocked,
                                     onClick = {
                                         onReviewException(
                                             detail.period.periodId,
                                             exception.exceptionId,
                                             reviewNote,
                                         )
-                                        reviewNote = ""
                                     },
                                 ) { Text(hiltechText("تسجيل مراجعة", "Record review")) }
                             }
@@ -199,7 +208,7 @@ fun Payroll9aEmployeePendingSection() {
     CompositionLocalProvider(LocalLayoutDirection provides LocalHiltechLanguage.current.direction) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(hiltechText("كشف المرتب", "Payslip"), style = MaterialTheme.typography.titleMedium)
-            Text(hiltechText("لن يتاح كشف راتب شخصي قبل اعتماد سياسات المرتبات ونتيجة الصرف الفعلية.", "Personal payslips require approved payroll policies and actual payment results."))
+            Text(hiltechText("يظهر كشفك بعد اعتماد نسخة المرتبات. تظهر حالة الصرف بشكل مستقل عند تسجيل نتيجتها من المالية.", "Your payslip becomes available after the payroll version is released. Payment status is shown separately when Finance records its outcome."))
         }
     }
 }

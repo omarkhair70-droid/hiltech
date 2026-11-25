@@ -285,13 +285,13 @@ internal enum class NativeWorkspaceGroup(val ar: String, val en: String) {
 }
 
 internal fun nativeWorkspaceGroup(id: String): NativeWorkspaceGroup = when {
-    id.startsWith("executive") -> NativeWorkspaceGroup.Management
-    id.contains("payroll") || id.contains("payslip") -> NativeWorkspaceGroup.Payroll
+    id.startsWith("executive") || id == "company-administration" -> NativeWorkspaceGroup.Management
     id.startsWith("finance") -> NativeWorkspaceGroup.Finance
+    id.contains("payroll") || id.contains("payslip") -> NativeWorkspaceGroup.Payroll
     id.startsWith("commercial") -> NativeWorkspaceGroup.Sales
     id.startsWith("project-") -> NativeWorkspaceGroup.Projects
     id.startsWith("handover") || id.startsWith("service-operations") -> NativeWorkspaceGroup.Delivery
-    id.contains("purchase") || id.contains("procurement") -> NativeWorkspaceGroup.Purchasing
+    id.contains("purchase") || id.contains("procurement") || id == "supplier-registry" -> NativeWorkspaceGroup.Purchasing
     else -> NativeWorkspaceGroup.Other
 }
 
@@ -299,7 +299,10 @@ internal fun nativeWorkspaceTitle(workspace: NativeOperationalWorkspace, languag
     val names = when (workspace.id) {
         "executive-home" -> "نظرة عامة على الشركة" to "Company overview"
         "my-payslips" -> "كشوف مرتباتي" to "My payslips"
-        "payroll-admin-read" -> "مراجعة فترات المرتبات" to "Payroll periods"
+        "payroll-admin-read" -> "إدارة الرواتب" to "Payroll administration"
+        "company-administration" -> "إدارة الشركة" to "Company administration"
+        "supplier-registry" -> "سجل الموردين" to "Supplier register"
+        "service-purchasing" -> "مشتريات الخدمات" to "Service purchasing"
         "commercial-read" -> "المبيعات والمناقصات" to "Sales & tenders"
         "project-planning" -> "المشاريع وخطط التنفيذ" to "Projects & delivery plans"
         "handover-read" -> "تسليم المشاريع" to "Project handover"
@@ -309,6 +312,8 @@ internal fun nativeWorkspaceTitle(workspace: NativeOperationalWorkspace, languag
         "finance-invoice-read" -> "فواتير الموردين" to "Supplier invoices"
         "finance-completion-operator" -> "إتمام العمليات المالية" to "Complete financial operations"
         "finance-cashbox-opening" -> "فتح خزنة" to "Open cashbox"
+        "finance-allocation-operator" -> "التخصيصات المالية" to "Financial allocations"
+        "finance-payroll-disbursement" -> "صرف الرواتب" to "Payroll disbursements"
         else -> return workspace.label
     }
     return language.text(names.first, names.second)

@@ -19,14 +19,15 @@ import java.util.UUID
  * individual salary facts stay in the Payroll domain. Does NOT post a payable,
  * make payment instructions, create a bank transfer or mark employees PAID.
  *
- * This adapter is installed ONLY when the separate Finance review intake
- * feature is enabled. The pending DDL is not a numbered production migration.
+ * The internal source adapter is available by default. An explicit false
+ * incident switch can suspend intake without changing Payroll authority.
  */
 @Component
 @ConditionalOnProperty(
     prefix = "hiltech.finance",
     name = ["payroll-review-intake-enabled"],
     havingValue = "true",
+    matchIfMissing = true,
 )
 class FinancePayrollReviewIntakeAdapter(
     private val jdbc: JdbcTemplate,

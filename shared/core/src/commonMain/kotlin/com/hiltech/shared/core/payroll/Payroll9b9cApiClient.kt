@@ -88,6 +88,28 @@ class Payroll9b9cApiClient(
             decode = { json.decodeFromString(PayrollApprovalResultDto.serializer(), it) },
         )
 
+    suspend fun review(runVersionId: String, installationId: String): PayrollRunReviewDto = api.request(
+        method = HttpMethod.Get, path = "/v1/payroll/runs/$runVersionId/review",
+        options = HiltechRequestOptions(installationId = installationId),
+        decode = { body -> json.decodeFromString(PayrollRunReviewDto.serializer(), body).also {
+            require(it.runVersionId == runVersionId) { "Payroll review source mismatch" }
+        } },
+    )
+
+    suspend fun decideRun(runVersionId: String, request: PayrollRunDecisionRequestDto, installationId: String): PayrollRunDecisionResultDto {
+        require(request.decision in setOf("APPROVE", "REJECT", "REQUEST_CHANGE"))
+        require(request.decision == "APPROVE" || !request.comment.isNullOrBlank())
+        return api.request(method = HttpMethod.Post, path = "/v1/payroll/runs/$runVersionId/approval-decisions",
+            options = HiltechRequestOptions(installationId = installationId, idempotencyKey = request.operationId),
+            requestBody = json.encodeToString(PayrollRunDecisionRequestDto.serializer(), request),
+            decode = { body -> json.decodeFromString(PayrollRunDecisionResultDto.serializer(), body).also {
+                val expected = when (request.decision) { "APPROVE" -> "APPROVED"; "REJECT" -> "REJECTED"; else -> "CHANGE_REQUESTED" }
+                require(it.runVersionId == runVersionId && it.approvalRequestId == request.approvalRequestId && it.approvalState == expected) {
+                    "Payroll review decision receipt mismatch"
+                }
+            } })
+    }
+
     suspend fun releaseForFinanceReview(
         runVersionId: String,
         operationId: String,

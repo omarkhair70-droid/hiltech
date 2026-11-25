@@ -17,15 +17,15 @@ import java.util.UUID
 data class CreatePayrollDraftRequest(val operationId: String)
 
 /**
- * Separate opt-in from 9A. Real approved-source and policy provider must be
- * installed before this creates a draft; never accepts amounts from an API user.
+ * Real approved-source and policy providers must satisfy every calculation.
+ * The calculation request never accepts payroll amounts from an API user.
  */
 @RestController
 @ConditionalOnProperty(
     prefix = "hiltech.payroll",
     name = ["draft-runs-enabled"],
     havingValue = "true",
-    matchIfMissing = false,
+    matchIfMissing = true,
 )
 class Payroll9bController(private val service: Payroll9bDraftService) {
     @PostMapping("/v1/payroll/periods/{periodId}/runs/drafts")

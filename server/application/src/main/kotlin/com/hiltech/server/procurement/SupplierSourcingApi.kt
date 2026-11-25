@@ -74,6 +74,10 @@ class SupplierSourcingController(private val service: SupplierSourcingService) {
 class SupplierMasterDataController(
     private val masterData: SupplierMasterDataService,
 ) {
+    @GetMapping("/v1/sourcing/organizations/{orgId}/supplier-registry/capabilities")
+    fun capabilities(request: HttpServletRequest, @PathVariable orgId: UUID): SupplierRegistryCapabilities =
+        masterData.capabilities(request.sourcingActor(), orgId)
+
     @GetMapping("/v1/sourcing/organizations/{orgId}/supplier-registry")
     fun supplierRegistry(
         request: HttpServletRequest,
@@ -81,6 +85,23 @@ class SupplierMasterDataController(
         @RequestParam(name = "query", defaultValue = "") nameContains: String,
     ): List<SupplierRegistryCandidate> =
         masterData.supplierRegistry(request.sourcingActor(), orgId, nameContains)
+
+    @GetMapping("/v1/sourcing/organizations/{orgId}/supplier-registry/{supplierId}")
+    fun supplierDetail(request: HttpServletRequest, @PathVariable orgId: UUID, @PathVariable supplierId: UUID): SupplierRegistryDetail =
+        masterData.supplierDetail(request.sourcingActor(), orgId, supplierId)
+
+    @GetMapping("/v1/sourcing/organizations/{orgId}/supplier-registry/{supplierId}/history")
+    fun supplierHistory(request: HttpServletRequest, @PathVariable orgId: UUID, @PathVariable supplierId: UUID): List<SupplierRegistryHistoryEntry> =
+        masterData.supplierHistory(request.sourcingActor(), orgId, supplierId)
+
+    @PostMapping("/v1/sourcing/organizations/{orgId}/supplier-registry")
+    fun createSupplier(request: HttpServletRequest, @PathVariable orgId: UUID, @RequestBody body: CreateSupplierRequest): SupplierProfileReceipt =
+        masterData.createSupplier(request.sourcingContext(body.operationId), orgId, body)
+
+    @PostMapping("/v1/sourcing/organizations/{orgId}/supplier-registry/{supplierId}/profile")
+    fun updateSupplier(request: HttpServletRequest, @PathVariable orgId: UUID, @PathVariable supplierId: UUID,
+        @RequestBody body: UpdateSupplierProfileRequest): SupplierProfileReceipt =
+        masterData.updateSupplierProfile(request.sourcingContext(body.operationId), orgId, supplierId, body)
 
     @PostMapping("/v1/sourcing/organizations/{orgId}/supplier-links")
     fun changeSupplierLink(

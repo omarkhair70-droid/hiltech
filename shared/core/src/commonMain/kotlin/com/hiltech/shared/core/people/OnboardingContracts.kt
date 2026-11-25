@@ -108,6 +108,7 @@ data class EmployeeIdentityInvitationDto(
     val version: Long,
     val replayed: Boolean,
     val correlationId: String,
+    val operationId: String? = null,
 )
 
 @Serializable

@@ -149,7 +149,7 @@ class FinanceExpenseReimbursementApprovalSubject(
    ) ?: BigDecimal.ZERO
    val allocated=jdbc.queryForObject(
      """SELECT coalesce(sum(amount),0)
-        FROM finance_expense_reimbursement_record
+        FROM finance_bank_committed_usage
         WHERE organization_id=? AND bank_statement_line_id=?""",
      BigDecimal::class.java,org,source.bankLine,
    ) ?: BigDecimal.ZERO

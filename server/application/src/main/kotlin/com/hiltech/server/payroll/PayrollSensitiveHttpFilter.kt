@@ -12,6 +12,7 @@ class PayrollSensitiveHttpFilter : OncePerRequestFilter() {
     override fun shouldNotFilter(request: HttpServletRequest): Boolean =
         !(
             request.requestURI.startsWith("/v1/payroll/") ||
+                request.requestURI.startsWith("/v1/finance/payroll/") ||
                 request.requestURI.startsWith("/v1/me/payroll/")
         )
 

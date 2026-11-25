@@ -17,6 +17,57 @@ class Payroll9aApiClient(
         explicitNulls = false
     },
 ) {
+    suspend fun capabilities(organizationId: String, installationId: String): PayrollCapabilitiesDto {
+        requireUuid(organizationId)
+        return api.request(HttpMethod.Get, "/v1/payroll/capabilities?organizationId=$organizationId",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(PayrollCapabilitiesDto.serializer(), it) })
+    }
+
+    suspend fun sources(periodId: String, installationId: String): PayrollSourcesDto {
+        requireUuid(periodId)
+        return api.request(HttpMethod.Get, "/v1/payroll/periods/$periodId/sources",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(PayrollSourcesDto.serializer(), it).also { result ->
+                require(result.periodId == periodId && result.records.all { record -> record.periodId == periodId })
+            } })
+    }
+
+    suspend fun saveSource(periodId: String, request: PayrollSourceRequestDto, installationId: String): PayrollSourceCommandDto {
+        requireUuid(periodId)
+        requireUuid(request.operationId)
+        require(validPayrollSource(request))
+        return api.request(HttpMethod.Post, "/v1/payroll/periods/$periodId/sources",
+            options = HiltechRequestOptions(installationId = installationId, idempotencyKey = request.operationId),
+            requestBody = json.encodeToString(PayrollSourceRequestDto.serializer(), request),
+            decode = { json.decodeFromString(PayrollSourceCommandDto.serializer(), it).also { result ->
+                require(payrollSourceReceiptMatches(periodId, request, result.record))
+            } })
+    }
+
+    suspend fun requestSourceApproval(recordId: String, operationId: String, installationId: String): PayrollSourceCommandDto {
+        requireUuid(recordId)
+        requireUuid(operationId)
+        return api.request(HttpMethod.Post, "/v1/payroll/sources/$recordId/approval-requests",
+            options = HiltechRequestOptions(installationId = installationId, idempotencyKey = operationId),
+            requestBody = json.encodeToString(PayrollSourceApprovalRequestDto.serializer(), PayrollSourceApprovalRequestDto(operationId)),
+            decode = { json.decodeFromString(PayrollSourceCommandDto.serializer(), it).also { result ->
+                require(result.record.recordId == recordId && result.record.approvalRequestId != null)
+            } })
+    }
+
+    suspend fun decideSource(recordId: String, request: PayrollSourceDecisionRequestDto, installationId: String): PayrollSourceCommandDto {
+        requireUuid(recordId)
+        requireUuid(request.operationId)
+        return api.request(HttpMethod.Post, "/v1/payroll/sources/$recordId/decisions",
+            options = HiltechRequestOptions(installationId = installationId, idempotencyKey = request.operationId),
+            requestBody = json.encodeToString(PayrollSourceDecisionRequestDto.serializer(), request),
+            decode = { json.decodeFromString(PayrollSourceCommandDto.serializer(), it).also { result ->
+                val expected = when (request.decision) { "APPROVE" -> "APPROVED"; "REJECT" -> "REJECTED"; else -> "CHANGE_REQUESTED" }
+                require(result.record.recordId == recordId && result.record.approvalState == expected)
+            } })
+    }
+
     suspend fun list(
         organizationId: String,
         installationId: String,

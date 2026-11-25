@@ -18,6 +18,12 @@ candidate, not resuming a historical phase cursor.
   branch name nor a historical green check proves deployment or acceptance.
 - Read `docs/13-delivery/NATIVE_PRODUCT_VERIFICATION.md` for the current
   engineering evidence contract and publication boundary.
+- Company responsibility and delegation commands are described in
+  `docs/13-delivery/RESPONSIBILITY_ADMINISTRATION_CONTRACT.md`; payroll bank
+  evidence and result semantics are in
+  `docs/13-delivery/FINANCE_PAYROLL_DISBURSEMENT_CONTRACT.md`.
+  These are implementation contracts. Verify the current native flow, provider
+  prerequisites and exact source/test results before treating a journey as ready.
 - Reconcile other checkouts and unique local work before merging. Preserve
   dirty files and evidence; never reset or clean to make a comparison easier.
 - Complete interactions across UI, command response, permissions and source

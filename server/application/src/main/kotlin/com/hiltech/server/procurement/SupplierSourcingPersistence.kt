@@ -27,6 +27,7 @@ data class SourcingSupplierCandidate(
     val supplierOrganizationId: UUID,
     val displayName: String,
     val relationshipRevision: Int,
+    val organizationCode: String = "",
 )
 
 data class SupplierQuoteDocumentSlot(
@@ -58,6 +59,8 @@ data class SupplierRegistryCandidate(
     val supplierStatus: String,
     val relationshipRevision: Int,
     val relationshipState: String?,
+    val organizationCode: String = "",
+    val profileVersion: Long = 0,
 )
 
 data class SupplierLinkEventRecord(
@@ -128,14 +131,16 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
         ) }, id,
     ).singleOrNull()
 
-    /** Master-data-only supplier search: includes unlinked/inactive records. */
+    /** Company-owned register including suspended links; never a global directory. */
     fun supplierRegistryCandidates(
         purchasingOrganizationId: UUID,
         nameContains: String,
     ): List<SupplierRegistryCandidate> = jdbc.query(
         """
-        SELECT o.id, o.display_name, o.status, latest.revision_number, latest.state
+        SELECT o.id, coalesce(p.display_name,o.display_name) AS display_name,
+               coalesce(p.supplier_code,o.organization_code) AS organization_code,o.status,latest.revision_number,latest.state,coalesce(p.version,0) AS profile_version
         FROM organization o
+        LEFT JOIN procurement_supplier_profile p ON p.supplier_organization_id=o.id AND p.organization_id=?
         LEFT JOIN LATERAL (
             SELECT l.revision_number, l.state
             FROM procurement_supplier_link_event l
@@ -144,8 +149,10 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
             ORDER BY l.revision_number DESC LIMIT 1
         ) latest ON true
         WHERE o.organization_type = 'SUPPLIER'
-          AND o.display_name ILIKE '%' || ? || '%'
-        ORDER BY o.display_name, o.id
+          AND (p.organization_id IS NOT NULL OR latest.revision_number IS NOT NULL)
+          AND position(lower(?) in lower(coalesce(p.display_name,o.display_name) || ' ' ||
+              coalesce(p.legal_name,o.legal_name) || ' ' || coalesce(p.supplier_code,o.organization_code))) > 0
+        ORDER BY coalesce(p.display_name,o.display_name), o.id
         LIMIT 100
         """.trimIndent(),
         { row, _ -> SupplierRegistryCandidate(
@@ -154,7 +161,10 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
             row.getString("status"),
             row.getInt("revision_number"),
             row.getString("state"),
+            row.getString("organization_code"),
+            row.getLong("profile_version"),
         ) },
+        purchasingOrganizationId,
         purchasingOrganizationId,
         nameContains,
     )
@@ -265,7 +275,8 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
         nameContains: String,
     ): List<SourcingSupplierCandidate> = jdbc.query(
         """
-        SELECT current.supplier_organization_id, current.revision_number, o.display_name
+        SELECT current.supplier_organization_id,current.revision_number,coalesce(p.display_name,o.display_name) AS display_name,
+               coalesce(p.supplier_code,o.organization_code) AS organization_code
         FROM (
             SELECT DISTINCT ON (l.supplier_organization_id)
                 l.supplier_organization_id, l.revision_number, l.state
@@ -274,18 +285,20 @@ class SupplierSourcingPersistence(private val jdbc: JdbcTemplate) {
             ORDER BY l.supplier_organization_id, l.revision_number DESC
         ) current
         JOIN organization o ON o.id = current.supplier_organization_id
+        LEFT JOIN procurement_supplier_profile p ON p.supplier_organization_id=o.id AND p.organization_id=?
         WHERE current.state = 'ACTIVE'
           AND o.organization_type = 'SUPPLIER'
           AND o.status = 'ACTIVE'
-          AND position(lower(?) in lower(o.display_name)) > 0
-        ORDER BY o.display_name, current.supplier_organization_id
+          AND position(lower(?) in lower(coalesce(p.display_name,o.display_name) || ' ' || coalesce(p.supplier_code,o.organization_code))) > 0
+        ORDER BY coalesce(p.display_name,o.display_name), current.supplier_organization_id
         LIMIT 100
         """.trimIndent(),
         { row, _ -> SourcingSupplierCandidate(
             row.getObject("supplier_organization_id", UUID::class.java),
             row.getString("display_name"),
             row.getInt("revision_number"),
-        ) }, organizationId, nameContains,
+            row.getString("organization_code"),
+        ) }, organizationId, organizationId, nameContains,
     )
 
     /** Do not use a globally active supplier without a current local link. */

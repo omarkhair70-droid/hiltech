@@ -53,6 +53,7 @@ data class PayrollRunSummaryDto(
     val net: String,
     val employeeCount: Int,
     val sourceFingerprint: String,
+    val releaseState: String = "NOT_RELEASED",
 )
 
 @Serializable
@@ -157,6 +158,7 @@ data class PrivatePayslipDto(
     val reimbursements: String,
     val net: String,
     val paymentStatus: String,
+    val paymentAvailability: String = "RECORDED",
 )
 
 @Serializable

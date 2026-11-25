@@ -5,11 +5,11 @@ import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.IdempotentCommandExecutor
 import com.hiltech.server.platform.IdempotentCommandOutcome
 import com.hiltech.server.platform.IdempotentCommandSpec
+import com.hiltech.server.platform.IdempotencyKeyContract
 import com.hiltech.server.platform.ProductApiException
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
-import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import java.security.MessageDigest
 import java.time.Clock
@@ -23,21 +23,12 @@ interface SupplierMasterDataAuthorizationPort {
     fun canMaintainSupplierLinks(actor: UUID, purchasingOrganizationId: UUID): Boolean
 }
 
-/** No user, role or supplier is granted master-data authority by default. */
-@Component
-class DenyAllSupplierMasterDataAuthorization : SupplierMasterDataAuthorizationPort {
-    override fun canMaintainSupplierLinks(
-        actor: UUID,
-        purchasingOrganizationId: UUID,
-    ): Boolean = false
-}
-
 data class ChangeSupplierLinkRequest(
     val operationId: UUID,
     val supplierOrganizationId: UUID,
     val expectedRevisionNumber: Int,
     val state: String,
-    /** Operator-attested reference; validation against company records is a rollout gate. */
+    /** Human reason or source reference, recorded as an operator attestation. */
     val sourceReference: String,
 )
 
@@ -50,18 +41,33 @@ data class SupplierLinkEventReceipt(
     val replayed: Boolean,
 )
 
+data class SupplierRegistryCapabilities(val organizationId: UUID, val available: Boolean, val canMaintain: Boolean)
+data class CreateSupplierRequest(val operationId: UUID, val profile: SupplierProfileData)
+data class UpdateSupplierProfileRequest(val operationId: UUID, val baseVersion: Long, val profile: SupplierProfileData)
+data class SupplierProfileReceipt(
+    val operationId: UUID,
+    val organizationId: UUID,
+    val supplierOrganizationId: UUID,
+    val version: Long,
+    val action: String,
+    val replayed: Boolean,
+)
+
 @Service
 class SupplierMasterDataService @Autowired constructor(
     private val sourcing: SupplierSourcingPersistence,
+    private val registry: SupplierRegistryPersistence,
     private val authority: SupplierMasterDataAuthorizationPort,
     private val commands: IdempotentCommandExecutor,
     private val audit: AuditEventWriter,
     private val clock: Clock,
-    @Value("\${hiltech.procurement.sourcing.enabled:false}")
-    private val sourcingEnabled: Boolean = false,
-    @Value("\${hiltech.procurement.supplier-master-data.enabled:false}")
-    private val masterDataEnabled: Boolean = false,
+    @Value("\${hiltech.procurement.supplier-master-data.enabled:true}")
+    private val masterDataEnabled: Boolean = true,
 ) {
+    fun capabilities(actor: UUID, org: UUID) = SupplierRegistryCapabilities(
+        org, masterDataEnabled, masterDataEnabled && authority.canMaintainSupplierLinks(actor, org),
+    )
+
     /** Only an explicitly authorized supplier-registry custodian can search. */
     fun supplierRegistry(
         actor: UUID,
@@ -72,6 +78,72 @@ class SupplierMasterDataService @Autowired constructor(
         val search = nameContains.trim()
         if (search.length > 80 || search.any { it.code < 32 }) invalid()
         return sourcing.supplierRegistryCandidates(purchasingOrganizationId, search)
+    }
+
+    fun supplierDetail(actor: UUID, org: UUID, supplier: UUID): SupplierRegistryDetail {
+        requireAuthority(actor, org)
+        return registry.detail(org, supplier) ?: unavailable()
+    }
+
+    fun supplierHistory(actor: UUID, org: UUID, supplier: UUID): List<SupplierRegistryHistoryEntry> {
+        supplierDetail(actor, org, supplier)
+        return registry.history(org, supplier)
+    }
+
+    fun createSupplier(ctx: ProcurementDraftContext, org: UUID, request: CreateSupplierRequest): SupplierProfileReceipt {
+        requireAuthority(ctx.actor, org)
+        if (request.operationId != ctx.operationId) invalidProfile()
+        val profile = normalizedProfile(request.profile)
+        val supplier = commandId("supplier", ctx.operationId)
+        val eventId = commandId("supplier-profile", ctx.operationId)
+        val execution = commands.execute(IdempotentCommandSpec(
+            ctx.operationId, ctx.actor, "PROCUREMENT_SUPPLIER_CREATED", "SUPPLIER_PROFILE", supplier,
+            profileFingerprint(org, supplier, 0, profile), ctx.correlationId,
+        )) {
+            lockAndAuthorize(ctx.actor, org)
+            val at = clock.instant()
+            registry.insertIdentity(supplier, profile, at)
+            val code = registry.reserveSupplierCode(org)
+            check(registry.saveProfile(org, supplier, 0, profile, ctx.actor, at, code))
+            registry.appendProfileEvent(eventId, ctx, org, supplier, 1, at)
+            sourcing.insertSupplierLinkEvent(SupplierLinkEventRecord(
+                commandId("supplier-link", ctx.operationId), ctx.operationId, org, supplier, 1, "ACTIVE",
+                "REGISTERED_IN_APPLICATION", ctx.actor, at, ctx.correlationId,
+            ))
+            audit.append(AuditEventRecord(
+                actorUserId = ctx.actor, action = "PROCUREMENT_SUPPLIER_CREATED", targetType = "SUPPLIER_PROFILE",
+                targetId = eventId, occurredAt = at, correlationId = ctx.correlationId, reason = "SUPPLIER_REGISTERED",
+            ))
+            IdempotentCommandOutcome("PROCUREMENT_SUPPLIER_CREATED", """{"supplierOrganizationId":"$supplier","version":1}""")
+        }
+        return SupplierProfileReceipt(ctx.operationId, org, supplier, 1, "CREATED", execution.replayed)
+    }
+
+    fun updateSupplierProfile(
+        ctx: ProcurementDraftContext, org: UUID, supplier: UUID, request: UpdateSupplierProfileRequest,
+    ): SupplierProfileReceipt {
+        requireAuthority(ctx.actor, org)
+        if (request.operationId != ctx.operationId || request.baseVersion < 0 || request.baseVersion == Long.MAX_VALUE) invalidProfile()
+        val profile = normalizedProfile(request.profile)
+        val version = request.baseVersion + 1
+        val eventId = commandId("supplier-profile", ctx.operationId)
+        val execution = commands.execute(IdempotentCommandSpec(
+            ctx.operationId, ctx.actor, "PROCUREMENT_SUPPLIER_PROFILE_SAVED", "SUPPLIER_PROFILE", supplier,
+            profileFingerprint(org, supplier, request.baseVersion, profile), ctx.correlationId,
+        )) {
+            lockAndAuthorize(ctx.actor, org)
+            val current = registry.detail(org, supplier) ?: unavailable()
+            if (current.version != request.baseVersion) profileConflict()
+            val at = clock.instant()
+            if (!registry.saveProfile(org, supplier, request.baseVersion, profile, ctx.actor, at)) profileConflict()
+            registry.appendProfileEvent(eventId, ctx, org, supplier, version, at)
+            audit.append(AuditEventRecord(
+                actorUserId = ctx.actor, action = "PROCUREMENT_SUPPLIER_PROFILE_SAVED", targetType = "SUPPLIER_PROFILE",
+                targetId = eventId, occurredAt = at, correlationId = ctx.correlationId, reason = "SUPPLIER_PROFILE_CORRECTED",
+            ))
+            IdempotentCommandOutcome("PROCUREMENT_SUPPLIER_PROFILE_SAVED", """{"supplierOrganizationId":"$supplier","version":$version}""")
+        }
+        return SupplierProfileReceipt(ctx.operationId, org, supplier, version, "UPDATED", execution.replayed)
     }
 
     fun changeSupplierLink(
@@ -119,6 +191,8 @@ class SupplierMasterDataService @Autowired constructor(
                 unavailable()
             }
             requireAuthority(ctx.actor, purchasingOrganizationId)
+            // A guessed global ID cannot import another company's supplier.
+            registry.detail(purchasingOrganizationId, request.supplierOrganizationId) ?: unavailable()
             val supplier = sourcing.supplierTypeAndStatus(request.supplierOrganizationId)
                 ?: unavailable()
             if (supplier.first != "SUPPLIER" ||
@@ -175,10 +249,48 @@ class SupplierMasterDataService @Autowired constructor(
     }
 
     private fun requireAuthority(actor: UUID, organizationId: UUID) {
-        if (!sourcingEnabled || !masterDataEnabled ||
+        if (!masterDataEnabled ||
             !authority.canMaintainSupplierLinks(actor, organizationId)
         ) unavailable()
     }
+
+    private fun lockAndAuthorize(actor: UUID, org: UUID) {
+        if (!sourcing.lockActiveOrganizationForSupplierLinks(org)) unavailable()
+        requireAuthority(actor, org)
+    }
+
+    private fun commandId(kind: String, operation: UUID): UUID = UUID.nameUUIDFromBytes(
+        "hiltech:procurement:$kind:$operation".toByteArray(Charsets.UTF_8),
+    )
+
+    private fun normalizedProfile(value: SupplierProfileData): SupplierProfileData {
+        fun field(text: String?, limit: Int, required: Boolean = false, multiline: Boolean = false): String? {
+            val trimmed = text?.trim()?.takeIf { it.isNotEmpty() }
+            if ((required && trimmed == null) || (trimmed != null && (trimmed.length > limit ||
+                    trimmed.any { it.code < 32 && !(multiline && it == '\n') || it.code == 127 }))) invalidProfile()
+            return trimmed
+        }
+        val email = field(value.email, 254)
+        if (email != null && !Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(email)) invalidProfile()
+        return SupplierProfileData(
+            field(value.legalName, 240, true)!!, field(value.displayName, 160, true)!!,
+            field(value.contactName, 160), email, field(value.phone, 40), field(value.taxReference, 80), field(value.address, 500, multiline = true),
+        )
+    }
+
+    private fun profileFingerprint(org: UUID, supplier: UUID, version: Long, profile: SupplierProfileData): String =
+        IdempotencyKeyContract.fingerprint(listOf(
+            org, supplier, version, profile.legalName, profile.displayName, profile.contactName.orEmpty(),
+            profile.email.orEmpty(), profile.phone.orEmpty(), profile.taxReference.orEmpty(), profile.address.orEmpty(),
+        ).joinToString("\u001f"))
+
+    private fun invalidProfile(): Nothing = throw ProductApiException(
+        "INVALID_SUPPLIER_PROFILE", "Review the supplier name and contact details.", HttpStatus.BAD_REQUEST,
+    )
+
+    private fun profileConflict(): Nothing = throw ProductApiException(
+        "SUPPLIER_PROFILE_VERSION_CONFLICT", "Supplier details changed; refresh before saving.", HttpStatus.CONFLICT,
+    )
 
     private fun unavailable(): Nothing = throw ProductApiException(
         "SUPPLIER_MASTER_DATA_UNAVAILABLE",

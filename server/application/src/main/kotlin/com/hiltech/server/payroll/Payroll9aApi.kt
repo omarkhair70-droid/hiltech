@@ -18,8 +18,8 @@ import java.time.LocalDate
 import java.util.UUID
 
 /**
- * Intentionally disabled by default. Phase 9B computation and 9C payout
- * endpoints do not exist. No employee self-service pay data exists in 9A.
+ * Source-authorized period capture. Available by default; an explicit server
+ * incident override may pause this route without changing employee authority.
  */
 @RestController
 @RequestMapping("/v1/payroll/periods")
@@ -27,7 +27,7 @@ import java.util.UUID
     prefix = "hiltech.payroll",
     name = ["periods-enabled"],
     havingValue = "true",
-    matchIfMissing = false,
+    matchIfMissing = true,
 )
 class Payroll9aController(
     private val service: Payroll9aService,

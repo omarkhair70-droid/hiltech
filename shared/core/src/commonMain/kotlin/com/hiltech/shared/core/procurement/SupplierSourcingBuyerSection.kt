@@ -84,7 +84,7 @@ fun SupplierSourcingBuyerSection(
                 Text("No active supplier relationship has been registered for this organization.")
             } else {
                 suppliers.forEach { supplier ->
-                    Text(supplier.displayName + " · Source revision " + supplier.relationshipRevision)
+                    Text(supplier.displayLabel())
                 }
             }
         }

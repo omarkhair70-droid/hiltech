@@ -180,17 +180,11 @@ class FinanceEmployeeFundingApprovalSubject(
             Boolean::class.java,org,row.kind,row.draftId,
         )==true)return null
         val used=jdbc.queryForObject(
-            """SELECT coalesce(sum(amount),0) FROM finance_employee_funding_record
+            """SELECT coalesce(sum(amount),0) FROM finance_bank_committed_usage
                WHERE organization_id=? AND bank_statement_line_id=?""",
             BigDecimal::class.java,org,row.bankLineId,
         ) ?: BigDecimal.ZERO
-        val cashUsed=jdbc.queryForObject(
-            """SELECT coalesce(sum(allocated_amount),0)
-               FROM finance_cash_allocation_effective
-               WHERE organization_id=? AND bank_statement_line_id=?""",
-            BigDecimal::class.java,org,row.bankLineId,
-        ) ?: BigDecimal.ZERO
-        if(used.add(cashUsed).add(row.amount)>row.bankAmount)return null
+        if(used.add(row.amount)>row.bankAmount)return null
         return FinanceEmployeeFundingVerified(
             proposalId=id,org=org,kind=row.kind,draftId=row.draftId,
             employeeId=row.employeeId,originalPolicyApprovalId=row.originalApproval,

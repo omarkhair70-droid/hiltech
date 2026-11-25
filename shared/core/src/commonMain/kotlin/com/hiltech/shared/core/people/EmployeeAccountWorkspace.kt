@@ -22,6 +22,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +35,7 @@ import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.network.HiltechApiException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 
 private enum class AccountDelivery {
     EMAIL_ACTION_LINK,
@@ -58,7 +60,9 @@ fun EmployeeAccountWorkspace(
     var deliveryState by remember { mutableStateOf<String?>(null) }
     var login by remember { mutableStateOf(employee.email.orEmpty()) }
     var method by remember { mutableStateOf<AccountDelivery?>(null) }
-    var attempted by remember { mutableStateOf<ProvisionEmployeeIdentityRequestDto?>(null) }
+    var attemptedJson by rememberSaveable { mutableStateOf<String?>(null) }
+    var unknownOutcome by rememberSaveable { mutableStateOf(false) }
+    val attempted = attemptedJson?.let { Json.decodeFromString(ProvisionEmployeeIdentityRequestDto.serializer(), it) }
     var refresh by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var submitting by remember { mutableStateOf(false) }
@@ -73,14 +77,18 @@ fun EmployeeAccountWorkspace(
 
     LaunchedEffect(employee.version, refresh) {
         loading = true
-        message = null
         try {
             val result = client.identityInvitationAvailability(employee.employeeId, installationId)
             require(result.employeeId == employee.employeeId && result.organizationId == employee.organizationId)
             availability = result
             val available = AccountDelivery.entries.filter { it.name in result.deliveryModes }
-            method = method?.takeIf { it in available } ?: available.firstOrNull()
-            result.pending?.let { login = it.requestedLogin }
+            if (unknownOutcome && attempted != null) {
+                method = AccountDelivery.valueOf(attempted.deliveryMode)
+                login = attempted.requestedLogin
+            } else {
+                method = method?.takeIf { it in available } ?: available.firstOrNull()
+                result.pending?.let { login = it.requestedLogin }
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -102,9 +110,11 @@ fun EmployeeAccountWorkspace(
             else -> null
         }
         when {
+            current?.status == "ACCOUNT_RESTRICTED" -> Text(hiltechText("هذا الموظف لديه حساب موقوف أو عضوية غير سارية. راجع حالة الحساب قبل متابعة الإعداد.", "This employee has a restricted account or inactive membership. Review the account status before continuing setup."))
             confirmation != null -> HiltechStateTag(confirmation, HiltechStateTone.CURRENT)
             current?.status == "LINKED" -> HiltechStateTag(hiltechText("حساب مرتبط", "Account linked"), HiltechStateTone.CURRENT)
-            current?.status == "NOT_PREBOARDING" -> Text(hiltechText("إنشاء الحساب متاح خلال تجهيز انضمام الموظف.", "Create accounts during preboarding."))
+            current?.status in setOf("NOT_ELIGIBLE", "NOT_PREBOARDING") -> Text(hiltechText("إنشاء الحساب متاح للموظف النشط أو الجاري تجهيز انضمامه.", "Account setup is available for active employees and employees preparing to join."))
+            current?.status == "ACCOUNT_ATTENTION" -> Text(hiltechText("يوجد حساب قيد الإعداد يحتاج مراجعة قبل المتابعة. لا تنشئ حسابًا بديلًا.", "An existing account setup needs attention before continuing."))
             current?.status == "DELIVERY_UNAVAILABLE" -> Text(hiltechText("تسليم الحساب غير متاح حاليًا. راجع إعدادات الخدمة مع المسؤول.", "Account delivery is currently unavailable. Review service setup with the administrator."))
         }
         credential?.let { oneTimePassword ->
@@ -124,22 +134,23 @@ fun EmployeeAccountWorkspace(
         if (needsReauthentication) {
             TextButton(onClick = onReauthenticate) { Text(hiltechText("تأكيد تسجيل الدخول", "Confirm sign-in")) }
         }
-        if (!loading && confirmation == null && current != null && current.deliveryModes.isNotEmpty()) {
+        if (!loading && confirmation == null && current != null && (accountSetupCanSubmit(current) || (unknownOutcome && attempted != null))) {
             val pending = current.pending
+            val frozen = unknownOutcome && attempted != null
             OutlinedTextField(
                 value = login,
                 onValueChange = { login = it },
                 modifier = Modifier.fillMaxWidth(),
-                readOnly = pending != null || submitting,
+                readOnly = pending != null || submitting || frozen,
                 singleLine = true,
                 label = { Text(if (method == AccountDelivery.EMAIL_ACTION_LINK) hiltechText("البريد الإلكتروني للموظف", "Employee email") else hiltechText("اسم تسجيل الدخول", "Sign-in name")) },
             )
             Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                AccountDelivery.entries.filter { it.name in current.deliveryModes }.forEach { choice ->
+                AccountDelivery.entries.filter { it.name in current.deliveryModes || (frozen && it.name == attempted?.deliveryMode) }.forEach { choice ->
                     Row(
                         modifier = Modifier.fillMaxWidth().selectable(
                             selected = method == choice,
-                            enabled = pending == null && !submitting,
+                            enabled = pending == null && !submitting && !frozen,
                             role = Role.RadioButton,
                             onClick = { method = choice },
                         ),
@@ -155,6 +166,8 @@ fun EmployeeAccountWorkspace(
                 }
             }
             val selected = method
+            if (frozen) Text(hiltechText("نتيجة الطلب السابق غير مؤكدة. سنعيد نفس الطلب للتحقق منها.",
+                "The previous result is unconfirmed. Retry the same saved request to check its outcome."))
             Button(
                 enabled = selected != null && login.trim().length >= 3 && !submitting && !needsReauthentication,
                 onClick = {
@@ -165,26 +178,35 @@ fun EmployeeAccountWorkspace(
                     val previous = attempted?.takeIf {
                         it.requestedLogin == requestedLogin && it.deliveryMode == selected.name
                     }
-                    val request = ProvisionEmployeeIdentityRequestDto(
+                    val request = if (frozen) requireNotNull(attempted) else ProvisionEmployeeIdentityRequestDto(
                         operationId = pending?.operationId ?: previous?.operationId ?: newOperationId(),
                         baseEmployeeVersion = employee.version,
                         requestedLogin = requestedLogin,
                         deliveryMode = selected.name,
                     )
-                    attempted = request
+                    attemptedJson = Json.encodeToString(ProvisionEmployeeIdentityRequestDto.serializer(), request)
+                    val previouslyUnknown = unknownOutcome
+                    unknownOutcome = true
                     jobs.launch {
                         try {
                             val result = client.provisionIdentity(employee.employeeId, request, installationId)
                             require(result.employeeId == employee.employeeId && result.organizationId == employee.organizationId)
                             require(result.state == "READY" && result.deliveryMode == request.deliveryMode)
                             deliveryState = result.deliveryState
+                            unknownOutcome = false
+                            attemptedJson = null
                             credential = result.temporaryCredential.takeIf { selected == AccountDelivery.TEMPORARY_PASSWORD_HANDOFF }
+                            refresh += 1
                             onAccountReady()
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (failure: HiltechApiException) {
                             needsReauthentication = failure.code == "REAUTH_REQUIRED"
                             message = failure.code
+                            unknownOutcome = if (failure.code == "TEMPORARY_CREDENTIAL_NOT_REPLAYABLE") false
+                                else companyResponsibilityFailureDisposition(previouslyUnknown, failure).hasUnknownOutcome
+                            if (!unknownOutcome && failure.code == "TEMPORARY_CREDENTIAL_NOT_REPLAYABLE") attemptedJson = null
+                            refresh += 1
                         } catch (_: Exception) {
                             message = "OUTCOME_UNCONFIRMED"
                         } finally {
@@ -192,13 +214,16 @@ fun EmployeeAccountWorkspace(
                         }
                     }
                 },
-            ) { Text(if (pending != null) hiltechText("متابعة إعداد الحساب", "Continue account setup") else hiltechText("إنشاء الحساب", "Create account")) }
+            ) { Text(if (pending != null || frozen) hiltechText("متابعة إعداد الحساب", "Continue account setup") else hiltechText("إنشاء الحساب", "Create account")) }
         }
         if (!loading && !submitting && !needsReauthentication && (availability == null || message != null)) {
             TextButton(onClick = { refresh += 1 }) { Text(hiltechText("إعادة التحقق", "Check again")) }
         }
     }
 }
+
+internal fun accountSetupCanSubmit(availability: EmployeeIdentityInvitationAvailabilityDto): Boolean =
+    availability.status in setOf("READY_TO_INVITE", "CONTINUE_INVITATION") && availability.deliveryModes.isNotEmpty()
 
 @Composable
 private fun accountDeliveryTitle(delivery: AccountDelivery): String = when (delivery) {
@@ -218,6 +243,10 @@ private fun accountSetupMessage(code: String): String = when (code) {
     "REAUTH_REQUIRED" -> hiltechText("أكد تسجيل الدخول، ثم افتح الموظف مجددًا لإكمال إعداد حسابه.", "Confirm your sign-in, then reopen this employee to finish account setup.")
     "TEMPORARY_CREDENTIAL_NOT_REPLAYABLE" -> hiltechText("الحساب مرتبط. سبق إصدار كلمة مروره المؤقتة ولا يمكن عرضها مجددًا.", "The account is linked. Its temporary password was already issued.")
     "EMPLOYEE_VERSION_CONFLICT" -> hiltechText("تغير سجل الموظف. حدّث السجل قبل المتابعة.", "The employee changed. Refresh the record before continuing.")
+    "EMPLOYEE_ACCOUNT_NOT_ELIGIBLE", "IDENTITY_EMPLOYEE_NOT_ELIGIBLE" -> hiltechText("حالة الموظف الحالية لا تسمح بإنشاء حساب. راجع سجل الموظف.", "The employee’s current status does not allow account setup. Review the employee record.")
+    "EMPLOYEE_ACCOUNT_RESTRICTED", "IDENTITY_ACCOUNT_RESTRICTED", "IDENTITY_MEMBERSHIP_CONFLICT",
+    "IDENTITY_LOCAL_ACTIVATION_FAILED", "IDENTITY_MEMBERSHIP_ACTIVATION_FAILED" -> hiltechText("الحساب أو عضويته غير ساريين. راجع حالة الحساب قبل المتابعة.", "The account or its membership is restricted. Review its status before continuing.")
+    "EMPLOYEE_IDENTITY_ALREADY_LINKED", "IDENTITY_PERSON_ALREADY_LINKED", "IDENTITY_PROVIDER_SUBJECT_CONFLICT" -> hiltechText("يوجد حساب مرتبط بالفعل. راجع الحساب الحالي لتجنب إنشاء حساب آخر.", "An account is already linked. Review the existing account before continuing.")
     "IDENTITY_EMAIL_REQUIRED" -> hiltechText("أدخل بريدًا إلكترونيًا صالحًا.", "Enter a valid email address.")
     else -> hiltechText("تعذر تأكيد إعداد الحساب. أعد المحاولة لمتابعة نفس الطلب.", "Couldn’t confirm account setup. Try again to resume.")
 }

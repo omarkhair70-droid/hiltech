@@ -16,7 +16,7 @@ import java.util.UUID
     prefix = "hiltech.payroll",
     name = ["finance-results-enabled"],
     havingValue = "true",
-    matchIfMissing = false,
+    matchIfMissing = true,
 )
 class Payroll9cRunFinanceStatusController(
     private val service: Payroll9cRunFinanceStatusService,

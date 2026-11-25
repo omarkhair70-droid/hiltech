@@ -647,6 +647,9 @@ class Payroll9bDraftPostgresContractTest {
         }!!
         assertEquals(review.financeReviewBatchId, reviewedAgain.financeReviewBatchId)
         assertTrue(reviewedAgain.replayed)
+        com.hiltech.server.finance.FinancePayrollInstructionPostgresScenario.verify(
+            jdbc, tx, org, actor, currentSubject.subjectId, UUID.fromString(review.financeReviewBatchId), clock, realPublication,
+        )
         // One exact run may never be handed off with a second operation/hash.
         assertThrows<ProductApiException> {
             tx.execute {
@@ -674,13 +677,14 @@ class Payroll9bDraftPostgresContractTest {
         }
 
         decisionVersion = 2
-        assertFalse(realPublication.canPublish(
+        // Later review policy decisions do not revoke an immutable historical release.
+        assertTrue(realPublication.canPublish(
             org, currentSubject.subjectId, newer.first.sourceFingerprint,
         ))
         decisionVersion = 1
 
-        // 9C: even with a draft ledger, no payslip is visible unless a
-        // separately approved publication source and Finance-result source exist.
+        // A release is mandatory. Payment evidence availability must not hide
+        // the employee's independently approved historical entitlement.
         val notPublished = Payroll9cPayslipService(
             jdbc, JdbcPeoplePersistence(jdbc), JdbcRoleTeamSourceAuthority(jdbc),
             StaticListableBeanFactory().getBeanProvider(PayrollRunPublicationPort::class.java),
@@ -688,6 +692,24 @@ class Payroll9bDraftPostgresContractTest {
             clock,
         )
         assertTrue(notPublished.own(actor, org, "p9c-private").items.isEmpty())
+        val paymentUnavailable = Payroll9cPayslipService(
+            jdbc, JdbcPeoplePersistence(jdbc), JdbcRoleTeamSourceAuthority(jdbc),
+            reviewPublisher,
+            StaticListableBeanFactory().getBeanProvider(PayrollFinancePaymentResultsPort::class.java), clock,
+        )
+        assertEquals("PAYMENT_STATUS_UNAVAILABLE", paymentUnavailable.own(actor, org, "p9c-private").items.single().paymentStatus)
+        assertEquals("UNAVAILABLE", paymentUnavailable.own(actor, org, "p9c-private").items.single().paymentAvailability)
+        val emptyFinance = object : PayrollFinancePaymentResultsPort {
+            override fun expectedPayments(organizationId: UUID, runVersionId: UUID) = emptyList<PayrollExpectedPayment>()
+            override fun paymentEvents(organizationId: UUID, runVersionId: UUID) = emptyList<PayrollFinanceResult>()
+        }
+        val paymentNotRecorded = Payroll9cPayslipService(
+            jdbc, JdbcPeoplePersistence(jdbc), JdbcRoleTeamSourceAuthority(jdbc),
+            reviewPublisher,
+            StaticListableBeanFactory(mapOf("finance" to emptyFinance)).getBeanProvider(PayrollFinancePaymentResultsPort::class.java), clock,
+        )
+        assertEquals("PAYMENT_NOT_RECORDED", paymentNotRecorded.own(actor, org, "p9c-private").items.single().paymentStatus)
+        assertEquals("NOT_RECORDED", paymentNotRecorded.own(actor, org, "p9c-private").items.single().paymentAvailability)
         val publishedRunId = UUID.fromString(newer.first.runVersionId)
         val instructionId = UUID.randomUUID()
         val approval: PayrollRunPublicationPort = realPublication
@@ -730,9 +752,9 @@ class Payroll9bDraftPostgresContractTest {
             notReleased.status(actor, publishedRunId).status,
         )
         val unknownFinance = financeReviewer.status(actor, publishedRunId)
-        assertEquals("REQUIRES_REVIEW", unknownFinance.status)
+        assertEquals("PAYMENT_NOT_RECORDED", unknownFinance.status)
         assertEquals(1, unknownFinance.unresolvedCount)
-        assertEquals("UNKNOWN", unknownFinance.employeeOutcomes.single().outcome)
+        assertEquals("PAYMENT_NOT_RECORDED", unknownFinance.employeeOutcomes.single().outcome)
         assertThrows<ProductApiException> {
             financeReviewer.status(UUID.randomUUID(), publishedRunId)
         }
@@ -740,7 +762,7 @@ class Payroll9bDraftPostgresContractTest {
         assertEquals(1, pending.items.size)
         assertEquals(employee.toString(), pending.items.single().employeeId)
         assertEquals(newer.first.runVersionId, pending.items.single().runVersionId)
-        assertEquals("UNKNOWN", pending.items.single().paymentStatus)
+        assertEquals("PAYMENT_NOT_RECORDED", pending.items.single().paymentStatus)
         paymentEvents = listOf(
             PayrollFinanceResult(
                 organizationId = org, runVersionId = publishedRunId,
@@ -808,6 +830,7 @@ class Payroll9bDraftPostgresContractTest {
         // Changing an authoritative FINANCE coverage version makes the
         // correction materially different without fabricating salary figures.
         attestationVersion = 2L
+        assertTrue(realPublication.canPublish(org, publishedRunId, newer.first.sourceFingerprint))
         val corrected = tx.execute {
             service.create(periodId, UUID.randomUUID(), actor, "p9c-correction")
         }!!
@@ -913,12 +936,18 @@ class Payroll9bDraftPostgresContractTest {
             time.plusSeconds(1), historicalAssignment,
         )
         assertFalse(guard.isCurrent(currentSubject))
-        // Coverage change without any change to a monetary component
-        // must also invalidate a previously released payroll run.
+        // A later corrected RELEASE, rather than a draft/source change,
+        // supersedes the earlier published version. Current HR edits still
+        // block a new draft, but cannot erase the corrected historical release.
         attestationVersion = 2
         assertFalse(guard.isCurrentForPublication(currentSubject))
         jdbc.update("UPDATE employee SET version = version + 1 WHERE id = ?", employee)
         assertFalse(guard.isCurrent(currentSubject))
+        assertTrue(realPublication.canPublish(org, correctedRun, corrected.first.sourceFingerprint))
+        jdbc.update("UPDATE employment SET state = 'ENDED', end_date = ?, version = version + 1 WHERE id = ?",
+            LocalDate.parse("2026-11-25"), employment)
+        assertTrue(realPublication.canPublish(org, correctedRun, corrected.first.sourceFingerprint))
+        assertFalse(realPublication.canPublish(org, UUID.fromString(unapprovedCorrection.first.runVersionId), unapprovedCorrection.first.sourceFingerprint))
         assertThrows<ProductApiException> {
             tx.execute {
                 service.create(periodId, UUID.randomUUID(), actor, "p9b-test")

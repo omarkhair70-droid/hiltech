@@ -21,7 +21,7 @@ import java.util.UUID
     prefix = "hiltech.payroll",
     name = ["payslips-enabled"],
     havingValue = "true",
-    matchIfMissing = false,
+    matchIfMissing = true,
 )
 class OwnPayrollPayslipController(
     private val service: Payroll9cPayslipService,

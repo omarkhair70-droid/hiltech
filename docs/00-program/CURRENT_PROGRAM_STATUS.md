@@ -14,13 +14,22 @@ It distinguishes source changes, tests, device results and deployment. Internal
 audit reports and the canonical product closeout register are maintained
 privately. They must not be copied into this public repository.
 
-The current review also connects employee onboarding to both native hosts,
-separates operational supplier selection from supplier-master administration,
-and presents identity failures through localized recovery actions. These changes
-reuse current source authority. They do not supply company policy, make supplier
-administration available, or establish complete authenticated role acceptance.
-Keep local test, disposable-server, native-device and deployment evidence
-separate when evaluating the review.
+The current review connects employee onboarding, typed company responsibility
+administration and supplier registry operations to both native hosts. It adds
+bounded delegation, a first-administrator People activation path, eligible
+active-employee account setup, independently approved payroll inputs and run
+decisions, and bank-evidence-based payroll result recording. The native screens
+use named choices, calendars, localized states and retained uncertain commands.
+
+The engineering contracts are
+[`RESPONSIBILITY_ADMINISTRATION_CONTRACT.md`](../13-delivery/RESPONSIBILITY_ADMINISTRATION_CONTRACT.md)
+and
+[`FINANCE_PAYROLL_DISBURSEMENT_CONTRACT.md`](../13-delivery/FINANCE_PAYROLL_DISBURSEMENT_CONTRACT.md).
+They preserve current source authority, independent review and immutable
+history. They do not supply company-approved policy, create live accounts or
+execute bank transfers. Keep local tests, disposable database contracts, native
+device results and deployment evidence separate. Full role acceptance remains
+an explicit end-to-end verification result.
 
 ## Historical status snapshot — 2026-09-21
 

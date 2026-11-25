@@ -4,6 +4,7 @@ import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.ProductApiException
 import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -105,6 +106,7 @@ class Payroll9aService(
     private val authority: Payroll9aAuthorityPort,
     private val audit: AuditEventWriter,
     private val clock: Clock,
+    private val coverage: ObjectProvider<PayrollSourceCoverageReadPort>? = null,
 ) {
     @Transactional
     fun create(
@@ -499,9 +501,22 @@ class Payroll9aService(
             },
             period.id,
         )
+        val coverageSource = coverage?.ifAvailable
+        val withCurrentSources = if (coverageSource == null) employees else employees.map { employee ->
+            val approved = coverageSource.approvedDomains(period.organizationId, period.id, UUID.fromString(employee.employeeId))
+            employee.copy(exceptions = employee.exceptions.map { exception ->
+                val covered = when (exception.code) {
+                    "COMPENSATION_POLICY_NOT_CONNECTED" -> "COMPENSATION" in approved
+                    "APPROVED_TIME_SOURCE_NOT_CONNECTED" -> "APPROVED_TIME" in approved
+                    "FINANCE_DEDUCTION_SOURCE_NOT_CONNECTED" -> "FINANCE" in approved
+                    else -> false
+                }
+                if (covered) exception.copy(blocksCalculation = false) else exception
+            })
+        }
         return PayrollPeriodDetailDto(
             period = summary(period),
-            employees = employees,
+            employees = withCurrentSources,
         )
     }
 

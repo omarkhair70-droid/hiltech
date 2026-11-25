@@ -230,6 +230,13 @@ class DesktopIdentityRuntime(
             },
         )
 
+    internal fun productApiForSession(sessionCurrent: () -> Boolean): HiltechApiClient =
+        com.hiltech.shared.core.network.sessionBoundHiltechApiClient(
+            httpClient, apiBaseUrl, sessionCurrent,
+            accessToken = { session?.currentAccessToken() },
+            correlationId = { UUID.randomUUID().toString() },
+        )
+
     private val peopleApi =
         PeopleApiClient(productApi)
 

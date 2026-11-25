@@ -95,6 +95,10 @@ class SharedApprovalPayrollRunReleaseDecision(
                   AND ar.subject_type = ? AND ar.subject_id = ?
                   AND ar.subject_version = ? AND ar.policy_key = ?
                   AND ar.policy_version = ? AND ar.state = 'APPROVED'
+                  AND EXISTS (SELECT 1 FROM approval_decision d JOIN payroll_run_version r ON r.id = ar.subject_id
+                      WHERE d.approval_request_id = ar.id AND d.subject_version = ar.subject_version AND d.decision = 'APPROVE'
+                        AND r.organization_id = ar.organization_id AND d.actor_user_id <> ar.requester_user_id
+                        AND d.actor_user_id <> r.created_by_user_id)
             )
             """.trimIndent(),
             Boolean::class.java,
@@ -147,8 +151,10 @@ class Payroll9bRunReleaseService(
     private val corrections: Payroll9cCorrectionService,
     private val audit: AuditEventWriter,
     private val clock: Clock,
-    @Value("\${hiltech.payroll.run-approval-policy-key:}") private val policyKey: String,
+    @Value("\${hiltech.payroll.run-approval-policy-key:PAYROLL_RUN_REVIEW}") policyKey: String,
 ) {
+    private val policyKey = payrollRunPolicyKey(policyKey)
+
     @Transactional
     fun release(
         actorId: UUID,

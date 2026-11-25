@@ -161,9 +161,10 @@ class FinanceCashAllocationApprovalSubject(
         val usedSource=sums.filter {
             it["source_kind"]==p.kind && it["source_journal_id"]==p.journalId
         }.fold(BigDecimal.ZERO){a,row->a.add(row["allocated_amount"] as BigDecimal)}
-        val usedBank=sums.filter {
-            it["bank_statement_line_id"]==p.bankLineId
-        }.fold(BigDecimal.ZERO){a,row->a.add(row["allocated_amount"] as BigDecimal)}
+        val usedBank=jdbc.queryForObject(
+            "SELECT coalesce(sum(amount),0) FROM finance_bank_committed_usage WHERE organization_id=? AND bank_statement_line_id=?",
+            BigDecimal::class.java,org,p.bankLineId,
+        ) ?: BigDecimal.ZERO
         // A posted customer/supplier invoice can be settled partly in a
         // company cashbox and partly by bank: never advertise the same
         // remaining invoice balance twice.

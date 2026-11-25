@@ -47,9 +47,18 @@ class Payroll9cRunFinanceStatusService(
         ) == true
         if (!approved) return pending(run, "NOT_RELEASED", false, false)
         val financePort = finance.ifAvailable
-            ?: return pending(run, "FINANCE_NOT_CONNECTED", false, true)
+            ?: return pending(run,
+                if (run.lines.all { BigDecimal(it.net).signum() == 0 }) "NO_PAYMENT_REQUIRED" else "FINANCE_NOT_CONNECTED",
+                false, true)
 
         val expected = financePort.expectedPayments(org, runVersionId)
+        val events = financePort.paymentEvents(org, runVersionId)
+        if (expected.isEmpty() && events.isNotEmpty()) {
+            Payroll9aPolicy.fail("PAYROLL_FINANCE_UNEXPECTED_EVENT", HttpStatus.CONFLICT)
+        }
+        if (expected.isEmpty() && run.lines.any { BigDecimal(it.net).signum() > 0 }) {
+            return pending(run, "PAYMENT_NOT_RECORDED", true, true)
+        }
         Payroll9cExpectedBatchGuard.validate(
             org, runVersionId,
             run.lines.map {
@@ -61,16 +70,13 @@ class Payroll9cRunFinanceStatusService(
             },
             expected,
         )
-        val events = financePort.paymentEvents(org, runVersionId)
-        if (expected.isEmpty() && events.isNotEmpty()) {
-            Payroll9aPolicy.fail("PAYROLL_FINANCE_UNEXPECTED_EVENT", HttpStatus.CONFLICT)
-        }
         val reconciled = if (expected.isEmpty()) null else
             Payroll9cReconciler.reconcile(org, runVersionId, expected, events)
         val noTransferEmployees = run.lines.filter { BigDecimal(it.net).signum() == 0 }
         return Payroll9cRunFinanceStatusDto(
             runVersionId = run.runVersionId,
-            status = reconciled?.status?.name ?: "NO_PAYMENT_REQUIRED",
+            status = if (expected.isNotEmpty() && events.isEmpty()) "PAYMENT_NOT_RECORDED"
+                else reconciled?.status?.name ?: "NO_PAYMENT_REQUIRED",
             financeConnected = true,
             publicationApproved = true,
             employeeCount = run.lines.size,
@@ -80,7 +86,7 @@ class Payroll9cRunFinanceStatusService(
                 (reconciled?.employees ?: emptyList()).map {
                     PayrollEmployeeFinanceStatusDto(
                         employeeId = it.employeeId.toString(),
-                        outcome = it.result.name,
+                        outcome = if (events.none { event -> event.employeeId == it.employeeId }) "PAYMENT_NOT_RECORDED" else it.result.name,
                     )
                 } + noTransferEmployees.map {
                     PayrollEmployeeFinanceStatusDto(
@@ -104,7 +110,13 @@ class Payroll9cRunFinanceStatusService(
         publicationApproved = publicationApproved,
         employeeCount = run.lines.size,
         settledCount = 0,
-        unresolvedCount = run.lines.size,
-        employeeOutcomes = emptyList(),
+        unresolvedCount = run.lines.count { BigDecimal(it.net).signum() > 0 },
+        employeeOutcomes = if (status in setOf("PAYMENT_NOT_RECORDED", "FINANCE_NOT_CONNECTED", "NO_PAYMENT_REQUIRED")) run.lines.map {
+            PayrollEmployeeFinanceStatusDto(it.employeeId, when {
+                BigDecimal(it.net).signum() == 0 -> "NOT_APPLICABLE"
+                status == "FINANCE_NOT_CONNECTED" -> "PAYMENT_STATUS_UNAVAILABLE"
+                else -> "PAYMENT_NOT_RECORDED"
+            })
+        }.sortedBy { it.employeeId } else emptyList(),
     )
 }

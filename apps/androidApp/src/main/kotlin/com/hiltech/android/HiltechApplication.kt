@@ -99,6 +99,13 @@ class HiltechApplication : Application() {
         )
     }
 
+    fun productApiForSession(sessionCurrent: () -> Boolean): HiltechApiClient =
+        com.hiltech.shared.core.network.sessionBoundHiltechApiClient(
+            httpClient, BuildConfig.HILTECH_API_BASE_URL, sessionCurrent,
+            accessToken = { identityRuntime.currentAccessToken() },
+            correlationId = { UUID.randomUUID().toString() },
+        )
+
     val peopleApi: PeopleApiClient by lazy {
         PeopleApiClient(productApi)
     }

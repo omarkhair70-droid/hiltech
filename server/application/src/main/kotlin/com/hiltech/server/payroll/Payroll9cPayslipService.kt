@@ -13,8 +13,8 @@ import java.time.LocalDate
 import java.util.UUID
 
 /**
- * This is an external publication decision, not a writable Boolean on payroll.
- * It must validate the exact run version and currently approved company policy.
+ * Publication is an exact historical approval/release fact, not a writable
+ * Boolean or a dependency on later employment edits and bank availability.
  * Without an adapter the employee sees NO payroll data.
  */
 interface PayrollRunPublicationPort {
@@ -37,6 +37,7 @@ data class PrivatePayrollPayslipDto(
     val reimbursements: String,
     val net: String,
     val paymentStatus: String,
+    val paymentAvailability: String = "RECORDED",
 )
 
 data class OwnPayrollPayslipsDto(
@@ -82,7 +83,7 @@ class Payroll9cPayslipService(
         val employee = people.loadOwnEmployee(actorIdentity, organizationId, at)
             ?: Payroll9aPolicy.fail("PAYROLL_SELF_ACCESS_DENIED", HttpStatus.FORBIDDEN)
         val publisher = publication.ifAvailable ?: return OwnPayrollPayslipsDto(emptyList(), correlationId)
-        val financePort = finance.ifAvailable ?: return OwnPayrollPayslipsDto(emptyList(), correlationId)
+        val financePort = finance.ifAvailable
         val rows = jdbc.query(
             """
             SELECT rv.id AS run_id, l.employee_id, p.start_date, p.end_date,
@@ -125,18 +126,17 @@ class Payroll9cPayslipService(
             if (!publisher.canPublish(organizationId, row.runId, row.fingerprint)) {
                 return@mapNotNull null
             }
-            val expected = financePort.expectedPayments(organizationId, row.runId)
-            // An empty Finance batch can be correct only for a whole
-            // released payroll with no positive transfer candidates.
-            // A self-only payslip must not trust an incomplete batch while
-            // the admin run-status endpoint would correctly reject it.
-            Payroll9cExpectedBatchGuard.validateAgainstDatabase(
-                jdbc, organizationId, row.runId, expected,
-            )
-            val events = financePort.paymentEvents(organizationId, row.runId)
+            val expected = financePort?.expectedPayments(organizationId, row.runId).orEmpty()
+            val events = financePort?.paymentEvents(organizationId, row.runId).orEmpty()
             if (expected.isEmpty() && events.isNotEmpty()) {
                 Payroll9aPolicy.fail("PAYROLL_FINANCE_UNEXPECTED_EVENT", HttpStatus.CONFLICT)
             }
+            // Missing payment preparation does not erase an authorized,
+            // published payslip. A non-empty batch must still match every
+            // frozen employee exactly before any result is trusted.
+            if (expected.isNotEmpty()) Payroll9cExpectedBatchGuard.validateAgainstDatabase(
+                jdbc, organizationId, row.runId, expected,
+            )
             val outcome = if (row.net.signum() == 0) {
                 // No transfer was required for this employee; do not assert
                 // SUCCESS or invent a zero-value Finance instruction.
@@ -146,13 +146,18 @@ class Payroll9cPayslipService(
                     )
                 }
                 "NOT_APPLICABLE"
+            } else if (financePort == null) {
+                "PAYMENT_STATUS_UNAVAILABLE"
+            } else if (expected.isEmpty()) {
+                "PAYMENT_NOT_RECORDED"
             } else {
                 val reconciliation = Payroll9cReconciler.reconcile(
                     organizationId, row.runId, expected, events,
                 )
-                reconciliation.employees.singleOrNull {
+                val result = reconciliation.employees.singleOrNull {
                     it.employeeId == employee.employeeId
-                }?.result?.name ?: return@mapNotNull null
+                } ?: return@mapNotNull null
+                if (events.none { it.employeeId == employee.employeeId }) "PAYMENT_NOT_RECORDED" else result.result.name
             }
             PrivatePayrollPayslipDto(
                 runVersionId = row.runId.toString(),
@@ -166,6 +171,12 @@ class Payroll9cPayslipService(
                 reimbursements = row.reimbursements.toPlainString(),
                 net = row.net.toPlainString(),
                 paymentStatus = outcome,
+                paymentAvailability = when (outcome) {
+                    "PAYMENT_STATUS_UNAVAILABLE" -> "UNAVAILABLE"
+                    "PAYMENT_NOT_RECORDED" -> "NOT_RECORDED"
+                    "NOT_APPLICABLE" -> "NOT_APPLICABLE"
+                    else -> "RECORDED"
+                },
             )
         }
         return OwnPayrollPayslipsDto(approved, correlationId)

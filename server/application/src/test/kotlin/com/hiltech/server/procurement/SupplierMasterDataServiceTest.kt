@@ -25,6 +25,7 @@ class SupplierMasterDataServiceTest {
     private val at = Instant.parse("2026-11-22T15:00:00Z")
     private val context = ProcurementDraftContext(operation, actor, "supplier-test")
     private val repo = Mockito.mock(SupplierSourcingPersistence::class.java)
+    private val registry = Mockito.mock(SupplierRegistryPersistence::class.java)
     private val authority = Mockito.mock(SupplierMasterDataAuthorizationPort::class.java)
     private val audit = Mockito.mock(AuditEventWriter::class.java)
     private val commands = object : IdempotentCommandExecutor {
@@ -33,11 +34,9 @@ class SupplierMasterDataServiceTest {
     }
 
     private fun service(
-        sourcingEnabled: Boolean = true,
         masterDataEnabled: Boolean = true,
     ) = SupplierMasterDataService(
-        repo, authority, commands, audit, Clock.fixed(at, ZoneOffset.UTC),
-        sourcingEnabled, masterDataEnabled,
+        repo, registry, authority, commands, audit, Clock.fixed(at, ZoneOffset.UTC), masterDataEnabled,
     )
 
     private fun request(
@@ -56,17 +55,22 @@ class SupplierMasterDataServiceTest {
         Mockito.`when`(repo.lockActiveOrganizationForSupplierLinks(org)).thenReturn(true)
         Mockito.`when`(repo.supplierTypeAndStatus(supplier))
             .thenReturn("SUPPLIER" to "ACTIVE")
+        Mockito.`when`(registry.detail(org, supplier)).thenReturn(SupplierRegistryDetail(
+            org, supplier, "SUP-SYNTHETIC", "ACTIVE", 0, null, 1,
+            SupplierProfileData("External supplier", "External supplier"),
+        ))
     }
 
     @Test fun noAuthorityOrDisabledFeatureCanGrantSupplierRegistration() {
         assertEquals("SUPPLIER_MASTER_DATA_UNAVAILABLE", assertThrows<ProductApiException> {
-            service(false, false).changeSupplierLink(context, org, request())
+            service(false).changeSupplierLink(context, org, request())
         }.code)
         assertEquals("SUPPLIER_MASTER_DATA_UNAVAILABLE", assertThrows<ProductApiException> {
-            service(true, false).changeSupplierLink(context, org, request())
+            service(true).changeSupplierLink(context, org, request())
         }.code)
+        allow()
         assertEquals("SUPPLIER_MASTER_DATA_UNAVAILABLE", assertThrows<ProductApiException> {
-            service(true, true).changeSupplierLink(context, org, request())
+            service(false).changeSupplierLink(context, org, request())
         }.code)
         Mockito.verifyNoInteractions(repo)
     }
@@ -157,5 +161,44 @@ class SupplierMasterDataServiceTest {
         assertEquals("SUPPLIER_MASTER_DATA_UNAVAILABLE", assertThrows<ProductApiException> {
             service().changeSupplierLink(context, org, request())
         }.code)
+    }
+
+    @Test fun guessedUnrelatedSupplierCannotBeLinkedEvenByCompanyRegistrar() {
+        allow()
+        Mockito.`when`(registry.detail(org, supplier)).thenReturn(null)
+        assertEquals("SUPPLIER_MASTER_DATA_UNAVAILABLE", assertThrows<ProductApiException> {
+            service().changeSupplierLink(context, org, request())
+        }.code)
+        assertEquals(0, Mockito.mockingDetails(repo).invocations.count { it.method.name == "insertSupplierLinkEvent" })
+    }
+
+    @Test fun invalidProfileNeverCreatesIdentityOrContactRecord() {
+        allow()
+        listOf(
+            SupplierProfileData("Legal supplier", ""),
+            SupplierProfileData("Legal supplier", "Supplier", email = "invalid-email"),
+            SupplierProfileData("Legal supplier", "Supplier", phone = "bad\u001fphone"),
+        ).forEach { profile ->
+            assertEquals("INVALID_SUPPLIER_PROFILE", assertThrows<ProductApiException> {
+                service().createSupplier(context, org, CreateSupplierRequest(operation, profile))
+            }.code)
+        }
+        Mockito.verifyNoInteractions(registry)
+    }
+
+    @Test fun revokedAuthorityInsideTransactionCannotCreateSupplier() {
+        allow()
+        Mockito.`when`(authority.canMaintainSupplierLinks(actor, org)).thenReturn(true, false)
+        assertEquals("SUPPLIER_MASTER_DATA_UNAVAILABLE", assertThrows<ProductApiException> {
+            service().createSupplier(context, org, CreateSupplierRequest(operation, SupplierProfileData("Supplier", "Supplier")))
+        }.code)
+        Mockito.verifyNoInteractions(registry)
+    }
+
+    @Test fun capabilityDistinguishesUnavailableServiceFromMissingResponsibility() {
+        assertEquals(SupplierRegistryCapabilities(org, true, false), service().capabilities(actor, org))
+        allow()
+        assertEquals(SupplierRegistryCapabilities(org, true, true), service().capabilities(actor, org))
+        assertEquals(SupplierRegistryCapabilities(org, false, false), service(false).capabilities(actor, org))
     }
 }

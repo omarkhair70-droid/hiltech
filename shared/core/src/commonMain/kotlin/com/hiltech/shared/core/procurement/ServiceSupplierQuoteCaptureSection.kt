@@ -193,11 +193,11 @@ fun ServiceSupplierQuoteCaptureSection(
                 visibleSuppliers.forEach { supplier ->
                     OutlinedButton(enabled = !busy, onClick = { selectedSupplier = supplier }) {
                         Text((if (selectedSupplier?.supplierOrganizationId == supplier.supplierOrganizationId) "✓ " else "") +
-                            supplier.displayName)
+                            supplier.displayLabel())
                     }
                 }
                 selectedSupplier?.let {
-                    Text("المورد المختار · " + it.displayName +
+                    Text("المورد المختار · " + it.displayLabel() +
                         " · الأهلية الفعلية يعيد السيرفر فحصها عند التسجيل.")
                 }
                 OutlinedTextField(value = reference, onValueChange = { reference = it },

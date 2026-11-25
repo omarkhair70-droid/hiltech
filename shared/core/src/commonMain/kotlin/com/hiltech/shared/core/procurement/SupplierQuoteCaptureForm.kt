@@ -68,11 +68,11 @@ fun SupplierQuoteCaptureForm(
         OutlinedButton(
             enabled = rfq.sourceCurrent && !busy && suppliers.isNotEmpty(),
             onClick = { menu = true },
-        ) { Text(selected?.displayName ?: "Choose linked supplier") }
+        ) { Text(selected?.displayLabel() ?: "Choose linked supplier") }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             suppliers.forEach { supplier ->
                 DropdownMenuItem(
-                    text = { Text(supplier.displayName) },
+                    text = { Text(supplier.displayLabel()) },
                     onClick = {
                         if (supplierId != supplier.supplierOrganizationId) {
                             supplierId = supplier.supplierOrganizationId
