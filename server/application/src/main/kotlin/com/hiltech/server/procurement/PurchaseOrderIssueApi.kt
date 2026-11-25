@@ -1,5 +1,6 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.companysettings.PurchaseOrderNumberingResponse
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.IdempotencyKeyContract
 import com.hiltech.server.platform.ProductApiException
@@ -15,6 +16,10 @@ import java.util.UUID
 /** Company-authorized PO issuance, NOT vendor dispatch, stock receipt or payment. */
 @RestController
 class PurchaseOrderIssueController(private val service: PurchaseOrderIssueService) {
+    @GetMapping("/v1/procurement/organizations/{organizationId}/po-numbering")
+    fun numbering(servlet: HttpServletRequest, @PathVariable organizationId: UUID): PurchaseOrderNumberingResponse =
+        service.numbering(currentActor(servlet), organizationId)
+
     @GetMapping("/v1/procurement/organizations/{organizationId}/po-issuer-queue")
     fun queue(
         servlet: HttpServletRequest,

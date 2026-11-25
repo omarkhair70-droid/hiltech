@@ -1,6 +1,7 @@
 package com.hiltech.shared.core.procurement
 
 import com.hiltech.shared.core.network.HiltechApiClient
+import com.hiltech.shared.core.network.HiltechApiException
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -13,6 +14,8 @@ import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.test.assertFailsWith
 
 class PurchaseOrderIssueApiClientTest {
     private val org = "11111111-1111-1111-1111-111111111111"
@@ -98,6 +101,40 @@ class PurchaseOrderIssueApiClientTest {
         val row = client(http).issuedOrders(org, installation).single()
         assertEquals("CANCELLED", row.effectiveState)
         assertEquals(2L, row.version)
+    }
+
+    @Test fun issuerReadsCurrentNumberingWithoutASettingsAdministrationGrant() = runBlocking {
+        val http = HttpClient(MockEngine { req ->
+            assertEquals("/v1/procurement/organizations/$org/po-numbering", req.url.encodedPath)
+            respond("""{"organizationId":"$org","source":"COMPANY","prefix":"HT-PO","version":4,"ready":true,
+                "exampleCode":"HT-PO-000001","changedAt":"2026-11-25T12:00:00Z"}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        assertEquals(4L, client(http).numbering(org, installation).version)
+        http.close()
+    }
+
+    @Test fun lostIssueResponseRetriesTheFrozenCandidateAndDestinationWithOneOperation() = runBlocking {
+        val bodies = mutableListOf<String>()
+        val keys = mutableListOf<String?>()
+        val intent = PurchaseOrderIssueIntent(op, org, candidate, destination, "Synthetic main warehouse", "Synthetic supplier")
+        val http = HttpClient(MockEngine { req ->
+            bodies += (req.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            keys += req.headers["Idempotency-Key"]
+            if (bodies.size == 1) throw IllegalStateException("Synthetic lost receipt")
+            respond("""{"purchaseOrderId":"$op","code":"HT-PO-000026","serial":26,"state":"ISSUED",
+                "supplierDispatchState":"NOT_SENT","candidateId":"$candidate","approvalRequestId":"$op",
+                "total":"600.000000","currency":"EGP","replayed":true}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val api = client(http)
+        assertFailsWith<HiltechApiException> { api.issue(intent, installation) }
+        val restored = Json.decodeFromString(PurchaseOrderIssueIntent.serializer(), Json.encodeToString(PurchaseOrderIssueIntent.serializer(), intent))
+        val result = api.issue(restored, installation)
+        assertTrue(result.replayed)
+        assertEquals("HT-PO-000026", result.code)
+        assertEquals(bodies[0], bodies[1])
+        assertEquals<List<String?>>(listOf(op, op), keys)
+        http.close()
     }
 
     @Test fun idempotentIssueIsInternallyIssuedNotSentOrPaid() = runBlocking {

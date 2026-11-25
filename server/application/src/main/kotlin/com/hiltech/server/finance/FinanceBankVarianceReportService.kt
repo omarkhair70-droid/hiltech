@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.ProductApiException
@@ -33,31 +36,24 @@ data class FinanceBankVarianceReport(
 
 /** Exact bank line allocations, not a signed bank reconciliation event. */
 @Service
-class FinanceBankVarianceReportService(
+class FinanceBankVarianceReportService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val approvals:ApprovalPersistencePort,
     private val environment:Environment,
     private val clock:Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     @Transactional(readOnly=true)
     fun read(
         actor:UUID,org:UUID,intake:UUID,limit:Int=100,
     ):FinanceBankVarianceReport {
-        val key=environment.getProperty(
-            "hiltech.finance.bank-reconciliation.reader-authority-key","",
-        ).trim()
         if(!environment.getProperty(
             "hiltech.finance.bank-reconciliation.report-enabled",
             Boolean::class.java,false,
-        ) || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key) ||
-            limit !in 1..500)unavailable()
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now))unavailable()
-        val binding=approvals.resolveCurrentAuthority(org,key,now)
-            ?: unavailable()
-        if(binding.organizationId!=org ||
-            !approvals.actorMatchesAuthority(actor,binding,now))
-            unavailable()
+        ) || limit !in 1..500)unavailable()
+        val property = "hiltech.finance.bank-reconciliation.reader-authority-key"
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, property,
+            environment.getProperty(property), clock.instant()) ?: unavailable()
         val exists=jdbc.queryForObject(
             """SELECT EXISTS(SELECT 1 FROM finance_bank_statement_intake
                WHERE id=? AND organization_id=?)""",

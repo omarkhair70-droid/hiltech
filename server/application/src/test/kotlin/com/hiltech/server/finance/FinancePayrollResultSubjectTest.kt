@@ -6,6 +6,9 @@ import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalPolicySnapshot
 import com.hiltech.server.approval.ApprovalPrincipalType
 import com.hiltech.server.approval.ApprovalSubjectRef
+import com.hiltech.server.approval.ApprovalDecisionContext
+import com.hiltech.server.approval.ApprovalDecisionType
+import com.hiltech.server.approval.ApprovalRequestState
 import com.hiltech.server.payroll.PayrollRunPublicationPort
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
@@ -111,5 +114,25 @@ class FinancePayrollResultSubjectTest {
         assertFalse(FinancePayrollResultRules.transitionAllowed(success.copy(action = "RETURNED", outcome = "RETURNED"), "VOID_MATCH", success.id))
         assertNotEquals(proposal.reviewVersion, FinancePayrollResultRules.version(proposal.copy(reason = "Changed verification reason"), source, policy))
         assertNotEquals(proposal.reviewVersion, FinancePayrollResultRules.version(proposal, source.copy(amount = BigDecimal("101.00")), policy))
+    }
+
+    @Test fun genericDecisionRequiresSameIndependentActorAndExactProofOpeningOnlyForApproval() {
+        allow()
+        val context = ApprovalDecisionContext(UUID.randomUUID(), org, FINANCE_PAYROLL_RESULT_SUBJECT, proposal.id, proposal.reviewVersion,
+            FINANCE_PAYROLL_RESULT_POLICY, 2, proposer, ApprovalRequestState.PENDING, 1, UUID.randomUUID(),
+            FINANCE_PAYROLL_RESULT_REVIEWER, UUID.randomUUID(), ApprovalPrincipalType.USER, reviewer, "ASSIGNED")
+        assertFalse(subject.canDecide(reviewer, context, ApprovalDecisionType.APPROVE))
+        assertTrue(subject.canDecide(reviewer, context, ApprovalDecisionType.REJECT))
+        assertTrue(subject.canDecide(reviewer, context, ApprovalDecisionType.REQUEST_CHANGE))
+        Mockito.`when`(repo.hasEvidenceView(reviewer, org, proposal)).thenReturn(true)
+        assertTrue(subject.canDecide(reviewer, context, ApprovalDecisionType.APPROVE))
+        assertFalse(subject.canDecide(proposer, context, ApprovalDecisionType.APPROVE))
+        assertFalse(subject.canDecide(reviewer, context.copy(subjectVersion = proposal.reviewVersion + 1), ApprovalDecisionType.APPROVE))
+        assertFalse(subject.canDecide(reviewer, context.copy(organizationId = UUID.randomUUID()), ApprovalDecisionType.APPROVE))
+        Mockito.`when`(repo.isBeneficiary(reviewer, employee)).thenReturn(true)
+        assertFalse(subject.canDecide(reviewer, context, ApprovalDecisionType.APPROVE))
+        Mockito.`when`(repo.isBeneficiary(reviewer, employee)).thenReturn(false)
+        Mockito.`when`(authority.canReview(reviewer, org)).thenReturn(false)
+        assertFalse(subject.canDecide(reviewer, context, ApprovalDecisionType.APPROVE))
     }
 }

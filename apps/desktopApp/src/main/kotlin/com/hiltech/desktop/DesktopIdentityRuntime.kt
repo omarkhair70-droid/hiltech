@@ -237,6 +237,8 @@ class DesktopIdentityRuntime(
             correlationId = { UUID.randomUUID().toString() },
         )
 
+    internal fun evidenceApiForSession(api: HiltechApiClient) = EvidenceApiClient(api, httpClient)
+
     private val peopleApi =
         PeopleApiClient(productApi)
 

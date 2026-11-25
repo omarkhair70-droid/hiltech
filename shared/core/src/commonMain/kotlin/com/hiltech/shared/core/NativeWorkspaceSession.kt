@@ -41,6 +41,8 @@ import kotlinx.coroutines.launch
 
 internal enum class WorkspaceAvailability { CHECKING, AVAILABLE, DENIED, UNAVAILABLE }
 
+data class NativeWorkspaceOpenRequest(val workspaceId: String, val sequence: Int)
+
 internal fun workspaceFailureAvailability(status: Int?): WorkspaceAvailability =
     if (status == 401 || status == 403) WorkspaceAvailability.DENIED
     else WorkspaceAvailability.UNAVAILABLE

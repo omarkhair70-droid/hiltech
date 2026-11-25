@@ -3,12 +3,16 @@ package com.hiltech.server.finance
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.IdempotencyKeyContract
 import com.hiltech.server.platform.ProductApiException
+import com.hiltech.server.identity.IdentitySessionService
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -16,7 +20,8 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("/v1/finance/payroll/organizations/{orgId}/disbursements")
-class FinancePayrollDisbursementApi(private val service: FinancePayrollDisbursementService, private val evidence: FinancePayrollEvidenceService) {
+class FinancePayrollDisbursementApi(private val service: FinancePayrollDisbursementService, private val evidence: FinancePayrollEvidenceService,
+    private val sessions: IdentitySessionService) {
     @GetMapping("/capabilities") fun capabilities(request: HttpServletRequest, @PathVariable orgId: UUID) = service.capabilities(actor(request), orgId)
     @GetMapping("/batches") fun batches(request: HttpServletRequest, @PathVariable orgId: UUID) = service.batches(actor(request), orgId)
     @GetMapping("/runs/{runId}") fun run(request: HttpServletRequest, @PathVariable orgId: UUID, @PathVariable runId: UUID) = service.run(actor(request), orgId, runId)
@@ -33,8 +38,10 @@ class FinancePayrollDisbursementApi(private val service: FinancePayrollDisbursem
         return service.propose(actor(request), orgId, id, body, context(request).correlationId)
     }
     @PostMapping("/result-proposals/{id}/review") fun review(request: HttpServletRequest, @PathVariable orgId: UUID, @PathVariable id: UUID,
+        @AuthenticationPrincipal jwt: Jwt, @RequestHeader("X-Device-Installation-Id") installationId: UUID,
         @RequestBody body: FinancePayrollReviewResult): FinancePayrollCommandReceipt {
         checkOperation(request, body.operationId)
+        sessions.requireRecentReauthentication(sessions.requireCurrentAccess(jwt, installationId))
         return service.review(actor(request), orgId, id, body, context(request).correlationId)
     }
     @PostMapping("/result-proposals/{id}/evidence-content") fun originalEvidence(request: HttpServletRequest,

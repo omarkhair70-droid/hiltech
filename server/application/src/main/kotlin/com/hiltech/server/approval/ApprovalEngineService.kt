@@ -75,7 +75,7 @@ class FailClosedApprovalSubjectVersionGuard @Autowired constructor(
 }
 
 @Component
-class ApprovalEngineService(
+class ApprovalEngineService @Autowired constructor(
     private val persistence:
         ApprovalPersistencePort,
     private val idempotency:
@@ -91,11 +91,92 @@ class ApprovalEngineService(
     private val events:
         ApplicationEventPublisher,
     private val clock: Clock,
+    private val policyMaintenance: ApprovalPolicyMaintenancePersistencePort? = null,
+    private val policyMaintenanceAuthority: ApprovalPolicyMaintenanceAuthorityPort? = null,
+    private val decisionConstraints: List<ApprovalDecisionConstraint> = emptyList(),
 ) {
     private val json =
         Json {
             ignoreUnknownKeys = true
         }
+
+    /**
+     * Explicit company setup maintenance. This can only end pending assignments;
+     * it cannot approve a source or give the administrator reviewer access.
+     * The HTTP setup boundary separately requires recent reauthentication.
+     */
+    fun supersedePolicyRequests(
+        actorUserId: UUID,
+        operationId: UUID,
+        scope: ApprovalPolicyMaintenanceScope,
+        reason: String,
+        correlationId: String,
+    ): ApprovalPolicyMaintenanceResult {
+        val store = policyMaintenance ?: throw ProductApiException(
+            "APPROVAL_POLICY_MAINTENANCE_UNAVAILABLE", "Review workflow maintenance is unavailable.", HttpStatus.SERVICE_UNAVAILABLE,
+        )
+        fun requireMaintenanceAuthority() {
+            requireActiveMember(scope.organizationId, actorUserId, clock.instant())
+            if (policyMaintenanceAuthority?.canSupersedePending(actorUserId, scope) != true) throw ProductApiException(
+                "APPROVAL_POLICY_ADMINISTRATION_DENIED", "Current company review workflow setup authority is required.", HttpStatus.FORBIDDEN,
+            )
+        }
+        requireMaintenanceAuthority()
+        val note = reason.trim()
+        if (note.length !in 3..1000 || note.any { it.code < 32 } || scope.policyVersion < 1 ||
+            scope.policyRevision < 1 || scope.expectedPendingCount < 1) throw ProductApiException(
+            "APPROVAL_POLICY_MAINTENANCE_INVALID", "A current policy version, pending count and reason are required.", HttpStatus.BAD_REQUEST,
+        )
+        val fingerprint = IdempotencyKeyContract.fingerprint(buildJsonObject {
+            put("organizationId", scope.organizationId.toString()); put("policyId", scope.policyId.toString())
+            put("policyKey", scope.policyKey); put("policyRevision", scope.policyRevision); put("policyVersion", scope.policyVersion)
+            put("subjectType", scope.subjectType); put("expectedPendingCount", scope.expectedPendingCount); put("reason", note)
+        }.toString())
+        val execution = idempotency.execute(IdempotentCommandSpec(
+            operationId, actorUserId, "SupersedeCompanyReviewPolicyRequests", "ApprovalPolicyVersion",
+            scope.policyId, fingerprint, correlationId,
+        )) {
+            if (!store.lockPolicy(scope)) throw ProductApiException(
+                "APPROVAL_POLICY_CHANGED", "The review policy version changed; refresh the setup impact.", HttpStatus.CONFLICT,
+            )
+            requireMaintenanceAuthority()
+            val requests = store.pendingRequestIds(scope)
+            if (requests.size != scope.expectedPendingCount) throw ProductApiException(
+                "APPROVAL_POLICY_PENDING_CHANGED", "The pending review count changed; review the impact again.", HttpStatus.CONFLICT,
+            )
+            val now = clock.instant()
+            val contexts = requests.map { id ->
+                val context = persistence.loadDecisionContextForUpdate(id) ?: throw notVisible()
+                if (context.organizationId != scope.organizationId || context.policyKey != scope.policyKey ||
+                    context.policyVersion != scope.policyRevision || context.subjectType != scope.subjectType ||
+                    context.requestState != ApprovalRequestState.PENDING || context.assignmentState != "ASSIGNED") {
+                    throw ProductApiException("APPROVAL_POLICY_PENDING_CHANGED", "The pending review changed; refresh the setup impact.", HttpStatus.CONFLICT)
+                }
+                context
+            }
+            contexts.forEach { context ->
+                val id = context.requestId
+                persistence.supersede(context, now)
+                projectionWriter.write(revokeApproverIntent(context, now))
+                audit.append(AuditEventRecord(
+                    actorUserId = actorUserId, action = "APPROVAL_SUPERSEDED", targetType = "ApprovalRequest", targetId = id,
+                    previousStateRef = "approval:PENDING", newStateRef = "approval:SUPERSEDED",
+                    safeDiffJson = buildJsonObject {
+                        put("policyId", scope.policyId.toString()); put("policyRevision", scope.policyRevision)
+                        put("maintenanceOperationId", operationId.toString()); put("reason", note)
+                    }.toString(), occurredAt = now, correlationId = correlationId, reason = "COMPANY_REVIEW_WORKFLOW_RECONFIGURED",
+                ))
+                events.publishEvent(ApprovalSuperseded(
+                    UUID.randomUUID(), id, context.organizationId, context.subjectType, context.subjectId,
+                    context.subjectVersion, actorUserId, now, correlationId,
+                ))
+            }
+            IdempotentCommandOutcome("APPROVAL_POLICY_PENDING_SUPERSEDED", buildJsonObject { put("supersededCount", requests.size) }.toString())
+        }
+        val count = json.parseToJsonElement(requireNotNull(execution.outcome.resultPayloadJson)).jsonObject
+            .getValue("supersededCount").jsonPrimitive.content.toInt()
+        return ApprovalPolicyMaintenanceResult(scope.policyId, count, execution.replayed)
+    }
 
     fun evaluate(
         actorUserId: UUID,
@@ -543,7 +624,32 @@ class ApprovalEngineService(
         )
     }
 
+    /** The generic API keeps its established conflict response after a stale request is recorded. */
     fun decide(
+        actorUserId: UUID,
+        operationId: UUID,
+        approvalRequestId: UUID,
+        decision: ApprovalDecisionType,
+        comment: String?,
+        correlationId: String,
+    ): ApprovalDecisionResult {
+        val recorded = decideForSourceWorkflow(actorUserId, operationId, approvalRequestId, decision, comment, correlationId)
+        if (recorded.state == ApprovalRequestState.SUPERSEDED) throw ProductApiException(
+            code = "APPROVAL_SUPERSEDED",
+            message = "The subject changed while approval was pending.",
+            status = HttpStatus.CONFLICT,
+        )
+        return recorded
+    }
+
+    /**
+     * Source-owned commands need the recorded terminal outcome inside their
+     * surrounding transaction. Returning SUPERSEDED preserves that close instead
+     * of rolling it back as an HTTP conflict; it never applies a business decision.
+     * Every assignment, current authority and source constraint below is shared
+     * with the generic API. There is no caller-controlled bypass option.
+     */
+    fun decideForSourceWorkflow(
         actorUserId: UUID,
         operationId: UUID,
         approvalRequestId: UUID,
@@ -771,6 +877,16 @@ class ApprovalEngineService(
                         )
                 }
 
+                // A stale source was ended above without recording a business
+                // decision. Current-source decisions must satisfy their owner's
+                // independence and proof requirements even through the generic API.
+                val sourceConstraints = decisionConstraints.filter { it.supports(context.subjectType) }
+                if (sourceConstraints.size > 1 || sourceConstraints.singleOrNull()?.canDecide(actorUserId, context, decision) == false) {
+                    throw ProductApiException(
+                        "APPROVAL_SOURCE_REVIEW_NOT_ALLOWED", "This source requires an independent currently eligible reviewer and its review evidence.", HttpStatus.FORBIDDEN,
+                    )
+                }
+
                 persistence.applyDecision(
                     context = context,
                     decisionId =
@@ -866,20 +982,6 @@ class ApprovalEngineService(
                 payload["state"]!!
                     .jsonPrimitive.content,
             )
-
-        if (
-            execution.outcome.resultCode ==
-                "APPROVAL_SUPERSEDED"
-        ) {
-            throw ProductApiException(
-                code =
-                    "APPROVAL_SUPERSEDED",
-                message =
-                    "The subject changed while approval was pending.",
-                status =
-                    HttpStatus.CONFLICT,
-            )
-        }
 
         return ApprovalDecisionResult(
             approvalRequestId =

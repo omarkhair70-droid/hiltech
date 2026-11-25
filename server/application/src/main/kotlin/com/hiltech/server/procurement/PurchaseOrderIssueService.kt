@@ -1,5 +1,16 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityOrigin
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.OperationalAuthorityProof
+import com.hiltech.server.companysettings.PurchaseOrderNumberingResponse
+import com.hiltech.server.companysettings.PurchaseOrderNumberingSnapshot
+import com.hiltech.server.companysettings.PurchaseOrderNumberingSource
+import com.hiltech.server.companysettings.PurchaseOrderNumberingSourcePort
+import com.hiltech.server.companysettings.response
+import com.hiltech.server.companysettings.validExistingPurchaseOrderPrefix
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalRequestState
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -56,19 +67,21 @@ class PurchaseOrderIssueService @Autowired constructor(
     private val clock: Clock,
     @Value("\${hiltech.procurement.po-issue.enabled:false}")
     private val issueEnabled: Boolean = false,
-    @Value("\${hiltech.procurement.approval-policy-key:}")
+    @Value("\${hiltech.procurement.approval-policy-key:PROCUREMENT_PO_REVIEW}")
     private val approvalPolicyKey: String = "",
-    @Value("\${hiltech.procurement.po.issue-authority-key:}")
+    @Value("\${hiltech.procurement.po.issue-authority-key:PROCUREMENT_ORDER_ISSUE}")
     private val issuerAuthorityKey: String = "",
     @Value("\${hiltech.procurement.po.number-prefix:}")
     private val poNumberPrefix: String = "",
     private val sourceVerifier: ProcurementDemandSourceVerifier? = null,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
+    private val numberingSource: PurchaseOrderNumberingSourcePort? = null,
 ) {
     /** Separate workbench for currently assigned issuer, never broad procurement reads. */
     fun issuerQueue(actor: UUID, organizationId: UUID): List<PurchaseOrderIssuerQueueItem> {
         val policyVersion = requireIssuerRead(actor, organizationId)
         return purchases.issuerQueue(
-            organizationId, approvalPolicyKey.trim(), policyVersion,
+            organizationId, procurementReviewPolicyKey(approvalPolicyKey), policyVersion,
         ).filter { row ->
             sourceGuard.isCurrent(ApprovalSubjectRef(
                 organizationId, "PROCUREMENT_PO_CANDIDATE", row.candidateId, 1L,
@@ -129,21 +142,10 @@ class PurchaseOrderIssueService @Autowired constructor(
         requireIssuerRead(actor, organizationId)
 
     private fun requireIssuerRead(actor: UUID, organizationId: UUID): Int {
-        val policyKey = approvalPolicyKey.trim()
-        val authorityKey = issuerAuthorityKey.trim()
-        if (!issueEnabled || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(policyKey) ||
-            !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(authorityKey) ||
-            !Regex("^[A-Z][A-Z0-9-]{1,23}$").matches(poNumberPrefix.trim())
-        ) unavailable()
+        val policyKey = procurementReviewPolicyKey(approvalPolicyKey)
+        if (!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(policyKey)) unavailable()
+        requireIssuerAuthority(actor, organizationId)
         val now = clock.instant()
-        if (!approvalPersistence.isActiveOrganizationMember(organizationId, actor, now))
-            unavailable()
-        val issuer = approvalPersistence.resolveCurrentAuthority(
-            organizationId, authorityKey, now,
-        ) ?: unavailable()
-        if (issuer.organizationId != organizationId || issuer.authorityKey != authorityKey ||
-            !approvalPersistence.actorMatchesAuthority(actor, issuer, now)
-        ) unavailable()
         val policy = approvalPersistence.loadActivePolicy(
             organizationId, policyKey, now,
         ) ?: unavailable()
@@ -152,29 +154,51 @@ class PurchaseOrderIssueService @Autowired constructor(
         return policy.versionNumber
     }
 
+    fun numbering(actor: UUID, organizationId: UUID): PurchaseOrderNumberingResponse {
+        requireIssuerAuthority(actor, organizationId)
+        return currentNumbering(organizationId).response()
+    }
+
+    private fun requireIssuerAuthority(actor: UUID, organizationId: UUID): OperationalAuthorityProof {
+        if (!issueEnabled) unavailable()
+        return currentOperationalAuthority(operationalAuthority, approvalPersistence, actor, organizationId,
+            "hiltech.procurement.po.issue-authority-key", issuerAuthorityKey, clock.instant()) ?: unavailable()
+    }
+
+    private fun currentNumbering(organizationId: UUID): PurchaseOrderNumberingSnapshot {
+        numberingSource?.let { return it.current(organizationId) }
+        val prefix = poNumberPrefix.trim().takeIf(::validExistingPurchaseOrderPrefix)
+        return PurchaseOrderNumberingSnapshot(organizationId,
+            if (prefix == null) PurchaseOrderNumberingSource.NOT_CONFIGURED else PurchaseOrderNumberingSource.DEPLOYMENT, prefix, 0)
+    }
+
     fun issue(
         ctx: ProcurementDraftContext,
         candidateId: UUID,
         request: IssuePurchaseOrderRequest,
     ): PurchaseOrderIssueReceipt {
-        val policyKey = approvalPolicyKey.trim()
-        val authorityKey = issuerAuthorityKey.trim()
-        val prefix = poNumberPrefix.trim()
-        if (!issueEnabled || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(policyKey) ||
-            !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(authorityKey) ||
-            !Regex("^[A-Z][A-Z0-9-]{1,23}$").matches(prefix)
-        ) unavailable()
+        val policyKey = procurementReviewPolicyKey(approvalPolicyKey)
+        if (!issueEnabled || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(policyKey)) unavailable()
         if (request.operationId != ctx.operationId || request.expectedCandidateVersion != 1L)
             invalid()
         val candidate = candidates.byId(candidateId) ?: unavailable()
         // Replays also require CURRENT authority; idempotency must not become a read bypass.
         requireIssuerRead(ctx.actor, candidate.organizationId)
+        val initialIssuer = requireIssuerAuthority(ctx.actor, candidate.organizationId)
+        val existingReceipt = purchases.byCandidate(candidateId)?.takeIf { it.operationId == ctx.operationId && it.issuer == ctx.actor }
+        val numbering = currentNumbering(candidate.organizationId)
+        if (existingReceipt == null && !numbering.ready) throw ProductApiException(
+            "PROCUREMENT_PO_NUMBERING_REQUIRED", "Configure purchase order numbering in company operating settings before issue.", HttpStatus.CONFLICT)
+        // Replays retain their original numbering intent even after an explicit company configuration change.
+        val prefix = existingReceipt?.let { it.code.removeSuffix("-${it.serial.toString().padStart(6, '0')}") } ?: requireNotNull(numbering.prefix)
+        val authorityKey = existingReceipt?.issuerAuthorityKey ?: initialIssuer.authorityKey
+        val fingerprintPolicy = existingReceipt?.approvalPolicyKey ?: policyKey
         val orderId = UUID.nameUUIDFromBytes(
             "hiltech:procurement:purchase-order:${ctx.operationId}".toByteArray(Charsets.UTF_8),
         )
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(
             listOf(candidateId, request.expectedCandidateVersion,
-                request.deliveryStorageLocationId, policyKey, authorityKey, prefix)
+                request.deliveryStorageLocationId, fingerprintPolicy, authorityKey, prefix)
                 .joinToString("\u001f").toByteArray(Charsets.UTF_8),
         ).joinToString("") { "%02x".format(it) }
         val execution = commands.execute(IdempotentCommandSpec(
@@ -232,17 +256,11 @@ class PurchaseOrderIssueService @Autowired constructor(
             )
             // Decision and evidence are rechecked IN the same write transaction.
             if (!sourceGuard.isCurrent(subject)) stale()
-            if (!approvalPersistence.isActiveOrganizationMember(
-                    current.organizationId, ctx.actor, now,
-                )
-            ) unavailable()
-            val issuer = approvalPersistence.resolveCurrentAuthority(
-                current.organizationId, authorityKey, now,
-            ) ?: unavailable()
-            if (issuer.organizationId != current.organizationId ||
-                issuer.authorityKey != authorityKey ||
-                !approvalPersistence.actorMatchesAuthority(ctx.actor, issuer, now)
-            ) unavailable()
+            val issuer = requireIssuerAuthority(ctx.actor, current.organizationId)
+            if (issuer.authorityKey != initialIssuer.authorityKey) unavailable()
+            val lockedNumbering = currentNumbering(current.organizationId)
+            if (!lockedNumbering.ready || lockedNumbering != numbering) throw ProductApiException(
+                "PROCUREMENT_PO_NUMBERING_CHANGED", "Purchase order numbering changed. Refresh the current configuration before issue.", HttpStatus.CONFLICT)
             val policy = approvalPersistence.loadActivePolicy(
                 current.organizationId, policyKey, now,
             ) ?: unavailable()
@@ -308,7 +326,7 @@ class PurchaseOrderIssueService @Autowired constructor(
             }
             val serial = purchases.allocateSerial(current.organizationId)
             // Numbering format is set by the company, never supplied by the buyer.
-            val code = "$prefix-${serial.toString().padStart(6, '0')}"
+            val code = lockedNumbering.code(serial)
             val po = PurchaseOrderIssuedRecord(
                 id = orderId, operationId = ctx.operationId,
                 organizationId = current.organizationId,
@@ -316,8 +334,9 @@ class PurchaseOrderIssueService @Autowired constructor(
                 approvalRequestId = decision.approvalRequestId,
                 approvalPolicyKey = policyKey,
                 approvalPolicyVersion = policy.versionNumber,
-                issuerAuthorityKey = authorityKey,
-                issuerAuthorityBindingId = issuer.id,
+                issuerAuthorityKey = issuer.authorityKey,
+                issuerAuthorityBindingId = issuer.bindingId.takeIf { issuer.origin == OperationalAuthorityOrigin.LEGACY_APPROVAL_BINDING },
+                issuerOperationalBindingId = issuer.bindingId.takeIf { issuer.origin == OperationalAuthorityOrigin.OPERATIONAL },
                 code = code, serial = serial,
                 supplierOrganizationId = current.supplierOrganizationId,
                 deliveryStorageLocationId = request.deliveryStorageLocationId,
@@ -325,6 +344,7 @@ class PurchaseOrderIssueService @Autowired constructor(
                 quoteId = current.quoteId,
                 quoteSha256 = current.sourceSha256,
                 issuer = ctx.actor, issuedAt = now, correlationId = ctx.correlationId,
+                numberingRevisionId = lockedNumbering.revisionId,
             )
             purchases.insert(po, current)
             audit.append(AuditEventRecord(

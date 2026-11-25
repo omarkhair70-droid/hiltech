@@ -63,6 +63,7 @@ fun EmployeeCompanyResponsibilitiesWorkspace(
     var submitting by remember { mutableStateOf(false) }
     var refresh by remember { mutableIntStateOf(0) }
     var selectedKey by rememberSaveable { mutableStateOf("") }
+    var selectedCategory by rememberSaveable { mutableStateOf("") }
     var pendingJson by rememberSaveable { mutableStateOf<String?>(null) }
     var dialogVisible by rememberSaveable { mutableStateOf(false) }
     var attempted by rememberSaveable { mutableStateOf(false) }
@@ -95,8 +96,13 @@ fun EmployeeCompanyResponsibilitiesWorkspace(
         item.canGrant && item.authorityKey in employeeCompanyResponsibilityKeys &&
             current?.bindings.orEmpty().none { it.authorityKey == item.authorityKey && it.assignmentSource == "DIRECT" && it.current }
     }
-    LaunchedEffect(choices) {
-        if (choices.none { it.authorityKey == selectedKey }) selectedKey = choices.firstOrNull()?.authorityKey.orEmpty()
+    val categories = choices.map { companyResponsibilityCategory(it.authorityKey) }.distinct()
+    LaunchedEffect(categories) {
+        if (selectedCategory !in categories) selectedCategory = categories.firstOrNull().orEmpty()
+    }
+    val categoryChoices = choices.filter { companyResponsibilityCategory(it.authorityKey) == selectedCategory }
+    LaunchedEffect(categoryChoices) {
+        if (categoryChoices.none { it.authorityKey == selectedKey }) selectedKey = categoryChoices.firstOrNull()?.authorityKey.orEmpty()
     }
 
     fun prepare(authorityKey: String, binding: CompanyResponsibilityBindingDto? = null) {
@@ -138,8 +144,10 @@ fun EmployeeCompanyResponsibilitiesWorkspace(
         acknowledgement?.let { code -> Text(when (code) {
             "GRANT_ENDED" -> hiltechText("تأكد تسجيل الإسناد، لكنه انتهى بعد ذلك. يعرض التحديث الحالة الحالية.",
                 "The assignment was recorded and later ended. Refresh shows current access.")
-            "END" -> hiltechText("تم إنهاء التكليف المباشر. قد يستمر وصول يأتي من فريق أو تكليف آخر.",
-                "The direct assignment ended. Access inherited from a team or another assignment may remain.")
+            "END_REMAINING" -> hiltechText("تم إنهاء هذا التكليف المباشر. لا يزال للحساب وصول من فريق أو مصدر سابق ظاهر في القائمة.",
+                "This direct assignment ended. The account still has access from a team or an existing source shown below.")
+            "END" -> hiltechText("تم إنهاء هذا التكليف المباشر. يعرض التحديث المسؤوليات الحالية.",
+                "This direct assignment ended. Refresh shows current responsibilities.")
             else -> hiltechText("تم إسناد المسؤولية. يُعاد التحقق من الصلاحية عند استخدام الوظائف التابعة لها.",
                 "The responsibility was assigned. Its access is checked again when the employee uses the related functions.")
         }, color = MaterialTheme.colorScheme.primary) }
@@ -162,7 +170,11 @@ fun EmployeeCompanyResponsibilitiesWorkspace(
                         Text(companyResponsibilityLabel(binding.authorityKey), style = MaterialTheme.typography.titleSmall)
                         Text(companyResponsibilityDescription(binding.authorityKey),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (binding.assignmentSource == "TEAM") Text(hiltechText(
+                        if (binding.assignmentSource == "LEGACY") Text(hiltechText(
+                            "مصدر قائم · قد يتيح بعض عمليات هذه المسؤولية. إنهاء تكليف جديد هنا لا يغيّر هذا المصدر أو اعتمادات المعاملات المرتبطة به.",
+                            "Existing source · may cover some operations in this responsibility. Ending a new assignment here does not change this source or its transaction approvals.",
+                        ), style = MaterialTheme.typography.labelMedium)
+                        else if (binding.assignmentSource == "TEAM") Text(hiltechText(
                             "من عضوية فريق — تُدار من تكليف الفريق.", "Inherited from a team — managed through that team’s assignment.",
                         ), style = MaterialTheme.typography.labelMedium)
                         else if (binding.canEnd && binding.authorityKey in employeeCompanyResponsibilityKeys) {
@@ -176,8 +188,14 @@ fun EmployeeCompanyResponsibilitiesWorkspace(
                 if (choices.isNotEmpty()) {
                     HorizontalDivider()
                     HiltechRecordPicker(
+                        label = hiltechText("مجال المسؤولية", "Responsibility area"), value = selectedCategory,
+                        choices = categories.map { HiltechRecordChoice(it, companyResponsibilityCategoryLabel(it)) },
+                        onChange = { selectedCategory = it }, allowKnownReference = false, allowClear = false,
+                        enabled = pending == null && !submitting,
+                    )
+                    HiltechRecordPicker(
                         label = hiltechText("إضافة مسؤولية", "Add responsibility"), value = selectedKey,
-                        choices = choices.map { HiltechRecordChoice(it.authorityKey,
+                        choices = categoryChoices.map { HiltechRecordChoice(it.authorityKey,
                             companyResponsibilityLabel(it.authorityKey), companyResponsibilityDescription(it.authorityKey)) },
                         onChange = { selectedKey = it }, allowKnownReference = false, allowClear = false,
                         enabled = pending == null && !submitting,
@@ -251,7 +269,11 @@ fun EmployeeCompanyResponsibilitiesWorkspace(
                             attempted = false
                             unknownOutcome = false
                             rejectionConfirmed = false
-                            acknowledgement = if (intent.action == "GRANT" && !result.current) "GRANT_ENDED" else intent.action
+                            acknowledgement = when {
+                                intent.action == "GRANT" && !result.current -> "GRANT_ENDED"
+                                intent.action == "END" && result.effectiveAccessRemaining -> "END_REMAINING"
+                                else -> intent.action
+                            }
                             refresh += 1
                         } catch (cancelled: CancellationException) {
                             throw cancelled
@@ -291,8 +313,33 @@ internal fun companyResponsibilityLabel(key: String): String = when (key) {
     "PAYROLL_REVIEW" -> hiltechText("مراجعة الرواتب", "Payroll review")
     "SUPPLIER_MASTER_DATA_ADMIN" -> hiltechText("إدارة سجل الموردين", "Supplier register administration")
     "APPROVAL_POLICY_ADMIN" -> hiltechText("إعداد مسارات الاعتماد", "Approval workflow setup")
+    "COMPANY_SETTINGS_ADMIN" -> hiltechText("إعدادات الشركة", "Company settings")
     "FINANCE_PAYROLL_PREPARE" -> hiltechText("تسجيل نتائج صرف الرواتب", "Payroll disbursement recording")
     "FINANCE_PAYROLL_REVIEW" -> hiltechText("مراجعة نتائج صرف الرواتب", "Payroll disbursement review")
+    "PROCUREMENT_BUYER" -> hiltechText("إعداد المشتريات وعروض الموردين", "Purchasing and supplier quotations")
+    "PROCUREMENT_TECHNICAL_REVIEW" -> hiltechText("المراجعة الفنية للمشتريات", "Purchasing technical review")
+    "PROCUREMENT_NEED_REQUEST" -> hiltechText("طلب احتياجات الفرق والخدمات", "Team and service requests")
+    "PROCUREMENT_NEED_REVIEW" -> hiltechText("مراجعة الاحتياجات وإحالتها للشراء", "Need review and purchasing handoff")
+    "PROCUREMENT_ORDER_ISSUE" -> hiltechText("إصدار أوامر الشراء المعتمدة", "Approved purchase order issue")
+    "PROCUREMENT_SERVICE_ACCEPT" -> hiltechText("فحص الخدمات المستلمة", "Received service inspection")
+    "FINANCE_SUPPLIER_REVIEW" -> hiltechText("مراجعة فواتير الموردين", "Supplier invoice review")
+    "FINANCE_EMPLOYEE_REVIEW" -> hiltechText("مراجعة مصروفات الموظفين", "Employee expense review")
+    "FINANCE_COMMERCIAL_REVIEW" -> hiltechText("مراجعة مصادر مستحقات العملاء", "Customer source review")
+    "FINANCE_PAYABLE_PREPARE" -> hiltechText("إعداد قيود الموردين وتصحيحاتها", "Supplier entry preparation")
+    "FINANCE_PAYABLE_POST" -> hiltechText("ترحيل قيود الموردين المعتمدة", "Approved supplier entry posting")
+    "FINANCE_RECEIVABLE_PREPARE" -> hiltechText("إعداد فواتير وقيود العملاء", "Customer invoice and entry preparation")
+    "FINANCE_RECEIVABLE_EXECUTE" -> hiltechText("إصدار فواتير العملاء وترحيل قيودها", "Customer invoice issue and posting")
+    "FINANCE_EMPLOYEE_PREPARE" -> hiltechText("إعداد العهد وتسويات الموظفين", "Employee funding and settlement preparation")
+    "FINANCE_EMPLOYEE_EXECUTE" -> hiltechText("تسجيل العهد والتسويات المعتمدة", "Approved employee settlement recording")
+    "FINANCE_BANK_STATEMENT_PREPARE" -> hiltechText("تجهيز كشوف البنك وأدلتها", "Bank statement preparation")
+    "FINANCE_BANK_STATEMENT_IMPORT" -> hiltechText("استيراد كشوف البنك المعتمدة", "Approved bank statement import")
+    "FINANCE_BANK_RECONCILIATION_PREPARE" -> hiltechText("إعداد التسوية البنكية", "Bank reconciliation preparation")
+    "FINANCE_BANK_RECONCILIATION_FINALIZE" -> hiltechText("إقفال التسوية البنكية المعتمدة", "Approved bank reconciliation completion")
+    "FINANCE_CASH_PREPARE" -> hiltechText("إعداد الخزائن والحركات النقدية", "Cashbox and cash entry preparation")
+    "FINANCE_CASH_EXECUTE" -> hiltechText("تسجيل الحركات النقدية المعتمدة", "Approved cash entry recording")
+    "FINANCE_PERIOD_CLOSE_PREPARE" -> hiltechText("إعداد إقفال الفترات المالية", "Financial period close preparation")
+    "FINANCE_PERIOD_CLOSE_EXECUTE" -> hiltechText("تنفيذ إقفال الفترات المعتمد", "Approved financial period close")
+    "FINANCE_REPORT_READ" -> hiltechText("عرض التقارير والأرصدة المالية", "Financial reports and balances")
     else -> hiltechText("مسؤولية أخرى", "Other responsibility")
 }
 
@@ -319,10 +366,60 @@ private fun companyResponsibilityDescription(key: String): String = when (key) {
         "Add suppliers and maintain their records and status, with purchasing and payment approvals separate.")
     "APPROVAL_POLICY_ADMIN" -> hiltechText("إعداد مسارات الاعتماد التي تتيحها الشركة مع الحفاظ على المراجع المستقل والاعتمادات الإلزامية.",
         "Configure the company’s available approval workflows while preserving independent reviewers and required approvals.")
+    "COMPANY_SETTINGS_ADMIN" -> hiltechText("إدارة إعدادات التشغيل المتاحة للشركة، ومنها ترقيم أوامر الشراء. لا يمنح توقيعًا ماليًا أو سلطة اعتماد.",
+        "Manage supported company operating settings, including purchase order numbering. Does not grant financial signing or approval authority.")
     "FINANCE_PAYROLL_PREPARE" -> hiltechText("مطابقة كشف الرواتب الصادر مع أدلة الصرف البنكية وتسجيل النتيجة للمراجعة. لا ينفذ تحويلًا بنكيًا.",
         "Match released payroll to bank disbursement evidence and record the result for review. Does not execute a bank transfer.")
     "FINANCE_PAYROLL_REVIEW" -> hiltechText("مراجعة نتائج صرف الرواتب التي أعدّها شخص آخر وأدلتها البنكية المرتبطة.",
         "Review payroll disbursement results prepared by another person and their linked bank evidence.")
+    "PROCUREMENT_BUYER" -> hiltechText("إعداد طلبات عروض أسعار المواد والخدمات، ومراجعة مستندات الموردين واختيار العرض المقترح. اعتماد الشراء وإصدار الأمر منفصلان.",
+        "Prepare material and service quotations, review supplier documents, and select a proposed quotation. Purchase approval and order issue remain separate.")
+    "PROCUREMENT_TECHNICAL_REVIEW" -> hiltechText("تقييم مطابقة عرض المورد لمتطلبات الشراء الفنية. لا يمنح اعتماد تكلفة الشراء.",
+        "Assess supplier quotations against technical requirements. Purchase cost approval remains separate.")
+    "PROCUREMENT_NEED_REQUEST" -> hiltechText("إعداد احتياجات المواد والخدمات للفرق التي ينتمي إليها الموظف حاليًا، مع اختيار وجهة التسليم.",
+        "Prepare material and service needs for the employee’s current teams and select a delivery destination.")
+    "PROCUREMENT_NEED_REVIEW" -> hiltechText("مراجعة احتياجات الفرق وتجهيزها لطلب عروض الموردين وفق شروط المصدر.",
+        "Review team needs and release them for supplier sourcing under the source requirements.")
+    "PROCUREMENT_ORDER_ISSUE" -> hiltechText("إصدار أوامر شراء المواد والخدمات بعد الاعتماد المستقل، ومتابعة دورة الأمر. تسجيل الإرسال للمورد لا يرسل رسالة تلقائيًا.",
+        "Issue material and service orders after independent approval and manage their lifecycle. Recording supplier dispatch does not send a message automatically.")
+    "PROCUREMENT_SERVICE_ACCEPT" -> hiltechText("رفع أدلة تسليم الخدمة وتسجيل قبولها أو رفضها استنادًا إلى أمر الخدمة وشروطه.",
+        "Upload service delivery evidence and record acceptance or rejection against the service order and its criteria.")
+    "FINANCE_SUPPLIER_REVIEW" -> hiltechText("مطابقة فواتير المواد والخدمات وأدلتها مع أوامر الشراء والاستلام، وتجهيزها للمراجعة المحاسبية.",
+        "Match material and service invoices and their evidence against orders and receipts, then prepare them for accounting review.")
+    "FINANCE_EMPLOYEE_REVIEW" -> hiltechText("فحص مطالبات مصروفات الموظفين وإيصالاتها وتسجيل المراجعة قبل التسوية.",
+        "Inspect employee expense claims and their receipts and record review before settlement.")
+    "FINANCE_COMMERCIAL_REVIEW" -> hiltechText("فحص الترسية التجارية ومصادرها قبل تجهيز مستحقات العميل.",
+        "Review commercial awards and their source records before preparing customer receivables.")
+    "FINANCE_PAYABLE_PREPARE" -> hiltechText("إعداد قيود مستحقات الموردين وعكس القيد للتصحيح، مع الحسابات والفترة والمصدر المرتبط. الاعتماد والترحيل منفصلان.",
+        "Prepare supplier payable entries and reversal corrections with their accounts, period, and source. Approval and posting remain separate.")
+    "FINANCE_PAYABLE_POST" -> hiltechText("ترحيل قيود الموردين أو عكسها بعد اعتماد المقترح المطابق ومراجعة المصدر والفترة.",
+        "Post or reverse supplier entries after approval of the exact proposal and validation of its source and period.")
+    "FINANCE_RECEIVABLE_PREPARE" -> hiltechText("إعداد مقترحات فواتير العملاء وقيودها من المصادر التجارية المتاحة. لا يصدر الفاتورة أو يرحّل القيد.",
+        "Prepare customer invoice and journal proposals from available commercial sources. Invoice issue and posting remain separate.")
+    "FINANCE_RECEIVABLE_EXECUTE" -> hiltechText("إصدار فاتورة العميل أو ترحيل قيدها بعد الاعتماد المستقل واكتمال شروط المصدر.",
+        "Issue a customer invoice or post its entry after independent approval and source validation.")
+    "FINANCE_EMPLOYEE_PREPARE" -> hiltechText("إعداد تمويل عهد الموظفين وتسوياتها وتعويض المصروفات مع الأدلة المطلوبة للمراجعة.",
+        "Prepare employee funding, settlements, and expense reimbursement with the evidence required for review.")
+    "FINANCE_EMPLOYEE_EXECUTE" -> hiltechText("تسجيل التمويل والتسوية والتعويض بعد الاعتماد المطلوب. تسجيل العملية لا ينفذ تحويلًا بنكيًا.",
+        "Record funding, settlement, and reimbursement after required approval. Recording does not execute a bank transfer.")
+    "FINANCE_BANK_STATEMENT_PREPARE" -> hiltechText("رفع كشف البنك وربطه ببيانات الحساب وتجهيز الاستيراد للمراجعة المستقلة.",
+        "Upload bank statements, link account details, and prepare imports for independent review.")
+    "FINANCE_BANK_STATEMENT_IMPORT" -> hiltechText("استيراد النسخة المعتمدة من كشف البنك إلى سجلات الشركة. لا يسمح بتحويل الأموال.",
+        "Import the approved bank statement revision into company records. Does not permit transferring funds.")
+    "FINANCE_BANK_RECONCILIATION_PREPARE" -> hiltechText("إعداد التسوية بين الحركات المسجلة وكشف البنك وتقديمها للمراجعة.",
+        "Prepare reconciliation between recorded transactions and bank statements for review.")
+    "FINANCE_BANK_RECONCILIATION_FINALIZE" -> hiltechText("إتمام التسوية البنكية المعتمدة بعد إعادة فحص الحركات والأدلة المرتبطة.",
+        "Complete an approved bank reconciliation after rechecking its transactions and evidence.")
+    "FINANCE_CASH_PREPARE" -> hiltechText("إعداد افتتاح الخزائن والسندات والجرد وتخصيص المتحصلات وتصحيح التخصيص. كل إجراء يحتفظ بمراجعته المطلوبة.",
+        "Prepare cashbox opening, vouchers, counts, receipt allocation, and allocation corrections. Each action retains its required review.")
+    "FINANCE_CASH_EXECUTE" -> hiltechText("تسجيل السندات والجرد والتخصيص أو إلغائه بعد الاعتماد المطابق. لا يثبت تسليم النقد خارج النظام تلقائيًا.",
+        "Record vouchers, counts, allocations, and allocation reversals after exact approval. Does not automatically attest to physical cash delivery.")
+    "FINANCE_PERIOD_CLOSE_PREPARE" -> hiltechText("مراجعة أدلة الفترة وتجهيز طلب إقفالها للاعتماد المستقل.",
+        "Review period evidence and prepare its close proposal for independent approval.")
+    "FINANCE_PERIOD_CLOSE_EXECUTE" -> hiltechText("إقفال الفترة المالية المعتمدة بعد إعادة التحقق من القيود والمصادر.",
+        "Close an approved financial period after rechecking its entries and sources.")
+    "FINANCE_REPORT_READ" -> hiltechText("عرض أرصدة العملاء والموردين وتقارير القيود ومصادر المشاريع والخزائن والفروق البنكية ضمن الشركة.",
+        "Read company customer and supplier balances, entry reports, project sources, cashbox records, and bank variances.")
     else -> hiltechText("تُدار وفق قواعد الإدارة المالكة لها.", "Managed under its owning department’s rules.")
 }
 
@@ -340,4 +437,39 @@ private fun companyResponsibilityError(code: String): String = when (code) {
         "This responsibility is already assigned. Refresh current state.")
     else -> hiltechText("تعذر تأكيد التغيير. تحقق من الاتصال ثم أعد المحاولة بنفس الطلب المحفوظ.",
         "Couldn’t confirm the change. Check your connection, then retry the same saved request.")
+}
+
+internal fun companyResponsibilityCategory(key: String): String = when (key) {
+    "PEOPLE_ADMIN" -> "PEOPLE"
+    "PROJECT_ADMIN" -> "PROJECTS"
+    "SUPPLIER_MASTER_DATA_ADMIN" -> "SUPPLIERS"
+    "APPROVAL_POLICY_ADMIN", "COMPANY_SETTINGS_ADMIN" -> "ADMINISTRATION"
+    "FINANCE_PAYROLL_PREPARE", "FINANCE_PAYROLL_REVIEW", "PAYROLL_READ", "PAYROLL_PREPARE", "PAYROLL_REVIEW" -> "PAYROLL"
+    "FINANCE_SUPPLIER_REVIEW", "FINANCE_PAYABLE_PREPARE", "FINANCE_PAYABLE_POST" -> "FINANCE_SUPPLIERS"
+    "FINANCE_COMMERCIAL_REVIEW", "FINANCE_RECEIVABLE_PREPARE", "FINANCE_RECEIVABLE_EXECUTE" -> "FINANCE_CUSTOMERS"
+    "FINANCE_EMPLOYEE_REVIEW", "FINANCE_EMPLOYEE_PREPARE", "FINANCE_EMPLOYEE_EXECUTE" -> "FINANCE_EMPLOYEES"
+    "FINANCE_BANK_STATEMENT_PREPARE", "FINANCE_BANK_STATEMENT_IMPORT", "FINANCE_BANK_RECONCILIATION_PREPARE", "FINANCE_BANK_RECONCILIATION_FINALIZE" -> "FINANCE_BANK"
+    "FINANCE_CASH_PREPARE", "FINANCE_CASH_EXECUTE" -> "FINANCE_CASH"
+    "FINANCE_PERIOD_CLOSE_PREPARE", "FINANCE_PERIOD_CLOSE_EXECUTE", "FINANCE_REPORT_READ" -> "FINANCE_REPORTS"
+    "PROCUREMENT_BUYER", "PROCUREMENT_TECHNICAL_REVIEW", "PROCUREMENT_NEED_REQUEST", "PROCUREMENT_NEED_REVIEW", "PROCUREMENT_ORDER_ISSUE", "PROCUREMENT_SERVICE_ACCEPT" -> "PROCUREMENT"
+    "SALES_VIEW", "SALES_WRITE", "SALES_COST_VIEW", "SALES_RELEASE", "SALES_AWARD" -> "COMMERCIAL"
+    else -> "OTHER"
+}
+
+@Composable
+internal fun companyResponsibilityCategoryLabel(category: String): String = when (category) {
+    "PEOPLE" -> hiltechText("الموظفون", "People")
+    "PROJECTS" -> hiltechText("المشاريع", "Projects")
+    "SUPPLIERS" -> hiltechText("سجل الموردين", "Supplier register")
+    "ADMINISTRATION" -> hiltechText("إعدادات الشركة", "Company setup")
+    "PAYROLL" -> hiltechText("الرواتب ونتائج الصرف", "Payroll and disbursement results")
+    "PROCUREMENT" -> hiltechText("المشتريات والخدمات", "Purchasing and services")
+    "COMMERCIAL" -> hiltechText("المبيعات والعروض", "Sales and quotations")
+    "FINANCE_SUPPLIERS" -> hiltechText("المالية · الموردون", "Finance · suppliers")
+    "FINANCE_CUSTOMERS" -> hiltechText("المالية · العملاء", "Finance · customers")
+    "FINANCE_EMPLOYEES" -> hiltechText("المالية · الموظفون", "Finance · employees")
+    "FINANCE_BANK" -> hiltechText("المالية · البنوك", "Finance · banks")
+    "FINANCE_CASH" -> hiltechText("المالية · الخزائن", "Finance · cashboxes")
+    "FINANCE_REPORTS" -> hiltechText("المالية · التقارير والإقفال", "Finance · reporting and close")
+    else -> hiltechText("مسؤوليات أخرى", "Other responsibilities")
 }

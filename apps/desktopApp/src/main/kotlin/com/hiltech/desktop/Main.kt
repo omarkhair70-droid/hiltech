@@ -38,7 +38,7 @@ import com.hiltech.shared.core.executive.executiveNativeWorkspace
 import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
 import com.hiltech.shared.core.payroll.payrollAdminReadNativeWorkspace
 import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
-import com.hiltech.shared.core.service.handoverReadNativeWorkspace
+import com.hiltech.shared.core.service.serviceDeliveryNativeWorkspace
 import com.hiltech.shared.core.service.serviceOperationsReadNativeWorkspace
 import com.hiltech.shared.core.finance.financeEvidenceReadNativeWorkspace
 import com.hiltech.shared.core.finance.financeBankCsvIntakeNativeWorkspace
@@ -2798,6 +2798,7 @@ fun main() {
                 navigationOrganization?.organizationId.orEmpty()
             var executiveProjectFocus by remember(nativeProjectScope) { mutableIntStateOf(0) }
             val employeeSessionScope = (shellState.value as? HiltechShellState.SignedIn)?.let(::planningSessionScope).orEmpty()
+            var companySettingsFocusRequest by remember(employeeSessionScope) { mutableIntStateOf(0) }
             val employeeDrafts = androidx.compose.runtime.key(employeeSessionScope) {
                 androidx.compose.runtime.saveable.rememberSaveableStateHolder()
             }
@@ -2806,6 +2807,36 @@ fun main() {
                     val current = shellState.value as? HiltechShellState.SignedIn
                     current != null && planningSessionScope(current) == employeeSessionScope
                 }
+            }
+            val sessionOnboarding = remember(workspaceApi) {
+                com.hiltech.shared.core.people.OnboardingApiClient(workspaceApi)
+            }
+            val sessionInbox = remember(workspaceApi) {
+                com.hiltech.shared.core.inbox.InboxApiClient(workspaceApi)
+            }
+            val sessionApprovals = remember(workspaceApi) {
+                com.hiltech.shared.core.approval.ApprovalApiClient(workspaceApi)
+            }
+            val purchaseReviews = remember(workspaceApi) {
+                com.hiltech.shared.core.procurement.PurchaseOrderReviewApiClient(workspaceApi)
+            }
+            val serviceProjects = remember(workspaceApi) {
+                com.hiltech.shared.core.projects.ProjectsApiClient(workspaceApi)
+            }
+            val serviceDelivery = remember(workspaceApi) {
+                com.hiltech.shared.core.service.ServiceDeliveryApiClient(workspaceApi)
+            }
+            val serviceHandover = remember(workspaceApi) {
+                com.hiltech.shared.core.service.HandoverApiClient(workspaceApi)
+            }
+            val serviceReviews = remember(workspaceApi) {
+                com.hiltech.shared.core.service.HandoverReviewApiClient(workspaceApi)
+            }
+            val serviceEvidence = remember(workspaceApi) {
+                runtime.evidenceApiForSession(workspaceApi)
+            }
+            val stockPurchasing = remember(workspaceApi, serviceEvidence) {
+                com.hiltech.shared.core.procurement.StockPurchasingNativeClients(workspaceApi, serviceEvidence)
             }
             val companyResponsibilities = remember(workspaceApi) {
                 com.hiltech.shared.core.people.CompanyResponsibilitiesApiClient(workspaceApi)
@@ -2827,8 +2858,15 @@ fun main() {
             }
             val languagePreferences = remember { java.util.prefs.Preferences.userRoot().node("com/hiltech/desktop/preferences") }
             var appLanguage by remember { mutableStateOf(HiltechLanguage.fromCode(languagePreferences.get("appLanguage", null))) }
+            val serviceDocuments = remember(employeeSessionScope, appLanguage) {
+                DesktopSourceDocuments(appLanguage) {
+                    val current = shellState.value as? HiltechShellState.SignedIn
+                    current != null && planningSessionScope(current) == employeeSessionScope
+                }
+            }
             HiltechShell(
                 state = shellState.value,
+                operationalFocusRequest = com.hiltech.shared.core.NativeWorkspaceOpenRequest("company-administration", companySettingsFocusRequest),
                 language = appLanguage,
                 onLanguageChange = { choice ->
                     appLanguage = choice
@@ -2849,7 +2887,7 @@ fun main() {
                         EmployeeAccountWorkspace(
                             employee = employee,
                             sessionScope = employeeSessionScope,
-                            client = runtime.onboardingApi,
+                            client = sessionOnboarding,
                             installationId = runtime.physicalWarehouseInstallationId,
                             newOperationId = { java.util.UUID.randomUUID().toString() },
                             onReauthenticate = { signIn(true) },
@@ -2886,7 +2924,7 @@ fun main() {
                         com.hiltech.shared.core.people.EmployeeOnboardingWorkspace(
                             employee = employee,
                             sessionScope = expectedScope,
-                            client = runtime.onboardingApi,
+                            client = sessionOnboarding,
                             installationId = runtime.physicalWarehouseInstallationId,
                             newOperationId = { java.util.UUID.randomUUID().toString() },
                             isSessionCurrent = sessionCurrent,
@@ -2902,9 +2940,11 @@ fun main() {
                 inboxWorkspace = {
                     navigationIdentity?.let { identity ->
                         InboxWorkspace(
-                            sessionScope = "${identity.identityId}:${identity.identityVersion}",
-                            inbox = runtime.inboxApi,
-                            approvals = runtime.approvalApi,
+                            sessionScope = employeeSessionScope,
+                            inbox = sessionInbox,
+                            approvals = sessionApprovals,
+                            purchaseReviews = purchaseReviews,
+                            onReauthenticate = { signIn(true) },
                             installationId = runtime.physicalWarehouseInstallationId,
                             newOperationId = { java.util.UUID.randomUUID().toString() },
                         )
@@ -2947,6 +2987,7 @@ fun main() {
                                 installationId = runtime.physicalWarehouseInstallationId,
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
                                 runClient = payrollRuns,
+                                onReauthenticate = { signIn(true) },
                                 )
                             }
                             add(payrollWorkspace.copy(content = { exit ->
@@ -3061,12 +3102,19 @@ fun main() {
                             ))
                         }
                         if (operationAvailable(ProductOperation.SERVICE_HANDOVER)) {
-                            add(handoverReadNativeWorkspace(
-                                projects = runtime.readProjectsApi,
-                                handover = runtime.handoverApi,
+                            add(serviceDeliveryNativeWorkspace(
+                                projects = serviceProjects,
+                                delivery = serviceDelivery,
+                                handover = serviceHandover,
+                                reviews = serviceReviews,
+                                evidence = serviceEvidence,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                pickDocument = { serviceDocuments.pickDocument() },
+                                exportDocument = { name, type, bytes, digest -> serviceDocuments.exportDocument(name, type, bytes, digest) },
+                                onReauthenticate = { signIn(true) },
                             ))
                         }
                         if (serviceOperationsAvailable()) {
@@ -3305,67 +3353,27 @@ fun main() {
                                     val organization = identity?.organizations?.firstOrNull { it.primary }
                                         ?: identity?.organizations?.firstOrNull()
                                     if (identity != null && organization != null) {
-                                        androidx.compose.runtime.key(identity.identityId, organization.organizationId) {
+                                        androidx.compose.runtime.key(employeeSessionScope) {
                                             SupplierSourcingBuyerSection(
-                                                api = runtime.supplierSourcingApi,
+                                                api = stockPurchasing.sourcing,
                                                 organizationId = organization.organizationId,
                                                 installationId = runtime.physicalWarehouseInstallationId,
                                                 newOperationId = { java.util.UUID.randomUUID().toString() },
-                                                purchaseCandidateApi = runtime.purchaseOrderCandidateApi.takeIf {
+                                                purchaseCandidateApi = stockPurchasing.candidates.takeIf {
                                                     operationAvailable(ProductOperation.PROCUREMENT_PO_CANDIDATES)
                                                 },
                                                 purchaseApprovalRequestEnabled =
                                                     operationAvailable(ProductOperation.PROCUREMENT_APPROVAL_REQUEST),
-                                                quoteDocumentUploader = runtime.supplierQuoteDocumentUploader,
+                                                quoteDocumentUploader = stockPurchasing.quoteDocuments,
                                                 pickQuoteFile = {
-                                                    kotlinx.coroutines.withContext(Dispatchers.IO) {
-                                                        val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
-                                                        javax.swing.SwingUtilities.invokeAndWait {
-                                                            val picker = javax.swing.JFileChooser()
-                                                            picker.dialogTitle = "Private supplier quotation document"
-                                                            picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter(
-                                                                "Quotation PDF or image (max 16 MiB)", "pdf", "jpg", "jpeg", "png", "webp",
-                                                            )
-                                                            picker.isAcceptAllFileFilterUsed = false
-                                                            if (picker.showOpenDialog(null) ==
-                                                                javax.swing.JFileChooser.APPROVE_OPTION
-                                                            ) chosen.set(picker.selectedFile)
-                                                        }
-                                                        val file = chosen.get()
-                                                        if (file == null) null else {
-                                                            val path = file.toPath()
-                                                            require(java.nio.file.Files.isRegularFile(
-                                                                path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
-                                                            )) { "Quotation source must be a regular file." }
-                                                            val size = java.nio.file.Files.size(path)
-                                                            require(size in 1..(16L * 1024L * 1024L)) {
-                                                                "Quotation file must be between 1 byte and 16 MiB."
-                                                            }
-                                                            val ext = file.extension.lowercase()
-                                                            val mime = when (ext) {
-                                                                "pdf" -> "application/pdf"
-                                                                "jpg", "jpeg" -> "image/jpeg"
-                                                                "png" -> "image/png"
-                                                                "webp" -> "image/webp"
-                                                                else -> error("Unsupported quotation document format.")
-                                                            }
-                                                            val bytes = java.nio.file.Files.readAllBytes(path)
-                                                            require(bytes.size.toLong() == size) {
-                                                                "Quotation source changed during file selection."
-                                                            }
-                                                            val digest = java.security.MessageDigest
-                                                                .getInstance("SHA-256").digest(bytes)
-                                                                .joinToString("") { byte ->
-                                                                    "%02x".format(byte.toInt() and 0xff)
-                                                                }
-                                                            com.hiltech.shared.core.procurement.SupplierQuotePickedFile(
-                                                                fileName = file.name,
-                                                                contentType = mime,
-                                                                sha256 = digest,
-                                                                bytes = bytes,
-                                                                capturedAt = java.time.Instant.now().toString(),
-                                                            )
-                                                        }
+                                                    serviceDocuments.pickDocument()?.let { file ->
+                                                        com.hiltech.shared.core.procurement.SupplierQuotePickedFile(
+                                                            fileName = file.originalFileName,
+                                                            contentType = file.contentType,
+                                                            sha256 = file.sha256,
+                                                            bytes = file.bytes,
+                                                            capturedAt = file.capturedAt,
+                                                        )
                                                     }
                                                 },
                                             )
@@ -3384,8 +3392,9 @@ fun main() {
                                             identity.identityId, organization.organizationId, "po-issuer",
                                         ) {
                                             PurchaseOrderIssuerSection(
-                                                api = runtime.purchaseOrderIssueApi,
-                                                amendmentApi = runtime.purchaseOrderDeliveryAmendmentApi.takeIf {
+                                                onOpenCompanySettings = { companySettingsFocusRequest += 1 },
+                                                api = stockPurchasing.issue,
+                                                amendmentApi = stockPurchasing.amendments.takeIf {
                                                     operationAvailable(ProductOperation.PROCUREMENT_PO_DELIVERY_AMENDMENTS)
                                                 },
                                                 cancellationEnabled =
@@ -3400,8 +3409,8 @@ fun main() {
                                                 identity.identityId, organization.organizationId, "po-dispatch-evidence",
                                             ) {
                                                 SupplierPoCommunicationSection(
-                                                    issued = runtime.purchaseOrderIssueApi,
-                                                    communications = runtime.supplierPoCommunicationApi,
+                                                    issued = stockPurchasing.issue,
+                                                    communications = stockPurchasing.communications,
                                                     organizationId = organization.organizationId,
                                                     installationId = runtime.physicalWarehouseInstallationId,
                                                     newOperationId = { java.util.UUID.randomUUID().toString() },

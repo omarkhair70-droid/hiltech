@@ -1,6 +1,8 @@
 package com.hiltech.server.finance
 
-import com.hiltech.server.approval.ApprovalAuthorityBindingSnapshot
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -76,7 +78,7 @@ data class FinanceApPostingReceipt(
  * must first install approved Chart of Accounts, Fiscal Period and Policy.
  */
 @Service
-class FinanceApJournalPostingService(
+class FinanceApJournalPostingService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val purchases: PurchaseOrderIssuePersistence,
     private val accountantReview: FinanceSupplierAccountingApprovalSubject,
@@ -87,6 +89,7 @@ class FinanceApJournalPostingService(
     private val audit: AuditEventWriter,
     private val clock: Clock,
     private val environment: Environment,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     @Transactional
     fun propose(
@@ -501,19 +504,10 @@ class FinanceApJournalPostingService(
         },org,proposalId,
     ).singleOrNull()
 
-    private fun requireAuthority(
-        actor: UUID,org: UUID,setting: String,
-    ): ApprovalAuthorityBindingSnapshot {
+    private fun requireAuthority(actor: UUID, org: UUID, setting: String) {
         if (!postingSubject.enabled()) unavailable()
-        val key=environment.getProperty(setting,"").trim()
-        if (!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) unavailable()
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now)) unavailable()
-        val binding=approvals.resolveCurrentAuthority(org,key,now)
-            ?: unavailable()
-        if(binding.organizationId!=org || binding.authorityKey!=key ||
-           !approvals.actorMatchesAuthority(actor,binding,now)) unavailable()
-        return binding
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, setting,
+            environment.getProperty(setting), clock.instant()) ?: unavailable()
     }
 
     private fun receipt(

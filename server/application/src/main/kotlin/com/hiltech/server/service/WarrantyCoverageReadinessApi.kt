@@ -14,9 +14,10 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
 /**
- * P11B5a is a read-only decision-preparation boundary, NOT an entitlement engine.
- * A P10 signed source, even with READY evidence, does not establish coverage.
- * No asset, site, warranty start, SLA target or billing decision is inferred.
+ * Read-only projection of the source-owned warranty decision and remaining checks.
+ * A signed source or READY evidence alone does not establish coverage. An actual
+ * independently reviewed service decision supplies the recorded coverage state.
+ * No SLA target, client communication or billing decision is inferred.
  */
 data class WarrantyCoverageReadinessDto(
     val projectId: String,
@@ -37,9 +38,9 @@ data class WarrantyCoverageReadinessDto(
 )
 
 /**
- * Deliberately never returns IN_WARRANTY or OUT_OF_WARRANTY.
- * The approved, versioned warranty policy + scoped asset/site + issue decision
- * do not yet exist in the canonical P10/P11 source contract.
+ * Conservative legacy-source assessment for callers that have no approved
+ * service decision. Current service reads additionally use the immutable
+ * service-delivery decision source below; commercial text alone is insufficient.
  */
 object WarrantyCoverageReadinessPolicy {
     fun evaluate(
@@ -87,6 +88,9 @@ object WarrantyCoverageReadinessPolicy {
 class WarrantyCoverageReadinessService(
     private val commercialSource: ProjectServiceContractSourceService,
     private val supportDesk: JdbcSupportDeskStore,
+    private val decisions: ServiceDeliveryRepository,
+    private val sources: ServiceDeliverySources,
+    private val review: ServiceDeliveryApprovalSubject,
 ) {
     @Transactional(readOnly = true)
     fun read(projectId: UUID, ticketId: UUID, actor: UUID): WarrantyCoverageReadinessDto {
@@ -95,7 +99,26 @@ class WarrantyCoverageReadinessService(
         val source = commercialSource.read(projectId, actor)
         val ticket = supportDesk.ticket(ticketId, projectId)
             ?: warrantyReadinessProblem("SUPPORT_TICKET_NOT_FOUND", HttpStatus.NOT_FOUND)
-        return WarrantyCoverageReadinessPolicy.evaluate(source, ticket)
+        val owner = sources.manage(projectId, actor)
+        val recorded = decisions.ticketCoverage(projectId, ticketId)
+        if (recorded == null) {
+            val currentTerms = decisions.currentTerms(owner.organizationId, projectId)
+            val configured = review.policy(owner.organizationId, DeliveryWorkflow.WARRANTY) != null
+            val blockers = buildList {
+                if (currentTerms.isEmpty()) add("APPROVED_WARRANTY_TERMS_REQUIRED")
+                if (!configured) add("WARRANTY_REVIEW_SETUP_REQUIRED")
+                add("INCIDENT_AND_EXCLUSIONS_NOT_ASSESSED")
+            }
+            return WarrantyCoverageReadinessDto(projectId.toString(), ticketId.toString(), source.contractId, source.clientPoId, source.sourceState,
+                currentTerms.isNotEmpty(), "NOT_EVALUATED", "NOT_APPROVED", if (currentTerms.isEmpty()) "NOT_VERIFIED" else "APPROVED_TERMS_AVAILABLE", blockers)
+        }
+        val state = requireNotNull(recorded.proposal.details.coverageDecision)
+        val terms = recorded.proposal.details.termsEventId?.let { decisions.event(recorded.proposal.organizationId, UUID.fromString(it)) }
+        return WarrantyCoverageReadinessDto(projectId.toString(), ticketId.toString(), source.contractId, source.clientPoId,
+            source.sourceState, terms?.proposal?.details?.writtenTerms?.isNotBlank() == true,
+            state, "APPROVED_RECORDED", if (recorded.proposal.details.scopeConfirmed) "VERIFIED_FOR_INCIDENT" else "NOT_CONFIRMED_FOR_INCIDENT",
+            if (state == "INSUFFICIENT_INFORMATION") listOf("INCIDENT_INFORMATION_REQUIRED") else emptyList(),
+            warrantyApproved = state == "COVERED", slaAuthorized = false, clientMayBeNotified = false, billableServiceAuthorized = false)
     }
 }
 

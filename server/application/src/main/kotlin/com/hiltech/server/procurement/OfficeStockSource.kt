@@ -1,5 +1,8 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.warehouse.StockLedgerPersistence
 import com.hiltech.server.warehouse.StorageLocationLifecycle
@@ -36,10 +39,11 @@ class OfficeStockSource @Autowired constructor(
     private val clock: Clock,
     @Value("\${hiltech.procurement.office-stock.enabled:false}")
     private val enabled: Boolean = false,
-    @Value("\${hiltech.procurement.office-stock.request-authority-key:}")
+    @Value("\${hiltech.procurement.office-stock.request-authority-key:PROCUREMENT_NEED_REQUEST}")
     private val requestKey: String = "",
-    @Value("\${hiltech.procurement.office-stock.review-authority-key:}")
+    @Value("\${hiltech.procurement.office-stock.review-authority-key:PROCUREMENT_NEED_REVIEW}")
     private val reviewKey: String = "",
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     fun load(teamId: UUID, locationId: UUID): OfficeStockSourceSnapshot? {
         if (!enabled) return null
@@ -74,7 +78,7 @@ class OfficeStockSource @Autowired constructor(
     }
 
     fun canRequest(actor: UUID, source: OfficeStockSourceSnapshot): Boolean =
-        authority(actor, source.organizationId, requestKey) &&
+        authority(actor, source.organizationId, "hiltech.procurement.office-stock.request-authority-key", requestKey) &&
             jdbc.queryForObject(
                 """
                 SELECT EXISTS(
@@ -87,16 +91,11 @@ class OfficeStockSource @Autowired constructor(
             ) == true
 
     fun canReview(actor: UUID, source: OfficeStockSourceSnapshot): Boolean =
-        authority(actor, source.organizationId, reviewKey)
+        authority(actor, source.organizationId, "hiltech.procurement.office-stock.review-authority-key", reviewKey)
 
-    private fun authority(actor: UUID, org: UUID, rawKey: String): Boolean {
-        val key = rawKey.trim()
-        if (!enabled || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) return false
-        val now = clock.instant()
-        if (!approvals.isActiveOrganizationMember(org, actor, now)) return false
-        val binding = approvals.resolveCurrentAuthority(org, key, now) ?: return false
-        return binding.organizationId == org && binding.authorityKey == key &&
-            approvals.actorMatchesAuthority(actor, binding, now)
+    private fun authority(actor: UUID, org: UUID, property: String, rawKey: String): Boolean {
+        if (!enabled) return false
+        return currentOperationalAuthority(operationalAuthority, approvals, actor, org, property, rawKey, clock.instant()) != null
     }
 
     /** Authorized sourcing/PO currentness, never a boolean supplied by the UI. */
@@ -123,8 +122,8 @@ class OfficeStockSource @Autowired constructor(
         if (!enabled || !approvals.isActiveOrganizationMember(
             organizationId, actor, clock.instant(),
         )) return emptyList()
-        val canReview = authority(actor, organizationId, reviewKey)
-        val requestAuthority = authority(actor, organizationId, requestKey)
+        val canReview = authority(actor, organizationId, "hiltech.procurement.office-stock.review-authority-key", reviewKey)
+        val requestAuthority = authority(actor, organizationId, "hiltech.procurement.office-stock.request-authority-key", requestKey)
         if (!canReview && !requestAuthority) return emptyList()
         return jdbc.query(
             """

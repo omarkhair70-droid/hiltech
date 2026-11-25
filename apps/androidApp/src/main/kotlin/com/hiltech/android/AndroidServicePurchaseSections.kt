@@ -20,7 +20,7 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
 
-/** Default OFF at the host. All mutations are online and server-authorized. */
+/** Server availability and current source authority govern this native journey. */
 @Composable
 fun AndroidServicePurchaseSections(application: HiltechApplication, organizationId: String) {
     val install = application.installationId

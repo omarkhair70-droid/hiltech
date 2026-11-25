@@ -59,6 +59,32 @@ class SupplierQuoteProtectedDocumentService @Autowired constructor(
                 source.supplierOrganizationId, source.sourceEvidenceRef, source.sourceSha256,
             )
         ) unavailable()
+        return deliver(actor, source, correlationId, EvidenceUploadSpec.MAX_EVIDENCE_OBJECT_BYTES) {}
+    }
+
+    /** Exact assigned candidate access does not confer the buyer's broader quotation permissions. */
+    internal fun readForAssignedCandidate(
+        actor: UUID,
+        candidate: PurchaseOrderCandidateRecord,
+        correlationId: String,
+        requireCurrentAssignment: () -> Unit,
+    ): ProtectedSupplierQuoteDocument {
+        if (!enabled) unavailable()
+        requireCurrentAssignment()
+        val source = sourcing.quoteDocumentSource(candidate.quoteId) ?: unavailable()
+        if (source.organizationId != candidate.organizationId || source.rfqId != candidate.rfqId ||
+            source.supplierOrganizationId != candidate.supplierOrganizationId || source.sourceSha256 != candidate.sourceSha256) unavailable()
+        val evidenceId = source.sourceEvidenceRef.takeIf { it.startsWith("evidence:") }?.removePrefix("evidence:")
+            ?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: unavailable()
+        val recorded = evidence.loadEvidenceRecord(evidenceId) ?: unavailable()
+        val slot = sourcing.quoteDocumentSlot(recorded.targetId) ?: unavailable()
+        if (slot.organizationId != candidate.organizationId || slot.rfqId != candidate.rfqId ||
+            slot.supplierOrganizationId != candidate.supplierOrganizationId) unavailable()
+        return deliver(actor, source, correlationId, 16L * 1024 * 1024, requireCurrentAssignment)
+    }
+
+    private fun deliver(actor: UUID, source: SupplierQuoteDocumentSource, correlationId: String,
+                        maximumBytes: Long, afterRead: () -> Unit): ProtectedSupplierQuoteDocument {
         if (!source.sourceEvidenceRef.startsWith("evidence:")) unavailable()
         val evidenceId = runCatching {
             UUID.fromString(source.sourceEvidenceRef.removePrefix("evidence:"))
@@ -73,7 +99,7 @@ class SupplierQuoteProtectedDocumentService @Autowired constructor(
             recorded.classificationCode != "HIGHLY_RESTRICTED" ||
             recorded.clientVisibilityMode != "INTERNAL_ONLY" ||
             recorded.expectedSha256 != source.sourceSha256 ||
-            recorded.expectedSizeBytes !in 1..EvidenceUploadSpec.MAX_EVIDENCE_OBJECT_BYTES
+            recorded.expectedSizeBytes !in 1..maximumBytes
         ) unavailable()
         val expectedScanClass = when (recorded.contentType) {
             "application/pdf" -> "SIGNED_DOCUMENT"
@@ -103,16 +129,18 @@ class SupplierQuoteProtectedDocumentService @Autowired constructor(
             !matchesMagic(bytes, recorded.contentType)
         ) unavailable()
 
+        afterRead()
+
         audit.append(AuditEventRecord(
             actorUserId = actor,
             action = "PROCUREMENT_SUPPLIER_QUOTE_DOCUMENT_READ",
             targetType = "SUPPLIER_QUOTE_EVIDENCE",
-            targetId = quoteId,
+            targetId = source.quoteId,
             occurredAt = clock.instant(),
             correlationId = correlationId,
             reason = "PROTECTED_SERVER_DELIVERY",
         ))
-        return ProtectedSupplierQuoteDocument(quoteId, recorded.contentType, bytes)
+        return ProtectedSupplierQuoteDocument(source.quoteId, recorded.contentType, bytes)
     }
 
     private fun hexBytes(value: String): ByteArray {

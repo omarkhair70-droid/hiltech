@@ -1,5 +1,8 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
@@ -73,10 +76,11 @@ class ServicePurchaseNeedService @org.springframework.beans.factory.annotation.A
     private val clock: Clock,
     @Value("\${hiltech.procurement.service-needs.enabled:false}")
     private val enabled: Boolean = false,
-    @Value("\${hiltech.procurement.service-needs.request-authority-key:}")
+    @Value("\${hiltech.procurement.service-needs.request-authority-key:PROCUREMENT_NEED_REQUEST}")
     private val requesterKey: String = "",
-    @Value("\${hiltech.procurement.service-needs.review-authority-key:}")
+    @Value("\${hiltech.procurement.service-needs.review-authority-key:PROCUREMENT_NEED_REVIEW}")
     private val reviewerKey: String = "",
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     private data class Team(val id: UUID, val org: UUID, val name: String, val version: Long)
     private data class Need(
@@ -94,8 +98,8 @@ class ServicePurchaseNeedService @org.springframework.beans.factory.annotation.A
         active()
         if (!approval.isActiveOrganizationMember(organizationId, actor, clock.instant()))
             return emptyList()
-        val requester = authority(actor, organizationId, requesterKey)
-        val reviewer = authority(actor, organizationId, reviewerKey)
+        val requester = authority(actor, organizationId, "hiltech.procurement.service-needs.request-authority-key", requesterKey)
+        val reviewer = authority(actor, organizationId, "hiltech.procurement.service-needs.review-authority-key", reviewerKey)
         if (!requester && !reviewer) return emptyList()
         return jdbc.query(
             """
@@ -352,7 +356,7 @@ class ServicePurchaseNeedService @org.springframework.beans.factory.annotation.A
     ).singleOrNull()
 
     private fun canRequest(actor: UUID, team: Team): Boolean =
-        authority(actor,team.org,requesterKey) &&
+        authority(actor,team.org,"hiltech.procurement.service-needs.request-authority-key",requesterKey) &&
         jdbc.queryForObject(
             """
             SELECT EXISTS(SELECT 1 FROM team_membership m
@@ -363,16 +367,11 @@ class ServicePurchaseNeedService @org.springframework.beans.factory.annotation.A
         ) == true
 
     private fun canReview(actor: UUID, team: Team) =
-        authority(actor,team.org,reviewerKey)
+        authority(actor,team.org,"hiltech.procurement.service-needs.review-authority-key",reviewerKey)
 
-    private fun authority(actor: UUID, org: UUID, rawKey: String): Boolean {
-        if (!enabled || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(rawKey.trim()))
-            return false
-        val now = clock.instant()
-        if (!approval.isActiveOrganizationMember(org,actor,now)) return false
-        val binding = approval.resolveCurrentAuthority(org,rawKey.trim(),now) ?: return false
-        return binding.organizationId == org && binding.authorityKey == rawKey.trim() &&
-            approval.actorMatchesAuthority(actor,binding,now)
+    private fun authority(actor: UUID, org: UUID, property: String, rawKey: String): Boolean {
+        if (!enabled) return false
+        return currentOperationalAuthority(operationalAuthority, approval, actor, org, property, rawKey, clock.instant()) != null
     }
 
     private fun text(raw: String, min: Int, max: Int): String =

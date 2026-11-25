@@ -1,6 +1,9 @@
 package com.hiltech.server.finance
 
 import com.hiltech.server.approval.ApprovalPersistencePort
+import com.hiltech.server.approval.ApprovalDecisionConstraint
+import com.hiltech.server.approval.ApprovalDecisionContext
+import com.hiltech.server.approval.ApprovalDecisionType
 import com.hiltech.server.approval.ApprovalPolicyMode
 import com.hiltech.server.approval.ApprovalPrincipalType
 import com.hiltech.server.approval.ApprovalSubjectRef
@@ -43,10 +46,20 @@ class FinancePayrollResultSubject(
     private val approvals: ApprovalPersistencePort,
     private val publication: ObjectProvider<PayrollRunPublicationPort>,
     private val clock: Clock,
-) : ApprovalSubjectVersionSource {
+) : ApprovalSubjectVersionSource, ApprovalDecisionConstraint {
     override fun supports(subjectType: String): Boolean = subjectType == FINANCE_PAYROLL_RESULT_SUBJECT
     override fun isCurrent(subject: ApprovalSubjectRef): Boolean = supports(subject.subjectType) &&
         current(subject.organizationId, subject.subjectId)?.proposal?.reviewVersion == subject.subjectVersion
+
+    override fun canDecide(actor: UUID, context: ApprovalDecisionContext, decision: ApprovalDecisionType): Boolean {
+        if (!supports(context.subjectType) || context.policyKey != FINANCE_PAYROLL_RESULT_POLICY) return false
+        val source = current(context.organizationId, context.subjectId) ?: return false
+        if (source.proposal.reviewVersion != context.subjectVersion || source.policy.version != context.policyVersion ||
+            source.policy.reviewerId != actor || context.requesterUserId != source.proposal.preparedBy ||
+            source.proposal.preparedBy == actor || !authority.canReview(actor, context.organizationId) ||
+            repository.isBeneficiary(actor, source.instruction.employeeId)) return false
+        return decision != ApprovalDecisionType.APPROVE || repository.hasEvidenceView(actor, context.organizationId, source.proposal)
+    }
 
     internal fun policy(org: UUID): FinancePayrollReviewPolicy? {
         val at = clock.instant()

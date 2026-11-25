@@ -2,6 +2,9 @@ package com.hiltech.server.finance
 
 import com.hiltech.server.approval.ApprovalAuthorizationPort
 import com.hiltech.server.approval.ApprovalEngineService
+import com.hiltech.server.approval.ApprovalDecisionType
+import com.hiltech.server.approval.ApprovalRequestState
+import com.hiltech.server.approval.ApprovalSubjectRef
 import com.hiltech.server.approval.ApprovalPrincipalType
 import com.hiltech.server.approval.FailClosedApprovalSubjectVersionGuard
 import com.hiltech.server.approval.JdbcApprovalPersistence
@@ -85,7 +88,7 @@ object FinancePayrollResultPostgresScenario {
                 val engine = ApprovalEngineService(persistence, commands, AuthorizationProjectionIntentWriter {}, object : ApprovalAuthorizationPort {
                     override fun canDecide(actorUserId: UUID, approvalRequestId: UUID, assignmentPrincipalType: ApprovalPrincipalType, assignmentPrincipalId: UUID) =
                         actorUserId == reviewer && assignmentPrincipalType == ApprovalPrincipalType.USER && assignmentPrincipalId == reviewer
-                }, FailClosedApprovalSubjectVersionGuard(listOf(subject)), audit, ApplicationEventPublisher {}, clock)
+                }, FailClosedApprovalSubjectVersionGuard(listOf(subject)), audit, ApplicationEventPublisher {}, clock, decisionConstraints = listOf(subject))
                 val service = FinancePayrollDisbursementService(repo, authority, subject, engine, commands, audit, clock, evidence)
                 val adapter = FinancePayrollPaymentResultsAdapter(repo)
                 assertTrue(service.capabilities(preparer, org).reviewConfigured)
@@ -100,6 +103,14 @@ object FinancePayrollResultPostgresScenario {
                 assertTrue(service.run(reviewer, org, run).proposals.single().canReview)
                 assertFalse(service.run(preparer, org, run).proposals.single().canReview)
                 assertFalse(service.run(reviewer, org, run).proposals.single().evidenceViewed)
+                val reviewSubject = ApprovalSubjectRef(org, FINANCE_PAYROLL_RESULT_SUBJECT, successProposal.targetId,
+                    repo.proposal(org, successProposal.targetId)!!.reviewVersion)
+                val approvalRequest = engine.subjectStatus(reviewSubject, FINANCE_PAYROLL_RESULT_POLICY)!!
+                assertThrows<ProductApiException> {
+                    engine.decide(reviewer, UUID.randomUUID(), approvalRequest.approvalRequestId, ApprovalDecisionType.APPROVE, null, "synthetic-generic-proof-gate")
+                }
+                assertEquals(ApprovalRequestState.PENDING, engine.subjectStatus(reviewSubject, FINANCE_PAYROLL_RESULT_POLICY)!!.state)
+                assertTrue(adapter.paymentEvents(org, run).isEmpty())
                 val ownProof = evidence.read(preparer, org, successProposal.targetId, "synthetic-payroll-proof")
                 assertEquals(debit.bytes.toString(Charsets.UTF_8), ownProof.contentUtf8)
                 assertEquals(debit.sha, ownProof.sha256)
@@ -150,6 +161,9 @@ object FinancePayrollResultPostgresScenario {
                 assertTrue(service.run(reviewer, org, run).proposals.single().evidenceViewed)
                 assertEquals(2, jdbc.queryForObject("SELECT count(*) FROM finance_payroll_evidence_view WHERE organization_id=? AND proposal_id=?", Int::class.java, org, successProposal.targetId))
                 assertEquals(2, jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE action='FINANCE_PAYROLL_EVIDENCE_VIEWED' AND target_id=?", Int::class.java, debit.evidence))
+                assertEquals(ApprovalRequestState.APPROVED, engine.decide(reviewer, UUID.randomUUID(), approvalRequest.approvalRequestId,
+                    ApprovalDecisionType.APPROVE, null, "synthetic-generic-proof-gate").state)
+                assertTrue(adapter.paymentEvents(org, run).isEmpty(), "Generic approval is not a recorded payroll payment result")
                 val review = FinancePayrollReviewResult(UUID.randomUUID(), "APPROVE")
                 assertEquals("RECORDED", service.review(reviewer, org, successProposal.targetId, review, "synthetic-payroll-result").state)
                 assertTrue(service.review(reviewer, org, successProposal.targetId, review, "synthetic-payroll-result").replayed)
@@ -171,6 +185,16 @@ object FinancePayrollResultPostgresScenario {
                     assertTrue(repo.bank(org, debit.line)!!.reconciled)
                     assertFalse(repo.canCorrectMatch(org, firstEvent.id))
                     assertNull(subject.current(org, voidProposal.targetId))
+                    assertTrue(service.run(reviewer, org, run).proposals.single { it.proposalId == voidProposal.targetId }.canCloseStale)
+                    assertFalse(service.run(preparer, org, run).proposals.single { it.proposalId == voidProposal.targetId }.canCloseStale)
+                    val closeRequest = FinancePayrollReviewResult(UUID.randomUUID(), "CLOSE_STALE")
+                    val closed = service.review(reviewer, org, voidProposal.targetId, closeRequest, "synthetic-stale-payroll-review")
+                    assertEquals("SUPERSEDED", closed.state)
+                    assertFalse(closed.bankExecutionInitiated)
+                    assertFalse(closed.ledgerPosted)
+                    assertTrue(service.review(reviewer, org, voidProposal.targetId, closeRequest, "synthetic-stale-payroll-review").replayed)
+                    assertEquals(1, adapter.paymentEvents(org, run).size, "Closing an outdated review must not record a payment or correction")
+                    assertEquals("SUPERSEDED", service.run(reviewer, org, run).proposals.single { it.proposalId == voidProposal.targetId }.state)
                 } finally {
                     transaction.rollbackToSavepoint(signedBranch)
                     transaction.releaseSavepoint(signedBranch)

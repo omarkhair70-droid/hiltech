@@ -41,6 +41,7 @@ data class FinancePayrollProposalView(
     val preparedAt: Instant, val bankReference: String?, val bookedOn: LocalDate?, val bankName: String?,
     val evidenceId: UUID, val canReview: Boolean,
     val canOpenEvidence: Boolean = false, val evidenceViewed: Boolean = false,
+    val canCloseStale: Boolean = false,
 )
 data class FinancePayrollRunView(
     val organizationId: UUID, val runVersionId: UUID,

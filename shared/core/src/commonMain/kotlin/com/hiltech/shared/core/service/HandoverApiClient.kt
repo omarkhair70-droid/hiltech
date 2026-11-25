@@ -4,6 +4,7 @@ import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 @Serializable
@@ -13,6 +14,17 @@ data class HandoverDocumentDto(
     val revisionId: String,
     val evidenceId: String,
     val sha256: String,
+    val workOrderCode: String = "",
+    val workOrderTitle: String = "",
+    val documentCode: String = "",
+    val documentTitle: String = "",
+    val revisionLabel: String = "",
+)
+
+@Serializable
+data class HandoverSourceFindingDto(
+    val workOrderCode: String, val workOrderTitle: String, val requirementKey: String,
+    val satisfactionState: String, val waiverReason: String?,
 )
 
 @Serializable
@@ -26,6 +38,8 @@ data class HandoverReadinessDto(
     val canShareWithClient: Boolean,
     val canAcceptForClient: Boolean,
     val sourceDigest: String,
+    val projectVersion: Long = 1,
+    val sourceFindings: List<HandoverSourceFindingDto> = emptyList(),
 )
 
 @Serializable
@@ -66,7 +80,7 @@ class HandoverApiClient(
         return api.request(
             HttpMethod.Get, "/v1/projects/$projectId/handover/readiness",
             HiltechRequestOptions(installationId = installationId),
-            decode = { json.decodeFromString(HandoverReadinessDto.serializer(), it) },
+            decode = { json.decodeFromString(HandoverReadinessDto.serializer(), it).also { dto -> check(dto.projectId == projectId) } },
         )
     }
 
@@ -75,7 +89,7 @@ class HandoverApiClient(
         return api.request(
             HttpMethod.Get, "/v1/projects/$projectId/handover/packages/latest",
             HiltechRequestOptions(installationId = installationId),
-            decode = { json.decodeFromString(HandoverPackageVersionDto.serializer(), it) },
+            decode = { json.decodeFromString(HandoverPackageVersionDto.serializer(), it).also { dto -> check(dto.projectId == projectId) } },
         )
     }
 
@@ -96,8 +110,16 @@ class HandoverApiClient(
                 idempotencyKey = input.operationId,
             ),
             requestBody = json.encodeToString(HandoverDraftRequestDto.serializer(), input),
-            decode = { json.decodeFromString(HandoverPackageVersionDto.serializer(), it) },
+            decode = { json.decodeFromString(HandoverPackageVersionDto.serializer(), it).also { dto ->
+                check(dto.projectId == projectId && dto.projectVersionAtSnapshot == input.baseProjectVersion && dto.versionNumber == input.expectedLatestVersion + 1)
+            } },
         )
+    }
+
+    suspend fun history(projectId: String, installationId: String): List<HandoverPackageVersionDto> {
+        requireUuid(projectId)
+        return api.request(HttpMethod.Get, "/v1/projects/$projectId/handover/packages", HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(ListSerializer(HandoverPackageVersionDto.serializer()), it).also { records -> check(records.all { dto -> dto.projectId == projectId }) } })
     }
 
     private fun requireUuid(value: String) {

@@ -139,6 +139,7 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
     private val commercialEvidenceTarget: CommercialEvidenceTargetPort =
         DisabledCommercialEvidenceTargetPort,
     private val bankStatementTargetProvider: ObjectProvider<FinanceBankStatementEvidenceTargetPort>? = null,
+    private val serviceDeliveryDocumentTargetProvider: ObjectProvider<ServiceDeliveryDocumentEvidenceTargetPort>? = null,
 ) {
     fun reserve(
         actorIdentityId: UUID,
@@ -191,6 +192,10 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
 
         if (command.targetType in setOf("COMMERCIAL_CONTRACT", "COMMERCIAL_CLIENT_PO")) {
             return reserveCommercialDocument(actorIdentityId, correlationId, command)
+        }
+
+        if (command.targetType == "SERVICE_DELIVERY_DOCUMENT") {
+            return reserveServiceDeliveryDocument(actorIdentityId, correlationId, command)
         }
 
         if (command.targetType != "WORK_ORDER") {
@@ -1637,6 +1642,53 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
         )
     }
 
+    private fun reserveServiceDeliveryDocument(actor: UUID, correlation: String, command: ReserveCommand): ReserveEvidenceUploadResponse {
+        fun unavailable(): Nothing = throw ProductApiException("OBJECT_NOT_VISIBLE", "This service document is unavailable.", HttpStatus.NOT_FOUND)
+        fun invalid(): Nothing = throw ProductApiException("SERVICE_DELIVERY_EVIDENCE_CONTRACT_MISMATCH", "Choose a PDF or image for this exact project document.", HttpStatus.UNPROCESSABLE_ENTITY)
+        val port = serviceDeliveryDocumentTargetProvider?.ifAvailable ?: unavailable()
+        val target = port.loadTarget(command.targetId) ?: unavailable()
+        if (!port.canReserve(actor, target)) unavailable()
+        val type = "SERVICE_DELIVERY_" + target.purpose
+        val scan = when (command.contentType) {
+            "application/pdf" -> "SIGNED_DOCUMENT"
+            "image/png", "image/jpeg" -> "NATIVE_MEDIA"
+            else -> invalid()
+        }
+        if (command.workOrderId != null || command.supersedesEvidenceId != null || command.requirementKey != type ||
+            command.assertedEvidenceTypeCode != type || command.sizeBytes !in 1..EvidenceUploadSpec.MAX_EVIDENCE_OBJECT_BYTES) invalid()
+        val storage = requireStorage()
+        val at = clock.instant()
+        val evidenceId = UUID.randomUUID()
+        val uploadId = UUID.randomUUID()
+        val uploadSpec = EvidenceUploadSpec(evidenceId, target.organizationId, UUID.randomUUID(), command.contentType, command.sizeBytes, command.sha256)
+        val expires = at.plusSeconds(storageProperties.uploadExpirySeconds)
+        val execution = idempotency.execute(IdempotentCommandSpec(command.operationId, actor, "ReserveEvidenceUpload", "ServiceDeliveryDocument",
+            target.slotId, command.fingerprint(), correlation)) {
+            val current = port.loadTarget(command.targetId) ?: unavailable()
+            if (current != target || !port.canReserve(actor, current)) unavailable()
+            persistence.insertServiceDeliveryReservation(PrivateDocumentEvidenceReservationInsert(
+                evidenceId, uploadId, command.operationId, current.organizationId, "SERVICE_DELIVERY_DOCUMENT", current.slotId,
+                type, uploadSpec.objectKey, command.contentType, command.originalFileName, command.sizeBytes, command.sha256,
+                command.capturedAt, command.clientOccurredAt, actor, scan, expires, at,
+            ))
+            audit.append(AuditEventRecord(actorUserId = actor, action = "EVIDENCE_UPLOAD_RESERVED", targetType = "Evidence", targetId = evidenceId,
+                newStateRef = "evidence:RESERVED", occurredAt = at, correlationId = correlation, reason = "SERVICE_DELIVERY_DOCUMENT_RESERVE",
+                configRevisionRefsJson = """{"targetType":"SERVICE_DELIVERY_DOCUMENT","projectId":"${target.projectId}"}"""))
+            IdempotentCommandOutcome("EVIDENCE_RESERVED")
+        }
+        val reserved = persistence.findReservationByOperationId(command.operationId)
+            ?: throw ProductApiException("EVIDENCE_RESERVATION_UNAVAILABLE", "The document reservation could not be confirmed.", HttpStatus.SERVICE_UNAVAILABLE, retryable = true)
+        if (reserved.organizationId != target.organizationId || reserved.targetId != target.slotId || reserved.targetType != "SERVICE_DELIVERY_DOCUMENT") unavailable()
+        if (!clock.instant().isBefore(reserved.uploadExpiresAt)) {
+            throw ProductApiException("EVIDENCE_UPLOAD_SESSION_EXPIRED", "This document upload session expired.", HttpStatus.CONFLICT)
+        }
+        val signed = runCatching { storage.createUploadTarget(reserved.toStorageSpec()) }.getOrElse {
+            throw ProductApiException("EVIDENCE_STORAGE_UNAVAILABLE", "Document storage is temporarily unavailable.", HttpStatus.SERVICE_UNAVAILABLE, retryable = true)
+        }
+        return ReserveEvidenceUploadResponse(reserved.toMetadata(), EvidenceUploadTargetResponse(signed.uploadUrl, signed.requiredHeaders,
+            minOf(signed.expiresAt, reserved.uploadExpiresAt).toString(), reserved.sizeBytes), correlation, execution.replayed)
+    }
+
     private fun reserveEmployeeDocument(
         actorIdentityId: UUID,
         correlationId: String,
@@ -2154,6 +2206,15 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
                         correlationId = correlationId,
                     ),
             ) {
+                // Binary verification may involve a storage read. A service document
+                // creator must still hold current project authority when it is finalized.
+                if (record.targetType == "SERVICE_DELIVERY_DOCUMENT" &&
+                    !canAccessTarget(actorIdentityId, record, EvidenceTargetOperation.FINALIZE)
+                ) {
+                    throw ProductApiException(
+                        "OBJECT_NOT_VISIBLE", "The requested Evidence is not available.", HttpStatus.NOT_FOUND,
+                    )
+                }
                 val updated =
                     persistence.markFinalized(
                         evidenceId = record.evidenceId,
@@ -2553,6 +2614,17 @@ class EvidenceLifecycleService @org.springframework.beans.factory.annotation.Aut
                             "COMMERCIAL_SIGNED_CONTRACT" else "COMMERCIAL_CLIENT_PO"
                     ) &&
                     commercialEvidenceTarget.canAccess(actorIdentityId, target)
+            }
+
+            "SERVICE_DELIVERY_DOCUMENT" -> {
+                val port = serviceDeliveryDocumentTargetProvider?.ifAvailable ?: return false
+                val target = port.loadTarget(record.targetId) ?: return false
+                target.organizationId == record.organizationId && record.classificationCode == "HIGHLY_RESTRICTED" &&
+                    record.clientVisibilityMode == "INTERNAL_ONLY" && record.evidenceTypeCode == "SERVICE_DELIVERY_" + target.purpose &&
+                    when (operation) {
+                        EvidenceTargetOperation.FINALIZE -> port.canReserve(actorIdentityId, target)
+                        EvidenceTargetOperation.VIEW, EvidenceTargetOperation.DOWNLOAD -> port.canAccess(actorIdentityId, target)
+                    }
             }
 
             else -> false

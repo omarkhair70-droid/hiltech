@@ -250,6 +250,50 @@ class CompanyResponsibilityServiceTest {
         assertFalse(CompanyResponsibilityKey.entries.any { it.name in setOf("OWNER_FINAL", "RESPONSIBILITY_ADMINISTRATOR", "PAYROLL_PAY", "FINANCE_APPROVE") })
     }
 
+    @Test
+    fun existingConfiguredSourceIsVisibleWithoutOfferingToRevokeItsApprovalBinding() {
+        authorized(CompanyResponsibilityKey.PROCUREMENT_BUYER)
+        val old = binding().copy(authorityKey = CompanyResponsibilityKey.PROCUREMENT_BUYER, administrationManaged = false)
+        persistence.rows[old.bindingId] = old
+        val current = service.current(actor, employeeId)
+        assertEquals("LEGACY", current.bindings.single().assignmentSource)
+        assertFalse(current.bindings.single().canEnd)
+        assertEquals("RESPONSIBILITY_DIRECT_ASSIGNMENT_REQUIRED", assertThrows<ProductApiException> { service.end(end(old)) }.code)
+        assertTrue(persistence.rows.getValue(old.bindingId).current)
+    }
+
+    @Test
+    fun fullExplicitRoleCanBeGrantedAlongsidePartialLegacySourceAndEndingItReportsRemainingAccess() {
+        authorized(CompanyResponsibilityKey.FINANCE_REPORT_READ)
+        val old = binding().copy(authorityKey = CompanyResponsibilityKey.FINANCE_REPORT_READ, administrationManaged = false)
+        persistence.rows[old.bindingId] = old
+        val granted = service.grant(command(CompanyResponsibilityKey.FINANCE_REPORT_READ))
+        assertTrue(granted.current)
+        assertEquals(2, service.current(actor, employeeId).bindings.size)
+        val direct = persistence.rows.getValue(UUID.fromString(granted.bindingId))
+        val result = service.end(end(direct))
+        assertFalse(result.current)
+        assertTrue(result.effectiveAccessRemaining)
+        assertTrue(persistence.rows.getValue(old.bindingId).current)
+    }
+
+    @Test
+    fun remainingAccessUsesCurrentRealTeamMembershipAndIgnoresUnrelatedResponsibility() {
+        authorized(CompanyResponsibilityKey.FINANCE_PAYABLE_PREPARE)
+        val team = UUID.randomUUID()
+        val inherited = binding().copy(authorityKey = CompanyResponsibilityKey.FINANCE_PAYABLE_PREPARE,
+            principalType = "TEAM", principalId = team)
+        persistence.rows[inherited.bindingId] = inherited
+        Mockito.`when`(source.isTeamMemberCurrent(identity, team, at)).thenReturn(true)
+        val first = service.grant(command(CompanyResponsibilityKey.FINANCE_PAYABLE_PREPARE))
+        val direct = persistence.rows.getValue(UUID.fromString(first.bindingId))
+        val operation = end(direct)
+        assertTrue(service.end(operation).effectiveAccessRemaining)
+        Mockito.`when`(source.isTeamMemberCurrent(identity, team, at)).thenReturn(false)
+        assertFalse(service.end(operation).effectiveAccessRemaining)
+        assertTrue(service.current(actor, employeeId).bindings.isEmpty())
+    }
+
     private fun authorized(vararg keys: CompanyResponsibilityKey = arrayOf(CompanyResponsibilityKey.PEOPLE_ADMIN)) {
         currentAccount()
         Mockito.`when`(authority.grantableKeys(actor, organization, at)).thenReturn(keys.toSet())

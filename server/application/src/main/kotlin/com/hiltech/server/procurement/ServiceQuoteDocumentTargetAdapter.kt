@@ -1,5 +1,8 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.documents.ServiceQuoteDocumentEvidenceTarget
 import com.hiltech.server.documents.ServiceQuoteDocumentEvidenceTargetPort
@@ -21,8 +24,9 @@ class ServiceQuoteDocumentTargetAdapter @org.springframework.beans.factory.annot
     private val clock: Clock,
     @Value("\${hiltech.procurement.service-sourcing.enabled:false}")
     private val enabled: Boolean = false,
-    @Value("\${hiltech.procurement.service-sourcing.buyer-authority-key:}")
+    @Value("\${hiltech.procurement.service-sourcing.buyer-authority-key:PROCUREMENT_BUYER}")
     private val buyerKey: String = "",
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) : ServiceQuoteDocumentEvidenceTargetPort {
     override fun loadTarget(slotId: UUID): ServiceQuoteDocumentEvidenceTarget? =
         jdbc.query(
@@ -61,12 +65,8 @@ class ServiceQuoteDocumentTargetAdapter @org.springframework.beans.factory.annot
         Boolean = canReserve(identityId,target)
 
     private fun authorized(actor: UUID, org: UUID): Boolean {
-        val key=buyerKey.trim()
-        if(!enabled || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) return false
-        val at=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,at)) return false
-        val binding=approvals.resolveCurrentAuthority(org,key,at)?:return false
-        return binding.organizationId==org && binding.authorityKey==key &&
-            approvals.actorMatchesAuthority(actor,binding,at)
+        if (!enabled) return false
+        return currentOperationalAuthority(operationalAuthority, approvals, actor, org,
+            "hiltech.procurement.service-sourcing.buyer-authority-key", buyerKey, clock.instant()) != null
     }
 }

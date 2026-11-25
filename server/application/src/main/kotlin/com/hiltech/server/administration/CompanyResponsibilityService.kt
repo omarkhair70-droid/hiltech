@@ -50,8 +50,8 @@ class CompanyResponsibilityService(
             }.map { binding ->
                 CompanyResponsibilityBindingResponse(
                     binding.bindingId.toString(), binding.authorityKey.name, binding.authorityKey.domain,
-                    if (binding.principalType == "USER") "DIRECT" else "TEAM",
-                    binding.principalType == "USER" && binding.authorityKey in ceiling,
+                    if (!binding.administrationManaged) "LEGACY" else if (binding.principalType == "USER") "DIRECT" else "TEAM",
+                    binding.administrationManaged && binding.principalType == "USER" && binding.authorityKey in ceiling,
                     binding.current, binding.version,
                 )
             }
@@ -108,7 +108,7 @@ class CompanyResponsibilityService(
             requireTarget(command, employee, now, granting = !ending)
             val binding = if (ending) {
                 val before = requireBinding(command, bindingId, now)
-                if (before.principalType != "USER" || before.principalId != command.expectedIdentityId) {
+                if (!before.administrationManaged || before.principalType != "USER" || before.principalId != command.expectedIdentityId) {
                     throw problem("RESPONSIBILITY_DIRECT_ASSIGNMENT_REQUIRED", "Only this employee’s direct assignment can be ended here.", HttpStatus.CONFLICT)
                 }
                 if (!before.current || before.version != command.baseBindingVersion || !persistence.end(before, now)) {
@@ -117,7 +117,7 @@ class CompanyResponsibilityService(
                 requireBinding(command, bindingId, now)
             } else {
                 if (persistence.bindings(command.organizationId, now).any {
-                        it.current && it.organizationId == command.organizationId && it.principalType == "USER" &&
+                        it.administrationManaged && it.current && it.organizationId == command.organizationId && it.principalType == "USER" &&
                             it.principalId == command.expectedIdentityId && it.authorityKey == command.authorityKey
                     }) {
                     throw problem("RESPONSIBILITY_ALREADY_ASSIGNED", "This direct responsibility is already assigned.", HttpStatus.CONFLICT)
@@ -142,11 +142,21 @@ class CompanyResponsibilityService(
             IdempotentCommandOutcome(resultCode, buildJsonObject { put("bindingId", bindingId.toString()) }.toString())
         }
         // A receipt is not a promise that the responsibility is still current.
-        val binding = requireBinding(command, bindingId, clock.instant())
+        val currentAt = clock.instant()
+        val binding = requireBinding(command, bindingId, currentAt)
+        val remaining = ending && source.isOrganizationMemberCurrent(command.expectedIdentityId, command.organizationId, currentAt) &&
+            persistence.bindings(command.organizationId, currentAt).any {
+                it.current && it.organizationId == command.organizationId && it.authorityKey == command.authorityKey &&
+                    when (it.principalType) {
+                        "USER" -> it.principalId == command.expectedIdentityId
+                        "TEAM" -> source.isTeamMemberCurrent(command.expectedIdentityId, it.principalId, currentAt)
+                        else -> false
+                    }
+            }
         return CompanyResponsibilityCommandResponse(
             command.employeeId.toString(), command.organizationId.toString(), command.expectedIdentityId.toString(),
             command.authorityKey.name, bindingId.toString(), result.outcome.resultCode,
-            binding.current, binding.version, result.replayed, command.operationId.toString(),
+            binding.current, binding.version, result.replayed, command.operationId.toString(), remaining,
         )
     }
 

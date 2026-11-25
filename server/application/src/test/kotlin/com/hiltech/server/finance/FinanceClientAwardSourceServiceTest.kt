@@ -71,7 +71,8 @@ class FinanceClientAwardSourceServiceTest {
         assertThrows<ProductApiException> {
             service(true, "").list(actor, org)
         }
-        Mockito.verifyNoInteractions(jdbc, approvals)
+        Mockito.verifyNoInteractions(jdbc)
+        Mockito.verify(approvals).isActiveOrganizationMember(org, actor, now)
     }
 
     @Test fun missingPhase10ViewIsNotMisreportedAsZeroCustomerReceivables() {

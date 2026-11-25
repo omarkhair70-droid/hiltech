@@ -1,5 +1,8 @@
 ﻿package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -54,7 +57,7 @@ data class FinanceBankReconciliationReceipt(
 
 /** Independent internal finance reconciliation, not a banking provider callback. */
 @Service
-class FinanceBankReconciliationSignoffService(
+class FinanceBankReconciliationSignoffService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val subject: FinanceBankReconciliationApprovalSubject,
     private val approvals: ApprovalPersistencePort,
@@ -63,6 +66,7 @@ class FinanceBankReconciliationSignoffService(
     private val audit: AuditEventWriter,
     private val environment: Environment,
     private val clock: Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     @Transactional
     fun prepare(
@@ -300,15 +304,10 @@ class FinanceBankReconciliationSignoffService(
         jdbc.query("SELECT finance_bank_reconciliation_lock_lines(?,?)",
             {rs,_ ->rs.getObject(1)},org,intake)
     }
-    private fun authority(actor:UUID,org:UUID,setting:String) {
-        if(!subject.enabled())unavailable()
-        val key=environment.getProperty(setting,"").trim()
-        if(!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key))unavailable()
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now))unavailable()
-        val reviewer=approvals.resolveCurrentAuthority(org,key,now) ?:unavailable()
-        if(reviewer.organizationId!=org ||
-            !approvals.actorMatchesAuthority(actor,reviewer,now))unavailable()
+    private fun authority(actor: UUID, org: UUID, setting: String) {
+        if (!subject.enabled()) unavailable()
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, setting,
+            environment.getProperty(setting), clock.instant()) ?: unavailable()
     }
     private fun unavailable():Nothing=throw ProductApiException(
         "FINANCE_BANK_RECONCILIATION_NOT_AUTHORIZED",

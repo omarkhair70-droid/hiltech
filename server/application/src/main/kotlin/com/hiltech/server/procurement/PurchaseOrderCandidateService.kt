@@ -28,6 +28,13 @@ data class PurchaseOrderCandidatePreview(
     val canPropose: Boolean,
     val purchaseAuthorized: Boolean = false,
     val purchaseOrderIssued: Boolean = false,
+    val existingCandidate: PurchaseCandidateSummary? = null,
+    val canReplace: Boolean = false,
+)
+
+data class PurchaseCandidateSummary(
+    val candidateId: UUID, val quoteId: UUID, val revision: Int, val approvalRequestId: UUID?,
+    val approvalState: String, val reviewComment: String?,
 )
 
 data class ProposePurchaseOrderCandidateRequest(
@@ -35,6 +42,8 @@ data class ProposePurchaseOrderCandidateRequest(
     val quoteEvidenceId: UUID,
     val expectedQuoteRevision: Int,
     val rationale: String,
+    val replacesCandidateId: UUID? = null,
+    val expectedCandidateRevision: Int? = null,
 )
 
 data class PurchaseOrderCandidateReceipt(
@@ -47,6 +56,7 @@ data class PurchaseOrderCandidateReceipt(
     val replayed: Boolean,
     val purchaseAuthorized: Boolean = false,
     val purchaseOrderIssued: Boolean = false,
+    val candidateRevision: Int = 1,
 )
 
 /**
@@ -92,7 +102,12 @@ class PurchaseOrderCandidateService @Autowired constructor(
             )) problems += "QUOTE_DOCUMENT_UNVERIFIED"
             problems.addAll(row.issues)
         }
-        if (candidates.byRfq(rfqId) != null) problems += "CANDIDATE_ALREADY_RECORDED"
+        val existing = candidates.byRfq(rfqId)
+        val issued = candidates.hasIssuedOrder(rfqId)
+        val pending = existing?.let { candidates.hasPendingReview(it.id) } == true
+        if (issued) problems += "PURCHASE_ORDER_ALREADY_ISSUED"
+        if (pending) problems += "CANDIDATE_REVIEW_PENDING"
+        val review = existing?.let { candidates.latestReview(it.id) }
 
         return PurchaseOrderCandidatePreview(
             rfqId = rfqId,
@@ -104,6 +119,9 @@ class PurchaseOrderCandidateService @Autowired constructor(
             currency = row?.currency,
             blockers = problems.toList(),
             canPropose = problems.isEmpty(),
+            existingCandidate = existing?.let { PurchaseCandidateSummary(it.id, it.quoteId, it.revisionNumber,
+                review?.requestId, review?.state ?: "NOT_REQUESTED", review?.comment) },
+            canReplace = existing != null && !issued && !pending,
         )
     }
 
@@ -115,6 +133,8 @@ class PurchaseOrderCandidateService @Autowired constructor(
         val rationale = request.rationale.trim()
         if (context.operationId != request.operationId ||
             request.expectedQuoteRevision < 1 ||
+            (request.replacesCandidateId == null) != (request.expectedCandidateRevision == null) ||
+            request.expectedCandidateRevision?.let { it < 1 } == true ||
             rationale.length !in 12..1000 ||
             rationale.any { it.code < 32 }
         ) invalid()
@@ -127,6 +147,7 @@ class PurchaseOrderCandidateService @Autowired constructor(
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(
             listOf(
                 rfqId, request.quoteEvidenceId, request.expectedQuoteRevision, rationale,
+                request.replacesCandidateId, request.expectedCandidateRevision,
             ).joinToString("\u001f").toByteArray(Charsets.UTF_8),
         ).joinToString("") { "%02x".format(it) }
 
@@ -141,6 +162,8 @@ class PurchaseOrderCandidateService @Autowired constructor(
             if (!sourcing.lockRfq(rfqId)) unavailable()
             val lockedRfq = authorizedRfq(context.actor, rfqId)
             if (lockedRfq != rfq) stale()
+            val previous = candidates.byRfq(rfqId)
+            if (previous?.id != request.replacesCandidateId || previous?.revisionNumber != request.expectedCandidateRevision) stale()
             val preview = preview(context.actor, rfqId, request.quoteEvidenceId)
             if (!preview.canPropose) stale()
             val chosen = sourcingService.comparison(context.actor, rfqId)
@@ -187,6 +210,8 @@ class PurchaseOrderCandidateService @Autowired constructor(
                 proposedBy = context.actor,
                 createdAt = now,
                 correlationId = context.correlationId,
+                revisionNumber = (previous?.revisionNumber ?: 0) + 1,
+                replacesCandidateId = previous?.id,
             ))
             audit.append(AuditEventRecord(
                 actorUserId = context.actor,
@@ -201,7 +226,7 @@ class PurchaseOrderCandidateService @Autowired constructor(
                 "PROCUREMENT_PO_CANDIDATE_PROPOSED", """{"candidateId":"$id"}""",
             )
         }
-        val current = candidates.byRfq(rfqId) ?: unavailable()
+        val current = candidates.byId(id) ?: unavailable()
         if (current.id != id || current.organizationId != rfq.organizationId ||
             current.quoteId != request.quoteEvidenceId ||
             current.quoteRevision != request.expectedQuoteRevision
@@ -210,6 +235,7 @@ class PurchaseOrderCandidateService @Autowired constructor(
             candidateId = current.id, rfqId = current.rfqId,
             quoteId = current.quoteId, requirementVersion = current.requirementVersion,
             candidateVersion = 1, state = "DRAFT_FOR_APPROVAL", replayed = execution.replayed,
+            candidateRevision = current.revisionNumber,
         )
     }
 

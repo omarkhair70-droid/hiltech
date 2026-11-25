@@ -55,7 +55,7 @@ class HandoverReviewApiClient(
             HttpMethod.Get,
             "/v1/projects/" + projectId + "/handover/packages/" + versionId + "/internal-review",
             HiltechRequestOptions(installationId = installationId),
-            decode = { json.decodeFromString(HandoverReviewSummaryDto.serializer(), it) },
+            decode = { json.decodeFromString(HandoverReviewSummaryDto.serializer(), it).also { dto -> check(dto.packageVersionId == versionId) } },
         )
     }
 
@@ -67,7 +67,7 @@ class HandoverReviewApiClient(
             HttpMethod.Get,
             "/v1/projects/" + projectId + "/handover/packages/" + versionId + "/internal-review/events",
             HiltechRequestOptions(installationId = installationId),
-            decode = { json.decodeFromString(ListSerializer(HandoverReviewEventDto.serializer()), it) },
+            decode = { json.decodeFromString(ListSerializer(HandoverReviewEventDto.serializer()), it).also { records -> check(records.all { dto -> dto.packageVersionId == versionId }) } },
         )
     }
 
@@ -85,7 +85,9 @@ class HandoverReviewApiClient(
                 installationId = installationId, idempotencyKey = request.operationId,
             ),
             requestBody = json.encodeToString(HandoverReviewRecordDto.serializer(), request),
-            decode = { json.decodeFromString(HandoverReviewEventDto.serializer(), it) },
+            decode = { json.decodeFromString(HandoverReviewEventDto.serializer(), it).also { dto ->
+                check(dto.packageVersionId == versionId && dto.eventType == request.eventType && dto.eventNumber == request.expectedLatestEventNumber + 1 && dto.reason == request.reason.trim())
+            } },
         )
     }
 

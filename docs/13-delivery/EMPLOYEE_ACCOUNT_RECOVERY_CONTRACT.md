@@ -121,6 +121,56 @@ the real source tables in rollback-only synthetic fixtures. The Keycloak
 protocol tests use a loopback HTTP fixture with synthetic identities and do not
 contact a deployed provider.
 
+### Real isolated provider contract
+
+`EmployeeAccountKeycloakContractTest` and
+`scripts/ci/phase1_employee_account_keycloak.py` extend the existing native OIDC
+workflow with the production JVM provisioning/replacement adapter and an actual
+Chromium authorization-code flow with PKCE. The test creates a random, marked
+realm on the workflow's disposable HTTPS loopback Keycloak, with a dedicated
+service client holding only its user-management roles. It uses no company
+database, deployed account, SMTP delivery or existing realm.
+
+The gate checks this sequence:
+
+1. Creating an invitation's provider user leaves it disabled and without a
+   password. Repeating the invitation recovers the same unique provider subject.
+2. Temporary-password handoff enables that subject and requires a password
+   change. Chromium completes the actual first sign-in, including the provider's
+   profile form if required, and the production server verifier validates the
+   returned ID token for the exact subject, issuer, client and nonce.
+3. A replacement through the production adapter makes both the prior chosen
+   password and the original temporary password fail fresh browser login. The
+   new temporary password requires another successful password change.
+4. Disabling the owned provider user causes credential replacement to reject.
+   Its credential metadata and disabled state remain unchanged, and a fresh
+   browser login fails.
+
+The script requires the explicit test switch, an exact HTTPS `127.0.0.1` base,
+an owned random realm and a private runner-temp directory. Cleanup checks the
+realm's ownership marker before deletion. The workflow verifies one executed,
+non-skipped JUnit test plus the JVM receipt; a skipped opt-in contract cannot be
+reported as a pass. Passwords, tokens and browser authorization URLs are neither
+printed nor uploaded. Temporary channel files and subprocess logs are removed
+after the run. Browser certificate handling is limited to this disposable
+fixture; provider API calls and the JVM verifier use its generated CA.
+
+The provisioning adapter stores `hiltechProvisioningId` as a stable recovery
+marker. A configured realm must retain and search this attribute and prevent
+employees from editing it. The isolated fixture declares it as a managed
+user-profile attribute with administrator-only view/edit permissions, while
+preserving the provider's existing profile requirements. Silently discarding
+this marker makes recovery unsafe; permitting arbitrary unmanaged employee
+attributes is unnecessary. This requirement follows the provider's
+[user-profile permission model](https://www.keycloak.org/docs/26.7.4/server_admin/)
+and [profile and password administration API](https://www.keycloak.org/docs-api/26.7.4/rest-api/index.html).
+
+This contract establishes provider interoperability for the pinned isolated
+runtime. It does not establish native Windows/Android handoff, deployed
+provider configuration, email delivery, current company responsibilities or
+local employee transaction behavior; those retain their separate source and
+device gates.
+
 Production Compose renders and semantics can check Arabic/English interaction
 and narrow/wide layouts with explicit mock responses. They cannot establish
 Windows or Android acceptance against the deployed server. Final journey

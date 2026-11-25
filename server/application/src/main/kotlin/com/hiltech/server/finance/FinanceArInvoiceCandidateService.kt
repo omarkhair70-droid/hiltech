@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
@@ -56,7 +59,7 @@ data class FinanceArCandidateReceipt(
  * commercial customer is contacted and no revenue is recognized.
  */
 @Service
-class FinanceArInvoiceCandidateService(
+class FinanceArInvoiceCandidateService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val award:FinanceClientAwardSourceService,
     private val approvals:ApprovalPersistencePort,
@@ -64,6 +67,7 @@ class FinanceArInvoiceCandidateService(
     private val idempotency:IdempotentCommandExecutor,
     private val audit:AuditEventWriter,
     private val clock:Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     @Transactional
     fun create(
@@ -201,20 +205,11 @@ class FinanceArInvoiceCandidateService(
             ) },id,org,
         ).singleOrNull() ?: unavailable()
     }
-    private fun requireFinance(actor:UUID,org:UUID) {
-        val key=environment.getProperty(
-            "hiltech.finance.receivables.invoice-candidate.preparer-authority-key",
-            "",
-        ).trim()
-        if(!environment.getProperty(
-              "hiltech.finance.receivables.invoice-candidate.enabled",
-              Boolean::class.java,false,
-            ) || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) unavailable()
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now)) unavailable()
-        val authority=approvals.resolveCurrentAuthority(org,key,now) ?: unavailable()
-        if(authority.organizationId!=org || authority.authorityKey!=key ||
-            !approvals.actorMatchesAuthority(actor,authority,now)) unavailable()
+    private fun requireFinance(actor: UUID, org: UUID) {
+        if (!environment.getProperty("hiltech.finance.receivables.invoice-candidate.enabled", Boolean::class.java, false)) unavailable()
+        val property = "hiltech.finance.receivables.invoice-candidate.preparer-authority-key"
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, property,
+            environment.getProperty(property), clock.instant()) ?: unavailable()
     }
     private fun unavailable():Nothing=throw ProductApiException(
         "FINANCE_AR_INVOICE_CANDIDATE_UNAVAILABLE",

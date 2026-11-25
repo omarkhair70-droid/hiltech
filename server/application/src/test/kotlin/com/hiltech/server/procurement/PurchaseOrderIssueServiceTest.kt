@@ -1,5 +1,13 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.companysettings.PurchaseOrderNumberingSnapshot
+import com.hiltech.server.companysettings.PurchaseOrderNumberingSource
+import com.hiltech.server.companysettings.PurchaseOrderNumberingSourcePort
+import com.hiltech.server.operationalaccess.OperationalAuthorityOrigin
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.OperationalAuthorityProof
+import com.hiltech.server.operationalaccess.OperationalResponsibility
+
 import com.hiltech.server.approval.ApprovalAuthorityBindingSnapshot
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -18,6 +26,7 @@ import com.hiltech.server.work.WorkPersistencePort
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.Mockito
@@ -83,9 +92,12 @@ class PurchaseOrderIssueServiceTest {
         policyKey: String = "PROCUREMENT_STANDARD",
         authorityKey: String = "PROCUREMENT_PO_ISSUER",
         prefix: String = "PO",
+        operationalSource: OperationalAuthorityPort? = null,
+        numberingSource: PurchaseOrderNumberingSourcePort? = null,
+        executor: IdempotentCommandExecutor = commands,
     ) = PurchaseOrderIssueService(
-        repository, issued, sourcing, source, work, approvals, guard, commands, audit,
-        Clock.fixed(at, ZoneOffset.UTC), enabled, policyKey, authorityKey, prefix,
+        repository, issued, sourcing, source, work, approvals, guard, executor, audit,
+        Clock.fixed(at, ZoneOffset.UTC), enabled, policyKey, authorityKey, prefix, operationalAuthority = operationalSource, numberingSource = numberingSource,
     )
 
     private fun request() = IssuePurchaseOrderRequest(op, 1L, destinationId)
@@ -162,6 +174,34 @@ class PurchaseOrderIssueServiceTest {
             .count { it.method.name == "append" })
     }
 
+    @Test fun explicitOperationalIssuerPersistsItsOwnProofAndNeverFabricatesAnApprovalBinding() {
+        allow()
+        val source = Mockito.mock(OperationalAuthorityPort::class.java)
+        val proof = OperationalAuthorityProof(UUID.randomUUID(), org, "PROCUREMENT_ORDER_ISSUE", 2, OperationalAuthorityOrigin.OPERATIONAL)
+        Mockito.`when`(source.current(actor, org, OperationalResponsibility.PROCUREMENT_ORDER_ISSUE, at)).thenReturn(proof)
+        Mockito.`when`(approvals.actorMatchesAuthority(actor, authority, at)).thenReturn(false)
+        service(authorityKey = "", operationalSource = source).issue(ctx(), candidateId, request())
+        val saved = requireNotNull(actualIssued)
+        assertEquals(null, saved.issuerAuthorityBindingId)
+        assertEquals(proof.bindingId, saved.issuerOperationalBindingId)
+        assertEquals("PROCUREMENT_ORDER_ISSUE", saved.issuerAuthorityKey)
+        assertEquals(approvalId, saved.approvalRequestId)
+    }
+
+    @Test fun operatingIssuerGrantNeverWaivesTheIndependentApprovedDecision() {
+        allow()
+        val source = Mockito.mock(OperationalAuthorityPort::class.java)
+        Mockito.`when`(source.current(actor, org, OperationalResponsibility.PROCUREMENT_ORDER_ISSUE, at)).thenReturn(
+            OperationalAuthorityProof(UUID.randomUUID(), org, "PROCUREMENT_ORDER_ISSUE", 1, OperationalAuthorityOrigin.OPERATIONAL))
+        Mockito.`when`(issued.lockApprovedCandidate(org, candidateId, "PROCUREMENT_STANDARD"))
+            .thenReturn(decision.copy(approvedDecisionCount = 0))
+        assertEquals("PROCUREMENT_PO_ISSUE_UNAVAILABLE", assertThrows<ProductApiException> {
+            service(authorityKey = "", operationalSource = source).issue(ctx(), candidateId, request())
+        }.code)
+        assertEquals(null, actualIssued)
+        assertEquals(0, Mockito.mockingDetails(issued).invocations.count { it.method.name == "allocateSerial" })
+    }
+
     @Test fun permissionRevocationOrMissingApprovalDeniesIssueBeforeNumberAllocation() {
         allow()
         Mockito.`when`(approvals.actorMatchesAuthority(actor, authority, at)).thenReturn(false)
@@ -198,6 +238,60 @@ class PurchaseOrderIssueServiceTest {
         }.code)
     }
 
+    @Test fun currentCompanyNumberingOverridesDeploymentPrefixAndPinsItsRealRevision() {
+        allow()
+        val numbering = Mockito.mock(PurchaseOrderNumberingSourcePort::class.java)
+        val configured = PurchaseOrderNumberingSnapshot(org, PurchaseOrderNumberingSource.COMPANY, "HT-PUR", 3, UUID.randomUUID(), at)
+        Mockito.`when`(numbering.current(org)).thenReturn(configured)
+        val result = service(prefix = "OLD", numberingSource = numbering).issue(ctx(), candidateId, request())
+        assertEquals("HT-PUR-000026", result.code)
+        assertEquals(configured.revisionId, actualIssued?.numberingRevisionId)
+    }
+
+    @Test fun lostIssueReceiptCanBeReplayedAfterPrefixRotationWithoutRenumberingOrReissuing() {
+        allow()
+        val numbering = Mockito.mock(PurchaseOrderNumberingSourcePort::class.java)
+        val first = PurchaseOrderNumberingSnapshot(org, PurchaseOrderNumberingSource.COMPANY, "OLD-PO", 1, UUID.randomUUID(), at)
+        Mockito.`when`(numbering.current(org)).thenReturn(first)
+        var original: IdempotentCommandSpec? = null
+        var outcome: IdempotentCommandOutcome? = null
+        val executor = object : IdempotentCommandExecutor {
+            override fun execute(spec: IdempotentCommandSpec, action: () -> IdempotentCommandOutcome): IdempotentCommandExecution {
+                val saved = outcome
+                if (saved != null) { assertEquals(original, spec); return IdempotentCommandExecution(saved, true) }
+                original = spec
+                return action().let { outcome = it; IdempotentCommandExecution(it, false) }
+            }
+        }
+        val runtime = service(numberingSource = numbering, executor = executor)
+        val issued = runtime.issue(ctx(), candidateId, request())
+        Mockito.`when`(numbering.current(org)).thenReturn(first.copy(prefix = "NEW-PO", version = 2, revisionId = UUID.randomUUID()))
+        val replay = runtime.issue(ctx(), candidateId, request())
+        assertTrue(replay.replayed)
+        assertEquals(issued.code, replay.code)
+        assertEquals("OLD-PO-000026", replay.code)
+        assertEquals(first.revisionId, actualIssued?.numberingRevisionId)
+        assertEquals(1, Mockito.mockingDetails(this.issued).invocations.count { it.method.name == "allocateSerial" })
+    }
+
+    @Test fun concurrentNumberingChangeIsRejectedBeforeAllocatingASerial() {
+        allow()
+        val numbering = Mockito.mock(PurchaseOrderNumberingSourcePort::class.java)
+        val first = PurchaseOrderNumberingSnapshot(org, PurchaseOrderNumberingSource.COMPANY, "HT-PO", 1, UUID.randomUUID(), at)
+        Mockito.`when`(numbering.current(org)).thenReturn(first, first.copy(prefix = "HT-PUR", version = 2, revisionId = UUID.randomUUID()))
+        assertEquals("PROCUREMENT_PO_NUMBERING_CHANGED", assertThrows<ProductApiException> {
+            service(numberingSource = numbering).issue(ctx(), candidateId, request())
+        }.code)
+        assertEquals(null, actualIssued)
+        assertEquals(0, Mockito.mockingDetails(issued).invocations.count { it.method.name == "allocateSerial" })
+    }
+
+    @Test fun issuerCanReadMissingNumberingAsActionableSetupWithoutHidingItsWorkbench() {
+        allow()
+        assertFalse(service(prefix = "").numbering(actor, org).ready)
+        assertEquals("NOT_CONFIGURED", service(prefix = "").numbering(actor, org).source)
+    }
+
     @Test fun locationScopePolicyAndFeatureDefaultsAreDenyByDefault() {
         allow()
         Mockito.`when`(issued.validDeliveryLocation(
@@ -209,7 +303,7 @@ class PurchaseOrderIssueServiceTest {
         assertEquals("PROCUREMENT_PO_ISSUE_UNAVAILABLE", assertThrows<ProductApiException> {
             service(enabled = false).issue(ctx(), candidateId, request())
         }.code)
-        assertEquals("PROCUREMENT_PO_ISSUE_UNAVAILABLE", assertThrows<ProductApiException> {
+        assertEquals("PROCUREMENT_PO_NUMBERING_REQUIRED", assertThrows<ProductApiException> {
             service(prefix = "").issue(ctx(), candidateId, request())
         }.code)
         assertEquals("PROCUREMENT_PO_ISSUE_UNAVAILABLE", assertThrows<ProductApiException> {

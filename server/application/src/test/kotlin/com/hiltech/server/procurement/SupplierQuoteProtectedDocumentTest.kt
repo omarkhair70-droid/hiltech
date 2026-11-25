@@ -18,6 +18,8 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
+import java.math.BigDecimal
+import org.springframework.http.HttpStatus
 
 class SupplierQuoteProtectedDocumentTest {
     private val quoteId = UUID.randomUUID()
@@ -152,4 +154,41 @@ class SupplierQuoteProtectedDocumentTest {
         }.code)
         Mockito.verifyNoInteractions(storage)
     }
+
+    @Test fun exactAssignedReviewReadsOriginalWithoutGrantingGeneralBuyerAccess() {
+        allow()
+        Mockito.`when`(buyer.canManageSourcing(actor, org)).thenReturn(false)
+        Mockito.`when`(sourcing.quoteDocumentSlot(slotId)).thenReturn(SupplierQuoteDocumentSlot(slotId, UUID.randomUUID(), org, rfqId, supplierId, actor, at, "synthetic"))
+        var checks = 0
+        val result = service().readForAssignedCandidate(actor, candidate(), "synthetic-assigned-source") { checks++ }
+        assertArrayEquals(bytes, result.bytes)
+        assertEquals(2, checks)
+        Mockito.verifyNoInteractions(buyer, verification)
+    }
+
+    @Test fun revokedAssignmentAfterObjectFetchDoesNotReturnBytesOrRecordDocumentRead() {
+        allow()
+        Mockito.`when`(sourcing.quoteDocumentSlot(slotId)).thenReturn(SupplierQuoteDocumentSlot(slotId, UUID.randomUUID(), org, rfqId, supplierId, actor, at, "synthetic"))
+        var checks = 0
+        assertThrows<ProductApiException> {
+            service().readForAssignedCandidate(actor, candidate(), "synthetic-revoked-during-read") {
+                checks++
+                if (checks == 2) throw ProductApiException("SYNTHETIC_ASSIGNMENT_REVOKED", "Synthetic assignment revoked", HttpStatus.FORBIDDEN)
+            }
+        }
+        Mockito.verify(storage).readRestrictedObject(key, bytes.size.toLong())
+        Mockito.verifyNoInteractions(audit)
+    }
+
+    @Test fun differentCandidateQuoteHashDoesNotFetchStorage() {
+        allow()
+        assertThrows<ProductApiException> {
+            service().readForAssignedCandidate(actor, candidate().copy(sourceSha256 = "b".repeat(64)), "synthetic-mismatched-source") {}
+        }
+        Mockito.verifyNoInteractions(storage, audit)
+    }
+
+    private fun candidate() = PurchaseOrderCandidateRecord(UUID.randomUUID(), UUID.randomUUID(), org, rfqId, UUID.randomUUID(), 2,
+        quoteId, 1, supplierId, UUID.randomUUID(), BigDecimal.ONE, "EA", "EGP", BigDecimal.TEN, BigDecimal.ZERO, BigDecimal.TEN,
+        digest, "Synthetic supplier quotation selection", UUID.randomUUID(), at, "synthetic")
 }

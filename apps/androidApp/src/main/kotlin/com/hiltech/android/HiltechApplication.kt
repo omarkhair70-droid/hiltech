@@ -106,6 +106,8 @@ class HiltechApplication : Application() {
             correlationId = { UUID.randomUUID().toString() },
         )
 
+    fun evidenceApiForSession(api: HiltechApiClient) = EvidenceApiClient(api, httpClient)
+
     val peopleApi: PeopleApiClient by lazy {
         PeopleApiClient(productApi)
     }

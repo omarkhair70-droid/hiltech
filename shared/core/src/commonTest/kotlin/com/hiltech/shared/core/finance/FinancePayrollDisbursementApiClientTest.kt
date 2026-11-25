@@ -58,6 +58,19 @@ class FinancePayrollDisbursementApiClientTest {
         assertFailsWith<Exception> { wrongScope.apply(intent, device) }
     }
 
+    @Test fun closingAnOutdatedReviewRequiresASupersededReceiptAndCannotMasqueradeAsPayment() = runBlocking {
+        val intent = FinancePayrollIntent(operation, org, "REVIEW_RESULT", target, "Synthetic employee",
+            review = FinancePayrollReviewResultDto(operation, "CLOSE_STALE"))
+        val api = client(MockEngine { call ->
+            val request = Json.decodeFromString<FinancePayrollReviewResultDto>((call.body as OutgoingContent.ByteArrayContent).bytes().decodeToString())
+            assertEquals("CLOSE_STALE", request.decision)
+            respond(receipt("SUPERSEDED"), HttpStatusCode.OK, headers)
+        })
+        assertEquals("SUPERSEDED", api.apply(intent, device).state)
+        val wrong = client(MockEngine { respond(receipt("RECORDED"), HttpStatusCode.OK, headers) })
+        assertFailsWith<Exception> { wrong.apply(intent, device) }
+    }
+
     @Test fun laterAuthorizationFailureDoesNotDiscardAnUnconfirmedFinancialRequest() {
         val code = "FINANCE_PAYROLL_UNAVAILABLE"
         val refusal = HiltechApiException(code, "synthetic", 404, false, ErrorEnvelope(code, "unavailable", "synthetic"), "unavailable")

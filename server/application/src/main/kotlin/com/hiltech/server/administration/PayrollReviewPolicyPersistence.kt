@@ -1,11 +1,12 @@
 package com.hiltech.server.administration
 
-import org.springframework.beans.factory.annotation.Autowired
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.payroll.PayrollRunPolicyConfiguration
+import com.hiltech.server.procurement.ProcurementReviewPolicyConfiguration
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
+import org.springframework.beans.factory.annotation.Autowired
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.ZoneOffset
@@ -13,9 +14,15 @@ import java.util.UUID
 
 @Component
 class JdbcPayrollReviewPolicyPersistence @Autowired constructor(private val jdbc: JdbcTemplate,
-    private val runPolicy: PayrollRunPolicyConfiguration = PayrollRunPolicyConfiguration("PAYROLL_RUN_REVIEW")) : PayrollReviewPolicyPersistencePort {
+    private val runPolicy: PayrollRunPolicyConfiguration = PayrollRunPolicyConfiguration("PAYROLL_RUN_REVIEW"),
+    private val procurementPolicy: ProcurementReviewPolicyConfiguration = ProcurementReviewPolicyConfiguration("PROCUREMENT_PO_REVIEW"),
+) : PayrollReviewPolicyPersistencePort {
     private fun policyKey(workflow: CompanyReviewWorkflow): String {
-        val key = if (workflow == CompanyReviewWorkflow.PAYROLL_RUN) runPolicy.key else workflow.policyKey
+        val key = when (workflow) {
+            CompanyReviewWorkflow.PAYROLL_RUN -> runPolicy.key
+            CompanyReviewWorkflow.PROCUREMENT_PO -> procurementPolicy.key
+            else -> workflow.policyKey
+        }
         if (!Regex("^[A-Z][A-Z0-9_]{2,95}$").matches(key)) throw ProductApiException(
             "COMPANY_REVIEW_WORKFLOW_CONFIGURATION_INVALID", "The installed workflow configuration is invalid.", HttpStatus.CONFLICT)
         return key
@@ -65,7 +72,20 @@ class JdbcPayrollReviewPolicyPersistence @Autowired constructor(private val jdbc
             "SELECT COUNT(*) FROM approval_request WHERE organization_id=? AND policy_key=? AND subject_type=? AND state='PENDING'",
             Int::class.java, organizationId, policyKey(workflow), workflow.subjectType,
         ) ?: 0
-        return PayrollReviewSetupRecord(policy, reviewer, pending)
+        val pendingPolicies = jdbc.query(
+            """SELECT p.id,p.version_number,p.version,COUNT(r.id) AS pending_count
+               FROM approval_policy_version p JOIN approval_request r
+                 ON r.organization_id=p.organization_id AND r.policy_key=p.policy_key AND r.policy_version=p.version_number
+               WHERE p.organization_id=? AND p.policy_key=? AND r.subject_type=? AND r.state='PENDING'
+               GROUP BY p.id,p.version_number,p.version ORDER BY p.version_number,p.id""".trimIndent(),
+            { rs, _ -> CompanyPendingReviewPolicy(rs.getObject("id", UUID::class.java).toString(),
+                rs.getInt("version_number"), rs.getLong("version"), rs.getInt("pending_count")) },
+            organizationId, policyKey(workflow), workflow.subjectType,
+        )
+        if (pendingPolicies.sumOf { it.pendingReviews } != pending) throw ProductApiException(
+            "COMPANY_REVIEW_WORKFLOW_CONFIGURATION_INVALID", "Pending reviews do not match their recorded policy history.", HttpStatus.CONFLICT,
+        )
+        return PayrollReviewSetupRecord(policy, reviewer, pending, pendingPolicies)
     }
 
     override fun candidates(organizationId: UUID, workflow: CompanyReviewWorkflow, query: String, at: Instant, limit: Int): List<PayrollReviewerCandidate> {
@@ -79,6 +99,12 @@ class JdbcPayrollReviewPolicyPersistence @Autowired constructor(private val jdbc
 
     private fun readCandidates(organizationId: UUID, workflow: CompanyReviewWorkflow, where: String, args: Array<out Any>, at: Instant, limit: Int): List<PayrollReviewerCandidate> {
         val now = at.atOffset(ZoneOffset.UTC)
+        val rolePredicate = workflow.reviewerTable?.let { table ->
+            """AND EXISTS (SELECT 1 FROM $table a
+                WHERE a.organization_id=e.organization_id AND a.identity_id=u.id AND a.${workflow.reviewerKeyColumn}='REVIEW' AND a.active=true
+                  AND a.${workflow.reviewerFromColumn}<=? AND (a.${workflow.reviewerToColumn} IS NULL OR a.${workflow.reviewerToColumn}>?))""".trimIndent()
+        }.orEmpty()
+        val roleArgs = if (workflow.reviewerTable == null) emptyArray() else arrayOf(now, now)
         return jdbc.query(
             """SELECT e.id,e.version,e.employee_code,p.display_name,u.id AS identity_id
                FROM employee e JOIN person p ON p.id=e.person_id
@@ -87,17 +113,15 @@ class JdbcPayrollReviewPolicyPersistence @Autowired constructor(private val jdbc
                  SELECT ui.id FROM user_identity ui
                  WHERE ui.person_id=p.id AND ui.status='ACTIVE' AND EXISTS (
                    SELECT 1 FROM organization_membership m WHERE m.organization_id=e.organization_id AND m.user_identity_id=ui.id
-                     AND m.state='ACTIVE' AND m.valid_from<=? AND (m.valid_until IS NULL OR m.valid_until>=?))
+                     AND m.state='ACTIVE' AND m.valid_from<=? AND (m.valid_until IS NULL OR m.valid_until>?))
                  ORDER BY ui.id LIMIT 1
                ) u ON true
                WHERE e.organization_id=? AND e.state='ACTIVE' AND o.status='ACTIVE' AND o.organization_type='HILTECH'
-                 AND EXISTS (SELECT 1 FROM ${workflow.reviewerTable} a
-                   WHERE a.organization_id=e.organization_id AND a.identity_id=u.id AND a.${workflow.reviewerKeyColumn}='REVIEW' AND a.active=true
-                     AND a.${workflow.reviewerFromColumn}<=? AND (a.${workflow.reviewerToColumn} IS NULL OR a.${workflow.reviewerToColumn}>=?))
+                 $rolePredicate
                  $where ORDER BY p.display_name,e.employee_code,e.id LIMIT ?""".trimIndent(),
             { rs, _ -> PayrollReviewerCandidate(rs.getObject("id", UUID::class.java), rs.getObject("identity_id", UUID::class.java),
                 rs.getLong("version"), rs.getString("display_name"), rs.getString("employee_code")) },
-            now, now, organizationId, now, now, *args, limit,
+            now, now, organizationId, *roleArgs, *args, limit,
         )
     }
 
@@ -109,18 +133,22 @@ class JdbcPayrollReviewPolicyPersistence @Autowired constructor(private val jdbc
         }
         if (reviewer.principalType != "TEAM") return emptyList()
         val now = at.atOffset(ZoneOffset.UTC)
+        val rolePredicate = workflow.reviewerTable?.let { table ->
+            """AND EXISTS (SELECT 1 FROM $table a WHERE a.organization_id=t.organization_id
+               AND a.identity_id=m.user_identity_id AND a.${workflow.reviewerKeyColumn}='REVIEW' AND a.active=true
+               AND a.${workflow.reviewerFromColumn}<=? AND (a.${workflow.reviewerToColumn} IS NULL OR a.${workflow.reviewerToColumn}>?))""".trimIndent()
+        }.orEmpty()
+        val roleArgs = if (workflow.reviewerTable == null) emptyArray() else arrayOf(now, now)
         return jdbc.query(
             """SELECT DISTINCT m.user_identity_id FROM team_membership m JOIN team t ON t.id=m.team_id
                JOIN user_identity u ON u.id=m.user_identity_id JOIN employee e ON e.person_id=u.person_id AND e.organization_id=t.organization_id
                WHERE t.id=? AND t.organization_id=? AND t.active=true AND u.status='ACTIVE' AND e.state='ACTIVE'
-                 AND m.valid_from<=? AND (m.valid_until IS NULL OR m.valid_until>=?)
+                 AND m.valid_from<=? AND (m.valid_until IS NULL OR m.valid_until>?)
                  AND EXISTS (SELECT 1 FROM organization_membership om WHERE om.organization_id=t.organization_id
                    AND om.user_identity_id=m.user_identity_id AND om.state='ACTIVE' AND om.valid_from<=?
-                   AND (om.valid_until IS NULL OR om.valid_until>=?))
-                 AND EXISTS (SELECT 1 FROM ${workflow.reviewerTable} a WHERE a.organization_id=t.organization_id
-                   AND a.identity_id=m.user_identity_id AND a.${workflow.reviewerKeyColumn}='REVIEW' AND a.active=true
-                   AND a.${workflow.reviewerFromColumn}<=? AND (a.${workflow.reviewerToColumn} IS NULL OR a.${workflow.reviewerToColumn}>=?))""".trimIndent(),
-            { rs, _ -> rs.getObject(1, UUID::class.java) }, reviewer.principalId, organizationId, now, now, now, now, now, now,
+                   AND (om.valid_until IS NULL OR om.valid_until>?))
+                 $rolePredicate""".trimIndent(),
+            { rs, _ -> rs.getObject(1, UUID::class.java) }, reviewer.principalId, organizationId, now, now, now, now, *roleArgs,
         )
     }
 

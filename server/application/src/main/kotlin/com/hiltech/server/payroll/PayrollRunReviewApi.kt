@@ -1,5 +1,10 @@
 package com.hiltech.server.payroll
 
+import com.hiltech.server.identity.IdentitySessionService
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.oauth2.jwt.Jwt
+import java.util.UUID
+
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.IdempotencyKeyContract
 import jakarta.servlet.http.HttpServletRequest
@@ -14,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @ConditionalOnProperty(prefix = "hiltech.payroll", name = ["approval-request-enabled"], havingValue = "true", matchIfMissing = true)
-class PayrollRunReviewController(private val reviews: PayrollRunReviewService) {
+class PayrollRunReviewController(private val reviews: PayrollRunReviewService, private val sessions: IdentitySessionService) {
     @GetMapping("/v1/payroll/runs/{runId}/review")
     fun review(request: HttpServletRequest, @PathVariable runId: String): PayrollRunReviewDto {
         val context = HiltechRequestContext.current(request)
@@ -25,11 +30,13 @@ class PayrollRunReviewController(private val reviews: PayrollRunReviewService) {
 
     @PostMapping("/v1/payroll/runs/{runId}/approval-decisions")
     fun decide(servletRequest: HttpServletRequest, @PathVariable runId: String,
+        @AuthenticationPrincipal jwt: Jwt, @RequestHeader("X-Device-Installation-Id") installationId: UUID,
         @RequestHeader(name = "Idempotency-Key") key: String, @RequestBody request: PayrollRunDecisionRequestDto): PayrollRunDecisionResultDto {
         val context = HiltechRequestContext.current(servletRequest)
         val actor = context.identityId?.let(PayrollSourcePolicy::uuid)
             ?: Payroll9aPolicy.fail("PAYROLL_AUTHENTICATION_REQUIRED", HttpStatus.UNAUTHORIZED)
         IdempotencyKeyContract.requireMatches(key, PayrollSourcePolicy.uuid(request.operationId))
+        sessions.requireRecentReauthentication(sessions.requireCurrentAccess(jwt, installationId))
         return reviews.decide(actor, PayrollSourcePolicy.uuid(runId), request, context.correlationId)
     }
 }

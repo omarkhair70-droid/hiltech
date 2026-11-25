@@ -1,6 +1,7 @@
 package com.hiltech.server.payroll
 
 import org.springframework.beans.factory.annotation.Autowired
+
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.platform.ProductApiException

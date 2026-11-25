@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -50,7 +53,7 @@ data class FinanceCashVoidReceipt(
  *  Every correction needs a separately recorded, independently approved event.
  */
 @Service
-class FinanceCashVoidService(
+class FinanceCashVoidService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val subject:FinanceCashVoidApprovalSubject,
     private val approvals:ApprovalPersistencePort,
@@ -59,6 +62,7 @@ class FinanceCashVoidService(
     private val audit:AuditEventWriter,
     private val environment:Environment,
     private val clock:Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     @Transactional
     fun prepare(
@@ -323,16 +327,10 @@ class FinanceCashVoidService(
             s.bankLineId,org,
         ).singleOrNull()!=s.bankLineId)stale()
     }
-    private fun authority(actor:UUID,org:UUID,keySetting:String){
-        if(!subject.enabled())unavailable()
-        val key=environment.getProperty(keySetting,"").trim()
-        if(!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key))unavailable()
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now))unavailable()
-        val binding=approvals.resolveCurrentAuthority(org,key,now)
-            ?:unavailable()
-        if(binding.organizationId!=org ||
-            !approvals.actorMatchesAuthority(actor,binding,now))unavailable()
+    private fun authority(actor: UUID, org: UUID, keySetting: String) {
+        if (!subject.enabled()) unavailable()
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, keySetting,
+            environment.getProperty(keySetting), clock.instant()) ?: unavailable()
     }
     private fun unavailable():Nothing=throw ProductApiException(
         "FINANCE_CASH_CORRECTION_NOT_AUTHORIZED",

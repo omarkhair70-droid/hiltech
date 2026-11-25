@@ -152,7 +152,8 @@ data class FinanceExpenseReceiptEvidenceReservationInsert(
     val createdAt: Instant,
 )
 
-data class CommercialEvidenceReservationInsert(
+/** Common private signed-document payload; each owning adapter validates its own exact target. */
+data class PrivateDocumentEvidenceReservationInsert(
     val evidenceId: UUID,
     val uploadSessionId: UUID,
     val operationId: UUID,
@@ -172,6 +173,8 @@ data class CommercialEvidenceReservationInsert(
     val uploadExpiresAt: Instant,
     val createdAt: Instant,
 )
+
+typealias CommercialEvidenceReservationInsert = PrivateDocumentEvidenceReservationInsert
 
 data class EvidenceReservationRecord(
     val evidenceId: UUID,
@@ -292,6 +295,10 @@ interface EvidencePersistencePort {
         value: CommercialEvidenceReservationInsert,
     ) {
         throw UnsupportedOperationException("Commercial Evidence requires an explicitly implemented canonical persistence adapter.")
+    }
+
+    fun insertServiceDeliveryReservation(value: PrivateDocumentEvidenceReservationInsert) {
+        throw UnsupportedOperationException("Service delivery Evidence requires its canonical persistence adapter.")
     }
 
     fun findReservationByOperationId(

@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -53,7 +56,7 @@ private data class FinanceCashboxLookup(
 
 /** A signed real physical voucher, never a bank transfer or estimated receipt. */
 @Service
-class FinanceCashVoucherService(
+class FinanceCashVoucherService @org.springframework.beans.factory.annotation.Autowired constructor(
  private val jdbc:JdbcTemplate,
  private val subject:FinanceCashVoucherApprovalSubject,
  private val approvals:ApprovalPersistencePort,
@@ -62,6 +65,7 @@ class FinanceCashVoucherService(
  private val audit:AuditEventWriter,
  private val environment:Environment,
  private val clock:Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
  @Transactional
  fun prepare(
@@ -325,15 +329,10 @@ class FinanceCashVoucherService(
       {rs,_ ->rs.getObject("id",UUID::class.java)},
       box,org).singleOrNull()!=box)stale()
  }
- private fun authority(actor:UUID,org:UUID,property:String) {
-   if(!subject.enabled())unavailable()
-   val key=environment.getProperty(property,"").trim()
-   if(!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key))unavailable()
-   val now=clock.instant()
-   if(!approvals.isActiveOrganizationMember(org,actor,now))unavailable()
-   val a=approvals.resolveCurrentAuthority(org,key,now) ?:unavailable()
-   if(a.organizationId!=org ||
-      !approvals.actorMatchesAuthority(actor,a,now))unavailable()
+ private fun authority(actor: UUID, org: UUID, property: String) {
+     if (!subject.enabled()) unavailable()
+     currentOperationalAuthority(operationalAuthority, approvals, actor, org, property,
+         environment.getProperty(property), clock.instant()) ?: unavailable()
  }
  private fun unavailable():Nothing=throw ProductApiException(
    "FINANCE_PHYSICAL_CASH_UNAUTHORIZED",

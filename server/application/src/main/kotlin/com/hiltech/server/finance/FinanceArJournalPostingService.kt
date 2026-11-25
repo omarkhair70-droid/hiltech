@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -51,7 +54,7 @@ data class FinanceArJournalReceipt(
 
 /** Source-based AR recognition, not an issuance, sales lead or bank receipt. */
 @Service
-class FinanceArJournalPostingService(
+class FinanceArJournalPostingService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val subject:FinanceArJournalPostingApprovalSubject,
     private val approvals:ApprovalPersistencePort,
@@ -60,6 +63,7 @@ class FinanceArJournalPostingService(
     private val audit:AuditEventWriter,
     private val environment:Environment,
     private val clock:Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     @Transactional
     fun propose(
@@ -388,15 +392,10 @@ class FinanceArJournalPostingService(
                WHERE organization_id=? AND period_id=?)""",
             Boolean::class.java,org,period,
         )==true
-    private fun authority(actor:UUID,org:UUID,keyName:String) {
-        if(!subject.enabled()) unavailable()
-        val key=environment.getProperty(keyName,"").trim()
-        if(!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) unavailable()
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now)) unavailable()
-        val resolved=approvals.resolveCurrentAuthority(org,key,now) ?: unavailable()
-        if(resolved.organizationId!=org ||
-            !approvals.actorMatchesAuthority(actor,resolved,now)) unavailable()
+    private fun authority(actor: UUID, org: UUID, keyName: String) {
+        if (!subject.enabled()) unavailable()
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, keyName,
+            environment.getProperty(keyName), clock.instant()) ?: unavailable()
     }
     private fun unavailable():Nothing=throw ProductApiException(
         "FINANCE_AR_POSTING_NOT_AUTHORIZED",

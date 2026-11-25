@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -61,7 +64,7 @@ private data class FinanceSourceBankDebit(
  * income, withholding, GL journal or cash transfer.
  */
 @Service
-class FinanceEmployeeFundingService(
+class FinanceEmployeeFundingService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val sources:FinanceMoneyDraftPolicyApprovalSubject,
     private val subject:FinanceEmployeeFundingApprovalSubject,
@@ -71,6 +74,7 @@ class FinanceEmployeeFundingService(
     private val audit:AuditEventWriter,
     private val environment:Environment,
     private val clock:Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     @Transactional
     fun prepare(
@@ -365,16 +369,10 @@ class FinanceEmployeeFundingService(
         approvalRequestId=approval,fundingRecordId=funding,
         replayed=replayed,fundingEvidenceRecorded=funding!=null,
     )
-    private fun authority(actor:UUID,org:UUID,setting:String) {
-        if(!subject.enabled())unavailable()
-        val key=environment.getProperty(setting,"").trim()
-        if(!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key))unavailable()
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now))unavailable()
-        val authority=approvals.resolveCurrentAuthority(org,key,now)
-            ?: unavailable()
-        if(authority.organizationId!=org ||
-            !approvals.actorMatchesAuthority(actor,authority,now))unavailable()
+    private fun authority(actor: UUID, org: UUID, setting: String) {
+        if (!subject.enabled()) unavailable()
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, setting,
+            environment.getProperty(setting), clock.instant()) ?: unavailable()
     }
     private fun unavailable():Nothing=throw ProductApiException(
         "FINANCE_EMPLOYEE_FUNDING_UNAUTHORIZED",

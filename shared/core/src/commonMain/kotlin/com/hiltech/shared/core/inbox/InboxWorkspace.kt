@@ -39,6 +39,11 @@ import com.hiltech.shared.core.design.HiltechKeyValue
 import com.hiltech.shared.core.design.HiltechPanel
 import com.hiltech.shared.core.design.HiltechStateTag
 import com.hiltech.shared.core.design.HiltechStateTone
+import com.hiltech.shared.core.procurement.PurchaseOrderReviewApiClient
+import com.hiltech.shared.core.procurement.PurchaseOrderReviewWorkspace
+import com.hiltech.shared.core.procurement.PurchaseReviewCompletedDto
+import com.hiltech.shared.core.procurement.purchaseReviewState
+import com.hiltech.shared.core.design.hiltechDateText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -49,6 +54,7 @@ private enum class InboxFilter(val label: String, val arabic: String) {
 private data class InboxDetail(
     val item: InboxItemDto,
     val approval: ApprovalRequestDto?,
+    val purchaseReceipt: PurchaseReviewCompletedDto? = null,
 )
 
 @Composable
@@ -58,6 +64,8 @@ fun InboxWorkspace(
     approvals: ApprovalApiClient,
     installationId: String,
     newOperationId: () -> String,
+    purchaseReviews: PurchaseOrderReviewApiClient? = null,
+    onReauthenticate: () -> Unit = {},
 ) = key(sessionScope, installationId) {
     val jobs = rememberCoroutineScope()
     val colors = LocalHiltechOperationalColors.current
@@ -117,7 +125,12 @@ fun InboxWorkspace(
                     null
                 }
             } else null
-            detail = InboxDetail(item, approval)
+            val purchaseReceipt = if (approval == null && item.sourceType == "APPROVAL_REQUEST" && purchaseReviews != null) {
+                try { purchaseReviews.completed(item.sourceId, installationId) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+            } else null
+            detail = InboxDetail(item, approval, purchaseReceipt)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -226,14 +239,36 @@ fun InboxWorkspace(
                 )
                 item.safeSummary?.takeIf(String::isNotBlank)?.let { Text(it) }
                 entry.approval?.let { approval ->
-                    Text(humanizeInboxCode(approval.subjectType), style = MaterialTheme.typography.titleMedium)
-                    HiltechKeyValue(hiltechText("حالة الموافقة", "Approval status"), humanizeInboxCode(approval.state))
-                    HiltechKeyValue(hiltechText("إصدار السجل", "Record version"), approval.subjectVersion.toString())
-                    HiltechKeyValue(hiltechText("تاريخ الطلب", "Requested at"), approval.createdAt)
-                    approval.safeReasonSummary?.takeIf(String::isNotBlank)?.let { Text(it) }
+                    if (approval.subjectType == "PROCUREMENT_PO_CANDIDATE") {
+                        if (purchaseReviews == null) Text(hiltechText("مراجعة المشتريات غير متاحة حاليًا في هذه الجلسة. حدّث الاتصال أو راجع مسؤول النظام.",
+                            "Purchasing review is currently unavailable in this session. Refresh the connection or contact the administrator."))
+                        else PurchaseOrderReviewWorkspace(
+                            client = purchaseReviews, candidateId = approval.subjectId, approvalRequestId = approval.approvalRequestId,
+                            installationId = installationId, newOperationId = newOperationId,
+                            onReauthenticate = onReauthenticate,
+                            onRecorded = { result ->
+                                detail = entry.copy(item = item.copy(actionable = false, state = "RESOLVED"), approval = approval.copy(state = result.approvalState))
+                                items = if (filter == InboxFilter.Attention) items.filterNot { it.inboxItemId == item.inboxItemId }
+                                    else items.map { if (it.inboxItemId == item.inboxItemId) it.copy(actionable = false, state = "RESOLVED") else it }
+                            },
+                        )
+                    } else {
+                        Text(humanizeInboxCode(approval.subjectType), style = MaterialTheme.typography.titleMedium)
+                        HiltechKeyValue(hiltechText("حالة الموافقة", "Approval status"), humanizeInboxCode(approval.state))
+                        HiltechKeyValue(hiltechText("إصدار السجل", "Record version"), approval.subjectVersion.toString())
+                        HiltechKeyValue(hiltechText("تاريخ الطلب", "Requested at"), approval.createdAt)
+                        approval.safeReasonSummary?.takeIf(String::isNotBlank)?.let { Text(it) }
+                    }
                 }
                 HiltechKeyValue(hiltechText("تاريخ آخر تحديث", "Last updated"), item.updatedAt)
-                if (item.sourceType == "APPROVAL_REQUEST" && entry.approval == null) {
+                entry.purchaseReceipt?.let { recorded ->
+                    HiltechStateTag(purchaseReviewState(recorded.approvalState), HiltechStateTone.CURRENT)
+                    Text(if (recorded.decidedByCurrentUser) hiltechText("هذا هو القرار المسجل من حسابك على مقترح الشراء.",
+                        "This is the decision recorded by your account on the purchase proposal.") else hiltechText(
+                        "أُغلقت المراجعة القديمة في السجل، ولم تُسجّل موافقة على المقترح.", "The outdated review was closed in the record; no proposal approval was recorded."))
+                    HiltechKeyValue(hiltechText("تاريخ الإغلاق", "Completed on"), hiltechDateText(recorded.completedAt.take(10)))
+                }
+                if (item.sourceType == "APPROVAL_REQUEST" && entry.approval == null && entry.purchaseReceipt == null) {
                     Text(hiltechText("تفاصيل الموافقة غير متاحة في هذه الجلسة.", "The approval details are unavailable for this session."))
                 }
                 OutlinedButton(enabled = !saving && !opening, onClick = {

@@ -11,6 +11,7 @@ import com.hiltech.server.documents.PoReceivingDeliveryNoteEvidenceReservationIn
 import com.hiltech.server.documents.FinanceBankStatementEvidenceReservationInsert
 import com.hiltech.server.documents.FinanceExpenseReceiptEvidenceReservationInsert
 import com.hiltech.server.documents.CommercialEvidenceReservationInsert
+import com.hiltech.server.documents.PrivateDocumentEvidenceReservationInsert
 import com.hiltech.server.documents.WorkOrderEvidencePolicySnapshot
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -630,6 +631,16 @@ class JdbcEvidencePersistence(
         value: CommercialEvidenceReservationInsert,
     ) {
         require(value.targetType in setOf("COMMERCIAL_CONTRACT", "COMMERCIAL_CLIENT_PO"))
+        insertPrivateDocumentReservation(value)
+    }
+
+    override fun insertServiceDeliveryReservation(value: PrivateDocumentEvidenceReservationInsert) {
+        require(value.targetType == "SERVICE_DELIVERY_DOCUMENT")
+        require(value.evidenceTypeCode in setOf("SERVICE_DELIVERY_AGREEMENT", "SERVICE_DELIVERY_CLIENT_RESPONSE", "SERVICE_DELIVERY_WARRANTY_SUPPORT", "SERVICE_DELIVERY_INCIDENT"))
+        insertPrivateDocumentReservation(value)
+    }
+
+    private fun insertPrivateDocumentReservation(value: PrivateDocumentEvidenceReservationInsert) {
         require(
             (value.contentType == "application/pdf" && value.securityScanClass == "SIGNED_DOCUMENT") ||
             (value.contentType in setOf("image/png", "image/jpeg") && value.securityScanClass == "NATIVE_MEDIA")

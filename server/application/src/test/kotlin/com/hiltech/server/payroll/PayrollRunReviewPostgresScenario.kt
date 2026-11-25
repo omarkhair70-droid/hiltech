@@ -27,6 +27,10 @@ object PayrollRunReviewPostgresScenario {
         val at = clock.instant().atOffset(ZoneOffset.UTC)
         val guard = PayrollRunApprovalVersionSource(jdbc, source)
         val persistence = JdbcApprovalPersistence(jdbc)
+        var reviewAuthorityCurrent = true
+        val reviewAuthority = object : Payroll9aAuthorityPort by authority {
+            override fun canReview(actorId: UUID, organizationId: UUID) = reviewAuthorityCurrent && authority.canReview(actorId, organizationId)
+        }
         val authorization = object : ApprovalAuthorizationPort {
             override fun canDecide(actorUserId: UUID, approvalRequestId: UUID,
                 assignmentPrincipalType: ApprovalPrincipalType, assignmentPrincipalId: UUID) =
@@ -35,7 +39,8 @@ object PayrollRunReviewPostgresScenario {
         val engine = ApprovalEngineService(persistence,
             JdbcIdempotentCommandExecutor(jdbc, DataSourceTransactionManager(jdbc.dataSource!!), clock,
                 HiltechTelemetryRuntime(OpenTelemetry.noop()) {}), AuthorizationProjectionIntentWriter {}, authorization,
-            FailClosedApprovalSubjectVersionGuard(listOf(guard)), AuditEventWriter.NOOP, ApplicationEventPublisher {}, clock)
+            FailClosedApprovalSubjectVersionGuard(listOf(guard)), AuditEventWriter.NOOP, ApplicationEventPublisher {}, clock,
+            decisionConstraints = listOf(PayrollReviewDecisionConstraint(jdbc, reviewAuthority, persistence, PayrollRunPolicyConfiguration(""), clock)))
         val policy = PayrollRunPolicyConfiguration("")
         jdbc.update("""INSERT INTO approval_authority_binding(id,organization_id,authority_key,principal_type,principal_user_id,
             effective_from,active,created_by_user_id,created_at) VALUES(?,?,'PAYROLL_RUN_REVIEWER','USER',?,?,true,?,?)""",
@@ -65,6 +70,12 @@ object PayrollRunReviewPostgresScenario {
         assertThrows<ProductApiException> { tx.execute { service.decide(reviewer, runId,
             command.copy(decision = "REQUEST_CHANGE", comment = null), "synthetic-missing-reason") } }
         assertEquals("PENDING", service.read(reviewer, runId).approvalState)
+        reviewAuthorityCurrent = false
+        assertEquals("APPROVAL_SOURCE_REVIEW_NOT_ALLOWED", assertThrows<ProductApiException> {
+            tx.execute { engine.decide(reviewer, UUID.randomUUID(), requestId, ApprovalDecisionType.APPROVE, null, "synthetic-generic-run-review-revoked") }
+        }.code)
+        assertEquals("PENDING", service.read(reviewer, runId).approvalState)
+        reviewAuthorityCurrent = true
         val approved = tx.execute { service.decide(reviewer, runId, command, "synthetic-run-approve") }!!
         assertEquals("APPROVED", approved.approvalState)
         assertFalse(approved.replayed)

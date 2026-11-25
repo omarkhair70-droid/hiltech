@@ -1,5 +1,8 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.documents.ServicePurchaseDocumentEvidenceTarget
 import com.hiltech.server.documents.ServicePurchaseDocumentEvidenceTargetPort
@@ -9,7 +12,7 @@ import org.springframework.stereotype.Component
 import java.time.Clock
 import java.util.UUID
 
-/** Reuse the current ApprovalEngine binding, not a second team/role hierarchy. */
+/** Document access follows the current operating source used by its workflow. */
 @Component
 class ServicePurchaseDocumentTargetAdapter @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
@@ -21,10 +24,11 @@ class ServicePurchaseDocumentTargetAdapter @org.springframework.beans.factory.an
     private val acceptanceEnabled:Boolean=false,
     @Value("\${hiltech.procurement.service-invoices.enabled:false}")
     private val invoiceEnabled:Boolean=false,
-    @Value("\${hiltech.procurement.service-acceptance.authority-key:}")
+    @Value("\${hiltech.procurement.service-acceptance.authority-key:PROCUREMENT_SERVICE_ACCEPT}")
     private val acceptingAuthorityKey:String="",
-    @Value("\${hiltech.procurement.service-invoices.finance-authority-key:}")
+    @Value("\${hiltech.procurement.service-invoices.finance-authority-key:FINANCE_SUPPLIER_REVIEW}")
     private val financeAuthorityKey:String="",
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) : ServicePurchaseDocumentEvidenceTargetPort {
     override fun loadTarget(id:UUID):ServicePurchaseDocumentEvidenceTarget? =
         jdbc.query(
@@ -52,16 +56,15 @@ class ServicePurchaseDocumentTargetAdapter @org.springframework.beans.factory.an
 
     private fun authorized(actor:UUID,t:ServicePurchaseDocumentEvidenceTarget):Boolean {
         if(!enabled)return false
-        val (active,key)=when(t.documentKind) {
-            "DELIVERY" -> acceptanceEnabled to acceptingAuthorityKey.trim()
-            "INVOICE" -> invoiceEnabled to financeAuthorityKey.trim()
+        val (active,property,key)=when(t.documentKind) {
+            "DELIVERY" -> Triple(acceptanceEnabled,
+                "hiltech.procurement.service-acceptance.authority-key", acceptingAuthorityKey)
+            "INVOICE" -> Triple(invoiceEnabled,
+                "hiltech.procurement.service-invoices.finance-authority-key", financeAuthorityKey)
             else -> return false
         }
-        if(!active || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key))return false
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(t.organizationId,actor,now))return false
-        val binding=approvals.resolveCurrentAuthority(t.organizationId,key,now)?:return false
-        return binding.organizationId==t.organizationId && binding.authorityKey==key &&
-            approvals.actorMatchesAuthority(actor,binding,now)
+        if(!active)return false
+        return currentOperationalAuthority(operationalAuthority, approvals, actor,
+            t.organizationId, property, key, clock.instant()) != null
     }
 }

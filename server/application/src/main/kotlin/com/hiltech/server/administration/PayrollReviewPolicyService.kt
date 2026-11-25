@@ -4,6 +4,12 @@ import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
 import com.hiltech.server.finance.FinancePayrollAuthorityPort
 import com.hiltech.server.payroll.Payroll9aAuthorityPort
+import com.hiltech.server.approval.ApprovalEngineService
+import com.hiltech.server.approval.ApprovalPolicyMaintenanceScope
+import com.hiltech.server.payroll.PayrollRunPolicyConfiguration
+import com.hiltech.server.procurement.ProcurementCandidateReviewEligibilityPort
+import com.hiltech.server.procurement.ProcurementReviewPolicyConfiguration
+import com.hiltech.server.service.ServiceDeliveryReviewEligibilityPort
 import com.hiltech.server.platform.IdempotencyKeyContract
 import com.hiltech.server.platform.IdempotentCommandExecutor
 import com.hiltech.server.platform.IdempotentCommandOutcome
@@ -11,23 +17,28 @@ import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
+import org.springframework.beans.factory.annotation.Autowired
 import java.time.Clock
 import java.util.UUID
 
 @Component
-class PayrollReviewPolicyService(
+class PayrollReviewPolicyService @Autowired constructor(
     private val authority: OrganizationAdministrationAuthorityPort,
     private val reviewers: CompanyReviewCandidateAuthorityPort,
     private val persistence: PayrollReviewPolicyPersistencePort,
     private val commands: IdempotentCommandExecutor,
     private val audit: AuditEventWriter,
     private val clock: Clock,
+    private val approvalEngine: ApprovalEngineService? = null,
+    private val payrollPolicy: PayrollRunPolicyConfiguration = PayrollRunPolicyConfiguration("PAYROLL_RUN_REVIEW"),
+    private val procurementPolicy: ProcurementReviewPolicyConfiguration = ProcurementReviewPolicyConfiguration("PROCUREMENT_PO_REVIEW"),
 ) {
     fun current(actor: UUID, organizationId: UUID, workflow: CompanyReviewWorkflow): PayrollReviewSetupResponse {
         requireAuthority(actor, organizationId)
@@ -47,6 +58,7 @@ class PayrollReviewPolicyService(
             }, state.policy?.id?.toString(), state.policy?.revision, state.policy?.version,
             state.reviewer?.id?.toString(), state.reviewer?.version, state.reviewer?.principalType,
             state.reviewer?.displayName, state.reviewer?.employeeId?.toString(), state.pendingReviews, now.toString(), workflow.name, !protectedAuthority,
+            state.pendingPolicies,
         )
     }
 
@@ -78,6 +90,13 @@ class PayrollReviewPolicyService(
             command.expectedPolicyVersion?.let { put("policyVersion", it) }
             put("bindingId", command.expectedBindingId?.toString())
             command.expectedBindingVersion?.let { put("bindingVersion", it) }
+            put("pendingPoliciesToSupersede", buildJsonArray {
+                command.pendingPoliciesToSupersede.sortedBy { it.policyId }.forEach { pending -> add(buildJsonObject {
+                    put("policyId", pending.policyId); put("policyRevision", pending.policyRevision)
+                    put("policyVersion", pending.policyVersion); put("pendingReviews", pending.pendingReviews)
+                }) }
+            })
+            put("supersedeReason", command.supersedeReason?.trim())
         }.toString())
         val execution = commands.execute(IdempotentCommandSpec(
             command.operationId, command.actorUserId, "CONFIGURE_COMPANY_REVIEW_WORKFLOW", "ORGANIZATION",
@@ -102,6 +121,36 @@ class PayrollReviewPolicyService(
             }
             val unchanged = previous.policy?.let { it.current && it.contractMatches } == true &&
                 previous.reviewer?.let { it.current && it.principalType == "USER" && it.principalId == reviewer.identityId } == true
+            if (!unchanged) {
+                if (previous.pendingReviews > 0 && (previous.pendingPolicies.isEmpty() ||
+                    previous.pendingPolicies.sumOf { it.pendingReviews } != previous.pendingReviews)) {
+                    throw conflict("APPROVAL_POLICY_PENDING_CHANGED", "Refresh the exact pending policy versions before replacing the reviewer.")
+                }
+                if (command.pendingPoliciesToSupersede.sortedBy { it.policyId } != previous.pendingPolicies.sortedBy { it.policyId }) {
+                    throw conflict("APPROVAL_POLICY_PENDING_CONFIRMATION_REQUIRED", "Review and confirm the exact pending policy versions affected by this change.")
+                }
+                if (previous.pendingPolicies.isNotEmpty()) {
+                    val reason = command.supersedeReason?.trim().orEmpty()
+                    if (reason.length !in 3..1000 || reason.any { it.code < 32 }) {
+                        throw invalid("APPROVAL_POLICY_MAINTENANCE_REASON_REQUIRED", "A reason is required to end pending reviews before replacing the reviewer.")
+                    }
+                    val engine = approvalEngine ?: throw conflict("APPROVAL_POLICY_MAINTENANCE_UNAVAILABLE", "Review workflow maintenance is unavailable.")
+                    val key = when (command.workflow) {
+                        CompanyReviewWorkflow.PAYROLL_RUN -> payrollPolicy.key
+                        CompanyReviewWorkflow.PROCUREMENT_PO -> procurementPolicy.key
+                        else -> command.workflow.policyKey
+                    }
+                    previous.pendingPolicies.sortedBy { it.policyId }.forEach { pending ->
+                        val policyId = runCatching { UUID.fromString(pending.policyId) }.getOrElse {
+                            throw invalid("APPROVAL_POLICY_MAINTENANCE_INVALID", "A pending policy identifier is invalid.")
+                        }
+                        engine.supersedePolicyRequests(command.actorUserId,
+                            UUID.nameUUIDFromBytes("company-review-maintenance:${command.operationId}:$policyId".toByteArray(Charsets.UTF_8)),
+                            ApprovalPolicyMaintenanceScope(command.organizationId, policyId, key, pending.policyRevision,
+                                pending.policyVersion, command.workflow.subjectType, pending.pendingReviews), reason, command.correlationId)
+                    }
+                }
+            }
             val installed = if (unchanged) PayrollReviewPolicyInstallation(
                 requireNotNull(previous.policy).id, previous.policy.revision, requireNotNull(previous.reviewer).id,
             ) else persistence.replace(command.organizationId, command.workflow, previous, reviewer, command.actorUserId, command.operationId, now)
@@ -139,13 +188,17 @@ class PayrollReviewPolicyService(
 }
 
 @Component
-class DomainCompanyReviewCandidateAuthority(
+class DomainCompanyReviewCandidateAuthority @Autowired constructor(
     private val payroll: Payroll9aAuthorityPort,
     private val finance: FinancePayrollAuthorityPort,
+    private val procurement: ProcurementCandidateReviewEligibilityPort? = null,
+    private val service: ServiceDeliveryReviewEligibilityPort? = null,
 ) : CompanyReviewCandidateAuthorityPort {
     override fun canReview(workflow: CompanyReviewWorkflow, actor: UUID, organizationId: UUID): Boolean = when (workflow) {
         CompanyReviewWorkflow.PAYROLL_SOURCE -> payroll.canReview(actor, organizationId)
         CompanyReviewWorkflow.PAYROLL_RUN -> payroll.canReview(actor, organizationId)
         CompanyReviewWorkflow.FINANCE_PAYROLL_RESULT -> finance.canReview(actor, organizationId)
+        CompanyReviewWorkflow.PROCUREMENT_PO -> procurement?.isEligible(actor, organizationId) == true
+        CompanyReviewWorkflow.SERVICE_HANDOVER, CompanyReviewWorkflow.SERVICE_WARRANTY -> service?.isEligible(actor, organizationId) == true
     }
 }

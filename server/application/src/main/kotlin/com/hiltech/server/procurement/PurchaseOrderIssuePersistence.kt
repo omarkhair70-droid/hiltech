@@ -25,7 +25,7 @@ data class PurchaseOrderIssuedRecord(
     val approvalPolicyKey: String,
     val approvalPolicyVersion: Int,
     val issuerAuthorityKey: String,
-    val issuerAuthorityBindingId: UUID,
+    val issuerAuthorityBindingId: UUID?,
     val code: String,
     val serial: Long,
     val supplierOrganizationId: UUID,
@@ -37,6 +37,8 @@ data class PurchaseOrderIssuedRecord(
     val issuedAt: Instant,
     val correlationId: String,
     val supplierDispatchState: String = "NOT_SENT",
+    val issuerOperationalBindingId: UUID? = null,
+    val numberingRevisionId: UUID? = null,
 )
 
 data class PurchaseOrderIssuerQueueItem(
@@ -312,6 +314,8 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
                 rs.getObject("issued_at", OffsetDateTime::class.java).toInstant(),
                 rs.getString("correlation_id"),
                 rs.getString("supplier_dispatch_state"),
+                rs.getObject("issuer_operational_binding_id", UUID::class.java),
+                rs.getObject("numbering_revision_id", UUID::class.java),
             )
         }, candidateId,
     ).singleOrNull()
@@ -454,8 +458,11 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
         """
         SELECT a.id, a.policy_version, a.state,
           (SELECT count(*) FROM approval_decision d
-           WHERE d.approval_request_id = a.id AND d.decision = 'APPROVE') AS approved_decision_count
+           WHERE d.approval_request_id = a.id AND d.decision = 'APPROVE'
+             AND d.subject_version = a.subject_version
+             AND d.actor_user_id <> a.requester_user_id AND d.actor_user_id <> c.selected_by_user_id) AS approved_decision_count
         FROM approval_request a
+        JOIN procurement_po_candidate c ON c.id = a.subject_id AND c.organization_id = a.organization_id
         WHERE a.organization_id = ? AND a.subject_type = 'PROCUREMENT_PO_CANDIDATE'
           AND a.subject_id = ? AND a.subject_version = 1 AND a.policy_key = ?
         FOR UPDATE OF a
@@ -539,22 +546,22 @@ class PurchaseOrderIssuePersistence(private val jdbc: JdbcTemplate) {
             INSERT INTO procurement_purchase_order (
               id, operation_id, organization_id, candidate_id,
               approval_request_id, approval_policy_key, approval_policy_version,
-              issuer_authority_key, issuer_authority_binding_id, po_code, po_serial,
+              issuer_authority_key, issuer_authority_binding_id, issuer_operational_binding_id, po_code, po_serial,
               supplier_organization_id, delivery_storage_location_id, stock_item_id,
               quantity, unit_code, currency, unit_price, tax_amount, total_amount,
               quote_evidence_id, quote_evidence_sha256, issued_by_user_id, issued_at,
-              correlation_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              correlation_id, numbering_revision_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
             record.id, record.operationId, record.organizationId, record.candidateId,
             record.approvalRequestId, record.approvalPolicyKey, record.approvalPolicyVersion,
-            record.issuerAuthorityKey, record.issuerAuthorityBindingId,
+            record.issuerAuthorityKey, record.issuerAuthorityBindingId, record.issuerOperationalBindingId,
             record.code, record.serial, record.supplierOrganizationId,
             record.deliveryStorageLocationId, record.stockItemId,
             candidate.quantity, candidate.unitCode, candidate.currency,
             candidate.unitPrice, candidate.taxAmount, candidate.totalAmount,
             record.quoteId, record.quoteSha256, record.issuer,
-            record.issuedAt.atOffset(ZoneOffset.UTC), record.correlationId,
+            record.issuedAt.atOffset(ZoneOffset.UTC), record.correlationId, record.numberingRevisionId,
         ) == 1)
     }
 }

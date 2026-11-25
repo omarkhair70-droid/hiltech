@@ -100,11 +100,15 @@ internal fun EmployeeResponsibilityDelegationWorkspace(employee: EmployeeRespons
                 TextButton(enabled = pending == null && !submitting, onClick = { selectedCsv = choices.sorted().joinToString(",") }) {
                     Text(hiltechText("اختيار الأدوار المتاحة", "Select available roles"))
                 }
-                choices.forEach { role -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(role in selected, onCheckedChange = { checked -> selectedCsv = (if (checked) selected + role else selected - role).sorted().joinToString(",") },
-                        enabled = pending == null && !submitting)
-                    Text(companyResponsibilityLabel(role))
-                } }
+                choices.groupBy(::companyResponsibilityCategory).forEach { (category, roles) ->
+                    Text(companyResponsibilityCategoryLabel(category), style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary)
+                    roles.forEach { role -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(role in selected, onCheckedChange = { checked -> selectedCsv = (if (checked) selected + role else selected - role).sorted().joinToString(",") },
+                            enabled = pending == null && !submitting)
+                        Text(companyResponsibilityLabel(role))
+                    } }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(onward, onCheckedChange = { onward = it }, enabled = pending == null && !submitting)
                     Text(hiltechText("السماح له بتفويض إدارة هذه الأدوار لغيره", "Allow onward delegation of these roles’ administration"))

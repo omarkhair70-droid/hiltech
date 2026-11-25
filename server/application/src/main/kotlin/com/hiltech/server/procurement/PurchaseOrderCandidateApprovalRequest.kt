@@ -45,7 +45,7 @@ class PurchaseOrderCandidateApprovalRequestService @Autowired constructor(
     private val candidatesEnabled: Boolean = false,
     @Value("\${hiltech.procurement.approval-request.enabled:false}")
     private val requestsEnabled: Boolean = false,
-    @Value("\${hiltech.procurement.approval-policy-key:}")
+    @Value("\${hiltech.procurement.approval-policy-key:PROCUREMENT_PO_REVIEW}")
     private val configuredPolicyKey: String = "",
 ) {
     fun request(
@@ -58,7 +58,7 @@ class PurchaseOrderCandidateApprovalRequestService @Autowired constructor(
         val candidate = candidates.byId(candidateId) ?: unavailable()
         if (!buyerAuthorization.canManageSourcing(context.actor, candidate.organizationId))
             unavailable()
-        val key = configuredPolicyKey.trim()
+        val key = procurementReviewPolicyKey(configuredPolicyKey)
         if (!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) {
             throw ProductApiException(
                 "PROCUREMENT_APPROVAL_POLICY_NOT_CONFIGURED",

@@ -48,6 +48,7 @@ class FinancePayrollDisbursementService(
                     authority.canReview(actor, org) && view.state in setOf("PENDING", "APPROVED"),
                 canOpenEvidence = evidence.canAccess(actor, org, view.proposalId),
                 evidenceViewed = current?.proposal?.let { repository.hasEvidenceView(actor, org, it) } == true,
+                canCloseStale = current == null && view.state == "PENDING" && canCloseStale(actor, org, view.proposalId),
             )
         }
         return FinancePayrollRunView(org, run, repository.instructionViews(org, run), proposals)
@@ -126,14 +127,26 @@ class FinancePayrollDisbursementService(
 
     fun review(actor: UUID, org: UUID, proposal: UUID, request: FinancePayrollReviewResult, correlation: String): FinancePayrollCommandReceipt {
         reviewer(actor, org)
-        val decision = when (request.decision) { "APPROVE" -> ApprovalDecisionType.APPROVE; "REJECT" -> ApprovalDecisionType.REJECT; else -> invalid() }
+        val closingStale = request.decision == "CLOSE_STALE"
+        val decision = when (request.decision) { "APPROVE" -> ApprovalDecisionType.APPROVE; "REJECT", "CLOSE_STALE" -> ApprovalDecisionType.REJECT; else -> invalid() }
         val comment = request.comment?.trim()?.takeIf { it.isNotEmpty() }
-        if ((decision == ApprovalDecisionType.REJECT && comment == null) || (comment != null && (comment.length > 500 || comment.any { it.code < 32 }))) invalid()
+        if ((decision == ApprovalDecisionType.REJECT && !closingStale && comment == null) || (comment != null && (comment.length > 500 || comment.any { it.code < 32 }))) invalid()
         val eventId = derivedId("result", request.operationId)
         val execution = commands.execute(spec(request.operationId, actor, "FINANCE_PAYROLL_RESULT_REVIEWED", proposal,
-            listOf(org, proposal, decision, comment), correlation)) {
+            listOf(org, proposal, request.decision, comment), correlation)) {
             val sourceProposal = repository.proposal(org, proposal) ?: unavailable()
             repository.instruction(org, sourceProposal.instructionId, lock = true) ?: unavailable()
+            if (closingStale) {
+                if (!canCloseStale(actor, org, proposal) || subject.current(org, proposal) != null) stale()
+                val reference = ApprovalSubjectRef(org, FINANCE_PAYROLL_RESULT_SUBJECT, proposal, sourceProposal.reviewVersion)
+                val status = approvals.subjectStatus(reference, FINANCE_PAYROLL_RESULT_POLICY)?.takeIf { it.state == ApprovalRequestState.PENDING } ?: stale()
+                val closed = approvals.decideForSourceWorkflow(actor, derivedId("review-decision", request.operationId), status.approvalRequestId,
+                    ApprovalDecisionType.REJECT, "SOURCE_CHANGED_CLOSE_OUTDATED_PAYROLL_MATCH", correlation)
+                // Engine alone checks current source and performs SUPERSEDED. Never turn this command into rejection, approval or payment.
+                if (closed.state != ApprovalRequestState.SUPERSEDED) stale()
+                audit(actor, "FINANCE_PAYROLL_REVIEW_SUPERSEDED", proposal, correlation, "SOURCE_CHANGED")
+                return@execute IdempotentCommandOutcome("FINANCE_PAYROLL_REVIEW_SUPERSEDED", """{"id":"$proposal"}""")
+            }
             sourceProposal.bankLineId?.let { repository.bank(org, it, lock = true) ?: stale() }
             sourceProposal.correctsEventId?.let { if (!repository.canCorrectMatch(org, it, lock = true)) stale() }
             if (sourceProposal.action == "SUCCESS") {
@@ -159,7 +172,15 @@ class FinancePayrollDisbursementService(
             IdempotentCommandOutcome("FINANCE_PAYROLL_RESULT_REVIEWED", """{"id":"$proposal"}""")
         }
         return FinancePayrollCommandReceipt(request.operationId, org, proposal,
-            if (decision == ApprovalDecisionType.APPROVE) "RECORDED" else "REJECTED", execution.replayed)
+            if (closingStale) "SUPERSEDED" else if (decision == ApprovalDecisionType.APPROVE) "RECORDED" else "REJECTED", execution.replayed)
+    }
+
+    private fun canCloseStale(actor: UUID, org: UUID, id: UUID): Boolean {
+        if (!authority.canReview(actor, org) || subject.policy(org)?.reviewerId != actor ||
+            !repository.pendingAssignedReviewer(org, id, actor)) return false
+        val p = repository.proposal(org, id) ?: return false
+        val instruction = repository.instruction(org, p.instructionId) ?: return false
+        return p.preparedBy != actor && !repository.isBeneficiary(actor, instruction.employeeId)
     }
 
     private fun spec(op: UUID, actor: UUID, type: String, target: UUID, values: List<Any?>, correlation: String) =

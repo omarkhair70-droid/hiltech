@@ -291,6 +291,7 @@ fun HiltechShell(
     // a canonical Executive project, never a new permission or API route.
     projectFocusRequest: Int = 0,
     peopleFocusRequest: Int = 0,
+    operationalFocusRequest: NativeWorkspaceOpenRequest? = null,
     desktopNavigation: Boolean = false,
     desktopPurchasingAvailable: Boolean = false,
     warehouseOperatorAvailable: Boolean = false,
@@ -340,6 +341,25 @@ fun HiltechShell(
         val nativeSession = rememberNativeWorkspaceSession(nativeScope, nativeAuthority, nativeWorkspaces)
         val activeNative = nativeWorkspaces.firstOrNull { it.id == nativeSession.selectedId && nativeSession.availability[it.id] == WorkspaceAvailability.AVAILABLE }
         var requestedWorkspace by remember(shellScrollScope, nativeAuthority) { mutableStateOf(ShellWorkspace.Home) }
+        var handledOperationalFocus by remember(shellScrollScope, nativeAuthority) { mutableStateOf<NativeWorkspaceOpenRequest?>(null) }
+        val focusedAvailability = operationalFocusRequest?.workspaceId?.let { nativeSession.availability[it] }
+        LaunchedEffect(shellScrollScope, nativeAuthority, operationalFocusRequest, focusedAvailability) {
+            val request = operationalFocusRequest ?: return@LaunchedEffect
+            if (request.sequence <= 0 || request == handledOperationalFocus ||
+                nativeWorkspaces.none { it.id == request.workspaceId }
+            ) return@LaunchedEffect
+            // Navigation never grants access. open() requires the discovered
+            // source permission and performs another source check before entry.
+            if (focusedAvailability == WorkspaceAvailability.AVAILABLE) {
+                handledOperationalFocus = request
+                requestedWorkspace = ShellWorkspace.Explore
+                nativeSession.open(request.workspaceId)
+            } else if (focusedAvailability == WorkspaceAvailability.DENIED || focusedAvailability == WorkspaceAvailability.UNAVAILABLE) {
+                handledOperationalFocus = request
+                nativeSession.close()
+                requestedWorkspace = ShellWorkspace.Explore
+            }
+        }
         var workspaceTabs by remember(shellScrollScope, nativeAuthority) { mutableStateOf(listOf(ShellWorkspace.Home)) }
         var finding by remember(shellScrollScope) { mutableStateOf(false) }
         var requestedFieldFocus by remember(shellScrollScope, nativeAuthority) { mutableStateOf<String?>(null) }

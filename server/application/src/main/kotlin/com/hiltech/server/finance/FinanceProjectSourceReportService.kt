@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.ProductApiException
@@ -40,31 +43,25 @@ data class FinanceProjectSourceReport(
 
 /** Source facts only, no guessed procurement/warehouse costs or gross margin. */
 @Service
-class FinanceProjectSourceReportService(
+class FinanceProjectSourceReportService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val approvals:ApprovalPersistencePort,
     private val environment:Environment,
     private val clock:Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     @Transactional(readOnly=true)
     fun read(
         actor:UUID,org:UUID,project:UUID,limit:Int=100,
     ):FinanceProjectSourceReport {
-        val key=environment.getProperty(
-            "hiltech.finance.project-sources.reader-authority-key","",
-        ).trim()
         if(!environment.getProperty(
             "hiltech.finance.project-sources.enabled",
             Boolean::class.java,false,
-        ) || limit !in 1..500 ||
-            !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key))
+        ) || limit !in 1..500)
             denied()
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now))denied()
-        val binding=approvals.resolveCurrentAuthority(org,key,now)
-            ?: denied()
-        if(binding.organizationId!=org ||
-            !approvals.actorMatchesAuthority(actor,binding,now))denied()
+        val property = "hiltech.finance.project-sources.reader-authority-key"
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, property,
+            environment.getProperty(property), clock.instant()) ?: denied()
         if(jdbc.queryForObject(
             """SELECT EXISTS(SELECT 1 FROM project
                WHERE id=? AND organization_id=?)""",

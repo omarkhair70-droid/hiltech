@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.ProductApiException
@@ -38,11 +41,12 @@ data class FinanceEmployeeReviewItem(
 )
 
 @Service
-class FinanceEmployeeReviewService(
+class FinanceEmployeeReviewService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val approvals: ApprovalPersistencePort,
     private val clock: Clock,
     private val environment: Environment,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     fun list(actor: UUID, organizationId: UUID): List<FinanceEmployeeReviewItem> {
         authorized(actor, organizationId)
@@ -86,15 +90,10 @@ class FinanceEmployeeReviewService(
     }
 
     private fun authorized(actor: UUID, org: UUID) {
-        if (!environment.getProperty("hiltech.finance.employee-review.enabled",
-                Boolean::class.java, false)) denied()
-        val key = environment.getProperty("hiltech.finance.employee-review.authority-key", "").trim()
-        if (!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) denied()
-        val now = clock.instant()
-        if (!approvals.isActiveOrganizationMember(org, actor, now)) denied()
-        val authority = approvals.resolveCurrentAuthority(org, key, now) ?: denied()
-        if (authority.organizationId != org || authority.authorityKey != key ||
-            !approvals.actorMatchesAuthority(actor, authority, now)) denied()
+        if (!environment.getProperty("hiltech.finance.employee-review.enabled", Boolean::class.java, false)) denied()
+        val property = "hiltech.finance.employee-review.authority-key"
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, property,
+            environment.getProperty(property), clock.instant()) ?: denied()
     }
 
     private fun denied(): Nothing = throw ProductApiException(

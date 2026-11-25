@@ -57,6 +57,8 @@ internal class PayrollCommandSession {
         private set
     var errorCode by mutableStateOf<String?>(null)
         private set
+    var requiresReauthentication by mutableStateOf(false)
+        private set
     private var wasUnknown = false
     val locked: Boolean get() = pending != null
 
@@ -67,6 +69,7 @@ internal class PayrollCommandSession {
             busy = true
             wasUnknown = false
             errorCode = null
+            requiresReauthentication = false
         }
     }
 
@@ -81,12 +84,14 @@ internal class PayrollCommandSession {
         busy = false
         wasUnknown = false
         errorCode = null
+        requiresReauthentication = false
         return true
     }
 
     fun fail(command: PayrollNativeCommand, failure: Throwable) {
         if (pending != command || !busy) return
         val api = failure as? HiltechApiException
+        requiresReauthentication = api?.code == "REAUTH_REQUIRED"
         val definite = api?.httpStatus?.let { it in 400..499 && it != 408 } == true &&
             api.envelope?.code == api.code && !api.retryable
         if (definite && (!wasUnknown || api?.code == "OPERATION_PREVIOUSLY_FAILED")) {

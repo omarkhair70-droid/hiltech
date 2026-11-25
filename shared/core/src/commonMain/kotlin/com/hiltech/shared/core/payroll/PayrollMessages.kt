@@ -17,6 +17,7 @@ internal fun payrollPeriodDatesValid(start: String, end: String, cutoff: String,
 
 @Composable
 internal fun payrollMessage(code: String): String = when (code) {
+    "REAUTH_REQUIRED" -> hiltechText("أكّد تسجيل الدخول لإتمام هذا القرار، ثم افتح النسخة الحالية للتحقق من نتيجتها.", "Confirm your sign-in to complete this decision, then open the current version to check its result.")
     "PAYROLL_PERIODS_PAUSED" -> hiltechText("إدارة فترات المرتبات متوقفة مؤقتًا على الخادم. مسؤوليتك محفوظة؛ أعد التحديث بعد استئناف الخدمة.", "Payroll periods are temporarily paused on the server. Your responsibility is retained; refresh when service resumes.")
     "PAYROLL_RUNS_PAUSED" -> hiltechText("حساب المرتبات متوقف مؤقتًا على الخادم.", "Payroll calculation is temporarily paused on the server.")
     "PAYROLL_RUN_REVIEW_PAUSED" -> hiltechText("إرسال نسخ المرتبات للمراجعة أو تثبيت اعتمادها متوقف مؤقتًا على الخادم.", "Payroll review requests or release are temporarily paused on the server.")

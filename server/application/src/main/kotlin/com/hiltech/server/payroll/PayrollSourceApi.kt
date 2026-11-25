@@ -1,5 +1,9 @@
 package com.hiltech.server.payroll
 
+import com.hiltech.server.identity.IdentitySessionService
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.oauth2.jwt.Jwt
+
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.IdempotencyKeyContract
 import jakarta.servlet.http.HttpServletRequest
@@ -16,7 +20,7 @@ import java.util.UUID
 
 @RestController
 @ConditionalOnProperty(prefix = "hiltech.payroll", name = ["periods-enabled"], havingValue = "true", matchIfMissing = true)
-class PayrollSourceController(private val service: PayrollSourceService) {
+class PayrollSourceController(private val service: PayrollSourceService, private val sessions: IdentitySessionService) {
     @GetMapping("/v1/payroll/periods/{periodId}/sources")
     fun list(servletRequest: HttpServletRequest, @PathVariable periodId: String): PayrollSourcesDto =
         service.list(actor(servletRequest), PayrollSourcePolicy.uuid(periodId))
@@ -40,8 +44,10 @@ class PayrollSourceController(private val service: PayrollSourceService) {
 
     @PostMapping("/v1/payroll/sources/{recordId}/decisions")
     fun decide(servletRequest: HttpServletRequest, @PathVariable recordId: String,
+        @AuthenticationPrincipal jwt: Jwt, @RequestHeader("X-Device-Installation-Id") installationId: UUID,
         @RequestHeader("Idempotency-Key") key: String, @RequestBody request: PayrollSourceDecisionRequestDto): PayrollSourceCommandDto {
         IdempotencyKeyContract.requireMatches(key, PayrollSourcePolicy.uuid(request.operationId))
+        sessions.requireRecentReauthentication(sessions.requireCurrentAccess(jwt, installationId))
         return service.decide(actor(servletRequest), PayrollSourcePolicy.uuid(recordId), request,
             HiltechRequestContext.current(servletRequest).correlationId)
     }

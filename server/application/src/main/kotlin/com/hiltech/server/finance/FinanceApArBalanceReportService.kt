@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.ProductApiException
@@ -39,11 +42,12 @@ data class FinanceApArBalanceReport(
  * an exception, NOT a negative liability or evidence of refunded funds.
  */
 @Service
-class FinanceApArBalanceReportService(
+class FinanceApArBalanceReportService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val approvals:ApprovalPersistencePort,
     private val environment:Environment,
     private val clock:Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     @Transactional(readOnly=true)
     fun read(
@@ -55,18 +59,10 @@ class FinanceApArBalanceReportService(
             "hiltech.finance.ap-ar-balances.enabled",
             Boolean::class.java,false,
         )
-        val key=environment.getProperty(
-            "hiltech.finance.ap-ar-balances.reader-authority-key","",
-        ).trim()
-        if(!enabled || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key))
-            unavailable()
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now))unavailable()
-        val reviewer=approvals.resolveCurrentAuthority(org,key,now)
-            ?: unavailable()
-        if(reviewer.organizationId!=org ||
-            !approvals.actorMatchesAuthority(actor,reviewer,now))
-            unavailable()
+        if (!enabled) unavailable()
+        val property = "hiltech.finance.ap-ar-balances.reader-authority-key"
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, property,
+            environment.getProperty(property), clock.instant()) ?: unavailable()
         val rows=jdbc.query(
             """
             SELECT source_kind,journal_id,counterparty_id,currency,

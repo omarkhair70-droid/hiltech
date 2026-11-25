@@ -40,6 +40,7 @@ import com.hiltech.shared.core.design.HiltechStateTag
 import com.hiltech.shared.core.design.HiltechStateTone
 import com.hiltech.shared.core.design.hiltechDateText
 import com.hiltech.shared.core.design.hiltechText
+import com.hiltech.shared.core.design.LocalHiltechLanguage
 import com.hiltech.shared.core.network.HiltechApiException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -54,6 +55,7 @@ fun FinancePayrollDisbursementWorkspace(
     newOperationId: () -> String,
     onReauthenticate: () -> Unit = {},
 ) = key(sessionScope, organizationId) {
+    val language = LocalHiltechLanguage.current
     val jobs = rememberCoroutineScope()
     var access by remember { mutableStateOf<FinancePayrollCapabilityDto?>(null) }
     var batches by remember { mutableStateOf(emptyList<FinancePayrollBatchDto>()) }
@@ -293,6 +295,13 @@ fun FinancePayrollDisbursementWorkspace(
                                 }
                                 if (p.state == "STALE") Text(hiltechText("تغير المصدر أو المراجع. أعد المطابقة من الحالة الحالية.",
                                     "The source or reviewer changed. Prepare a new match from the current state."))
+                                if (p.canCloseStale) OutlinedButton(enabled = enabled, onClick = {
+                                    val op = newOperationId()
+                                    prepare(FinancePayrollIntent(op, organizationId, "REVIEW_RESULT", p.proposalId, p.employeeName,
+                                        review = FinancePayrollReviewResultDto(op, "CLOSE_STALE")),
+                                        language.text("إغلاق طلب المطابقة القديم بعد تغير مصدره. يبقى الطلب في السجل ولا تُسجل نتيجة صرف.",
+                                            "Close this outdated match after its source changed. Its history stays available and no payment result is recorded."))
+                                }) { Text(hiltechText("إغلاق طلب المطابقة القديم", "Close outdated match request")) }
                                 HorizontalDivider()
                             }
                         }
@@ -380,6 +389,7 @@ private fun financePayrollStatus(status: String): String = when (status) {
     "APPROVED" -> hiltechText("معتمد · جاهز للتسجيل", "Approved · ready to record")
     "REJECTED" -> hiltechText("مرفوض", "Rejected")
     "STALE" -> hiltechText("يحتاج تحديث المصدر", "Source needs refreshing")
+    "SUPERSEDED" -> hiltechText("أُغلق بعد تغير المصدر", "Closed after source changed")
     "PAYMENT_NOT_RECORDED" -> hiltechText("لم تسجل نتيجة صرف", "Payment result not recorded")
     else -> hiltechText("يحتاج مراجعة مالية", "Finance review required")
 }

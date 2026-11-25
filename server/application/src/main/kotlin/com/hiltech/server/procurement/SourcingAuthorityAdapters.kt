@@ -1,5 +1,8 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
@@ -20,20 +23,17 @@ class CurrentBuyerSourcingAuthority @Autowired constructor(
     private val clock: Clock,
     @Value("\${hiltech.procurement.sourcing.enabled:false}")
     private val enabled: Boolean = false,
-    @Value("\${hiltech.procurement.sourcing.buyer-authority-key:}")
+    @Value("\${hiltech.procurement.sourcing.buyer-authority-key:PROCUREMENT_BUYER}")
     private val buyerAuthorityKey: String = "",
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) : SupplierSourcingAuthorizationPort {
     override fun canManageSourcing(actor: UUID, organizationId: UUID): Boolean =
         currentAuthority(actor, organizationId, buyerAuthorityKey)
 
     private fun currentAuthority(actor: UUID, org: UUID, rawKey: String): Boolean {
-        val key = rawKey.trim()
-        if (!enabled || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) return false
-        val at = clock.instant()
-        if (!approvals.isActiveOrganizationMember(org, actor, at)) return false
-        val binding = approvals.resolveCurrentAuthority(org, key, at) ?: return false
-        return binding.organizationId == org && binding.authorityKey == key &&
-            approvals.actorMatchesAuthority(actor, binding, at)
+        if (!enabled) return false
+        return currentOperationalAuthority(operationalAuthority, approvals, actor, org,
+            "hiltech.procurement.sourcing.buyer-authority-key", rawKey, clock.instant()) != null
     }
 }
 
@@ -49,18 +49,15 @@ class CurrentQuoteTechnicalReviewAuthority @Autowired constructor(
     private val clock: Clock,
     @Value("\${hiltech.procurement.sourcing.enabled:false}")
     private val enabled: Boolean = false,
-    @Value("\${hiltech.procurement.sourcing.technical-review-authority-key:}")
+    @Value("\${hiltech.procurement.sourcing.technical-review-authority-key:PROCUREMENT_TECHNICAL_REVIEW}")
     private val technicalAuthorityKey: String = "",
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) : SupplierQuoteTechnicalReviewerAuthorizationPort {
     override fun canReviewQuote(actor: UUID, organizationId: UUID, rfqId: UUID): Boolean {
-        val key = technicalAuthorityKey.trim()
-        if (!enabled || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) return false
+        if (!enabled) return false
         val rfq = sourcing.rfq(rfqId) ?: return false
         if (rfq.organizationId != organizationId) return false
-        val at = clock.instant()
-        if (!approvals.isActiveOrganizationMember(organizationId, actor, at)) return false
-        val binding = approvals.resolveCurrentAuthority(organizationId, key, at) ?: return false
-        return binding.organizationId == organizationId && binding.authorityKey == key &&
-            approvals.actorMatchesAuthority(actor, binding, at)
+        return currentOperationalAuthority(operationalAuthority, approvals, actor, organizationId,
+            "hiltech.procurement.sourcing.technical-review-authority-key", technicalAuthorityKey, clock.instant()) != null
     }
 }

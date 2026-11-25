@@ -123,6 +123,29 @@ class CompanyResponsibilitiesApiClientTest {
         assertTrue(result.rejectionConfirmed)
     }
 
+    @Test
+    fun expandedOperatingRolesHaveNamedAreasAndNeverIncludeApprovalAuthorities() {
+        assertEquals(39, employeeCompanyResponsibilityKeys.size)
+        assertTrue(employeeCompanyResponsibilityKeys.all { companyResponsibilityCategory(it) != "OTHER" })
+        assertEquals("FINANCE_BANK", companyResponsibilityCategory("FINANCE_BANK_STATEMENT_IMPORT"))
+        assertEquals("PROCUREMENT", companyResponsibilityCategory("PROCUREMENT_ORDER_ISSUE"))
+        assertFalse("OWNER_FINAL" in employeeCompanyResponsibilityKeys)
+        assertFalse("PROCUREMENT_PO_REVIEWER" in employeeCompanyResponsibilityKeys)
+    }
+
+    @Test
+    fun endingReceiptRetainsExplicitRemainingSourceAccess() = runBlocking {
+        val http = HttpClient(MockEngine {
+            respond(receipt(resultCode = "COMPANY_RESPONSIBILITY_ENDED")
+                .replace("\"current\":true", "\"current\":false,\"effectiveAccessRemaining\":true"),
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val result = client(http).apply(intent().copy(action = "END", bindingId = binding, baseBindingVersion = 1), installation)
+        assertFalse(result.current)
+        assertTrue(result.effectiveAccessRemaining)
+        http.close()
+    }
+
     private fun intent() = EmployeeCompanyResponsibilityIntent(operation, employee, organization, 3, identity,
         "PEOPLE_ADMIN", "Synthetic employee", "GRANT")
     private fun client(http: HttpClient) = CompanyResponsibilitiesApiClient(HiltechApiClient(http, "https://example.invalid",

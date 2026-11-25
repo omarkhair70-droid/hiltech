@@ -83,7 +83,7 @@ class PurchaseOrderCandidateApprovalRequestTest {
     @Test fun unknownPolicyNeverGetsInventedOrGrantsApproval() {
         allow()
         assertEquals("PROCUREMENT_APPROVAL_POLICY_NOT_CONFIGURED", assertThrows<ProductApiException> {
-            service(policy = "").request(ctx, candidateId, request)
+            service(policy = "invalid policy!").request(ctx, candidateId, request)
         }.code)
     }
 
@@ -100,7 +100,7 @@ class PurchaseOrderCandidateApprovalRequestTest {
         }.code)
     }
 
-    @Test fun flagsDefaultOffAndApprovalNotRequested() {
+    @Test fun explicitIncidentOverridesKeepApprovalUnavailable() {
         allow()
         assertEquals("PROCUREMENT_APPROVAL_REQUEST_UNAVAILABLE", assertThrows<ProductApiException> {
             service(requestsEnabled = false).request(ctx, candidateId, request)

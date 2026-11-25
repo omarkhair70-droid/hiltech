@@ -1,5 +1,8 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
@@ -89,10 +92,11 @@ class ServiceDeliveryInvoiceService @org.springframework.beans.factory.annotatio
     private val acceptanceEnabled:Boolean=false,
     @Value("\${hiltech.procurement.service-invoices.enabled:false}")
     private val invoiceEnabled:Boolean=false,
-    @Value("\${hiltech.procurement.service-acceptance.authority-key:}")
+    @Value("\${hiltech.procurement.service-acceptance.authority-key:PROCUREMENT_SERVICE_ACCEPT}")
     private val reviewerKey:String="",
-    @Value("\${hiltech.procurement.service-invoices.finance-authority-key:}")
+    @Value("\${hiltech.procurement.service-invoices.finance-authority-key:FINANCE_SUPPLIER_REVIEW}")
     private val financeKey:String="",
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     private data class Order(
         val id:UUID,val org:UUID,val supplier:UUID,val quote:UUID,
@@ -455,26 +459,24 @@ class ServiceDeliveryInvoiceService @org.springframework.beans.factory.annotatio
            t.documentKind!=kind || !documentTarget.canAccess(actor,t))hidden()
     }
     private fun configured(kind:String) {
-        val (flag,key)=when(kind) {
-            "DELIVERY" -> acceptanceEnabled to reviewerKey.trim()
-            "INVOICE" -> invoiceEnabled to financeKey.trim()
+        val flag=when(kind) {
+            "DELIVERY" -> acceptanceEnabled
+            "INVOICE" -> invoiceEnabled
             else -> invalid()
         }
-        if(!orderEnabled || !flag || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) hidden()
+        if(!orderEnabled || !flag) hidden()
     }
     private fun requireAuthority(actor:UUID,org:UUID,kind:String) {
-        val (flag,key)=when(kind) {
-            "DELIVERY" -> acceptanceEnabled to reviewerKey.trim()
-            "INVOICE" -> invoiceEnabled to financeKey.trim()
+        val (flag,property,key)=when(kind) {
+            "DELIVERY" -> Triple(acceptanceEnabled,
+                "hiltech.procurement.service-acceptance.authority-key", reviewerKey)
+            "INVOICE" -> Triple(invoiceEnabled,
+                "hiltech.procurement.service-invoices.finance-authority-key", financeKey)
             else -> invalid()
         }
-        if(!orderEnabled || !flag ||
-           !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key))hidden()
-        val at=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,at))hidden()
-        val binding=approvals.resolveCurrentAuthority(org,key,at)?:hidden()
-        if(binding.organizationId!=org || binding.authorityKey!=key ||
-           !approvals.actorMatchesAuthority(actor,binding,at))hidden()
+        if(!orderEnabled || !flag)hidden()
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org,
+            property, key, clock.instant()) ?: hidden()
     }
     private fun money(raw:String):BigDecimal {
         if(!Regex("^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$").matches(raw))invalid()

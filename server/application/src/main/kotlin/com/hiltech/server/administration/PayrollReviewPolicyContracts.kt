@@ -6,7 +6,8 @@ import java.util.UUID
 /** Fixed workflow catalog: API callers cannot supply policy modes, authority keys, or source SQL. */
 enum class CompanyReviewWorkflow(
     val policyKey: String, val authorityKey: String, val subjectType: String,
-    val reviewerTable: String, val reviewerKeyColumn: String, val reviewerFromColumn: String, val reviewerToColumn: String,
+    val reviewerTable: String? = null, val reviewerKeyColumn: String? = null,
+    val reviewerFromColumn: String? = null, val reviewerToColumn: String? = null,
 ) {
     PAYROLL_SOURCE("PAYROLL_SOURCE_REVIEW", "PAYROLL_SOURCE_REVIEWER", "PAYROLL_SOURCE_RECORD",
         "payroll_authority_binding", "capability", "valid_from", "valid_until"),
@@ -14,6 +15,9 @@ enum class CompanyReviewWorkflow(
         "finance_payroll_authority_binding", "authority_key", "effective_from", "effective_to"),
     PAYROLL_RUN("PAYROLL_RUN_REVIEW", "PAYROLL_RUN_REVIEWER", "PAYROLL_RUN_VERSION",
         "payroll_authority_binding", "capability", "valid_from", "valid_until"),
+    PROCUREMENT_PO("PROCUREMENT_PO_REVIEW", "PROCUREMENT_PO_REVIEWER", "PROCUREMENT_PO_CANDIDATE"),
+    SERVICE_HANDOVER("SERVICE_HANDOVER_REVIEW", "SERVICE_HANDOVER_REVIEWER", "SERVICE_HANDOVER_ACTION"),
+    SERVICE_WARRANTY("SERVICE_WARRANTY_REVIEW", "SERVICE_WARRANTY_REVIEWER", "SERVICE_WARRANTY_ACTION"),
 }
 
 interface CompanyReviewCandidateAuthorityPort {
@@ -30,7 +34,9 @@ data class PayrollReviewerBindingRecord(
 )
 data class PayrollReviewSetupRecord(
     val policy: PayrollReviewPolicyRecord?, val reviewer: PayrollReviewerBindingRecord?, val pendingReviews: Int,
+    val pendingPolicies: List<CompanyPendingReviewPolicy> = emptyList(),
 )
+data class CompanyPendingReviewPolicy(val policyId: String, val policyRevision: Int, val policyVersion: Long, val pendingReviews: Int)
 data class PayrollReviewerCandidate(
     val employeeId: UUID, val identityId: UUID, val employeeVersion: Long, val displayName: String, val employeeCode: String,
 )
@@ -52,6 +58,7 @@ data class PayrollReviewSetupResponse(
     val bindingId: String?, val bindingVersion: Long?, val reviewerPrincipalType: String?, val reviewerDisplayName: String?,
     val reviewerEmployeeId: String?, val pendingReviews: Int, val asOf: String, val workflow: String,
     val canConfigure: Boolean = true,
+    val pendingPolicies: List<CompanyPendingReviewPolicy> = emptyList(),
 )
 data class PayrollReviewerCandidateResponse(
     val employeeId: String, val identityId: String, val employeeVersion: Long, val displayName: String, val employeeCode: String,
@@ -62,6 +69,8 @@ data class ConfigurePayrollReviewPolicyCommand(
     val baseEmployeeVersion: Long, val expectedPolicyId: UUID?, val expectedPolicyVersion: Long?,
     val expectedBindingId: UUID?, val expectedBindingVersion: Long?, val actorUserId: UUID, val correlationId: String,
     val workflow: CompanyReviewWorkflow,
+    val pendingPoliciesToSupersede: List<CompanyPendingReviewPolicy> = emptyList(),
+    val supersedeReason: String? = null,
 )
 data class ConfigurePayrollReviewPolicyResponse(
     val operationId: String, val organizationId: String, val policyId: String, val policyRevision: Int,

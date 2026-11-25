@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.ProductApiException
@@ -35,11 +38,12 @@ data class FinanceAccountingChoices(
  * No new role, status mutation, GL posting or cross-company visibility.
  */
 @Service
-class FinanceAccountingChoicesService(
+class FinanceAccountingChoicesService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val approvals:ApprovalPersistencePort,
     private val environment:Environment,
     private val clock:Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     fun choices(actor:UUID,org:UUID,kind:String):FinanceAccountingChoices {
         val enabled=when(kind) {
@@ -53,13 +57,9 @@ class FinanceAccountingChoicesService(
             else -> unavailable()
         }
         if(!environment.getProperty(enabled,Boolean::class.java,false))unavailable()
-        val authorityKey=environment.getProperty(authorityKeyName,"").trim()
-        if(!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(authorityKey))unavailable()
         val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now))unavailable()
-        val binding=approvals.resolveCurrentAuthority(org,authorityKey,now) ?:unavailable()
-        if(binding.organizationId!=org || binding.authorityKey!=authorityKey ||
-            !approvals.actorMatchesAuthority(actor,binding,now))unavailable()
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, authorityKeyName,
+            environment.getProperty(authorityKeyName), now) ?: unavailable()
 
         val today=LocalDate.ofInstant(now,ZoneOffset.UTC)
         val accounts=jdbc.query(

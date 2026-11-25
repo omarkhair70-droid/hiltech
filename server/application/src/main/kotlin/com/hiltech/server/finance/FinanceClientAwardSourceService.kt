@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.ProductApiException
@@ -63,11 +66,12 @@ data class FinanceClientAwardSourcePage(
 )
 
 @Service
-class FinanceClientAwardSourceService(
+class FinanceClientAwardSourceService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val approvals: ApprovalPersistencePort,
     private val environment: Environment,
     private val clock: Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     fun list(actor: UUID, organizationId: UUID): FinanceClientAwardSourcePage {
         requireFinance(actor, organizationId)
@@ -181,19 +185,10 @@ class FinanceClientAwardSourceService(
         ) == true
 
     private fun requireFinance(actor: UUID, org: UUID) {
-        val key = environment.getProperty(
-            "hiltech.finance.receivables.sales-award-source-review-authority-key", "",
-        ).trim()
-        if (!environment.getProperty(
-                "hiltech.finance.receivables.sales-award-source-readiness.enabled",
-                Boolean::class.java, false,
-            ) || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) unavailable()
-        val now = clock.instant()
-        if (!approvals.isActiveOrganizationMember(org, actor, now)) unavailable()
-        val authority = approvals.resolveCurrentAuthority(org, key, now)
-            ?: unavailable()
-        if (authority.organizationId != org || authority.authorityKey != key ||
-            !approvals.actorMatchesAuthority(actor, authority, now)) unavailable()
+        if (!environment.getProperty("hiltech.finance.receivables.sales-award-source-readiness.enabled", Boolean::class.java, false)) unavailable()
+        val property = "hiltech.finance.receivables.sales-award-source-review-authority-key"
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, property,
+            environment.getProperty(property), clock.instant()) ?: unavailable()
     }
 
     private fun unavailable(): Nothing = throw ProductApiException(

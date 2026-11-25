@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.documents.FinanceExpenseReceiptEvidenceTarget
 import com.hiltech.server.documents.FinanceExpenseReceiptEvidenceTargetPort
@@ -12,11 +15,12 @@ import java.util.UUID
 
 /** Existing Finance draft, People and Approval sources; no shadow ACL table. */
 @Component
-class JdbcFinanceExpenseReceiptEvidenceTarget(
+class JdbcFinanceExpenseReceiptEvidenceTarget @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val approvals: ApprovalPersistencePort,
     private val clock: Clock,
     private val environment: Environment,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) : FinanceExpenseReceiptEvidenceTargetPort {
     override fun loadTarget(expenseDraftId: UUID): FinanceExpenseReceiptEvidenceTarget? =
         jdbc.query(
@@ -43,18 +47,12 @@ class JdbcFinanceExpenseReceiptEvidenceTarget(
     override fun canAccess(actor: UUID, target: FinanceExpenseReceiptEvidenceTarget): Boolean {
         if (!enabled() || !currentMember(actor, target.organizationId)) return false
         if (actor == target.createdByUserId && currentEmployeeOwner(actor, target)) return true
-        val key = environment.getProperty(
-            "hiltech.finance.employee-review.authority-key", "",
-        ).trim()
         if (!environment.getProperty(
                 "hiltech.finance.employee-review.enabled", Boolean::class.java, false,
-            ) || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) return false
-        val now = clock.instant()
-        val authority = approvals.resolveCurrentAuthority(target.organizationId, key, now)
-            ?: return false
-        return authority.organizationId == target.organizationId &&
-            authority.authorityKey == key &&
-            approvals.actorMatchesAuthority(actor, authority, now)
+            )) return false
+        val property = "hiltech.finance.employee-review.authority-key"
+        return currentOperationalAuthority(operationalAuthority, approvals, actor, target.organizationId, property,
+            environment.getProperty(property), clock.instant()) != null
     }
 
     private fun currentMember(actor: UUID, org: UUID): Boolean =

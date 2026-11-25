@@ -1,5 +1,6 @@
 package com.hiltech.shared.core.procurement
 
+import com.hiltech.shared.core.administration.PurchaseOrderNumberingDto
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
@@ -35,6 +36,13 @@ data class IssuePurchaseOrderDto(
     val operationId: String,
     val expectedCandidateVersion: Long,
     val deliveryStorageLocationId: String,
+)
+
+@Serializable
+data class PurchaseOrderIssueIntent(
+    val operationId: String, val organizationId: String, val candidateId: String,
+    val deliveryStorageLocationId: String, val destinationName: String, val supplierName: String,
+    val expectedCandidateVersion: Long = 1,
 )
 
 @Serializable
@@ -91,6 +99,22 @@ class PurchaseOrderIssueApiClient(
     private val api: HiltechApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
 ) {
+    suspend fun numbering(organizationId: String, installationId: String): PurchaseOrderNumberingDto = api.request(
+        HttpMethod.Get, "/v1/procurement/organizations/" + uuid(organizationId) + "/po-numbering",
+        HiltechRequestOptions(installationId), decode = { json.decodeFromString(PurchaseOrderNumberingDto.serializer(), it) },
+    ).also { require(it.organizationId == organizationId && it.version >= 0 &&
+        it.source in setOf("COMPANY", "DEPLOYMENT", "NOT_CONFIGURED") && (!it.ready || it.exampleCode != null)) }
+
+    suspend fun issue(intent: PurchaseOrderIssueIntent, installationId: String,
+        onCommandSending: () -> Unit = {}): PurchaseOrderIssueReceiptDto {
+        uuid(intent.organizationId); uuid(intent.candidateId); uuid(intent.operationId); uuid(intent.deliveryStorageLocationId)
+        require(intent.expectedCandidateVersion == 1L)
+        onCommandSending()
+        return issue(intent.candidateId, IssuePurchaseOrderDto(intent.operationId, intent.expectedCandidateVersion, intent.deliveryStorageLocationId), installationId)
+            .also { require(it.candidateId == intent.candidateId && it.state == "ISSUED" && it.code.isNotBlank() && it.serial > 0 &&
+                it.supplierDispatchState == "NOT_SENT" && !it.supplierNotified && !it.paymentAuthorized && !it.stockReceived) }
+    }
+
     suspend fun queue(organizationId: String, installationId: String):
         List<PurchaseOrderIssuerQueueItemDto> = api.request(
         method = HttpMethod.Get,

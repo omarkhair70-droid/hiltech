@@ -54,10 +54,11 @@ class PayrollSourcePostgresContractTest {
         jdbc.update("INSERT INTO person(id,display_name,created_at,updated_at) VALUES(?,'Synthetic source employee',?,?)", person, at, at)
         jdbc.update("INSERT INTO employee(id,organization_id,person_id,employee_code,state,hire_date,created_at,updated_at) VALUES(?,?,?,'SOURCE_1','ACTIVE','2026-01-01',?,?)", employee, org, person, at, at)
         jdbc.update("INSERT INTO employment(id,employee_id,start_date,state,created_at,updated_at) VALUES(?,?,'2026-01-01','ACTIVE',?,?)", employment, employee, at, at)
+        var reviewAuthorityCurrent = true
         val authority = object : Payroll9aAuthorityPort {
             override fun canRead(actorId: UUID, organizationId: UUID) = organizationId == org && actorId in setOf(preparer, reviewer)
             override fun canPrepare(actorId: UUID, organizationId: UUID) = organizationId == org && actorId == preparer
-            override fun canReview(actorId: UUID, organizationId: UUID) = organizationId == org && actorId in setOf(preparer, reviewer)
+            override fun canReview(actorId: UUID, organizationId: UUID) = organizationId == org && actorId in setOf(preparer, reviewer) && reviewAuthorityCurrent
         }
         val audit = JdbcAuditEventWriter(jdbc)
         val periods = Payroll9aService(jdbc, authority, audit, clock)
@@ -67,12 +68,14 @@ class PayrollSourcePostgresContractTest {
         tx.execute { periods.captureInputs(preparer, periodId, "source-test") }
         val repository = PayrollSourceRepository(jdbc, clock)
         val guard = PayrollSourceApprovalVersionSource(jdbc)
-        val engine = ApprovalEngineService(JdbcApprovalPersistence(jdbc),
+        val approvalPersistence = JdbcApprovalPersistence(jdbc)
+        val engine = ApprovalEngineService(approvalPersistence,
             JdbcIdempotentCommandExecutor(jdbc, manager, clock, HiltechTelemetryRuntime(OpenTelemetry.noop()) {}),
             AuthorizationProjectionIntentWriter {}, object : ApprovalAuthorizationPort {
                 override fun canDecide(actorUserId: UUID, approvalRequestId: UUID, assignmentPrincipalType: ApprovalPrincipalType, assignmentPrincipalId: UUID) =
                     actorUserId == reviewer && assignmentPrincipalType == ApprovalPrincipalType.USER && assignmentPrincipalId == reviewer
-            }, FailClosedApprovalSubjectVersionGuard(listOf(guard)), audit, ApplicationEventPublisher {}, clock)
+            }, FailClosedApprovalSubjectVersionGuard(listOf(guard)), audit, ApplicationEventPublisher {}, clock,
+            decisionConstraints = listOf(PayrollReviewDecisionConstraint(jdbc, authority, approvalPersistence, PayrollRunPolicyConfiguration(""), clock)))
         val adapter = ApprovedPayrollSourceAdapter(repository, guard)
         val ports = StaticListableBeanFactory(mapOf("recorded" to adapter))
         val assembler = PayrollVerifiedInputAssembler(
@@ -104,6 +107,13 @@ class PayrollSourcePostgresContractTest {
             val id = UUID.fromString(record.recordId)
             tx.execute { source.requestApproval(preparer, id, UUID.randomUUID(), "source-test") }
             assertThrows<ProductApiException> { tx.execute { source.decide(preparer, id, PayrollSourceDecisionRequestDto(UUID.randomUUID().toString(), "APPROVE"), "source-test") } }
+            val requestId = jdbc.queryForObject("SELECT id FROM approval_request WHERE subject_id=? AND subject_type='PAYROLL_SOURCE_RECORD'", UUID::class.java, id)!!
+            reviewAuthorityCurrent = false
+            assertEquals("APPROVAL_SOURCE_REVIEW_NOT_ALLOWED", assertThrows<ProductApiException> {
+                tx.execute { engine.decide(reviewer, UUID.randomUUID(), requestId, ApprovalDecisionType.APPROVE, null, "synthetic-generic-revoked-review") }
+            }.code)
+            assertEquals("PENDING", jdbc.queryForObject("SELECT state FROM approval_request WHERE id=?", String::class.java, requestId))
+            reviewAuthorityCurrent = true
             tx.execute { source.decide(reviewer, id, PayrollSourceDecisionRequestDto(UUID.randomUUID().toString(), "APPROVE"), "source-test") }
         }
         approve(policy.record)

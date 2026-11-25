@@ -6,7 +6,7 @@ import io.ktor.http.HttpMethod
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** Explicit buyer-only S03 preflight: no approval or PO issuance endpoint. */
+/** Source-owned buyer preparation. Review decisions and order issuance retain their own authority. */
 @Serializable
 data class PurchaseOrderCandidatePreviewDto(
     val rfqId: String,
@@ -20,7 +20,13 @@ data class PurchaseOrderCandidatePreviewDto(
     val canPropose: Boolean,
     val purchaseAuthorized: Boolean = false,
     val purchaseOrderIssued: Boolean = false,
+    val existingCandidate: PurchaseCandidateSummaryDto? = null,
+    val canReplace: Boolean = false,
 )
+
+@Serializable
+data class PurchaseCandidateSummaryDto(val candidateId: String, val quoteId: String, val revision: Int,
+    val approvalRequestId: String? = null, val approvalState: String, val reviewComment: String? = null)
 
 @Serializable
 data class ProposePurchaseOrderCandidateDto(
@@ -28,6 +34,8 @@ data class ProposePurchaseOrderCandidateDto(
     val quoteEvidenceId: String,
     val expectedQuoteRevision: Int,
     val rationale: String,
+    val replacesCandidateId: String? = null,
+    val expectedCandidateRevision: Int? = null,
 )
 
 @Serializable
@@ -41,6 +49,7 @@ data class PurchaseOrderCandidateReceiptDto(
     val replayed: Boolean,
     val purchaseAuthorized: Boolean = false,
     val purchaseOrderIssued: Boolean = false,
+    val candidateRevision: Int = 1,
 )
 
 @Serializable
@@ -64,6 +73,7 @@ class PurchaseOrderCandidateApiClient(
     private val api: HiltechApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true; explicitNulls = false },
 ) {
+    internal val commands = PurchaseCandidateCommandSession()
     suspend fun preview(
         rfqId: String,
         quoteId: String,
@@ -74,13 +84,19 @@ class PurchaseOrderCandidateApiClient(
             "/po-candidate-preflight?quoteId=" + uuid(quoteId),
         options = HiltechRequestOptions(installationId = installationId),
         decode = { json.decodeFromString(PurchaseOrderCandidatePreviewDto.serializer(), it) },
-    )
+    ).also { require(it.rfqId == rfqId && it.quoteId == quoteId) }
 
     suspend fun propose(
         rfqId: String,
         request: ProposePurchaseOrderCandidateDto,
         installationId: String,
-    ): PurchaseOrderCandidateReceiptDto = api.request(
+    ): PurchaseOrderCandidateReceiptDto {
+        require(request.rationale.trim().length in 12..1000 && request.rationale.none { it.code < 32 })
+        require(request.expectedQuoteRevision > 0)
+        require((request.replacesCandidateId == null) == (request.expectedCandidateRevision == null))
+        request.replacesCandidateId?.let(::uuid)
+        request.expectedCandidateRevision?.let { require(it > 0) }
+        return api.request(
         method = HttpMethod.Post,
         path = "/v1/sourcing/rfqs/" + uuid(rfqId) + "/po-candidates",
         options = HiltechRequestOptions(
@@ -89,7 +105,9 @@ class PurchaseOrderCandidateApiClient(
         ),
         requestBody = json.encodeToString(ProposePurchaseOrderCandidateDto.serializer(), request),
         decode = { json.decodeFromString(PurchaseOrderCandidateReceiptDto.serializer(), it) },
-    )
+        ).also { require(it.rfqId == rfqId && it.quoteId == request.quoteEvidenceId && it.candidateVersion == 1L &&
+            it.candidateRevision == (request.expectedCandidateRevision ?: 0) + 1 && !it.purchaseAuthorized && !it.purchaseOrderIssued) }
+    }
 
     suspend fun requestApproval(
         candidateId: String,
@@ -104,7 +122,7 @@ class PurchaseOrderCandidateApiClient(
         ),
         requestBody = json.encodeToString(RequestPurchaseCandidateApprovalDto.serializer(), request),
         decode = { json.decodeFromString(PurchaseCandidateApprovalReceiptDto.serializer(), it) },
-    )
+    ).also { require(it.candidateId == candidateId && it.candidateVersion == 1L && !it.purchaseAuthorized && !it.purchaseOrderIssued) }
 
     private fun uuid(id: String): String {
         require(Regex(

@@ -1,6 +1,8 @@
 package com.hiltech.server.finance
 
-import com.hiltech.server.approval.ApprovalAuthorityBindingSnapshot
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalRequestState
@@ -50,7 +52,7 @@ data class FinancePeriodCloseReceipt(
  * Actual status is from the close table, not the base period.state alone.
  */
 @Service
-class FinanceGlPeriodCloseService(
+class FinanceGlPeriodCloseService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val source: FinanceGlPeriodCloseApprovalSubject,
     private val approvals: ApprovalPersistencePort,
@@ -59,6 +61,7 @@ class FinanceGlPeriodCloseService(
     private val audit: AuditEventWriter,
     private val environment: Environment,
     private val clock: Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     fun requestReview(
         actor: UUID, org: UUID, periodId: UUID, operation: UUID,
@@ -271,18 +274,10 @@ class FinanceGlPeriodCloseService(
         periodClosed=closureId!=null,
     )
 
-    private fun requireAuthority(
-        actor: UUID,org: UUID,keyName:String,
-    ):ApprovalAuthorityBindingSnapshot {
+    private fun requireAuthority(actor: UUID, org: UUID, keyName: String) {
         if (!source.enabled()) unavailable()
-        val key=environment.getProperty(keyName,"").trim()
-        if (!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) unavailable()
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now)) unavailable()
-        val binding=approvals.resolveCurrentAuthority(org,key,now) ?: unavailable()
-        if (binding.organizationId!=org || binding.authorityKey!=key ||
-            !approvals.actorMatchesAuthority(actor,binding,now)) unavailable()
-        return binding
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, keyName,
+            environment.getProperty(keyName), clock.instant()) ?: unavailable()
     }
     private fun unavailable():Nothing=throw ProductApiException(
         "FINANCE_GL_PERIOD_CLOSE_UNAUTHORIZED",

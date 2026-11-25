@@ -1,5 +1,9 @@
 package com.hiltech.server.approval
 
+import com.hiltech.server.identity.IdentitySessionService
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.oauth2.jwt.Jwt
+
 import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.IdempotencyKeyContract
 import com.hiltech.server.platform.ProductApiException
@@ -485,6 +489,7 @@ class ApprovalController(
         ApprovalReadService,
     private val engine:
         ApprovalEngineService,
+    private val sessions: IdentitySessionService,
 ) {
     @GetMapping("/assigned")
     fun assigned(
@@ -545,6 +550,8 @@ class ApprovalController(
     fun decide(
         requestContext:
             HttpServletRequest,
+        @AuthenticationPrincipal jwt: Jwt,
+        @RequestHeader("X-Device-Installation-Id") installationId: UUID,
         @PathVariable
         approvalRequestId: String,
         @RequestHeader(
@@ -574,6 +581,8 @@ class ApprovalController(
                 operationId =
                     operationId,
             )
+
+        sessions.requireRecentReauthentication(sessions.requireCurrentAccess(jwt, installationId))
 
         val result =
             engine.decide(

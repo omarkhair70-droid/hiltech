@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
@@ -61,7 +64,7 @@ private data class SupplierSource(
  * Accounting approval, legal booking, payment and bank integration remain absent.
  */
 @Service
-class FinancePayableCandidateService(
+class FinancePayableCandidateService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val approval: ApprovalPersistencePort,
     private val purchases: PurchaseOrderIssuePersistence,
@@ -70,6 +73,7 @@ class FinancePayableCandidateService(
     private val audit: AuditEventWriter,
     private val clock: Clock,
     private val environment: Environment,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     fun handoffs(actor: UUID, org: UUID): List<SupplierHandoffFinanceView> {
         requireFinance(actor, org)
@@ -248,20 +252,14 @@ class FinancePayableCandidateService(
     }
 
     private fun configured() {
-        if (!environment.getProperty("hiltech.finance.payable-candidates.enabled", Boolean::class.java, false) ||
-            !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(
-                environment.getProperty("hiltech.finance.payables.review-authority-key", "").trim(),
-            )) unavailable()
+        if (!environment.getProperty("hiltech.finance.payable-candidates.enabled", Boolean::class.java, false)) unavailable()
     }
 
     private fun requireFinance(actor: UUID, org: UUID) {
-        configured()
-        val key = environment.getProperty("hiltech.finance.payables.review-authority-key", "").trim()
-        val now = clock.instant()
-        if (!approval.isActiveOrganizationMember(org, actor, now)) unavailable()
-        val authority = approval.resolveCurrentAuthority(org, key, now) ?: unavailable()
-        if (authority.organizationId != org || authority.authorityKey != key ||
-            !approval.actorMatchesAuthority(actor, authority, now)) unavailable()
+        if (!environment.getProperty("hiltech.finance.payable-candidates.enabled", Boolean::class.java, false)) unavailable()
+        val property = "hiltech.finance.payables.review-authority-key"
+        currentOperationalAuthority(operationalAuthority, approval, actor, org, property,
+            environment.getProperty(property), clock.instant()) ?: unavailable()
     }
 
     private fun hash(vararg values: Any) = MessageDigest.getInstance("SHA-256")

@@ -44,7 +44,7 @@ class PurchaseOrderCandidateApprovalSubject @Autowired constructor(
             return false
         val candidate = candidates.byId(subject.subjectId) ?: return false
         if (candidate.id != subject.subjectId ||
-            candidate.organizationId != subject.organizationId
+            candidate.organizationId != subject.organizationId || candidates.byRfq(candidate.rfqId)?.id != candidate.id
         ) return false
         val rfq = sourcing.rfq(candidate.rfqId) ?: return false
         if (rfq.organizationId != subject.organizationId ||

@@ -34,6 +34,7 @@ data class FinancePayrollProposalDto(
     val bankReference: String? = null, val bookedOn: String? = null, val bankName: String? = null,
     val evidenceId: String, val canReview: Boolean,
     val canOpenEvidence: Boolean = false, val evidenceViewed: Boolean = false,
+    val canCloseStale: Boolean = false,
 )
 @Serializable
 data class FinancePayrollEvidenceDocumentDto(
@@ -108,9 +109,9 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
             }
             "REVIEW_RESULT" -> {
                 val review = requireNotNull(intent.review)
-                require(sameId(intent.operationId, review.operationId) && review.decision in setOf("APPROVE", "REJECT"))
+                require(sameId(intent.operationId, review.operationId) && review.decision in setOf("APPROVE", "REJECT", "CLOSE_STALE"))
                 Triple("/result-proposals/${uuid(intent.targetId)}/review", json.encodeToString(FinancePayrollReviewResultDto.serializer(), review),
-                    if (review.decision == "APPROVE") "RECORDED" else "REJECTED")
+                    when (review.decision) { "APPROVE" -> "RECORDED"; "CLOSE_STALE" -> "SUPERSEDED"; else -> "REJECTED" })
             }
             else -> error("Unknown Finance payroll command")
         }
@@ -134,6 +135,7 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
 data class FinancePayrollFailureDisposition(val unknown: Boolean, val rejected: Boolean)
 fun financePayrollFailureDisposition(previouslyUnknown: Boolean, failure: Throwable): FinancePayrollFailureDisposition {
     val api = failure as? HiltechApiException
+    if (api?.code in setOf("REAUTH_REQUIRED", "UNAUTHENTICATED")) return FinancePayrollFailureDisposition(previouslyUnknown, false)
     val rejected = api != null && api.httpStatus?.let { it in 400..499 } == true && api.envelope?.code == api.code &&
         !api.retryable && api.code != "IDEMPOTENCY_KEY_REUSED"
     val terminal = rejected && api?.httpStatus == 409 && api.code == "OPERATION_PREVIOUSLY_FAILED"

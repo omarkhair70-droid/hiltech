@@ -1,5 +1,8 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
@@ -108,8 +111,9 @@ class SupplierInvoiceMatchingService @Autowired constructor(
     private val clock: Clock,
     @Value("\${hiltech.procurement.supplier-invoices.enabled:false}")
     private val enabled: Boolean = false,
-    @Value("\${hiltech.procurement.invoice.finance-authority-key:}")
+    @Value("\${hiltech.procurement.invoice.finance-authority-key:FINANCE_SUPPLIER_REVIEW}")
     private val financeAuthorityKey: String = "",
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     fun createSlot(
         ctx: ProcurementDraftContext, poId: UUID,
@@ -511,18 +515,12 @@ class SupplierInvoiceMatchingService @Autowired constructor(
 
     private fun requireFinance(actor: UUID, org: UUID) {
         configured()
-        val now = clock.instant()
-        val key = financeAuthorityKey.trim()
-        if (!approval.isActiveOrganizationMember(org, actor, now)) unavailable()
-        val current = approval.resolveCurrentAuthority(org, key, now) ?: unavailable()
-        if (current.organizationId != org || current.authorityKey != key ||
-            !approval.actorMatchesAuthority(actor, current, now)
-        ) unavailable()
+        currentOperationalAuthority(operationalAuthority, approval, actor, org,
+            "hiltech.procurement.invoice.finance-authority-key", financeAuthorityKey, clock.instant()) ?: unavailable()
     }
 
     private fun configured() {
-        if (!enabled || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(financeAuthorityKey.trim()))
-            unavailable()
+        if (!enabled) unavailable()
     }
     private fun decimal(text: String, strictlyPositive: Boolean = false): BigDecimal {
         val value = runCatching { BigDecimal(text) }.getOrElse { invalid() }

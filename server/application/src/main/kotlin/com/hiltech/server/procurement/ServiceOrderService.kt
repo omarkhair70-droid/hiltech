@@ -1,5 +1,10 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityOrigin
+import com.hiltech.server.operationalaccess.OperationalAuthorityProof
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -63,12 +68,13 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
     private val enabled:Boolean=false,
     @Value("\${hiltech.procurement.service-sourcing.enabled:false}")
     private val sourcingEnabled:Boolean=false,
-    @Value("\${hiltech.procurement.service-orders.buyer-authority-key:}")
+    @Value("\${hiltech.procurement.service-orders.buyer-authority-key:PROCUREMENT_BUYER}")
     private val buyerKey:String="",
-    @Value("\${hiltech.procurement.service-orders.issuer-authority-key:}")
+    @Value("\${hiltech.procurement.service-orders.issuer-authority-key:PROCUREMENT_ORDER_ISSUE}")
     private val issuerKey:String="",
     @Value("\${hiltech.procurement.service-orders.approval-policy-key:}")
     private val policyKey:String="",
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     private data class Quote(
         val id:UUID,val rfq:UUID,val org:UUID,val supplier:UUID,
@@ -179,12 +185,14 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
                 INSERT INTO procurement_service_order (
                   id,operation_id,organization_id,candidate_id,rfq_id,quote_id,
                   supplier_organization_id,approval_request_id,approval_policy_key,
-                  approval_policy_version,issuer_authority_binding_id,issuer_authority_key,currency,
+                  approval_policy_version,issuer_authority_binding_id,issuer_operational_binding_id,issuer_authority_key,currency,
                   total_amount,issued_by_user_id,issued_at,correlation_id
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """.trimIndent(),
                 id,ctx.operationId,current.org,current.id,current.rfq,current.quote,current.supplier,
-                approval.id,policyKey.trim(),policy.versionNumber,binding,issuerKey.trim(),
+                approval.id,policyKey.trim(),policy.versionNumber,
+                binding.bindingId.takeIf { binding.origin == OperationalAuthorityOrigin.LEGACY_APPROVAL_BINDING },
+                binding.bindingId.takeIf { binding.origin == OperationalAuthorityOrigin.OPERATIONAL }, binding.authorityKey,
                 current.currency,current.amount,ctx.actor,at.atOffset(ZoneOffset.UTC),
                 ctx.correlationId,
             )==1)
@@ -209,8 +217,8 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
     fun view(actor:UUID,id:UUID):ServiceOrderCandidateView {
         activeOrHidden()
         val candidate=candidate(id)?:hidden()
-        if(!authorized(actor,candidate.org,buyerKey) &&
-            !authorized(actor,candidate.org,issuerKey))hidden()
+        if(!authorized(actor,candidate.org,"hiltech.procurement.service-orders.buyer-authority-key",buyerKey) &&
+            !authorized(actor,candidate.org,"hiltech.procurement.service-orders.issuer-authority-key",issuerKey))hidden()
         val request=approvals.loadSubjectApproval(subject(candidate),policyKey.trim())
         val orderId=jdbc.query(
             "SELECT id FROM procurement_service_order WHERE candidate_id=?",
@@ -241,8 +249,8 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
                 rs.getBigDecimal("total_amount").toPlainString(),
                 rs.getString("currency"))},id,
         ).singleOrNull()?:hidden()
-        if(!authorized(actor,row.organizationId,issuerKey) &&
-            !authorized(actor,row.organizationId,buyerKey))hidden()
+        if(!authorized(actor,row.organizationId,"hiltech.procurement.service-orders.issuer-authority-key",issuerKey) &&
+            !authorized(actor,row.organizationId,"hiltech.procurement.service-orders.buyer-authority-key",buyerKey))hidden()
         // Never show hard-coded success flags. Current service acceptance and
         // latest supplier invoice matching are read from their real sources.
         val accepted=jdbc.queryForObject(
@@ -334,32 +342,22 @@ class ServiceOrderService @org.springframework.beans.factory.annotation.Autowire
         candidate.org,"SERVICE_ORDER_CANDIDATE",candidate.id,1L,
     )
     private fun requireBuyer(actor:UUID,org:UUID) {
-        if(!authorized(actor,org,buyerKey))hidden()
+        if(!authorized(actor,org,"hiltech.procurement.service-orders.buyer-authority-key",buyerKey))hidden()
     }
     /** Same existing service issuer, no new supplier messaging role. */
     fun requireIssuerForSupplierCommunication(actor:UUID,org:UUID) {
         requireIssuer(actor,org)
     }
 
-    private fun requireIssuer(actor:UUID,org:UUID):UUID {
+    private fun requireIssuer(actor:UUID,org:UUID):OperationalAuthorityProof {
         if(!enabled || !sourcingEnabled || !validKey(policyKey.trim()))hidden()
-        val key=issuerKey.trim()
-        if(!validKey(key))hidden()
-        val at=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,at))hidden()
-        val binding=approvals.resolveCurrentAuthority(org,key,at)?:hidden()
-        if(binding.organizationId!=org || binding.authorityKey!=key ||
-           !approvals.actorMatchesAuthority(actor,binding,at))hidden()
-        return binding.id
+        return currentOperationalAuthority(operationalAuthority, approvals, actor, org,
+            "hiltech.procurement.service-orders.issuer-authority-key", issuerKey, clock.instant()) ?: hidden()
     }
-    private fun authorized(actor:UUID,org:UUID,rawKey:String):Boolean {
-        val key=rawKey.trim()
-        if(!enabled || !sourcingEnabled || !validKey(key))return false
-        val at=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,at))return false
-        val authority=approvals.resolveCurrentAuthority(org,key,at)?:return false
-        return authority.organizationId==org && authority.authorityKey==key &&
-            approvals.actorMatchesAuthority(actor,authority,at)
+    private fun authorized(actor:UUID,org:UUID,property:String,rawKey:String):Boolean {
+        if(!enabled || !sourcingEnabled)return false
+        return currentOperationalAuthority(operationalAuthority, approvals, actor, org,
+            property, rawKey, clock.instant()) != null
     }
     private fun activeOrHidden() {if(!enabled || !sourcingEnabled)hidden()}
     private fun validKey(s:String)=Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(s)

@@ -1,5 +1,7 @@
 package com.hiltech.server.administration
 
+import com.hiltech.server.companysettings.CompanySettingsAuthorityPort
+
 import com.hiltech.server.people.EmployeeState
 import com.hiltech.server.people.PeopleAuthorizationPort
 import com.hiltech.server.platform.HiltechRequestContext
@@ -94,15 +96,17 @@ data class CompanyAdministrationCapabilitiesResponse(
     val organizationId: String, val canManageResponsibilities: Boolean, val canViewEmployeeResponsibilities: Boolean,
     val canManageApprovalPolicies: Boolean, val managedAuthorityKeys: List<String>, val delegableAuthorityKeys: List<String>,
     val ownPeopleAdministrationStatus: String,
+    val canManageCompanySettings: Boolean = false,
 )
 
 @RestController
-class CompanyAdministrationCapabilitiesController(
+class CompanyAdministrationCapabilitiesController @org.springframework.beans.factory.annotation.Autowired constructor(
     private val authority: ResponsibilityAdministrationAuthorityPort,
     private val policy: OrganizationAdministrationAuthorityPort,
     private val people: PeopleAuthorizationPort,
     private val ownPeople: OwnPeopleAdministrationService,
     private val clock: Clock,
+    private val settings: CompanySettingsAuthorityPort? = null,
 ) {
     @GetMapping("/v1/organizations/{organizationId}/administration/capabilities")
     fun current(request: HttpServletRequest, @PathVariable organizationId: UUID): ResponseEntity<CompanyAdministrationCapabilitiesResponse> {
@@ -114,7 +118,7 @@ class CompanyAdministrationCapabilitiesController(
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(CompanyAdministrationCapabilitiesResponse(
             organizationId.toString(), managed.isNotEmpty(), managed.isNotEmpty() || people.canManagePeople(actor, organizationId),
             policy.canManageApprovalPolicies(actor, organizationId), managed.map { it.name }.sorted(), delegated.map { it.name }.sorted(),
-            ownPeople.availability(actor, organizationId),
+            ownPeople.availability(actor, organizationId), settings?.canManageCompanySettings(actor, organizationId) == true,
         ))
     }
 }

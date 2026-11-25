@@ -48,6 +48,13 @@ receipt. This demonstrates opening the source, not proof of human reading. The
 native viewer keeps the file in the current session and supports reading both
 the bank rows and original text without an external export.
 
+When a pending proposal's source changes, its original reviewer can close the
+outdated request while still holding the current named review assignment and
+Finance responsibility. This calls ApprovalEngine's own `SUPERSEDED` transition;
+it never records a payment, rejection or accounting result. The exact operation
+remains replayable. Replacing a reviewer is governed separately by the bounded
+company policy administration workflow.
+
 The payment-results adapter exposes only these immutable, approved events.
 Unrecorded instructions remain PAYMENT_NOT_RECORDED, missing result service is
 PAYMENT_STATUS_UNAVAILABLE, and zero net is NOT_APPLICABLE. Published self-only

@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -57,7 +60,7 @@ data class FinanceApReversalReceipt(
  * Every command is fail-closed by default, company-scoped and source-versioned.
  */
 @Service
-class FinanceApReversalService(
+class FinanceApReversalService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val subject: FinanceApReversalApprovalSubject,
     private val approvals: ApprovalPersistencePort,
@@ -66,6 +69,7 @@ class FinanceApReversalService(
     private val audit: AuditEventWriter,
     private val environment: Environment,
     private val clock: Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     @Transactional
     fun propose(
@@ -364,15 +368,10 @@ class FinanceApReversalService(
             ) },org,id,
         ).singleOrNull()
 
-    private fun requireAuthority(actor:UUID,org:UUID,keyName:String) {
-        if(!subject.enabled()) unavailable()
-        val key=environment.getProperty(keyName,"").trim()
-        if(!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) unavailable()
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now)) unavailable()
-        val authority=approvals.resolveCurrentAuthority(org,key,now) ?: unavailable()
-        if(authority.organizationId!=org || authority.authorityKey!=key ||
-            !approvals.actorMatchesAuthority(actor,authority,now)) unavailable()
+    private fun requireAuthority(actor: UUID, org: UUID, keyName: String) {
+        if (!subject.enabled()) unavailable()
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, keyName,
+            environment.getProperty(keyName), clock.instant()) ?: unavailable()
     }
     private fun receipt(
         s:FinanceApReversalVerifiedSnapshot,state:String,

@@ -224,6 +224,14 @@ class FinancePayrollDisbursementRepository(private val jdbc: JdbcTemplate) {
             row.getObject("evidence_id", UUID::class.java), false) }, org, run,
     )
 
+    internal fun pendingAssignedReviewer(org: UUID, proposal: UUID, actor: UUID): Boolean = jdbc.queryForObject(
+        """SELECT EXISTS(SELECT 1 FROM approval_request r JOIN approval_step s ON s.approval_request_id=r.id AND s.sequence_number=1
+           JOIN approval_assignment a ON a.approval_request_id=r.id AND a.approval_step_id=s.id
+           WHERE r.organization_id=? AND r.subject_type='FINANCE_PAYROLL_RESULT' AND r.subject_id=? AND r.state='PENDING'
+             AND r.policy_key='FINANCE_PAYROLL_RESULT_REVIEW' AND a.state='ASSIGNED' AND a.principal_type='USER'
+             AND a.principal_user_id=?)""", Boolean::class.java, org, proposal, actor,
+    ) == true
+
     fun expected(org: UUID, run: UUID): List<PayrollExpectedPayment> = jdbc.query(
         "SELECT * FROM finance_payroll_instruction WHERE organization_id=? AND run_version_id=? ORDER BY employee_id",
         { row, _ -> PayrollExpectedPayment(org, run, row.getObject("employee_id", UUID::class.java), row.getObject("id", UUID::class.java),

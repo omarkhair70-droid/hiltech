@@ -1,5 +1,8 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
@@ -77,8 +80,9 @@ class ServiceSupplierSourcingService @org.springframework.beans.factory.annotati
     private val needsEnabled: Boolean = false,
     @Value("\${hiltech.procurement.service-sourcing.enabled:false}")
     private val enabled: Boolean = false,
-    @Value("\${hiltech.procurement.service-sourcing.buyer-authority-key:}")
+    @Value("\${hiltech.procurement.service-sourcing.buyer-authority-key:PROCUREMENT_BUYER}")
     private val buyerKey: String = "",
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     private data class Source(
         val id: UUID, val org: UUID, val team: UUID, val frozenTeamVersion: Long,
@@ -438,13 +442,8 @@ class ServiceSupplierSourcingService @org.springframework.beans.factory.annotati
     }
     private fun requireBuyer(actor:UUID,org:UUID) {
         active()
-        val key=buyerKey.trim()
-        if(!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key))hidden()
-        val at=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,at))hidden()
-        val binding=approvals.resolveCurrentAuthority(org,key,at)?:hidden()
-        if(binding.organizationId!=org || binding.authorityKey!=key ||
-            !approvals.actorMatchesAuthority(actor,binding,at))hidden()
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org,
+            "hiltech.procurement.service-sourcing.buyer-authority-key", buyerKey, clock.instant()) ?: hidden()
     }
     private fun money(raw:String):BigDecimal {
         if(!Regex("^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$").matches(raw)) invalid()

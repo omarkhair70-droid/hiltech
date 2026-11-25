@@ -41,7 +41,7 @@ import com.hiltech.shared.core.executive.executiveNativeWorkspace
 import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
 import com.hiltech.shared.core.payroll.payrollAdminReadNativeWorkspace
 import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
-import com.hiltech.shared.core.service.handoverReadNativeWorkspace
+import com.hiltech.shared.core.service.serviceDeliveryNativeWorkspace
 import com.hiltech.shared.core.service.serviceOperationsReadNativeWorkspace
 import com.hiltech.shared.core.finance.financeEvidenceReadNativeWorkspace
 import com.hiltech.shared.core.finance.financeBankCsvIntakeNativeWorkspace
@@ -284,11 +284,42 @@ class MainActivity : ComponentActivity() {
                 ?: employeeIdentity?.organizations?.firstOrNull()
             val employeeSessionScope = "${employeeIdentity?.identityId}:${employeeIdentity?.identityVersion}:" +
                 "${employeeOrg?.organizationId}:${employeeOrg?.membershipVersion}:$planningSessionEpoch"
+            var companySettingsFocusRequest by remember(employeeSessionScope) { mutableStateOf(0) }
             val employeeDrafts = androidx.compose.runtime.key(employeeSessionScope) {
                 androidx.compose.runtime.saveable.rememberSaveableStateHolder()
             }
             val workspaceApi = remember(employeeSessionScope) {
                 hiltechApplication.productApiForSession { activePlanningSessionScope() == employeeSessionScope }
+            }
+            val sessionOnboarding = remember(workspaceApi) {
+                com.hiltech.shared.core.people.OnboardingApiClient(workspaceApi)
+            }
+            val sessionInbox = remember(workspaceApi) {
+                com.hiltech.shared.core.inbox.InboxApiClient(workspaceApi)
+            }
+            val sessionApprovals = remember(workspaceApi) {
+                com.hiltech.shared.core.approval.ApprovalApiClient(workspaceApi)
+            }
+            val purchaseReviews = remember(workspaceApi) {
+                com.hiltech.shared.core.procurement.PurchaseOrderReviewApiClient(workspaceApi)
+            }
+            val serviceProjects = remember(workspaceApi) {
+                com.hiltech.shared.core.projects.ProjectsApiClient(workspaceApi)
+            }
+            val serviceDelivery = remember(workspaceApi) {
+                com.hiltech.shared.core.service.ServiceDeliveryApiClient(workspaceApi)
+            }
+            val serviceHandover = remember(workspaceApi) {
+                com.hiltech.shared.core.service.HandoverApiClient(workspaceApi)
+            }
+            val serviceReviews = remember(workspaceApi) {
+                com.hiltech.shared.core.service.HandoverReviewApiClient(workspaceApi)
+            }
+            val serviceEvidence = remember(workspaceApi) {
+                hiltechApplication.evidenceApiForSession(workspaceApi)
+            }
+            val stockPurchasing = remember(workspaceApi, serviceEvidence) {
+                com.hiltech.shared.core.procurement.StockPurchasingNativeClients(workspaceApi, serviceEvidence)
             }
             val companyResponsibilities = remember(workspaceApi) {
                 com.hiltech.shared.core.people.CompanyResponsibilitiesApiClient(workspaceApi)
@@ -308,8 +339,12 @@ class MainActivity : ComponentActivity() {
             val payrollRuns = remember(workspaceApi) {
                 com.hiltech.shared.core.payroll.Payroll9b9cApiClient(workspaceApi)
             }
+            val serviceDocuments = androidx.compose.runtime.key(employeeSessionScope) {
+                rememberAndroidSourceDocuments(appLanguage) { activePlanningSessionScope() == employeeSessionScope }
+            }
             HiltechShell(
                 state = shellState,
+                operationalFocusRequest = com.hiltech.shared.core.NativeWorkspaceOpenRequest("company-administration", companySettingsFocusRequest),
                 language = appLanguage,
                 onLanguageChange = { choice ->
                     appLanguage = choice
@@ -318,9 +353,11 @@ class MainActivity : ComponentActivity() {
                 inboxWorkspace = {
                     (shellState as? HiltechShellState.SignedIn)?.let { signed ->
                         InboxWorkspace(
-                            sessionScope = "${signed.identity.identityId}:${signed.identity.identityVersion}",
-                            inbox = hiltechApplication.inboxApi,
-                            approvals = hiltechApplication.approvalApi,
+                            sessionScope = employeeSessionScope,
+                            inbox = sessionInbox,
+                            approvals = sessionApprovals,
+                            purchaseReviews = purchaseReviews,
+                            onReauthenticate = ::startReauthentication,
                             installationId = hiltechApplication.installationId,
                             newOperationId = { UUID.randomUUID().toString() },
                         )
@@ -328,8 +365,10 @@ class MainActivity : ComponentActivity() {
                 },
                 compactNavigation = true,
                 warehouseOperatorAvailable = true,
-                desktopPurchasingAvailable = operationAvailable(ProductOperation.PROCUREMENT_REQUIREMENTS) ||
-                    operationAvailable(ProductOperation.PROCUREMENT_SUPPLIER_INVOICES),
+                desktopPurchasingAvailable = listOf(
+                    ProductOperation.PROCUREMENT_REQUIREMENTS, ProductOperation.PROCUREMENT_SOURCING,
+                    ProductOperation.PROCUREMENT_PO_ISSUE, ProductOperation.PROCUREMENT_SUPPLIER_INVOICES,
+                ).any(::operationAvailable),
                 compactBackRequest = workspaceBackRequest,
                 onCompactNavigationChanged = { canGoBack, inWork ->
                     workspaceBackAvailable = canGoBack
@@ -386,6 +425,7 @@ class MainActivity : ComponentActivity() {
                                 installationId = hiltechApplication.installationId,
                                 newOperationId = { UUID.randomUUID().toString() },
                                 runClient = payrollRuns,
+                                onReauthenticate = ::startReauthentication,
                                 )
                             }
                             add(payrollWorkspace.copy(content = { exit ->
@@ -488,12 +528,19 @@ class MainActivity : ComponentActivity() {
                             ))
                         }
                         if (operationAvailable(ProductOperation.SERVICE_HANDOVER)) {
-                            add(handoverReadNativeWorkspace(
-                                projects = hiltechApplication.readProjectsApi,
-                                handover = hiltechApplication.handoverApi,
+                            add(serviceDeliveryNativeWorkspace(
+                                projects = serviceProjects,
+                                delivery = serviceDelivery,
+                                handover = serviceHandover,
+                                reviews = serviceReviews,
+                                evidence = serviceEvidence,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                pickDocument = { serviceDocuments.pickDocument() },
+                                exportDocument = { name, type, bytes, digest -> serviceDocuments.exportDocument(name, type, bytes, digest) },
+                                onReauthenticate = ::startReauthentication,
                             ))
                         }
                         if (serviceOperationsAvailable()) {
@@ -606,7 +653,7 @@ class MainActivity : ComponentActivity() {
                         EmployeeAccountWorkspace(
                             employee = employee,
                             sessionScope = employeeSessionScope,
-                            client = hiltechApplication.onboardingApi,
+                            client = sessionOnboarding,
                             installationId = hiltechApplication.installationId,
                             newOperationId = { UUID.randomUUID().toString() },
                             onReauthenticate = ::startReauthentication,
@@ -646,7 +693,7 @@ class MainActivity : ComponentActivity() {
                         com.hiltech.shared.core.people.EmployeeOnboardingWorkspace(
                             employee = employee,
                             sessionScope = expectedScope,
-                            client = hiltechApplication.onboardingApi,
+                            client = sessionOnboarding,
                             installationId = hiltechApplication.installationId,
                             newOperationId = { UUID.randomUUID().toString() },
                             isSessionCurrent = sessionCurrent,
@@ -782,6 +829,62 @@ class MainActivity : ComponentActivity() {
                                                 selectedWorkOrderId = selectedWork,
                                                 newOperationId = { UUID.randomUUID().toString() },
                                             )
+                                        }
+                                    }
+                                })
+                            }
+                            if (operationAvailable(ProductOperation.PROCUREMENT_SOURCING)) {
+                                add(NativeOperationArea("sourcing", "الموردون وعروض الأسعار", "مقارنة عروض الموردين وإعداد طلب الشراء") {
+                                    employeeOrg?.let { organization ->
+                                        key(employeeSessionScope, "stock-sourcing") {
+                                            com.hiltech.shared.core.procurement.SupplierSourcingBuyerSection(
+                                                api = stockPurchasing.sourcing,
+                                                organizationId = organization.organizationId,
+                                                installationId = hiltechApplication.installationId,
+                                                newOperationId = { UUID.randomUUID().toString() },
+                                                purchaseCandidateApi = stockPurchasing.candidates.takeIf {
+                                                    operationAvailable(ProductOperation.PROCUREMENT_PO_CANDIDATES)
+                                                },
+                                                purchaseApprovalRequestEnabled = operationAvailable(ProductOperation.PROCUREMENT_APPROVAL_REQUEST),
+                                                quoteDocumentUploader = stockPurchasing.quoteDocuments,
+                                                pickQuoteFile = {
+                                                    serviceDocuments.pickDocument()?.let { file ->
+                                                        com.hiltech.shared.core.procurement.SupplierQuotePickedFile(
+                                                            fileName = file.originalFileName, contentType = file.contentType,
+                                                            sha256 = file.sha256, bytes = file.bytes, capturedAt = file.capturedAt,
+                                                        )
+                                                    }
+                                                },
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                            if (operationAvailable(ProductOperation.PROCUREMENT_PO_ISSUE)) {
+                                add(NativeOperationArea("orders", "أوامر الشراء", "إصدار الطلب المعتمد ومتابعة التسليم والتصحيح") {
+                                    employeeOrg?.let { organization ->
+                                        key(employeeSessionScope, "po-issuer") {
+                                            com.hiltech.shared.core.procurement.PurchaseOrderIssuerSection(
+                                                onOpenCompanySettings = { companySettingsFocusRequest += 1 },
+                                                api = stockPurchasing.issue,
+                                                organizationId = organization.organizationId,
+                                                installationId = hiltechApplication.installationId,
+                                                newOperationId = { UUID.randomUUID().toString() },
+                                                cancellationEnabled = operationAvailable(ProductOperation.PROCUREMENT_PO_CANCELLATION),
+                                                amendmentApi = stockPurchasing.amendments.takeIf {
+                                                    operationAvailable(ProductOperation.PROCUREMENT_PO_DELIVERY_AMENDMENTS)
+                                                },
+                                            )
+                                            if (operationAvailable(ProductOperation.PROCUREMENT_PO_SUPPLIER_COMMUNICATIONS)) {
+                                                com.hiltech.shared.core.procurement.SupplierPoCommunicationSection(
+                                                    issued = stockPurchasing.issue,
+                                                    communications = stockPurchasing.communications,
+                                                    organizationId = organization.organizationId,
+                                                    installationId = hiltechApplication.installationId,
+                                                    newOperationId = { UUID.randomUUID().toString() },
+                                                    currentInstant = { java.time.Instant.now().toString() },
+                                                )
+                                            }
                                         }
                                     }
                                 })

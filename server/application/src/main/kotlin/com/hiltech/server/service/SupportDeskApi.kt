@@ -127,7 +127,9 @@ class JdbcSupportDeskStore(private val jdbc: JdbcTemplate) {
         jdbc.query(
             """
             SELECT id, project_id, client_organization_id, title, description,
-                   severity_code, priority_code, lifecycle_state, coverage_state,
+                   severity_code, priority_code, lifecycle_state,
+                   COALESCE((SELECT coverage_state FROM service_ticket_coverage_status coverage
+                     WHERE coverage.ticket_id=t.id AND coverage.project_id=t.project_id AND coverage.organization_id=t.organization_id),t.coverage_state) AS coverage_state,
                    sla_state, client_visibility, opened_by_user_id, created_at,
                    COALESCE(
                      (SELECT e.resulting_state

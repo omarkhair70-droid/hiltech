@@ -9,8 +9,32 @@ import kotlinx.serialization.json.Json
 
 val employeeCompanyResponsibilityKeys = setOf(
     "PEOPLE_ADMIN", "PROJECT_ADMIN", "SALES_VIEW", "SALES_WRITE", "SALES_COST_VIEW", "SALES_RELEASE", "SALES_AWARD",
-    "PAYROLL_READ", "PAYROLL_PREPARE", "PAYROLL_REVIEW", "SUPPLIER_MASTER_DATA_ADMIN", "APPROVAL_POLICY_ADMIN",
+    "PAYROLL_READ", "PAYROLL_PREPARE", "PAYROLL_REVIEW", "SUPPLIER_MASTER_DATA_ADMIN", "APPROVAL_POLICY_ADMIN", "COMPANY_SETTINGS_ADMIN",
     "FINANCE_PAYROLL_PREPARE", "FINANCE_PAYROLL_REVIEW",
+    "PROCUREMENT_BUYER",
+    "PROCUREMENT_TECHNICAL_REVIEW",
+    "PROCUREMENT_NEED_REQUEST",
+    "PROCUREMENT_NEED_REVIEW",
+    "PROCUREMENT_ORDER_ISSUE",
+    "PROCUREMENT_SERVICE_ACCEPT",
+    "FINANCE_SUPPLIER_REVIEW",
+    "FINANCE_EMPLOYEE_REVIEW",
+    "FINANCE_COMMERCIAL_REVIEW",
+    "FINANCE_PAYABLE_PREPARE",
+    "FINANCE_PAYABLE_POST",
+    "FINANCE_RECEIVABLE_PREPARE",
+    "FINANCE_RECEIVABLE_EXECUTE",
+    "FINANCE_EMPLOYEE_PREPARE",
+    "FINANCE_EMPLOYEE_EXECUTE",
+    "FINANCE_BANK_STATEMENT_PREPARE",
+    "FINANCE_BANK_STATEMENT_IMPORT",
+    "FINANCE_BANK_RECONCILIATION_PREPARE",
+    "FINANCE_BANK_RECONCILIATION_FINALIZE",
+    "FINANCE_CASH_PREPARE",
+    "FINANCE_CASH_EXECUTE",
+    "FINANCE_PERIOD_CLOSE_PREPARE",
+    "FINANCE_PERIOD_CLOSE_EXECUTE",
+    "FINANCE_REPORT_READ",
 )
 
 @Serializable
@@ -38,6 +62,7 @@ data class CompanyResponsibilityCommandDto(
     val employeeId: String, val organizationId: String, val identityId: String, val authorityKey: String,
     val bindingId: String, val resultCode: String, val current: Boolean, val version: Long, val replayed: Boolean,
     val operationId: String,
+    val effectiveAccessRemaining: Boolean = false,
 )
 @Serializable
 data class EmployeeCompanyResponsibilityIntent(

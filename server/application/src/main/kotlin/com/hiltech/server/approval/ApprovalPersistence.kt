@@ -3,6 +3,8 @@ package com.hiltech.server.approval
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
+import org.springframework.http.HttpStatus
+import com.hiltech.server.platform.ProductApiException
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -436,6 +438,24 @@ class JdbcApprovalPersistence @Autowired constructor(
         val at =
             creation.createdAt
                 .atOffset(ZoneOffset.UTC)
+
+        // A setup change locks the same policy row before closing pending requests.
+        // Do not allow a request whose policy was read before that change to arrive
+        // afterwards under the retired revision.
+        val currentPolicy = jdbc.query(
+            """SELECT id FROM approval_policy_version
+               WHERE organization_id=? AND policy_key=? AND version_number=?
+                 AND lifecycle_state='ACTIVE' AND approval_required=true AND step_mode='SINGLE'
+                 AND authority_key=? AND reason_required=?
+                 AND effective_from<=? AND (effective_to IS NULL OR effective_to>?)
+               FOR SHARE""".trimIndent(),
+            { rs, _ -> rs.getObject(1, UUID::class.java) }, creation.subject.organizationId,
+            creation.policy.policyKey, creation.policy.versionNumber, creation.policy.authorityKey,
+            creation.policy.reasonRequired, at, at,
+        ).singleOrNull()
+        if (currentPolicy == null) throw ProductApiException(
+            "APPROVAL_POLICY_CHANGED", "The review policy changed; refresh before requesting review.", HttpStatus.CONFLICT,
+        )
 
         jdbc.update(
             """

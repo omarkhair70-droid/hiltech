@@ -23,6 +23,8 @@ data class ConfigurePayrollReviewPolicyRequest(
     val operationId: String, val reviewerEmployeeId: String, val expectedReviewerIdentityId: String, val baseEmployeeVersion: Long,
     val expectedPolicyId: String? = null, val expectedPolicyVersion: Long? = null,
     val expectedBindingId: String? = null, val expectedBindingVersion: Long? = null,
+    val pendingPoliciesToSupersede: List<CompanyPendingReviewPolicy> = emptyList(),
+    val supersedeReason: String? = null,
 )
 
 @RestController
@@ -51,6 +53,7 @@ class PayrollReviewPolicyController(private val service: PayrollReviewPolicyServ
             request.baseEmployeeVersion, request.expectedPolicyId?.let(::uuid), request.expectedPolicyVersion,
             request.expectedBindingId?.let(::uuid), request.expectedBindingVersion,
             actor, HiltechRequestContext.current(servletRequest).correlationId, parseWorkflow(workflow),
+            request.pendingPoliciesToSupersede, request.supersedeReason,
         ))
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result)
     }

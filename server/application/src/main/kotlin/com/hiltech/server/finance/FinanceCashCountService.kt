@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -48,7 +51,7 @@ data class FinanceCashCountReceipt(
 
 /** A witnessed physical count, not a payout, GL adjustment or bank reconciliation. */
 @Service
-class FinanceCashCountService(
+class FinanceCashCountService @org.springframework.beans.factory.annotation.Autowired constructor(
  private val jdbc:JdbcTemplate,
  private val subject:FinanceCashCountApprovalSubject,
  private val approvals:ApprovalPersistencePort,
@@ -57,6 +60,7 @@ class FinanceCashCountService(
  private val audit:AuditEventWriter,
  private val environment:Environment,
  private val clock:Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
  @Transactional
  fun prepare(
@@ -302,15 +306,10 @@ class FinanceCashCountService(
      {rs,_ ->rs.getBigDecimal("cash_on_hand") to
        rs.getLong("recorded_vouchers")},org,id,
    ).singleOrNull()
- private fun authority(actor:UUID,org:UUID,property:String) {
-   if(!subject.enabled())unavailable()
-   val key=environment.getProperty(property,"").trim()
-   if(!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key))unavailable()
-   val now=clock.instant()
-   if(!approvals.isActiveOrganizationMember(org,actor,now))unavailable()
-   val current=approvals.resolveCurrentAuthority(org,key,now) ?:unavailable()
-   if(current.organizationId!=org ||
-      !approvals.actorMatchesAuthority(actor,current,now))unavailable()
+ private fun authority(actor: UUID, org: UUID, property: String) {
+     if (!subject.enabled()) unavailable()
+     currentOperationalAuthority(operationalAuthority, approvals, actor, org, property,
+         environment.getProperty(property), clock.instant()) ?: unavailable()
  }
  private fun unavailable():Nothing=throw ProductApiException(
    "FINANCE_CASH_COUNT_NOT_AUTHORIZED",

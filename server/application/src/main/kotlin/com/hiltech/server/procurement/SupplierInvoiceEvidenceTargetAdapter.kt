@@ -1,5 +1,8 @@
 package com.hiltech.server.procurement
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.documents.SupplierInvoiceDocumentEvidenceTarget
 import com.hiltech.server.documents.SupplierInvoiceDocumentEvidenceTargetPort
@@ -21,8 +24,9 @@ class SupplierInvoiceEvidenceTargetAdapter @Autowired constructor(
     private val clock: Clock,
     @Value("\${hiltech.procurement.supplier-invoices.enabled:false}")
     private val enabled: Boolean = false,
-    @Value("\${hiltech.procurement.invoice.finance-authority-key:}")
+    @Value("\${hiltech.procurement.invoice.finance-authority-key:FINANCE_SUPPLIER_REVIEW}")
     private val financeAuthorityKey: String = "",
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) : SupplierInvoiceDocumentEvidenceTargetPort {
     override fun loadTarget(slotId: UUID): SupplierInvoiceDocumentEvidenceTarget? =
         jdbc.query(
@@ -51,12 +55,8 @@ class SupplierInvoiceEvidenceTargetAdapter @Autowired constructor(
         canReserve(actor, target)
 
     private fun financeAuthorized(actor: UUID, org: UUID): Boolean {
-        val key = financeAuthorityKey.trim()
-        if (!enabled || !Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key)) return false
-        val now = clock.instant()
-        if (!approvals.isActiveOrganizationMember(org, actor, now)) return false
-        val auth = approvals.resolveCurrentAuthority(org, key, now) ?: return false
-        return auth.organizationId == org && auth.authorityKey == key &&
-            approvals.actorMatchesAuthority(actor, auth, now)
+        if (!enabled) return false
+        return currentOperationalAuthority(operationalAuthority, approvals, actor, org,
+            "hiltech.procurement.invoice.finance-authority-key", financeAuthorityKey, clock.instant()) != null
     }
 }

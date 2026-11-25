@@ -92,6 +92,7 @@ class PurchaseOrderCandidateApprovalSubjectTest {
 
     private fun allow() {
         Mockito.`when`(candidates.byId(candidateId)).thenReturn(candidate)
+        Mockito.`when`(candidates.byRfq(rfqId)).thenReturn(candidate)
         Mockito.`when`(sourcing.rfq(rfqId)).thenReturn(rfq)
         Mockito.`when`(requirements.byId(requirementId)).thenReturn(source)
         Mockito.`when`(requirements.latestTransition(requirementId)).thenReturn(transition)
@@ -149,5 +150,12 @@ class PurchaseOrderCandidateApprovalSubjectTest {
         Mockito.`when`(evidence.loadEvidenceRecord(evidenceId))
             .thenReturn(recorded.copy(targetId = UUID.randomUUID()))
         assertFalse(guard().isCurrent(subject))
+    }
+
+    @Test fun correctedCandidateLeavesHistoricalSourceVisibleButNotCurrentForNewApproval() {
+        allow()
+        Mockito.`when`(candidates.byRfq(rfqId)).thenReturn(candidate.copy(id = UUID.randomUUID(), revisionNumber = 2, replacesCandidateId = candidate.id))
+        assertFalse(guard().isCurrent(subject))
+        assertTrue(candidates.byId(candidate.id) == candidate)
     }
 }

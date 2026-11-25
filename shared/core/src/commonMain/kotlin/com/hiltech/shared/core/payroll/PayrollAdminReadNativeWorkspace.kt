@@ -34,6 +34,7 @@ fun payrollAdminReadNativeWorkspace(
     installationId: String,
     newOperationId: (() -> String)? = null,
     runClient: Payroll9b9cApiClient? = null,
+    onReauthenticate: () -> Unit = {},
 ): NativeOperationalWorkspace {
     // Kept by the identity-scoped workspace, so leaving this screen does not
     // create a new operation after a timeout. No salary data is cached to disk.
@@ -220,6 +221,9 @@ fun payrollAdminReadNativeWorkspace(
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (loading || commands.busy) CircularProgressIndicator()
                 if (commands.errorCode != null) Text(payrollMessage(requireNotNull(commands.errorCode)), color = MaterialTheme.colorScheme.error)
+                if (commands.requiresReauthentication || error == "REAUTH_REQUIRED") OutlinedButton(
+                    enabled = !commands.busy, onClick = onReauthenticate,
+                ) { Text(hiltechText("تأكيد تسجيل الدخول", "Confirm sign-in")) }
                 if (commands.locked && !commands.busy) OutlinedButton(onClick = { commands.retry()?.let(::execute) }) {
                     Text(hiltechText("التحقق بنفس العملية", "Retry the same operation"))
                 }

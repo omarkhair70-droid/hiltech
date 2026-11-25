@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -61,7 +64,7 @@ private data class ExpenseBankDebitRow(
  * Does NOT initiate a transfer or post an inferred tax/expense GL category.
  */
 @Service
-class FinanceExpenseReimbursementService(
+class FinanceExpenseReimbursementService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc:JdbcTemplate,
     private val documents:FinanceExpenseDocumentationApprovalSubject,
     private val subject:FinanceExpenseReimbursementApprovalSubject,
@@ -71,6 +74,7 @@ class FinanceExpenseReimbursementService(
     private val audit:AuditEventWriter,
     private val environment:Environment,
     private val clock:Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
     @Transactional
     fun prepare(
@@ -373,16 +377,10 @@ class FinanceExpenseReimbursementService(
         state,approval,recorded,replayed,
         bankDebitAllocatedToEmployeeExpense=recorded!=null,
     )
-    private fun authority(actor:UUID,org:UUID,setting:String) {
-        if(!subject.enabled())unavailable()
-        val key=environment.getProperty(setting,"").trim()
-        if(!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key))unavailable()
-        val now=clock.instant()
-        if(!approvals.isActiveOrganizationMember(org,actor,now))unavailable()
-        val a=approvals.resolveCurrentAuthority(org,key,now)
-            ?: unavailable()
-        if(a.organizationId!=org ||
-            !approvals.actorMatchesAuthority(actor,a,now))unavailable()
+    private fun authority(actor: UUID, org: UUID, setting: String) {
+        if (!subject.enabled()) unavailable()
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, setting,
+            environment.getProperty(setting), clock.instant()) ?: unavailable()
     }
     private fun unavailable():Nothing=throw ProductApiException(
         "FINANCE_EXPENSE_REIMBURSEMENT_UNAVAILABLE",

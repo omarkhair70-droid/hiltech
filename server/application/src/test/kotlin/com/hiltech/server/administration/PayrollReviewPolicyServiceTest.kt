@@ -1,6 +1,9 @@
 package com.hiltech.server.administration
 
 import com.hiltech.server.audit.AuditEventWriter
+import com.hiltech.server.approval.ApprovalEngineService
+import com.hiltech.server.procurement.ProcurementCandidateReviewEligibilityPort
+import com.hiltech.server.service.ServiceDeliveryReviewEligibilityPort
 import com.hiltech.server.finance.FinancePayrollAuthorityPort
 import com.hiltech.server.payroll.Payroll9aAuthorityPort
 import com.hiltech.server.platform.IdempotentCommandExecution
@@ -30,7 +33,8 @@ class PayrollReviewPolicyServiceTest {
     private val audit = Mockito.mock(AuditEventWriter::class.java)
     private val persistence = MemorySetup()
     private val commands = RecordingCommands()
-    private val service = PayrollReviewPolicyService(authority, reviewers, persistence, commands, audit, Clock.fixed(at, ZoneOffset.UTC))
+    private val engine = Mockito.mock(ApprovalEngineService::class.java)
+    private val service = PayrollReviewPolicyService(authority, reviewers, persistence, commands, audit, Clock.fixed(at, ZoneOffset.UTC), engine)
     private val candidate = PayrollReviewerCandidate(employee, identity, 3, "Synthetic reviewer", "SYNTH-REVIEWER")
 
     @Test
@@ -155,16 +159,24 @@ class PayrollReviewPolicyServiceTest {
     fun existingTeamReviewerRemainsVisibleAndExplicitReplacementUsesExpectedBinding() {
         authorized()
         val team = UUID.randomUUID()
-        val state = PayrollReviewSetupRecord(PayrollReviewPolicyRecord(UUID.randomUUID(), 2, 4, true, true),
-            PayrollReviewerBindingRecord(UUID.randomUUID(), 3, "TEAM", team, "Synthetic review team", null, true), 2)
+        val policyId = UUID.randomUUID()
+        val scopes = listOf(CompanyPendingReviewPolicy(policyId.toString(), 2, 4, 2))
+        val state = PayrollReviewSetupRecord(PayrollReviewPolicyRecord(policyId, 2, 4, true, true),
+            PayrollReviewerBindingRecord(UUID.randomUUID(), 3, "TEAM", team, "Synthetic review team", null, true), 2, scopes)
         persistence.currentState[CompanyReviewWorkflow.PAYROLL_SOURCE] = state
         val visible = service.current(actor, organization, CompanyReviewWorkflow.PAYROLL_SOURCE)
         assertEquals("TEAM", visible.reviewerPrincipalType)
         assertEquals("Synthetic review team", visible.reviewerDisplayName)
         assertEquals(2, visible.pendingReviews)
-        service.configure(command(previous = state))
+        assertEquals(scopes, visible.pendingPolicies)
+        assertEquals("APPROVAL_POLICY_PENDING_CONFIRMATION_REQUIRED", assertThrows<ProductApiException> {
+            service.configure(command(previous = state))
+        }.code)
+        assertEquals(0, persistence.replacements)
+        service.configure(command(previous = state).copy(pendingPoliciesToSupersede = scopes, supersedeReason = "Replace the review team with the designated employee"))
         assertEquals("USER", persistence.currentState.getValue(CompanyReviewWorkflow.PAYROLL_SOURCE).reviewer?.principalType)
         assertEquals(state, persistence.lastPrevious)
+        assertEquals(1, Mockito.mockingDetails(engine).invocations.count { it.method.name == "supersedePolicyRequests" })
     }
 
     @Test
@@ -182,11 +194,21 @@ class PayrollReviewPolicyServiceTest {
     fun boundedCatalogAndOwningAuthorityRemainDistinct() {
         val payroll = Mockito.mock(Payroll9aAuthorityPort::class.java)
         val finance = Mockito.mock(FinancePayrollAuthorityPort::class.java)
-        val domain = DomainCompanyReviewCandidateAuthority(payroll, finance)
+        val procurement = Mockito.mock(ProcurementCandidateReviewEligibilityPort::class.java)
+        val delivery = Mockito.mock(ServiceDeliveryReviewEligibilityPort::class.java)
+        val domain = DomainCompanyReviewCandidateAuthority(payroll, finance, procurement, delivery)
         Mockito.`when`(payroll.canReview(identity, organization)).thenReturn(true)
         assertTrue(domain.canReview(CompanyReviewWorkflow.PAYROLL_SOURCE, identity, organization))
         assertFalse(domain.canReview(CompanyReviewWorkflow.FINANCE_PAYROLL_RESULT, identity, organization))
-        assertEquals(setOf("PAYROLL_SOURCE_REVIEW", "FINANCE_PAYROLL_RESULT_REVIEW", "PAYROLL_RUN_REVIEW"), CompanyReviewWorkflow.entries.map { it.policyKey }.toSet())
+        assertEquals(setOf("PAYROLL_SOURCE_REVIEW", "FINANCE_PAYROLL_RESULT_REVIEW", "PAYROLL_RUN_REVIEW", "PROCUREMENT_PO_REVIEW",
+            "SERVICE_HANDOVER_REVIEW", "SERVICE_WARRANTY_REVIEW"), CompanyReviewWorkflow.entries.map { it.policyKey }.toSet())
+        assertFalse(domain.canReview(CompanyReviewWorkflow.PROCUREMENT_PO, identity, organization))
+        Mockito.`when`(procurement.isEligible(identity, organization)).thenReturn(true)
+        assertTrue(domain.canReview(CompanyReviewWorkflow.PROCUREMENT_PO, identity, organization))
+        assertFalse(domain.canReview(CompanyReviewWorkflow.SERVICE_HANDOVER, identity, organization))
+        Mockito.`when`(delivery.isEligible(identity, organization)).thenReturn(true)
+        assertTrue(domain.canReview(CompanyReviewWorkflow.SERVICE_HANDOVER, identity, organization))
+        assertTrue(domain.canReview(CompanyReviewWorkflow.SERVICE_WARRANTY, identity, organization))
         assertTrue(CompanyReviewWorkflow.entries.none { it.authorityKey == "OWNER_FINAL" })
     }
 
@@ -245,7 +267,7 @@ class PayrollReviewPolicyServiceTest {
             lastPrevious = previous
             val policy = PayrollReviewPolicyRecord(UUID.randomUUID(), (previous.policy?.revision ?: 0) + 1, 1, true, true)
             val binding = PayrollReviewerBindingRecord(UUID.randomUUID(), 1, "USER", reviewer.identityId, reviewer.displayName, reviewer.employeeId, true)
-            currentState[workflow] = PayrollReviewSetupRecord(policy, binding, previous.pendingReviews)
+            currentState[workflow] = PayrollReviewSetupRecord(policy, binding, 0)
             return PayrollReviewPolicyInstallation(policy.id, policy.revision, binding.id)
         }
     }

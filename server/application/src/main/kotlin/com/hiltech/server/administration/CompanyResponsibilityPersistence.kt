@@ -1,5 +1,9 @@
 package com.hiltech.server.administration
 
+import com.hiltech.server.companysettings.CompanySettingsAuthorityPort
+
+import com.hiltech.server.operationalaccess.LegacyOperationalAuthorityDirectoryPort
+import com.hiltech.server.operationalaccess.OperationalResponsibility
 import com.hiltech.server.people.JdbcPeopleAuthorizationProjectionBridge
 import com.hiltech.server.platform.ProductApiException
 import com.hiltech.server.projects.ProjectAuthorizationProjectionBridge
@@ -80,7 +84,7 @@ private fun CompanyResponsibilityKey.source(): ResponsibilitySource = when (this
         "supplier_master_data_authority_binding", null, null, "identity_id",
         "effective_from", "effective_to", "created_by_user_id", false,
     )
-    CompanyResponsibilityKey.APPROVAL_POLICY_ADMIN -> ResponsibilitySource(
+    CompanyResponsibilityKey.APPROVAL_POLICY_ADMIN, CompanyResponsibilityKey.COMPANY_SETTINGS_ADMIN -> ResponsibilitySource(
         "organization_administration_authority_binding", "authority_key", name, "identity_id",
         "effective_from", "effective_to", "created_by_user_id", false,
     )
@@ -88,10 +92,18 @@ private fun CompanyResponsibilityKey.source(): ResponsibilitySource = when (this
         "finance_payroll_authority_binding", "authority_key", name.removePrefix("FINANCE_PAYROLL_"), "identity_id",
         "effective_from", "effective_to", "created_by_user_id", false,
     )
+    else -> {
+        requireNotNull(OperationalResponsibility.forCatalogKey(name))
+        ResponsibilitySource("operational_authority_binding", "authority_key", name, "principal_user_id",
+            "effective_from", "effective_to", "created_by_user_id", true)
+    }
 }
 
 @Component
-class JdbcCompanyResponsibilityPersistence(private val jdbc: JdbcTemplate) : CompanyResponsibilityPersistencePort {
+class JdbcCompanyResponsibilityPersistence @org.springframework.beans.factory.annotation.Autowired constructor(
+    private val jdbc: JdbcTemplate,
+    private val legacy: LegacyOperationalAuthorityDirectoryPort? = null,
+) : CompanyResponsibilityPersistencePort {
     override fun lockOrganization(organizationId: UUID) {
         if (jdbc.query("SELECT id FROM organization WHERE id = ? AND status = 'ACTIVE' AND organization_type = 'HILTECH' FOR UPDATE",
                 { rs, _ -> rs.getObject(1, UUID::class.java) }, organizationId).isEmpty()) {
@@ -107,6 +119,10 @@ class JdbcCompanyResponsibilityPersistence(private val jdbc: JdbcTemplate) : Com
     override fun bindings(organizationId: UUID, at: Instant): List<CompanyResponsibilityBinding> =
         CompanyResponsibilityKey.entries.flatMap { key ->
             read(key, "b.organization_id = ?", arrayOf(organizationId), at).filter { it.current }
+        } + legacy?.bindings(organizationId, at).orEmpty().map { binding ->
+            CompanyResponsibilityBinding(binding.bindingId, binding.organizationId,
+                CompanyResponsibilityKey.valueOf(binding.responsibility.name), binding.principalType,
+                binding.principalId, true, binding.version, administrationManaged = false)
         }
 
     override fun binding(key: CompanyResponsibilityKey, bindingId: UUID, at: Instant): CompanyResponsibilityBinding? =
@@ -117,12 +133,13 @@ class JdbcCompanyResponsibilityPersistence(private val jdbc: JdbcTemplate) : Com
         val principalType = if (source.teams) "b.principal_type" else "'USER'"
         val principalId = if (source.teams) "COALESCE(b.${source.userColumn}, b.principal_team_id)" else "b.${source.userColumn}"
         val keyPredicate = source.keyColumn?.let { "AND b.$it = ?" }.orEmpty()
+        val endComparison = if (source.table in setOf("operational_authority_binding", "organization_administration_authority_binding")) ">" else ">="
         val now = at.atOffset(ZoneOffset.UTC)
         return jdbc.query(
             """
             SELECT b.id, b.organization_id, $principalType AS principal_type, $principalId AS principal_id,
               b.version, (b.active = true AND o.status = 'ACTIVE' AND o.organization_type = 'HILTECH'
-                AND b.${source.fromColumn} <= ? AND (b.${source.toColumn} IS NULL OR b.${source.toColumn} >= ?)) AS authority_current
+                AND b.${source.fromColumn} <= ? AND (b.${source.toColumn} IS NULL OR b.${source.toColumn} $endComparison ?)) AS authority_current
             FROM ${source.table} b JOIN organization o ON o.id = b.organization_id
             WHERE $where $keyPredicate ORDER BY b.id
             """.trimIndent(),
@@ -163,6 +180,7 @@ class JdbcCompanyResponsibilityPersistence(private val jdbc: JdbcTemplate) : Com
     }
 
     override fun end(binding: CompanyResponsibilityBinding, at: Instant): Boolean {
+        if (!binding.administrationManaged) return false
         val source = binding.authorityKey.source()
         return jdbc.update(
             """
@@ -178,8 +196,10 @@ class JdbcCompanyResponsibilityPersistence(private val jdbc: JdbcTemplate) : Com
 class JdbcOrganizationAdministrationAuthority(
     private val jdbc: JdbcTemplate,
     private val clock: Clock,
-) : OrganizationAdministrationAuthorityPort {
-    override fun canManageApprovalPolicies(actor: UUID, organizationId: UUID): Boolean {
+) : OrganizationAdministrationAuthorityPort, CompanySettingsAuthorityPort {
+    override fun canManageApprovalPolicies(actor: UUID, organizationId: UUID): Boolean = current(actor, organizationId, "APPROVAL_POLICY_ADMIN")
+    override fun canManageCompanySettings(actor: UUID, organizationId: UUID): Boolean = current(actor, organizationId, "COMPANY_SETTINGS_ADMIN")
+    private fun current(actor: UUID, organizationId: UUID, key: String): Boolean {
         val now = clock.instant().atOffset(ZoneOffset.UTC)
         return jdbc.queryForObject(
             """
@@ -187,14 +207,14 @@ class JdbcOrganizationAdministrationAuthority(
               SELECT 1 FROM organization_administration_authority_binding b
               JOIN organization o ON o.id = b.organization_id
               JOIN user_identity u ON u.id = b.identity_id
-              WHERE b.organization_id = ? AND b.identity_id = ? AND b.authority_key = 'APPROVAL_POLICY_ADMIN'
+              WHERE b.organization_id = ? AND b.identity_id = ? AND b.authority_key = ?
                 AND o.organization_type = 'HILTECH' AND o.status = 'ACTIVE' AND u.status = 'ACTIVE'
-                AND b.active = true AND b.effective_from <= ? AND (b.effective_to IS NULL OR b.effective_to >= ?)
+                AND b.active = true AND b.effective_from <= ? AND (b.effective_to IS NULL OR b.effective_to > ?)
                 AND EXISTS (SELECT 1 FROM organization_membership m
                   WHERE m.organization_id = b.organization_id AND m.user_identity_id = b.identity_id
-                    AND m.state = 'ACTIVE' AND m.valid_from <= ? AND (m.valid_until IS NULL OR m.valid_until >= ?))
+                    AND m.state = 'ACTIVE' AND m.valid_from <= ? AND (m.valid_until IS NULL OR m.valid_until > ?))
             )
-            """.trimIndent(), Boolean::class.java, organizationId, actor, now, now, now, now,
+            """.trimIndent(), Boolean::class.java, organizationId, actor, key, now, now, now, now,
         ) == true
     }
 }

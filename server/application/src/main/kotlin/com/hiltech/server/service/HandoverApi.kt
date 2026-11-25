@@ -13,6 +13,7 @@ import com.hiltech.server.projects.ProjectSnapshot
 import com.hiltech.server.projects.ProjectsPersistencePort
 import jakarta.servlet.http.HttpServletRequest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.jsonArray
@@ -39,11 +40,7 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.UUID
 
-/**
- * P11A is deliberately limited to INTERNAL DRAFT handovers.
- * Client sharing, acceptance and warranty activation have no inferred authority.
- * The controller is OFF until the pending SQL migration is versioned and deployed.
- */
+/** Immutable source assembly. Issuance and recorded client responses use their own reviewed events. */
 data class HandoverDraftRequest(
     val operationId: String,
     val baseProjectVersion: Long,
@@ -72,12 +69,24 @@ data class HandoverDocumentFact(
     val sourceSha256: String,
 )
 
+@Serializable
 data class HandoverDocumentDto(
     val workOrderId: String,
     val documentId: String,
     val revisionId: String,
     val evidenceId: String,
     val sha256: String,
+    val workOrderCode: String = "",
+    val workOrderTitle: String = "",
+    val documentCode: String = "",
+    val documentTitle: String = "",
+    val revisionLabel: String = "",
+)
+
+@Serializable
+data class HandoverSourceFindingDto(
+    val workOrderCode: String, val workOrderTitle: String, val requirementKey: String,
+    val satisfactionState: String, val waiverReason: String?,
 )
 
 data class HandoverReadinessDto(
@@ -90,6 +99,8 @@ data class HandoverReadinessDto(
     val canShareWithClient: Boolean,
     val canAcceptForClient: Boolean,
     val sourceDigest: String,
+    val projectVersion: Long = 1,
+    val sourceFindings: List<HandoverSourceFindingDto> = emptyList(),
 )
 
 data class HandoverPackageVersionDto(
@@ -129,6 +140,7 @@ object HandoverReadinessPolicy {
         works: List<HandoverWorkFact>,
         requirements: List<HandoverRequirementFact>,
         approved: List<HandoverDocumentFact>,
+        includeUnconfiguredPolicyReasons: Boolean = true,
     ): List<String> {
         val present = approved.map { it.workOrderId to it.requirementKey }.toSet()
         return buildList {
@@ -161,9 +173,11 @@ object HandoverReadinessPolicy {
                     }
                 }
             }
-            add(MISSING_PACKAGE_POLICY)
-            add(MISSING_SHARING_POLICY)
-            add(MISSING_ACCEPTANCE_AUTHORITY)
+            if (includeUnconfiguredPolicyReasons) {
+                add(MISSING_PACKAGE_POLICY)
+                add(MISSING_SHARING_POLICY)
+                add(MISSING_ACCEPTANCE_AUTHORITY)
+            }
         }.distinct()
     }
 
@@ -233,6 +247,16 @@ class JdbcHandoverSource(
             projectId,
         )
 
+    fun sourceFindings(projectId: UUID): List<HandoverSourceFindingDto> = jdbc.query(
+        """SELECT w.work_order_code,w.title,r.requirement_key,r.satisfaction_state,r.waiver_reason
+           FROM work_requirement_instance r JOIN work_order w ON w.id=r.work_order_id
+           WHERE w.project_id=? AND w.lifecycle_state<>'CANCELLED' AND r.requirement_family='DOCUMENT'
+             AND r.required AND r.satisfaction_state<>'SATISFIED'
+           ORDER BY w.work_order_code,r.requirement_key""",
+        { rs, _ -> HandoverSourceFindingDto(rs.getString("work_order_code"), rs.getString("title"), rs.getString("requirement_key"),
+            rs.getString("satisfaction_state"), rs.getString("waiver_reason")) }, projectId,
+    )
+
     /**
      * Only latest revisions, backed by READY evidence, with actual approved
      * release. An older approved revision does not hide a newer pending one.
@@ -265,6 +289,7 @@ class JdbcHandoverSource(
                )
                AND (rel.release_mode = 'NO_APPROVAL_REQUIRED'
                     OR (rel.release_mode = 'APPROVAL_REQUEST' AND ar.state = 'APPROVED'))
+               AND service_delivery_work_document_released(r.id)
                AND NOT EXISTS (
                    SELECT 1 FROM work_document_revision newer
                     WHERE newer.document_id = r.document_id
@@ -337,6 +362,22 @@ class JdbcHandoverSource(
             projectId,
         ).singleOrNull()
 
+    fun version(projectId: UUID, versionId: UUID): HandoverSnapshotRow? =
+        jdbc.query(
+            """SELECT package_id,id,project_id,version_number,state,project_version_at_snapshot,
+                      source_digest,blockers_json::text AS blockers,created_at
+                 FROM service_handover_package_version WHERE project_id=? AND id=?""",
+            { rs, _ -> snapshotRow(rs) }, projectId, versionId,
+        ).singleOrNull()
+
+    fun history(projectId: UUID): List<HandoverSnapshotRow> =
+        jdbc.query(
+            """SELECT package_id,id,project_id,version_number,state,project_version_at_snapshot,
+                      source_digest,blockers_json::text AS blockers,created_at
+                 FROM service_handover_package_version WHERE project_id=? ORDER BY version_number DESC LIMIT 200""",
+            { rs, _ -> snapshotRow(rs) }, projectId,
+        )
+
     fun insertDraft(
         project: ProjectSnapshot,
         packageId: UUID,
@@ -379,10 +420,14 @@ class JdbcHandoverSource(
     fun snapshotDocuments(versionId: UUID): List<HandoverDocumentDto> =
         jdbc.query(
             """
-            SELECT work_order_id, document_id, revision_id, evidence_id, source_sha256
-              FROM service_handover_package_item
-             WHERE package_version_id = ?
-             ORDER BY document_id
+            SELECT item.work_order_id,item.document_id,item.revision_id,item.evidence_id,item.source_sha256,
+                   work.work_order_code,work.title AS work_title,d.document_code,d.title AS document_title,r.revision_label
+              FROM service_handover_package_item item
+              JOIN work_order work ON work.id=item.work_order_id
+              JOIN work_document d ON d.id=item.document_id
+              JOIN work_document_revision r ON r.id=item.revision_id
+             WHERE item.package_version_id = ?
+             ORDER BY work.work_order_code,d.document_code
             """.trimIndent(),
             { rs, _ ->
                 HandoverDocumentDto(
@@ -391,6 +436,8 @@ class JdbcHandoverSource(
                     rs.getObject("revision_id", UUID::class.java).toString(),
                     rs.getObject("evidence_id", UUID::class.java).toString(),
                     rs.getString("source_sha256"),
+                    rs.getString("work_order_code"), rs.getString("work_title"),
+                    rs.getString("document_code"), rs.getString("document_title"), rs.getString("revision_label"),
                 )
             },
             versionId,
@@ -425,12 +472,14 @@ class HandoverService(
         val works = sources.work(projectId)
         val docs = sources.approvedDocuments(projectId, project.organizationId)
         val requirements = sources.requirements(projectId)
-        val missing = HandoverReadinessPolicy.missing(works, requirements, docs)
+        val missing = HandoverReadinessPolicy.missing(works, requirements, docs, includeUnconfiguredPolicyReasons = false)
         return HandoverReadinessDto(
             projectId.toString(), project.organizationId.toString(), docs.size, works.size,
-            missing, canSubmitForInternalReview = false,
+            missing, canSubmitForInternalReview = true,
             canShareWithClient = false, canAcceptForClient = false,
             sourceDigest = HandoverReadinessPolicy.digest(docs, works, requirements, project.version),
+            projectVersion = project.version,
+            sourceFindings = sources.sourceFindings(projectId),
         )
     }
 
@@ -438,6 +487,12 @@ class HandoverService(
     fun latest(projectId: UUID, actor: UUID): HandoverPackageVersionDto? {
         authorizedProject(projectId, actor, true)
         return sources.latest(projectId)?.toDto(false)
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    fun history(projectId: UUID, actor: UUID): List<HandoverPackageVersionDto> {
+        authorizedProject(projectId, actor, true)
+        return sources.history(projectId).map { it.toDto(false) }
     }
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
@@ -480,7 +535,7 @@ class HandoverService(
             val docs = sources.approvedDocuments(projectId, fresh.organizationId)
             val works = sources.work(projectId)
             val requirements = sources.requirements(projectId)
-            val reasons = HandoverReadinessPolicy.missing(works, requirements, docs)
+            val reasons = HandoverReadinessPolicy.missing(works, requirements, docs, includeUnconfiguredPolicyReasons = false)
             val digest = HandoverReadinessPolicy.digest(docs, works, requirements, fresh.version)
             val at = clock.instant()
             sources.insertDraft(
@@ -530,6 +585,7 @@ class HandoverService(
     prefix = "hiltech.phase11.handover",
     name = ["enabled"],
     havingValue = "true",
+    matchIfMissing = true,
 )
 class HandoverController(private val service: HandoverService) {
     @GetMapping("/readiness")
@@ -540,6 +596,10 @@ class HandoverController(private val service: HandoverService) {
     fun latest(request: HttpServletRequest, @PathVariable projectId: UUID): HandoverPackageVersionDto =
         service.latest(projectId, principal(request))
             ?: problem("HANDOVER_PACKAGE_NOT_FOUND", HttpStatus.NOT_FOUND)
+
+    @GetMapping("/packages")
+    fun history(request: HttpServletRequest, @PathVariable projectId: UUID): List<HandoverPackageVersionDto> =
+        service.history(projectId, principal(request))
 
     @PostMapping("/packages")
     fun snapshot(

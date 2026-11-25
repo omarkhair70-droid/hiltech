@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.approval.ApprovalEngineService
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.approval.ApprovalPolicyMode
@@ -14,6 +17,7 @@ import com.hiltech.server.platform.IdempotentCommandOutcome
 import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
 import jakarta.servlet.http.HttpServletRequest
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.core.env.Environment
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
@@ -49,7 +53,7 @@ data class FinanceCashboxBalanceReceipt(
 
 /** Approved only with zero opening: no fabricated historical cash supply. */
 @Service
-class FinanceCashboxOpeningService(
+class FinanceCashboxOpeningService @Autowired constructor(
  private val jdbc:JdbcTemplate,
  private val subject:FinanceCashboxOpeningApprovalSubject,
  private val approvals:ApprovalPersistencePort,
@@ -58,6 +62,7 @@ class FinanceCashboxOpeningService(
  private val audit:AuditEventWriter,
  private val environment:Environment,
  private val clock:Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
  @Transactional
  fun prepare(
@@ -271,15 +276,10 @@ class FinanceCashboxOpeningService(
  )=FinanceCashboxReceipt(
    s.id,s.org,s.code,s.currency,s.custodian,state,approval,replayed,
  )
- private fun authority(actor:UUID,org:UUID,property:String) {
-   if(!subject.enabled())unavailable()
-   val key=environment.getProperty(property,"").trim()
-   if(!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(key))unavailable()
-   val now=clock.instant()
-   if(!approvals.isActiveOrganizationMember(org,actor,now))unavailable()
-   val a=approvals.resolveCurrentAuthority(org,key,now) ?:unavailable()
-   if(a.organizationId!=org ||
-      !approvals.actorMatchesAuthority(actor,a,now))unavailable()
+ private fun authority(actor: UUID, org: UUID, property: String) {
+     if (!subject.enabled()) unavailable()
+     currentOperationalAuthority(operationalAuthority, approvals, actor, org, property,
+         environment.getProperty(property), clock.instant()) ?: unavailable()
  }
  private fun unavailable():Nothing=throw ProductApiException(
    "FINANCE_CASHBOX_NOT_AUTHORIZED",

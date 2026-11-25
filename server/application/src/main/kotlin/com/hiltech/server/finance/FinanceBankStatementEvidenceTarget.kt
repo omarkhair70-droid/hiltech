@@ -1,5 +1,8 @@
 package com.hiltech.server.finance
 
+import com.hiltech.server.operationalaccess.OperationalAuthorityPort
+import com.hiltech.server.operationalaccess.currentOperationalAuthority
+
 import com.hiltech.server.documents.FinanceBankEvidenceAccount
 import com.hiltech.server.documents.FinanceBankStatementEvidenceTargetPort
 import com.hiltech.server.approval.ApprovalPersistencePort
@@ -16,12 +19,13 @@ import java.util.UUID
  * No fallback to ordinary organization membership as a financial grant.
  */
 @Component
-class JdbcFinanceBankStatementEvidenceTarget(
+class JdbcFinanceBankStatementEvidenceTarget @org.springframework.beans.factory.annotation.Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val approvals: ApprovalPersistencePort,
     private val subject: FinanceBankStatementIntakeApprovalSubject,
     private val environment: Environment,
     private val clock: Clock,
+    private val operationalAuthority: OperationalAuthorityPort? = null,
 ) : FinanceBankStatementEvidenceTargetPort {
     override fun loadApprovedAccount(accountId: UUID): FinanceBankEvidenceAccount? =
         jdbc.query(
@@ -56,18 +60,11 @@ class JdbcFinanceBankStatementEvidenceTarget(
 
     private fun canUseFinanceBankIntake(actor: UUID, org: UUID): Boolean {
         if (!subject.enabled()) return false
-        val preparerKey = environment.getProperty(
-            "hiltech.finance.bank-statement-intake.preparer-authority-key", "",
-        ).trim()
-        if (!Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(preparerKey)) return false
         val policyKey = subject.policyKey() ?: return false
         val now = clock.instant()
-        if (!approvals.isActiveOrganizationMember(org, actor, now)) return false
-        val preparer = approvals.resolveCurrentAuthority(org, preparerKey, now)
-            ?: return false
-        if (preparer.organizationId != org ||
-            !approvals.actorMatchesAuthority(actor, preparer, now)
-        ) return false
+        val property = "hiltech.finance.bank-statement-intake.preparer-authority-key"
+        currentOperationalAuthority(operationalAuthority, approvals, actor, org, property,
+            environment.getProperty(property), now) ?: return false
 
         val policy = approvals.loadActivePolicy(org, policyKey, now)
             ?.takeIf { it.organizationId == org &&

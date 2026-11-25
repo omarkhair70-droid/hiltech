@@ -3,6 +3,7 @@ package com.hiltech.server.procurement
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
 import java.math.BigDecimal
+import java.sql.ResultSet
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -34,7 +35,11 @@ data class PurchaseOrderCandidateRecord(
     val proposedBy: UUID,
     val createdAt: Instant,
     val correlationId: String,
+    val revisionNumber: Int = 1,
+    val replacesCandidateId: UUID? = null,
 )
+
+data class PurchaseCandidateReviewState(val requestId: UUID, val state: String, val requestVersion: Long, val policyVersion: Int, val comment: String?)
 
 @Repository
 class PurchaseOrderCandidatePersistence(private val jdbc: JdbcTemplate) {
@@ -45,38 +50,43 @@ class PurchaseOrderCandidatePersistence(private val jdbc: JdbcTemplate) {
     ).isNotEmpty()
 
     /** ApprovalEngine subject lookup; never trusts an arbitrary RFQ identifier. */
-    fun byId(candidateId: UUID): PurchaseOrderCandidateRecord? =
-        jdbc.query(
-            "SELECT rfq_id FROM procurement_po_candidate WHERE id = ?",
-            { row, _ -> row.getObject("rfq_id", UUID::class.java) }, candidateId,
-        ).singleOrNull()?.let(::byRfq)?.takeIf { it.id == candidateId }
+    fun byId(candidateId: UUID): PurchaseOrderCandidateRecord? = jdbc.query(
+        "SELECT * FROM procurement_po_candidate WHERE id=?", { row, _ -> row.candidate() }, candidateId,
+    ).singleOrNull()
 
     fun byRfq(rfqId: UUID): PurchaseOrderCandidateRecord? = jdbc.query(
-        "SELECT * FROM procurement_po_candidate WHERE rfq_id = ?",
-        { row, _ -> PurchaseOrderCandidateRecord(
-            id = row.getObject("id", UUID::class.java),
-            operationId = row.getObject("operation_id", UUID::class.java),
-            organizationId = row.getObject("organization_id", UUID::class.java),
-            rfqId = row.getObject("rfq_id", UUID::class.java),
-            requirementId = row.getObject("purchase_requirement_id", UUID::class.java),
-            requirementVersion = row.getLong("requirement_version"),
-            quoteId = row.getObject("quote_evidence_id", UUID::class.java),
-            quoteRevision = row.getInt("quote_revision"),
-            supplierOrganizationId = row.getObject("supplier_organization_id", UUID::class.java),
-            stockItemId = row.getObject("stock_item_id", UUID::class.java),
-            quantity = row.getBigDecimal("quantity"),
-            unitCode = row.getString("unit_code"),
-            currency = row.getString("currency"),
-            unitPrice = row.getBigDecimal("unit_price"),
-            taxAmount = row.getBigDecimal("tax_amount"),
-            totalAmount = row.getBigDecimal("total_amount"),
-            sourceSha256 = row.getString("quote_evidence_sha256"),
-            rationale = row.getString("rationale"),
-            proposedBy = row.getObject("selected_by_user_id", UUID::class.java),
-            createdAt = row.getObject("created_at", OffsetDateTime::class.java).toInstant(),
-            correlationId = row.getString("correlation_id"),
-        ) }, rfqId,
+        "SELECT * FROM procurement_po_candidate WHERE rfq_id = ? ORDER BY revision_number DESC LIMIT 1",
+        { row, _ -> row.candidate() }, rfqId,
     ).singleOrNull()
+
+    fun hasIssuedOrder(rfqId: UUID): Boolean = jdbc.queryForObject(
+        """SELECT EXISTS(SELECT 1 FROM procurement_purchase_order po JOIN procurement_po_candidate c ON c.id=po.candidate_id WHERE c.rfq_id=?)""",
+        Boolean::class.java, rfqId,
+    ) == true
+
+    fun hasPendingReview(candidateId: UUID): Boolean = jdbc.queryForObject(
+        "SELECT EXISTS(SELECT 1 FROM approval_request WHERE subject_type='PROCUREMENT_PO_CANDIDATE' AND subject_id=? AND state='PENDING')",
+        Boolean::class.java, candidateId,
+    ) == true
+
+    fun latestReview(candidateId: UUID): PurchaseCandidateReviewState? = jdbc.query(
+        """SELECT a.id,a.state,a.version,a.policy_version,
+            (SELECT d.comment_text FROM approval_decision d WHERE d.approval_request_id=a.id ORDER BY d.decided_at DESC LIMIT 1) AS comment
+           FROM approval_request a WHERE a.subject_type='PROCUREMENT_PO_CANDIDATE' AND a.subject_id=? AND a.subject_version=1
+           ORDER BY a.created_at DESC,a.id DESC LIMIT 1""".trimIndent(),
+        { rs, _ -> PurchaseCandidateReviewState(rs.getObject("id", UUID::class.java), rs.getString("state"),
+            rs.getLong("version"), rs.getInt("policy_version"), rs.getString("comment")) }, candidateId,
+    ).singleOrNull()
+
+    private fun ResultSet.candidate() = PurchaseOrderCandidateRecord(
+        getObject("id", UUID::class.java), getObject("operation_id", UUID::class.java), getObject("organization_id", UUID::class.java),
+        getObject("rfq_id", UUID::class.java), getObject("purchase_requirement_id", UUID::class.java), getLong("requirement_version"),
+        getObject("quote_evidence_id", UUID::class.java), getInt("quote_revision"), getObject("supplier_organization_id", UUID::class.java),
+        getObject("stock_item_id", UUID::class.java), getBigDecimal("quantity"), getString("unit_code"), getString("currency"),
+        getBigDecimal("unit_price"), getBigDecimal("tax_amount"), getBigDecimal("total_amount"), getString("quote_evidence_sha256"),
+        getString("rationale"), getObject("selected_by_user_id", UUID::class.java), getObject("created_at", OffsetDateTime::class.java).toInstant(),
+        getString("correlation_id"), getInt("revision_number"), getObject("replaces_candidate_id", UUID::class.java),
+    )
 
     fun insert(candidate: PurchaseOrderCandidateRecord) {
         check(jdbc.update(
@@ -88,10 +98,10 @@ class PurchaseOrderCandidatePersistence(private val jdbc: JdbcTemplate) {
                 stock_item_id, quantity, unit_code, currency,
                 unit_price, tax_amount, total_amount, quote_evidence_sha256,
                 rationale, selected_by_user_id, created_at, correlation_id,
-                state, version
+                state, version, revision_number, replaces_candidate_id
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT_FOR_APPROVAL', 1
+                ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT_FOR_APPROVAL', 1, ?, ?
             )
             """.trimIndent(),
             candidate.id, candidate.operationId, candidate.organizationId,
@@ -102,6 +112,7 @@ class PurchaseOrderCandidatePersistence(private val jdbc: JdbcTemplate) {
             candidate.totalAmount, candidate.sourceSha256, candidate.rationale,
             candidate.proposedBy, candidate.createdAt.atOffset(ZoneOffset.UTC),
             candidate.correlationId,
+            candidate.revisionNumber, candidate.replacesCandidateId,
         ) == 1)
     }
 }

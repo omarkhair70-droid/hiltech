@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +70,7 @@ fun CompanyAdministrationWorkspace(
     val options = buildList {
         if (capabilities?.canViewEmployeeResponsibilities == true) add("RESPONSIBILITIES")
         if (capabilities?.canManageApprovalPolicies == true) add("REVIEW_WORKFLOWS")
+        if (capabilities?.canManageCompanySettings == true) add("OPERATIONAL_SETTINGS")
     }
     LaunchedEffect(options) { if (section !in options) section = options.firstOrNull().orEmpty() }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -77,16 +79,19 @@ fun CompanyAdministrationWorkspace(
                 Text(hiltechText("إدارة الشركة", "Company administration"), Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
                 TextButton(onClick = { refresh += 1 }, enabled = !checking) { Text(hiltechText("تحديث", "Refresh")) }
             }
-            Text(hiltechText("إسناد مسؤوليات الموظفين ونقل إدارتها وإعداد المراجعين، كلٌّ ضمن تفويضك الحالي.",
-                "Assign employee responsibilities, transfer their administration, and configure reviewers within your current authority."))
+            Text(hiltechText("إسناد مسؤوليات الموظفين ونقل إدارتها وإعداد المراجعين وإعدادات التشغيل، كلٌّ ضمن تفويضك الحالي.",
+                "Assign employee responsibilities, transfer their administration, configure reviewers, and manage operating settings within your current authority."))
             if (checking) CircularProgressIndicator()
             if (capabilityError) Text(hiltechText("تعذر التحقق من صلاحيات الإدارة. حدّث الصفحة لإعادة المحاولة.",
                 "Couldn’t verify administration access. Refresh to retry."), color = MaterialTheme.colorScheme.error)
             if (!checking && capabilities?.available == false) Text(hiltechText("لا توجد مسؤوليات إدارة شركة مخوّلة لهذا الحساب حاليًا.",
                 "This account currently has no company administration responsibilities."))
             if (options.size > 1) HiltechRecordPicker(hiltechText("مساحة الإدارة", "Administration area"), section,
-                options.map { HiltechRecordChoice(it, if (it == "RESPONSIBILITIES") hiltechText("الموظفون والمسؤوليات", "Employees and responsibilities")
-                    else hiltechText("مسارات الاعتماد", "Approval workflows")) }, onChange = { section = it }, allowKnownReference = false, allowClear = false)
+                options.map { HiltechRecordChoice(it, when (it) {
+                    "RESPONSIBILITIES" -> hiltechText("الموظفون والمسؤوليات", "Employees and responsibilities")
+                    "OPERATIONAL_SETTINGS" -> hiltechText("إعدادات التشغيل", "Operating settings")
+                    else -> hiltechText("مسارات الاعتماد", "Approval workflows")
+                }) }, onChange = { section = it }, allowKnownReference = false, allowClear = false)
             if (section == "REVIEW_WORKFLOWS" && section in options) HiltechRecordPicker(hiltechText("مسار الاعتماد", "Approval workflow"), workflow,
                 companyReviewWorkflows.map { HiltechRecordChoice(it, workflowLabel(it)) }, onChange = { workflow = it }, allowKnownReference = false, allowClear = false)
         }
@@ -97,6 +102,9 @@ fun CompanyAdministrationWorkspace(
         }
         if (section == "REVIEW_WORKFLOWS" && section in options) state.SaveableStateProvider("REVIEW:$workflow") {
             CompanyReviewSetupWorkspace(organizationId, workflow, client, installationId, newOperationId, onReauthenticate)
+        }
+        if (section == "OPERATIONAL_SETTINGS" && section in options) state.SaveableStateProvider("OPERATIONAL_SETTINGS") {
+            CompanyOperationalSettingsWorkspace(organizationId, client.operationalSettings, installationId, newOperationId, onReauthenticate)
         }
     }
 }
@@ -237,18 +245,21 @@ private fun CompanyReviewSetupWorkspace(
                 "This workflow uses an independently governed approval authority already set for the company. Its configuration is preserved and cannot be replaced here.",
             ))
             if (setup.pendingReviews > 0) Text(hiltechText(
-                "هناك ${setup.pendingReviews} طلبات معلقة. تغيير المراجع يستلزم إصدار سجل مصحح وإرساله للمراجعة الجديدة. تبقى الاعتمادات المكتملة محفوظة.",
-                "There are ${setup.pendingReviews} pending requests. Changing the reviewer requires a corrected record and a new review request. Completed approvals are preserved.",
+                "هناك ${setup.pendingReviews} طلبات معلقة. قبل تغيير المراجع ستؤكد إنهاء هذه الطلبات وإعادة إرسال مصادرها للمراجعة الجديدة. تبقى الاعتمادات المكتملة محفوظة.",
+                "There are ${setup.pendingReviews} pending requests. Before replacing the reviewer, confirm ending these requests so their sources can be resubmitted. Completed approvals are preserved.",
             ), style = MaterialTheme.typography.bodySmall)
             if (setup.canConfigure) {
             HorizontalDivider()
             Text(hiltechText("اختيار موظف مراجع", "Choose a reviewer"), style = MaterialTheme.typography.titleSmall)
-            Text(if (workflow != "FINANCE_PAYROLL_RESULT") hiltechText(
+            Text(if (workflow in setOf("PAYROLL_SOURCE", "PAYROLL_RUN")) hiltechText(
                 "يظهر الموظفون النشطون الذين لديهم مسؤولية مراجعة الرواتب. يمكنك إسناد هذه المسؤولية من سجل الموظف أولًا.",
                 "Active employees with Payroll review responsibility appear here. You can assign that responsibility from the employee record first.",
-            ) else hiltechText(
+            ) else if (workflow == "FINANCE_PAYROLL_RESULT") hiltechText(
                 "يظهر الموظفون النشطون الذين لديهم مسؤولية مراجعة نتائج صرف الرواتب.",
                 "Active employees with Payroll disbursement review responsibility appear here.",
+            ) else hiltechText(
+                "اختر موظفًا نشطًا لديه حساب مرتبط بالشركة. هذا التعيين يتيح مراجعة الطلبات المسندة له فقط.",
+                "Choose an active employee with a linked company account. This designation allows review only of requests assigned to them.",
             ), style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(query, { query = it.take(120) }, Modifier.fillMaxWidth(), singleLine = true,
                 label = { Text(hiltechText("ابحث بالاسم أو كود الموظف", "Search by name or employee code")) },
@@ -256,8 +267,8 @@ private fun CompanyReviewSetupWorkspace(
             if (searching) CircularProgressIndicator()
             if (candidateError) Text(hiltechText("تعذر تحميل الموظفين. حدّث الصفحة لإعادة المحاولة.",
                 "Couldn’t load employees. Refresh to retry."), color = MaterialTheme.colorScheme.error)
-            if (!searching && candidates?.items?.isEmpty() == true) Text(hiltechText("لا يوجد موظف مطابق يملك مسؤولية المراجعة الحالية.",
-                "No matching employee holds the required current review responsibility."))
+            if (!searching && candidates?.items?.isEmpty() == true) Text(hiltechText("لا يوجد موظف مطابق مستوفٍ لمتطلبات هذا المسار.",
+                "No matching employee meets this workflow’s current requirements."))
             candidates?.let { options ->
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 280.dp)) {
                     items(options.items, key = { it.employeeId }) { candidate ->
@@ -274,11 +285,32 @@ private fun CompanyReviewSetupWorkspace(
                     "Use a more specific name to find other employees."), style = MaterialTheme.typography.bodySmall)
             }
             selected?.let { chosen ->
+                val needsPendingClosure = setup.pendingReviews > 0 && (setup.status != "READY" ||
+                    setup.reviewerPrincipalType != "USER" || setup.reviewerEmployeeId != chosen.employeeId)
+                var pendingClosureConfirmed by remember(setup.policyId, setup.policyVersion, chosen.employeeId, setup.pendingPolicies) { mutableStateOf(false) }
+                var pendingClosureReason by remember(setup.policyId, setup.policyVersion, chosen.employeeId, setup.pendingPolicies) { mutableStateOf("") }
                 Text(hiltechText("الاختيار: ", "Selected: ") + chosen.displayName, style = MaterialTheme.typography.titleSmall)
-                Button(enabled = pending == null && !submitting, onClick = {
+                if (needsPendingClosure) {
+                    Text(hiltechText("الطلبات التي ستنتهي: ${setup.pendingReviews}", "Requests that will be ended: ${setup.pendingReviews}"), style = MaterialTheme.typography.titleSmall)
+                    setup.pendingPolicies.forEach { scope -> Text(hiltechText(
+                        "نسخة المسار ${scope.policyRevision}: ${scope.pendingReviews} طلبات",
+                        "Workflow revision ${scope.policyRevision}: ${scope.pendingReviews} requests")) }
+                    OutlinedTextField(pendingClosureReason, { pendingClosureReason = it.take(1000) }, Modifier.fillMaxWidth(),
+                        enabled = pending == null && !submitting, label = { Text(hiltechText("سبب تغيير مسار الطلبات المعلقة", "Reason for replacing the pending review workflow")) })
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(pendingClosureConfirmed, { pendingClosureConfirmed = it }, enabled = pending == null && !submitting)
+                        Text(hiltechText("أوافق على إنهاء هذه الطلبات المعلقة وإعادة إرسال مصادرها للمراجع الجديد.",
+                            "I confirm ending these pending requests and resubmitting their sources to the new reviewer."))
+                    }
+                }
+                val impactConfirmed = !needsPendingClosure || (pendingClosureConfirmed && pendingClosureReason.trim().length in 3..1000 &&
+                    setup.pendingPolicies.isNotEmpty() && setup.pendingPolicies.sumOf { it.pendingReviews } == setup.pendingReviews)
+                Button(enabled = pending == null && !submitting && impactConfirmed, onClick = {
                     pendingJson = Json.encodeToString(CompanyReviewSetupIntent.serializer(), CompanyReviewSetupIntent(
                         newOperationId(), organizationId, workflow, chosen.employeeId, chosen.identityId, chosen.employeeVersion,
                         chosen.displayName, setup.policyId, setup.policyVersion, setup.bindingId, setup.bindingVersion, setup.pendingReviews,
+                        if (needsPendingClosure) setup.pendingPolicies else emptyList(),
+                        pendingClosureReason.trim().takeIf { needsPendingClosure },
                     ))
                     attempted = false; unknownOutcome = false; rejectionConfirmed = false
                     commandError = null; acknowledgement = null; dialogVisible = true
@@ -296,10 +328,11 @@ private fun CompanyReviewSetupWorkspace(
                 Text(intent.reviewerDisplayName, style = MaterialTheme.typography.titleMedium)
                 Text(hiltechText("يظل الاعتماد مطلوبًا، مع مراجع مستقل عن مُعدّ السجل. يتم حفظ تاريخ الإعداد السابق.",
                     "Approval remains required from a reviewer independent of the preparer. The prior setup history is retained."))
-                if (intent.pendingReviews > 0) Text(hiltechText(
-                    "الطلبات المعلقة تحت المسار السابق تحتاج سجلًا مصححًا وطلب مراجعة جديدًا بعد تغيير المراجع.",
-                    "Requests pending under the prior workflow need a corrected record and a new review request after the reviewer changes.",
-                ))
+                if (intent.pendingPoliciesToSupersede.isNotEmpty()) {
+                    Text(hiltechText("ستنتهي ${intent.pendingReviews} طلبات معلقة. يلزم إعادة إرسال مصادرها للمراجع الجديد.",
+                        "${intent.pendingReviews} pending requests will be ended. Their sources must be resubmitted to the new reviewer."))
+                    Text(intent.supersedeReason.orEmpty())
+                }
                 if (submitting) CircularProgressIndicator()
                 commandError?.let { Text(setupError(it), color = MaterialTheme.colorScheme.error) }
                 if (commandError == "REAUTH_REQUIRED" && onReauthenticate != null) TextButton(onClick = onReauthenticate, enabled = !submitting) {
@@ -343,7 +376,11 @@ private fun CompanyReviewSetupWorkspace(
 private fun workflowLabel(workflow: String): String = when (workflow) {
     "PAYROLL_SOURCE" -> hiltechText("مراجعة مدخلات الرواتب", "Payroll input review")
     "PAYROLL_RUN" -> hiltechText("اعتماد كشف الرواتب", "Payroll run approval")
-    else -> hiltechText("مراجعة نتائج صرف الرواتب", "Payroll disbursement review")
+    "FINANCE_PAYROLL_RESULT" -> hiltechText("مراجعة نتائج صرف الرواتب", "Payroll disbursement review")
+    "PROCUREMENT_PO" -> hiltechText("اعتماد مقترحات الشراء", "Purchase proposal approval")
+    "SERVICE_HANDOVER" -> hiltechText("اعتماد التسليم", "Handover approval")
+    "SERVICE_WARRANTY" -> hiltechText("اعتماد الضمان", "Warranty approval")
+    else -> hiltechText("مسار المراجعة", "Review workflow")
 }
 
 @Composable
@@ -358,6 +395,11 @@ private fun setupError(code: String): String = when (code) {
         "The employee’s account or review responsibility changed. Refresh and choose a current reviewer.")
     "REVIEW_WORKFLOW_PROTECTED_AUTHORITY" -> hiltechText("هذا المسار يستخدم سلطة اعتماد مستقلة لا يمكن استبدالها من هذه الشاشة.",
         "This workflow uses independently governed approval authority that cannot be replaced here.")
+    "APPROVAL_POLICY_PENDING_CONFIRMATION_REQUIRED", "APPROVAL_POLICY_PENDING_CHANGED", "APPROVAL_POLICY_CHANGED" -> hiltechText(
+        "تغيرت الطلبات المعلقة أو نسخة المسار. حدّث الحالة وراجع عدد الطلبات التي ستنتهي قبل التأكيد.",
+        "Pending requests or the workflow version changed. Refresh and review the affected request count before confirming.")
+    "APPROVAL_POLICY_MAINTENANCE_REASON_REQUIRED" -> hiltechText("اكتب سبب إنهاء الطلبات المعلقة قبل تغيير المراجع.",
+        "Enter a reason for ending pending requests before replacing the reviewer.")
     else -> hiltechText("تعذر تأكيد الإعداد. تحقق من الاتصال والصلاحية وأعد نفس الطلب إن كان محفوظًا.",
         "Couldn’t confirm the setup. Check your connection and authority, and retry the same saved request if present.")
 }

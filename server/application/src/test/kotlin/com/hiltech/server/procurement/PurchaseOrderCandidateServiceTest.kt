@@ -71,6 +71,7 @@ class PurchaseOrderCandidateServiceTest {
     private val candidates = Mockito.mock(PurchaseOrderCandidatePersistence::class.java)
     private val audit = Mockito.mock(AuditEventWriter::class.java)
     private var submitted: PurchaseOrderCandidateRecord? = null
+    private val history = linkedMapOf<UUID, PurchaseOrderCandidateRecord>()
     private val commands = object : IdempotentCommandExecutor {
         override fun execute(spec: IdempotentCommandSpec, action: () -> IdempotentCommandOutcome) =
             IdempotentCommandExecution(action(), false)
@@ -96,6 +97,7 @@ class PurchaseOrderCandidateServiceTest {
         Mockito.`when`(sourcing.quotes(rfqId)).thenReturn(listOf(quote))
         Mockito.doAnswer {
             submitted = it.getArgument(0)
+            submitted?.let { candidate -> history[candidate.id] = candidate }
             Unit
         }.`when`(candidates).insert(
             Mockito.any(PurchaseOrderCandidateRecord::class.java)
@@ -107,6 +109,7 @@ class PurchaseOrderCandidateServiceTest {
                 ),
         )
         Mockito.`when`(candidates.byRfq(rfqId)).thenAnswer { submitted }
+        Mockito.`when`(candidates.byId(Mockito.any(UUID::class.java) ?: UUID.randomUUID())).thenAnswer { history[it.getArgument(0)] }
     }
 
     private fun request(revision: Int = 1) = ProposePurchaseOrderCandidateRequest(
@@ -205,7 +208,31 @@ class PurchaseOrderCandidateServiceTest {
                 sourceSha, "Older supplier choice", actor, now, "s03-test",
             ),
         )
-        assertTrue("CANDIDATE_ALREADY_RECORDED" in
-            service().preview(actor, rfqId, quoteId).blockers)
+        assertTrue(service().preview(actor, rfqId, quoteId).canReplace)
+        assertEquals("PROCUREMENT_PO_CANDIDATE_SOURCE_CHANGED", assertThrows<ProductApiException> {
+            service().propose(ctx, rfqId, request())
+        }.code)
+    }
+
+    @Test fun explicitCorrectionPreservesPreviousCandidateAndCannotReplacePendingOrIssuedOrder() {
+        allow()
+        val original = service().propose(ctx, rfqId, request())
+        val first = requireNotNull(submitted)
+        Mockito.`when`(candidates.hasPendingReview(first.id)).thenReturn(true)
+        assertFalse(service().preview(actor, rfqId, quoteId).canReplace)
+        val nextOp = UUID.randomUUID()
+        val correction = request().copy(operationId = nextOp, replacesCandidateId = first.id, expectedCandidateRevision = 1,
+            rationale = "Corrected delivery terms checked against the supplier quotation")
+        val nextContext = ctx.copy(operationId = nextOp)
+        assertThrows<ProductApiException> { service().propose(nextContext, rfqId, correction) }
+        Mockito.`when`(candidates.hasPendingReview(first.id)).thenReturn(false)
+        Mockito.`when`(candidates.hasIssuedOrder(rfqId)).thenReturn(true)
+        assertThrows<ProductApiException> { service().propose(nextContext, rfqId, correction) }
+        Mockito.`when`(candidates.hasIssuedOrder(rfqId)).thenReturn(false)
+        val second = service().propose(nextContext, rfqId, correction)
+        assertEquals(2, second.candidateRevision)
+        assertEquals(first.id, submitted?.replacesCandidateId)
+        assertEquals(first, history[original.candidateId])
+        assertEquals(2, history.size)
     }
 }

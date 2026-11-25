@@ -300,7 +300,7 @@ class HandoverReviewService(
 
 @RestController
 @RequestMapping("/v1/projects/{projectId}/handover/packages/{versionId}/internal-review")
-@ConditionalOnProperty(prefix = "hiltech.phase11.handover", name = ["enabled"], havingValue = "true")
+@ConditionalOnProperty(prefix = "hiltech.phase11.handover", name = ["enabled"], havingValue = "true", matchIfMissing = true)
 class HandoverReviewController(private val service: HandoverReviewService) {
     @GetMapping
     fun summary(
