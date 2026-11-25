@@ -2,34 +2,19 @@
 
 This repository is the single source of truth for the HILTECH digital transformation and HILTECH OS product.
 
-## Current phase
+## Current engineering source
 
-**Phase 1 — Identity, Organization, Permissions Foundation.**
+HILTECH is being consolidated and verified as one integrated product, not
+restarted from an earlier phase. Start with [AGENTS.md](AGENTS.md) and the
+[current program status](docs/00-program/CURRENT_PROGRAM_STATUS.md).
 
-The first production slice is frozen, Repository Bootstrap / Phase 0 is verified and merged, and business vertical implementation is authorized to begin with Phase 1.
+The integrated candidate is PR #242 and its follow-up is PR #243. Verify
+current heads before changing code. Do not assume a historical phase label,
+a successful build, or a draft PR means a deployed and accepted release.
 
-Canonical freeze decision:
-`docs/13-delivery/first-slice-contract-pack/24_FIRST_SLICE_FREEZE_DECISION_2026-09-19.md`
-
-Canonical stack:
-`docs/12-stack/FINAL_STACK.md`
-
-Current implementation rule:
-
-> **The shared foundation is verified. Ship complete vertical slices from the frozen contracts.**
-
-The first production vertical remains:
-
-PM Desktop
-→ Project / Site / Work Order
-→ Warehouse Asset Reservation / Checkout
-→ Technician Android
-→ Offline Execution / Evidence
-→ Reconnect / Sync
-→ Supervisor Acceptance
-→ PM Read / Audit
-
-Do not prematurely implement later domains; record useful reality evidence now and consume it when the relevant phase arrives.
+Complete existing user journeys across native UI, source-owned operations,
+authorization, recovery and both supported platforms. Preserve the historical
+contracts and evidence; use Git history for earlier status snapshots.
 
 ## Product thesis
 

@@ -9,15 +9,14 @@ Use JDK 21, the installed Android SDK and a Windows host. Set the two HTTPS endp
 ```powershell
 .\gradlew.bat :apps:desktopApp:packageMsi :apps:androidApp:assembleDebug `
   "-Philtech.apiBaseUrl=$apiUrl" `
-  "-Philtech.oidcIssuerUri=$issuerUri" `
-  "-Philtech.productProfile=operations"
+  "-Philtech.oidcIssuerUri=$issuerUri"
 ```
 
 The MSI includes its connection settings. An environment variable already set for the Windows process takes precedence over the packaged value. The Android APK includes the same endpoints and uses the local debug signer, suitable for staging and developer devices. Updates to an existing Android installation require its signing certificate. Public distribution requires the release signing keys.
 
 ## Configure the operations profile
 
-Set `SPRING_PROFILES_ACTIVE=operations` in the HILTECH API environment. The runtime profile provides defaults for assigned AssetTag lookup, personal issued stock, material usage reporting, completion and Executive Home. The matching native build profile opens the corresponding entry points. The original server APIs still enforce current organization, role, assignment and transaction checks.
+Set `SPRING_PROFILES_ACTIVE=operations` in the HILTECH API environment. The runtime profile provides defaults for assigned AssetTag lookup, personal issued stock, material usage reporting, completion and Executive Home. The authenticated server capabilities determine the corresponding native entry points. The server APIs still enforce current organization, role, assignment and transaction checks.
 
 Omit existing per-feature overrides to inherit the profile defaults. An explicit `HILTECH_FIELD_*_ENABLED=false` remains effective and can be used for rollback of an individual workflow. Keep database, OIDC, OpenFGA and evidence settings in the private HILTECH API environment. The product profile needs no `SPRING_APPLICATION_JSON`.
 

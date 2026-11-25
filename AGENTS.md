@@ -34,108 +34,11 @@ candidate, not resuming a historical phase cursor.
   Internal reports, role assignments, detailed audit matrices and operational
   evidence stay private. Do not embed private artifact links or identifiers.
 
-### Historical phase checkpoint
+## Historical records
 
-The checkpoint below is retained for provenance. Its next-phase instructions
-and completion labels describe the earlier handoff, not the current product
-acceptance status or the current execution order.
-
-
-- Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
-- Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
-- Phase 2 — Shared Product Infrastructure: **VERIFIED / COMPLETE**
-- Current execution phase: **Phase 4 — Projects / Sites / Work Core — Slice 01 VERIFIED / MERGED; Slice 02–06 planning FROZEN; production execution resumes at Slice 02**
-- Phase 2 Slice 01: **Shared HTTP / Command Runtime — VERIFIED**
-- Phase 2 Slice 02: **Evidence Metadata + Upload/Finalize — VERIFIED**
-- Slice 02 canonical verified code head: `563875c0421df713b52e6661bf3d46b8c5ec5878`
-- Slice 02 verification runs: Phase 2 `35433246103` / Bootstrap `35433246124` / Phase 1 OIDC `35433246188` — **PASS**
-- Phase 2 Slice 02 merge commit: `21a04718414ab20ecf8deeffccfd63961e45099a`; post-merge Bootstrap run `35434157140` — **PASS**
-- Phase 2 Slice 03: **Activity Events Foundation — VERIFIED / MERGED**
-- Slice 03 merge commit: `9eaf7a2a18ac7138a08c6fcab43ab282b2449ce9`
-- Slice 03 post-merge Bootstrap run: `35438086181` — **PASS**
-- Slice 03 contract: `docs/13-delivery/phase2/03_ACTIVITY_EVENTS_FOUNDATION_SLICE_2026-09-19.md`
-- Phase 2 Slice 04: **Minimal Approval Engine Foundation — VERIFIED / MERGED**
-- Slice 04 merge commit: `b6aad197bb4a9e8200717ad9801092dc2cabbb5b`
-- Slice 04 post-merge Bootstrap run `35464733404` — **PASS**
-- Slice 04 post-merge OpenFGA run `35464733333` — **PASS**
-- Slice 04 implementation contract: `docs/13-delivery/phase2/04_APPROVAL_ENGINE_FOUNDATION_SLICE_2026-09-19.md` — **VERIFIED**
-- Phase 2 Slice 05: **Inbox / Work Queue Foundation — VERIFIED / MERGED**
-- Slice 05 branch / PR: `phase2/inbox-work-queue-foundation-20260919` / **#34**
-- Slice 05 canonical tested code head: `fa8d0660f49c6de0dc4bc1285976f6a06a4610cb`
-- Slice 05 merge commit: `6b6194a9107dcfc1ba74e392776a1dee9e38964a`
-- Slice 05 exact-head verification: Bootstrap `35467408783` / Phase 2 `35467408781` / Phase 1 OIDC `35467408788` — **PASS**
-- Slice 05 post-merge Bootstrap run: `35468123129` — **PASS**
-- Slice 05 reality gate: `docs/13-delivery/phase2/05_INBOX_WORK_QUEUE_REALITY_CLOSURE_2026-09-19.md` — **PASS**
-- Slice 05 implementation contract: `docs/13-delivery/phase2/05_INBOX_WORK_QUEUE_FOUNDATION_SLICE_2026-09-19.md` — **VERIFIED / MERGED**
-- Slice 05 rule preserved in production: source domains stay authoritative; Work Queue is current actionable attention, Inbox is durable attention/read state, and Notifications remain a separate delivery concern.
-- Phase 2 Slice 06: **Notification Abstraction — VERIFIED / MERGED**
-- Slice 06 reality gate: `docs/13-delivery/phase2/06_NOTIFICATION_ABSTRACTION_REALITY_CLOSURE_2026-09-20.md` — **PASS**
-- Slice 06 implementation contract: `docs/13-delivery/phase2/06_NOTIFICATION_ABSTRACTION_FOUNDATION_SLICE_2026-09-20.md` — **VERIFIED / MERGED**
-- Slice 06 canonical tested code head: `df72b296181890b3f4a680800f924c8bde3ec5b8`
-- Slice 06 verification runs: Bootstrap `35472074530` / Phase 2 `35472074603` / Phase 1 OIDC `35472074705` — **PASS**
-- Slice 06 rule preserved: provider-neutral Notification intent/policy/attempt foundation only; no production provider, preferences, quiet hours, digest, escalation or TEAM fan-out were invented.
-- Slice 06 merge commit: `a24715e9d792672a0a33fbebaf2e16a1acafadc9`; post-merge Bootstrap `35474093059` — **PASS**
-- Phase 2 final gap review: `docs/13-delivery/phase2/07_PHASE2_FINAL_GAP_REVIEW_2026-09-20.md` — **PASS / NO ADDITIONAL PHASE 2 SLICE REQUIRED**
-- Phase 2 final closure PR #37 merge commit: `624bd6c50f8d17535316ae450a8a780bc756a108`; post-merge Bootstrap `35474921624` — **PASS**
-- Phase 3 scope closure: `docs/13-delivery/phase3/00_PHASE3_PEOPLE_CORE_SCOPE_CLOSURE_2026-09-20.md` — **PASS / SLICE PLAN FROZEN**
-- Phase 3 Slice 01 contract: `docs/13-delivery/phase3/01_EMPLOYEE_EMPLOYMENT_CORE_SLICE_2026-09-20.md` — **VERIFIED / MERGED**
-- Phase 3 Slice 01 canonical tested code head: `59c5cb9fb4d859260ba48a9f8edd5ecce5a97e96`
-- Slice 01 verification runs: OpenFGA `35477856791` / Bootstrap `35477856788` / Phase 1 OIDC `35477856782` / Phase 2 runtime `35477856796` — **PASS**
-- Slice 01 merge commit: `0183a273f1a01d3b9d0277df2ac2e8bbe2f98390`; post-merge Bootstrap `35478418690` and OpenFGA `35478418692` — **PASS**
-- Slice 02 reality closure: `docs/13-delivery/phase3/02_WORKFORCE_ASSIGNMENT_REALITY_CLOSURE_2026-09-20.md` — **PASS**
-- Slice 02 implementation contract: `docs/13-delivery/phase3/02_WORKFORCE_ASSIGNMENT_FOUNDATION_SLICE_2026-09-20.md` — **VERIFIED / MERGED**
-- Slice 02 canonical tested code head: `b838e92f1126ebf1081c81568d5abb90d0c17edd`
-- Slice 02 verification: Bootstrap `35479675064` / Phase 2 runtime `35479675067` / Phase 1 OIDC `35479675062` attempt 2 — **PASS**
-- Slice 02 merge commit: `9b42ba8981364884b1e9217ad1b1d52c55f3b2ce`; post-merge Bootstrap `35480853486` — **PASS**
-- Slice 03 reality closure: `docs/13-delivery/phase3/03_HR_DOCUMENTS_CERTIFICATIONS_REALITY_CLOSURE_2026-09-20.md` — **PASS**
-- Slice 03 implementation contract: `docs/13-delivery/phase3/03_HR_DOCUMENTS_CERTIFICATIONS_SLICE_2026-09-20.md` — **VERIFIED / MERGED**
-- Slice 03 canonical tested code head: `9fa0b95de549bd92cc7d3a554cd7cdcf941ef35f`
-- Slice 03 exact-head verification: Bootstrap `35482995671` / Phase 2 runtime `35482995728` / Phase 1 OIDC `35482995573` — **PASS**
-- Slice 03 merge commit: `d5d0cb256e68cf7b30978434aa6ba241c7500df1`; post-merge Bootstrap `35485263189` — **PASS**
-- Slice 04 reality closure: `docs/13-delivery/phase3/04_ONBOARDING_SELF_SERVICE_REALITY_CLOSURE_2026-09-20.md` — **PASS**
-- Slice 04 implementation contract: `docs/13-delivery/phase3/04_ONBOARDING_SELF_SERVICE_SLICE_2026-09-20.md` — **VERIFIED / MERGED**
-- Slice 04 canonical tested code head: `d511f1e262e954a2646bd040692d5a6f0e74371e`
-- Slice 04 exact-head verification: Bootstrap `35488578970` / Phase 2 runtime `35488578980` / Phase 1 OIDC `35488578992` / Onboarding Human Proof `35488579082` — **PASS**
-- Slice 04 merge commit: `f7d7460718f43e634a180734623dabe5260b0224`; post-merge Bootstrap `35489327649` — **PASS**
-- Slice 05 reality closure: `docs/13-delivery/phase3/05_WORKFORCE_ASSIGNMENT_CHANGE_REALITY_CLOSURE_2026-09-20.md` — **PASS**
-- Slice 05 implementation contract: `docs/13-delivery/phase3/05_WORKFORCE_ASSIGNMENT_CHANGE_SLICE_2026-09-20.md` — **VERIFIED / MERGED**
-- Slice 05 canonical tested code head: `1c9986ef369cdd40b16cea53726d19f7fb10e799`
-- Slice 05 merge commit: `51648418a69df285334f76f5b1b4cfca9ec3cc43`; post-merge Bootstrap `35492558129` — **PASS**
-- Slice 06 reality closure: `docs/13-delivery/phase3/06_OFFBOARDING_SKELETON_REALITY_CLOSURE_2026-09-20.md` — **PASS**
-- Slice 06 implementation contract: `docs/13-delivery/phase3/06_OFFBOARDING_SKELETON_SLICE_2026-09-20.md` — **VERIFIED / MERGED**
-- Slice 06 final closure head: `4d941970563b84245061d5ab80101550243b6000`
-- Slice 06 final exact-head verification: Bootstrap `35495373713` attempt 2 / Phase 2 runtime `35495373785` / Phase 1 OIDC `35495373737` / Onboarding proof `35495373800` / Assignment Change proof `35495373780` / Offboarding Human Proof `35495373723` — **PASS**
-- Slice 06 merge commit: `bc6b61cca744c17814e58d5e212812339cd96409`; post-merge Bootstrap `35495676983` — **PASS**
-- Phase 3 final gap review: `docs/13-delivery/phase3/07_PHASE3_FINAL_GAP_REVIEW_2026-09-20.md` — **PASS / NO ADDITIONAL PHASE 3 SLICE REQUIRED**
-- Phase 4 owner entry reconstruction: `docs/13-delivery/phase4/00_PHASE4_OWNER_ENTRY_REALITY_RECONSTRUCTION_2026-09-20.md` — **PASS / OWNER ACCEPTED**
-- Phase 4 scope/slice closure: `docs/13-delivery/phase4/01_PHASE4_SCOPE_AND_SLICE_PLAN_2026-09-20.md` — **PASS / SCOPE FROZEN / 6 SLICES**
-- Approval cursor stability prerequisite: PR #54 merged at `b9eee0ee5af61ffb960b3b4baa142b2896a9ac59`; exact-head Approval Stability `35511034523`, Bootstrap `35511034711`, Native OIDC `35511034539`, and post-merge Bootstrap `35511320336` — **PASS**
-- Phase 4 Slice 01 reality + implementation contract: `docs/13-delivery/phase4/02_PROJECT_SITE_CORE_REALITY_AND_IMPLEMENTATION_CONTRACT_2026-09-20.md` — **PASS / FROZEN**
-- Phase 4 Slice 01 final gap review: `docs/13-delivery/phase4/03_PROJECT_SITE_CORE_FINAL_GAP_REVIEW_2026-09-20.md` — **PASS / VERIFIED / MERGED / NO ADDITIONAL SLICE 01 WORK REQUIRED**
-- Slice 01 final tested head: `89c19605405dad912457dc22286751c2eb379752`
-- Slice 01 exact-head verification: Phase 4 Project Site Core `35515218944` / Bootstrap `35515218905` / Native OIDC `35515218910` / Onboarding `35515218926` / Assignment Change `35515218940` / Offboarding `35515218945` — **PASS**
-- Slice 01 final merge commit: `e6b87dd4a6a4f66e72190a5d1d3c632b414f359e`; post-merge Bootstrap `35515882737` — **PASS**
-- Phase 4 full implementation map: `docs/13-delivery/phase4/04_PHASE4_MASTER_IMPLEMENTATION_MAP_2026-09-20.md` — **FROZEN**
-- Slice 02 contract: `docs/13-delivery/phase4/05_SLICE02_PROJECT_PLANNING_STRUCTURE_CONTRACT_2026-09-20.md` — **FROZEN**
-- Slice 03 contract: `docs/13-delivery/phase4/06_SLICE03_WORKORDER_POLICY_BINDING_CONTRACT_2026-09-20.md` — **FROZEN**
-- Slice 04 contract: `docs/13-delivery/phase4/07_SLICE04_READINESS_ASSIGNMENT_CONTRACT_2026-09-20.md` — **FROZEN**
-- Slice 05 contract: `docs/13-delivery/phase4/08_SLICE05_REVIEW_PROGRESS_HEALTH_CONTRACT_2026-09-20.md` — **FROZEN**
-- Slice 06 contract: `docs/13-delivery/phase4/09_SLICE06_ASSIGNED_WORK_MOBILE_HANDOFF_CONTRACT_2026-09-20.md` — **FROZEN**
-- Phase 4 completion/Codex handoff: `docs/13-delivery/phase4/10_PHASE4_COMPLETION_GATES_AND_CODEX_HANDOFF_2026-09-20.md` — **FROZEN**
-- Current rule: Phase 4 product planning is closed before coding resumes. Execute Slice 02 -> 03 -> 04 -> 05 -> 06 sequentially from these contracts. Do not redesign the phase per slice; stop only for a genuine repository contradiction.
-- First production slice contracts: **FROZEN / PASS**
-- Figma: **OPTIONAL**, not an implementation blocker
-- First-slice rendered design proof: **PASS**
-- Infrastructure provider baseline: **OCI research/contract selected; activation/purchase remains separately gated**
-
-Canonical current status:
-`docs/00-program/CURRENT_PROGRAM_STATUS.md`
-
-Canonical implementation order:
-`docs/13-delivery/IMPLEMENTATION_ORDER.md`
-
-Canonical first-slice stack:
-`docs/12-stack/FINAL_STACK.md`
+Past phase checkpoints remain in Git history and the domain contracts.
+They are not active execution instructions or acceptance results for the
+unified product. Use the current integrated source and actual verification.
 
 ## Mandatory read order before changing code
 
