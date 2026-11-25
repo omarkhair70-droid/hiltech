@@ -210,7 +210,7 @@ BEGIN
  IF p.action<>'VOID_MATCH' THEN
    SELECT * INTO bank FROM finance_bank_statement_intake_line WHERE id=p.bank_statement_line_id AND organization_id=NEW.organization_id FOR UPDATE;
    IF bank.id IS NULL OR bank.amount<>i.amount OR bank.currency<>i.currency
-     OR bank.flow<>CASE WHEN p.action='SUCCESS' THEN 'DEBIT' ELSE 'CREDIT' END
+     OR bank.flow<>(CASE WHEN p.action='SUCCESS' THEN 'DEBIT' ELSE 'CREDIT' END)
      OR NOT EXISTS (SELECT 1 FROM finance_bank_statement_intake h
        WHERE h.id=bank.intake_id AND h.organization_id=NEW.organization_id
          AND h.statement_evidence_id=p.evidence_id AND h.statement_sha256=p.evidence_sha256)
