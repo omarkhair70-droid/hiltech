@@ -14,6 +14,17 @@ dump_ui() {
   adb shell cat /sdcard/hiltech-phase5-asset.xml | tr -d '\r'
 }
 
+report_failure() {
+  local status=$?
+  trap - ERR
+  printf 'Asset lookup smoke failed with exit %s; capturing the current synthetic UI.\n' "$status" >&2
+  dump_ui > "$report_dir/android-asset-lookup-failure.xml" || true
+  cat "$report_dir/android-asset-lookup-failure.xml" >&2 || true
+  adb exec-out screencap -p > "$report_dir/android-asset-lookup-failure.png" || true
+  exit "$status"
+}
+trap report_failure ERR
+
 wait_for_text() {
   local expected="$1" xml
   for ((attempt=0; attempt<15; attempt++)); do

@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.HiltechPlannedDateRange
+import com.hiltech.shared.core.design.hiltechDateRangeProblem
 import com.hiltech.shared.core.design.HiltechRecordChoice
 import com.hiltech.shared.core.design.HiltechRecordPicker
 import com.hiltech.shared.core.design.HiltechSectionHeading
@@ -476,29 +478,13 @@ private fun ProjectCreateForm(
         if (principalType == "EMPLOYEE") employeeChoices else teamChoices, { principalId = it },
     )
     Text(hiltechText("الجدول المخطط", "Planned schedule"), style = MaterialTheme.typography.titleSmall)
-    OutlinedTextField(
-        value = startDate,
-        onValueChange = {
-            startDate = it
-        },
-        label = {
-            Text(hiltechText("بداية مخططة YYYY-MM-DD", "Planned start YYYY-MM-DD"))
-        },
-    )
-    OutlinedTextField(
-        value = endDate,
-        onValueChange = {
-            endDate = it
-        },
-        label = {
-            Text(hiltechText("نهاية مخططة YYYY-MM-DD", "Planned end YYYY-MM-DD"))
-        },
-    )
+    HiltechPlannedDateRange(startDate, endDate, { startDate = it }, { endDate = it })
     Button(
         enabled =
             name.isNotBlank() &&
                 clientId.isNotBlank() &&
-                (principalType.isBlank() || principalId.isNotBlank()),
+                (principalType.isBlank() || principalId.isNotBlank()) &&
+                hiltechDateRangeProblem(startDate, endDate) == null,
         onClick = {
             onCreateProject(
                 name,

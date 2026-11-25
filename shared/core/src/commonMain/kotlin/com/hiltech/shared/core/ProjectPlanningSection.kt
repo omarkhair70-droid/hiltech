@@ -369,9 +369,9 @@ private fun MilestoneFields(
     var acceptance by remember(initialAcceptance) { mutableStateOf(initialAcceptance) }
     OutlinedTextField(code, { code = it }, label = { Text("كود المعلم") })
     OutlinedTextField(name, { name = it }, label = { Text("اسم المعلم") })
-    OutlinedTextField(date, { date = it }, label = { Text("تاريخ YYYY-MM-DD — اختياري") })
+    HiltechDateField(hiltechText("تاريخ المعلم", "Milestone date"), date, { date = it })
     OutlinedTextField(acceptance, { acceptance = it }, label = { Text("شرط قبول — اختياري") })
-    Button(enabled = code.isNotBlank() && name.isNotBlank(), onClick = {
+    Button(enabled = code.isNotBlank() && name.isNotBlank() && isValidOptionalHiltechDate(date), onClick = {
         submit(code.trim(), name.trim(), date.trim(), acceptance.trim())
     }) { Text(if (initialCode.isBlank()) "إضافة معلم" else "حفظ المعلم") }
 }
@@ -443,10 +443,9 @@ private fun WorkPackageFields(
     OutlinedTextField(milestoneId, { milestoneId = it }, label = { Text("Milestone ID — اختياري") })
     OutlinedTextField(ownerType, { ownerType = it }, label = { Text("المسؤول EMPLOYEE / TEAM — اختياري") })
     OutlinedTextField(ownerId, { ownerId = it }, label = { Text("Owner ID — اختياري") })
-    OutlinedTextField(start, { start = it }, label = { Text("بداية مخططة — اختياري") })
-    OutlinedTextField(end, { end = it }, label = { Text("نهاية مخططة — اختياري") })
+    HiltechPlannedDateRange(start, end, { start = it }, { end = it })
     OutlinedTextField(sequence, { sequence = it }, label = { Text(hiltechText("الترتيب — اختياري", "Sequence (optional)")) })
-    Button(enabled = code.isNotBlank() && name.isNotBlank(), onClick = {
+    Button(enabled = code.isNotBlank() && name.isNotBlank() && hiltechDateRangeProblem(start, end) == null, onClick = {
         submit(
             WorkPackageValues(
                 projectSiteId.blankToNull(), siteId.blankToNull(), milestoneId.blankToNull(), code.trim(),

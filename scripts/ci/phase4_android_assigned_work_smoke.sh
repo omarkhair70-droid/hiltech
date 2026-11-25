@@ -102,7 +102,11 @@ render_mode () {
 }
 
 render_mode "today" "شغلي اليوم" "android-today-rtl.png"
-scroll_until_text "السياق جاهز للمراجعة — التنفيذ بصلاحياتك الحالية فقط" 30
+# TodayCard now presents the assignment reference, lifecycle/readiness and
+# actionable label separately. Prove the current fixture, not removed copy.
+scroll_until_text "WO-2026-010" 30
+wait_for_text "ASSIGNED · READY" 10
+wait_for_text "جاهز للمراجعة" 10
 
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$ACTIVITY" --es mode "detail" \

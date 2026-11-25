@@ -17,20 +17,20 @@ dump_ui () {
 }
 
 wait_for_text () {
-  local EXPECTED="$1"
-  local LIMIT="$2"
+  local LIMIT="$1"
+  shift
   local START
   START="$(date +%s)"
 
   while true; do
     XML="$(dump_ui || true)"
-    if echo "$XML" | grep -F -q "$EXPECTED"; then
+    if printf '%s' "$XML" | python3 scripts/ci/phase1_android_ui_text.py "$@"; then
       return 0
     fi
 
     NOW="$(date +%s)"
     if [ $((NOW - START)) -ge "$LIMIT" ]; then
-      echo "Timed out waiting for UI text: $EXPECTED"
+      printf 'Timed out waiting for exact UI text (supported translations): %s\n' "$*"
       echo "$XML"
       adb logcat -d -t 500 | grep -i -E 'hiltech|oidc|MainActivity' || true
       return 1
@@ -43,8 +43,10 @@ adb shell am force-stop "$PKG"
 adb shell am start -W -n "$ACTIVITY" >/tmp/hiltech-android-start.out
 cat /tmp/hiltech-android-start.out
 
-wait_for_text "Sign in with your HILTECH identity to continue." 30
-wait_for_text "Sign in" 10
+# The production shell is Arabic-first and also supports English. Assert the
+# actual localized labels; an unrelated screen or metadata text must not pass.
+wait_for_text 30 "سجّل الدخول بحساب HILTECH للمتابعة." "Sign in with your HILTECH identity to continue."
+wait_for_text 10 "تسجيل الدخول" "Sign in"
 adb exec-out screencap -p > "$REPORT_DIR/android-signed-out.png"
 test -s "$REPORT_DIR/android-signed-out.png"
 
@@ -54,8 +56,8 @@ adb shell am start -W   -a android.intent.action.VIEW   -c android.intent.catego
 cat /tmp/hiltech-android-callback.out
 
 grep -q "com.hiltech.android/.MainActivity" /tmp/hiltech-android-callback.out
-wait_for_text "Something went wrong" 30
-wait_for_text "OIDC_ATTEMPT_MISSING" 10
+wait_for_text 30 "حدث خطأ" "Something went wrong"
+wait_for_text 10 "المرجع: OIDC_ATTEMPT_MISSING" "Reference: OIDC_ATTEMPT_MISSING"
 adb exec-out screencap -p > "$REPORT_DIR/android-callback-failure.png"
 test -s "$REPORT_DIR/android-callback-failure.png"
 
