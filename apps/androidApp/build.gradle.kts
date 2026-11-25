@@ -228,6 +228,7 @@ android {
 
 dependencies {
     implementation(project(":shared:core"))
+    implementation(libs.compose.foundation)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.work.runtime)
     implementation(libs.kotlinx.coroutines.android)

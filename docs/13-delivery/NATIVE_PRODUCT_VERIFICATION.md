@@ -85,6 +85,14 @@ action. Raw provider or server messages are not product copy. Retain a separate
 sanitized support reference and preserve callback, session and authorization
 checks. Re-run native shell assertions when changing these visible messages.
 
+Android window chrome and system insets are part of the host contract. Keep the
+Compose shell out of system bars, display cutouts and the visible keyboard;
+do not layer a platform ActionBar over its own navigation or product heading.
+Native smoke checks must inspect the product heading, subtitle and controls
+inside the safe content bounds, exercise language changes using observed UI
+bounds, and retain the UI hierarchy alongside screenshots. Text presence alone
+does not establish that a control is visible or reachable.
+
 ## Completion discipline
 
 Update the existing private closeout record with new defects, results and

@@ -23,7 +23,7 @@ import com.hiltech.android.field.PendingEvidenceCapture
 import com.hiltech.android.field.PendingEvidenceCaptureState
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -248,6 +248,7 @@ class MainActivity : ComponentActivity() {
         savedInstanceState: Bundle?,
     ) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         // Android may destroy this Activity while the system picker or camera
         // is open. Recover its scoped request before ActivityResult delivery.
         pendingEvidenceCapture = PendingEvidenceCaptureState.restore(
@@ -255,7 +256,7 @@ class MainActivity : ComponentActivity() {
             File(filesDir, "field-camera"),
         )
 
-        setContent {
+        setHiltechAndroidContent {
             var fieldFocused by remember { mutableStateOf(false) }
             var fieldBackRequest by remember { mutableStateOf(0) }
             var workspaceBackAvailable by remember { mutableStateOf(false) }
