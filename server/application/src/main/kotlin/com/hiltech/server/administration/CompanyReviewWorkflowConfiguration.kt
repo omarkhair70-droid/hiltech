@@ -14,10 +14,14 @@ import java.util.UUID
 /** The same source key is one explicitly shared workflow group, never two competing setups. */
 @Component
 class CompanyReviewWorkflowConfiguration @Autowired constructor(
-    private val environment: Environment? = null,
+    private val environment: Environment?,
     private val payroll: PayrollRunPolicyConfiguration = PayrollRunPolicyConfiguration("PAYROLL_RUN_REVIEW"),
     private val procurement: ProcurementReviewPolicyConfiguration = ProcurementReviewPolicyConfiguration("PROCUREMENT_PO_REVIEW"),
 ) {
+    // A deliberate, unannotated convenience constructor keeps direct callers
+    // compatible without Kotlin generating a second required @Autowired constructor.
+    constructor() : this(null)
+
     fun key(workflow: CompanyReviewWorkflow): String = when (workflow) {
         CompanyReviewWorkflow.PAYROLL_RUN -> payroll.key
         CompanyReviewWorkflow.PROCUREMENT_PO -> procurement.key
