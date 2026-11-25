@@ -6,7 +6,34 @@ This repository is the single source of truth for HILTECH OS.
 
 Any coding agent, Codex session, new chat, automation, or human contributor must treat repository state and canonical documents as authoritative. Conversation memory is never the project source of truth.
 
-## Current program position
+## Current engineering baseline — 2026-11-25
+
+The active work is end-to-end product verification and repair on the unified
+candidate, not resuming a historical phase cursor.
+
+- Unified candidate: PR #242, `integration/hiltech-unified-staging-20261124`,
+  reviewed at `4a3709c5707d39135a6e8034d5ff1eb8ef949145`.
+- Follow-up changes: PR #243, `product/hiltech-reconstruction-20261125`.
+  Fetch the current heads and inspect their diffs before continuing. Neither
+  branch name nor a historical green check proves deployment or acceptance.
+- Read `docs/13-delivery/NATIVE_PRODUCT_VERIFICATION.md` for the current
+  engineering evidence contract and publication boundary.
+- Reconcile other checkouts and unique local work before merging. Preserve
+  dirty files and evidence; never reset or clean to make a comparison easier.
+- Complete interactions across UI, command response, permissions and source
+  truth. Screen access is separate from authority to execute an operation.
+- Record new defects in the existing private closeout register; do not create
+  another phase or publish a duplicate internal audit in this public repository.
+- Publish code, synthetic tests and sanitized engineering documentation only.
+  Internal reports, role assignments, detailed audit matrices and operational
+  evidence stay private. Do not embed private artifact links or identifiers.
+
+### Historical phase checkpoint
+
+The checkpoint below is retained for provenance. Its next-phase instructions
+and completion labels describe the earlier handoff, not the current product
+acceptance status or the current execution order.
+
 
 - Phase 0 — Repository / Engineering Foundation: **VERIFIED / MERGED**
 - Phase 1 — Identity, Organization, Permissions Foundation: **VERIFIED / COMPLETE**
@@ -125,7 +152,7 @@ Before work:
 - inspect `main` and the intended working branch,
 - do not assume any SHA from a prior chat,
 - inspect relevant open PRs and current GitHub Actions,
-- verify that the requested work belongs to the current phase/slice.
+- verify that the requested work belongs to the current authorized product scope.
 
 During work:
 
@@ -149,11 +176,14 @@ After work:
 - run the relevant regression gates,
 - inspect the actual workflow result,
 - update execution/status evidence where the slice requires it,
-- open a PR against the current `main`,
+- open/update the isolated PR against the verified unified candidate; do not retarget to `main` merely to trigger checks,
 - merge only the exact tested head,
 - never force-push over branch movement.
 
-## Phase rule
+## Historical decomposition rule
+
+The historical phases organize contracts; they do not replace current end-to-end
+product requirements or require creating a new phase for every repair.
 
 Each later phase receives its own reality/contract/design closure when implementation reaches it.
 
@@ -265,9 +295,11 @@ Keep external Actions pinned and preserve the existing supply-chain/OSV gates.
 
 A new agent must be able to continue without prior chat memory.
 
-If a decision exists only in a conversation, it is not durable until it is represented in the appropriate repository document.
+Record engineering decisions in the appropriate sanitized repository document.
+Keep sensitive operational decisions and their evidence in the private canonical
+record; publishing them is not a prerequisite for continuing authorized work.
 
-The repository must always answer:
+The sanitized engineering record must answer:
 - where the program is,
 - what is next,
 - what is frozen,

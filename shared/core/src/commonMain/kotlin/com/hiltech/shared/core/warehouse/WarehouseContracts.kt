@@ -289,6 +289,8 @@ data class WarehouseAuthorityCommandResponseDto(
     val version: Long,
     val replayed: Boolean,
     val correlationId: String,
+    val organizationId: String? = null,
+    val operationId: String? = null,
 )
 
 @Serializable

@@ -138,6 +138,15 @@ class HiltechApplication : Application() {
     val payrollAdminApi by lazy { Payroll9aApiClient(productApi) }
     val commercialApi by lazy { CommercialApiClient(productApi) }
     val readProjectsApi by lazy { ProjectsApiClient(productApi) }
+    val planningApi by lazy { com.hiltech.shared.core.projects.PlanningApiClient(productApi) }
+    suspend fun submitPlanningForm(
+        request: com.hiltech.shared.core.PlanningFormRequest,
+        sessionCurrent: () -> Boolean,
+    ) = com.hiltech.shared.core.projects.submitPlanningFormInSession(
+        httpClient, BuildConfig.HILTECH_API_BASE_URL, installationId, request, sessionCurrent,
+        accessToken = { identityRuntime.currentAccessToken() },
+        correlationId = { UUID.randomUUID().toString() },
+    )
     val handoverApi by lazy { HandoverApiClient(productApi) }
     val supportServiceApi by lazy { SupportDeskApiClient(productApi) }
     val supportTimeApi by lazy { SupportTimeApiClient(productApi) }

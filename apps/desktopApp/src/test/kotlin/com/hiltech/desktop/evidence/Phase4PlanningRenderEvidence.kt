@@ -14,6 +14,8 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.hiltech.shared.core.HiltechProjectsState
+import com.hiltech.shared.core.PlanningFormHost
+import com.hiltech.shared.core.PlanningFormOperation
 import com.hiltech.shared.core.ProjectControlSection
 import com.hiltech.shared.core.ProjectPlanningSection
 import com.hiltech.shared.core.projects.AreaDto
@@ -29,13 +31,19 @@ import com.hiltech.shared.core.projects.ProjectSummaryDto
 import com.hiltech.shared.core.projects.WorkPackageDto
 import com.hiltech.shared.core.projects.WorkPackageOwnerDto
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import java.awt.Rectangle
 import java.awt.Robot
 import java.awt.Window as AwtWindow
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.UUID
 import javax.imageio.ImageIO
 import kotlin.system.exitProcess
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 fun main() = application {
     val outputDirectory = Path.of(
@@ -50,15 +58,22 @@ fun main() = application {
     ) {
         var screen by remember { mutableStateOf(0) }
         val frame = window
+        val syntheticHost = remember {
+            PlanningFormHost(
+                scopeKey = "phase4-planning-static-evidence",
+                newOperation = { PlanningFormOperation(UUID.randomUUID().toString(), "2026-09-20T12:00:00Z") },
+                submit = { _, _ -> error("Static planning evidence must not execute commands") },
+            )
+        }
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             when (screen) {
                 0 -> ProjectPlanningSection(plan = plan(canEdit = false, ready = true), onAction = {})
-                1 -> ProjectPlanningSection(plan = plan(canEdit = true, ready = true), onAction = {})
-                else -> ProjectControlSection(state = conflictState())
+                1 -> ProjectPlanningSection(plan = plan(canEdit = true, ready = true), onAction = {}, formHost = syntheticHost)
+                else -> ProjectControlSection(state = conflictState(), planningFormHost = syntheticHost)
             }
         }
         LaunchedEffect(Unit) {
-            try {
+            finishPlanningRender(closeWindow = ::exitApplication) {
                 settle()
                 captureWindow(frame, outputDirectory.resolve("desktop-project-planning-tree.png"))
                 screen = 1
@@ -72,13 +87,64 @@ fun main() = application {
                         "site_area_tree=PASS milestones=PASS work_packages=PASS dependencies=PASS " +
                         "ready_gate=PASS stale_conflict=PASS no_phase5_truth=PASS no_phase6_execution=PASS",
                 )
-            } finally {
-                System.out.flush()
-                exitApplication()
-                exitProcess(0)
             }
         }
     }
+}
+
+private suspend fun finishPlanningRender(
+    closeWindow: () -> Unit,
+    terminate: (Int) -> Nothing = ::exitProcess,
+    capture: suspend () -> Unit,
+): Nothing {
+    var exitCode = 1
+    try {
+        capture()
+        exitCode = 0
+    } catch (failure: Throwable) {
+        failure.printStackTrace(System.err)
+    } finally {
+        System.out.flush()
+        System.err.flush()
+        closeWindow()
+        terminate(exitCode)
+    }
+}
+
+class Phase4PlanningRenderExitTest {
+    @Test
+    fun screenshotFailureClosesWindowAndExitsNonzero() = runBlocking {
+        var closed = 0
+        val exit = assertFailsWith<RenderExit> {
+            finishPlanningRender(
+                closeWindow = { closed += 1 },
+                terminate = { throw RenderExit(it) },
+            ) {
+                throw IOException("Synthetic screenshot write failure")
+            }
+        }
+        assertEquals(1, exit.code)
+        assertEquals(1, closed)
+    }
+
+    @Test
+    fun completedCaptureClosesWindowAndExitsZero() = runBlocking {
+        var captured = 0
+        var closed = 0
+        val exit = assertFailsWith<RenderExit> {
+            finishPlanningRender(
+                closeWindow = { closed += 1 },
+                terminate = { throw RenderExit(it) },
+            ) {
+                captured += 1
+            }
+        }
+        assertEquals(0, exit.code)
+        assertEquals(1, captured)
+        assertEquals(1, closed)
+    }
+
+    private class RenderExit(val code: Int) : RuntimeException()
 }
 
 private suspend fun settle() {

@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.hiltechText
+import com.hiltech.shared.core.design.hiltechDateText
 import com.hiltech.shared.core.design.HiltechPanel
 import com.hiltech.shared.core.design.HiltechPlannedDateRange
 import com.hiltech.shared.core.design.hiltechDateRangeProblem
@@ -131,6 +132,7 @@ fun ProjectControlSection(
             _, _, _, _, _, _ -> Unit
         },
     onPlanningAction: (PlanningUiAction) -> Unit = {},
+    planningFormHost: PlanningFormHost? = null,
     onWorkPlanningAction: (WorkPlanningUiAction) -> Unit = {},
     onWorkReadinessAction: (WorkReadinessUiAction) -> Unit = {},
     reservationPort: ReservationUiPort? = null,
@@ -253,7 +255,7 @@ fun ProjectControlSection(
                                     Text(hiltechText("فتح ملف مسؤول المشروع", "Open project owner's profile"))
                                 }
                             }
-                            HiltechKeyValue(hiltechText("الفترة المخططة", "Planned period"), (selected.startDatePlanned ?: "غير محددة") + " — " + (selected.endDatePlanned ?: "غير محددة"))
+                            HiltechKeyValue(hiltechText("الفترة المخططة", "Planned period"), hiltechDateText(selected.startDatePlanned) + " — " + hiltechDateText(selected.endDatePlanned))
                         }
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -301,7 +303,7 @@ fun ProjectControlSection(
                                     }
                                     if (showManager) ProjectManagerChangeForm(project = selected, onChangeManager = onChangeManager,
                                         employeeChoices = employeeChoices, teamChoices = teamChoices)
-                                    Text(hiltechText("المصدر: ", "Source: ") + selected.sourceType + (selected.sourceExternalReference?.let { " · " + it } ?: ""),
+                                    Text(hiltechText("المصدر: ", "Source: ") + projectSourceLabel(selected.sourceType) + (selected.sourceExternalReference?.let { " · " + it } ?: ""),
                                         style = MaterialTheme.typography.labelSmall, color = colors.secondaryText)
                                 }
                             }
@@ -325,7 +327,8 @@ fun ProjectControlSection(
                                 }
                             }
                             ProjectWorkspaceTab.Plan -> {
-                                state.plan?.let { ProjectPlanningSection(plan = it, onAction = onPlanningAction) }
+                                state.plan?.let { ProjectPlanningSection(plan = it, onAction = onPlanningAction, formHost = planningFormHost,
+                                    employeeChoices = employeeChoices, teamChoices = teamChoices) }
                                     ?: Text(hiltechText("بيانات التخطيط غير متاحة حاليًا.", "Planning data is unavailable."))
                             }
                             ProjectWorkspaceTab.Work -> {
@@ -372,11 +375,24 @@ private enum class ProjectWorkspaceTab(val title: String, val english: String) {
 private fun projectStateLabel(state: String): String = when (state) {
     "DRAFT" -> hiltechText("مسودة", "Draft")
     "KICKOFF" -> hiltechText("التجهيز", "Kickoff")
+    "PLANNING" -> hiltechText("التخطيط", "Planning")
+    "READY" -> hiltechText("جاهز", "Ready")
     "ACTIVE" -> hiltechText("قيد التنفيذ", "Active")
     "ON_HOLD" -> hiltechText("متوقف", "On hold")
+    "DELIVERY_REVIEW" -> hiltechText("مراجعة التسليم", "Delivery review")
+    "HANDOVER" -> hiltechText("التسليم", "Handover")
+    "DELIVERED" -> hiltechText("تم التسليم", "Delivered")
+    "CLOSED" -> hiltechText("مغلق", "Closed")
     "COMPLETED" -> hiltechText("مكتمل", "Completed")
     "CANCELLED" -> hiltechText("ملغى", "Cancelled")
     else -> state
+}
+
+@Composable
+private fun projectSourceLabel(source: String): String = when (source) {
+    "INTERNAL" -> hiltechText("داخلي", "Internal")
+    "IMPORT" -> hiltechText("مستورد", "Imported")
+    else -> source
 }
 
 private fun projectStateTone(state: String): HiltechStateTone = when (state) {

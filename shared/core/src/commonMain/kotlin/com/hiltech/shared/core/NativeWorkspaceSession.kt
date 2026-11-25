@@ -277,6 +277,7 @@ internal enum class NativeWorkspaceGroup(val ar: String, val en: String) {
     Finance("المالية والمحاسبة", "Finance & accounting"),
     Payroll("الرواتب", "Payroll"),
     Sales("المبيعات", "Sales"),
+    Projects("المشاريع والتنفيذ", "Projects & delivery"),
     Delivery("التسليم والخدمة", "Delivery & service"),
     Purchasing("المشتريات", "Purchasing"),
     Other("مساحات أخرى", "Other workspaces");
@@ -288,6 +289,7 @@ internal fun nativeWorkspaceGroup(id: String): NativeWorkspaceGroup = when {
     id.contains("payroll") || id.contains("payslip") -> NativeWorkspaceGroup.Payroll
     id.startsWith("finance") -> NativeWorkspaceGroup.Finance
     id.startsWith("commercial") -> NativeWorkspaceGroup.Sales
+    id.startsWith("project-") -> NativeWorkspaceGroup.Projects
     id.startsWith("handover") || id.startsWith("service-operations") -> NativeWorkspaceGroup.Delivery
     id.contains("purchase") || id.contains("procurement") -> NativeWorkspaceGroup.Purchasing
     else -> NativeWorkspaceGroup.Other
@@ -299,6 +301,7 @@ internal fun nativeWorkspaceTitle(workspace: NativeOperationalWorkspace, languag
         "my-payslips" -> "كشوف مرتباتي" to "My payslips"
         "payroll-admin-read" -> "مراجعة فترات المرتبات" to "Payroll periods"
         "commercial-read" -> "المبيعات والمناقصات" to "Sales & tenders"
+        "project-planning" -> "المشاريع وخطط التنفيذ" to "Projects & delivery plans"
         "handover-read" -> "تسليم المشاريع" to "Project handover"
         "service-operations-read" -> "الدعم والصيانة" to "Support & maintenance"
         "finance-evidence-read" -> "المراجعة المالية" to "Financial review"

@@ -71,6 +71,9 @@ import com.hiltech.shared.core.network.HiltechApiException
 import com.hiltech.shared.core.people.CreateEmployeeRequestDto
 import com.hiltech.shared.core.people.ChangeWorkforceAssignmentRequestDto
 import com.hiltech.shared.core.people.EmployeeDetailDto
+import com.hiltech.shared.core.people.EmployeeWarehouseResponsibilitiesWorkspace
+import com.hiltech.shared.core.projects.projectPlanningNativeWorkspace
+import com.hiltech.shared.core.PlanningFormOperation
 import com.hiltech.shared.core.people.EmployeeAccountWorkspace
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -262,6 +265,14 @@ class MainActivity : ComponentActivity() {
             }
             val languagePreferences = remember { getSharedPreferences("hiltech_ui", MODE_PRIVATE) }
             var appLanguage by remember { mutableStateOf(HiltechLanguage.fromCode(languagePreferences.getString("appLanguage", null))) }
+            val employeeIdentity = (shellState as? HiltechShellState.SignedIn)?.identity
+            val employeeOrg = employeeIdentity?.organizations?.firstOrNull { it.primary }
+                ?: employeeIdentity?.organizations?.firstOrNull()
+            val employeeSessionScope = "${employeeIdentity?.identityId}:${employeeIdentity?.identityVersion}:" +
+                "${employeeOrg?.organizationId}:${employeeOrg?.membershipVersion}:$planningSessionEpoch"
+            val employeeDrafts = androidx.compose.runtime.key(employeeSessionScope) {
+                androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+            }
             HiltechShell(
                 state = shellState,
                 language = appLanguage,
@@ -294,6 +305,24 @@ class MainActivity : ComponentActivity() {
                     val org = signed.identity.organizations.firstOrNull { it.primary }
                         ?: signed.identity.organizations.firstOrNull()
                     if (org == null) emptyList() else buildList {
+                        add(projectPlanningNativeWorkspace(
+                            projects = hiltechApplication.readProjectsApi,
+                            planning = hiltechApplication.planningApi,
+                            sessionScope = employeeSessionScope,
+                            organizationId = org.organizationId,
+                            installationId = hiltechApplication.installationId,
+                            newOperation = { PlanningFormOperation(UUID.randomUUID().toString(), java.time.Instant.now().toString()) },
+                            submit = { request, routeCurrent ->
+                                hiltechApplication.submitPlanningForm(request) {
+                                    routeCurrent() && activePlanningSessionScope() == employeeSessionScope
+                                }
+                            },
+                            employeeChoices = signed.people?.directory?.items.orEmpty()
+                                .filter { it.employeeState == "ACTIVE" }
+                                .map { com.hiltech.shared.core.design.HiltechRecordChoice(it.employeeId, it.displayName, it.employeeCode) },
+                            teamChoices = signed.identity.teams.filter { it.organizationId == org.organizationId }
+                                .map { com.hiltech.shared.core.design.HiltechRecordChoice(it.teamId, it.name, it.code) },
+                        ))
                         if (signed.identity.productCapabilities?.executiveHome ?: BuildConfig.HILTECH_EXECUTIVE_HOME_ENABLED) {
                             add(executiveNativeWorkspace(
                                 client = hiltechApplication.executiveApi,
@@ -461,18 +490,29 @@ class MainActivity : ComponentActivity() {
                 peopleOffboardingAvailable = false,
                 employeeAccountWorkspace = { employee ->
                     (shellState as? HiltechShellState.SignedIn)?.let { signed ->
+                        employeeDrafts.SaveableStateProvider("$employeeSessionScope:${employee.employeeId}") {
                         EmployeeAccountWorkspace(
                             employee = employee,
-                            sessionScope = signed.identity.identityId,
+                            sessionScope = employeeSessionScope,
                             client = hiltechApplication.onboardingApi,
                             installationId = hiltechApplication.installationId,
                             newOperationId = { UUID.randomUUID().toString() },
                             onReauthenticate = ::startReauthentication,
+                            onAccountReady = { selectEmployee(employee.employeeId) },
                             onCredentialVisibilityChanged = { visible ->
                                 val secure = WindowManager.LayoutParams.FLAG_SECURE
                                 if (visible) window.addFlags(secure) else window.clearFlags(secure)
                             },
                         )
+                        EmployeeWarehouseResponsibilitiesWorkspace(
+                            employee = employee,
+                            sessionScope = employeeSessionScope,
+                            client = hiltechApplication.warehouseApi,
+                            installationId = hiltechApplication.installationId,
+                            newOperationId = { UUID.randomUUID().toString() },
+                            nowUtc = { java.time.Instant.now().toString() },
+                        )
+                        }
                     }
                 },
                 onRefreshOnboarding =
@@ -776,9 +816,19 @@ class MainActivity : ComponentActivity() {
         return true
     }
 
+    private var planningSessionEpoch by mutableStateOf(0)
+
+    private fun activePlanningSessionScope(): String? {
+        val identity = (shellState as? HiltechShellState.SignedIn)?.identity ?: return null
+        val org = identity.organizations.firstOrNull { it.primary } ?: identity.organizations.firstOrNull()
+        return "${identity.identityId}:${identity.identityVersion}:${org?.organizationId}:" +
+            "${org?.membershipVersion}:$planningSessionEpoch"
+    }
+
     private fun showSignedIn(
         identity: IdentityBootstrapDto,
     ) {
+        planningSessionEpoch += 1
         assetLookupSequence++
         // Drop any previous-session response even if the same actor signs in again.
         personalIssuedStockSequence++
@@ -1972,7 +2022,8 @@ class MainActivity : ComponentActivity() {
         val directory = signed.people?.directory ?: return
         if (!directory.canManagePeople || directory.items.none { it.employeeId == employeeId }) return
 
-        loadPeopleEmployee { _, _ ->
+        loadPeopleEmployee(keepSelection = signed.people?.selectedEmployee?.employeeId == employeeId,
+            expectedEmployeeId = employeeId) { _, _ ->
             hiltechApplication.peopleApi.detail(employeeId, hiltechApplication.installationId)
         }
     }
@@ -2005,12 +2056,14 @@ class MainActivity : ComponentActivity() {
     private fun loadPeopleEmployee(
         refreshDirectory: Boolean = false,
         keepSelection: Boolean = false,
+        expectedEmployeeId: String? = null,
         command: suspend (String, String) -> EmployeeDetailDto,
     ) {
         val signed = shellState as? HiltechShellState.SignedIn ?: return
         val people = signed.people ?: return
         if (people.loading || people.directory?.canManagePeople != true) return
         val peopleScope = signed.peopleScope() ?: return
+        val expectedSessionScope = activePlanningSessionScope() ?: return
         val (identityId, organizationId) = peopleScope
         val requestSequence = ++peopleRequestSequence
         shellState = signed.copy(people = people.copy(
@@ -2022,7 +2075,10 @@ class MainActivity : ComponentActivity() {
         ))
         scope.launch {
             val result = runCatching { command(identityId, organizationId) }
-            val employee = result.getOrNull()?.takeIf { it.organizationId == organizationId }
+            val employee = result.getOrNull()?.takeIf {
+                it.organizationId == organizationId && (expectedEmployeeId == null || it.employeeId == expectedEmployeeId)
+            }
+            val responseMismatch = result.isSuccess && employee == null
             val assignment = employee?.let {
                 runCatching {
                     hiltechApplication.workforceAssignmentApi.currentForEmployee(it.employeeId, hiltechApplication.installationId)
@@ -2044,17 +2100,26 @@ class MainActivity : ComponentActivity() {
                     hiltechApplication.peopleApi.directory(organizationId, hiltechApplication.installationId)
                 }
             } else null
+            if (activePlanningSessionScope() != expectedSessionScope) return@launch
             updatePeople(peopleScope, requestSequence) { current ->
                 val directory = if (refreshedDirectory == null) current.directory else refreshedDirectory.getOrNull()
+                val transientRefresh = keepSelection && result.exceptionOrNull()?.let {
+                    com.hiltech.shared.core.people.canRetainEmployeeAfterRefreshFailure(it)
+                } == true
+                val retainedEmployee = current.selectedEmployee?.takeIf {
+                    transientRefresh && it.employeeId == people.selectedEmployee?.employeeId &&
+                        it.organizationId == organizationId
+                }
                 current.copy(
                     loading = false,
                     directory = directory,
-                    selectedEmployee = employee.takeIf { directory?.canManagePeople == true },
+                    selectedEmployee = (employee ?: retainedEmployee).takeIf { directory?.canManagePeople == true },
                     selectedWorkforceAssignment = assignment.takeIf { directory?.canManagePeople == true },
                     selectedWorkforceHistory = history.takeIf { directory?.canManagePeople == true },
                     workforceStructure = (structure ?: current.workforceStructure).takeIf { directory?.canManagePeople == true },
-                    errorMessage = result.exceptionOrNull()?.let { it.message ?: "Employee details are unavailable." }
-                        ?: refreshedDirectory?.exceptionOrNull()?.let { "Refresh People to load the current employee directory." },
+                    errorMessage = if (responseMismatch) "Employee details could not be verified. Refresh the record."
+                        else result.exceptionOrNull()?.let { it.message ?: "Employee details are unavailable." }
+                            ?: refreshedDirectory?.exceptionOrNull()?.let { "Refresh People to load the current employee directory." },
                 )
             }
         }

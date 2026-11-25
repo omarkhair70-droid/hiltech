@@ -8,6 +8,7 @@ on:
   pull_request:
     branches:
       - main
+      - "integration/hiltech-unified-staging-*"
     paths:
       - "build-logic/**"
       - "gradle/**"

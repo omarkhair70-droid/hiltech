@@ -1,6 +1,23 @@
 # HILTECH Program Status
 
-Updated: 2026-09-21
+Current engineering review: **2026-11-25 — verification and repair in progress**
+
+The unified candidate is PR #242 at
+`4a3709c5707d39135a6e8034d5ff1eb8ef949145`. Review changes are in PR #243,
+`product/hiltech-reconstruction-20261125`, targeting that candidate.
+Fetch and verify current heads before work; `main` is not automatically the
+current integrated source.
+
+The public verification contract is
+[`NATIVE_PRODUCT_VERIFICATION.md`](../13-delivery/NATIVE_PRODUCT_VERIFICATION.md).
+It distinguishes source changes, tests, device results and deployment. Internal
+audit reports and the canonical product closeout register are maintained
+privately. They must not be copied into this public repository.
+
+## Historical status snapshot — 2026-09-21
+
+The remainder preserves an earlier checkpoint. Its completion and next-phase
+labels are historical and do not certify current user journeys.
 
 ## Overall Stage
 **PHASE 4 VERIFIED / COMPLETE — PHASE 5 PLAN FROZEN — SLICE 01 PRODUCTION NEXT AFTER PLANNING MERGE**

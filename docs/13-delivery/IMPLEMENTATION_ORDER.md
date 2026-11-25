@@ -1,6 +1,18 @@
 # HILTECH Production Implementation Order
 
-Status: **FROZEN v1.3 / PHASE 0–4 VERIFIED / COMPLETE / PHASE 5 PLAN FROZEN / SLICE 01 NEXT**
+Current engineering order: **complete authorized user journeys on the unified candidate**
+
+Start with source reconciliation, then select a bounded journey from the private
+canonical closeout record. Fix its UI, source integration, authorization and
+failure handling together; verify affected neighbouring workflows before closing
+it. Track new evidence in that same record rather than opening another phase.
+
+Read [NATIVE_PRODUCT_VERIFICATION.md](NATIVE_PRODUCT_VERIFICATION.md) for the
+public evidence contract. Dependency order may follow engineering needs; an old
+phase cursor must not require rebuilding working functionality.
+
+Historical status: **FROZEN v1.3 / PHASE 0–4 VERIFIED / COMPLETE / PHASE 5 PLAN FROZEN / SLICE 01 NEXT**.
+The sequence below remains a contract index, not a current acceptance claim.
 
 ## Core Rule
 

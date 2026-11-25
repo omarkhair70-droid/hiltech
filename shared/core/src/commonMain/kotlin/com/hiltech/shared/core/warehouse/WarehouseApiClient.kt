@@ -7,6 +7,7 @@ import io.ktor.http.encodeURLQueryComponent
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.CancellationException
 
 /**
  * Same HILTECH authenticated HTTP transport as People/Projects.
@@ -21,6 +22,82 @@ class WarehouseApiClient(
         explicitNulls = false
     },
 ) {
+    suspend fun employeeWarehouseResponsibilities(
+        employeeId: String,
+        installationId: String,
+    ): EmployeeWarehouseResponsibilitiesDto = get(
+        "/v1/employees/" + uuid(employeeId) + "/warehouse-responsibilities",
+        installationId,
+        EmployeeWarehouseResponsibilitiesDto.serializer(),
+    )
+
+    suspend fun applyEmployeeWarehouseAuthority(
+        intent: EmployeeWarehouseAuthorityIntent,
+        installationId: String,
+        priorOutcomeUnknown: Boolean = false,
+        onCommandSending: () -> Unit = {},
+    ): WarehouseAuthorityCommandResponseDto {
+        require(intent.authorityKey in setOf("WAREHOUSE_VIEWER", "WAREHOUSE_OPERATOR"))
+        uuid(intent.organizationId)
+        uuid(intent.principalId)
+        uuid(intent.employeeId)
+        require(intent.employeeVersion >= 1)
+        if (!priorOutcomeUnknown) {
+            val employee = try {
+                employeeWarehouseResponsibilities(intent.employeeId, installationId)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                throw EmployeeWarehousePreparationException("EMPLOYEE_RESPONSIBILITY_PREFLIGHT_FAILED")
+            }
+            if (employee.employeeId != intent.employeeId || employee.organizationId != intent.organizationId ||
+                employee.employeeVersion != intent.employeeVersion || employee.linkedIdentityId != intent.principalId ||
+                employee.accountStatus != "CURRENT" || employee.scope != "MANAGED_WAREHOUSES_ONLY") {
+                throw EmployeeWarehousePreparationException("EMPLOYEE_RESPONSIBILITY_TARGET_CHANGED")
+            }
+        }
+        // Unknown retries deliberately retain the captured account and operation.
+        // People links cannot transfer this account to another person; Warehouse
+        // rechecks current membership when executing the existing command.
+        onCommandSending()
+        val result = when (intent.action) {
+            "GRANT" -> grantWarehouseAuthority(
+                intent.warehouseId,
+                WarehouseAuthorityGrantRequestDto(
+                    operationId = intent.operationId,
+                    authorityKey = intent.authorityKey,
+                    principalType = "USER",
+                    principalId = intent.principalId,
+                    effectiveFrom = intent.effectiveFrom,
+                    clientOccurredAt = intent.clientOccurredAt,
+                ),
+                installationId,
+            )
+            "END" -> endWarehouseAuthority(
+                intent.warehouseId,
+                requireNotNull(intent.bindingId),
+                AuthorityEndRequestDto(
+                    operationId = intent.operationId,
+                    baseVersion = requireNotNull(intent.baseVersion).also { require(it >= 1) },
+                    clientOccurredAt = intent.clientOccurredAt,
+                ),
+                installationId,
+            )
+            else -> error("Unknown warehouse responsibility action")
+        }
+        // A response for another employee/warehouse is not an acknowledgement.
+        require(result.warehouseId == intent.warehouseId && result.principalId == intent.principalId)
+        require(result.organizationId == intent.organizationId && result.operationId == intent.operationId)
+        require(result.principalType == "USER" && result.authorityKey == intent.authorityKey)
+        // A successful grant may have been ended before its lost response is
+        // replayed. Its acknowledgement and present-day access are separate.
+        require(if (intent.action == "GRANT") result.current || result.replayed else !result.current)
+        uuid(result.bindingId)
+        require(result.version >= 1)
+        if (intent.action == "END") require(result.bindingId == intent.bindingId)
+        return result
+    }
+
     suspend fun fulfillmentRecipients(warehouse: String, search: String, installationId: String): List<FulfillmentEmployeeChoiceDto> =
         get("/v1/warehouses/" + uuid(warehouse) + "/fulfillment-recipients?search=" + search.encodeURLQueryComponent(),
             installationId, ListSerializer(FulfillmentEmployeeChoiceDto.serializer()))

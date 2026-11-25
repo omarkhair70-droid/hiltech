@@ -256,6 +256,7 @@ fun HiltechShell(
             _, _, _, _, _, _ -> Unit
         },
     onPlanningAction: (PlanningUiAction) -> Unit = {},
+    planningFormHost: PlanningFormHost? = null,
     onWorkPlanningAction: (WorkPlanningUiAction) -> Unit = {},
     onWorkReadinessAction: (WorkReadinessUiAction) -> Unit = {},
     onProjectCommandCenterAction: (ProjectCommandCenterUiAction) -> Unit = {},
@@ -898,6 +899,7 @@ fun HiltechShell(
                                 onAttachProjectSite,
                             onPlanningAction =
                                 onPlanningAction,
+                            planningFormHost = planningFormHost,
                             onWorkPlanningAction =
                                 onWorkPlanningAction,
                             onWorkReadinessAction =
@@ -1497,7 +1499,10 @@ private fun PeopleSection(
                                     onChange = onChangeWorkforceAssignment)
                                 else Text(hiltechText("لم تتوفر بيانات التعيين الحالي.", "Current assignment data is unavailable."))
                             }
-                            PeopleWorkspaceTab.Account -> if (!state.loading) accountWorkspace?.invoke(employee)
+                            // A refresh of this employee must not discard a one-time account handoff.
+                            // The host clears the selection when changing employees; the workspace
+                            // is also keyed by employee and actor/session, never saved with credentials.
+                            PeopleWorkspaceTab.Account -> accountWorkspace?.invoke(employee)
                             PeopleWorkspaceTab.Offboarding -> if (offboardingAvailable) OffboardingAdminSection(
                                 employee = employee, offboarding = state.selectedOffboarding,
                                 onStart = onStartOffboarding, onRevokeAccess = onRevokeOffboardingAccess,
@@ -2331,7 +2336,7 @@ private fun PeopleCreateForm(
         }
 
     Text(
-        "Create employee",
+        hiltechText("إضافة موظف", "Create employee"),
         style = MaterialTheme.typography.titleSmall,
     )
     OutlinedTextField(
@@ -2340,7 +2345,7 @@ private fun PeopleCreateForm(
             displayName = it
         },
         label = {
-            Text("Display name")
+            Text(hiltechText("اسم الموظف", "Display name"))
         },
         singleLine = true,
     )
@@ -2350,19 +2355,16 @@ private fun PeopleCreateForm(
             employeeCode = it
         },
         label = {
-            Text("Employee code")
+            Text(hiltechText("كود الموظف", "Employee code"))
         },
         singleLine = true,
     )
-    OutlinedTextField(
+    com.hiltech.shared.core.design.HiltechDateField(
+        label = hiltechText("بداية العمل", "Employment start date"),
         value = startDate,
-        onValueChange = {
-            startDate = it
-        },
-        label = {
-            Text("Start date (YYYY-MM-DD)")
-        },
-        singleLine = true,
+        onValueChange = { startDate = it },
+        optional = false,
+        enabled = canSubmit,
     )
     OutlinedTextField(
         value = employmentTypeCode,
@@ -2370,7 +2372,7 @@ private fun PeopleCreateForm(
             employmentTypeCode = it
         },
         label = {
-            Text("Employment type code")
+            Text(hiltechText("كود نوع التوظيف (اختياري)", "Employment type code (optional)"))
         },
         singleLine = true,
     )
@@ -2390,8 +2392,8 @@ private fun PeopleCreateForm(
         enabled =
             canSubmit && displayName.isNotBlank() &&
                 employeeCode.isNotBlank() &&
-                startDate.isNotBlank(),
+                com.hiltech.shared.core.design.isValidOptionalHiltechDate(startDate) && startDate.isNotBlank(),
     ) {
-        Text("Create")
+        Text(hiltechText("إضافة الموظف", "Create employee"))
     }
 }

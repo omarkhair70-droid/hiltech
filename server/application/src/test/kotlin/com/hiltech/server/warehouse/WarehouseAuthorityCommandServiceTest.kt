@@ -88,6 +88,50 @@ class WarehouseAuthorityCommandServiceTest {
     }
 
     @Test
+    fun managerRevokedAfterPreviewCannotGrantInsideTheCommandTransaction() {
+        val warehouse = warehouse()
+        Mockito.`when`(persistence.warehouse(warehouseId)).thenReturn(warehouse)
+        Mockito.`when`(authorization.canManageWarehouse(actor, warehouse)).thenReturn(true, false)
+        Mockito.`when`(
+            sourceAuthority.isOrganizationMemberCurrent(principalId, organizationId, clock.instant()),
+        ).thenReturn(true)
+        val failure = assertThrows<ProductApiException> {
+            service.grant(grant(WarehouseAuthorityKey.WAREHOUSE_OPERATOR))
+        }
+        assertEquals("WAREHOUSE_AUTHORITY_UNAVAILABLE", failure.code)
+        assertTrue(Mockito.mockingDetails(persistence).invocations.none { it.method.name == "insertWarehouseAuthorityBinding" })
+        Mockito.verifyNoInteractions(projection, audit)
+    }
+
+    @Test
+    fun recipientRevokedBetweenPreviewAndCommandWriteCannotReceiveAssignment() {
+        authorizeManager()
+        Mockito.`when`(
+            sourceAuthority.isOrganizationMemberCurrent(principalId, organizationId, clock.instant()),
+        ).thenReturn(true, false)
+        val failure = assertThrows<ProductApiException> {
+            service.grant(grant(WarehouseAuthorityKey.WAREHOUSE_VIEWER))
+        }
+        assertEquals("WAREHOUSE_PRINCIPAL_NOT_CURRENT", failure.code)
+        assertTrue(Mockito.mockingDetails(persistence).invocations.none { it.method.name == "insertWarehouseAuthorityBinding" })
+        Mockito.verifyNoInteractions(projection, audit)
+    }
+
+    @Test
+    fun managerRevokedAfterPreviewCannotEndAssignmentInsideTheCommandTransaction() {
+        val warehouse = warehouse()
+        Mockito.`when`(persistence.warehouse(warehouseId)).thenReturn(warehouse)
+        Mockito.`when`(authorization.canManageWarehouse(actor, warehouse)).thenReturn(true, false)
+        val bindingId = UUID.randomUUID()
+        Mockito.`when`(persistence.warehouseAuthorityBinding(bindingId, clock.instant()))
+            .thenReturn(snapshot(bindingId, WarehouseAuthorityKey.WAREHOUSE_OPERATOR))
+        val failure = assertThrows<ProductApiException> { service.end(end(bindingId, 1)) }
+        assertEquals("WAREHOUSE_AUTHORITY_UNAVAILABLE", failure.code)
+        assertTrue(Mockito.mockingDetails(persistence).invocations.none { it.method.name == "endWarehouseAuthorityBinding" })
+        Mockito.verifyNoInteractions(projection, audit)
+    }
+
+    @Test
     fun operatorGrantProjectsAndAuditsExactlyOnce() {
         authorizeManager()
         Mockito.`when`(

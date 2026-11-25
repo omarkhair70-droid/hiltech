@@ -26,6 +26,14 @@ import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 
+/** Shared by delegation commands and their read-only employee preview. */
+object WarehouseDelegationPolicy {
+    val delegableKeys: Set<WarehouseAuthorityKey> = setOf(
+        WarehouseAuthorityKey.WAREHOUSE_VIEWER,
+        WarehouseAuthorityKey.WAREHOUSE_OPERATOR,
+    )
+}
+
 /**
  * Restricted Phase-5 delegated Warehouse grants:
  *
@@ -197,7 +205,7 @@ class WarehouseAuthorityCommandService(
     }
 
     private fun requireDelegableKey(key: WarehouseAuthorityKey) {
-        if (key !in setOf(WarehouseAuthorityKey.WAREHOUSE_OPERATOR, WarehouseAuthorityKey.WAREHOUSE_VIEWER)) {
+        if (key !in WarehouseDelegationPolicy.delegableKeys) {
             throw ProductApiException(
                 code = "WAREHOUSE_PRIVILEGED_AUTHORITY_REQUIRES_POLICY",
                 message = "This authority requires a separate trusted provisioning policy.",
@@ -271,6 +279,8 @@ data class WarehouseAuthorityCommandResponse(
     val version: Long,
     val replayed: Boolean,
     val correlationId: String,
+    val organizationId: String,
+    val operationId: String,
 )
 
 @RestController
@@ -321,7 +331,7 @@ class WarehouseAuthorityCommandController(private val service: WarehouseAuthorit
                 correlationId = context.correlationId,
             ),
         )
-        return result.toResponse(context.correlationId)
+        return result.toResponse(context.correlationId, operationId)
     }
 
     @PostMapping("/v1/warehouses/{warehouseId}/authority/{bindingId}/end")
@@ -346,11 +356,11 @@ class WarehouseAuthorityCommandController(private val service: WarehouseAuthorit
                 correlationId = context.correlationId,
             ),
         )
-        return result.toResponse(context.correlationId)
+        return result.toResponse(context.correlationId, operationId)
     }
 }
 
-private fun WarehouseBindingCommandResult.toResponse(correlationId: String) = WarehouseAuthorityCommandResponse(
+private fun WarehouseBindingCommandResult.toResponse(correlationId: String, operationId: UUID) = WarehouseAuthorityCommandResponse(
     bindingId = binding.bindingId.toString(),
     warehouseId = binding.warehouseId.toString(),
     authorityKey = binding.authorityKey.name,
@@ -360,6 +370,8 @@ private fun WarehouseBindingCommandResult.toResponse(correlationId: String) = Wa
     version = binding.version,
     replayed = replayed,
     correlationId = correlationId,
+    organizationId = binding.organizationId.toString(),
+    operationId = operationId.toString(),
 )
 private fun String.asWarehouseAuthUuid(code: String): UUID =
     runCatching { UUID.fromString(this) }.getOrElse {

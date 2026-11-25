@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - "integration/hiltech-unified-staging-*"
     paths:
       - "database/migrations/V0022__projects_planning__slice02.sql"
       - "server/application/src/main/kotlin/com/hiltech/server/projects/**"

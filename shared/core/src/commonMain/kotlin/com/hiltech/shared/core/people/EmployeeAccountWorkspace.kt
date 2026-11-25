@@ -30,16 +30,14 @@ import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.HiltechPanel
 import com.hiltech.shared.core.design.HiltechStateTag
 import com.hiltech.shared.core.design.HiltechStateTone
+import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.network.HiltechApiException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-private enum class AccountDelivery(
-    val title: String,
-    val explanation: String,
-) {
-    EMAIL_ACTION_LINK("Send setup link", "The employee sets their own password from the link."),
-    TEMPORARY_PASSWORD_HANDOFF("Set up in person", "Confirm your sign-in to receive a one-time password to hand over privately."),
+private enum class AccountDelivery {
+    EMAIL_ACTION_LINK,
+    TEMPORARY_PASSWORD_HANDOFF,
 }
 
 @Composable
@@ -51,6 +49,7 @@ fun EmployeeAccountWorkspace(
     newOperationId: () -> String,
     onReauthenticate: () -> Unit,
     onCredentialVisibilityChanged: (Boolean) -> Unit = {},
+    onAccountReady: () -> Unit = {},
 ) = key(sessionScope, employee.organizationId, employee.employeeId) {
     val jobs = rememberCoroutineScope()
     var availability by remember { mutableStateOf<EmployeeIdentityInvitationAvailabilityDto?>(null) }
@@ -86,44 +85,44 @@ fun EmployeeAccountWorkspace(
             throw cancelled
         } catch (_: Exception) {
             availability = null
-            message = "Couldn’t check account setup."
+            message = "CHECK_FAILED"
         } finally {
             loading = false
         }
     }
 
     HiltechPanel(Modifier.fillMaxWidth()) {
-        Text("HILTECH account", style = MaterialTheme.typography.titleMedium)
+        Text(hiltechText("حساب HILTECH", "HILTECH account"), style = MaterialTheme.typography.titleMedium)
         if (loading) CircularProgressIndicator()
         val current = availability
         val confirmation = when (deliveryState) {
-            "SENT" -> "Setup link sent"
-            "READY" -> "Account created"
-            "FAILED_RETRYABLE", "NOT_CONFIGURED" -> "Account created · delivery needs attention"
+            "SENT" -> hiltechText("تم إرسال رابط إعداد الحساب", "Setup link sent")
+            "READY" -> hiltechText("تم إنشاء الحساب", "Account created")
+            "FAILED_RETRYABLE", "NOT_CONFIGURED" -> hiltechText("تم إنشاء الحساب · تسليمه يحتاج متابعة", "Account created · delivery needs attention")
             else -> null
         }
         when {
             confirmation != null -> HiltechStateTag(confirmation, HiltechStateTone.CURRENT)
-            current?.status == "LINKED" -> HiltechStateTag("Account linked", HiltechStateTone.CURRENT)
-            current?.status == "NOT_PREBOARDING" -> Text("Create accounts during preboarding.")
-            current?.status == "DELIVERY_UNAVAILABLE" -> Text("Account delivery is unavailable in this environment.")
+            current?.status == "LINKED" -> HiltechStateTag(hiltechText("حساب مرتبط", "Account linked"), HiltechStateTone.CURRENT)
+            current?.status == "NOT_PREBOARDING" -> Text(hiltechText("إنشاء الحساب متاح خلال تجهيز انضمام الموظف.", "Create accounts during preboarding."))
+            current?.status == "DELIVERY_UNAVAILABLE" -> Text(hiltechText("تسليم الحساب غير متاح حاليًا. راجع إعدادات الخدمة مع المسؤول.", "Account delivery is currently unavailable. Review service setup with the administrator."))
         }
         credential?.let { oneTimePassword ->
             if (credentialVisible) {
-                Text("Temporary password", style = MaterialTheme.typography.titleSmall)
+                Text(hiltechText("كلمة مرور مؤقتة", "Temporary password"), style = MaterialTheme.typography.titleSmall)
                 Text(oneTimePassword, style = MaterialTheme.typography.bodyLarge)
-                Text("Give it to the employee privately. It will disappear when you leave this screen.")
+                Text(hiltechText("سلّمها للموظف بشكل خاص. ستختفي عند مغادرة هذه الشاشة.", "Give it to the employee privately. It will disappear when you leave this screen."))
                 TextButton(onClick = {
                     credentialVisible = false
                     credential = null
-                }) { Text("Done") }
+                }) { Text(hiltechText("تم", "Done")) }
             } else {
-                TextButton(onClick = { credentialVisible = true }) { Text("Show one-time password") }
+                TextButton(onClick = { credentialVisible = true }) { Text(hiltechText("إظهار كلمة المرور المؤقتة", "Show one-time password")) }
             }
         }
-        message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        message?.let { Text(accountSetupMessage(it), color = MaterialTheme.colorScheme.error) }
         if (needsReauthentication) {
-            TextButton(onClick = onReauthenticate) { Text("Confirm sign-in") }
+            TextButton(onClick = onReauthenticate) { Text(hiltechText("تأكيد تسجيل الدخول", "Confirm sign-in")) }
         }
         if (!loading && confirmation == null && current != null && current.deliveryModes.isNotEmpty()) {
             val pending = current.pending
@@ -133,7 +132,7 @@ fun EmployeeAccountWorkspace(
                 modifier = Modifier.fillMaxWidth(),
                 readOnly = pending != null || submitting,
                 singleLine = true,
-                label = { Text(if (method == AccountDelivery.EMAIL_ACTION_LINK) "Employee email" else "Sign-in name") },
+                label = { Text(if (method == AccountDelivery.EMAIL_ACTION_LINK) hiltechText("البريد الإلكتروني للموظف", "Employee email") else hiltechText("اسم تسجيل الدخول", "Sign-in name")) },
             )
             Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AccountDelivery.entries.filter { it.name in current.deliveryModes }.forEach { choice ->
@@ -149,8 +148,8 @@ fun EmployeeAccountWorkspace(
                     ) {
                         RadioButton(selected = method == choice, onClick = null)
                         Column {
-                            Text(choice.title, style = MaterialTheme.typography.titleSmall)
-                            Text(choice.explanation, style = MaterialTheme.typography.bodySmall)
+                            Text(accountDeliveryTitle(choice), style = MaterialTheme.typography.titleSmall)
+                            Text(accountDeliveryExplanation(choice), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -180,28 +179,45 @@ fun EmployeeAccountWorkspace(
                             require(result.state == "READY" && result.deliveryMode == request.deliveryMode)
                             deliveryState = result.deliveryState
                             credential = result.temporaryCredential.takeIf { selected == AccountDelivery.TEMPORARY_PASSWORD_HANDOFF }
+                            onAccountReady()
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (failure: HiltechApiException) {
                             needsReauthentication = failure.code == "REAUTH_REQUIRED"
-                            message = when (failure.code) {
-                                "REAUTH_REQUIRED" -> "Confirm your sign-in, then reopen this employee to finish account setup."
-                                "TEMPORARY_CREDENTIAL_NOT_REPLAYABLE" -> "The account is linked. Its temporary password was already issued."
-                                "EMPLOYEE_VERSION_CONFLICT" -> "The employee changed. Refresh the record before continuing."
-                                "IDENTITY_EMAIL_REQUIRED" -> "Enter a valid email address."
-                                else -> "Couldn’t finish account setup. Try again to resume."
-                            }
+                            message = failure.code
                         } catch (_: Exception) {
-                            message = "Couldn’t confirm account setup. Try again to resume."
+                            message = "OUTCOME_UNCONFIRMED"
                         } finally {
                             submitting = false
                         }
                     }
                 },
-            ) { Text(if (pending != null) "Continue account setup" else "Create account") }
+            ) { Text(if (pending != null) hiltechText("متابعة إعداد الحساب", "Continue account setup") else hiltechText("إنشاء الحساب", "Create account")) }
         }
         if (!loading && !submitting && !needsReauthentication && (availability == null || message != null)) {
-            TextButton(onClick = { refresh += 1 }) { Text("Check again") }
+            TextButton(onClick = { refresh += 1 }) { Text(hiltechText("إعادة التحقق", "Check again")) }
         }
     }
+}
+
+@Composable
+private fun accountDeliveryTitle(delivery: AccountDelivery): String = when (delivery) {
+    AccountDelivery.EMAIL_ACTION_LINK -> hiltechText("إرسال رابط إعداد الحساب", "Send setup link")
+    AccountDelivery.TEMPORARY_PASSWORD_HANDOFF -> hiltechText("تسليم الحساب شخصيًا", "Set up in person")
+}
+
+@Composable
+private fun accountDeliveryExplanation(delivery: AccountDelivery): String = when (delivery) {
+    AccountDelivery.EMAIL_ACTION_LINK -> hiltechText("يختار الموظف كلمة مروره بنفسه من الرابط.", "The employee sets their own password from the link.")
+    AccountDelivery.TEMPORARY_PASSWORD_HANDOFF -> hiltechText("أكد تسجيل دخولك لاستلام كلمة مرور مؤقتة وتسليمها للموظف بشكل خاص.", "Confirm your sign-in to receive a one-time password to hand over privately.")
+}
+
+@Composable
+private fun accountSetupMessage(code: String): String = when (code) {
+    "CHECK_FAILED" -> hiltechText("تعذر التحقق من إعداد الحساب.", "Couldn’t check account setup.")
+    "REAUTH_REQUIRED" -> hiltechText("أكد تسجيل الدخول، ثم افتح الموظف مجددًا لإكمال إعداد حسابه.", "Confirm your sign-in, then reopen this employee to finish account setup.")
+    "TEMPORARY_CREDENTIAL_NOT_REPLAYABLE" -> hiltechText("الحساب مرتبط. سبق إصدار كلمة مروره المؤقتة ولا يمكن عرضها مجددًا.", "The account is linked. Its temporary password was already issued.")
+    "EMPLOYEE_VERSION_CONFLICT" -> hiltechText("تغير سجل الموظف. حدّث السجل قبل المتابعة.", "The employee changed. Refresh the record before continuing.")
+    "IDENTITY_EMAIL_REQUIRED" -> hiltechText("أدخل بريدًا إلكترونيًا صالحًا.", "Enter a valid email address.")
+    else -> hiltechText("تعذر تأكيد إعداد الحساب. أعد المحاولة لمتابعة نفس الطلب.", "Couldn’t confirm account setup. Try again to resume.")
 }

@@ -54,6 +54,13 @@ import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisibl
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
+import com.hiltech.shared.core.PlanningFormHost
+import com.hiltech.shared.core.PlanningFormOperation
+import com.hiltech.shared.core.PlanningFormRequest
+import com.hiltech.shared.core.PlanningFormResult
+import com.hiltech.shared.core.planningFormResponse
+import com.hiltech.shared.core.planningFormFailure
+import com.hiltech.shared.core.projects.projectId
 import com.hiltech.shared.core.ProjectCommandCenterUiAction
 import com.hiltech.shared.core.WorkPlanningUiAction
 import com.hiltech.shared.core.WorkReadinessUiAction
@@ -61,6 +68,7 @@ import com.hiltech.shared.core.identity.IdentityApiException
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.inbox.InboxWorkspace
+import com.hiltech.shared.core.people.EmployeeWarehouseResponsibilitiesWorkspace
 import com.hiltech.shared.core.people.EmployeeAccountWorkspace
 import com.hiltech.shared.core.network.HiltechApiException
 import kotlinx.coroutines.CoroutineScope
@@ -210,9 +218,25 @@ fun main() {
         }
     }
 
+    var planningSessionEpoch by mutableIntStateOf(0)
+    var employeeReadSequence = 0L
+    var planningCommandsJob = SupervisorJob(scope.coroutineContext[kotlinx.coroutines.Job])
+    fun invalidatePlanningCommands() {
+        planningSessionEpoch += 1
+        planningCommandsJob.cancel()
+        planningCommandsJob = SupervisorJob(scope.coroutineContext[kotlinx.coroutines.Job])
+    }
+    fun planningSessionScope(signed: HiltechShellState.SignedIn): String {
+        val org = signed.identity.organizations.firstOrNull { it.primary }
+            ?: signed.identity.organizations.firstOrNull()
+        return "${signed.identity.identityId}:${signed.identity.identityVersion}:" +
+            "${org?.organizationId}:${org?.membershipVersion}:$planningSessionEpoch"
+    }
+
     fun showSignedIn(
         identity: IdentityBootstrapDto,
     ) {
+        invalidatePlanningCommands()
         setState(
             HiltechShellState.SignedIn(
                 identity = identity,
@@ -530,16 +554,23 @@ fun main() {
             shellState.value as?
                 HiltechShellState.SignedIn
                 ?: return
+        val expectedSessionScope = planningSessionScope(signed)
+        val expectedOrganizationId = (signed.identity.organizations.firstOrNull { it.primary }
+            ?: signed.identity.organizations.firstOrNull())?.organizationId ?: return
+        val requestSequence = ++employeeReadSequence
+        val existingPeople = signed.people ?: HiltechPeopleState()
+        val sameEmployee = existingPeople.selectedEmployee?.employeeId == employeeId
 
         setState(
             signed.copy(
-                people =
-                    (signed.people
-                        ?: HiltechPeopleState())
-                        .copy(
-                            loading = true,
-                            errorMessage = null,
-                        ),
+                people = existingPeople.copy(
+                    loading = true,
+                    errorMessage = null,
+                    selectedEmployee = existingPeople.selectedEmployee.takeIf { sameEmployee },
+                    selectedWorkforceAssignment = existingPeople.selectedWorkforceAssignment.takeIf { sameEmployee },
+                    selectedWorkforceHistory = existingPeople.selectedWorkforceHistory.takeIf { sameEmployee },
+                    selectedOffboarding = existingPeople.selectedOffboarding.takeIf { sameEmployee },
+                ),
             ),
         )
 
@@ -575,7 +606,8 @@ fun main() {
             val current =
                 shellState.value as?
                     HiltechShellState.SignedIn
-            if (current == null) {
+            if (current == null || planningSessionScope(current) != expectedSessionScope ||
+                employeeReadSequence != requestSequence) {
                 return@launch
             }
 
@@ -589,6 +621,10 @@ fun main() {
                                     ?: HiltechPeopleState())
                                     .copy(
                                         loading = false,
+                                        selectedEmployee = current.people?.selectedEmployee?.takeIf {
+                                            sameEmployee && it.employeeId == employeeId &&
+                                                com.hiltech.shared.core.people.canRetainEmployeeAfterRefreshFailure(failure)
+                                        },
                                         errorMessage =
                                             failure.message
                                                 ?: "Employee detail could not be loaded.",
@@ -597,6 +633,18 @@ fun main() {
                     )
                     return@launch
                 }
+
+            if (detail.employeeId != employeeId || detail.organizationId != expectedOrganizationId) {
+                setState(current.copy(people = (current.people ?: HiltechPeopleState()).copy(
+                    loading = false,
+                    selectedEmployee = null,
+                    selectedWorkforceAssignment = null,
+                    selectedWorkforceHistory = null,
+                    selectedOffboarding = null,
+                    errorMessage = "Employee details could not be verified. Refresh the record.",
+                )))
+                return@launch
+            }
 
             val assignmentFailure =
                 assignmentResult
@@ -2212,126 +2260,71 @@ fun main() {
         }
     }
 
-    fun runPlanningAction(
-        action: PlanningUiAction,
+    fun newPlanningOperation() = PlanningFormOperation(
+        java.util.UUID.randomUUID().toString(), java.time.Instant.now().toString(),
+    )
+
+    fun runPlanningRequest(
+        expectedScope: String,
+        request: PlanningFormRequest,
+        onResult: (PlanningFormResult) -> Unit,
     ) {
-        val signed =
-            shellState.value as?
-                HiltechShellState.SignedIn
-                ?: return
-        val projectId =
-            when (action) {
-                is PlanningUiAction.CreateArea -> action.projectId
-                is PlanningUiAction.UpdateArea -> action.projectId
-                is PlanningUiAction.CreateMilestone -> action.projectId
-                is PlanningUiAction.UpdateMilestone -> action.projectId
-                is PlanningUiAction.CreateWorkPackage -> action.projectId
-                is PlanningUiAction.UpdateWorkPackage -> action.projectId
-                is PlanningUiAction.AddDependency -> action.projectId
-                is PlanningUiAction.RemoveDependency -> action.projectId
-                is PlanningUiAction.MarkReady -> action.projectId
+        val signed = shellState.value as? HiltechShellState.SignedIn
+        val projectId = request.action.projectId()
+        if (signed == null || planningSessionScope(signed) != expectedScope ||
+            signed.projects?.selectedProject?.projectId != projectId
+        ) {
+            onResult(PlanningFormResult.Rejected("PLANNING_SESSION_CHANGED", null, null))
+            return
+        }
+        fun sessionCurrent(): Boolean {
+            val active = shellState.value as? HiltechShellState.SignedIn ?: return false
+            return planningSessionScope(active) == expectedScope && active.projects?.selectedProject?.projectId == projectId
+        }
+        CoroutineScope(scope.coroutineContext + planningCommandsJob).launch {
+            if (!sessionCurrent()) return@launch
+            val result = try {
+                Result.success(runtime.submitPlanningForm(request, ::sessionCurrent))
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                Result.failure(failure)
             }
-        setState(
-            signed.copy(
-                projects =
-                    (signed.projects ?: HiltechProjectsState())
-                        .copy(
-                            loading = true,
-                            errorCode = null,
-                            errorMessage = null,
-                        ),
-            ),
-        )
-        scope.launch {
-            runCatching {
-                when (action) {
-                    is PlanningUiAction.CreateArea -> runtime.createArea(
-                        action.projectId, action.projectSiteId, action.parentAreaId,
-                        action.typeCode, action.code, action.name, action.sequence,
-                        action.restrictedAccess, action.baseProjectVersion,
-                        action.expectedBaselineVersion,
+            // Refresh a conflicting version without replacing any form draft or rebasing it implicitly.
+            val freshPlan = if ((result.exceptionOrNull() as? HiltechApiException)?.httpStatus == 409) {
+                try { runtime.projectPlan(projectId) }
+                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+            } else null
+            SwingUtilities.invokeLater {
+                val current = shellState.value as? HiltechShellState.SignedIn ?: return@invokeLater
+                if (planningSessionScope(current) != expectedScope ||
+                    current.projects?.selectedProject?.projectId != projectId
+                ) return@invokeLater
+                val response = result.getOrNull()
+                val confirmed = response?.let { planningFormResponse(request, it) }
+                val validResponse = (confirmed as? PlanningFormResult.Succeeded)?.response
+                val incomingPlan = validResponse?.plan ?: freshPlan
+                if (incomingPlan != null && incomingPlan.project.projectId == projectId &&
+                    incomingPlan.project.version >= (current.projects?.plan?.project?.version ?: 0)
+                ) {
+                    val projects = requireNotNull(current.projects)
+                    val selected = projects.selectedProject?.copy(
+                        lifecycleState = incomingPlan.project.lifecycleState,
+                        baselineVersion = incomingPlan.project.baselineVersion,
+                        version = incomingPlan.project.version,
                     )
-                    is PlanningUiAction.UpdateArea -> runtime.updateArea(
-                        action.projectId, action.areaId, action.parentAreaId, action.typeCode,
-                        action.code, action.name, action.sequence, action.restrictedAccess,
-                        action.baseProjectVersion, action.baseObjectVersion,
-                        action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.CreateMilestone -> runtime.createMilestone(
-                        action.projectId, action.code, action.name, action.plannedDate,
-                        action.sequence, action.clientVisible, action.acceptanceRequirement,
-                        action.baseProjectVersion, action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.UpdateMilestone -> runtime.updateMilestone(
-                        action.projectId, action.milestoneId, action.code, action.name,
-                        action.plannedDate, action.sequence, action.clientVisible,
-                        action.acceptanceRequirement, action.baseProjectVersion,
-                        action.baseObjectVersion, action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.CreateWorkPackage -> runtime.createWorkPackage(
-                        action.projectId, action.projectSiteId, action.siteId, action.milestoneId,
-                        action.code, action.name, action.description, action.ownerType, action.ownerId,
-                        action.plannedStart, action.plannedEnd, action.sequence,
-                        action.baseProjectVersion, action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.UpdateWorkPackage -> runtime.updateWorkPackage(
-                        action.projectId, action.workPackageId, action.projectSiteId, action.siteId,
-                        action.milestoneId, action.code, action.name, action.description,
-                        action.ownerType, action.ownerId, action.plannedStart, action.plannedEnd,
-                        action.sequence, action.baseProjectVersion, action.baseObjectVersion,
-                        action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.AddDependency -> runtime.addPlanDependency(
-                        action.projectId, action.predecessorType, action.predecessorId,
-                        action.successorType, action.successorId, action.dependencyType,
-                        action.lagMinutes, action.baseProjectVersion,
-                        action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.RemoveDependency -> runtime.removePlanDependency(
-                        action.projectId, action.dependencyId, action.baseProjectVersion,
-                        action.baseObjectVersion, action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.MarkReady -> runtime.markProjectReady(
-                        action.projectId, action.baseProjectVersion,
-                        action.expectedBaselineVersion,
-                    )
+                    shellState.value = current.copy(projects = projects.copy(
+                        plan = incomingPlan, selectedProject = selected,
+                        list = projects.list?.let { currentList -> currentList.copy(items = currentList.items.map {
+                            if (it.projectId == projectId && selected != null) selected else it
+                        }) }, errorCode = null, errorMessage = null,
+                    ))
                 }
-            }.onSuccess { result ->
-                val current =
-                    shellState.value as?
-                        HiltechShellState.SignedIn
-                        ?: return@onSuccess
-                setState(
-                    current.copy(
-                        projects =
-                            (current.projects ?: HiltechProjectsState())
-                                .copy(
-                                    loading = false,
-                                    plan = result.plan,
-                                    errorCode = null,
-                                    errorMessage = null,
-                                ),
-                    ),
-                )
-                selectProject(projectId)
-            }.onFailure { failure ->
-                val current =
-                    shellState.value as?
-                        HiltechShellState.SignedIn
-                        ?: return@onFailure
-                setState(
-                    current.copy(
-                        projects =
-                            (current.projects ?: HiltechProjectsState())
-                                .copy(
-                                    loading = false,
-                                    errorCode =
-                                        (failure as? HiltechApiException)
-                                            ?.code,
-                                    errorMessage = failure.message,
-                                ),
-                    ),
-                )
+                onResult(when {
+                    confirmed != null -> confirmed
+                    else -> planningFormFailure(requireNotNull(result.exceptionOrNull()))
+                })
             }
         }
     }
@@ -2675,6 +2668,7 @@ fun main() {
     fun signIn(
         forceReauthentication: Boolean = false,
     ) {
+        invalidatePlanningCommands()
         if (!runtime.configured) {
             setState(
                 HiltechShellState.ConfigurationRequired(
@@ -2756,6 +2750,7 @@ fun main() {
     }
 
     fun signOut() {
+        invalidatePlanningCommands()
         setState(
             HiltechShellState.Working(
                 "Signing out…",
@@ -2796,6 +2791,10 @@ fun main() {
             val nativeProjectScope = navigationIdentity?.identityId.orEmpty() + ":" +
                 navigationOrganization?.organizationId.orEmpty()
             var executiveProjectFocus by remember(nativeProjectScope) { mutableIntStateOf(0) }
+            val employeeSessionScope = (shellState.value as? HiltechShellState.SignedIn)?.let(::planningSessionScope).orEmpty()
+            val employeeDrafts = androidx.compose.runtime.key(employeeSessionScope) {
+                androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+            }
             val languagePreferences = remember { java.util.prefs.Preferences.userRoot().node("com/hiltech/desktop/preferences") }
             var appLanguage by remember { mutableStateOf(HiltechLanguage.fromCode(languagePreferences.get("appLanguage", null))) }
             HiltechShell(
@@ -2811,14 +2810,25 @@ fun main() {
                 desktopPurchasingAvailable = purchasingAvailable,
                 employeeAccountWorkspace = { employee ->
                     navigationIdentity?.let { identity ->
+                        employeeDrafts.SaveableStateProvider("$employeeSessionScope:${employee.employeeId}") {
                         EmployeeAccountWorkspace(
                             employee = employee,
-                            sessionScope = identity.identityId,
+                            sessionScope = employeeSessionScope,
                             client = runtime.onboardingApi,
                             installationId = runtime.physicalWarehouseInstallationId,
                             newOperationId = { java.util.UUID.randomUUID().toString() },
                             onReauthenticate = { signIn(true) },
+                            onAccountReady = { selectEmployee(employee.employeeId) },
                         )
+                        EmployeeWarehouseResponsibilitiesWorkspace(
+                            employee = employee,
+                            sessionScope = employeeSessionScope,
+                            client = runtime.physicalWarehouseApi,
+                            installationId = runtime.physicalWarehouseInstallationId,
+                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                            nowUtc = { java.time.Instant.now().toString() },
+                        )
+                        }
                     }
                 },
                 inboxWorkspace = {
@@ -3553,8 +3563,14 @@ fun main() {
                 onCreateSite = ::createSite,
                 onAttachProjectSite =
                     ::attachProjectSite,
-                onPlanningAction =
-                    ::runPlanningAction,
+                planningFormHost = (shellState.value as? HiltechShellState.SignedIn)?.let { signed ->
+                    val expectedScope = planningSessionScope(signed)
+                    PlanningFormHost(
+                        scopeKey = expectedScope,
+                        newOperation = ::newPlanningOperation,
+                        submit = { request, completed -> runPlanningRequest(expectedScope, request, completed) },
+                    )
+                },
                 onWorkPlanningAction =
                     ::runWorkPlanningAction,
                 onWorkReadinessAction =
