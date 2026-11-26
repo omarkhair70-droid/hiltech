@@ -32,10 +32,11 @@ import com.hiltech.shared.core.projects.ProjectsApiClient
 import kotlinx.coroutines.CancellationException
 
 /**
- * Phase11 internal service native workbench, source-only:
+ * Internal service native workbench:
  * tickets, warranty readiness, observed internal response time and proposed
  * maintenance agenda. No ticket edits, client sends, contractual SLA decisions,
  * service billing, approved warranty claims or visit dispatch.
+ * Private note recording uses the original project-scoped Support Desk API.
  *
  * Each actual view is rendered by its Phase11 source-owned Compose Section;
  * the native host merely selects the scoped original API and bounded pane.
@@ -49,6 +50,8 @@ fun serviceOperationsReadNativeWorkspace(
     identityId: String,
     organizationId: String,
     installationId: String,
+    newOperationId: () -> String,
+    onReauthenticate: () -> Unit,
 ): NativeOperationalWorkspace = NativeOperationalWorkspace(
     id = "service-operations-read",
     label = "الدعم والصيانة",
@@ -142,6 +145,14 @@ fun serviceOperationsReadNativeWorkspace(
                 val matching = allowedProjects.filter { project -> query.isBlank() ||
                     listOf(project.name, project.projectCode, project.clientDisplayName).any { it.contains(query.trim(), true) } }
                 if (!projectsLoading && projectsError == null && matching.isEmpty()) Text(hiltechText("لا توجد مشاريع مطابقة.", "No matching projects."))
+                ticketsApi.noteSession.pending?.target?.takeIf { it.identityId == identityId }?.let { pending ->
+                    val source = allowedProjects.firstOrNull { it.projectId == pending.projectId }
+                    if (source != null && !projectsLoading) {
+                        OutlinedButton(onClick = { selectedProjectId = source.projectId }) {
+                            Text(hiltechText("متابعة ملاحظة معلّقة", "Resume pending note") + " · " + source.name)
+                        }
+                    }
+                }
                 matching.forEach { project ->
                     Surface(onClick = { if (allowedProjects.any { it.projectId == project.projectId }) selectedProjectId = project.projectId },
                         enabled = !projectsLoading, color = colors.surface, contentColor = colors.primaryText,
@@ -171,7 +182,9 @@ fun serviceOperationsReadNativeWorkspace(
                     mutableStateOf<List<InternalSupportTicketDto>>(emptyList())
                 }
                 var selectedTicketId by remember(identityId, organizationId, projectId) {
-                    mutableStateOf<String?>(null)
+                    mutableStateOf(ticketsApi.noteSession.pending?.target?.takeIf {
+                        it.projectId == projectId && it.identityId == identityId
+                    }?.ticketId)
                 }
                 var ticketsLoading by remember(identityId, organizationId, projectId) {
                     mutableStateOf(true)
@@ -319,6 +332,15 @@ fun serviceOperationsReadNativeWorkspace(
                         Text(hiltechText("الرجوع لمشاريع الخدمة", "Back to service projects"))
                     }
                     Text(project.name)
+                    ticketsApi.noteSession.pending?.target?.takeIf {
+                        it.identityId == identityId && it.projectId == projectId && it.ticketId != selectedTicketId
+                    }?.let { pending ->
+                        if (!ticketsLoading && ticketRecords.any { it.ticketId == pending.ticketId }) {
+                            OutlinedButton(onClick = { selectedTicketId = pending.ticketId; tab = "TICKETS" }) {
+                                Text(hiltechText("متابعة ملاحظة معلّقة", "Resume pending note"))
+                            }
+                        }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -340,7 +362,10 @@ fun serviceOperationsReadNativeWorkspace(
                     } else {
                         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                             when (tab) {
-                                "TICKETS" -> InternalSupportDeskSection(
+                                "TICKETS" -> if (selectedTicket != null) {
+                                    SupportTicketNotes(selectedTicket, identityId, installationId, ticketsApi,
+                                        newOperationId, onReauthenticate, onBack = { selectedTicketId = null })
+                                } else InternalSupportDeskSection(
                                     state = SupportDeskUiState(
                                         loading = ticketsLoading,
                                         projectName = project.name,
@@ -353,7 +378,6 @@ fun serviceOperationsReadNativeWorkspace(
                                     onSelectTicket = { id ->
                                         if (!ticketsLoading && ticketRecords.any { it.ticketId == id }) {
                                             selectedTicketId = id
-                                            tab = "COVERAGE"
                                         }
                                     },
                                     onOpenCase = {},

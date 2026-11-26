@@ -2823,6 +2823,10 @@ fun main() {
             val serviceProjects = remember(workspaceApi) {
                 com.hiltech.shared.core.projects.ProjectsApiClient(workspaceApi)
             }
+            val supportDesk = remember(workspaceApi) { com.hiltech.shared.core.service.SupportDeskApiClient(workspaceApi) }
+            val supportWarranty = remember(workspaceApi) { com.hiltech.shared.core.service.WarrantyCoverageReadinessApiClient(workspaceApi) }
+            val supportTime = remember(workspaceApi) { com.hiltech.shared.core.service.SupportTimeApiClient(workspaceApi) }
+            val supportAgenda = remember(workspaceApi) { com.hiltech.shared.core.service.MaintenanceAgendaApiClient(workspaceApi) }
             val serviceDelivery = remember(workspaceApi) {
                 com.hiltech.shared.core.service.ServiceDeliveryApiClient(workspaceApi)
             }
@@ -3134,14 +3138,16 @@ fun main() {
                         }
                         if (serviceOperationsAvailable()) {
                             add(serviceOperationsReadNativeWorkspace(
-                                projects = runtime.readProjectsApi,
-                                ticketsApi = runtime.supportServiceApi,
-                                warrantyApi = runtime.warrantyReadinessApi,
-                                timeApi = runtime.supportTimeApi,
-                                agendaApi = runtime.maintenanceAgendaApi,
+                                projects = serviceProjects,
+                                ticketsApi = supportDesk,
+                                warrantyApi = supportWarranty,
+                                timeApi = supportTime,
+                                agendaApi = supportAgenda,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = runtime.physicalWarehouseInstallationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                onReauthenticate = { signIn(true) },
                             ))
                         }
                         if (operationAvailable(ProductOperation.FINANCE_CASHBOX)) {

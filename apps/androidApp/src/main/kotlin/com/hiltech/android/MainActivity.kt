@@ -306,6 +306,10 @@ class MainActivity : ComponentActivity() {
             val serviceProjects = remember(workspaceApi) {
                 com.hiltech.shared.core.projects.ProjectsApiClient(workspaceApi)
             }
+            val supportDesk = remember(workspaceApi) { com.hiltech.shared.core.service.SupportDeskApiClient(workspaceApi) }
+            val supportWarranty = remember(workspaceApi) { com.hiltech.shared.core.service.WarrantyCoverageReadinessApiClient(workspaceApi) }
+            val supportTime = remember(workspaceApi) { com.hiltech.shared.core.service.SupportTimeApiClient(workspaceApi) }
+            val supportAgenda = remember(workspaceApi) { com.hiltech.shared.core.service.MaintenanceAgendaApiClient(workspaceApi) }
             val serviceDelivery = remember(workspaceApi) {
                 com.hiltech.shared.core.service.ServiceDeliveryApiClient(workspaceApi)
             }
@@ -560,14 +564,16 @@ class MainActivity : ComponentActivity() {
                         }
                         if (serviceOperationsAvailable()) {
                             add(serviceOperationsReadNativeWorkspace(
-                                projects = hiltechApplication.readProjectsApi,
-                                ticketsApi = hiltechApplication.supportServiceApi,
-                                warrantyApi = hiltechApplication.warrantyReadinessApi,
-                                timeApi = hiltechApplication.supportTimeApi,
-                                agendaApi = hiltechApplication.maintenanceAgendaApi,
+                                projects = serviceProjects,
+                                ticketsApi = supportDesk,
+                                warrantyApi = supportWarranty,
+                                timeApi = supportTime,
+                                agendaApi = supportAgenda,
                                 identityId = signed.identity.identityId,
                                 organizationId = org.organizationId,
                                 installationId = hiltechApplication.installationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                onReauthenticate = ::startReauthentication,
                             ))
                         }
                         if (operationAvailable(ProductOperation.FINANCE_CASHBOX)) {

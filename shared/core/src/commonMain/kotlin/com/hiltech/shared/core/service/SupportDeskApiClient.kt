@@ -63,6 +63,8 @@ class SupportDeskApiClient(
         explicitNulls = false
     },
 ) {
+    internal val noteSession = SupportNoteSession()
+
     suspend fun list(projectId: String, installationId: String): List<InternalSupportTicketDto> {
         requireCanonicalId(projectId)
         return api.request(
