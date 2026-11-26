@@ -122,6 +122,7 @@ data class HiltechPeopleState(
     val selectedOffboarding:
         OffboardingCaseDto? = null,
     val errorMessage: String? = null,
+    val lastCreatedEmployeeId: String? = null,
 )
 
 @Composable
@@ -183,13 +184,7 @@ fun HiltechShell(
         ) -> Unit = {
             _, _, _, _ -> Unit
         },
-    onCreateEmployee:
-        (
-            displayName: String,
-            employeeCode: String,
-            startDate: String,
-            employmentTypeCode: String?,
-        ) -> Unit = { _, _, _, _ -> },
+    onCreateEmployee: (com.hiltech.shared.core.people.EmployeeCreationDraft) -> Unit = {},
     onRefreshWarehouse: () -> Unit = {},
     onStockAction: (StockAction) -> Unit = {},
     reservationPort: ReservationUiPort? = null,
@@ -300,6 +295,7 @@ fun HiltechShell(
     onCompactNavigationChanged: (canGoBack: Boolean, inWork: Boolean) -> Unit = { _, _ -> },
     peopleOffboardingAvailable: Boolean = true,
     inboxWorkspace: (@Composable () -> Unit)? = null,
+    employeeInitialAssignmentWorkspace: (@Composable (EmployeeDetailDto) -> Unit)? = null,
     employeeAccountWorkspace: (@Composable (EmployeeDetailDto) -> Unit)? = null,
     employeeOnboardingWorkspace: (@Composable (EmployeeDetailDto) -> Unit)? = null,
     desktopFindRequest: Int = 0,
@@ -826,6 +822,7 @@ fun HiltechShell(
                             onCreateEmployee =
                                 onCreateEmployee,
                             offboardingAvailable = peopleOffboardingAvailable,
+                            initialAssignmentWorkspace = employeeInitialAssignmentWorkspace,
                             accountWorkspace = employeeAccountWorkspace,
                             onboardingWorkspace = employeeOnboardingWorkspace,
                             showOwnProfile = !useWorkspaceNavigation,
@@ -1391,14 +1388,9 @@ private fun PeopleSection(
             baseEmployeeVersion: Long,
             baseEmploymentVersion: Long,
         ) -> Unit,
-    onCreateEmployee:
-        (
-            displayName: String,
-            employeeCode: String,
-            startDate: String,
-            employmentTypeCode: String?,
-        ) -> Unit,
+    onCreateEmployee: (com.hiltech.shared.core.people.EmployeeCreationDraft) -> Unit,
     offboardingAvailable: Boolean,
+    initialAssignmentWorkspace: (@Composable (EmployeeDetailDto) -> Unit)?,
     accountWorkspace: (@Composable (EmployeeDetailDto) -> Unit)?,
     onboardingWorkspace: (@Composable (EmployeeDetailDto) -> Unit)?,
     showOwnProfile: Boolean = true,
@@ -1412,6 +1404,13 @@ private fun PeopleSection(
     val employee = state.selectedEmployee
     var showDetail by remember(employee?.employeeId) { mutableStateOf(employee != null) }
     var tab by remember(employee?.employeeId) { mutableStateOf(PeopleWorkspaceTab.Profile) }
+    LaunchedEffect(state.lastCreatedEmployeeId, employee?.employeeId) {
+        if (employee != null && state.lastCreatedEmployeeId == employee.employeeId) {
+            creating = false
+            showDetail = true
+            tab = if (initialAssignmentWorkspace != null) PeopleWorkspaceTab.Assignment else PeopleWorkspaceTab.Profile
+        }
+    }
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -1448,7 +1447,8 @@ private fun PeopleSection(
                             }
                         }
                         if (creating && directory.canManagePeople) HiltechPanel(Modifier.fillMaxWidth()) {
-                            PeopleCreateForm(onCreateEmployee = onCreateEmployee, canSubmit = !state.loading)
+                            PeopleCreateForm(onCreateEmployee = onCreateEmployee, canSubmit = !state.loading,
+                                employmentTypes = com.hiltech.shared.core.people.observedEmploymentTypes(directory))
                         }
                         OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
                             label = { Text(hiltechText("الاسم أو كود الموظف", "Employee name or code")) }, singleLine = true)
@@ -1522,6 +1522,10 @@ private fun PeopleSection(
                                 it.teamName?.let { name -> Text(name, color = colors.secondaryText) }
                             }
                         }
+                        if (state.lastCreatedEmployeeId == employee.employeeId) {
+                            Text(hiltechText("تم حفظ سجل الموظف. أكمل التعيين ثم حساب العمل.", "Employee record saved. Continue with assignment and work account."),
+                                style = MaterialTheme.typography.bodyMedium)
+                        }
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             PeopleWorkspaceTab.entries.filter {
@@ -1570,7 +1574,10 @@ private fun PeopleSection(
                                 if (assignment != null) WorkforceAssignmentChangeSection(employee = employee, current = assignment,
                                     structure = state.workforceStructure, history = state.selectedWorkforceHistory,
                                     onChange = onChangeWorkforceAssignment)
+                                else if (!state.loading && initialAssignmentWorkspace != null &&
+                                    employee.employeeState in setOf("ACTIVE", "PREBOARDING")) initialAssignmentWorkspace(employee)
                                 else Text(hiltechText("لم تتوفر بيانات التعيين الحالي.", "Current assignment data is unavailable."))
+                                if (!state.loading && accountWorkspace != null) TextButtonForEmployeeAccount { tab = PeopleWorkspaceTab.Account }
                             }
                             // A refresh of this employee must not discard a one-time account handoff.
                             // The host clears the selection when changing employees; the workspace
@@ -1626,6 +1633,13 @@ private fun PersonalEmployeeProfilePanel(own: EmployeeDetailDto, assignment: Wor
             current.reportsToDisplayName?.let { com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("المسؤول المباشر", "Reports to"), it) }
             Text(current.effectiveFrom, style = MaterialTheme.typography.labelSmall, color = colors.secondaryText)
         }
+    }
+}
+
+@Composable
+private fun TextButtonForEmployeeAccount(onClick: () -> Unit) {
+    androidx.compose.material3.TextButton(onClick = onClick) {
+        Text(hiltechText("متابعة إلى حساب العمل", "Continue to work account"))
     }
 }
 
@@ -2392,91 +2406,92 @@ private fun WorkforceAssignmentChangeSection(
 
 @Composable
 private fun PeopleCreateForm(
-    onCreateEmployee:
-        (
-            displayName: String,
-            employeeCode: String,
-            startDate: String,
-            employmentTypeCode: String?,
-        ) -> Unit,
+    onCreateEmployee: (com.hiltech.shared.core.people.EmployeeCreationDraft) -> Unit,
     canSubmit: Boolean,
+    employmentTypes: List<String>,
 ) {
-    var displayName by
-        remember {
-            mutableStateOf("")
+    var draft by remember { mutableStateOf(com.hiltech.shared.core.people.EmployeeCreationDraft()) }
+    var reviewing by remember { mutableStateOf(false) }
+    var typeMenu by remember { mutableStateOf(false) }
+    var customType by remember { mutableStateOf(false) }
+    val colors = com.hiltech.shared.core.design.LocalHiltechOperationalColors.current
+    val value = draft.normalized()
+    val sourceTypeValid = customType || value.employmentTypeCode == null || value.employmentTypeCode in employmentTypes
+    Text(hiltechText("إضافة موظف", "New employee"), style = MaterialTheme.typography.titleLarge)
+    Text(hiltechText("١. بيانات الموظف  ·  ٢. التعيين  ·  ٣. حساب العمل", "1. Employee details  ·  2. Assignment  ·  3. Work account"),
+        color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+    if (reviewing) {
+        Text(hiltechText("راجع البيانات قبل الحفظ", "Review before saving"), style = MaterialTheme.typography.titleMedium)
+        com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("الاسم", "Name"), value.displayName)
+        com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("رقم الموظف", "Employee number"), value.employeeCode)
+        com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("بداية العمل", "Start date"), value.startDate)
+        listOf(
+            hiltechText("الاسم الرسمي", "Legal name") to value.legalName,
+            hiltechText("الهاتف", "Phone") to value.mobile,
+            hiltechText("البريد", "Email") to value.email,
+            hiltechText("نوع التوظيف", "Employment type") to value.employmentTypeCode.orEmpty(),
+        ).filter { it.second.isNotEmpty() }.forEach { (label, text) ->
+            com.hiltech.shared.core.design.HiltechKeyValue(label, text)
         }
-    var employeeCode by
-        remember {
-            mutableStateOf("")
+        Text(hiltechText("سيتم إنشاء سجل الموظف فقط. بعد الحفظ اختر التعيين وجهّز حساب العمل؛ لا تُرسل دعوة تلقائيًا.",
+            "This creates the employee record only. Set the assignment and prepare the work account after saving; no invitation is sent automatically."),
+            style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(enabled = canSubmit, onClick = { reviewing = false }) { Text(hiltechText("تعديل", "Edit")) }
+            Button(enabled = canSubmit && value.isValid() && sourceTypeValid, onClick = { onCreateEmployee(value) }) {
+                Text(hiltechText("حفظ الموظف", "Save employee"))
+            }
         }
-    var startDate by
-        remember {
-            mutableStateOf("")
+    } else {
+        OutlinedTextField(draft.displayName, { draft = draft.copy(displayName = it) }, modifier = Modifier.fillMaxWidth(),
+            enabled = canSubmit, singleLine = true, label = { Text(hiltechText("اسم الموظف", "Display name")) })
+        OutlinedTextField(draft.legalName, { draft = draft.copy(legalName = it) }, modifier = Modifier.fillMaxWidth(),
+            enabled = canSubmit, singleLine = true, label = { Text(hiltechText("الاسم الرسمي (اختياري)", "Legal name (optional)")) })
+        OutlinedTextField(draft.employeeCode, { draft = draft.copy(employeeCode = it) }, modifier = Modifier.fillMaxWidth(),
+            enabled = canSubmit, singleLine = true, label = { Text(hiltechText("رقم الموظف", "Employee number")) })
+        OutlinedTextField(draft.mobile, { draft = draft.copy(mobile = it) }, modifier = Modifier.fillMaxWidth(),
+            enabled = canSubmit, singleLine = true, label = { Text(hiltechText("الهاتف (اختياري)", "Phone (optional)")) })
+        OutlinedTextField(draft.email, { draft = draft.copy(email = it) }, modifier = Modifier.fillMaxWidth(),
+            enabled = canSubmit, singleLine = true, label = { Text(hiltechText("البريد الإلكتروني (اختياري)", "Email (optional)")) })
+        com.hiltech.shared.core.design.HiltechDateField(
+            label = hiltechText("بداية العمل", "Employment start date"),
+            value = draft.startDate, onValueChange = { draft = draft.copy(startDate = it) },
+            optional = false, enabled = canSubmit,
+        )
+        if (!customType) {
+            Text(hiltechText("نوع التوظيف (اختياري)", "Employment type (optional)"))
+            Box {
+                OutlinedButton(enabled = canSubmit, onClick = { typeMenu = true }) {
+                    Text(draft.employmentTypeCode?.replace('_', ' ') ?: hiltechText("بدون تحديد", "Not specified"))
+                }
+                DropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
+                    DropdownMenuItem(text = { Text(hiltechText("بدون تحديد", "Not specified")) },
+                        onClick = { draft = draft.copy(employmentTypeCode = null); typeMenu = false })
+                    employmentTypes.forEach { code ->
+                        DropdownMenuItem(text = { Text(code.replace('_', ' ')) },
+                            onClick = { draft = draft.copy(employmentTypeCode = code); typeMenu = false })
+                    }
+                    DropdownMenuItem(text = { Text(hiltechText("نوع توظيف جديد", "New employment type")) },
+                        onClick = { customType = true; draft = draft.copy(employmentTypeCode = null); typeMenu = false })
+                }
+            }
+            Text(hiltechText("أنواع مستخدمة في سجلات الموظفين الحالية.", "Types observed in the current employee records."),
+                style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+        } else {
+            OutlinedTextField(draft.employmentTypeCode.orEmpty(), {
+                draft = draft.copy(employmentTypeCode = it)
+            }, modifier = Modifier.fillMaxWidth(), enabled = canSubmit, singleLine = true,
+                label = { Text(hiltechText("نوع التوظيف المعتمد (بالإنجليزية)", "Company employment type (English)")) })
+            androidx.compose.material3.TextButton(enabled = canSubmit, onClick = {
+                customType = false; draft = draft.copy(employmentTypeCode = null)
+            }) { Text(hiltechText("الاختيار من السجلات", "Choose from existing records")) }
         }
-    var employmentTypeCode by
-        remember {
-            mutableStateOf("")
+        if (!value.isValid() && value.email.isNotEmpty()) {
+            Text(hiltechText("راجع الاسم والرقم والتاريخ وبيانات التواصل.", "Check name, number, date and contact details."),
+                color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
         }
-
-    Text(
-        hiltechText("إضافة موظف", "Create employee"),
-        style = MaterialTheme.typography.titleSmall,
-    )
-    OutlinedTextField(
-        value = displayName,
-        onValueChange = {
-            displayName = it
-        },
-        label = {
-            Text(hiltechText("اسم الموظف", "Display name"))
-        },
-        singleLine = true,
-    )
-    OutlinedTextField(
-        value = employeeCode,
-        onValueChange = {
-            employeeCode = it
-        },
-        label = {
-            Text(hiltechText("كود الموظف", "Employee code"))
-        },
-        singleLine = true,
-    )
-    com.hiltech.shared.core.design.HiltechDateField(
-        label = hiltechText("بداية العمل", "Employment start date"),
-        value = startDate,
-        onValueChange = { startDate = it },
-        optional = false,
-        enabled = canSubmit,
-    )
-    OutlinedTextField(
-        value = employmentTypeCode,
-        onValueChange = {
-            employmentTypeCode = it
-        },
-        label = {
-            Text(hiltechText("كود نوع التوظيف (اختياري)", "Employment type code (optional)"))
-        },
-        singleLine = true,
-    )
-    Button(
-        onClick = {
-            onCreateEmployee(
-                displayName.trim(),
-                employeeCode.trim(),
-                startDate.trim(),
-                employmentTypeCode
-                    .trim()
-                    .takeIf {
-                        it.isNotEmpty()
-                    },
-            )
-        },
-        enabled =
-            canSubmit && displayName.isNotBlank() &&
-                employeeCode.isNotBlank() &&
-                com.hiltech.shared.core.design.isValidOptionalHiltechDate(startDate) && startDate.isNotBlank(),
-    ) {
-        Text(hiltechText("إضافة الموظف", "Create employee"))
+        Button(enabled = canSubmit && value.isValid() && sourceTypeValid, onClick = { reviewing = true }) {
+            Text(hiltechText("مراجعة البيانات", "Review details"))
+        }
     }
 }

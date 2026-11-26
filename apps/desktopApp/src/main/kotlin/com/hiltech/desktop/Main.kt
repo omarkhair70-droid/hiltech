@@ -576,6 +576,7 @@ fun main() {
                     loading = true,
                     errorMessage = null,
                     selectedEmployee = existingPeople.selectedEmployee.takeIf { sameEmployee },
+                    lastCreatedEmployeeId = null,
                     selectedWorkforceAssignment = existingPeople.selectedWorkforceAssignment.takeIf { sameEmployee },
                     selectedWorkforceHistory = existingPeople.selectedWorkforceHistory.takeIf { sameEmployee },
                     selectedOffboarding = existingPeople.selectedOffboarding.takeIf { sameEmployee },
@@ -1038,109 +1039,44 @@ fun main() {
         }
     }
 
-    fun createEmployee(
-        displayName: String,
-        employeeCode: String,
-        startDate: String,
-        employmentTypeCode: String?,
-    ) {
-        val signed =
-            shellState.value as?
-                HiltechShellState.SignedIn
-                ?: return
-        val organizationId =
-            signed.identity.organizations
-                .firstOrNull {
-                    it.primary
-                }
-                ?.organizationId
-                ?: signed.identity
-                    .organizations
-                    .firstOrNull()
-                    ?.organizationId
-                ?: return
-
-        setState(
-            signed.copy(
-                people =
-                    (signed.people
-                        ?: HiltechPeopleState())
-                        .copy(
-                            loading = true,
-                            errorMessage = null,
-                        ),
-            ),
-        )
-
+    fun createEmployee(draft: com.hiltech.shared.core.people.EmployeeCreationDraft) {
+        val signed = shellState.value as? HiltechShellState.SignedIn ?: return
+        val people = signed.people ?: return
+        if (people.loading || people.directory?.canManagePeople != true || !draft.isValid()) return
+        val organizationId = (signed.identity.organizations.firstOrNull { it.primary }
+            ?: signed.identity.organizations.firstOrNull())?.organizationId ?: return
+        val expectedSession = planningSessionScope(signed)
+        val sequence = ++employeeReadSequence
+        fun currentSession(): Boolean =
+            (shellState.value as? HiltechShellState.SignedIn)?.let { planningSessionScope(it) == expectedSession } == true &&
+                employeeReadSequence == sequence
+        val client = com.hiltech.shared.core.people.PeopleApiClient(runtime.productApiForSession(::currentSession))
+        val operationId = java.util.UUID.nameUUIDFromBytes(draft.operationSeed(signed.identity.identityId, organizationId).encodeToByteArray()).toString()
+        setState(signed.copy(people = people.copy(loading = true, errorMessage = null, selectedEmployee = null,
+            lastCreatedEmployeeId = null, selectedWorkforceAssignment = null, selectedWorkforceHistory = null, selectedOffboarding = null)))
         scope.launch {
-            runCatching {
-                runtime.createEmployee(
-                    organizationId =
-                        organizationId,
-                    displayName =
-                        displayName,
-                    employeeCode =
-                        employeeCode,
-                    startDate =
-                        startDate,
-                    employmentTypeCode =
-                        employmentTypeCode,
-                )
-            }.onSuccess { created ->
-                runCatching {
-                    runtime.peopleDirectory(
-                        organizationId,
-                    )
-                }.onSuccess { directory ->
-                    val current =
-                        shellState.value as?
-                            HiltechShellState.SignedIn
-                    if (current != null) {
-                        setState(
-                            current.copy(
-                                people =
-                                    HiltechPeopleState(
-                                        ownProfile =
-                                            current.people
-                                                ?.ownProfile,
-                                        ownWorkforceAssignment =
-                                            current.people
-                                                ?.ownWorkforceAssignment,
-                                        directory =
-                                            directory,
-                                        workforceStructure =
-                                            current.people
-                                                ?.workforceStructure,
-                                        selectedEmployee =
-                                            created.employee,
-                                        selectedWorkforceAssignment =
-                                            null,
-                                        selectedWorkforceHistory =
-                                            null,
-                                    ),
-                            ),
-                        )
-                    }
-                }.onFailure(::showFailure)
-            }.onFailure { failure ->
-                val current =
-                    shellState.value as?
-                        HiltechShellState.SignedIn
-                if (current != null) {
-                    setState(
-                        current.copy(
-                            people =
-                                (current.people
-                                    ?: HiltechPeopleState())
-                                    .copy(
-                                        loading = false,
-                                        errorMessage =
-                                            failure.message
-                                                ?: "Employee could not be created.",
-                                    ),
-                        ),
-                    )
-                }
+            val result = runCatching {
+                client.create(draft.request(operationId, organizationId), runtime.physicalWarehouseInstallationId)
+                    .employee.also { check(draft.matches(it, organizationId)) { "Employee receipt scope mismatch" } }
+            }
+            if (!currentSession()) return@launch
+            val employee = result.getOrNull()
+            val directoryResult = if (employee != null) runCatching {
+                client.directory(organizationId, runtime.physicalWarehouseInstallationId)
+            } else null
+            if (!currentSession()) return@launch
+            SwingUtilities.invokeLater {
+                if (!currentSession()) return@invokeLater
+                val current = shellState.value as? HiltechShellState.SignedIn ?: return@invokeLater
+                val directory = if (directoryResult == null) current.people?.directory else directoryResult.getOrNull()
+                shellState.value = current.copy(people = (current.people ?: HiltechPeopleState()).copy(
+                    loading = false, directory = directory,
+                    selectedEmployee = employee.takeIf { directory?.canManagePeople == true },
+                    lastCreatedEmployeeId = employee?.employeeId?.takeIf { directory?.canManagePeople == true },
+                    selectedWorkforceAssignment = null, selectedWorkforceHistory = null, selectedOffboarding = null,
+                    errorMessage = result.exceptionOrNull()?.let { it.message ?: "Employee could not be created. Retry the same details." }
+                        ?: directoryResult?.exceptionOrNull()?.let { "Employee recorded. Refresh People to load the current directory." },
+                ))
             }
         }
     }
@@ -2813,6 +2749,9 @@ fun main() {
                     current != null && planningSessionScope(current) == employeeSessionScope
                 }
             }
+            val sessionWorkforce = remember(workspaceApi) {
+                com.hiltech.shared.core.people.WorkforceAssignmentApiClient(workspaceApi)
+            }
             val sessionOnboarding = remember(workspaceApi) {
                 com.hiltech.shared.core.people.OnboardingApiClient(workspaceApi)
             }
@@ -2895,6 +2834,18 @@ fun main() {
                     ProductOperation.PROCUREMENT_OFFICE_STOCK, ProductOperation.PROCUREMENT_WAREHOUSE_REPLENISHMENT,
                     ProductOperation.PROCUREMENT_PO_RECEIVING, ProductOperation.PROCUREMENT_SUPPLIER_INVOICES,
                 ).any(::operationAvailable),
+                employeeInitialAssignmentWorkspace = { employee ->
+                    employeeDrafts.SaveableStateProvider("initial-assignment:$employeeSessionScope:${employee.employeeId}") {
+                        com.hiltech.shared.core.people.EmployeeInitialAssignmentWorkspace(
+                            employee = employee, sessionScope = employeeSessionScope,
+                            client = sessionWorkforce, installationId = runtime.physicalWarehouseInstallationId,
+                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                            nowUtc = { java.time.Instant.now().toString() },
+                            onAssignmentReady = { selectEmployee(employee.employeeId) },
+                            onReauthenticate = { signIn(true) },
+                        )
+                    }
+                },
                 employeeAccountWorkspace = { employee ->
                     navigationIdentity?.let { identity ->
                         employeeDrafts.SaveableStateProvider("$employeeSessionScope:${employee.employeeId}") {

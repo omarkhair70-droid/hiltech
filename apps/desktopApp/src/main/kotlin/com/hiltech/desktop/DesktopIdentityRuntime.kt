@@ -86,8 +86,7 @@ import com.hiltech.shared.core.procurement.SupplierMasterDataApiClient
 import com.hiltech.shared.core.evidence.EvidenceApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
 import com.hiltech.shared.core.people.ChangeWorkforceAssignmentRequestDto
-import com.hiltech.shared.core.people.CreateEmployeeRequestDto
-import com.hiltech.shared.core.people.EmployeeCommandResponseDto
+
 import com.hiltech.shared.core.people.EmployeeDetailDto
 import com.hiltech.shared.core.people.EmployeeDirectoryDto
 import com.hiltech.shared.core.people.CertificationListDto
@@ -503,35 +502,7 @@ class DesktopIdentityRuntime(
         )
     }
 
-    suspend fun createEmployee(
-        organizationId: String,
-        displayName: String,
-        employeeCode: String,
-        startDate: String,
-        employmentTypeCode: String?,
-    ): EmployeeCommandResponseDto {
-        ensureConfigured()
-        return peopleApi.create(
-            request =
-                CreateEmployeeRequestDto(
-                    operationId =
-                        UUID.randomUUID()
-                            .toString(),
-                    organizationId =
-                        organizationId,
-                    displayName =
-                        displayName,
-                    employeeCode =
-                        employeeCode,
-                    startDate =
-                        startDate,
-                    employmentTypeCode =
-                        employmentTypeCode,
-                ),
-            installationId =
-                installationId,
-        )
-    }
+
 
     suspend fun employeeWorkforceAssignment(
         employeeId: String,

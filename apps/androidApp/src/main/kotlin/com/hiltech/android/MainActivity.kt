@@ -70,7 +70,7 @@ import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.inbox.InboxWorkspace
 import com.hiltech.shared.core.network.HiltechApiException
-import com.hiltech.shared.core.people.CreateEmployeeRequestDto
+
 import com.hiltech.shared.core.people.ChangeWorkforceAssignmentRequestDto
 import com.hiltech.shared.core.people.EmployeeDetailDto
 import com.hiltech.shared.core.people.EmployeeWarehouseResponsibilitiesWorkspace
@@ -290,6 +290,9 @@ class MainActivity : ComponentActivity() {
             }
             val workspaceApi = remember(employeeSessionScope) {
                 hiltechApplication.productApiForSession { activePlanningSessionScope() == employeeSessionScope }
+            }
+            val sessionWorkforce = remember(workspaceApi) {
+                com.hiltech.shared.core.people.WorkforceAssignmentApiClient(workspaceApi)
             }
             val sessionOnboarding = remember(workspaceApi) {
                 com.hiltech.shared.core.people.OnboardingApiClient(workspaceApi)
@@ -671,6 +674,18 @@ class MainActivity : ComponentActivity() {
                 onCreateEmployee = ::createEmployee,
                 onChangeWorkforceAssignment = ::changeWorkforceAssignment,
                 peopleOffboardingAvailable = false,
+                employeeInitialAssignmentWorkspace = { employee ->
+                    employeeDrafts.SaveableStateProvider("initial-assignment:$employeeSessionScope:${employee.employeeId}") {
+                        com.hiltech.shared.core.people.EmployeeInitialAssignmentWorkspace(
+                            employee = employee, sessionScope = employeeSessionScope,
+                            client = sessionWorkforce, installationId = hiltechApplication.installationId,
+                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                            nowUtc = { java.time.Instant.now().toString() },
+                            onAssignmentReady = { selectEmployee(employee.employeeId) },
+                            onReauthenticate = ::startReauthentication,
+                        )
+                    }
+                },
                 employeeAccountWorkspace = { employee ->
                     (shellState as? HiltechShellState.SignedIn)?.let { signed ->
                         employeeDrafts.SaveableStateProvider("$employeeSessionScope:${employee.employeeId}") {
@@ -2303,28 +2318,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun createEmployee(
-        displayName: String,
-        employeeCode: String,
-        startDate: String,
-        employmentTypeCode: String?,
-    ) {
-        loadPeopleEmployee(refreshDirectory = true) { identityId, organizationId ->
-            val payload = listOf(
-                "android-employee-create", identityId, organizationId,
-                employeeCode, displayName, startDate, employmentTypeCode,
-            ).joinToString("") { value -> value?.let { "${it.length}:$it" } ?: "-1:" }
-            hiltechApplication.peopleApi.create(
-                request = CreateEmployeeRequestDto(
-                    operationId = UUID.nameUUIDFromBytes(payload.encodeToByteArray()).toString(),
-                    organizationId = organizationId,
-                    displayName = displayName,
-                    employeeCode = employeeCode,
-                    startDate = startDate,
-                    employmentTypeCode = employmentTypeCode,
-                ),
+    private fun createEmployee(draft: com.hiltech.shared.core.people.EmployeeCreationDraft) {
+        if (!draft.isValid()) return
+        val expectedSession = activePlanningSessionScope() ?: return
+        val client = com.hiltech.shared.core.people.PeopleApiClient(
+            hiltechApplication.productApiForSession { activePlanningSessionScope() == expectedSession },
+        )
+        loadPeopleEmployee(refreshDirectory = true, createdRecord = true) { identityId, organizationId ->
+            val operationId = UUID.nameUUIDFromBytes(draft.operationSeed(identityId, organizationId).encodeToByteArray()).toString()
+            client.create(
+                request = draft.request(operationId, organizationId),
                 installationId = hiltechApplication.installationId,
-            ).employee
+            ).employee.also { check(draft.matches(it, organizationId)) { "Employee receipt scope mismatch" } }
         }
     }
 
@@ -2332,6 +2337,7 @@ class MainActivity : ComponentActivity() {
         refreshDirectory: Boolean = false,
         keepSelection: Boolean = false,
         expectedEmployeeId: String? = null,
+        createdRecord: Boolean = false,
         command: suspend (String, String) -> EmployeeDetailDto,
     ) {
         val signed = shellState as? HiltechShellState.SignedIn ?: return
@@ -2345,6 +2351,7 @@ class MainActivity : ComponentActivity() {
             loading = true,
             errorMessage = null,
             selectedEmployee = people.selectedEmployee.takeIf { keepSelection },
+            lastCreatedEmployeeId = null,
             selectedWorkforceAssignment = null,
             selectedWorkforceHistory = null,
         ))
@@ -2389,6 +2396,7 @@ class MainActivity : ComponentActivity() {
                     loading = false,
                     directory = directory,
                     selectedEmployee = (employee ?: retainedEmployee).takeIf { directory?.canManagePeople == true },
+                    lastCreatedEmployeeId = employee?.employeeId?.takeIf { createdRecord && directory?.canManagePeople == true },
                     selectedWorkforceAssignment = assignment.takeIf { directory?.canManagePeople == true },
                     selectedWorkforceHistory = history.takeIf { directory?.canManagePeople == true },
                     workforceStructure = (structure ?: current.workforceStructure).takeIf { directory?.canManagePeople == true },
