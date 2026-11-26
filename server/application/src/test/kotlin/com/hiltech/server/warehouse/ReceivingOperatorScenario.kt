@@ -226,6 +226,8 @@ internal class ReceivingOperatorScenario(
         return ReceivingService(
             receiving, stock, writer, warehouse, authority, executor(), JdbcAuditEventWriter(jdbc),
             events, clock,
+            com.hiltech.server.procurement.ProcurementPoReceivingGuard(
+                jdbc, com.hiltech.server.procurement.PurchaseOrderIssuePersistence(jdbc)),
         )
     }
 

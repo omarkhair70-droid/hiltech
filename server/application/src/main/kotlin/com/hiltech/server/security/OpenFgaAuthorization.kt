@@ -25,6 +25,8 @@ data class HiltechOpenFgaProperties(
     var apiUrl: String = "",
     var storeId: String = "",
     var authorizationModelId: String = "",
+    var authnMethod: String = "none",
+    var presharedKey: String = "",
     var requestTimeoutMs: Long = 2_000,
     var projectorPollDelayMs: Long = 1_000,
     var claimLeaseSeconds: Long = 60,
@@ -42,6 +44,15 @@ data class HiltechOpenFgaProperties(
         }
         require(authorizationModelId.isNotBlank()) {
             "hiltech.authorization.openfga.authorization-model-id must be configured when OpenFGA is enabled."
+        }
+        require(authnMethod == "none" || authnMethod == "preshared") {
+            "hiltech.authorization.openfga.authn-method must be none or preshared."
+        }
+        require(authnMethod != "preshared" || presharedKey.isNotBlank()) {
+            "hiltech.authorization.openfga.preshared-key is required when preshared authentication is selected."
+        }
+        require(authnMethod != "none" || presharedKey.isBlank()) {
+            "hiltech.authorization.openfga.preshared-key must not be configured when authentication is disabled."
         }
         require(requestTimeoutMs in 1..10_000) {
             "hiltech.authorization.openfga.request-timeout-ms must be between 1 and 10000."
@@ -127,6 +138,12 @@ fun interface OpenFgaHttpTransport {
 class JdkOpenFgaHttpTransport(
     properties: HiltechOpenFgaProperties,
 ) : OpenFgaHttpTransport {
+    init {
+        properties.validateEnabledConfiguration()
+    }
+
+    private val authnMethod = properties.authnMethod
+    private val presharedKey = properties.presharedKey
     private val baseUrl = properties.apiUrl.trimEnd('/')
     private val timeout = Duration.ofMillis(properties.requestTimeoutMs)
     private val client = HttpClient.newBuilder()
@@ -137,11 +154,17 @@ class JdkOpenFgaHttpTransport(
         path: String,
         body: String,
     ): OpenFgaHttpResponse {
-        val request = HttpRequest.newBuilder(
+        val builder = HttpRequest.newBuilder(
             URI.create(baseUrl + path),
         )
             .timeout(timeout)
             .header("content-type", "application/json")
+
+        if (authnMethod == "preshared") {
+            builder.header("Authorization", "Bearer $presharedKey")
+        }
+
+        val request = builder
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build()
 

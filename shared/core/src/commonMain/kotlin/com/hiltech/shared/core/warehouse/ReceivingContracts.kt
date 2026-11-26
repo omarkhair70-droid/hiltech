@@ -28,6 +28,8 @@ data class ReceivingDiscrepancyDto(
 @Serializable
 data class ReceivingDetailDto(
     val record: ReceivingRecordDto, val lines: List<ReceivingLineDto>, val discrepancies: List<ReceivingDiscrepancyDto>,
+    val rejectedLineIds: List<String> = emptyList(),
+    val deliveryNoteReady: Boolean = false,
 )
 
 @Serializable
@@ -68,6 +70,13 @@ data class AddReceivingDiscrepancyDto(
     val operationId: String, val recordVersion: Long, val lineId: String? = null,
     val type: String, val description: String,
 )
+@Serializable
+data class RejectPoReceivingStockLineDto(
+    val operationId: String, val lineId: String,
+    val recordVersion: Long, val lineVersion: Long,
+    val quantity: String, val type: String, val reason: String,
+)
+
 @Serializable
 data class CompleteReceivingDto(val operationId: String, val recordVersion: Long)
 

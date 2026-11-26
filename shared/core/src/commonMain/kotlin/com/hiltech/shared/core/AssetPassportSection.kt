@@ -1,11 +1,19 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -29,6 +37,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.*
 import com.hiltech.shared.core.warehouse.AssetCatalogDto
 import com.hiltech.shared.core.warehouse.AssetDueReturnQueueDto
 import com.hiltech.shared.core.warehouse.AssetCondition
@@ -92,47 +101,106 @@ sealed interface AssetAction {
 }
 
 @Composable
-fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispatch: (AssetAction) -> Unit) {
+fun AssetPassportSection(state: AssetInventoryState, warehouseId: String?, dispatch: (AssetAction) -> Unit, requestedAssetId: String? = null, onAssetFocusConsumed: () -> Unit = {}, readableProjects: Map<String, String> = emptyMap(), readableAssignments: Map<String, String> = emptyMap(), onOpenProject: (String) -> Unit = {}, onOpenAssignment: (String) -> Unit = {}) {
+    val colors = LocalHiltechOperationalColors.current
     var search by remember(warehouseId) { mutableStateOf(state.search) }
     var showRegistration by remember(warehouseId) { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Asset Passport", style = MaterialTheme.typography.titleLarge)
+    var mode by remember(warehouseId) { mutableStateOf(AssetDirectoryMode.Catalogue) }
+    var detailMode by remember(state.selected?.identity?.id) { mutableStateOf(state.selected != null) }
+    androidx.compose.runtime.LaunchedEffect(requestedAssetId, state.selected?.identity?.id, state.loading) {
+        if (requestedAssetId != null) {
+            mode = AssetDirectoryMode.Catalogue
+            if (state.selected?.identity?.id == requestedAssetId) {
+                detailMode = true
+                onAssetFocusConsumed()
+            } else if (!state.loading && state.message != null) onAssetFocusConsumed()
+        }
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(hiltechText("المعدات والأصول", "Equipment & assets"), style = MaterialTheme.typography.titleLarge)
+        Text(hiltechText("سجل المعدة وحالتها وعهدتها وخدمتها.", "Asset passport, condition, custody and service."), color = colors.secondaryText, style = MaterialTheme.typography.bodyMedium)
         if (warehouseId == null) {
-            Text("Select a warehouse.")
+            Text(hiltechText("اختر مخزنًا.", "Select a warehouse."))
             return@Column
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(search, { search = it }, modifier = Modifier.weight(1f),
-                label = { Text("Search assets") }, placeholder = { Text("Code, serial, manufacturer, model, type or tag") }, singleLine = true)
-            OutlinedButton({ dispatch(AssetAction.Search(search.trim())) }, enabled = !state.loading) {
-                Text(if (state.loading) "Loading assets" else "Search assets")
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AssetDirectoryMode.entries.forEach { choice ->
+                FilterChip(selected = mode == choice, onClick = { mode = choice; detailMode = false }, label = { Text(hiltechText(choice.title, choice.english)) })
             }
         }
         state.message?.let { Text(it) }
-        AssetServiceQueue(state, dispatch)
-        AssetDueReturnsSection(state.dueReturns, state.loading,
-            refresh = { dispatch(AssetAction.RefreshDueReturns) },
-            more = { due, code, id -> dispatch(AssetAction.MoreDueReturns(due, code, id)) },
-            select = { dispatch(AssetAction.Select(it)) })
-        val catalog = state.catalog ?: return@Column
-        if (catalog.canRegister) {
-            OutlinedButton({ showRegistration = !showRegistration }) {
-                Text(if (showRegistration) "Close registration" else "Register an asset")
+        val detail: @Composable () -> Unit = {
+            state.selected?.takeIf { requestedAssetId == null || it.identity.id == requestedAssetId }?.let { AssetPassportDetail(it, state, dispatch, readableProjects, readableAssignments, onOpenProject, onOpenAssignment) }
+                ?: HiltechPanel(Modifier.fillMaxWidth()) { Text(hiltechText("اختر معدة لفتح سجلها.", "Select an asset to open its passport.")) }
+        }
+        when (mode) {
+            AssetDirectoryMode.Service -> {
+                AssetServiceQueue(state, dispatch)
+                state.selected?.let { AssetPassportDetail(it, state, dispatch, readableProjects, readableAssignments, onOpenProject, onOpenAssignment) }
             }
-            if (showRegistration) {
-                if (catalog.types.isEmpty()) Text("No active Asset types are configured.")
-                else AssetRegistrationForm(state, dispatch)
+            AssetDirectoryMode.Returns -> {
+                AssetDueReturnsSection(state.dueReturns, state.loading,
+                    refresh = { dispatch(AssetAction.RefreshDueReturns) },
+                    more = { due, code, id -> dispatch(AssetAction.MoreDueReturns(due, code, id)) },
+                    select = { dispatch(AssetAction.Select(it)) })
+                state.selected?.let { AssetPassportDetail(it, state, dispatch, readableProjects, readableAssignments, onOpenProject, onOpenAssignment) }
+            }
+            AssetDirectoryMode.Catalogue -> {
+                val directory: @Composable () -> Unit = {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(search, { search = it }, modifier = Modifier.weight(1f),
+                                label = { Text(hiltechText("كود أو اسم أو مسلسل", "Code, name or serial")) }, singleLine = true)
+                            Button({ dispatch(AssetAction.Search(search.trim())) }, enabled = !state.loading) {
+                                Text(if (state.loading) hiltechText("تحميل", "Loading") else hiltechText("بحث", "Search"))
+                            }
+                        }
+                        val catalog = state.catalog
+                        if (catalog?.canRegister == true) {
+                            TextButton(onClick = { showRegistration = !showRegistration }) {
+                                Text(if (showRegistration) hiltechText("إغلاق التسجيل", "Close registration") else hiltechText("+ تسجيل معدة", "+ Register asset"))
+                            }
+                            if (showRegistration) HiltechPanel(Modifier.fillMaxWidth()) {
+                                if (catalog.types.isEmpty()) Text(hiltechText("لا توجد أنواع معدات مفعّلة.", "No active asset types."))
+                                else AssetRegistrationForm(state, dispatch)
+                            }
+                        }
+                        if (catalog != null && state.items.isEmpty()) Text(hiltechText("لا توجد معدات مطابقة في النتائج.", "No matching assets."))
+                        state.items.forEach { item ->
+                            Surface(onClick = { detailMode = true; dispatch(AssetAction.Select(item.id)) },
+                                enabled = !state.loading, color = if (item.id == state.selected?.identity?.id) colors.selected else colors.surface,
+                                contentColor = colors.primaryText, shape = HiltechShape.medium, modifier = Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                    Text(item.assetCode, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+                                    Text(item.name ?: item.assetCode, style = MaterialTheme.typography.titleMedium)
+                                    Text(item.typeName, color = colors.secondaryText)
+                                    Text(listOfNotNull(item.manufacturer, item.model, item.serialNumber).joinToString(" · "),
+                                        color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+                                    HiltechStateTag(item.condition.name, HiltechStateTone.NEUTRAL)
+                                }
+                            }
+                        }
+                        state.nextAfterCode?.let { cursor ->
+                            OutlinedButton({ dispatch(AssetAction.More(cursor)) }, enabled = !state.loading) { Text(hiltechText("تحميل معدات إضافية", "Load more assets")) }
+                        }
+                    }
+                }
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    if (maxWidth >= 860.dp) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                        Column(Modifier.weight(.9f)) { directory() }
+                        Column(Modifier.weight(1.5f)) { detail() }
+                    } else if (detailMode && state.selected != null) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        TextButton(onClick = { detailMode = false }) { Text(hiltechText("العودة إلى المعدات", "Back to assets")) }
+                        detail()
+                    } else directory()
+                }
             }
         }
-        if (state.items.isEmpty()) Text("No matching assets")
-        assetPicker("Asset", state.selected?.identity?.id, state.items.map {
-            it.id to listOfNotNull(it.assetCode, it.name).joinToString(" · ")
-        }, !state.loading) { dispatch(AssetAction.Select(it)) }
-        state.nextAfterCode?.let { cursor ->
-            OutlinedButton({ dispatch(AssetAction.More(cursor)) }, enabled = !state.loading) { Text("Load more assets") }
-        }
-        state.selected?.let { AssetPassportDetail(it, state, dispatch) }
     }
+}
+
+private enum class AssetDirectoryMode(val title: String, val english: String) {
+    Catalogue("دليل المعدات", "Asset directory"), Service("الخدمة والمعايرة", "Service & calibration"), Returns("المرتجعات المستحقة", "Due returns"),
 }
 
 @Composable
@@ -167,32 +235,67 @@ private fun AssetRegistrationForm(state: AssetInventoryState, dispatch: (AssetAc
 }
 
 @Composable
-private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventoryState, dispatch: (AssetAction) -> Unit) {
+private fun AssetPassportDetail(passport: AssetPassportDto, state: AssetInventoryState, dispatch: (AssetAction) -> Unit, readableProjects: Map<String, String>, readableAssignments: Map<String, String>, onOpenProject: (String) -> Unit, onOpenAssignment: (String) -> Unit) {
     val asset = passport.identity
     val custody = passport.custody
-    HorizontalDivider()
-    Text(listOfNotNull(asset.assetCode, asset.name).joinToString(" · "), style = MaterialTheme.typography.titleMedium)
-    Text("${asset.typeName} · revision ${asset.typeRevision} · ${asset.lifecycle}")
-    Text(listOfNotNull(asset.manufacturer, asset.model).joinToString(" · ").ifEmpty { "Manufacturer and model unknown" })
-    Text("Serial number · ${asset.serialNumber ?: "Unknown"}")
-    if (asset.duplicateSerial) Text("Review duplicate serial number", color = MaterialTheme.colorScheme.error)
-    Text("Condition · ${asset.condition.name.lowercase().replaceFirstChar { it.uppercase() }}")
-    asset.sourceImportRowId?.let { Text("Import row · $it") }
-    Text("Current custody", style = MaterialTheme.typography.titleSmall)
-    if (custody == null) Text("Opening custody has not been recorded.")
-    custody?.let {
-        Text(it.locationCode ?: it.employeeCode?.let { code -> "Employee $code" } ?: "Custody target unavailable")
-        it.since?.let { since -> Text("Since $since") }
-        it.expectedReturnAt?.let { due -> Text("Expected return · $due") }
-        it.projectId?.let { id -> Text("Project · $id") }
-        it.siteId?.let { id -> Text("Site · $id") }
-        it.workOrderId?.let { id -> Text("Work order · $id") }
+    val colors = LocalHiltechOperationalColors.current
+    var tab by remember(asset.id) { mutableStateOf(AssetDetailTab.Passport) }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        HiltechPanel(Modifier.fillMaxWidth()) {
+            Text(asset.assetCode, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+            Text(asset.name ?: asset.assetCode, style = MaterialTheme.typography.headlineSmall)
+            Text(asset.typeName, color = colors.secondaryText, style = MaterialTheme.typography.bodyMedium)
+            HiltechStateTag(asset.condition.name, HiltechStateTone.NEUTRAL)
+            HiltechKeyValue(hiltechText("العهدة الحالية", "Current custody"), custody?.locationCode ?: custody?.employeeCode?.let { hiltechText("موظف ", "Employee ") + it }
+                ?: hiltechText("لم تُسجل أو لا تتوفر بيانات العهدة", "Custody is unrecorded or unavailable"))
+            custody?.expectedReturnAt?.let { HiltechKeyValue(hiltechText("الموعد المتوقع للعودة", "Expected return"), it) }
+            if (asset.duplicateSerial) Text(hiltechText("الرقم المسلسل يحتاج مراجعة", "Serial number needs review"), color = MaterialTheme.colorScheme.error)
+        }
+        val tabs = AssetDetailTab.entries.filter { choice ->
+            when (choice) {
+                AssetDetailTab.Operations -> passport.canInitialize || passport.canCorrect || (passport.canOperatePhysical && custody != null)
+                AssetDetailTab.Service -> state.serviceDetail != null
+                else -> true
+            }
+        }
+        val current = tab.takeIf { it in tabs } ?: AssetDetailTab.Passport
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            tabs.forEach { choice ->
+                FilterChip(selected = current == choice, onClick = { tab = choice }, label = { Text(hiltechText(choice.title, choice.english)) })
+            }
+        }
+        when (current) {
+            AssetDetailTab.Passport -> HiltechPanel(Modifier.fillMaxWidth()) {
+                HiltechKeyValue(hiltechText("الشركة المصنعة / الموديل", "Manufacturer / model"), listOfNotNull(asset.manufacturer, asset.model).joinToString(" · ").ifEmpty { hiltechText("غير متاح", "Unavailable") })
+                HiltechKeyValue(hiltechText("الرقم المسلسل", "Serial number"), asset.serialNumber ?: hiltechText("غير متاح", "Unavailable"))
+                HiltechKeyValue(hiltechText("الحالة", "Status"), asset.lifecycle)
+                custody?.since?.let { HiltechKeyValue(hiltechText("العهدة منذ", "In custody since"), it) }
+                asset.sourceImportRowId?.let { HiltechKeyValue(hiltechText("مرجع سجل الاستيراد", "Import record reference"), it) }
+                custody?.projectId?.let { id ->
+                    val project = readableProjects[id]
+                    HiltechKeyValue(hiltechText("المشروع", "Project"), project ?: id)
+                    if (project != null) TextButton(onClick = { onOpenProject(id) }) { Text(hiltechText("فتح المشروع", "Open project")) }
+                }
+                custody?.siteId?.let { HiltechKeyValue(hiltechText("مرجع الموقع", "Site reference"), it) }
+                custody?.workOrderId?.let { id ->
+                    val work = readableAssignments[id]
+                    HiltechKeyValue(hiltechText("أمر العمل", "Work order"), work ?: id)
+                    if (work != null) TextButton(onClick = { onOpenAssignment(id) }) { Text(hiltechText("فتح التكليف", "Open assignment")) }
+                }
+            }
+            AssetDetailTab.Tags -> AssetTags(passport, state.loading, dispatch)
+            AssetDetailTab.Operations -> {
+                if (passport.canInitialize || passport.canCorrect) AssetCustodyForm(passport, state, dispatch)
+                if (passport.canOperatePhysical && custody != null) PhysicalAssetOperations(passport, state, dispatch)
+            }
+            AssetDetailTab.Service -> state.serviceDetail?.let { AssetServiceDetail(asset.id, it, state.loading, dispatch) }
+            AssetDetailTab.History -> AssetMovementHistory(state.movements, state.locations)
+        }
     }
-    AssetTags(passport, state.loading, dispatch)
-    if (passport.canInitialize || passport.canCorrect) AssetCustodyForm(passport, state, dispatch)
-    state.serviceDetail?.let { AssetServiceDetail(asset.id, it, state.loading, dispatch) }
-    if (passport.canOperatePhysical && custody != null) PhysicalAssetOperations(passport, state, dispatch)
-    AssetMovementHistory(state.movements, state.locations)
+}
+
+private enum class AssetDetailTab(val title: String, val english: String) {
+    Passport("السجل", "Passport"), Tags("الملصقات", "Tags"), Operations("العهدة والحركة", "Custody & movements"), Service("الخدمة", "Service"), History("التاريخ", "History"),
 }
 
 /** The same immutable movement receipts on Windows and Android. */

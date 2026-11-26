@@ -131,6 +131,11 @@ class OnboardingPostgresContractTest {
                     clock = clock,
                 )
 
+            val beforeStart = service.workspace(ids.adminIdentity, ids.employeeId)
+            assertEquals("AVAILABLE", beforeStart.startAvailability)
+            assertTrue(beforeStart.policies.any { it.configRevisionId == ids.policyRevisionId })
+            assertEquals(null, beforeStart.currentCase)
+
             val startOperation =
                 UUID.randomUUID()
             val started =
@@ -489,6 +494,20 @@ class OnboardingPostgresContractTest {
                 activationReplay.onboarding
                     .state,
             )
+
+            // A lost start response remains recoverable after mutable policy and employee state changes.
+            val lateStartReplay = service.start(StartOnboardingCommand(
+                operationId = startOperation,
+                employeeId = ids.employeeId,
+                baseEmployeeVersion = 1,
+                onboardingPolicyRevisionId = ids.policyRevisionId,
+                actorUserId = ids.adminIdentity,
+                correlationId = "corr-start-replay-after-activation",
+            ))
+            assertTrue(lateStartReplay.replayed)
+            assertEquals(activated.onboarding.caseId, lateStartReplay.onboarding.caseId)
+            assertEquals(OnboardingCaseState.ACTIVATED, lateStartReplay.onboarding.state)
+            assertFalse(requireNotNull(service.workspace(ids.adminIdentity, ids.employeeId).currentCase).canActivate)
 
             val otherOrgPolicy =
                 assertThrows<

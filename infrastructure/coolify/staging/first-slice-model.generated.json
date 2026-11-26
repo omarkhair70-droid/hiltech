@@ -1,0 +1,2460 @@
+{
+  "schema_version": "1.1",
+  "type_definitions": [
+    {
+      "type": "user"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "admin": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_activate_config": {},
+          "can_edit_config": {},
+          "can_manage_people": {},
+          "can_manage_projects": {},
+          "can_view_config": {},
+          "can_view_people_private": {},
+          "config_activator": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "config_editor": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "config_viewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "member": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "people_admin": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "project_admin": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "admin": {
+          "this": {}
+        },
+        "can_activate_config": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "config_activator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "admin"
+                }
+              }
+            ]
+          }
+        },
+        "can_edit_config": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "config_editor"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "admin"
+                }
+              }
+            ]
+          }
+        },
+        "can_manage_people": {
+          "computedUserset": {
+            "relation": "people_admin"
+          }
+        },
+        "can_manage_projects": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "project_admin"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "admin"
+                }
+              }
+            ]
+          }
+        },
+        "can_view_config": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "config_viewer"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "config_editor"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "config_activator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "admin"
+                }
+              }
+            ]
+          }
+        },
+        "can_view_people_private": {
+          "computedUserset": {
+            "relation": "people_admin"
+          }
+        },
+        "config_activator": {
+          "this": {}
+        },
+        "config_editor": {
+          "this": {}
+        },
+        "config_viewer": {
+          "this": {}
+        },
+        "member": {
+          "this": {}
+        },
+        "people_admin": {
+          "this": {}
+        },
+        "project_admin": {
+          "this": {}
+        }
+      },
+      "type": "organization"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "can_manage_membership": {},
+          "can_view": {},
+          "manager": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "member": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "organization": {
+            "directly_related_user_types": [
+              {
+                "type": "organization"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "can_manage_membership": {
+          "computedUserset": {
+            "relation": "manager"
+          }
+        },
+        "can_view": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "member"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              }
+            ]
+          }
+        },
+        "manager": {
+          "this": {}
+        },
+        "member": {
+          "this": {}
+        },
+        "organization": {
+          "this": {}
+        }
+      },
+      "type": "team"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "member": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "member": {
+          "this": {}
+        }
+      },
+      "type": "crew"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "can_assign_work": {},
+          "can_cancel_work": {},
+          "can_create_work": {},
+          "can_manage": {},
+          "can_request_resource": {},
+          "can_review_work": {},
+          "can_view": {},
+          "can_view_resources": {},
+          "engineer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "explicit_viewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "organization": {
+            "directly_related_user_types": [
+              {
+                "type": "organization"
+              }
+            ]
+          },
+          "project_manager": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "supervisor": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "technician": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "warehouse_context": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "can_assign_work": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "project_manager"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "supervisor"
+                }
+              }
+            ]
+          }
+        },
+        "can_cancel_work": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "project_manager"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "supervisor"
+                }
+              }
+            ]
+          }
+        },
+        "can_create_work": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "project_manager"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "supervisor"
+                }
+              }
+            ]
+          }
+        },
+        "can_manage": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "project_manager"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_manage_projects"
+                  },
+                  "tupleset": {
+                    "relation": "organization"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_request_resource": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "project_manager"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "engineer"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "supervisor"
+                }
+              }
+            ]
+          }
+        },
+        "can_review_work": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "project_manager"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "engineer"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "supervisor"
+                }
+              }
+            ]
+          }
+        },
+        "can_view": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "project_manager"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "engineer"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "supervisor"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "technician"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "warehouse_context"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "explicit_viewer"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_manage_projects"
+                  },
+                  "tupleset": {
+                    "relation": "organization"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_view_resources": {
+          "computedUserset": {
+            "relation": "can_view"
+          }
+        },
+        "engineer": {
+          "this": {}
+        },
+        "explicit_viewer": {
+          "this": {}
+        },
+        "organization": {
+          "this": {}
+        },
+        "project_manager": {
+          "this": {}
+        },
+        "supervisor": {
+          "this": {}
+        },
+        "technician": {
+          "this": {}
+        },
+        "warehouse_context": {
+          "this": {}
+        }
+      },
+      "type": "project"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "can_access_field_context": {},
+          "can_manage": {},
+          "can_view": {},
+          "explicit_member": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "organization": {
+            "directly_related_user_types": [
+              {
+                "type": "organization"
+              }
+            ]
+          },
+          "project": {
+            "directly_related_user_types": [
+              {
+                "type": "project"
+              }
+            ]
+          },
+          "site_supervisor": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "site_technician": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "can_access_field_context": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "explicit_member"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "site_supervisor"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "site_technician"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "project_manager"
+                  },
+                  "tupleset": {
+                    "relation": "project"
+                  }
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "engineer"
+                  },
+                  "tupleset": {
+                    "relation": "project"
+                  }
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "supervisor"
+                  },
+                  "tupleset": {
+                    "relation": "project"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_manage": {
+          "tupleToUserset": {
+            "computedUserset": {
+              "relation": "can_manage_projects"
+            },
+            "tupleset": {
+              "relation": "organization"
+            }
+          }
+        },
+        "can_view": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "explicit_member"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "site_supervisor"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "site_technician"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view"
+                  },
+                  "tupleset": {
+                    "relation": "project"
+                  }
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_manage_projects"
+                  },
+                  "tupleset": {
+                    "relation": "organization"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "explicit_member": {
+          "this": {}
+        },
+        "organization": {
+          "this": {}
+        },
+        "project": {
+          "this": {}
+        },
+        "site_supervisor": {
+          "this": {}
+        },
+        "site_technician": {
+          "this": {}
+        }
+      },
+      "type": "site"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "assigned_crew": {
+            "directly_related_user_types": [
+              {
+                "relation": "member",
+                "type": "crew"
+              }
+            ]
+          },
+          "assigned_subcontractor": {
+            "directly_related_user_types": [
+              {
+                "relation": "member",
+                "type": "organization"
+              }
+            ]
+          },
+          "assigned_team": {
+            "directly_related_user_types": [
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "assigned_user": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_block": {},
+          "can_cancel": {},
+          "can_request_rework": {},
+          "can_resume": {},
+          "can_review": {},
+          "can_start": {},
+          "can_submit_completion": {},
+          "can_view": {},
+          "can_view_evidence": {},
+          "explicit_viewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "project": {
+            "directly_related_user_types": [
+              {
+                "type": "project"
+              }
+            ]
+          },
+          "reviewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "site": {
+            "directly_related_user_types": [
+              {
+                "type": "site"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "assigned_crew": {
+          "this": {}
+        },
+        "assigned_subcontractor": {
+          "this": {}
+        },
+        "assigned_team": {
+          "this": {}
+        },
+        "assigned_user": {
+          "this": {}
+        },
+        "can_block": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "assigned_user"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_team"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_crew"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_subcontractor"
+                }
+              }
+            ]
+          }
+        },
+        "can_cancel": {
+          "tupleToUserset": {
+            "computedUserset": {
+              "relation": "can_cancel_work"
+            },
+            "tupleset": {
+              "relation": "project"
+            }
+          }
+        },
+        "can_request_rework": {
+          "computedUserset": {
+            "relation": "can_review"
+          }
+        },
+        "can_resume": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "assigned_user"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_team"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_crew"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_subcontractor"
+                }
+              }
+            ]
+          }
+        },
+        "can_review": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "reviewer"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_review_work"
+                  },
+                  "tupleset": {
+                    "relation": "project"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_start": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "assigned_user"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_team"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_crew"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_subcontractor"
+                }
+              }
+            ]
+          }
+        },
+        "can_submit_completion": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "assigned_user"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_team"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_crew"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_subcontractor"
+                }
+              }
+            ]
+          }
+        },
+        "can_view": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "assigned_user"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_team"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_crew"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "assigned_subcontractor"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "reviewer"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "explicit_viewer"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view"
+                  },
+                  "tupleset": {
+                    "relation": "project"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_view_evidence": {
+          "computedUserset": {
+            "relation": "can_view"
+          }
+        },
+        "explicit_viewer": {
+          "this": {}
+        },
+        "project": {
+          "this": {}
+        },
+        "reviewer": {
+          "this": {}
+        },
+        "site": {
+          "this": {}
+        }
+      },
+      "type": "work_order"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "adjustment_approver": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "asset_master_manager": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "can_accept_return": {},
+          "can_approve_adjustment": {},
+          "can_checkout": {},
+          "can_checkout_asset": {},
+          "can_count": {},
+          "can_inspect_return": {},
+          "can_issue_stock": {},
+          "can_manage": {},
+          "can_manage_asset_service": {},
+          "can_manage_master": {},
+          "can_receive": {},
+          "can_request_adjustment": {},
+          "can_request_retirement": {},
+          "can_reserve": {},
+          "can_return": {},
+          "can_transfer": {},
+          "can_view_inventory": {},
+          "can_view_value": {},
+          "manager": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "operator": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "organization": {
+            "directly_related_user_types": [
+              {
+                "type": "organization"
+              }
+            ]
+          },
+          "value_viewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "viewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "adjustment_approver": {
+          "this": {}
+        },
+        "asset_master_manager": {
+          "this": {}
+        },
+        "can_accept_return": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_approve_adjustment": {
+          "computedUserset": {
+            "relation": "adjustment_approver"
+          }
+        },
+        "can_checkout": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_checkout_asset": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_count": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_inspect_return": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "asset_master_manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_issue_stock": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_manage": {
+          "computedUserset": {
+            "relation": "manager"
+          }
+        },
+        "can_manage_asset_service": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "asset_master_manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_manage_master": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "asset_master_manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_receive": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_request_adjustment": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_request_retirement": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "asset_master_manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_reserve": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_return": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_transfer": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              }
+            ]
+          }
+        },
+        "can_view_inventory": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "manager"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "viewer"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "asset_master_manager"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "adjustment_approver"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "value_viewer"
+                }
+              }
+            ]
+          }
+        },
+        "can_view_value": {
+          "computedUserset": {
+            "relation": "value_viewer"
+          }
+        },
+        "manager": {
+          "this": {}
+        },
+        "operator": {
+          "this": {}
+        },
+        "organization": {
+          "this": {}
+        },
+        "value_viewer": {
+          "this": {}
+        },
+        "viewer": {
+          "this": {}
+        }
+      },
+      "type": "warehouse"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "can_count": {},
+          "can_manage": {},
+          "can_move_in": {},
+          "can_move_out": {},
+          "can_view": {},
+          "operator": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "project": {
+            "directly_related_user_types": [
+              {
+                "type": "project"
+              }
+            ]
+          },
+          "responsible": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "site": {
+            "directly_related_user_types": [
+              {
+                "type": "site"
+              }
+            ]
+          },
+          "viewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "warehouse": {
+            "directly_related_user_types": [
+              {
+                "type": "warehouse"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "can_count": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "responsible"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_count"
+                  },
+                  "tupleset": {
+                    "relation": "warehouse"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_manage": {
+          "tupleToUserset": {
+            "computedUserset": {
+              "relation": "can_manage"
+            },
+            "tupleset": {
+              "relation": "warehouse"
+            }
+          }
+        },
+        "can_move_in": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "responsible"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_receive"
+                  },
+                  "tupleset": {
+                    "relation": "warehouse"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_move_out": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "responsible"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_checkout"
+                  },
+                  "tupleset": {
+                    "relation": "warehouse"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_view": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "responsible"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "viewer"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view_inventory"
+                  },
+                  "tupleset": {
+                    "relation": "warehouse"
+                  }
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view_resources"
+                  },
+                  "tupleset": {
+                    "relation": "project"
+                  }
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view"
+                  },
+                  "tupleset": {
+                    "relation": "site"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "operator": {
+          "this": {}
+        },
+        "project": {
+          "this": {}
+        },
+        "responsible": {
+          "this": {}
+        },
+        "site": {
+          "this": {}
+        },
+        "viewer": {
+          "this": {}
+        },
+        "warehouse": {
+          "this": {}
+        }
+      },
+      "type": "storage_location"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "can_checkout": {},
+          "can_report_damage": {},
+          "can_report_missing": {},
+          "can_reserve_as_warehouse": {},
+          "can_return": {},
+          "can_transfer": {},
+          "can_view": {},
+          "can_view_history": {},
+          "checkout_delegate": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "current_custodian": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "explicit_viewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "project": {
+            "directly_related_user_types": [
+              {
+                "type": "project"
+              }
+            ]
+          },
+          "site": {
+            "directly_related_user_types": [
+              {
+                "type": "site"
+              }
+            ]
+          },
+          "storage_location": {
+            "directly_related_user_types": [
+              {
+                "type": "storage_location"
+              }
+            ]
+          },
+          "warehouse": {
+            "directly_related_user_types": [
+              {
+                "type": "warehouse"
+              }
+            ]
+          },
+          "work_order": {
+            "directly_related_user_types": [
+              {
+                "type": "work_order"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "can_checkout": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "checkout_delegate"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_checkout"
+                  },
+                  "tupleset": {
+                    "relation": "warehouse"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_report_damage": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "current_custodian"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view"
+                  },
+                  "tupleset": {
+                    "relation": "work_order"
+                  }
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view_inventory"
+                  },
+                  "tupleset": {
+                    "relation": "warehouse"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_report_missing": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "current_custodian"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view_inventory"
+                  },
+                  "tupleset": {
+                    "relation": "warehouse"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_reserve_as_warehouse": {
+          "tupleToUserset": {
+            "computedUserset": {
+              "relation": "can_checkout"
+            },
+            "tupleset": {
+              "relation": "warehouse"
+            }
+          }
+        },
+        "can_return": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "current_custodian"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_return"
+                  },
+                  "tupleset": {
+                    "relation": "warehouse"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_transfer": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "current_custodian"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_transfer"
+                  },
+                  "tupleset": {
+                    "relation": "warehouse"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_view": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "current_custodian"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "explicit_viewer"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view_inventory"
+                  },
+                  "tupleset": {
+                    "relation": "warehouse"
+                  }
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view"
+                  },
+                  "tupleset": {
+                    "relation": "storage_location"
+                  }
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view_resources"
+                  },
+                  "tupleset": {
+                    "relation": "project"
+                  }
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view"
+                  },
+                  "tupleset": {
+                    "relation": "work_order"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_view_history": {
+          "union": {
+            "child": [
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view_inventory"
+                  },
+                  "tupleset": {
+                    "relation": "warehouse"
+                  }
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view_resources"
+                  },
+                  "tupleset": {
+                    "relation": "project"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "checkout_delegate": {
+          "this": {}
+        },
+        "current_custodian": {
+          "this": {}
+        },
+        "explicit_viewer": {
+          "this": {}
+        },
+        "project": {
+          "this": {}
+        },
+        "site": {
+          "this": {}
+        },
+        "storage_location": {
+          "this": {}
+        },
+        "warehouse": {
+          "this": {}
+        },
+        "work_order": {
+          "this": {}
+        }
+      },
+      "type": "asset"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "can_count": {},
+          "can_issue": {},
+          "can_reserve_as_warehouse": {},
+          "can_return": {},
+          "can_view": {},
+          "viewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "warehouse": {
+            "directly_related_user_types": [
+              {
+                "type": "warehouse"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "can_count": {
+          "tupleToUserset": {
+            "computedUserset": {
+              "relation": "can_count"
+            },
+            "tupleset": {
+              "relation": "warehouse"
+            }
+          }
+        },
+        "can_issue": {
+          "tupleToUserset": {
+            "computedUserset": {
+              "relation": "can_checkout"
+            },
+            "tupleset": {
+              "relation": "warehouse"
+            }
+          }
+        },
+        "can_reserve_as_warehouse": {
+          "tupleToUserset": {
+            "computedUserset": {
+              "relation": "can_checkout"
+            },
+            "tupleset": {
+              "relation": "warehouse"
+            }
+          }
+        },
+        "can_return": {
+          "tupleToUserset": {
+            "computedUserset": {
+              "relation": "can_return"
+            },
+            "tupleset": {
+              "relation": "warehouse"
+            }
+          }
+        },
+        "can_view": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "viewer"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view_inventory"
+                  },
+                  "tupleset": {
+                    "relation": "warehouse"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "viewer": {
+          "this": {}
+        },
+        "warehouse": {
+          "this": {}
+        }
+      },
+      "type": "stock_item"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "can_download": {},
+          "can_finalize": {},
+          "can_reserve_upload": {},
+          "can_review": {},
+          "can_view": {},
+          "client_visible_to": {
+            "directly_related_user_types": [
+              {
+                "relation": "member",
+                "type": "organization"
+              }
+            ]
+          },
+          "creator": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "reviewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "work_order": {
+            "directly_related_user_types": [
+              {
+                "type": "work_order"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "can_download": {
+          "computedUserset": {
+            "relation": "can_view"
+          }
+        },
+        "can_finalize": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "creator"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_submit_completion"
+                  },
+                  "tupleset": {
+                    "relation": "work_order"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_reserve_upload": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "creator"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_submit_completion"
+                  },
+                  "tupleset": {
+                    "relation": "work_order"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_review": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "reviewer"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_review"
+                  },
+                  "tupleset": {
+                    "relation": "work_order"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_view": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "creator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "reviewer"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "client_visible_to"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view_evidence"
+                  },
+                  "tupleset": {
+                    "relation": "work_order"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "client_visible_to": {
+          "this": {}
+        },
+        "creator": {
+          "this": {}
+        },
+        "reviewer": {
+          "this": {}
+        },
+        "work_order": {
+          "this": {}
+        }
+      },
+      "type": "evidence"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "activator": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "can_activate": {},
+          "can_edit_draft": {},
+          "can_retire": {},
+          "can_supersede": {},
+          "can_validate": {},
+          "can_view": {},
+          "can_view_history": {},
+          "editor": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "organization": {
+            "directly_related_user_types": [
+              {
+                "type": "organization"
+              }
+            ]
+          },
+          "viewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "activator": {
+          "this": {}
+        },
+        "can_activate": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "activator"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_activate_config"
+                  },
+                  "tupleset": {
+                    "relation": "organization"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_edit_draft": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "editor"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_edit_config"
+                  },
+                  "tupleset": {
+                    "relation": "organization"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_retire": {
+          "computedUserset": {
+            "relation": "can_activate"
+          }
+        },
+        "can_supersede": {
+          "computedUserset": {
+            "relation": "can_activate"
+          }
+        },
+        "can_validate": {
+          "computedUserset": {
+            "relation": "can_edit_draft"
+          }
+        },
+        "can_view": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "viewer"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "editor"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "activator"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view_config"
+                  },
+                  "tupleset": {
+                    "relation": "organization"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_view_history": {
+          "computedUserset": {
+            "relation": "can_view"
+          }
+        },
+        "editor": {
+          "this": {}
+        },
+        "organization": {
+          "this": {}
+        },
+        "viewer": {
+          "this": {}
+        }
+      },
+      "type": "configuration_revision"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "approver": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          },
+          "can_decide": {},
+          "can_view": {},
+          "organization": {
+            "directly_related_user_types": [
+              {
+                "type": "organization"
+              }
+            ]
+          },
+          "requester": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "viewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              },
+              {
+                "relation": "member",
+                "type": "team"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
+        "approver": {
+          "this": {}
+        },
+        "can_decide": {
+          "computedUserset": {
+            "relation": "approver"
+          }
+        },
+        "can_view": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "requester"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "approver"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "viewer"
+                }
+              }
+            ]
+          }
+        },
+        "organization": {
+          "this": {}
+        },
+        "requester": {
+          "this": {}
+        },
+        "viewer": {
+          "this": {}
+        }
+      },
+      "type": "approval_request"
+    }
+  ]
+}

@@ -1,6 +1,16 @@
 # HILTECH Product Completeness Matrix
 
-Status: ACTIVE TRACKER
+Status: **HISTORICAL CAPABILITY MAP**
+
+Use this map to discover scope and existing contracts, not to infer current
+implementation or acceptance from its older status letters. The current private
+closeout register holds the detailed evidence and coverage crosswalk. Publish
+only sanitized engineering outcomes under the
+[verification contract](../13-delivery/NATIVE_PRODUCT_VERIFICATION.md).
+
+A source declaration, a mounted route, an authorized command and a completed
+user journey are separate facts. Count each explicitly; do not treat composable
+functions or HTTP handler counts as counts of completed screens.
 
 This file tracks capability families against the strict Definition of COMPLETE.
 

@@ -19,7 +19,35 @@ import com.hiltech.android.field.FieldEngineeringTestOnlineIdentity
 import com.hiltech.android.field.FieldEvidenceOnlineIdentity
 import com.hiltech.shared.core.local.buildHiltechLocalDatabase
 import com.hiltech.shared.core.local.getAndroidDatabaseBuilder
+import com.hiltech.shared.core.payroll.Payroll9aApiClient
+import com.hiltech.shared.core.payroll.Payroll9b9cApiClient
+import com.hiltech.shared.core.service.SupportDeskApiClient
+import com.hiltech.shared.core.service.SupportTimeApiClient
+import com.hiltech.shared.core.service.WarrantyCoverageReadinessApiClient
+import com.hiltech.shared.core.service.MaintenanceAgendaApiClient
+import com.hiltech.shared.core.service.HandoverApiClient
+import com.hiltech.shared.core.projects.ProjectsApiClient
+import com.hiltech.shared.core.commercial.CommercialApiClient
+import com.hiltech.shared.core.executive.ExecutiveApiClient
+import com.hiltech.shared.core.approval.ApprovalApiClient
+import com.hiltech.shared.core.inbox.InboxApiClient
+import com.hiltech.shared.core.finance.FinanceEvidenceReadApis
+import com.hiltech.shared.core.finance.FinanceBankCsvEvidenceUploader
+import com.hiltech.shared.core.finance.FinanceBankStatementIntakeApiClient
 import com.hiltech.shared.core.network.HiltechApiClient
+import com.hiltech.shared.core.procurement.PurchaseRequirementApiClient
+import com.hiltech.shared.core.procurement.WarehouseReplenishmentApiClient
+import com.hiltech.shared.core.procurement.OfficeStockNeedApiClient
+import com.hiltech.shared.core.procurement.AssetPurchaseNeedApiClient
+import com.hiltech.shared.core.procurement.PoWarehouseIntakeApiClient
+import com.hiltech.shared.core.procurement.PoReceivingDeliveryNoteUploader
+import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceApiClient
+import com.hiltech.shared.core.procurement.ServicePurchaseNeedApiClient
+import com.hiltech.shared.core.procurement.ServiceSupplierSourcingApiClient
+import com.hiltech.shared.core.procurement.ServiceSupplierQuoteUploader
+import com.hiltech.shared.core.procurement.ServiceOrderAndInvoiceApiClient
+import com.hiltech.shared.core.procurement.SupplierMasterDataApiClient
+import com.hiltech.shared.core.work.WorkApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
 import com.hiltech.shared.core.people.HrDocumentsApiClient
 import com.hiltech.shared.core.people.OnboardingApiClient
@@ -71,6 +99,15 @@ class HiltechApplication : Application() {
         )
     }
 
+    fun productApiForSession(sessionCurrent: () -> Boolean): HiltechApiClient =
+        com.hiltech.shared.core.network.sessionBoundHiltechApiClient(
+            httpClient, BuildConfig.HILTECH_API_BASE_URL, sessionCurrent,
+            accessToken = { identityRuntime.currentAccessToken() },
+            correlationId = { UUID.randomUUID().toString() },
+        )
+
+    fun evidenceApiForSession(api: HiltechApiClient) = EvidenceApiClient(api, httpClient)
+
     val peopleApi: PeopleApiClient by lazy {
         PeopleApiClient(productApi)
     }
@@ -86,12 +123,62 @@ class HiltechApplication : Application() {
         OnboardingApiClient(productApi)
     }
 
+    suspend fun submitEmployeeOnboarding(
+        intent: com.hiltech.shared.core.people.OnboardingWorkspaceIntent,
+        priorOutcomeUnknown: Boolean,
+        sessionCurrent: () -> Boolean,
+        onCommandSending: () -> Unit,
+    ) = com.hiltech.shared.core.people.submitOnboardingInSession(
+        httpClient, BuildConfig.HILTECH_API_BASE_URL, installationId, intent, priorOutcomeUnknown, sessionCurrent,
+        accessToken = { identityRuntime.currentAccessToken() },
+        correlationId = { UUID.randomUUID().toString() },
+        onCommandSending = onCommandSending,
+    )
+
     val hrDocumentsApi:
         HrDocumentsApiClient by lazy {
         HrDocumentsApiClient(productApi)
     }
 
     val warehouseApi by lazy { WarehouseApiClient(productApi) }
+    val procurementApi by lazy { PurchaseRequirementApiClient(productApi) }
+    val warehouseReplenishmentApi by lazy { WarehouseReplenishmentApiClient(productApi) }
+    val officeStockNeedApi by lazy { OfficeStockNeedApiClient(productApi) }
+    val assetPurchaseNeedApi by lazy { AssetPurchaseNeedApiClient(productApi) }
+    val poWarehouseIntakeApi by lazy { PoWarehouseIntakeApiClient(productApi) }
+    val supplierInvoiceFinanceApi by lazy { SupplierInvoiceFinanceApiClient(productApi) }
+    val financeEvidenceReadApis by lazy { FinanceEvidenceReadApis(productApi) }
+    val financeBankIntakeApi by lazy { FinanceBankStatementIntakeApiClient(productApi) }
+    val financeBankCsvUploader by lazy {
+        FinanceBankCsvEvidenceUploader(evidenceApi, financeBankIntakeApi)
+    }
+    val executiveApi by lazy { ExecutiveApiClient(productApi) }
+    val inboxApi by lazy { InboxApiClient(productApi) }
+    val approvalApi by lazy { ApprovalApiClient(productApi) }
+    val payrollOwnApi by lazy { Payroll9b9cApiClient(productApi) }
+    val payrollAdminApi by lazy { Payroll9aApiClient(productApi) }
+    val commercialApi by lazy { CommercialApiClient(productApi) }
+    val readProjectsApi by lazy { ProjectsApiClient(productApi) }
+    val planningApi by lazy { com.hiltech.shared.core.projects.PlanningApiClient(productApi) }
+    suspend fun submitPlanningForm(
+        request: com.hiltech.shared.core.PlanningFormRequest,
+        sessionCurrent: () -> Boolean,
+    ) = com.hiltech.shared.core.projects.submitPlanningFormInSession(
+        httpClient, BuildConfig.HILTECH_API_BASE_URL, installationId, request, sessionCurrent,
+        accessToken = { identityRuntime.currentAccessToken() },
+        correlationId = { UUID.randomUUID().toString() },
+    )
+    val handoverApi by lazy { HandoverApiClient(productApi) }
+    val supportServiceApi by lazy { SupportDeskApiClient(productApi) }
+    val supportTimeApi by lazy { SupportTimeApiClient(productApi) }
+    val warrantyReadinessApi by lazy { WarrantyCoverageReadinessApiClient(productApi) }
+    val maintenanceAgendaApi by lazy { MaintenanceAgendaApiClient(productApi) }
+    val servicePurchaseNeedApi by lazy { ServicePurchaseNeedApiClient(productApi) }
+    val serviceSupplierSourcingApi by lazy { ServiceSupplierSourcingApiClient(productApi) }
+    val supplierMasterDataApi by lazy { SupplierMasterDataApiClient(productApi) }
+    val serviceOrderAndInvoiceApi by lazy { ServiceOrderAndInvoiceApiClient(productApi, evidenceApi) }
+    val serviceSupplierQuoteUploader by lazy { ServiceSupplierQuoteUploader(serviceSupplierSourcingApi, evidenceApi) }
+    val procurementWorkApi by lazy { WorkApiClient(productApi) }
 
     val fieldAssignedWorkApi:
         FieldAssignedWorkApiClient by lazy {
@@ -127,6 +214,8 @@ class HiltechApplication : Application() {
     private val evidenceApi by lazy {
         EvidenceApiClient(productApi, httpClient)
     }
+
+    val poDeliveryNoteUploader by lazy { PoReceivingDeliveryNoteUploader(evidenceApi) }
 
     val fieldEvidenceSyncRuntime by lazy {
         AndroidFieldEvidenceSyncRuntime(

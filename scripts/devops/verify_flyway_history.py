@@ -13,15 +13,19 @@ import subprocess
 from pathlib import Path
 
 PREFIX = "database/migrations/"
-VERSION = re.compile(r"^V([0-9]{4})__[A-Za-z0-9_]+\.sql$")
+VERSION = re.compile(r"^V([0-9]{4})(?:_([1-9][0-9]*))?__[A-Za-z0-9_]+\.sql$")
 
 
 class MigrationGateError(ValueError):
     pass
 
 
-def _versions(files: dict[str, bytes], context: str) -> dict[int, str]:
-    versions: dict[int, str] = {}
+def _label(number: tuple[int, int]) -> str:
+    return f"V{number[0]:04d}" + (f"_{number[1]}" if number[1] else "")
+
+
+def _versions(files: dict[str, bytes], context: str) -> dict[tuple[int, int], str]:
+    versions: dict[tuple[int, int], str] = {}
     for path in sorted(files):
         if not path.startswith(PREFIX):
             continue
@@ -34,10 +38,10 @@ def _versions(files: dict[str, bytes], context: str) -> dict[int, str]:
         match = VERSION.fullmatch(filename)
         if match is None:
             raise MigrationGateError(f"{context}: malformed Flyway filename: {path}")
-        number = int(match.group(1))
+        number = (int(match.group(1)), int(match.group(2) or "0"))
         if number in versions:
             raise MigrationGateError(
-                f"{context}: duplicate V{number:04d}: {versions[number]}, {path}"
+                f"{context}: duplicate {_label(number)}: {versions[number]}, {path}"
             )
         versions[number] = path
     if not versions:
@@ -52,7 +56,7 @@ def verify_history(
     now = _versions(candidate, "candidate")
     for number, path in sorted(old.items()):
         if candidate.get(path) != baseline[path]:
-            raise MigrationGateError(f"already-merged V{number:04d} removed or changed: {path}")
+            raise MigrationGateError(f"already-merged {_label(number)} removed or changed: {path}")
     if any(number not in now or now[number] != path for number, path in old.items()):
         raise MigrationGateError("historical main migration filename altered")
     base_max = max(old)
@@ -60,16 +64,20 @@ def verify_history(
     for number in additions:
         if number <= base_max:
             raise MigrationGateError(
-                f"candidate backfills V{number:04d} below main's V{base_max:04d}"
+                f"candidate backfills {_label(number)} below main's {_label(base_max)}"
             )
-    observed = sorted(now)
-    expected = list(range(1, max(now) + 1))
+    observed = sorted(number[0] for number in now if number[1] == 0)
+    expected = list(range(1, max(now)[0] + 1))
     if observed != expected:
         missing = sorted(set(expected) - set(observed))
         raise MigrationGateError(
             f"missing lower Flyway versions {missing}; never merge higher versions first"
         )
-    return len(old), len(additions), max(now)
+    for major in observed:
+        minors = sorted(number[1] for number in now if number[0] == major and number[1] > 0)
+        if minors and minors != list(range(1, minors[-1] + 1)):
+            raise MigrationGateError(f"missing lower Flyway minor versions for V{major:04d}")
+    return len(old), len(additions), max(now)[0]
 
 
 def _git(repo: Path, *args: str) -> bytes:
@@ -113,7 +121,8 @@ def main() -> int:
         return 1
     print(
         f"PASS: unchanged main migrations={historical}; new additive={added}; "
-        f"highest=V{version:04d}; contiguous 1..V{version:04d}; no duplicates"
+        f"highest={_label(max(_versions(current, 'candidate')))}; "
+        f"contiguous majors 1..V{version:04d} and ordered minor repairs; no duplicates"
     )
     print("Read-only schema check; no database migration or rollback was executed.")
     return 0

@@ -4,6 +4,9 @@ import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 class OnboardingApiClient(
     private val api: HiltechApiClient,
@@ -13,6 +16,69 @@ class OnboardingApiClient(
             explicitNulls = false
         },
 ) {
+    val accountAccess = EmployeeAccountAccessApiClient(api, json)
+    suspend fun workspace(employeeId: String, installationId: String): OnboardingWorkspaceDto {
+        requireId(employeeId)
+        return api.request(
+            method = HttpMethod.Get,
+            path = "/v1/employees/$employeeId/onboarding/workspace",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(OnboardingWorkspaceDto.serializer(), it) },
+        )
+    }
+
+    suspend fun applyWorkspaceIntent(
+        intent: OnboardingWorkspaceIntent,
+        installationId: String,
+        priorOutcomeUnknown: Boolean,
+        sessionCurrent: () -> Boolean,
+        onCommandSending: () -> Unit,
+    ): OnboardingCommandResponseDto {
+        requireId(intent.operationId)
+        requireId(intent.employeeId)
+        requireId(intent.organizationId)
+        requireId(intent.policyConfigRevisionId)
+        require(intent.employeeVersion >= 1)
+        if (intent.action != OnboardingWorkspaceAction.START) {
+            requireId(requireNotNull(intent.caseId))
+            require((intent.caseVersion ?: 0) >= 1)
+        }
+        if (intent.action == OnboardingWorkspaceAction.RESOLVE) {
+            require(REQUIREMENT_KEY.matches(requireNotNull(intent.requirementKey)))
+            require(intent.resolution in setOf("SATISFIED", "WAIVED"))
+            require((intent.reason?.length ?: 0) <= 500)
+            require(intent.resolution != "WAIVED" || !intent.reason.isNullOrBlank())
+        }
+        currentCoroutineContext().ensureActive()
+        if (!sessionCurrent()) throw OnboardingPreparationException("SESSION_CHANGED")
+        if (!priorOutcomeUnknown) {
+            val current = try {
+                workspace(intent.employeeId, installationId)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                throw OnboardingPreparationException("SOURCE_CHECK_FAILED")
+            }
+            if (!onboardingIntentIsCurrent(intent, current)) throw OnboardingPreparationException("SOURCE_CHANGED")
+        }
+        currentCoroutineContext().ensureActive()
+        if (!sessionCurrent()) throw OnboardingPreparationException("SESSION_CHANGED")
+        onCommandSending()
+        val response = when (intent.action) {
+            OnboardingWorkspaceAction.START -> start(intent.employeeId,
+                StartOnboardingRequestDto(intent.operationId, intent.employeeVersion, intent.policyConfigRevisionId), installationId)
+            OnboardingWorkspaceAction.RESOLVE -> resolve(requireNotNull(intent.caseId), requireNotNull(intent.requirementKey),
+                ResolveOnboardingRequirementRequestDto(intent.operationId, requireNotNull(intent.caseVersion),
+                    requireNotNull(intent.resolution), intent.reason), installationId)
+            OnboardingWorkspaceAction.ACTIVATE -> activate(requireNotNull(intent.caseId),
+                ActivateEmployeeOnboardingRequestDto(intent.operationId, requireNotNull(intent.caseVersion), intent.employeeVersion), installationId)
+        }
+        currentCoroutineContext().ensureActive()
+        if (!sessionCurrent()) throw CancellationException("Onboarding session changed")
+        check(onboardingReceiptMatches(intent, response)) { "ONBOARDING_RECEIPT_MISMATCH" }
+        return response
+    }
+
     suspend fun start(
         employeeId: String,
         request: StartOnboardingRequestDto,
@@ -172,6 +238,19 @@ class OnboardingApiClient(
         )
     }
 
+    suspend fun identityInvitationAvailability(
+        employeeId: String,
+        installationId: String,
+    ): EmployeeIdentityInvitationAvailabilityDto {
+        requireId(employeeId)
+        return api.request(
+            method = HttpMethod.Get,
+            path = "/v1/employees/$employeeId/identity-invitations/availability",
+            options = HiltechRequestOptions(installationId = installationId),
+            decode = { json.decodeFromString(EmployeeIdentityInvitationAvailabilityDto.serializer(), it) },
+        ).also { require(it.employeeId == employeeId) }
+    }
+
     suspend fun provisionIdentity(
         employeeId: String,
         request:
@@ -183,6 +262,8 @@ class OnboardingApiClient(
         require(
             request.baseEmployeeVersion >= 1,
         )
+        require(request.deliveryMode in setOf("EMAIL_ACTION_LINK", "TEMPORARY_PASSWORD_HANDOFF"))
+        require(request.requestedLogin.trim().length in 3..320 && request.requestedLogin.none(Char::isISOControl))
 
         return api.request(
             method = HttpMethod.Post,
@@ -210,7 +291,15 @@ class OnboardingApiClient(
                     it,
                 )
             },
-        )
+        ).also { receipt ->
+            require(receipt.employeeId == employeeId && receipt.operationId == request.operationId)
+            require(receipt.deliveryMode == request.deliveryMode && receipt.state == "READY" && receipt.version >= 1)
+            require(!receipt.userIdentityId.isNullOrBlank())
+            when (request.deliveryMode) {
+                "EMAIL_ACTION_LINK" -> require(receipt.deliveryState == "SENT" && receipt.temporaryCredential == null)
+                "TEMPORARY_PASSWORD_HANDOFF" -> require(receipt.deliveryState == "READY" && !receipt.temporaryCredential.isNullOrBlank())
+            }
+        }
     }
 
     private suspend fun command(

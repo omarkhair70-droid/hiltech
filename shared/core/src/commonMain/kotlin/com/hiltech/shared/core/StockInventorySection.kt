@@ -1,8 +1,16 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -16,7 +24,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.*
 import com.hiltech.shared.core.warehouse.StockBalanceDto
 import com.hiltech.shared.core.warehouse.IssuedStockDirectoryDto
 import com.hiltech.shared.core.warehouse.IssuedStockDirectoryEntryDto
@@ -67,34 +78,97 @@ sealed interface StockAction {
 
 @Composable
 fun StockInventorySection(state: StockInventoryState, selectedWarehouseId: String?, dispatch: (StockAction) -> Unit) {
-    var showSetup by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Stock Inventory", style = MaterialTheme.typography.titleLarge)
-        OutlinedButton({ dispatch(StockAction.Refresh) }, enabled = !state.loading) {
-            Text(if (state.loading) "Loading stock" else "Refresh stock")
+    val colors = LocalHiltechOperationalColors.current
+    var query by remember(selectedWarehouseId) { mutableStateOf("") }
+    var showSetup by remember(selectedWarehouseId) { mutableStateOf(false) }
+    var detailMode by remember(state.selected?.id) { mutableStateOf(state.selected != null) }
+    var tab by remember(state.selected?.id) { mutableStateOf(StockDetailTab.Balance) }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(hiltechText("دليل الأصناف", "Stock catalogue"), style = MaterialTheme.typography.titleLarge)
+                Text(hiltechText("الأرصدة والحركة والتسليم الفعلي", "Balances, movements and actual fulfillment"), color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+            }
+            TextButton(onClick = { dispatch(StockAction.Refresh) }, enabled = !state.loading) {
+                Text(if (state.loading) hiltechText("جارٍ التحميل", "Loading") else hiltechText("تحديث", "Refresh"))
+            }
         }
         state.message?.let { Text(it) }
         val catalog = state.catalog ?: return@Column
-        if (selectedWarehouseId != null) {
-            OutlinedButton({ showSetup = !showSetup }, enabled = !state.loading) {
-                Text(if (showSetup) "Close Stock setup" else "Set up Stock and units")
+        val directory: @Composable () -> Unit = {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (selectedWarehouseId != null) {
+                    TextButton(onClick = { showSetup = !showSetup }, enabled = !state.loading) {
+                        Text(if (showSetup) hiltechText("إغلاق إعداد الأصناف", "Close stock setup") else hiltechText("+ صنف أو وحدة قياس", "+ Item or unit"))
+                    }
+                    if (showSetup) HiltechPanel(Modifier.fillMaxWidth()) { StockMasterForm(catalog, state.loading, dispatch) }
+                }
+                OutlinedTextField(query, { query = it }, label = { Text(hiltechText("ابحث في الأصناف المعروضة", "Search visible items")) },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true)
+                val matches = state.items.filter { item ->
+                    query.isBlank() || listOfNotNull(item.itemCode, item.name, item.brand, item.partNumber)
+                        .any { it.contains(query.trim(), ignoreCase = true) }
+                }
+                Text("المعروض: " + matches.size, style = MaterialTheme.typography.labelMedium, color = colors.secondaryText)
+                if (matches.isEmpty()) Text(if (query.isBlank()) hiltechText("لا توجد أصناف معروضة.", "No visible items.") else hiltechText("لا توجد نتائج في الصفحة المحمّلة.", "No results in the loaded page."))
+                matches.forEach { item ->
+                    Surface(onClick = { detailMode = true; dispatch(StockAction.Select(item.id)) }, enabled = !state.loading,
+                        color = if (item.id == state.selected?.id) colors.selected else colors.surface,
+                        contentColor = colors.primaryText, shape = HiltechShape.medium, modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(item.itemCode, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+                            Text(item.name, style = MaterialTheme.typography.titleMedium)
+                            Text(listOfNotNull(item.brand, item.partNumber, item.baseUnitCode).joinToString(" · "),
+                                color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+                            HiltechStateTag(if (item.active) hiltechText("نشط", "Active") else hiltechText("غير نشط", "Inactive"),
+                                if (item.active) HiltechStateTone.CURRENT else HiltechStateTone.NEUTRAL)
+                        }
+                    }
+                }
+                state.nextAfterCode?.let { cursor ->
+                    OutlinedButton({ dispatch(StockAction.More(cursor)) }, enabled = !state.loading) { Text(hiltechText("تحميل أصناف إضافية", "Load more items")) }
+                }
             }
-            if (showSetup) StockMasterForm(catalog, state.loading, dispatch)
         }
-        if (state.items.isEmpty()) Text("No Stock items")
-        stockPicker("Stock item", state.selected?.id, state.items.map { it.id to "${it.itemCode} · ${it.name}" },
-            !state.loading) { dispatch(StockAction.Select(it)) }
-        state.nextAfterCode?.let { cursor ->
-            OutlinedButton({ dispatch(StockAction.More(cursor)) }, enabled = !state.loading) { Text("Load more items") }
-        }
-        state.selected?.let {
-            StockItemDetail(it, state, dispatch)
-            selectedWarehouseId?.let { warehouse ->
-                IssuedStockOperations(it, warehouse, state, dispatch)
-                StockFulfillmentHistorySection(it, warehouse, state, dispatch)
+        val detail: @Composable () -> Unit = {
+            val item = state.selected
+            if (item == null) {
+                HiltechPanel(Modifier.fillMaxWidth()) { Text(hiltechText("اختر صنفًا لعرض رصيده وحركته.", "Choose an item to view its balance and movements.")) }
+            } else {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HiltechPanel(Modifier.fillMaxWidth()) {
+                        Text(item.itemCode, style = MaterialTheme.typography.labelMedium, color = colors.secondaryText)
+                        Text(item.name, style = MaterialTheme.typography.headlineSmall)
+                        Text(listOfNotNull(item.brand, item.partNumber, item.baseUnitCode).joinToString(" · "))
+                    }
+                    val tabs = StockDetailTab.entries.filter { selectedWarehouseId != null || it == StockDetailTab.Balance }
+                    val current = tab.takeIf { it in tabs } ?: StockDetailTab.Balance
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        tabs.forEach { choice -> FilterChip(selected = current == choice, onClick = { tab = choice },
+                            label = { Text(hiltechText(choice.title, choice.english)) }) }
+                    }
+                    when (current) {
+                        StockDetailTab.Balance -> HiltechPanel(Modifier.fillMaxWidth()) { StockItemDetail(item, state, dispatch) }
+                        StockDetailTab.Issued -> selectedWarehouseId?.let { IssuedStockOperations(item, it, state, dispatch) }
+                        StockDetailTab.History -> selectedWarehouseId?.let { StockFulfillmentHistorySection(item, it, state, dispatch) }
+                    }
+                }
             }
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if (maxWidth >= 860.dp) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                Column(Modifier.weight(.9f)) { directory() }
+                Column(Modifier.weight(1.5f)) { detail() }
+            } else if (detailMode && state.selected != null) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                TextButton(onClick = { detailMode = false }) { Text(hiltechText("العودة إلى الأصناف", "Back to stock")) }
+                detail()
+            } else directory()
         }
     }
+}
+
+private enum class StockDetailTab(val title: String, val english: String) {
+    Balance("الرصيد والحركة", "Balance & movements"), Issued("العهد المصروفة", "Issued stock"), History("سجل التسليم", "Fulfillment history"),
 }
 
 @Composable
@@ -153,16 +227,25 @@ private fun StockItemDetail(item: StockItemDto, state: StockInventoryState, disp
         item.sourceImportRowId != null -> "Opening pending"
         else -> "Stock master created without opening evidence"
     })
-    Text("On hand by location", style = MaterialTheme.typography.titleMedium)
-    if (state.balances.isEmpty()) Text("No visible balances")
-    state.balances.forEach { Text("${it.locationCode} · ${it.onHandQuantity} ${item.baseUnitCode}") }
-    Text("Movement history", style = MaterialTheme.typography.titleMedium)
-    if (state.movements.isEmpty()) Text("No visible movements")
-    state.movements.forEach { movement ->
-        val route = listOfNotNull(locations[movement.fromStorageLocationId], locations[movement.toStorageLocationId])
-            .joinToString(" → ")
-        Text("${movement.occurredAt} · ${movement.type} · ${movement.quantity} ${movement.unitCode} · $route")
-    }
+    Text(hiltechText("الأرصدة حسب الموقع", "On hand by location"), style = MaterialTheme.typography.titleMedium)
+    HiltechRecordTable(
+        columns = listOf(HiltechTableColumn(hiltechText("موقع التخزين", "Storage location"), 1.4f),
+            HiltechTableColumn(hiltechText("الرصيد", "On hand"), numeric = true), HiltechTableColumn(hiltechText("الوحدة", "Unit"), .65f)),
+        records = state.balances.map { HiltechTableRecord(listOf(it.locationCode, it.onHandQuantity, item.baseUnitCode)) },
+        emptyMessage = hiltechText("لا توجد أرصدة معروضة.", "No visible balances."),
+    )
+    Text(hiltechText("سجل الحركة", "Movement history"), style = MaterialTheme.typography.titleMedium)
+    HiltechRecordTable(
+        columns = listOf(HiltechTableColumn(hiltechText("التاريخ", "Date"), 1.4f),
+            HiltechTableColumn(hiltechText("الحركة", "Movement")),
+            HiltechTableColumn(hiltechText("الكمية", "Quantity"), .8f, numeric = true),
+            HiltechTableColumn(hiltechText("من / إلى", "From / to"), 1.2f)),
+        records = state.movements.map { movement ->
+            val route = listOfNotNull(locations[movement.fromStorageLocationId], locations[movement.toStorageLocationId]).joinToString(" → ")
+            HiltechTableRecord(listOf(movement.occurredAt, movement.type, movement.quantity + " " + movement.unitCode, route))
+        },
+        emptyMessage = hiltechText("لا توجد حركات معروضة.", "No visible movements."),
+    )
     if (item.sourceImportRowId != null && !item.openingInitialized && !item.verifiedZeroOpening) {
         stockPicker("Verified opening location", openingLocation, active, canMove) { openingLocation = it }
         stockField("Opening quantity (${item.baseUnitCode})", openingQuantity) { openingQuantity = it }

@@ -11,6 +11,17 @@ data class IdentityBootstrapDto(
     val organizations: List<IdentityOrganizationDto>,
     val teams: List<IdentityTeamDto>,
     val device: IdentityDeviceDto? = null,
+    val productCapabilities: IdentityProductCapabilitiesDto? = null,
+)
+
+@Serializable
+data class IdentityProductCapabilitiesDto(
+    val executiveHome: Boolean = false,
+    val personalIssuedStock: Boolean = false,
+    val materialUsageReporting: Boolean = false,
+    val assignedAssetLookup: Boolean = false,
+    val engineeringTests: Boolean = false,
+    val operationAvailability: Map<String, Boolean> = emptyMap(),
 )
 
 @Serializable

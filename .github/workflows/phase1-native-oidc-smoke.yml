@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - "integration/hiltech-unified-staging-*"
     paths:
       - "apps/**"
       - "shared/**"
@@ -24,7 +25,7 @@ permissions:
 jobs:
   provider-browser-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -48,6 +49,9 @@ jobs:
             beautifulsoup4==4.12.3 \
             playwright==1.63.0
           python3 -m playwright install --with-deps chromium
+
+      - name: Verify isolated account fixture ownership guards
+        run: python3 -m unittest discover -s scripts/ci -p phase1_employee_account_keycloak_test.py
 
       - name: Generate disposable Keycloak TLS identity and Java trust store
         shell: bash
@@ -103,8 +107,8 @@ jobs:
           REQUESTS_CA_BUNDLE: ${{ runner.temp }}/keycloak-tls/cert.pem
         run: python3 scripts/ci/phase1_native_oidc_browser.py setup
 
-      - name: Compile provider smoke harness before timed browser checks
-        run: ./gradlew :apps:desktopApp:testClasses --stacktrace
+      - name: Compile provider smoke harness and server verifier before timed browser checks
+        run: ./gradlew :apps:desktopApp:testClasses :server:application:testClasses --stacktrace
 
       - name: Android private-use callback through production OIDC session core
         shell: bash
@@ -169,13 +173,34 @@ jobs:
           HILTECH_REAUTH_ID_TOKEN_CONTRACT_TEST: "1"
           HILTECH_REAUTH_ID_TOKEN_FILE: ${{ runner.temp }}/phase1-oidc-windows/windows-reauth-id-token.txt
           HILTECH_OIDC_ISSUER_URI: https://127.0.0.1:8443/realms/hiltech
-          JAVA_TOOL_OPTIONS: >-
-            -Djavax.net.ssl.trustStore=${{ runner.temp }}/keycloak-truststore.p12
-            -Djavax.net.ssl.trustStorePassword=changeit
+          HILTECH_OIDC_TRUST_STORE: ${{ runner.temp }}/keycloak-truststore.p12
+          HILTECH_OIDC_TRUST_STORE_PASSWORD: changeit
         run: |
-          ./gradlew :server:application:test \
-            --tests com.hiltech.server.identity.ReauthIdTokenKeycloakContractTest \
-            --rerun-tasks
+          ./gradlew :server:application:test --rerun \
+            --tests com.hiltech.server.identity.ReauthIdTokenKeycloakContractTest
+
+      - name: Provision and recover an owned account through real Chromium PKCE
+        env:
+          KEYCLOAK_URL: https://127.0.0.1:8443
+          KEYCLOAK_ADMIN: admin
+          KEYCLOAK_ADMIN_PASSWORD: admin
+          REQUESTS_CA_BUNDLE: ${{ runner.temp }}/keycloak-tls/cert.pem
+          HILTECH_ACCOUNT_KEYCLOAK_CONTRACT_TEST: "1"
+          HILTECH_ACCOUNT_KEYCLOAK_CONTRACT_DIR: ${{ runner.temp }}/hiltech-account-provider-contract
+          HILTECH_OIDC_TRUST_STORE: ${{ runner.temp }}/keycloak-truststore.p12
+          HILTECH_OIDC_TRUST_STORE_PASSWORD: changeit
+        run: python3 scripts/ci/phase1_employee_account_keycloak.py run
+
+      - name: Remove only the owned account-provider fixture
+        if: always()
+        env:
+          KEYCLOAK_URL: https://127.0.0.1:8443
+          KEYCLOAK_ADMIN: admin
+          KEYCLOAK_ADMIN_PASSWORD: admin
+          REQUESTS_CA_BUNDLE: ${{ runner.temp }}/keycloak-tls/cert.pem
+          HILTECH_ACCOUNT_KEYCLOAK_CONTRACT_TEST: "1"
+          HILTECH_ACCOUNT_KEYCLOAK_CONTRACT_DIR: ${{ runner.temp }}/hiltech-account-provider-contract
+        run: python3 scripts/ci/phase1_employee_account_keycloak.py cleanup
 
       - name: Keycloak and runtime logs on failure
         if: failure()
@@ -184,6 +209,35 @@ jobs:
           docker logs hiltech-phase1-keycloak || true
           cat /tmp/hiltech-oidc-android.log 2>/dev/null || true
           cat /tmp/hiltech-oidc-windows.log 2>/dev/null || true
+
+  windows-packaged-oidc-runtime:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+      - name: Build Windows MSI with the production launcher
+        run: .\gradlew.bat :apps:desktopApp:packageMsi --console=plain
+      - name: Verify the MSI includes the browser callback runtime
+        shell: pwsh
+        run: |
+          $msis = @(Get-ChildItem apps/desktopApp/build/compose/binaries/main/msi -Filter '*.msi')
+          if ($msis.Count -ne 1) { throw "Expected one Windows installer." }
+          $destination = Join-Path $env:RUNNER_TEMP 'hiltech-msi-contents'
+          $arguments = @('/a', ('"' + $msis[0].FullName + '"'), '/qn', ('TARGETDIR="' + $destination + '"'))
+          $installer = Start-Process -FilePath msiexec.exe -ArgumentList $arguments -PassThru -Wait -WindowStyle Hidden
+          if ($installer.ExitCode -ne 0) { throw "MSI extraction failed ($($installer.ExitCode))." }
+          $image = Join-Path $destination 'HILTECH/runtime/lib/modules'
+          $contents = & (Join-Path $env:JAVA_HOME 'bin/jimage.exe') list $image
+          if ($LASTEXITCODE -ne 0 -or !($contents -match '^\s*com/sun/net/httpserver/HttpServer\.class$')) {
+            throw 'The installed runtime is missing the native OIDC callback server.'
+          }
 
   desktop-shell-render:
     runs-on: ubuntu-latest
@@ -288,6 +342,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: hiltech-phase1-android-shell-evidence
-          path: build/reports/phase1-native-oidc/*.png
+          path: |
+            build/reports/phase1-native-oidc/*.png
+            build/reports/phase1-native-oidc/*.xml
           if-no-files-found: error
           retention-days: 30

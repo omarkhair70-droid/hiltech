@@ -266,7 +266,7 @@ fun main() = runBlocking<Unit> {
     val assets = syntheticAsset(state)
     val passportScene = ImageComposeScene(width = 980, height = 1180, coroutineContext = coroutineContext) {
         Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
-            AssetPassportSection(assets, state.selectedWarehouseId) {}
+            AssetPassportSection(assets, state.selectedWarehouseId, dispatch = {})
         }
     }
     captureAndClose(passportScene, directory.resolve("asset-passport.png"))

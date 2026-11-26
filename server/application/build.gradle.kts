@@ -14,6 +14,16 @@ java {
     }
 }
 
+tasks.named<Test>("test") {
+    // The disposable Keycloak CA is for the verifier's test JVM only.
+    providers.environmentVariable("HILTECH_OIDC_TRUST_STORE").orNull?.let { trustStore ->
+        systemProperty("javax.net.ssl.trustStore", trustStore)
+    }
+    providers.environmentVariable("HILTECH_OIDC_TRUST_STORE_PASSWORD").orNull?.let { password ->
+        systemProperty("javax.net.ssl.trustStorePassword", password)
+    }
+}
+
 val jooqCodegen by configurations.creating
 val generatedJooqDir = rootProject.layout.projectDirectory.dir("server/build/generated-src/jooq/main")
 
@@ -35,16 +45,20 @@ dependencies {
     testImplementation(platform("org.springframework.modulith:spring-modulith-bom:${libs.versions.springModulith.get()}"))
 
     implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-mail")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-jooq")
+    implementation("org.apache.httpcomponents.client5:httpclient5")
     implementation("org.springframework.modulith:spring-modulith-starter-jdbc")
-    implementation("org.flywaydb:flyway-core")
+    // Boot 4 modularizes Flyway auto-configuration; core alone does not migrate on startup.
+    implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation(libs.jooq)
     implementation(libs.kotlinx.serialization.json)
+    implementation("org.apache.pdfbox:pdfbox:3.0.8")
     implementation(libs.aws.s3)
     implementation(libs.aws.urlconnection)
     implementation(libs.opentelemetry.api)
@@ -70,6 +84,11 @@ kotlin {
     sourceSets.named("main") {
         kotlin.srcDir(generatedJooqDir)
     }
+}
+
+tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") {
+    from(rootProject.file("shared/core/src/commonMain/composeResources/font/plex_regular.ttf")) { into("commercial-fonts") }
+    from(rootProject.file("docs/10-design/IBM_PLEX_OFL.txt")) { into("commercial-fonts") }
 }
 
 fun String.xmlEscaped(): String =

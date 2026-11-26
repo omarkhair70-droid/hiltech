@@ -8,6 +8,9 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import com.sun.net.httpserver.HttpServer
+import java.net.InetSocketAddress
+import java.util.concurrent.atomic.AtomicReference
 
 class OpenFgaAuthorizationContractTest {
     private val tuple = OpenFgaTuple(
@@ -138,6 +141,85 @@ class OpenFgaAuthorizationContractTest {
             ),
         )
         assertFalse(transportCalled)
+    }
+
+    @Test
+    fun presharedModeRejectsMissingKeyAndUnsupportedMethod() {
+        val base = HiltechOpenFgaProperties(
+            enabled = true,
+            apiUrl = "http://localhost:8080",
+            storeId = "store-locked",
+            authorizationModelId = "model-locked",
+        )
+        assertThrows<IllegalArgumentException> {
+            base.copy(authnMethod = "preshared").validateEnabledConfiguration()
+        }
+        assertThrows<IllegalArgumentException> {
+            base.copy(authnMethod = "typo", presharedKey = "test-only").validateEnabledConfiguration()
+        }
+        assertThrows<IllegalArgumentException> {
+            base.copy(authnMethod = "none", presharedKey = "test-only").validateEnabledConfiguration()
+        }
+    }
+
+    @Test
+    fun jdkTransportSendsPresharedBearerHeaderWithoutChangingPayload() {
+        val authorization = AtomicReference<String?>()
+        val requestBody = AtomicReference<String?>()
+        val httpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        httpServer.createContext("/stores/store-locked/check") { exchange ->
+            authorization.set(exchange.requestHeaders.getFirst("Authorization"))
+            requestBody.set(exchange.requestBody.bufferedReader().use { it.readText() })
+            val responseBytes = """{"allowed":true}""".toByteArray()
+            exchange.sendResponseHeaders(200, responseBytes.size.toLong())
+            exchange.responseBody.use { it.write(responseBytes) }
+        }
+        httpServer.start()
+        try {
+            val properties = HiltechOpenFgaProperties(
+                enabled = true,
+                apiUrl = "http://127.0.0.1:${httpServer.address.port}",
+                storeId = "store-locked",
+                authorizationModelId = "model-locked",
+                authnMethod = "preshared",
+                presharedKey = "staging-test-only",
+            )
+            val response = JdkOpenFgaHttpTransport(properties).post(
+                path = "/stores/store-locked/check",
+                body = "{}",
+            )
+            assertEquals(200, response.statusCode)
+            assertEquals("Bearer staging-test-only", authorization.get())
+            assertEquals("{}", requestBody.get())
+        } finally {
+            httpServer.stop(0)
+        }
+    }
+
+    @Test
+    fun jdkTransportOmitsAuthorizationWhenNoneSelected() {
+        val authorization = AtomicReference<String?>()
+        val httpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        httpServer.createContext("/test") { exchange ->
+            authorization.set(exchange.requestHeaders.getFirst("Authorization"))
+            exchange.requestBody.use { it.readAllBytes() }
+            exchange.sendResponseHeaders(204, -1)
+            exchange.close()
+        }
+        httpServer.start()
+        try {
+            val properties = HiltechOpenFgaProperties(
+                enabled = true,
+                apiUrl = "http://127.0.0.1:${httpServer.address.port}",
+                storeId = "store-locked",
+                authorizationModelId = "model-locked",
+                authnMethod = "none",
+            )
+            assertEquals(204, JdkOpenFgaHttpTransport(properties).post("/test", "{}").statusCode)
+            assertEquals(null, authorization.get())
+        } finally {
+            httpServer.stop(0)
+        }
     }
 
     private fun gateway(

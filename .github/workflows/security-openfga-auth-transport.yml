@@ -1,0 +1,52 @@
+name: Security — HILTECH OpenFGA Auth Transport
+
+on:
+  pull_request:
+    paths:
+      - "server/application/src/main/kotlin/com/hiltech/server/security/OpenFgaAuthorization.kt"
+      - "server/application/src/main/resources/application.yml"
+      - "server/application/src/test/kotlin/com/hiltech/server/security/OpenFgaAuthorizationContractTest.kt"
+      - ".github/workflows/security-openfga-auth-transport.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hiltech-openfga-auth-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auth-transport-contract:
+    name: Preshared bearer + fail-closed transport contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact PR source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Configure Gradle 9.5.0
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Exercise OpenFGA HTTP transport and configuration tests
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.security.OpenFgaAuthorizationContractTest \
+            --no-daemon --console=plain
+
+      - name: Preserve failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hiltech-openfga-auth-test-results
+          path: server/application/build/test-results/test/
+          if-no-files-found: ignore
+          retention-days: 7

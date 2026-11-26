@@ -2,6 +2,7 @@ package com.hiltech.server
 
 import com.hiltech.server.warehouse.provisionWarehouseManager
 import com.hiltech.server.warehouse.provisionInventoryAdjustmentApprover
+import com.hiltech.server.administration.provisionResponsibilityAdministrator
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.modulith.Modulith
@@ -11,6 +12,10 @@ import org.springframework.modulith.Modulith
 class HiltechServerApplication
 
 fun main(args: Array<String>) {
+    if (args.firstOrNull() == "provision-responsibility-administrator") {
+        provisionResponsibilityAdministrator(args.drop(1))
+        return
+    }
     if (args.firstOrNull() == "provision-warehouse-manager") {
         provisionWarehouseManager(args.drop(1))
         return

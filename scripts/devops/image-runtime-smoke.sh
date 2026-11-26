@@ -12,6 +12,18 @@ if [[ "${HILTECH_CI_IMAGE_SMOKE:-}" != "1" || "${GITHUB_ACTIONS:-}" != "true" ]]
 fi
 
 docker image inspect "$image" >/dev/null
+
+# The earlier contract/codegen steps migrated the default CI database already.
+# A second, pristine database proves the executable image runs Flyway itself.
+smoke_db=hiltech_runtime_smoke
+psql_ci() {
+  docker run --rm --network host --env PGPASSWORD=hiltech postgres:18.6 \
+    psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U hiltech "$@"
+}
+psql_ci -d postgres -c "CREATE DATABASE $smoke_db"
+test "$(psql_ci -d "$smoke_db" -Atc "SELECT to_regclass('public.flyway_schema_history') IS NULL")" = t
+test "$(psql_ci -d "$smoke_db" -Atc "SELECT to_regclass('public.authorization_projection_outbox') IS NULL")" = t
+
 app_container="hiltech-image-smoke-${GITHUB_RUN_ID:-local}-$$"
 fga_container="hiltech-openfga-smoke-${GITHUB_RUN_ID:-local}-$$"
 port=18080
@@ -74,7 +86,7 @@ docker run -d \
   --pids-limit=256 \
   --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=64m \
-  --env HILTECH_DB_URL="jdbc:postgresql://127.0.0.1:5432/hiltech" \
+  --env HILTECH_DB_URL="jdbc:postgresql://127.0.0.1:5432/$smoke_db" \
   --env HILTECH_DB_USER="hiltech" \
   --env HILTECH_DB_PASSWORD="hiltech" \
   --env HILTECH_SERVER_PORT="$port" \
@@ -139,6 +151,15 @@ for probe in liveness readiness; do
   rm -f "$output"
   echo "PASS: /actuator/health/${probe} HTTP 200 with non-sensitive UP-only payload."
 done
+
+# Health/db alone can be green with a completely empty schema. Assert the
+# entire versioned migration history and the relation used by live projection.
+expected_migrations="$(find database/migrations -maxdepth 1 -type f -name 'V*.sql' | wc -l | tr -d '[:space:]')"
+test "$expected_migrations" -gt 0
+test "$(psql_ci -d "$smoke_db" -Atc "SELECT count(*) FROM flyway_schema_history WHERE version IS NOT NULL AND success")" = "$expected_migrations"
+test "$(psql_ci -d "$smoke_db" -Atc "SELECT count(*) FROM flyway_schema_history WHERE NOT success")" = 0
+test "$(psql_ci -d "$smoke_db" -Atc "SELECT to_regclass('public.authorization_projection_outbox') IS NOT NULL")" = t
+echo "PASS: executable Boot image automatically applied all $expected_migrations versioned migrations on a pristine database."
 
 # Only the health endpoint is permitted to anonymous callers. Administrative
 # actuator endpoints and ordinary business routes must never be exposed.

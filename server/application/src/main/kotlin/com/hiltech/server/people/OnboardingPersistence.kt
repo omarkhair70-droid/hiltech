@@ -18,6 +18,8 @@ interface OnboardingPersistencePort {
 
     fun policy(configRevisionId: UUID): OnboardingPolicyContext?
 
+    fun activePolicies(organizationId: UUID): List<OnboardingPolicyContext>
+
     fun policyRequirements(
         configRevisionId: UUID,
     ): List<OnboardingRequirementDefinition>
@@ -214,6 +216,35 @@ class JdbcOnboardingPersistence(
             },
             configRevisionId,
         ).singleOrNull()
+
+    override fun activePolicies(
+        organizationId: UUID,
+    ): List<OnboardingPolicyContext> =
+        jdbc.query(
+            """
+            SELECT cr.id, cr.scope_type, cr.scope_organization_id,
+                   cr.lifecycle_state, cr.code, cr.name, cr.revision_number
+            FROM config_revision cr
+            JOIN onboarding_policy op ON op.config_revision_id = cr.id
+            WHERE cr.family = 'onboarding-policies'
+              AND cr.lifecycle_state = 'ACTIVE'
+              AND ((cr.scope_type = 'SYSTEM' AND cr.scope_organization_id IS NULL)
+                OR (cr.scope_type = 'ORGANIZATION' AND cr.scope_organization_id = ?))
+            ORDER BY cr.name, cr.code, cr.revision_number DESC, cr.id
+            """.trimIndent(),
+            { rs, _ ->
+                OnboardingPolicyContext(
+                    configRevisionId = rs.getObject("id", UUID::class.java),
+                    scopeType = rs.getString("scope_type"),
+                    scopeOrganizationId = rs.getObject("scope_organization_id", UUID::class.java),
+                    lifecycleState = rs.getString("lifecycle_state"),
+                    code = rs.getString("code"),
+                    name = rs.getString("name"),
+                    revisionNumber = rs.getInt("revision_number"),
+                )
+            },
+            organizationId,
+        )
 
     override fun policyRequirements(
         configRevisionId: UUID,

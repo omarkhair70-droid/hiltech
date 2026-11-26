@@ -10,6 +10,7 @@ import com.hiltech.server.identity.IdentityProvisioningDeliveryState
 import com.hiltech.server.platform.ProductApiException
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus
+import org.springframework.jdbc.core.ConnectionCallback
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
@@ -26,6 +27,13 @@ enum class EmployeeIdentityInvitationState {
     LOCAL_PENDING,
     READY,
     FAILED_RETRYABLE,
+}
+
+enum class EmployeeIdentityAccountState {
+    NONE,
+    PENDING,
+    LINKED,
+    RESTRICTED,
 }
 
 data class EmployeeIdentityInvitationSnapshot(
@@ -67,7 +75,23 @@ data class EmployeeIdentityInvitationCommandResult(
     val replayed: Boolean,
 )
 
+data class EmployeeIdentityInvitationPending(
+    val operationId: String,
+    val requestedLogin: String,
+    val deliveryMode: String,
+)
+
+data class EmployeeIdentityInvitationAvailability(
+    val employeeId: String,
+    val organizationId: String,
+    val status: String,
+    val deliveryModes: List<String>,
+    val pending: EmployeeIdentityInvitationPending?,
+)
+
 interface EmployeeIdentityInvitationPersistencePort {
+    fun <T> serializeProvisioning(employeeId: UUID, provision: () -> T): T
+
     fun byOperationId(
         operationId: UUID,
     ): EmployeeIdentityInvitationSnapshot?
@@ -76,9 +100,7 @@ interface EmployeeIdentityInvitationPersistencePort {
         employeeId: UUID,
     ): EmployeeIdentityInvitationSnapshot?
 
-    fun employeeHasLinkedIdentity(
-        employeeId: UUID,
-    ): Boolean
+    fun accountState(employeeId: UUID, at: Instant): EmployeeIdentityAccountState
 
     fun insertPending(
         invitationId: UUID,
@@ -116,6 +138,31 @@ interface EmployeeIdentityInvitationPersistencePort {
 class JdbcEmployeeIdentityInvitationPersistence(
     private val jdbc: JdbcTemplate,
 ) : EmployeeIdentityInvitationPersistencePort {
+    override fun <T> serializeProvisioning(employeeId: UUID, provision: () -> T): T =
+        jdbc.execute(ConnectionCallback { connection ->
+            val lockKey = "hiltech.employee-identity:$employeeId"
+            val claimed = connection.prepareStatement("SELECT pg_try_advisory_lock(hashtextextended(?, 0))").use { query ->
+                query.setString(1, lockKey)
+                query.executeQuery().use { it.next() && it.getBoolean(1) }
+            }
+            if (!claimed) {
+                throw ProductApiException(
+                    code = "EMPLOYEE_IDENTITY_INVITATION_IN_PROGRESS",
+                    message = "Account setup is already running for this employee.",
+                    status = HttpStatus.CONFLICT,
+                    retryable = true,
+                )
+            }
+            try {
+                provision()
+            } finally {
+                connection.prepareStatement("SELECT pg_advisory_unlock(hashtextextended(?, 0))").use { query ->
+                    query.setString(1, lockKey)
+                    query.execute()
+                }
+            }
+        }) ?: error("Employee identity operation did not produce a result.")
+
     override fun byOperationId(
         operationId: UUID,
     ): EmployeeIdentityInvitationSnapshot? =
@@ -141,27 +188,47 @@ class JdbcEmployeeIdentityInvitationPersistence(
             arrayOf(employeeId),
         )
 
-    override fun employeeHasLinkedIdentity(
-        employeeId: UUID,
-    ): Boolean =
-        jdbc.queryForObject(
+    override fun accountState(employeeId: UUID, at: Instant): EmployeeIdentityAccountState =
+        jdbc.query(
             """
-            SELECT EXISTS (
-                SELECT 1
-                FROM employee e
-                JOIN user_identity ui
-                  ON ui.person_id = e.person_id
-                WHERE e.id = ?
-                  AND ui.status IN (
-                      'PENDING',
-                      'ACTIVE',
-                      'LOCKED'
-                  )
-            )
+            SELECT ui.status,
+                   EXISTS (
+                       SELECT 1 FROM organization_membership m
+                       JOIN organization o ON o.id = m.organization_id
+                       WHERE m.organization_id = e.organization_id AND m.user_identity_id = ui.id
+                         AND o.status = 'ACTIVE' AND o.organization_type = 'HILTECH'
+                         AND m.state = 'ACTIVE' AND m.valid_from <= ?
+                         AND (m.valid_until IS NULL OR m.valid_until > ?)
+                   ) AS current_member,
+                   EXISTS (
+                       SELECT 1 FROM organization_membership m
+                       JOIN organization o ON o.id = m.organization_id
+                       WHERE m.organization_id = e.organization_id AND m.user_identity_id = ui.id
+                         AND o.status = 'ACTIVE' AND o.organization_type = 'HILTECH'
+                         AND m.state = 'PENDING' AND m.valid_from <= ?
+                         AND (m.valid_until IS NULL OR m.valid_until > ?)
+                   ) AS pending_member
+            FROM employee e JOIN user_identity ui ON ui.person_id = e.person_id
+            WHERE e.id = ?
             """.trimIndent(),
-            Boolean::class.java,
-            employeeId,
-        ) == true
+            { rs, _ ->
+                when {
+                    rs.getString("status") == "ACTIVE" && rs.getBoolean("current_member") -> EmployeeIdentityAccountState.LINKED
+                    rs.getString("status") in setOf("PENDING", "ACTIVE") &&
+                        (rs.getBoolean("current_member") || rs.getBoolean("pending_member")) -> EmployeeIdentityAccountState.PENDING
+                    else -> EmployeeIdentityAccountState.RESTRICTED
+                }
+            },
+            at.atOffset(ZoneOffset.UTC), at.atOffset(ZoneOffset.UTC),
+            at.atOffset(ZoneOffset.UTC), at.atOffset(ZoneOffset.UTC), employeeId,
+        ).let { states ->
+            when {
+                EmployeeIdentityAccountState.LINKED in states -> EmployeeIdentityAccountState.LINKED
+                EmployeeIdentityAccountState.PENDING in states -> EmployeeIdentityAccountState.PENDING
+                states.isNotEmpty() -> EmployeeIdentityAccountState.RESTRICTED
+                else -> EmployeeIdentityAccountState.NONE
+            }
+        }
 
     override fun insertPending(
         invitationId: UUID,
@@ -421,6 +488,43 @@ class EmployeeIdentityInvitationService(
         ApplicationEventPublisher,
     private val clock: Clock,
 ) {
+    fun availability(employeeId: UUID, actorUserId: UUID): EmployeeIdentityInvitationAvailability {
+        val employee = onboarding.employee(employeeId) ?: throw invitationError(
+            code = "EMPLOYEE_NOT_FOUND",
+            message = "The employee does not exist.",
+            status = HttpStatus.NOT_FOUND,
+        )
+        requireManage(actorUserId, employee.organizationId)
+
+        val current = persistence.currentForEmployee(employeeId)
+        val pending = current?.takeUnless { it.state == EmployeeIdentityInvitationState.READY }
+        val account = persistence.accountState(employeeId, clock.instant())
+        val modes = provisioning.availableDeliveryModes()
+        val status = when {
+            account == EmployeeIdentityAccountState.RESTRICTED -> "ACCOUNT_RESTRICTED"
+            account == EmployeeIdentityAccountState.LINKED -> "LINKED"
+            employee.employeeState !in setOf(EmployeeState.PREBOARDING, EmployeeState.ACTIVE) -> "NOT_ELIGIBLE"
+            pending != null && pending.deliveryMode in modes -> "CONTINUE_INVITATION"
+            pending != null -> "DELIVERY_UNAVAILABLE"
+            current?.state == EmployeeIdentityInvitationState.READY || account == EmployeeIdentityAccountState.PENDING -> "ACCOUNT_ATTENTION"
+            modes.isEmpty() -> "DELIVERY_UNAVAILABLE"
+            else -> "READY_TO_INVITE"
+        }
+        return EmployeeIdentityInvitationAvailability(
+            employeeId = employeeId.toString(),
+            organizationId = employee.organizationId.toString(),
+            status = status,
+            deliveryModes = when (status) {
+                "READY_TO_INVITE" -> modes.map { it.name }
+                "CONTINUE_INVITATION" -> listOf(requireNotNull(pending).deliveryMode.name)
+                else -> emptyList()
+            },
+            pending = pending?.takeIf { status == "CONTINUE_INVITATION" }?.let {
+                EmployeeIdentityInvitationPending(it.operationId.toString(), it.requestedLogin, it.deliveryMode.name)
+            },
+        )
+    }
+
     fun provision(
         command:
             ProvisionEmployeeIdentityCommand,
@@ -440,6 +544,15 @@ class EmployeeIdentityInvitationService(
             normalizeLogin(
                 command.requestedLogin,
             )
+        if (command.deliveryMode == IdentityProvisioningDeliveryMode.EMAIL_ACTION_LINK &&
+            (login.count { it == '@' } != 1 || login.startsWith('@') || login.endsWith('@') || login.any(Char::isWhitespace))
+        ) {
+            throw invitationError(
+                code = "IDENTITY_EMAIL_REQUIRED",
+                message = "Enter the employee’s email address to send a setup link.",
+                status = HttpStatus.BAD_REQUEST,
+            )
+        }
         val employee =
             onboarding.employee(
                 command.employeeId,
@@ -458,15 +571,55 @@ class EmployeeIdentityInvitationService(
             employee.organizationId,
         )
 
+        return persistence.serializeProvisioning(employee.employeeId) {
+            val current = onboarding.employee(employee.employeeId)
+                ?.takeIf { it.organizationId == employee.organizationId }
+                ?: throw invitationError(
+                    code = "EMPLOYEE_NOT_FOUND",
+                    message = "The employee does not exist.",
+                    status = HttpStatus.NOT_FOUND,
+                )
+            provisionAuthorized(command, current, login)
+        }
+    }
+
+    private fun provisionAuthorized(
+        command: ProvisionEmployeeIdentityCommand,
+        employee: OnboardingEmployeeContext,
+        login: String,
+    ): EmployeeIdentityInvitationCommandResult {
+        // Authority can change while another request owns the employee provisioning lock.
+        requireManage(command.actorUserId, employee.organizationId)
+        val existing = persistence.byOperationId(command.operationId)
+        existing?.let { requireSameRequest(it, employee, login, command.deliveryMode) }
+        val account = persistence.accountState(employee.employeeId, clock.instant())
+        if (account == EmployeeIdentityAccountState.RESTRICTED) {
+            throw invitationError(
+                code = "EMPLOYEE_ACCOUNT_RESTRICTED",
+                message = "The employee has an existing restricted account. Review that account before continuing.",
+                status = HttpStatus.CONFLICT,
+            )
+        }
+
+        if (existing?.state == EmployeeIdentityInvitationState.READY) {
+            if (existing.deliveryMode == IdentityProvisioningDeliveryMode.TEMPORARY_PASSWORD_HANDOFF) {
+                throw invitationError(
+                    code = "TEMPORARY_CREDENTIAL_NOT_REPLAYABLE",
+                    message = "The temporary credential was already issued and cannot be replayed.",
+                    status = HttpStatus.CONFLICT,
+                )
+            }
+            return EmployeeIdentityInvitationCommandResult(existing, null, replayed = true)
+        }
+
         if (
-            employee.employeeState !=
-            EmployeeState.PREBOARDING
+            employee.employeeState !in setOf(EmployeeState.PREBOARDING, EmployeeState.ACTIVE)
         ) {
             throw invitationError(
                 code =
-                    "EMPLOYEE_NOT_PREBOARDING",
+                    "EMPLOYEE_ACCOUNT_NOT_ELIGIBLE",
                 message =
-                    "Identity provisioning is only available during preboarding.",
+                    "Account setup is available for preboarding and active employees.",
                 status =
                     HttpStatus.CONFLICT,
             )
@@ -488,53 +641,16 @@ class EmployeeIdentityInvitationService(
             )
         }
 
-        val existing =
-            persistence.byOperationId(
-                command.operationId,
+        if (command.deliveryMode !in provisioning.availableDeliveryModes()) {
+            throw invitationError(
+                code = "IDENTITY_DELIVERY_NOT_CONFIGURED",
+                message = "The selected account delivery method is unavailable.",
+                status = HttpStatus.SERVICE_UNAVAILABLE,
             )
+        }
 
-        if (existing != null) {
-            requireSameRequest(
-                existing = existing,
-                employee = employee,
-                login = login,
-                mode =
-                    command.deliveryMode,
-            )
-
-            if (
-                existing.state ==
-                EmployeeIdentityInvitationState
-                    .READY
-            ) {
-                if (
-                    existing.deliveryMode ==
-                    IdentityProvisioningDeliveryMode
-                        .TEMPORARY_PASSWORD_HANDOFF
-                ) {
-                    throw invitationError(
-                        code =
-                            "TEMPORARY_CREDENTIAL_NOT_REPLAYABLE",
-                        message =
-                            "The temporary credential was already issued and cannot be replayed.",
-                        status =
-                            HttpStatus.CONFLICT,
-                    )
-                }
-
-                return EmployeeIdentityInvitationCommandResult(
-                    invitation = existing,
-                    temporaryCredential = null,
-                    replayed = true,
-                )
-            }
-        } else {
-            if (
-                persistence
-                    .employeeHasLinkedIdentity(
-                        employee.employeeId,
-                    )
-            ) {
+        if (existing == null) {
+            if (account != EmployeeIdentityAccountState.NONE) {
                 throw invitationError(
                     code =
                         "EMPLOYEE_IDENTITY_ALREADY_LINKED",
@@ -736,6 +852,11 @@ class EmployeeIdentityInvitationService(
             is EmployeeIdentityProvisioningResult
                 .RetryableFailure -> {
                 val now = clock.instant()
+                val sourceConflict = result.safeCode in setOf(
+                    "IDENTITY_ACCOUNT_RESTRICTED", "IDENTITY_PERSON_ALREADY_LINKED", "IDENTITY_MEMBERSHIP_CONFLICT",
+                    "IDENTITY_PROVIDER_SUBJECT_CONFLICT", "IDENTITY_EMPLOYEE_NOT_ELIGIBLE",
+                    "IDENTITY_LOCAL_ACTIVATION_FAILED", "IDENTITY_MEMBERSHIP_ACTIVATION_FAILED",
+                )
                 persistence
                     .markRetryableFailure(
                         invitationId =
@@ -753,10 +874,11 @@ class EmployeeIdentityInvitationService(
                     code =
                         result.safeCode,
                     message =
-                        "Identity provisioning is not available yet.",
+                        if (sourceConflict) "The existing account or membership changed. Review it before continuing."
+                        else "Identity provisioning is not available yet.",
                     status =
-                        HttpStatus.SERVICE_UNAVAILABLE,
-                    retryable = true,
+                        if (sourceConflict) HttpStatus.CONFLICT else HttpStatus.SERVICE_UNAVAILABLE,
+                    retryable = !sourceConflict,
                 )
             }
         }

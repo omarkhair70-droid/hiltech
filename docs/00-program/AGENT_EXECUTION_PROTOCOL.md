@@ -24,14 +24,14 @@ Chat memory is convenience only.
 
 Every new implementation session must:
 
-1. inspect `main`,
-2. fetch the current working branch,
+1. inspect `main` and the integrated candidate identified in `AGENTS.md`,
+2. fetch the current working branch and reconcile unpublished source,
 3. inspect current open PRs,
 4. inspect recent Actions for the branch/head,
 5. read root `AGENTS.md`,
 6. read `CURRENT_PROGRAM_STATUS.md`,
 7. read `IMPLEMENTATION_ORDER.md`,
-8. read only the contracts relevant to the current phase/slice,
+8. read only the contracts relevant to the current authorized user journey,
 9. confirm whether the requested work is implementation, design proof, reality closure, or activation/cutover work.
 
 Never assume a SHA, PR state, run result, or branch position from an old conversation.
@@ -54,8 +54,8 @@ Avoid:
 
 ## Branch / commit discipline
 
-- branch from the actual current `main`,
-- use a branch scoped to the phase/slice/change,
+- base changes on the verified integrated candidate until it is accepted into `main`,
+- continue the active review branch or use a narrowly scoped change branch only when necessary,
 - do not force-update a moved branch,
 - keep commits explainable,
 - generated artifacts are committed only when the repository contract explicitly requires them,
@@ -155,6 +155,8 @@ Before ending a substantial implementation session, ensure a fresh agent can ans
 - What remains?
 - What CI run proves it?
 - Did any canonical contract change?
-- What is the exact next slice?
+- What is the exact next unresolved user journey and verification gate?
 
-If the answer is not visible in GitHub, the handoff is incomplete.
+Publish sanitized code, tests and engineering decisions. Preserve private company
+acceptance evidence in the canonical private record; never publish it as a
+condition of handoff. Preserve exact source for any unpublished implementation.

@@ -58,6 +58,124 @@ data class EmployeeDocumentEvidenceReservationInsert(
     val createdAt: Instant,
 )
 
+data class SupplierQuoteDocumentEvidenceReservationInsert(
+    val evidenceId: UUID,
+    val uploadSessionId: UUID,
+    val operationId: UUID,
+    val objectKey: String,
+    val organizationId: UUID,
+    val documentSlotId: UUID,
+    val contentType: String,
+    val originalFileName: String?,
+    val sizeBytes: Long,
+    val sha256: String,
+    val capturedAt: Instant,
+    val clientOccurredAt: Instant?,
+    val capturedByUserId: UUID,
+    val securityScanClass: String,
+    val uploadExpiresAt: Instant,
+    val createdAt: Instant,
+)
+
+data class SupplierInvoiceDocumentEvidenceReservationInsert(
+    val evidenceId: UUID,
+    val uploadSessionId: UUID,
+    val operationId: UUID,
+    val objectKey: String,
+    val organizationId: UUID,
+    val documentSlotId: UUID,
+    val contentType: String,
+    val originalFileName: String?,
+    val sizeBytes: Long,
+    val sha256: String,
+    val capturedAt: Instant,
+    val clientOccurredAt: Instant?,
+    val capturedByUserId: UUID,
+    val securityScanClass: String,
+    val uploadExpiresAt: Instant,
+    val createdAt: Instant,
+)
+
+data class PoReceivingDeliveryNoteEvidenceReservationInsert(
+    val evidenceId: UUID,
+    val uploadSessionId: UUID,
+    val operationId: UUID,
+    val objectKey: String,
+    val organizationId: UUID,
+    val receivingRecordId: UUID,
+    val contentType: String,
+    val originalFileName: String?,
+    val sizeBytes: Long,
+    val sha256: String,
+    val capturedAt: Instant,
+    val clientOccurredAt: Instant?,
+    val capturedByUserId: UUID,
+    val securityScanClass: String,
+    val uploadExpiresAt: Instant,
+    val createdAt: Instant,
+)
+
+data class FinanceBankStatementEvidenceReservationInsert(
+    val evidenceId: UUID,
+    val uploadSessionId: UUID,
+    val operationId: UUID,
+    val objectKey: String,
+    val organizationId: UUID,
+    val bankProposalId: UUID,
+    val contentType: String,
+    val originalFileName: String?,
+    val sizeBytes: Long,
+    val sha256: String,
+    val capturedAt: Instant,
+    val clientOccurredAt: Instant?,
+    val capturedByUserId: UUID,
+    val uploadExpiresAt: Instant,
+    val createdAt: Instant,
+)
+
+data class FinanceExpenseReceiptEvidenceReservationInsert(
+    val evidenceId: UUID,
+    val uploadSessionId: UUID,
+    val operationId: UUID,
+    val objectKey: String,
+    val organizationId: UUID,
+    val expenseDraftId: UUID,
+    val contentType: String,
+    val originalFileName: String?,
+    val sizeBytes: Long,
+    val sha256: String,
+    val capturedAt: Instant,
+    val clientOccurredAt: Instant?,
+    val capturedByUserId: UUID,
+    val securityScanClass: String,
+    val uploadExpiresAt: Instant,
+    val createdAt: Instant,
+)
+
+/** Common private signed-document payload; each owning adapter validates its own exact target. */
+data class PrivateDocumentEvidenceReservationInsert(
+    val evidenceId: UUID,
+    val uploadSessionId: UUID,
+    val operationId: UUID,
+    val organizationId: UUID,
+    val targetType: String,
+    val targetId: UUID,
+    val evidenceTypeCode: String,
+    val objectKey: String,
+    val contentType: String,
+    val originalFileName: String?,
+    val sizeBytes: Long,
+    val sha256: String,
+    val capturedAt: Instant,
+    val clientOccurredAt: Instant?,
+    val capturedByUserId: UUID,
+    val securityScanClass: String,
+    val uploadExpiresAt: Instant,
+    val createdAt: Instant,
+)
+
+typealias CommercialEvidenceReservationInsert = PrivateDocumentEvidenceReservationInsert
+
 data class EvidenceReservationRecord(
     val evidenceId: UUID,
     val uploadSessionId: UUID,
@@ -131,6 +249,61 @@ interface EvidencePersistencePort {
     fun insertEmployeeDocumentReservation(
         value: EmployeeDocumentEvidenceReservationInsert,
     )
+
+    fun insertSupplierQuoteDocumentReservation(
+        value: SupplierQuoteDocumentEvidenceReservationInsert,
+    )
+
+    fun insertServiceQuoteDocumentReservation(
+        value: SupplierQuoteDocumentEvidenceReservationInsert,
+    ) {
+        throw UnsupportedOperationException("Service quote Evidence repository is not configured.")
+    }
+
+    fun insertServicePurchaseDocumentReservation(
+        value: SupplierQuoteDocumentEvidenceReservationInsert,
+        documentKind: String,
+    ) {
+        throw UnsupportedOperationException("Service purchase Evidence repository is not configured.")
+    }
+
+    fun insertSupplierInvoiceDocumentReservation(
+        value: SupplierInvoiceDocumentEvidenceReservationInsert,
+    ) {
+        throw UnsupportedOperationException("Invoice Evidence repository is not configured.")
+    }
+
+    fun insertPoReceivingDeliveryNoteReservation(
+        value: PoReceivingDeliveryNoteEvidenceReservationInsert,
+    ) {
+        throw UnsupportedOperationException("PO delivery note Evidence repository is not configured.")
+    }
+
+    fun insertFinanceBankStatementReservation(
+        value: FinanceBankStatementEvidenceReservationInsert,
+    ) {
+        throw UnsupportedOperationException("Finance bank Evidence target not configured.")
+    }
+
+    fun insertFinanceExpenseReceiptReservation(
+        value: FinanceExpenseReceiptEvidenceReservationInsert,
+    ) {
+        throw UnsupportedOperationException("Finance receipt Evidence target not configured.")
+    }
+
+    fun insertCommercialReservation(
+        value: CommercialEvidenceReservationInsert,
+    ) {
+        throw UnsupportedOperationException("Commercial Evidence requires an explicitly implemented canonical persistence adapter.")
+    }
+
+    fun insertServiceDeliveryReservation(value: PrivateDocumentEvidenceReservationInsert) {
+        throw UnsupportedOperationException("Service delivery Evidence requires its canonical persistence adapter.")
+    }
+
+    fun insertSupplierTechnicalReservation(value: PrivateDocumentEvidenceReservationInsert) {
+        throw UnsupportedOperationException("Supplier technical Evidence requires its canonical persistence adapter.")
+    }
 
     fun findReservationByOperationId(
         operationId: UUID,

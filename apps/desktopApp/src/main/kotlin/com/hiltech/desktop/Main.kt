@@ -6,23 +6,72 @@ import com.hiltech.shared.core.StockAction
 import com.hiltech.shared.core.StockInventoryState
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
 import com.hiltech.shared.core.HiltechOnboardingState
 import com.hiltech.shared.core.HiltechPeopleState
 import com.hiltech.shared.core.HiltechProjectsState
 import com.hiltech.shared.core.HiltechWarehouseState
 import com.hiltech.shared.core.WarehouseImportReviewDraft
 import com.hiltech.shared.core.WarehousePhysicalOperatorSection
+import com.hiltech.shared.core.procurement.PurchaseRequirementOperatorSection
+import com.hiltech.shared.core.procurement.WarehouseReplenishmentSection
+import com.hiltech.shared.core.procurement.OfficeStockNeedSection
+import com.hiltech.shared.core.procurement.AssetPurchaseNeedSection
+import com.hiltech.shared.core.procurement.SupplierSourcingBuyerSection
+import com.hiltech.shared.core.procurement.PurchaseOrderIssuerSection
+import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceSection
+import com.hiltech.shared.core.procurement.SupplierPoCommunicationSection
+import com.hiltech.shared.core.procurement.PoWarehouseIntakeSection
+import com.hiltech.shared.core.executive.executiveNativeWorkspace
+import com.hiltech.shared.core.payroll.ownPayslipNativeWorkspace
+import com.hiltech.shared.core.payroll.payrollAdminReadNativeWorkspace
+import com.hiltech.shared.core.commercial.commercialReadNativeWorkspace
+import com.hiltech.shared.core.service.serviceDeliveryNativeWorkspace
+import com.hiltech.shared.core.service.serviceOperationsReadNativeWorkspace
+import com.hiltech.shared.core.finance.financeEvidenceReadNativeWorkspace
+import com.hiltech.shared.core.finance.financeBankCsvIntakeNativeWorkspace
+import com.hiltech.shared.core.finance.financeCompletionOperatorWorkspace
+import com.hiltech.shared.core.finance.financeCashboxOpeningWorkspace
+import com.hiltech.shared.core.finance.FinanceBankCsvSelectedFile
+import com.hiltech.shared.core.procurement.supplierInvoiceFinanceReadWorkspace
+import com.hiltech.shared.core.NativeOperationalWorkspace
+import com.hiltech.shared.core.NativeOperationArea
+import com.hiltech.shared.core.design.HiltechLanguage
+import com.hiltech.shared.core.NativeOperationAreas
+import com.hiltech.shared.core.procurement.servicePurchaseAnyCurrentSourceVisible
 import com.hiltech.shared.core.HiltechShell
 import com.hiltech.shared.core.HiltechShellState
 import com.hiltech.shared.core.PlanningUiAction
+import com.hiltech.shared.core.PlanningFormHost
+import com.hiltech.shared.core.PlanningFormOperation
+import com.hiltech.shared.core.PlanningFormRequest
+import com.hiltech.shared.core.PlanningFormResult
+import com.hiltech.shared.core.planningFormResponse
+import com.hiltech.shared.core.planningFormFailure
+import com.hiltech.shared.core.projects.projectId
 import com.hiltech.shared.core.ProjectCommandCenterUiAction
 import com.hiltech.shared.core.WorkPlanningUiAction
 import com.hiltech.shared.core.WorkReadinessUiAction
 import com.hiltech.shared.core.identity.IdentityApiException
+import com.hiltech.shared.core.identity.ProductOperation
+import com.hiltech.shared.core.identity.operationAvailable
 import com.hiltech.shared.core.identity.IdentityBootstrapDto
 import com.hiltech.shared.core.identity.auth.NativeOidcException
+import com.hiltech.shared.core.inbox.InboxWorkspace
+import com.hiltech.shared.core.people.EmployeeWarehouseResponsibilitiesWorkspace
+import com.hiltech.shared.core.people.EmployeeAccountWorkspace
 import com.hiltech.shared.core.network.HiltechApiException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,12 +84,15 @@ fun main() {
     val runtime = DesktopIdentityRuntime(
         apiBaseUrl =
             System.getenv("HILTECH_API_BASE_URL")
+                ?: System.getProperty("hiltech.apiBaseUrl")
                 ?: "",
         oidcIssuer =
             System.getenv("HILTECH_OIDC_ISSUER_URI")
+                ?: System.getProperty("hiltech.oidcIssuerUri")
                 ?: "",
         oidcClientId =
             System.getenv("HILTECH_OIDC_CLIENT_ID")
+                ?: System.getProperty("hiltech.oidcClientId")
                 ?: "hiltech-native",
     )
 
@@ -60,6 +112,23 @@ fun main() {
                 )
             },
         )
+
+    fun operationAvailable(operation: ProductOperation): Boolean =
+        (shellState.value as? HiltechShellState.SignedIn)?.identity.operationAvailable(operation)
+
+    fun serviceOperationsAvailable(): Boolean = listOf(
+        ProductOperation.SERVICE_SUPPORT, ProductOperation.SERVICE_MAINTENANCE,
+        ProductOperation.SERVICE_WARRANTY,
+    ).any(::operationAvailable)
+
+    fun financeOperationsAvailable(): Boolean = listOf(
+        ProductOperation.FINANCE_PAYABLE_CANDIDATES, ProductOperation.FINANCE_AP_POSTING,
+        ProductOperation.FINANCE_RECEIVABLES_INVOICE_ISSUANCE,
+        ProductOperation.FINANCE_RECEIVABLES_AR_POSTING, ProductOperation.FINANCE_EMPLOYEE_FUNDING,
+        ProductOperation.FINANCE_EMPLOYEE_SETTLEMENT, ProductOperation.FINANCE_EXPENSE_REIMBURSEMENT,
+        ProductOperation.FINANCE_CASHBOX, ProductOperation.FINANCE_CASH_ALLOCATION,
+        ProductOperation.FINANCE_CASH_ALLOCATION_VOID, ProductOperation.FINANCE_GL_PERIOD_CLOSE,
+    ).any(::operationAvailable)
 
     fun setState(
         state: HiltechShellState,
@@ -108,6 +177,12 @@ fun main() {
                                 ?: "HILTECH sign-in failed.",
                     )
 
+                failure is LinkageError ->
+                    HiltechShellState.Failure(
+                        code = "IDENTITY_RUNTIME_COMPONENT_MISSING",
+                        message = "This installation is missing a sign-in component. Install the latest HILTECH update.",
+                    )
+
                 else ->
                     HiltechShellState.Failure(
                         code = "IDENTITY_RUNTIME_FAILURE",
@@ -147,9 +222,30 @@ fun main() {
         }
     }
 
+    val supportNoteContinuity = com.hiltech.shared.core.service.SupportNoteContinuity()
+    var planningSessionEpoch by mutableIntStateOf(0)
+    var companyPeopleFocusRequest by mutableIntStateOf(0)
+    var employeeReadSequence = 0L
+    var planningCommandsJob = SupervisorJob(scope.coroutineContext[kotlinx.coroutines.Job])
+    fun invalidatePlanningCommands() {
+        companyPeopleFocusRequest = 0
+        planningSessionEpoch += 1
+        planningCommandsJob.cancel()
+        planningCommandsJob = SupervisorJob(scope.coroutineContext[kotlinx.coroutines.Job])
+    }
+    fun planningSessionScope(signed: HiltechShellState.SignedIn): String {
+        val org = signed.identity.organizations.firstOrNull { it.primary }
+            ?: signed.identity.organizations.firstOrNull()
+        return "${signed.identity.identityId}:${signed.identity.identityVersion}:" +
+            "${org?.organizationId}:${org?.membershipVersion}:$planningSessionEpoch"
+    }
+
     fun showSignedIn(
         identity: IdentityBootstrapDto,
     ) {
+        val organization = identity.organizations.firstOrNull { it.primary } ?: identity.organizations.firstOrNull()
+        supportNoteContinuity.bindVerifiedIdentity(identity.identityId, organization?.organizationId)
+        invalidatePlanningCommands()
         setState(
             HiltechShellState.SignedIn(
                 identity = identity,
@@ -467,16 +563,23 @@ fun main() {
             shellState.value as?
                 HiltechShellState.SignedIn
                 ?: return
+        val expectedSessionScope = planningSessionScope(signed)
+        val expectedOrganizationId = (signed.identity.organizations.firstOrNull { it.primary }
+            ?: signed.identity.organizations.firstOrNull())?.organizationId ?: return
+        val requestSequence = ++employeeReadSequence
+        val existingPeople = signed.people ?: HiltechPeopleState()
+        val sameEmployee = existingPeople.selectedEmployee?.employeeId == employeeId
 
         setState(
             signed.copy(
-                people =
-                    (signed.people
-                        ?: HiltechPeopleState())
-                        .copy(
-                            loading = true,
-                            errorMessage = null,
-                        ),
+                people = existingPeople.copy(
+                    loading = true,
+                    errorMessage = null,
+                    selectedEmployee = existingPeople.selectedEmployee.takeIf { sameEmployee },
+                    selectedWorkforceAssignment = existingPeople.selectedWorkforceAssignment.takeIf { sameEmployee },
+                    selectedWorkforceHistory = existingPeople.selectedWorkforceHistory.takeIf { sameEmployee },
+                    selectedOffboarding = existingPeople.selectedOffboarding.takeIf { sameEmployee },
+                ),
             ),
         )
 
@@ -512,7 +615,8 @@ fun main() {
             val current =
                 shellState.value as?
                     HiltechShellState.SignedIn
-            if (current == null) {
+            if (current == null || planningSessionScope(current) != expectedSessionScope ||
+                employeeReadSequence != requestSequence) {
                 return@launch
             }
 
@@ -526,6 +630,10 @@ fun main() {
                                     ?: HiltechPeopleState())
                                     .copy(
                                         loading = false,
+                                        selectedEmployee = current.people?.selectedEmployee?.takeIf {
+                                            sameEmployee && it.employeeId == employeeId &&
+                                                com.hiltech.shared.core.people.canRetainEmployeeAfterRefreshFailure(failure)
+                                        },
                                         errorMessage =
                                             failure.message
                                                 ?: "Employee detail could not be loaded.",
@@ -534,6 +642,18 @@ fun main() {
                     )
                     return@launch
                 }
+
+            if (detail.employeeId != employeeId || detail.organizationId != expectedOrganizationId) {
+                setState(current.copy(people = (current.people ?: HiltechPeopleState()).copy(
+                    loading = false,
+                    selectedEmployee = null,
+                    selectedWorkforceAssignment = null,
+                    selectedWorkforceHistory = null,
+                    selectedOffboarding = null,
+                    errorMessage = "Employee details could not be verified. Refresh the record.",
+                )))
+                return@launch
+            }
 
             val assignmentFailure =
                 assignmentResult
@@ -2149,126 +2269,71 @@ fun main() {
         }
     }
 
-    fun runPlanningAction(
-        action: PlanningUiAction,
+    fun newPlanningOperation() = PlanningFormOperation(
+        java.util.UUID.randomUUID().toString(), java.time.Instant.now().toString(),
+    )
+
+    fun runPlanningRequest(
+        expectedScope: String,
+        request: PlanningFormRequest,
+        onResult: (PlanningFormResult) -> Unit,
     ) {
-        val signed =
-            shellState.value as?
-                HiltechShellState.SignedIn
-                ?: return
-        val projectId =
-            when (action) {
-                is PlanningUiAction.CreateArea -> action.projectId
-                is PlanningUiAction.UpdateArea -> action.projectId
-                is PlanningUiAction.CreateMilestone -> action.projectId
-                is PlanningUiAction.UpdateMilestone -> action.projectId
-                is PlanningUiAction.CreateWorkPackage -> action.projectId
-                is PlanningUiAction.UpdateWorkPackage -> action.projectId
-                is PlanningUiAction.AddDependency -> action.projectId
-                is PlanningUiAction.RemoveDependency -> action.projectId
-                is PlanningUiAction.MarkReady -> action.projectId
+        val signed = shellState.value as? HiltechShellState.SignedIn
+        val projectId = request.action.projectId()
+        if (signed == null || planningSessionScope(signed) != expectedScope ||
+            signed.projects?.selectedProject?.projectId != projectId
+        ) {
+            onResult(PlanningFormResult.Rejected("PLANNING_SESSION_CHANGED", null, null))
+            return
+        }
+        fun sessionCurrent(): Boolean {
+            val active = shellState.value as? HiltechShellState.SignedIn ?: return false
+            return planningSessionScope(active) == expectedScope && active.projects?.selectedProject?.projectId == projectId
+        }
+        CoroutineScope(scope.coroutineContext + planningCommandsJob).launch {
+            if (!sessionCurrent()) return@launch
+            val result = try {
+                Result.success(runtime.submitPlanningForm(request, ::sessionCurrent))
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                Result.failure(failure)
             }
-        setState(
-            signed.copy(
-                projects =
-                    (signed.projects ?: HiltechProjectsState())
-                        .copy(
-                            loading = true,
-                            errorCode = null,
-                            errorMessage = null,
-                        ),
-            ),
-        )
-        scope.launch {
-            runCatching {
-                when (action) {
-                    is PlanningUiAction.CreateArea -> runtime.createArea(
-                        action.projectId, action.projectSiteId, action.parentAreaId,
-                        action.typeCode, action.code, action.name, action.sequence,
-                        action.restrictedAccess, action.baseProjectVersion,
-                        action.expectedBaselineVersion,
+            // Refresh a conflicting version without replacing any form draft or rebasing it implicitly.
+            val freshPlan = if ((result.exceptionOrNull() as? HiltechApiException)?.httpStatus == 409) {
+                try { runtime.projectPlan(projectId) }
+                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+            } else null
+            SwingUtilities.invokeLater {
+                val current = shellState.value as? HiltechShellState.SignedIn ?: return@invokeLater
+                if (planningSessionScope(current) != expectedScope ||
+                    current.projects?.selectedProject?.projectId != projectId
+                ) return@invokeLater
+                val response = result.getOrNull()
+                val confirmed = response?.let { planningFormResponse(request, it) }
+                val validResponse = (confirmed as? PlanningFormResult.Succeeded)?.response
+                val incomingPlan = validResponse?.plan ?: freshPlan
+                if (incomingPlan != null && incomingPlan.project.projectId == projectId &&
+                    incomingPlan.project.version >= (current.projects?.plan?.project?.version ?: 0)
+                ) {
+                    val projects = requireNotNull(current.projects)
+                    val selected = projects.selectedProject?.copy(
+                        lifecycleState = incomingPlan.project.lifecycleState,
+                        baselineVersion = incomingPlan.project.baselineVersion,
+                        version = incomingPlan.project.version,
                     )
-                    is PlanningUiAction.UpdateArea -> runtime.updateArea(
-                        action.projectId, action.areaId, action.parentAreaId, action.typeCode,
-                        action.code, action.name, action.sequence, action.restrictedAccess,
-                        action.baseProjectVersion, action.baseObjectVersion,
-                        action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.CreateMilestone -> runtime.createMilestone(
-                        action.projectId, action.code, action.name, action.plannedDate,
-                        action.sequence, action.clientVisible, action.acceptanceRequirement,
-                        action.baseProjectVersion, action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.UpdateMilestone -> runtime.updateMilestone(
-                        action.projectId, action.milestoneId, action.code, action.name,
-                        action.plannedDate, action.sequence, action.clientVisible,
-                        action.acceptanceRequirement, action.baseProjectVersion,
-                        action.baseObjectVersion, action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.CreateWorkPackage -> runtime.createWorkPackage(
-                        action.projectId, action.projectSiteId, action.siteId, action.milestoneId,
-                        action.code, action.name, action.description, action.ownerType, action.ownerId,
-                        action.plannedStart, action.plannedEnd, action.sequence,
-                        action.baseProjectVersion, action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.UpdateWorkPackage -> runtime.updateWorkPackage(
-                        action.projectId, action.workPackageId, action.projectSiteId, action.siteId,
-                        action.milestoneId, action.code, action.name, action.description,
-                        action.ownerType, action.ownerId, action.plannedStart, action.plannedEnd,
-                        action.sequence, action.baseProjectVersion, action.baseObjectVersion,
-                        action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.AddDependency -> runtime.addPlanDependency(
-                        action.projectId, action.predecessorType, action.predecessorId,
-                        action.successorType, action.successorId, action.dependencyType,
-                        action.lagMinutes, action.baseProjectVersion,
-                        action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.RemoveDependency -> runtime.removePlanDependency(
-                        action.projectId, action.dependencyId, action.baseProjectVersion,
-                        action.baseObjectVersion, action.expectedBaselineVersion,
-                    )
-                    is PlanningUiAction.MarkReady -> runtime.markProjectReady(
-                        action.projectId, action.baseProjectVersion,
-                        action.expectedBaselineVersion,
-                    )
+                    shellState.value = current.copy(projects = projects.copy(
+                        plan = incomingPlan, selectedProject = selected,
+                        list = projects.list?.let { currentList -> currentList.copy(items = currentList.items.map {
+                            if (it.projectId == projectId && selected != null) selected else it
+                        }) }, errorCode = null, errorMessage = null,
+                    ))
                 }
-            }.onSuccess { result ->
-                val current =
-                    shellState.value as?
-                        HiltechShellState.SignedIn
-                        ?: return@onSuccess
-                setState(
-                    current.copy(
-                        projects =
-                            (current.projects ?: HiltechProjectsState())
-                                .copy(
-                                    loading = false,
-                                    plan = result.plan,
-                                    errorCode = null,
-                                    errorMessage = null,
-                                ),
-                    ),
-                )
-                selectProject(projectId)
-            }.onFailure { failure ->
-                val current =
-                    shellState.value as?
-                        HiltechShellState.SignedIn
-                        ?: return@onFailure
-                setState(
-                    current.copy(
-                        projects =
-                            (current.projects ?: HiltechProjectsState())
-                                .copy(
-                                    loading = false,
-                                    errorCode =
-                                        (failure as? HiltechApiException)
-                                            ?.code,
-                                    errorMessage = failure.message,
-                                ),
-                    ),
-                )
+                onResult(when {
+                    confirmed != null -> confirmed
+                    else -> planningFormFailure(requireNotNull(result.exceptionOrNull()))
+                })
             }
         }
     }
@@ -2612,6 +2677,8 @@ fun main() {
     fun signIn(
         forceReauthentication: Boolean = false,
     ) {
+        if (!forceReauthentication) supportNoteContinuity.clear()
+        invalidatePlanningCommands()
         if (!runtime.configured) {
             setState(
                 HiltechShellState.ConfigurationRequired(
@@ -2693,6 +2760,8 @@ fun main() {
     }
 
     fun signOut() {
+        supportNoteContinuity.clear()
+        invalidatePlanningCommands()
         setState(
             HiltechShellState.Working(
                 "Signing out…",
@@ -2709,6 +2778,7 @@ fun main() {
     }
 
     application {
+        var desktopFindRequest by remember { mutableIntStateOf(0) }
         Window(
             onCloseRequest = {
                 scope.cancel()
@@ -2716,9 +2786,500 @@ fun main() {
                 exitApplication()
             },
             title = "HILTECH",
+            state = rememberWindowState(width = 1120.dp, height = 760.dp),
+            onPreviewKeyEvent = { event ->
+                if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.K &&
+                    shellState.value is HiltechShellState.SignedIn
+                ) {
+                    desktopFindRequest += 1
+                    true
+                } else false
+            },
         ) {
+            val navigationIdentity = (shellState.value as? HiltechShellState.SignedIn)?.identity
+            val navigationOrganization = navigationIdentity?.organizations?.firstOrNull { it.primary }
+                ?: navigationIdentity?.organizations?.firstOrNull()
+            val nativeProjectScope = navigationIdentity?.identityId.orEmpty() + ":" +
+                navigationOrganization?.organizationId.orEmpty()
+            var executiveProjectFocus by remember(nativeProjectScope) { mutableIntStateOf(0) }
+            val employeeSessionScope = (shellState.value as? HiltechShellState.SignedIn)?.let(::planningSessionScope).orEmpty()
+            var companySettingsFocusRequest by remember(employeeSessionScope) { mutableIntStateOf(0) }
+            val employeeDrafts = androidx.compose.runtime.key(employeeSessionScope) {
+                androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+            }
+            val workspaceApi = remember(employeeSessionScope) {
+                runtime.productApiForSession {
+                    val current = shellState.value as? HiltechShellState.SignedIn
+                    current != null && planningSessionScope(current) == employeeSessionScope
+                }
+            }
+            val sessionOnboarding = remember(workspaceApi) {
+                com.hiltech.shared.core.people.OnboardingApiClient(workspaceApi)
+            }
+            val sessionInbox = remember(workspaceApi) {
+                com.hiltech.shared.core.inbox.InboxApiClient(workspaceApi)
+            }
+            val sessionApprovals = remember(workspaceApi) {
+                com.hiltech.shared.core.approval.ApprovalApiClient(workspaceApi)
+            }
+            val purchaseReviews = remember(workspaceApi) {
+                com.hiltech.shared.core.procurement.PurchaseOrderReviewApiClient(workspaceApi)
+            }
+            val serviceProjects = remember(workspaceApi) {
+                com.hiltech.shared.core.projects.ProjectsApiClient(workspaceApi)
+            }
+            val supportDesk = remember(workspaceApi) {
+                supportNoteContinuity.client(workspaceApi, navigationIdentity?.identityId, navigationOrganization?.organizationId)
+            }
+            val supportWarranty = remember(workspaceApi) { com.hiltech.shared.core.service.WarrantyCoverageReadinessApiClient(workspaceApi) }
+            val supportTime = remember(workspaceApi) { com.hiltech.shared.core.service.SupportTimeApiClient(workspaceApi) }
+            val supportAgenda = remember(workspaceApi) { com.hiltech.shared.core.service.MaintenanceAgendaApiClient(workspaceApi) }
+            val serviceDelivery = remember(workspaceApi) {
+                com.hiltech.shared.core.service.ServiceDeliveryApiClient(workspaceApi)
+            }
+            val serviceHandover = remember(workspaceApi) {
+                com.hiltech.shared.core.service.HandoverApiClient(workspaceApi)
+            }
+            val serviceReviews = remember(workspaceApi) {
+                com.hiltech.shared.core.service.HandoverReviewApiClient(workspaceApi)
+            }
+            val serviceEvidence = remember(workspaceApi) {
+                runtime.evidenceApiForSession(workspaceApi)
+            }
+            val sessionCash = remember(workspaceApi) {
+                com.hiltech.shared.core.finance.FinancePhysicalCashApiClient(workspaceApi)
+            }
+            val stockPurchasing = remember(workspaceApi, serviceEvidence) {
+                com.hiltech.shared.core.procurement.StockPurchasingNativeClients(workspaceApi, serviceEvidence)
+            }
+            val companyResponsibilities = remember(workspaceApi) {
+                com.hiltech.shared.core.people.CompanyResponsibilitiesApiClient(workspaceApi)
+            }
+            val companyAdministration = remember(workspaceApi) {
+                com.hiltech.shared.core.administration.CompanyAdministrationApiClient(workspaceApi)
+            }
+            val supplierRegistry = remember(workspaceApi) {
+                com.hiltech.shared.core.procurement.SupplierMasterDataApiClient(workspaceApi)
+            }
+            val payrollAdministration = remember(workspaceApi) {
+                com.hiltech.shared.core.payroll.Payroll9aApiClient(workspaceApi)
+            }
+            val payrollDisbursements = remember(workspaceApi) {
+                com.hiltech.shared.core.finance.FinancePayrollDisbursementApiClient(workspaceApi)
+            }
+            val payrollRuns = remember(workspaceApi) {
+                com.hiltech.shared.core.payroll.Payroll9b9cApiClient(workspaceApi)
+            }
+            val languagePreferences = remember { java.util.prefs.Preferences.userRoot().node("com/hiltech/desktop/preferences") }
+            var appLanguage by remember { mutableStateOf(HiltechLanguage.fromCode(languagePreferences.get("appLanguage", null))) }
+            val serviceDocuments = remember(employeeSessionScope, appLanguage) {
+                DesktopSourceDocuments(appLanguage) {
+                    val current = shellState.value as? HiltechShellState.SignedIn
+                    current != null && planningSessionScope(current) == employeeSessionScope
+                }
+            }
             HiltechShell(
                 state = shellState.value,
+                operationalFocusRequest = com.hiltech.shared.core.NativeWorkspaceOpenRequest("company-administration", companySettingsFocusRequest),
+                language = appLanguage,
+                onLanguageChange = { choice ->
+                    appLanguage = choice
+                    languagePreferences.put("appLanguage", choice.code)
+                },
+                projectFocusRequest = executiveProjectFocus,
+                desktopNavigation = true,
+                desktopFindRequest = desktopFindRequest,
+                desktopPurchasingAvailable = listOf(
+                    ProductOperation.PROCUREMENT_REQUIREMENTS, ProductOperation.PROCUREMENT_SOURCING,
+                    ProductOperation.PROCUREMENT_PO_ISSUE, ProductOperation.PROCUREMENT_ASSET_PARTS,
+                    ProductOperation.PROCUREMENT_OFFICE_STOCK, ProductOperation.PROCUREMENT_WAREHOUSE_REPLENISHMENT,
+                    ProductOperation.PROCUREMENT_PO_RECEIVING, ProductOperation.PROCUREMENT_SUPPLIER_INVOICES,
+                ).any(::operationAvailable),
+                employeeAccountWorkspace = { employee ->
+                    navigationIdentity?.let { identity ->
+                        employeeDrafts.SaveableStateProvider("$employeeSessionScope:${employee.employeeId}") {
+                        EmployeeAccountWorkspace(
+                            employee = employee,
+                            sessionScope = employeeSessionScope,
+                            client = sessionOnboarding,
+                            installationId = runtime.physicalWarehouseInstallationId,
+                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                            onReauthenticate = { signIn(true) },
+                            onAccountReady = { selectEmployee(employee.employeeId) },
+                        )
+                        com.hiltech.shared.core.people.EmployeeCompanyResponsibilitiesWorkspace(
+                            employee = employee,
+                            sessionScope = employeeSessionScope,
+                            client = companyResponsibilities,
+                            installationId = runtime.physicalWarehouseInstallationId,
+                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                            onReauthenticate = { signIn(true) },
+                        )
+                        EmployeeWarehouseResponsibilitiesWorkspace(
+                            employee = employee,
+                            sessionScope = employeeSessionScope,
+                            client = runtime.physicalWarehouseApi,
+                            installationId = runtime.physicalWarehouseInstallationId,
+                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                            nowUtc = { java.time.Instant.now().toString() },
+                        )
+                        }
+                    }
+                },
+                employeeOnboardingWorkspace = { employee ->
+                    val expectedScope = employeeSessionScope
+                    val expectedEmployeeId = employee.employeeId
+                    val sessionCurrent = {
+                        val current = shellState.value as? HiltechShellState.SignedIn
+                        current != null && planningSessionScope(current) == expectedScope &&
+                            current.people?.selectedEmployee?.employeeId == expectedEmployeeId
+                    }
+                    employeeDrafts.SaveableStateProvider("onboarding:$expectedScope:$expectedEmployeeId") {
+                        com.hiltech.shared.core.people.EmployeeOnboardingWorkspace(
+                            employee = employee,
+                            sessionScope = expectedScope,
+                            client = sessionOnboarding,
+                            installationId = runtime.physicalWarehouseInstallationId,
+                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                            isSessionCurrent = sessionCurrent,
+                            submitCommand = { intent, unknown, sending ->
+                                runtime.submitEmployeeOnboarding(intent, unknown, sessionCurrent, sending)
+                            },
+                            onEmployeeChanged = {
+                                if (sessionCurrent()) selectEmployee(expectedEmployeeId)
+                            },
+                        )
+                    }
+                },
+                inboxWorkspace = {
+                    navigationIdentity?.let { identity ->
+                        InboxWorkspace(
+                            sessionScope = employeeSessionScope,
+                            inbox = sessionInbox,
+                            approvals = sessionApprovals,
+                            purchaseReviews = purchaseReviews,
+                            onReauthenticate = { signIn(true) },
+                            installationId = runtime.physicalWarehouseInstallationId,
+                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                        )
+                    }
+                },
+                operationalWorkspaces = (shellState.value as? HiltechShellState.SignedIn)?.let { signed ->
+                    val org = signed.identity.organizations.firstOrNull { it.primary }
+                        ?: signed.identity.organizations.firstOrNull()
+                    if (org == null) emptyList() else buildList {
+                        if (operationAvailable(ProductOperation.EXECUTIVE_HOME)) {
+                            add(executiveNativeWorkspace(
+                                client = runtime.executiveApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                authorityRevisionKey =
+                                    signed.identity.identityVersion.toString() + ":" +
+                                        org.membershipVersion.toString(),
+                                onOpenProject = { projectId ->
+                                    // Original Projects API performs its own authorization.
+                                    selectProject(projectId)
+                                    executiveProjectFocus += 1
+                                },
+                            ))
+                        }
+                        if (operationAvailable(ProductOperation.PAYROLL_PAYSLIPS)) {
+                            add(ownPayslipNativeWorkspace(
+                                client = runtime.payrollOwnApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                            ))
+                        }
+                        if (operationAvailable(ProductOperation.PAYROLL_PERIODS)) {
+                            val payrollWorkspace = remember(employeeSessionScope, org.organizationId, payrollAdministration, payrollRuns) {
+                                payrollAdminReadNativeWorkspace(
+                                client = payrollAdministration,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                runClient = payrollRuns,
+                                onReauthenticate = { signIn(true) },
+                                )
+                            }
+                            add(payrollWorkspace.copy(content = { exit ->
+                                employeeDrafts.SaveableStateProvider("payroll:$employeeSessionScope") {
+                                    payrollWorkspace.content(exit)
+                                }
+                            }))
+                        }
+                        add(NativeOperationalWorkspace(
+                            id = "company-administration",
+                            label = "إدارة الشركة",
+                            canReadSource = {
+                                companyAdministration.capabilities(org.organizationId, runtime.physicalWarehouseInstallationId).available
+                            },
+                            hostOwnsScroll = true,
+                            content = { _ ->
+                                employeeDrafts.SaveableStateProvider("administration:$employeeSessionScope") {
+                                    com.hiltech.shared.core.administration.CompanyAdministrationWorkspace(
+                                        organizationId = org.organizationId,
+                                        sessionScope = employeeSessionScope,
+                                        client = companyAdministration,
+                                        installationId = runtime.physicalWarehouseInstallationId,
+                                        newOperationId = { java.util.UUID.randomUUID().toString() },
+                                        onReauthenticate = { signIn(true) },
+                                        onOpenPeople = {
+                                            val current = shellState.value as? HiltechShellState.SignedIn
+                                            if (current != null && planningSessionScope(current) == employeeSessionScope) {
+                                                refreshPeople()
+                                                companyPeopleFocusRequest += 1
+                                            }
+                                        },
+                                    )
+                                }
+                            },
+                        ))
+                        add(NativeOperationalWorkspace(
+                            id = "finance-payroll-disbursement",
+                            label = "صرف الرواتب",
+                            canReadSource = {
+                                val access = payrollDisbursements.capabilities(org.organizationId, runtime.physicalWarehouseInstallationId)
+                                access.canPrepare || access.canReview
+                            },
+                            hostOwnsScroll = true,
+                            content = { _ ->
+                                employeeDrafts.SaveableStateProvider("payroll-disbursements:$employeeSessionScope") {
+                                    com.hiltech.shared.core.finance.FinancePayrollDisbursementWorkspace(
+                                        organizationId = org.organizationId,
+                                        sessionScope = employeeSessionScope,
+                                        client = payrollDisbursements,
+                                        installationId = runtime.physicalWarehouseInstallationId,
+                                        newOperationId = { java.util.UUID.randomUUID().toString() },
+                                        onReauthenticate = { signIn(true) },
+                                    )
+                                }
+                            },
+                        ))
+                        if (operationAvailable(ProductOperation.PROCUREMENT_SUPPLIER_MASTER_DATA)) {
+                            add(NativeOperationalWorkspace(
+                                id = "supplier-registry",
+                                label = "سجل الموردين",
+                                canReadSource = {
+                                    supplierRegistry.capabilities(org.organizationId, runtime.physicalWarehouseInstallationId).canMaintain
+                                },
+                                hostOwnsScroll = true,
+                                content = { _ ->
+                                    employeeDrafts.SaveableStateProvider("suppliers:$employeeSessionScope") {
+                                        com.hiltech.shared.core.procurement.SupplierRegistryWorkspace(
+                                            organizationId = org.organizationId,
+                                            sessionScope = employeeSessionScope,
+                                            client = supplierRegistry,
+                                            installationId = runtime.physicalWarehouseInstallationId,
+                                            newOperationId = { java.util.UUID.randomUUID().toString() },
+                                            onReauthenticate = { signIn(true) },
+                                        )
+                                    }
+                                },
+                            ))
+                        }
+                        if (operationAvailable(ProductOperation.PROCUREMENT_SOURCING)) {
+                            add(com.hiltech.shared.core.procurement.supplierTechnicalReviewNativeWorkspace(
+                                client = stockPurchasing.technical,
+                                evidence = serviceEvidence,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                pickDocument = { serviceDocuments.pickDocument() },
+                                onReauthenticate = { signIn(true) },
+                            ))
+                        }
+                        if (operationAvailable(ProductOperation.COMMERCIAL)) {
+                            add(commercialReadNativeWorkspace(
+                                client = runtime.commercialApi,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                pickLogo = {
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                        SwingUtilities.invokeAndWait {
+                                            val picker = javax.swing.JFileChooser()
+                                            picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter("PNG / JPEG", "png", "jpg", "jpeg")
+                                            if (picker.showOpenDialog(null) == javax.swing.JFileChooser.APPROVE_OPTION) chosen.set(picker.selectedFile)
+                                        }
+                                        chosen.get()?.let { file -> require(file.length() in 1L..1048576L); file.readBytes().also { require(it.size <= 1048576) } }
+                                    }
+                                },
+                                exportPdf = { filename, bytes ->
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                        SwingUtilities.invokeAndWait {
+                                            val picker = javax.swing.JFileChooser()
+                                            picker.selectedFile = java.io.File(filename.replace(Regex("[^A-Za-z0-9._-]"), "_"))
+                                            if (picker.showSaveDialog(null) == javax.swing.JFileChooser.APPROVE_OPTION) {
+                                                val selected = picker.selectedFile
+                                                val target = if (selected.name.endsWith(".pdf", true)) selected else java.io.File(selected.parentFile, selected.name + ".pdf")
+                                                if (!target.exists() || javax.swing.JOptionPane.showConfirmDialog(null, "Replace existing PDF?", "HILTECH", javax.swing.JOptionPane.YES_NO_OPTION) == javax.swing.JOptionPane.YES_OPTION) chosen.set(target)
+                                            }
+                                        }
+                                        chosen.get()?.let { it.writeBytes(bytes); true } ?: false
+                                    }
+                                },
+                            ))
+                        }
+                        if (operationAvailable(ProductOperation.SERVICE_HANDOVER)) {
+                            add(serviceDeliveryNativeWorkspace(
+                                projects = serviceProjects,
+                                delivery = serviceDelivery,
+                                handover = serviceHandover,
+                                reviews = serviceReviews,
+                                evidence = serviceEvidence,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                pickDocument = { serviceDocuments.pickDocument() },
+                                exportDocument = { name, type, bytes, digest -> serviceDocuments.exportDocument(name, type, bytes, digest) },
+                                onReauthenticate = { signIn(true) },
+                            ))
+                        }
+                        if (serviceOperationsAvailable()) {
+                            add(serviceOperationsReadNativeWorkspace(
+                                projects = serviceProjects,
+                                ticketsApi = supportDesk,
+                                warrantyApi = supportWarranty,
+                                timeApi = supportTime,
+                                agendaApi = supportAgenda,
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                onReauthenticate = { signIn(true) },
+                            ))
+                        }
+                        if (operationAvailable(ProductOperation.FINANCE_CASHBOX)) {
+                            add(financeCashboxOpeningWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                api = sessionCash,
+                                onOpenCompanySettings = { companySettingsFocusRequest += 1 },
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                            ))
+                        }
+                        if (financeOperationsAvailable()) {
+                            add(financeCompletionOperatorWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                apis = runtime.financeEvidenceReadApis,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                            ))
+                        }
+                        if (operationAvailable(ProductOperation.FINANCE_BANK_STATEMENT_INTAKE)) {
+                            add(financeBankCsvIntakeNativeWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                api = runtime.financeBankIntakeApi,
+                                uploader = runtime.financeBankCsvUploader,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                deriveProposalId = { bankOperation ->
+                                    java.util.UUID.nameUUIDFromBytes(
+                                        "hiltech:bank-statement-intake:$bankOperation"
+                                            .toByteArray(Charsets.UTF_8),
+                                    ).toString()
+                                },
+                                pickCsvFile = {
+                                    kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                        val selected =
+                                            java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                        javax.swing.SwingUtilities.invokeAndWait {
+                                            val picker = javax.swing.JFileChooser()
+                                            picker.dialogTitle = "HILTECH · Private bank CSV"
+                                            picker.fileFilter =
+                                                javax.swing.filechooser.FileNameExtensionFilter(
+                                                    "Canonical UTF-8 bank CSV (2 MiB)", "csv",
+                                                )
+                                            picker.isAcceptAllFileFilterUsed = false
+                                            if (picker.showOpenDialog(null) ==
+                                                javax.swing.JFileChooser.APPROVE_OPTION
+                                            ) selected.set(picker.selectedFile)
+                                        }
+                                        selected.get()?.let { file ->
+                                            val path = file.toPath()
+                                            require(java.nio.file.Files.isRegularFile(
+                                                path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
+                                            )) { "Bank statement source must be a regular file." }
+                                            val size = java.nio.file.Files.size(path)
+                                            require(size in 1L..(2L * 1024L * 1024L)) {
+                                                "Bank statement must be 1 byte to 2 MiB."
+                                            }
+                                            val bytes = java.nio.file.Files.readAllBytes(path)
+                                            require(bytes.size.toLong() == size &&
+                                                file.name.endsWith(".csv", ignoreCase = true)
+                                            ) { "The canonical bank CSV source changed." }
+                                            val sha = java.security.MessageDigest
+                                                .getInstance("SHA-256").digest(bytes)
+                                                .joinToString("") { byte ->
+                                                    "%02x".format(byte.toInt() and 0xff)
+                                                }
+                                            FinanceBankCsvSelectedFile(
+                                                bytes = bytes, sha256 = sha,
+                                                originalFileName = file.name,
+                                                capturedAt = java.time.Instant.now().toString(),
+                                            )
+                                        }
+                                    }
+                                },
+                            ))
+                        }
+                        if (financeOperationsAvailable()) {
+                            add(financeEvidenceReadNativeWorkspace(
+                                identityId = signed.identity.identityId,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                apis = runtime.financeEvidenceReadApis,
+                                reviewPreparationEnabled = financeOperationsAvailable(),
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                            ))
+                        }
+                        if (operationAvailable(ProductOperation.PROCUREMENT_SUPPLIER_INVOICES)) {
+                            add(supplierInvoiceFinanceReadWorkspace(
+                                client = runtime.supplierInvoiceFinanceApi,
+                                organizationId = org.organizationId,
+                                installationId = runtime.physicalWarehouseInstallationId,
+                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                            ))
+                        }
+                        if (operationAvailable(ProductOperation.PROCUREMENT_SERVICE_NEEDS)) {
+                            add(NativeOperationalWorkspace(
+                                id = "service-purchasing",
+                                label = "مشتريات الخدمات",
+                                canReadSource = {
+                                    servicePurchaseAnyCurrentSourceVisible(
+                                        needs = runtime.servicePurchaseNeedApi,
+                                        sourcing = runtime.serviceSupplierSourcingApi,
+                                        orders = runtime.serviceOrderAndInvoiceApi,
+                                        organizationId = org.organizationId,
+                                        installationId = runtime.physicalWarehouseInstallationId,
+                                    )
+                                },
+                                hostOwnsScroll = true,
+                                content = { _ ->
+                                    androidx.compose.runtime.key(
+                                        signed.identity.identityId, org.organizationId, "service-purchases",
+                                    ) {
+                                        DesktopServicePurchaseSections(
+                                            runtime = runtime,
+                                            organizationId = org.organizationId,
+                                        )
+                                    }
+                                },
+                            ))
+                        }
+                    }
+                } ?: emptyList(),
                 onSignIn = { signIn(false) },
                 onSignOut = ::signOut,
                 onRetry = { signIn(false) },
@@ -2727,6 +3288,7 @@ fun main() {
                 onRevokeSession = ::revokeSession,
                 onRevokeDevice = ::revokeDevice,
                 onRefreshPeople = ::refreshPeople,
+                peopleFocusRequest = companyPeopleFocusRequest,
                 onRefreshOnboarding =
                     ::refreshOnboarding,
                 onSelectEmployee = ::selectEmployee,
@@ -2770,6 +3332,7 @@ fun main() {
                             api = runtime.physicalWarehouseApi,
                             organizationId = organization.organizationId,
                             installationId = runtime.physicalWarehouseInstallationId,
+                            operatorScopeKey = identity.identityId,
                             operationId = { fields ->
                                 val payload =
                                     (listOf(
@@ -2785,6 +3348,327 @@ fun main() {
                             },
                         )
                     }
+                },
+                procurementOperator = {
+                    NativeOperationAreas(
+                        title = "المشتريات",
+                        description = "اختر العملية المطلوبة وتابعها في مساحتها المستقلة.",
+                        areas = buildList<NativeOperationArea> {
+
+                            if (operationAvailable(ProductOperation.PROCUREMENT_REQUIREMENTS)) {
+                                add(NativeOperationArea("requirements", "احتياجات المشاريع", "طلبات الخامات المرتبطة بالأعمال والمشاريع") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val works = signed?.projects?.workOrders.orEmpty()
+                                    if (identity != null && works.isNotEmpty()) {
+                                        androidx.compose.runtime.key(identity.identityId) {
+                                            PurchaseRequirementOperatorSection(
+                                                api = runtime.procurementApi,
+                                                warehouseApi = runtime.physicalWarehouseApi,
+                                                workApi = runtime.procurementWorkApi,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                workChoices = works,
+                                                projectIntakeId = signed.projects?.selectedProject?.projectId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                            if (operationAvailable(ProductOperation.PROCUREMENT_SOURCING)) {
+                                add(NativeOperationArea("sourcing", "الموردون وعروض الأسعار", "مقارنة عروض الموردين وإعداد طلب الشراء") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(employeeSessionScope) {
+                                            SupplierSourcingBuyerSection(
+                                                api = stockPurchasing.sourcing,
+                                                organizationId = organization.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                                purchaseCandidateApi = stockPurchasing.candidates.takeIf {
+                                                    operationAvailable(ProductOperation.PROCUREMENT_PO_CANDIDATES)
+                                                },
+                                                purchaseApprovalRequestEnabled =
+                                                    operationAvailable(ProductOperation.PROCUREMENT_APPROVAL_REQUEST),
+                                                technicalPacketEditor = { quoteId, close, changed ->
+                                                    com.hiltech.shared.core.procurement.SupplierTechnicalPacketEditor(
+                                                        client = stockPurchasing.technical,
+                                                        evidence = serviceEvidence,
+                                                        quoteId = quoteId,
+                                                        identityId = identity.identityId,
+                                                        organizationId = organization.organizationId,
+                                                        installationId = runtime.physicalWarehouseInstallationId,
+                                                        newOperationId = { java.util.UUID.randomUUID().toString() },
+                                                        pickDocument = { serviceDocuments.pickDocument() },
+                                                        onReauthenticate = { signIn(true) },
+                                                        onClose = close,
+                                                        onChanged = changed,
+                                                    )
+                                                },
+                                                quoteDocumentUploader = stockPurchasing.quoteDocuments,
+                                                pickQuoteFile = {
+                                                    serviceDocuments.pickDocument()?.let { file ->
+                                                        com.hiltech.shared.core.procurement.SupplierQuotePickedFile(
+                                                            fileName = file.originalFileName,
+                                                            contentType = file.contentType,
+                                                            sha256 = file.sha256,
+                                                            bytes = file.bytes,
+                                                            capturedAt = file.capturedAt,
+                                                        )
+                                                    }
+                                                },
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                            if (operationAvailable(ProductOperation.PROCUREMENT_PO_ISSUE)) {
+                                add(NativeOperationArea("orders", "أوامر الشراء", "الإصدار والتعديلات والإلغاء والتواصل مع المورد") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, organization.organizationId, "po-issuer",
+                                        ) {
+                                            PurchaseOrderIssuerSection(
+                                                onOpenCompanySettings = { companySettingsFocusRequest += 1 },
+                                                api = stockPurchasing.issue,
+                                                amendmentApi = stockPurchasing.amendments.takeIf {
+                                                    operationAvailable(ProductOperation.PROCUREMENT_PO_DELIVERY_AMENDMENTS)
+                                                },
+                                                cancellationEnabled =
+                                                    operationAvailable(ProductOperation.PROCUREMENT_PO_CANCELLATION),
+                                                organizationId = organization.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                            )
+                                        }
+                                        if (operationAvailable(ProductOperation.PROCUREMENT_PO_SUPPLIER_COMMUNICATIONS)) {
+                                            androidx.compose.runtime.key(
+                                                identity.identityId, organization.organizationId, "po-dispatch-evidence",
+                                            ) {
+                                                SupplierPoCommunicationSection(
+                                                    issued = stockPurchasing.issue,
+                                                    communications = stockPurchasing.communications,
+                                                    organizationId = organization.organizationId,
+                                                    installationId = runtime.physicalWarehouseInstallationId,
+                                                    newOperationId = { java.util.UUID.randomUUID().toString() },
+                                                    currentInstant = { java.time.Instant.now().toString() },
+                                                )
+                                            }
+                                        }
+                                    }
+                                })
+                            }
+                            if (operationAvailable(ProductOperation.PROCUREMENT_ASSET_PARTS)) {
+                                add(NativeOperationArea("asset-parts", "قطع غيار المعدات", "احتياجات الأصول والصيانة") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, organization.organizationId, "asset-parts-needs",
+                                        ) {
+                                            AssetPurchaseNeedSection(
+                                                api = runtime.assetPurchaseNeedApi,
+                                                warehouseApi = runtime.physicalWarehouseApi,
+                                                organizationId = organization.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                            if (operationAvailable(ProductOperation.PROCUREMENT_OFFICE_STOCK)) {
+                                add(NativeOperationArea("office-stock", "احتياجات المكتب", "طلبات المستلزمات الداخلية") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val org = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && org != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, org.organizationId, "office-needs",
+                                        ) {
+                                            OfficeStockNeedSection(
+                                                api = runtime.officeStockNeedApi,
+                                                organizationId = org.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                            if (operationAvailable(ProductOperation.PROCUREMENT_WAREHOUSE_REPLENISHMENT)) {
+                                add(NativeOperationArea("replenishment", "إعادة التوريد", "احتياجات إعادة تعبئة المخزون") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, organization.organizationId, "warehouse-needs",
+                                        ) {
+                                            WarehouseReplenishmentSection(
+                                                api = runtime.warehouseReplenishmentApi,
+                                                warehouseApi = runtime.physicalWarehouseApi,
+                                                organizationId = organization.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                            if (operationAvailable(ProductOperation.PROCUREMENT_PO_RECEIVING)) {
+                                add(NativeOperationArea("receiving", "استلام المشتريات", "استلام التوريدات ومستندات التسليم") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, organization.organizationId, "po-warehouse",
+                                        ) {
+                                            PoWarehouseIntakeSection(
+                                                api = runtime.poWarehouseIntakeApi,
+                                                warehouseApi = runtime.physicalWarehouseApi,
+                                                organizationId = organization.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                                deliveryNoteUploader = runtime.poReceivingDeliveryNoteUploader,
+                                                pickDeliveryNote = {
+                                                    kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                                        val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                                        javax.swing.SwingUtilities.invokeAndWait {
+                                                            val picker = javax.swing.JFileChooser()
+                                                            picker.dialogTitle = "Private supplier delivery note document"
+                                                            picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter(
+                                                                "Delivery note PDF/image (max 16 MiB)", "pdf", "jpg", "jpeg", "png", "webp",
+                                                            )
+                                                            picker.isAcceptAllFileFilterUsed = false
+                                                            if (picker.showOpenDialog(null) ==
+                                                                javax.swing.JFileChooser.APPROVE_OPTION
+                                                            ) chosen.set(picker.selectedFile)
+                                                        }
+                                                        val file = chosen.get()
+                                                        if (file == null) null else {
+                                                            val path = file.toPath()
+                                                            require(java.nio.file.Files.isRegularFile(
+                                                                path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
+                                                            )) { "Delivery note source must be a regular file." }
+                                                            val size = java.nio.file.Files.size(path)
+                                                            require(size in 1..(16L * 1024L * 1024L)) {
+                                                                "Delivery note must be between 1 byte and 16 MiB."
+                                                            }
+                                                            val mime = when (file.extension.lowercase()) {
+                                                                "pdf" -> "application/pdf"
+                                                                "jpg", "jpeg" -> "image/jpeg"
+                                                                "png" -> "image/png"
+                                                                "webp" -> "image/webp"
+                                                                else -> error("Unsupported delivery note file type.")
+                                                            }
+                                                            val bytes = java.nio.file.Files.readAllBytes(path)
+                                                            require(bytes.size.toLong() == size) {
+                                                                "Delivery note document changed during file selection."
+                                                            }
+                                                            val digest = java.security.MessageDigest
+                                                                .getInstance("SHA-256").digest(bytes)
+                                                                .joinToString("") { byte ->
+                                                                    "%02x".format(byte.toInt() and 0xff)
+                                                                }
+                                                            com.hiltech.shared.core.procurement.PoDeliveryNoteFile(
+                                                                contentType = mime, originalFileName = file.name,
+                                                                bytes = bytes, sha256 = digest,
+                                                                capturedAt = java.time.Instant.now().toString(),
+                                                            )
+                                                        }
+                                                    }
+                                                },
+              
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                            if (operationAvailable(ProductOperation.PROCUREMENT_SUPPLIER_INVOICES)) {
+                                add(NativeOperationArea("invoices", "فواتير الموردين", "تسجيل الفواتير ومراجعتها") {
+                                    val signed = shellState.value as? HiltechShellState.SignedIn
+                                    val identity = signed?.identity
+                                    val organization = identity?.organizations?.firstOrNull { it.primary }
+                                        ?: identity?.organizations?.firstOrNull()
+                                    if (identity != null && organization != null) {
+                                        androidx.compose.runtime.key(
+                                            identity.identityId, organization.organizationId, "invoice-finance",
+                                        ) {
+                                            SupplierInvoiceFinanceSection(
+                                                api = runtime.supplierInvoiceFinanceApi,
+                                                organizationId = organization.organizationId,
+                                                installationId = runtime.physicalWarehouseInstallationId,
+                                                newOperationId = { java.util.UUID.randomUUID().toString() },
+                                                documentUploader = runtime.supplierInvoiceDocumentUploader,
+                                                pickInvoiceFile = {
+                                                    kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                                        val chosen = java.util.concurrent.atomic.AtomicReference<java.io.File?>()
+                                                        javax.swing.SwingUtilities.invokeAndWait {
+                                                            val picker = javax.swing.JFileChooser()
+                                                            picker.dialogTitle = "Private supplier invoice document"
+                                                            picker.fileFilter = javax.swing.filechooser.FileNameExtensionFilter(
+                                                                "Invoice PDF/image (max 16 MiB)", "pdf", "jpg", "jpeg", "png", "webp",
+                                                            )
+                                                            picker.isAcceptAllFileFilterUsed = false
+                                                            if (picker.showOpenDialog(null) ==
+                                                                javax.swing.JFileChooser.APPROVE_OPTION
+                                                            ) chosen.set(picker.selectedFile)
+                                                        }
+                                                        val file = chosen.get()
+                                                        if (file == null) null else {
+                                                            val path = file.toPath()
+                                                            require(java.nio.file.Files.isRegularFile(
+                                                                path, java.nio.file.LinkOption.NOFOLLOW_LINKS,
+                                                            )) { "Invoice source must be a regular file." }
+                                                            val size = java.nio.file.Files.size(path)
+                                                            require(size in 1..(16L * 1024L * 1024L)) {
+                                                                "Invoice must be between 1 byte and 16 MiB."
+                                                            }
+                                                            val mime = when (file.extension.lowercase()) {
+                                                                "pdf" -> "application/pdf"
+                                                                "jpg", "jpeg" -> "image/jpeg"
+                                                                "png" -> "image/png"
+                                                                "webp" -> "image/webp"
+                                                                else -> error("Unsupported invoice file type.")
+                                                            }
+                                                            val bytes = java.nio.file.Files.readAllBytes(path)
+                                                            require(bytes.size.toLong() == size) {
+                                                                "Invoice document changed during file selection."
+                                                            }
+                                                            val digest = java.security.MessageDigest
+                                                                .getInstance("SHA-256").digest(bytes)
+                                                                .joinToString("") { byte ->
+                                                                    "%02x".format(byte.toInt() and 0xff)
+                                                                }
+                                                            com.hiltech.shared.core.procurement.SupplierInvoiceSelectedFile(
+                                                                contentType = mime, originalFileName = file.name,
+                                                                bytes = bytes, sha256 = digest,
+                                                                capturedAt = java.time.Instant.now().toString(),
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                            )
+                                        }
+                                    }
+                                })
+                            }
+                        },
+                    )
                 },
                 onRefreshProjects =
                     ::refreshProjects,
@@ -2817,8 +3701,14 @@ fun main() {
                 onCreateSite = ::createSite,
                 onAttachProjectSite =
                     ::attachProjectSite,
-                onPlanningAction =
-                    ::runPlanningAction,
+                planningFormHost = (shellState.value as? HiltechShellState.SignedIn)?.let { signed ->
+                    val expectedScope = planningSessionScope(signed)
+                    PlanningFormHost(
+                        scopeKey = expectedScope,
+                        newOperation = ::newPlanningOperation,
+                        submit = { request, completed -> runPlanningRequest(expectedScope, request, completed) },
+                    )
+                },
                 onWorkPlanningAction =
                     ::runWorkPlanningAction,
                 onWorkReadinessAction =

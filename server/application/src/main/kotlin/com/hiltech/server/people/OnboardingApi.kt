@@ -4,6 +4,7 @@ import com.hiltech.server.platform.HiltechRequestContext
 import com.hiltech.server.platform.IdempotencyKeyContract
 import com.hiltech.server.platform.ProductApiException
 import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -42,6 +43,7 @@ data class OnboardingRequirementResponse(
     val actionCode: String?,
     val sourceStateCode: String?,
     val sortOrder: Int,
+    val allowedResolutions: List<String> = emptyList(),
 )
 
 data class OnboardingCaseResponse(
@@ -62,18 +64,64 @@ data class OnboardingCaseResponse(
     val caseVersion: Long,
     val startedAt: String,
     val activatedAt: String?,
+    val canActivate: Boolean = false,
+)
+
+data class OnboardingPolicyOptionResponse(
+    val configRevisionId: String,
+    val code: String,
+    val name: String,
+    val revisionNumber: Int,
+)
+
+data class OnboardingWorkspaceResponse(
+    val employeeId: String,
+    val organizationId: String,
+    val employeeDisplayName: String,
+    val employeeState: String,
+    val employeeVersion: Long,
+    val startAvailability: String,
+    val policies: List<OnboardingPolicyOptionResponse>,
+    val currentCase: OnboardingCaseResponse?,
 )
 
 data class OnboardingCommandResponse(
     val onboarding: OnboardingCaseResponse,
     val replayed: Boolean,
     val correlationId: String,
+    val operationId: String,
 )
 
 @RestController
 class OnboardingController(
     private val service: OnboardingService,
 ) {
+    @GetMapping("/v1/employees/{employeeId}/onboarding/workspace")
+    fun workspace(
+        servletRequest: HttpServletRequest,
+        servletResponse: HttpServletResponse,
+        @PathVariable employeeId: String,
+    ): OnboardingWorkspaceResponse {
+        servletResponse.setHeader("Cache-Control", "no-store")
+        val context = HiltechRequestContext.current(servletRequest)
+        val view = service.workspace(
+            context.requireOnboardingIdentityId(),
+            employeeId.toOnboardingUuid("INVALID_EMPLOYEE_ID"),
+        )
+        return OnboardingWorkspaceResponse(
+            employeeId = view.employeeId.toString(),
+            organizationId = view.organizationId.toString(),
+            employeeDisplayName = view.employeeDisplayName,
+            employeeState = view.employeeState.name,
+            employeeVersion = view.employeeVersion,
+            startAvailability = view.startAvailability,
+            policies = view.policies.map {
+                OnboardingPolicyOptionResponse(it.configRevisionId.toString(), it.code, it.name, it.revisionNumber)
+            },
+            currentCase = view.currentCase?.toResponse(),
+        )
+    }
+
     @PostMapping(
         "/v1/employees/{employeeId}/onboarding",
     )
@@ -130,6 +178,7 @@ class OnboardingController(
             )
 
         return OnboardingCommandResponse(
+            operationId = operationId.toString(),
             onboarding =
                 result.onboarding.toResponse(),
             replayed = result.replayed,
@@ -217,6 +266,7 @@ class OnboardingController(
             )
 
         return OnboardingCommandResponse(
+            operationId = operationId.toString(),
             onboarding =
                 result.onboarding.toResponse(),
             replayed = result.replayed,
@@ -276,6 +326,7 @@ class OnboardingController(
             )
 
         return OnboardingCommandResponse(
+            operationId = operationId.toString(),
             onboarding =
                 result.onboarding.toResponse(),
             replayed = result.replayed,
@@ -345,6 +396,7 @@ private fun OnboardingCaseView
                     sourceStateCode =
                         it.sourceStateCode,
                     sortOrder = it.sortOrder,
+                    allowedResolutions = it.allowedResolutions.map { resolution -> resolution.name },
                 )
             },
         blockingSatisfied =
@@ -353,6 +405,7 @@ private fun OnboardingCaseView
         startedAt = startedAt.toString(),
         activatedAt =
             activatedAt?.toString(),
+        canActivate = canActivate,
     )
 
 private fun String.toOnboardingResolution():

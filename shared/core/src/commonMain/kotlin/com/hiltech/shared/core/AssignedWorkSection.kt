@@ -1,6 +1,19 @@
 package com.hiltech.shared.core
 
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import com.hiltech.shared.core.design.HiltechShape
+import com.hiltech.shared.core.design.LocalHiltechOperationalColors
+import com.hiltech.shared.core.design.LocalHiltechLanguage
+import com.hiltech.shared.core.design.hiltechText
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +26,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,6 +37,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.HiltechOperationalTheme
+import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.HiltechKeyValue
+import com.hiltech.shared.core.design.HiltechSectionHeading
+import com.hiltech.shared.core.design.HiltechSpace
+import com.hiltech.shared.core.design.HiltechStateTag
+import com.hiltech.shared.core.design.HiltechStateTone
 import com.hiltech.shared.core.field.FieldExecutionIntent
 import com.hiltech.shared.core.field.FieldMaterialUsageIntent
 import com.hiltech.shared.core.field.FieldQueuedIntent
@@ -80,16 +103,80 @@ fun AssignedWorkSection(
     showAssignedAssetLookup: Boolean = false,
     onSubmitEngineeringTest: (String, FieldEngineeringTestDraft) -> Unit = { _, _ -> },
     showEngineeringTests: Boolean = false,
+    // Nonblank only for an authenticated identity + organization host scope.
+    // Offline unverified identity keeps the original read-only presentation.
+    focusScopeKey: String = "",
+    onCompactFocusChanged: (Boolean) -> Unit = {},
+    // The Android host increments this when System Back is pressed in focus.
+    compactBackRequest: Int = 0,
+    readableProjects: Map<String, String> = emptyMap(),
+    onOpenProject: (String) -> Unit = {},
+    externalFocusId: String? = null,
+    onExternalFocusConsumed: () -> Unit = {},
 ) {
     CompositionLocalProvider(
         LocalLayoutDirection provides
-            LayoutDirection.Rtl,
+            LocalHiltechLanguage.current.direction,
     ) {
+        // A selected bundle is a source snapshot, never a grant to keep
+        // showing an old WorkOrder after selection or assignment changes.
+        val visibleBundle = state.selectedBundle?.takeIf { bundle ->
+            fieldSourceAllowsSelectedBundle(
+                selectedWorkOrderId = state.selectedWorkOrderId,
+                bundleWorkOrderId = bundle.workOrderId,
+                todayWorkOrderIds = state.today.map { it.workOrderId },
+            )
+        }
+        val todayIds = state.today.map { it.workOrderId }
+        var focusedWorkOrderId by remember(focusScopeKey) { mutableStateOf<String?>(null) }
+        var returnAnchorId by remember(focusScopeKey) { mutableStateOf<String?>(null) }
+        // The shared host owns scrolling. No nested scroll state is created.
+        DisposableEffect(focusScopeKey) {
+            onDispose { onCompactFocusChanged(false) }
+        }
+        LaunchedEffect(focusScopeKey, compactBackRequest) {
+            if (compactBackRequest > 0 && focusScopeKey.isNotBlank() &&
+                fieldFocusStillAssigned(focusedWorkOrderId, todayIds)
+            ) {
+                returnAnchorId = focusedWorkOrderId
+                focusedWorkOrderId = null
+            }
+        }
+        LaunchedEffect(focusScopeKey, focusedWorkOrderId, todayIds) {
+            if (focusedWorkOrderId != null &&
+                !fieldFocusStillAssigned(focusedWorkOrderId, todayIds)
+            ) {
+                focusedWorkOrderId = null
+                returnAnchorId = null
+            }
+        }
         BoxWithConstraints(
             modifier = Modifier.fillMaxWidth(),
         ) {
             val wide =
                 maxWidth >= 760.dp
+            LaunchedEffect(focusScopeKey, wide, externalFocusId, todayIds) {
+                val requested = externalFocusId ?: return@LaunchedEffect
+                if (!wide && focusScopeKey.isNotBlank() && fieldFocusStillAssigned(requested, todayIds)) {
+                    focusedWorkOrderId = requested
+                    returnAnchorId = null
+                }
+                onExternalFocusConsumed()
+            }
+            // Clear compact focus when the adaptive layout becomes wide;
+            // rotating back must not revive a previous focused route.
+            LaunchedEffect(focusScopeKey, wide) {
+                if (wide && focusedWorkOrderId != null) {
+                    focusedWorkOrderId = null
+                    returnAnchorId = null
+                }
+            }
+            LaunchedEffect(focusScopeKey, wide, focusedWorkOrderId, todayIds) {
+                onCompactFocusChanged(
+                    !wide && focusScopeKey.isNotBlank() &&
+                        fieldFocusStillAssigned(focusedWorkOrderId, todayIds)
+                )
+            }
             if (wide) {
                 Row(
                     modifier =
@@ -107,10 +194,12 @@ fun AssignedWorkSection(
                                 max = 460.dp,
                             ),
                     )
-                    state.selectedBundle
+                    visibleBundle
                         ?.let {
                             JobBundleDetail(
                                 bundle = it,
+                                linkedProject = readableProjects[it.project.projectId],
+                                onOpenProject = onOpenProject,
                                 cached = state.cachedBundleAt != null,
                                 captureFieldIntent = captureFieldIntent,
                                 pending = state.pendingFieldIntent,
@@ -144,23 +233,80 @@ fun AssignedWorkSection(
                         }
                 }
             } else {
+                val compactFocus = focusScopeKey.isNotBlank()
+                val focusedId = focusedWorkOrderId?.takeIf {
+                    fieldFocusStillAssigned(it, todayIds)
+                }
+                val focusHeaderRequester = remember(focusScopeKey) { BringIntoViewRequester() }
+                val returnCardRequester = remember(focusScopeKey) { BringIntoViewRequester() }
+                LaunchedEffect(focusScopeKey, focusedId) {
+                    if (compactFocus && focusedId != null) {
+                        withFrameNanos { }
+                        focusHeaderRequester.bringIntoView()
+                    }
+                }
+                LaunchedEffect(focusScopeKey, returnAnchorId, todayIds) {
+                    val anchor = returnAnchorId ?: return@LaunchedEffect
+                    if (anchor in todayIds) {
+                        // Allow the Today cards to replace the detail before
+                        // returning to the same WorkOrder even after reorder.
+                        withFrameNanos { }
+                        returnCardRequester.bringIntoView()
+                    }
+                    returnAnchorId = null
+                }
                 Column(
-                    modifier =
-                        Modifier.fillMaxWidth(),
-                    verticalArrangement =
-                        Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    TodayColumn(
-                        state = state,
-                        onRefresh = onRefresh,
-                        onSelectWork = onSelectWork,
-                        modifier =
-                            Modifier.fillMaxWidth(),
-                    )
-                    state.selectedBundle
+                    if (!compactFocus || focusedId == null) {
+                        TodayColumn(
+                            state = state,
+                            onRefresh = onRefresh,
+                            onSelectWork = { id ->
+                                if (compactFocus && fieldFocusStillAssigned(id, todayIds)) {
+                                    focusedWorkOrderId = id
+                                    returnAnchorId = null
+                                    onCompactFocusChanged(true)
+                                }
+                                onSelectWork(id)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            returnAnchorId = returnAnchorId,
+                            returnCardRequester = returnCardRequester,
+                        )
+                    } else {
+                        OutlinedButton(
+                            modifier = Modifier.bringIntoViewRequester(focusHeaderRequester),
+                            onClick = {
+                                returnAnchorId = focusedId
+                                focusedWorkOrderId = null
+                                onCompactFocusChanged(false)
+                            },
+                        ) { Text(hiltechText("الرجوع لشغلي اليوم", "Back to my work")) }
+                        if (visibleBundle?.workOrderId != focusedId) {
+                            if (state.loading) {
+                                Text(hiltechText("بنجيب تفاصيل التكليف الحالي…", "Loading assignment details…"))
+                            } else {
+                                HiltechStateTag(
+                                    state.errorMessage
+                                        ?: "التفاصيل الحالية غير متاحة. ارجع للتكليفات وحدّثها.",
+                                    HiltechStateTone.ATTENTION,
+                                )
+                            }
+                        }
+                    }
+                    val detailBundle = if (compactFocus) {
+                        visibleBundle?.takeIf { it.workOrderId == focusedId }
+                    } else {
+                        visibleBundle
+                    }
+                    detailBundle
                         ?.let {
                             JobBundleDetail(
                                 bundle = it,
+                                linkedProject = readableProjects[it.project.projectId],
+                                onOpenProject = onOpenProject,
                                 cached = state.cachedBundleAt != null,
                                 captureFieldIntent = captureFieldIntent,
                                 pending = state.pendingFieldIntent,
@@ -204,71 +350,90 @@ private fun TodayColumn(
     onRefresh: () -> Unit,
     onSelectWork: (String) -> Unit,
     modifier: Modifier,
+    returnAnchorId: String? = null,
+    returnCardRequester: BringIntoViewRequester? = null,
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement =
-            Arrangement.spacedBy(8.dp),
-    ) {
-        Row(
-            horizontalArrangement =
-                Arrangement.spacedBy(8.dp),
+    HiltechOperationalTheme {
+        var query by remember { mutableStateOf("") }
+        var filter by remember { mutableStateOf(FieldAssignmentFilter.All) }
+        LaunchedEffect(returnAnchorId) { if (returnAnchorId != null) { query = ""; filter = FieldAssignmentFilter.All } }
+        Column(
+            modifier = modifier,
+            verticalArrangement = Arrangement.spacedBy(HiltechSpace.small),
         ) {
-            Text(
-                "شغلي اليوم",
-                style =
-                    MaterialTheme.typography
-                        .titleLarge,
-            )
-            OutlinedButton(
-                onClick = onRefresh,
-            ) {
-                Text("تحديث")
-            }
-        }
-
-        if (state.loading) {
-            Row(
-                horizontalArrangement =
-                    Arrangement.spacedBy(8.dp),
-            ) {
-                CircularProgressIndicator()
-                Text("بنجيب آخر تكليفاتك…")
-            }
-        }
-
-        if (state.cachedTodayAt != null) {
-            Text("نسخة محفوظة بدون اتصال — قد يكون التكليف أو الجاهزية اتغيروا.")
-            Text("آخر وقت من السيرفر: " + (state.today.firstOrNull()?.bundleAsOf ?: "غير متاح"))
-        }
-
-        state.errorMessage?.let {
-            Text(
-                "تعذر تحديث الشغل: " + it,
-            )
-        }
-
-        if (
-            !state.loading &&
-            state.today.isEmpty()
-        ) {
-            Text(
-                "مفيش WorkOrder حالي متعيّن ليك. لو التكليف اتشال أو اتبدل، هيختفي هنا فورًا.",
-            )
-        }
-
-        state.today.forEach { item ->
-            TodayCard(
-                item = item,
-                selected =
-                    state.selectedWorkOrderId ==
-                        item.workOrderId,
-                onClick = {
-                    onSelectWork(
-                        item.workOrderId,
+            HiltechPanel(Modifier.fillMaxWidth()) {
+                HiltechSectionHeading(
+                    index = "FIELD / TODAY",
+                    title = hiltechText("شغلي اليوم", "My work today"),
+                    subtitle = hiltechText("تكليفاتك الحالية ومواقعها وجاهزيتها.", "Your current assignments, sites and readiness."),
+                )
+                OutlinedButton(onClick = onRefresh) {
+                    Text(hiltechText("تحديث التكليفات", "Refresh assignments"))
+                }
+                if (state.loading) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(HiltechSpace.xs)) {
+                        CircularProgressIndicator()
+                        Text(hiltechText("بنجيب آخر تكليفاتك…", "Loading current assignments…"))
+                    }
+                }
+                if (state.cachedTodayAt != null) {
+                    HiltechStateTag(
+                        "نسخة محفوظة بدون اتصال — قد يكون التكليف أو الجاهزية اتغيروا.",
+                        HiltechStateTone.ATTENTION,
                     )
-                },
-            )
+                    Text("آخر وقت من السيرفر: " +
+                        (state.today.firstOrNull()?.bundleAsOf ?: "غير متاح"))
+                }
+                state.errorMessage?.let { issue ->
+                    HiltechStateTag(
+                        "تعذر تحديث الشغل: " + issue,
+                        HiltechStateTone.BLOCKED,
+                    )
+                }
+                if (!state.loading && state.today.isEmpty()) {
+                    Text(
+                        "مفيش WorkOrder حالي متعيّن ليك. لو التكليف اتشال أو اتبدل، هيختفي هنا فورًا.",
+                    )
+                }
+                if (state.selectedBundle != null &&
+                    !fieldSourceAllowsSelectedBundle(
+                        selectedWorkOrderId = state.selectedWorkOrderId,
+                        bundleWorkOrderId = state.selectedBundle.workOrderId,
+                        todayWorkOrderIds = state.today.map { it.workOrderId },
+                    )
+                ) {
+                    HiltechStateTag(
+                        "تفاصيل أمر العمل السابق اتخفت لأن التكليف الحالي أو الاختيار اتغير. حدّث التكليفات وافتح الشغل من جديد.",
+                        HiltechStateTone.BLOCKED,
+                    )
+                }
+            }
+            OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                label = { Text(hiltechText("ابحث في تكليفاتك", "Search assignments")) })
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FieldAssignmentFilter.entries.forEach { item ->
+                    FilterChip(selected = filter == item, onClick = { filter = item }, label = { Text(hiltechText(item.ar, item.en)) })
+                }
+            }
+            val visible = state.today.filter { item ->
+                val match = query.isBlank() || listOf(item.title, item.workOrderCode, item.project.projectCode, item.site.name).any { it.contains(query.trim(), true) }
+                match && when (filter) {
+                    FieldAssignmentFilter.All -> true
+                    FieldAssignmentFilter.Ready -> item.currentlyActionable
+                    FieldAssignmentFilter.Waiting -> !item.currentlyActionable
+                }
+            }
+            if (visible.isEmpty() && state.today.isNotEmpty()) Text(hiltechText("لا توجد تكليفات مطابقة.", "No matching assignments."))
+            visible.forEach { item ->
+                TodayCard(
+                    item = item,
+                    modifier = if (returnAnchorId == item.workOrderId &&
+                        returnCardRequester != null
+                    ) Modifier.bringIntoViewRequester(returnCardRequester) else Modifier,
+                    selected = state.selectedWorkOrderId == item.workOrderId,
+                    onClick = { onSelectWork(item.workOrderId) },
+                )
+            }
         }
     }
 }
@@ -278,74 +443,40 @@ private fun TodayCard(
     item: FieldTodayItemDto,
     selected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    OutlinedButton(
-        modifier =
-            Modifier.fillMaxWidth(),
-        onClick = onClick,
-    ) {
-        Column(
-            modifier =
-                Modifier.fillMaxWidth(),
-            verticalArrangement =
-                Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                item.workOrderCode +
-                    " · " +
-                    item.title,
-                style =
-                    MaterialTheme.typography
-                        .titleMedium,
-            )
-            Text(
-                item.project.projectCode +
-                    " · " +
-                    item.site.siteCode +
-                    " — " +
-                    item.site.name,
-            )
-            item.area?.let {
-                Text(
-                    "المنطقة: " +
-                        it.label,
-                )
+    val colors = LocalHiltechOperationalColors.current
+    Surface(onClick = onClick, modifier = modifier.fillMaxWidth(),
+        color = if (selected) colors.selected else colors.surface, contentColor = colors.primaryText,
+        shape = HiltechShape.medium) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(HiltechSpace.xs)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(item.workOrderCode, Modifier.weight(1f), color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+                HiltechStateTag(if (item.currentlyActionable) hiltechText("جاهز للمراجعة", "Ready for review") else hiltechText("بانتظار متطلبات", "Waiting"),
+                    if (item.currentlyActionable) HiltechStateTone.CURRENT else HiltechStateTone.ATTENTION)
             }
-            Text(
-                "الحالة: " +
-                    item.lifecycleState +
-                    " · readiness: " +
-                    item.readinessState,
-            )
-            Text(
-                "التكليف: " +
-                    item.assignment.targetType +
-                    " · " +
-                    item.assignment.targetLabel,
-            )
-            item.importantBlocker
-                ?.let {
-                    Text(
-                        "Waiting On: " + it,
-                    )
-                }
-            Text(
-                if (item.currentlyActionable) {
-                    "السياق جاهز للعرض — التنفيذ يبدأ في Phase 6."
-                } else {
-                    "في انتظار شرط/دور آخر قبل التنفيذ."
-                },
-            )
-            if (selected) {
-                Text("مفتوح دلوقتي")
-            }
+            Text(item.title, style = MaterialTheme.typography.titleLarge)
+            Text(item.site.name, style = MaterialTheme.typography.titleSmall)
+            Text(item.project.projectCode + " · " + item.site.siteCode, color = colors.secondaryText)
+            item.area?.let { Text(hiltechText("المنطقة: ", "Area: ") + it.label) }
+            Text(item.lifecycleState + " · " + item.readinessState, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+            Text(item.assignment.targetLabel, style = MaterialTheme.typography.bodySmall)
+            item.importantBlocker?.let { HiltechStateTag(hiltechText("في انتظار: ", "Waiting for: ") + it, HiltechStateTone.ATTENTION) }
+            Text(if (selected) hiltechText("العمل المفتوح", "Open assignment") else hiltechText("عرض العمل", "View assignment"),
+                color = colors.accent, style = MaterialTheme.typography.labelLarge)
         }
     }
+}
+
+private enum class FieldAssignmentFilter(val ar: String, val en: String) {
+    All("الكل", "All"), Ready("الجاهز", "Ready"), Waiting("بانتظار", "Waiting"),
 }
 
 @Composable
 private fun JobBundleDetail(
     bundle: TechnicianJobBundleDto,
+    linkedProject: String?,
+    onOpenProject: (String) -> Unit,
     cached: Boolean,
     captureFieldIntent: Boolean,
     pending: FieldQueuedIntent?,
@@ -385,7 +516,7 @@ private fun JobBundleDetail(
             Text("وقت بيانات السيرفر: " + bundle.asOf)
         }
         Text(
-            "تفاصيل الشغل",
+            hiltechText("تفاصيل الشغل", "Work details"),
             style =
                 MaterialTheme.typography
                     .titleLarge,
@@ -398,14 +529,14 @@ private fun JobBundleDetail(
         bundle.description?.let {
             Text(it)
         }
+        HiltechPanel(Modifier.fillMaxWidth()) {
+            HiltechKeyValue(hiltechText("المشروع", "Project"), bundle.project.projectCode + " · " + bundle.project.name)
+            if (!cached && linkedProject != null) TextButton(onClick = { onOpenProject(bundle.project.projectId) }) {
+                Text(hiltechText("فتح المشروع", "Open project"))
+            }
+        }
         Text(
-            "المشروع: " +
-                bundle.project.projectCode +
-                " · " +
-                bundle.project.name,
-        )
-        Text(
-            "الموقع: " +
+            hiltechText("الموقع: ", "Site: ") +
                 bundle.site.siteCode +
                 " · " +
                 bundle.site.name,
@@ -416,18 +547,18 @@ private fun JobBundleDetail(
             }
             ?.let {
                 Text(
-                    "تعليمات الدخول: " + it,
+                    hiltechText("تعليمات الدخول: ", "Access instructions: ") + it,
                 )
             }
         bundle.area?.let {
             Text(
-                "المنطقة: " +
+                hiltechText("المنطقة: ", "Area: ") +
                     it.label,
             )
         }
 
         Text(
-            "التكليف الحالي: " +
+            hiltechText("التكليف الحالي: ", "Current assignment: ") +
                 bundle.assignment.targetType +
                 " · " +
                 bundle.assignment.targetLabel,
@@ -449,12 +580,12 @@ private fun JobBundleDetail(
 
         if (bundle.completionGate.available) {
             Text(
-                "تسليم العمل للمراجعة",
+                hiltechText("تسليم العمل للمراجعة", "Submit work for review"),
                 style = MaterialTheme.typography.titleMedium,
             )
             val gate = bundle.completionGate
             if (!gate.satisfied) {
-                Text("التسليم متوقف لحين استيفاء المتطلبات:")
+                Text(hiltechText("التسليم متوقف لحين استيفاء المتطلبات:", "Submission is waiting for requirements:"))
                 gate.reasonCodes.forEach { reason ->
                     Text("• " + reason)
                 }
@@ -470,7 +601,7 @@ private fun JobBundleDetail(
                 Text("سيُرسل هذا العمل إلى المراجع، ولن يُعتبر مقبولًا قبل قرار المراجعة.")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { confirmCompletion = false }) {
-                        Text("إلغاء")
+                        Text(hiltechText("إلغاء", "Cancel"))
                     }
                     OutlinedButton(
                         enabled =
@@ -483,7 +614,7 @@ private fun JobBundleDetail(
                             onQueueCompletion()
                         },
                     ) {
-                        Text("تأكيد التسليم للمراجعة")
+                        Text(hiltechText("تأكيد التسليم للمراجعة", "Confirm submission for review"))
                     }
                 }
             } else {
@@ -495,7 +626,7 @@ private fun JobBundleDetail(
                             gate.satisfied,
                     onClick = { confirmCompletion = true },
                 ) {
-                    Text("تقديم العمل للمراجعة")
+                    Text(hiltechText("تقديم العمل للمراجعة", "Submit for review"))
                 }
             }
         }
@@ -777,37 +908,7 @@ private fun JobBundleDetail(
             }
         }
 
-        if (
-            bundle.safeDocumentRefs
-                .isNotEmpty()
-        ) {
-            Text(
-                "مستندات حالية مصرح بها",
-                style =
-                    MaterialTheme.typography
-                        .titleMedium,
-            )
-            bundle.safeDocumentRefs
-                .forEach {
-                    Text(
-                        "• " +
-                            it.code +
-                            " · " +
-                            it.title +
-                            (
-                                it.revision
-                                    ?.let { revision ->
-                                        " · r" + revision
-                                    }
-                                    ?: ""
-                            ),
-                    )
-                }
-        } else {
-            Text(
-                "مفيش document revision source موثوق للـWork ده حاليًا.",
-            )
-        }
+        FieldDocumentRegister(bundle, cached)
 
         Text(
             "التنفيذ من الموبايل",
@@ -825,6 +926,63 @@ private fun JobBundleDetail(
     }
 }
 
+
+/** Read-only register: document IDs and evidence status are the exact source values.
+ * A reference is not a downloadable document or a verified file. */
+@Composable
+private fun FieldDocumentRegister(bundle: TechnicianJobBundleDto, cached: Boolean) {
+    val colors = LocalHiltechOperationalColors.current
+    var query by remember(bundle.workOrderId) { mutableStateOf("") }
+    var expanded by remember(bundle.workOrderId) { mutableStateOf(false) }
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(hiltechText("المستندات والأدلة", "Documents & evidence"), style = MaterialTheme.typography.titleLarge)
+                Text(hiltechText("المراجع: ", "References: ") + bundle.safeDocumentRefs.size +
+                    " · " + hiltechText("الأدلة: ", "Evidence: ") + bundle.existingEvidence.size,
+                    color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
+            }
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(if (expanded) hiltechText("طي", "Collapse") else hiltechText("عرض", "View"))
+            }
+        }
+        if (cached) Text(hiltechText("بيانات محفوظة؛ الإصدار والصلاحية الحالية غير مؤكدين.", "Cached data; current revision and access are unconfirmed."),
+            color = colors.cautionText)
+        if (expanded) {
+            OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                label = { Text(hiltechText("ابحث بالكود أو العنوان أو الإصدار", "Search code, title or revision")) })
+            val term = query.trim()
+            val documents = bundle.safeDocumentRefs.filter {
+                term.isEmpty() || listOf(it.code, it.title, it.revision.orEmpty(), it.sourceType).any { value -> value.contains(term, true) }
+            }
+            if (documents.isEmpty()) Text(if (term.isEmpty())
+                hiltechText("لا توجد مراجع مستندات متاحة من المصدر.", "No document references available from source.")
+                else hiltechText("لا توجد مراجع مطابقة.", "No matching references."))
+            documents.forEach { doc ->
+                Surface(color = colors.surfaceElevated, shape = HiltechShape.small, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(doc.title, style = MaterialTheme.typography.titleMedium)
+                        Text(doc.code, color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
+                        Text(hiltechText("الإصدار: ", "Revision: ") + (doc.revision ?: hiltechText("غير متاح", "Unavailable")))
+                        Text(hiltechText("المصدر: ", "Source: ") + doc.sourceType, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            Text(hiltechText("أدلة التنفيذ المسجلة", "Recorded execution evidence"), style = MaterialTheme.typography.titleMedium)
+            if (bundle.existingEvidence.isEmpty()) Text(hiltechText("لا توجد أدلة في البيانات المعروضة.", "No evidence in the visible data."))
+            bundle.existingEvidence.forEach { evidence ->
+                Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(evidence.evidenceTypeCode, style = MaterialTheme.typography.titleSmall)
+                    Text(evidence.contentType + " · v" + evidence.version, color = colors.secondaryText)
+                    Text(hiltechText("حالة التخزين: ", "Storage state: ") + evidence.storageState)
+                    Text(evidence.capturedAt, style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+                }
+            }
+            Text(hiltechText("هذه بيانات تعريفية من المصدر وليست معاينة للملف نفسه.", "These are source metadata, not a preview of the file itself."),
+                style = MaterialTheme.typography.bodySmall, color = colors.secondaryText)
+        }
+    }
+}
 
 @Composable
 private fun MaterialUsageCaptureLine(

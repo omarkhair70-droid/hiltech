@@ -107,6 +107,10 @@ class IdentitySecurityConfiguration {
                     .requestMatchers(
                         "/actuator/health",
                         "/actuator/health/**",
+                        "/v1/commercial/oauth/callback",
+                        "/v1/commercial/meta/launch",
+                        "/v1/commercial/meta/complete",
+                        "/v1/commercial/meta/webhook",
                     )
                     .permitAll()
 

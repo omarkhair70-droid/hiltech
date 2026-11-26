@@ -1,0 +1,62 @@
+name: UX-128 Native Field Focus Proof
+
+on:
+  push:
+    branches:
+      - "ux/128-phase7-unified-native-20261122"
+      - "integration/phase7-finance8i-native-ux-20261123"
+    paths:
+      - ".github/workflows/ux128-native-field-contract.yml"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/AssignedWorkSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehousePhysicalOperatorSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehouseQuickScanSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/FieldSourcePresentation.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/HiltechShell.kt"
+      - "apps/androidApp/src/main/kotlin/com/hiltech/android/MainActivity.kt"
+      - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/Main.kt"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/FieldSourcePresentationTest.kt"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/WarehouseQuickScanQueryTest.kt"
+  pull_request:
+    paths:
+      - ".github/workflows/ux128-native-field-contract.yml"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/AssignedWorkSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehousePhysicalOperatorSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/WarehouseQuickScanSection.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/FieldSourcePresentation.kt"
+      - "shared/core/src/commonMain/kotlin/com/hiltech/shared/core/HiltechShell.kt"
+      - "apps/androidApp/src/main/kotlin/com/hiltech/android/MainActivity.kt"
+      - "apps/desktopApp/src/main/kotlin/com/hiltech/desktop/Main.kt"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/FieldSourcePresentationTest.kt"
+      - "shared/core/src/commonTest/kotlin/com/hiltech/shared/core/WarehouseQuickScanQueryTest.kt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux128-native-field-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focus-and-native-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Pinned Gradle setup
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+      - name: Run complete shared native regression suite
+        run: ./gradlew :shared:core:desktopTest --no-configuration-cache --no-daemon --console=plain
+      - name: Focus source/revocation tests plus Windows/Android build
+        run: |
+          ./gradlew :shared:core:desktopTest \
+            --tests 'com.hiltech.shared.core.FieldSourcePresentationTest' \
+            :apps:desktopApp:compileKotlin \
+            :apps:androidApp:assembleDebug \
+            --no-configuration-cache --no-daemon --console=plain

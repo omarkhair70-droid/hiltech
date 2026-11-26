@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - "integration/hiltech-unified-staging-*"
     paths:
       - "database/migrations/V0022__projects_planning__slice02.sql"
       - "server/application/src/main/kotlin/com/hiltech/server/projects/**"
@@ -151,11 +152,16 @@ jobs:
         with:
           gradle-version: "9.5.0"
 
-      - name: Render planning structure flows
+      - name: Render static planning states within screen bounds
+        shell: bash
         env:
           HILTECH_PHASE4_PLANNING_EVIDENCE_DIR: ${{ github.workspace }}/build/reports/phase4-planning
         run: |
-          xvfb-run -a ./gradlew :apps:desktopApp:renderPhase4PlanningEvidence \
+          set -euo pipefail
+          xvfb-run -a -s "-screen 0 1920x1440x24" ./gradlew \
+            :apps:desktopApp:test \
+            --tests com.hiltech.desktop.evidence.Phase4PlanningRenderExitTest \
+            :apps:desktopApp:renderPhase4PlanningEvidence --console=plain \
             | tee /tmp/hiltech-phase4-planning.log
           grep -q "HILTECH_PHASE4_PLANNING_RENDER_PASS" /tmp/hiltech-phase4-planning.log
           test -s build/reports/phase4-planning/desktop-project-planning-tree.png
@@ -166,6 +172,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: hiltech-phase4-project-planning-evidence
-          path: build/reports/phase4-planning/*.png
+          path: |
+            build/reports/phase4-planning/*.png
+            apps/desktopApp/build/test-results/test/TEST-com.hiltech.desktop.evidence.Phase4PlanningRenderExitTest.xml
           if-no-files-found: error
           retention-days: 30

@@ -122,6 +122,7 @@ data class OnboardingRequirementView(
     val actionCode: String?,
     val sourceStateCode: String?,
     val sortOrder: Int,
+    val allowedResolutions: List<OnboardingManualResolutionType> = emptyList(),
 )
 
 data class OnboardingCaseView(
@@ -141,6 +142,18 @@ data class OnboardingCaseView(
     val caseVersion: Long,
     val startedAt: Instant,
     val activatedAt: Instant?,
+    val canActivate: Boolean = false,
+)
+
+data class OnboardingWorkspaceView(
+    val employeeId: UUID,
+    val organizationId: UUID,
+    val employeeDisplayName: String,
+    val employeeState: EmployeeState,
+    val employeeVersion: Long,
+    val startAvailability: String,
+    val policies: List<OnboardingPolicyContext>,
+    val currentCase: OnboardingCaseView?,
 )
 
 data class StartOnboardingCommand(

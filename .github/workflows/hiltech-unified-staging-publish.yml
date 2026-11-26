@@ -1,0 +1,120 @@
+name: HILTECH unified release candidate — test and publish staging image (no deploy)
+
+on:
+  push:
+    branches: [integration/hiltech-unified-staging-20261124]
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Build and publish this exact unified candidate as a staging-only immutable image"
+        required: true
+        type: choice
+        options:
+          - no-publish
+          - publish-unified-hiltech-staging
+        default: no-publish
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hiltech-unified-staging-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  prove:
+    if: github.ref == 'refs/heads/integration/hiltech-unified-staging-20261124' && ((github.event_name == 'push' && contains(github.event.head_commit.message, '[approve-hiltech-staging-image]')) || (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'publish-unified-hiltech-staging'))
+    uses: ./.github/workflows/devops-hiltech-server-package.yml
+
+  security:
+    if: github.ref == 'refs/heads/integration/hiltech-unified-staging-20261124' && ((github.event_name == 'push' && contains(github.event.head_commit.message, '[approve-hiltech-staging-image]')) || (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'publish-unified-hiltech-staging'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+      - name: Verify bearer transport and fail-closed settings
+        run: |
+          ./gradlew :server:application:test \
+            --tests com.hiltech.server.security.OpenFgaAuthorizationContractTest \
+            --no-daemon --console=plain
+
+  regression:
+    if: github.ref == 'refs/heads/integration/hiltech-unified-staging-20261124' && ((github.event_name == 'push' && contains(github.event.head_commit.message, '[approve-hiltech-staging-image]')) || (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'publish-unified-hiltech-staging'))
+    uses: ./.github/workflows/hiltech-v0100-full-regression.yml
+
+  payroll:
+    if: github.ref == 'refs/heads/integration/hiltech-unified-staging-20261124' && ((github.event_name == 'push' && contains(github.event.head_commit.message, '[approve-hiltech-staging-image]')) || (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'publish-unified-hiltech-staging'))
+    uses: ./.github/workflows/hiltech-payroll-finance-review-preflight.yml
+
+  publish:
+    name: Publish tested multiarch API by immutable digest (no Coolify changes)
+    needs: [prove, security, regression, payroll]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: hiltech-server-bootjar-${{ github.sha }}
+          path: build/staging-input
+      - name: Verify reviewed source and JAR digest before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/integration/hiltech-unified-staging-20261124
+          mapfile -t jars < <(find build/staging-input -type f -name '*.jar' ! -name '*-plain.jar' | sort)
+          mapfile -t hashes < <(find build/staging-input -type f -name SHA256SUMS | sort)
+          mapfile -t sources < <(find build/staging-input -type f -name source.txt | sort)
+          test "${#jars[@]}" -eq 1
+          test "${#hashes[@]}" -eq 1
+          test "${#sources[@]}" -eq 1
+          grep -Fx "source_sha=$GITHUB_SHA" "${sources[0]}"
+          test "$(sha256sum "${jars[0]}" | awk '{print $1}')" = "$(awk 'NR==1 {print $1}' "${hashes[0]}")"
+          mkdir -p build/tmp/hiltech-secure-oci/migrations
+          cp "${jars[0]}" build/tmp/hiltech-secure-oci/app.jar
+          cp -a database/migrations/. build/tmp/hiltech-secure-oci/migrations/
+          test "$(find build/tmp/hiltech-secure-oci/migrations -maxdepth 1 -name 'V*.sql' -type f | wc -l)" -gt 0
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Login to registry using short-lived GitHub token
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish digest-pinned staging-only image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/hiltech-server"
+          mkdir -p build/reports/devops-openfga-image
+          docker buildx build --platform linux/amd64,linux/arm64 --push \
+            --provenance=false --sbom=false \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --tag "$image:staging-unified-$GITHUB_SHA" \
+            --metadata-file build/reports/devops-openfga-image/metadata.json \
+            -f infrastructure/coolify/Dockerfile.server build/tmp/hiltech-secure-oci
+          digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["containerimage.digest"])' build/reports/devops-openfga-image/metadata.json)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker buildx imagetools inspect "$image@$digest" > build/reports/devops-openfga-image/manifest.txt
+          grep -q 'linux/amd64' build/reports/devops-openfga-image/manifest.txt
+          grep -q 'linux/arm64' build/reports/devops-openfga-image/manifest.txt
+          printf 'source_sha=%s\nimage_ref=%s\n' "$GITHUB_SHA" "$image@$digest" > build/reports/devops-openfga-image/pinned-image.txt
+          echo "Published reviewed staging artifact only: $image@$digest" >> "$GITHUB_STEP_SUMMARY"
+          echo "This workflow never deploys, exposes a route, or changes database state." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hiltech-unified-staging-image-${{ github.sha }}
+          path: build/reports/devops-openfga-image/
+          if-no-files-found: error
+          retention-days: 7

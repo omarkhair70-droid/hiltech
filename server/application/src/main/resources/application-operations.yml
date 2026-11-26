@@ -1,0 +1,6 @@
+# Compatibility for installations that already select the operations profile.
+# Implemented workflow availability is defined once in application.yml.
+# Explicit operation overrides and the internal default have the same precedence.
+hiltech:
+  product:
+    internal-operations-enabled: ${HILTECH_INTERNAL_OPERATIONS_ENABLED:true}

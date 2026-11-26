@@ -59,8 +59,35 @@ sys.exit("Target not clickable/visible: "+target)
   adb shell input tap "$x" "$y"
 }
 
+# The integrated Shell now renders Field/Today as an actor-scoped workspace.
+# Explicitly click the existing workspace and WorkOrder card, never bypass
+# the application's permission / source checks to expose the action.
+open_field_workorder () {
+  local target started xml coords
+  for target in "شغلي اليوم" "WO-2026-010"; do
+    started="$(date +%s)"
+    while true; do
+      xml="$(dump_ui || true)"
+      coords="$(printf '%s' "$xml" | python3 scripts/ci/android_uiautomator_clickable_center.py "$target" 2>/dev/null || true)"
+      if [ -n "$coords" ]; then
+        adb shell input tap $coords >/dev/null
+        sleep 2
+        break
+      fi
+      if [ $(($(date +%s) - started)) -ge 45 ]; then
+        echo "Missing clickable Field workspace/WorkOrder: $target"
+        echo "$xml"
+        exit 1
+      fi
+      adb shell input swipe 540 1920 540 670 300 >/dev/null || true
+      sleep 1
+    done
+  done
+}
+
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$ACTIVITY" --es mode field-command-start >/tmp/hiltech-phase6-field-start.txt
+open_field_workorder
 scroll_until_text "حفظ أمر بدء العمل"
 tap_visible_text "حفظ أمر بدء العمل"
 scroll_until_text "أمر StartWork محفوظ محليًا"
@@ -70,6 +97,7 @@ test -s "$REPORT_DIR/android-field-command-local-pending.png"
 # Force-stop destroys all in-memory Compose state. The actual Room queue is reopened.
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$ACTIVITY" --es mode field-command-persisted >/tmp/hiltech-phase6-field-restart.txt
+open_field_workorder
 scroll_until_text "أمر StartWork محفوظ محليًا"
 if dump_ui | grep -F -q "حفظ أمر بدء العمل"; then
   echo "An unresolved command must hide the duplicate Start action."

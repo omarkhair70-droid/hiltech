@@ -1,0 +1,88 @@
+name: Integration — Phase 7 + Finance 8A–8I + native UX + Payroll9 + Sales10 assembly proof
+
+on:
+  push:
+    branches: [integration/phase7-finance8i-native-payroll9-sales10-20261123]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p7-finance-native-payroll-sales10-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-backend:
+    name: Spring Modulith and all backend tests, exact S07 source
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_DB: hiltech
+          POSTGRES_USER: hiltech
+          POSTGRES_PASSWORD: hiltech
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hiltech -d hiltech"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      HILTECH_DB_CONTRACT_TEST: "1"
+      HILTECH_DB_URL: jdbc:postgresql://localhost:5432/hiltech
+      HILTECH_DB_USER: hiltech
+      HILTECH_DB_PASSWORD: hiltech
+      HILTECH_MIGRATIONS_PATH: ${{ github.workspace }}/database/migrations
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+      - name: Full domain, architecture and disposable PostgreSQL regression suite
+        run: ./gradlew :server:application:test :server:application:bootJar --rerun-tasks --no-daemon --no-configuration-cache --console=plain
+      - name: Preserve failure reason, not company data
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase7-s07-integration-failed-tests
+          path: server/application/build/test-results/test/
+          if-no-files-found: warn
+          retention-days: 7
+
+  real-native-source:
+    name: Android APK, Windows and KMP source compilation
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          gradle-version: "9.5.0"
+      - name: Build actual native source components without runtime flags
+        run: ./gradlew :shared:core:desktopTest :apps:desktopApp:compileKotlin :apps:androidApp:assembleDebug --no-daemon --console=plain
+
+  flyway-history:
+    name: Immutable main Flyway history and no gaps
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Unit-test and enforce immutable merged baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts/devops -p test_verify_flyway_history.py -v
+          git fetch --no-tags origin main
+          python3 scripts/devops/verify_flyway_history.py --repo . --base-ref origin/main

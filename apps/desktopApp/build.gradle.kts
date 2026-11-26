@@ -12,9 +12,16 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.ktor.client.core)
+    testImplementation(kotlin("test"))
+    testImplementation(compose.material3)
 }
 
 val testRuntimeClasspath = sourceSets["test"].runtimeClasspath
+val hiltechDesktopLauncherProperties = listOf(
+    "hiltech.apiBaseUrl",
+    "hiltech.oidcIssuerUri",
+    "hiltech.oidcClientId",
+)
 
 // Hosted Linux evidence jobs render real Compose windows without GPU access.
 // Keep this limited to evidence JavaExec tasks, never the production launcher.
@@ -66,11 +73,24 @@ tasks.register<JavaExec>("renderPhase1ShellEvidence") {
 compose.desktop {
     application {
         mainClass = "com.hiltech.desktop.MainKt"
+        hiltechDesktopLauncherProperties.forEach { property ->
+            providers.gradleProperty(property).orNull?.let { value ->
+                jvmArgs("-D$property=$value")
+            }
+        }
 
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             packageName = "HILTECH"
-            packageVersion = "0.1.0"
+            packageVersion = "0.1.1"
+            // DesktopIdentityRuntime binds the native browser callback on loopback.
+            modules("jdk.httpserver")
+            windows {
+                perUserInstall = true
+                upgradeUuid = "c6fb84f4-f9b9-36ed-bfea-9d872b1be327"
+                menu = true
+                menuGroup = "HILTECH"
+            }
         }
     }
 }

@@ -1,5 +1,8 @@
 package com.hiltech.desktop
 
+import com.hiltech.shared.core.PlanningFormRequest
+import com.hiltech.shared.core.projects.submitPlanningFormInSession
+
 import com.hiltech.shared.core.StockAction
 import com.hiltech.shared.core.StockInventoryState
 import com.hiltech.shared.core.AssetAction
@@ -48,7 +51,39 @@ import com.hiltech.shared.core.identity.auth.InMemoryOidcTokenStore
 import com.hiltech.shared.core.identity.auth.NativeOidcConfig
 import com.hiltech.shared.core.identity.auth.NativeOidcException
 import com.hiltech.shared.core.identity.auth.NativeOidcSessionManager
+import com.hiltech.shared.core.payroll.Payroll9aApiClient
+import com.hiltech.shared.core.payroll.Payroll9b9cApiClient
+import com.hiltech.shared.core.service.SupportDeskApiClient
+import com.hiltech.shared.core.service.SupportTimeApiClient
+import com.hiltech.shared.core.service.WarrantyCoverageReadinessApiClient
+import com.hiltech.shared.core.service.MaintenanceAgendaApiClient
+import com.hiltech.shared.core.service.HandoverApiClient
+import com.hiltech.shared.core.commercial.CommercialApiClient
+import com.hiltech.shared.core.executive.ExecutiveApiClient
+import com.hiltech.shared.core.finance.FinanceEvidenceReadApis
+import com.hiltech.shared.core.finance.FinanceBankCsvEvidenceUploader
+import com.hiltech.shared.core.finance.FinanceBankStatementIntakeApiClient
 import com.hiltech.shared.core.network.HiltechApiClient
+import com.hiltech.shared.core.procurement.PurchaseRequirementApiClient
+import com.hiltech.shared.core.procurement.WarehouseReplenishmentApiClient
+import com.hiltech.shared.core.procurement.OfficeStockNeedApiClient
+import com.hiltech.shared.core.procurement.AssetPurchaseNeedApiClient
+import com.hiltech.shared.core.procurement.SupplierSourcingApiClient
+import com.hiltech.shared.core.procurement.PurchaseOrderCandidateApiClient
+import com.hiltech.shared.core.procurement.PurchaseOrderIssueApiClient
+import com.hiltech.shared.core.procurement.SupplierInvoiceFinanceApiClient
+import com.hiltech.shared.core.procurement.SupplierInvoiceDocumentUploader
+import com.hiltech.shared.core.procurement.SupplierPoCommunicationApiClient
+import com.hiltech.shared.core.procurement.PoWarehouseIntakeApiClient
+import com.hiltech.shared.core.procurement.PoReceivingDeliveryNoteUploader
+import com.hiltech.shared.core.procurement.PurchaseOrderDeliveryAmendmentApiClient
+import com.hiltech.shared.core.procurement.SupplierQuoteDocumentUploader
+import com.hiltech.shared.core.procurement.ServicePurchaseNeedApiClient
+import com.hiltech.shared.core.procurement.ServiceSupplierSourcingApiClient
+import com.hiltech.shared.core.procurement.ServiceSupplierQuoteUploader
+import com.hiltech.shared.core.procurement.ServiceOrderAndInvoiceApiClient
+import com.hiltech.shared.core.procurement.SupplierMasterDataApiClient
+import com.hiltech.shared.core.evidence.EvidenceApiClient
 import com.hiltech.shared.core.network.createPlatformHttpClient
 import com.hiltech.shared.core.people.ChangeWorkforceAssignmentRequestDto
 import com.hiltech.shared.core.people.CreateEmployeeRequestDto
@@ -195,6 +230,15 @@ class DesktopIdentityRuntime(
             },
         )
 
+    internal fun productApiForSession(sessionCurrent: () -> Boolean): HiltechApiClient =
+        com.hiltech.shared.core.network.sessionBoundHiltechApiClient(
+            httpClient, apiBaseUrl, sessionCurrent,
+            accessToken = { session?.currentAccessToken() },
+            correlationId = { UUID.randomUUID().toString() },
+        )
+
+    internal fun evidenceApiForSession(api: HiltechApiClient) = EvidenceApiClient(api, httpClient)
+
     private val peopleApi =
         PeopleApiClient(productApi)
 
@@ -203,8 +247,23 @@ class DesktopIdentityRuntime(
             productApi,
         )
 
-    private val onboardingApi =
+    internal val onboardingApi =
         OnboardingApiClient(productApi)
+
+    internal suspend fun submitEmployeeOnboarding(
+        intent: com.hiltech.shared.core.people.OnboardingWorkspaceIntent,
+        priorOutcomeUnknown: Boolean,
+        sessionCurrent: () -> Boolean,
+        onCommandSending: () -> Unit,
+    ): com.hiltech.shared.core.people.OnboardingCommandResponseDto {
+        ensureConfigured()
+        return com.hiltech.shared.core.people.submitOnboardingInSession(
+            httpClient, apiBaseUrl, installationId, intent, priorOutcomeUnknown, sessionCurrent,
+            accessToken = { session?.currentAccessToken() },
+            correlationId = { UUID.randomUUID().toString() },
+            onCommandSending = onCommandSending,
+        )
+    }
 
     private val hrDocumentsApi =
         HrDocumentsApiClient(productApi)
@@ -223,6 +282,55 @@ class DesktopIdentityRuntime(
 
     internal val physicalWarehouseInstallationId: String
         get() = installationId
+
+    internal val procurementApi = PurchaseRequirementApiClient(productApi)
+    internal val warehouseReplenishmentApi = WarehouseReplenishmentApiClient(productApi)
+    internal val officeStockNeedApi = OfficeStockNeedApiClient(productApi)
+    internal val assetPurchaseNeedApi = AssetPurchaseNeedApiClient(productApi)
+    internal val supplierSourcingApi = SupplierSourcingApiClient(productApi)
+    internal val executiveApi = ExecutiveApiClient(productApi)
+    internal val inboxApi = com.hiltech.shared.core.inbox.InboxApiClient(productApi)
+    internal val approvalApi = com.hiltech.shared.core.approval.ApprovalApiClient(productApi)
+    internal val payrollOwnApi = Payroll9b9cApiClient(productApi)
+    internal val payrollAdminApi = Payroll9aApiClient(productApi)
+    internal val commercialApi = CommercialApiClient(productApi)
+    internal val handoverApi = HandoverApiClient(productApi)
+    internal val supportServiceApi = SupportDeskApiClient(productApi)
+    internal val supportTimeApi = SupportTimeApiClient(productApi)
+    internal val warrantyReadinessApi = WarrantyCoverageReadinessApiClient(productApi)
+    internal val maintenanceAgendaApi = MaintenanceAgendaApiClient(productApi)
+    internal val readProjectsApi: ProjectsApiClient get() = projectsApi
+    internal val servicePurchaseNeedApi = ServicePurchaseNeedApiClient(productApi)
+    internal val serviceSupplierSourcingApi = ServiceSupplierSourcingApiClient(productApi)
+    internal val supplierMasterDataApi = SupplierMasterDataApiClient(productApi)
+    internal val serviceOrderAndInvoiceApi =
+        ServiceOrderAndInvoiceApiClient(productApi, EvidenceApiClient(productApi, httpClient))
+    internal val serviceSupplierQuoteUploader = ServiceSupplierQuoteUploader(
+        serviceSupplierSourcingApi, EvidenceApiClient(productApi, httpClient),
+    )
+    internal val purchaseOrderCandidateApi = PurchaseOrderCandidateApiClient(productApi)
+    internal val purchaseOrderIssueApi = PurchaseOrderIssueApiClient(productApi)
+    internal val supplierInvoiceFinanceApi = SupplierInvoiceFinanceApiClient(productApi)
+    internal val financeEvidenceReadApis = FinanceEvidenceReadApis(productApi)
+    internal val financeBankIntakeApi = FinanceBankStatementIntakeApiClient(productApi)
+    internal val financeBankCsvUploader = FinanceBankCsvEvidenceUploader(
+        EvidenceApiClient(productApi, httpClient), financeBankIntakeApi,
+    )
+    internal val supplierPoCommunicationApi = SupplierPoCommunicationApiClient(productApi)
+    internal val supplierInvoiceDocumentUploader = SupplierInvoiceDocumentUploader(
+        supplierInvoiceFinanceApi, EvidenceApiClient(productApi, httpClient),
+    )
+    internal val poWarehouseIntakeApi = PoWarehouseIntakeApiClient(productApi)
+    internal val poReceivingDeliveryNoteUploader = PoReceivingDeliveryNoteUploader(
+        EvidenceApiClient(productApi, httpClient),
+    )
+    internal val purchaseOrderDeliveryAmendmentApi =
+        PurchaseOrderDeliveryAmendmentApiClient(productApi)
+    internal val supplierQuoteDocumentUploader = SupplierQuoteDocumentUploader(
+        supplierSourcingApi,
+        EvidenceApiClient(productApi, httpClient),
+    )
+    internal val procurementWorkApi: WorkApiClient get() = workApi
 
 
     private val planningApi =
@@ -1325,229 +1433,15 @@ class DesktopIdentityRuntime(
         return planningApi.plan(projectId, installationId)
     }
 
-    suspend fun createArea(
-        projectId: String,
-        projectSiteId: String,
-        parentAreaId: String?,
-        typeCode: String,
-        code: String,
-        name: String,
-        sequence: Int?,
-        restrictedAccess: Boolean,
-        baseProjectVersion: Long,
-        expectedBaselineVersion: Int,
+    suspend fun submitPlanningForm(
+        request: PlanningFormRequest,
+        sessionCurrent: () -> Boolean,
     ): PlanningMutationResponseDto {
         ensureConfigured()
-        return planningApi.createArea(
-            projectId,
-            CreateAreaRequestDto(
-                operationId = operationId(), projectSiteId = projectSiteId,
-                parentAreaId = parentAreaId, typeCode = typeCode, code = code, name = name,
-                sequence = sequence, restrictedAccess = restrictedAccess,
-                baseProjectVersion = baseProjectVersion,
-                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
-            ),
-            installationId,
-        )
-    }
-
-    suspend fun updateArea(
-        projectId: String,
-        areaId: String,
-        parentAreaId: String?,
-        typeCode: String,
-        code: String,
-        name: String,
-        sequence: Int?,
-        restrictedAccess: Boolean,
-        baseProjectVersion: Long,
-        baseObjectVersion: Long,
-        expectedBaselineVersion: Int,
-    ): PlanningMutationResponseDto {
-        ensureConfigured()
-        return planningApi.updateArea(
-            areaId,
-            UpdateAreaRequestDto(
-                operationId = operationId(), projectId = projectId, parentAreaId = parentAreaId,
-                typeCode = typeCode, code = code, name = name, sequence = sequence,
-                restrictedAccess = restrictedAccess, baseProjectVersion = baseProjectVersion,
-                baseObjectVersion = baseObjectVersion,
-                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
-            ),
-            installationId,
-        )
-    }
-
-    suspend fun createMilestone(
-        projectId: String,
-        code: String,
-        name: String,
-        plannedDate: String?,
-        sequence: Int?,
-        clientVisible: Boolean,
-        acceptanceRequirement: String?,
-        baseProjectVersion: Long,
-        expectedBaselineVersion: Int,
-    ): PlanningMutationResponseDto {
-        ensureConfigured()
-        return planningApi.createMilestone(
-            projectId,
-            CreateMilestoneRequestDto(
-                operationId = operationId(), code = code, name = name, plannedDate = plannedDate,
-                sequence = sequence, clientVisible = clientVisible,
-                acceptanceRequirement = acceptanceRequirement, baseProjectVersion = baseProjectVersion,
-                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
-            ),
-            installationId,
-        )
-    }
-
-    suspend fun updateMilestone(
-        projectId: String,
-        milestoneId: String,
-        code: String,
-        name: String,
-        plannedDate: String?,
-        sequence: Int?,
-        clientVisible: Boolean,
-        acceptanceRequirement: String?,
-        baseProjectVersion: Long,
-        baseObjectVersion: Long,
-        expectedBaselineVersion: Int,
-    ): PlanningMutationResponseDto {
-        ensureConfigured()
-        return planningApi.updateMilestone(
-            milestoneId,
-            UpdateMilestoneRequestDto(
-                operationId = operationId(), code = code, name = name, plannedDate = plannedDate,
-                sequence = sequence, clientVisible = clientVisible,
-                acceptanceRequirement = acceptanceRequirement, baseProjectVersion = baseProjectVersion,
-                baseObjectVersion = baseObjectVersion,
-                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
-            ),
-            installationId,
-        )
-    }
-
-    suspend fun createWorkPackage(
-        projectId: String,
-        projectSiteId: String?,
-        siteId: String?,
-        milestoneId: String?,
-        code: String,
-        name: String,
-        description: String?,
-        ownerType: String?,
-        ownerId: String?,
-        plannedStart: String?,
-        plannedEnd: String?,
-        sequence: Int?,
-        baseProjectVersion: Long,
-        expectedBaselineVersion: Int,
-    ): PlanningMutationResponseDto {
-        ensureConfigured()
-        return planningApi.createWorkPackage(
-            projectId,
-            CreateWorkPackageRequestDto(
-                operationId = operationId(), projectSiteId = projectSiteId, siteId = siteId,
-                milestoneId = milestoneId, code = code, name = name, description = description,
-                owner = planningOwner(ownerType, ownerId), plannedStart = plannedStart,
-                plannedEnd = plannedEnd, sequence = sequence, baseProjectVersion = baseProjectVersion,
-                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
-            ),
-            installationId,
-        )
-    }
-
-    suspend fun updateWorkPackage(
-        projectId: String,
-        workPackageId: String,
-        projectSiteId: String?,
-        siteId: String?,
-        milestoneId: String?,
-        code: String,
-        name: String,
-        description: String?,
-        ownerType: String?,
-        ownerId: String?,
-        plannedStart: String?,
-        plannedEnd: String?,
-        sequence: Int?,
-        baseProjectVersion: Long,
-        baseObjectVersion: Long,
-        expectedBaselineVersion: Int,
-    ): PlanningMutationResponseDto {
-        ensureConfigured()
-        return planningApi.updateWorkPackage(
-            workPackageId,
-            UpdateWorkPackageRequestDto(
-                operationId = operationId(), projectSiteId = projectSiteId, siteId = siteId,
-                milestoneId = milestoneId, code = code, name = name, description = description,
-                owner = planningOwner(ownerType, ownerId), plannedStart = plannedStart,
-                plannedEnd = plannedEnd, sequence = sequence, baseProjectVersion = baseProjectVersion,
-                baseObjectVersion = baseObjectVersion,
-                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
-            ),
-            installationId,
-        )
-    }
-
-    suspend fun addPlanDependency(
-        projectId: String,
-        predecessorType: String,
-        predecessorId: String,
-        successorType: String,
-        successorId: String,
-        dependencyType: String,
-        lagMinutes: Long,
-        baseProjectVersion: Long,
-        expectedBaselineVersion: Int,
-    ): PlanningMutationResponseDto {
-        ensureConfigured()
-        return planningApi.addDependency(
-            projectId,
-            AddPlanDependencyRequestDto(
-                operationId = operationId(), predecessor = PlanNodeDto(predecessorType, predecessorId),
-                successor = PlanNodeDto(successorType, successorId), dependencyType = dependencyType,
-                lagMinutes = lagMinutes, baseProjectVersion = baseProjectVersion,
-                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
-            ),
-            installationId,
-        )
-    }
-
-    suspend fun removePlanDependency(
-        projectId: String,
-        dependencyId: String,
-        baseProjectVersion: Long,
-        baseObjectVersion: Long,
-        expectedBaselineVersion: Int,
-    ): PlanningMutationResponseDto {
-        ensureConfigured()
-        return planningApi.removeDependency(
-            projectId, dependencyId,
-            RemovePlanDependencyRequestDto(
-                operationId = operationId(), baseProjectVersion = baseProjectVersion,
-                baseObjectVersion = baseObjectVersion,
-                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
-            ),
-            installationId,
-        )
-    }
-
-    suspend fun markProjectReady(
-        projectId: String,
-        baseProjectVersion: Long,
-        expectedBaselineVersion: Int,
-    ): PlanningMutationResponseDto {
-        ensureConfigured()
-        return planningApi.markReady(
-            projectId,
-            MarkProjectReadyRequestDto(
-                operationId = operationId(), baseProjectVersion = baseProjectVersion,
-                expectedBaselineVersion = expectedBaselineVersion, clientOccurredAt = occurredAt(),
-            ),
-            installationId,
+        return submitPlanningFormInSession(
+            httpClient, apiBaseUrl, installationId, request, sessionCurrent,
+            accessToken = { session?.currentAccessToken() },
+            correlationId = { UUID.randomUUID().toString() },
         )
     }
 
@@ -1766,9 +1660,6 @@ class DesktopIdentityRuntime(
 
     suspend fun activateProject(projectId:String,baseVersion:Long,baselineVersion:Int)=
         workApi.activate(projectId,ActivateProjectRequestDto(operationId(),baseVersion,baselineVersion,occurredAt()),installationId)
-
-    private fun planningOwner(type: String?, id: String?): PlanningOwnerDto? =
-        if (!type.isNullOrBlank() && !id.isNullOrBlank()) PlanningOwnerDto(type, id) else null
 
     private fun operationId(): String = UUID.randomUUID().toString()
 

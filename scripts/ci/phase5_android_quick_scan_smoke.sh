@@ -45,6 +45,10 @@ wait_for_text() {
   for ((attempt=0; attempt<20; attempt++)); do
     xml="$(dump_ui || true)"
     if [[ "$xml" == *"$expected"* ]]; then printf '%s' "$xml"; return 0; fi
+    # Compose semantics expose only the visible part of the long native
+    # Warehouse workspace. Keep verifying actual result text while traversing
+    # the viewport; a synthetic receipt alone is not sufficient evidence.
+    adb shell input swipe 540 1840 540 1080 280 >/dev/null
     sleep 1
   done
   printf 'Missing evidence: %s\n%s\n' "$expected" "$xml" >&2
