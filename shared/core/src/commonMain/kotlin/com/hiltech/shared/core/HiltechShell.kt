@@ -327,7 +327,7 @@ fun HiltechShell(
             if (inboxWorkspace != null) add(ShellWorkspace.Inbox)
             if (compactNavigation || operationalWorkspaces.isNotEmpty()) add(ShellWorkspace.Explore)
             if (signedIn.projects != null) add(ShellWorkspace.Projects)
-            if (signedIn.people != null) add(ShellWorkspace.People)
+            if (nativePeopleDirectoryAvailable(signedIn.people)) add(ShellWorkspace.People)
             if (signedIn.warehouse != null || signedIn.assetLookup != null || warehouseOperatorAvailable) add(ShellWorkspace.Warehouse)
             if (desktopPurchasingAvailable) add(ShellWorkspace.Purchasing)
             add(ShellWorkspace.Account)
@@ -341,6 +341,17 @@ fun HiltechShell(
         val nativeSession = rememberNativeWorkspaceSession(nativeScope, nativeAuthority, nativeWorkspaces)
         val activeNative = nativeWorkspaces.firstOrNull { it.id == nativeSession.selectedId && nativeSession.availability[it.id] == WorkspaceAvailability.AVAILABLE }
         var requestedWorkspace by remember(shellScrollScope, nativeAuthority) { mutableStateOf(ShellWorkspace.Home) }
+        fun navigateShell(workspace: ShellWorkspace) {
+            if (workspace in destinations) {
+                nativeSession.close()
+                requestedWorkspace = workspace
+            }
+        }
+        fun openCurrentNativeWorkspace(id: String) {
+            if (nativeSession.pendingId == null && nativeSession.availability[id] == WorkspaceAvailability.AVAILABLE) {
+                nativeSession.open(id)
+            }
+        }
         var handledOperationalFocus by remember(shellScrollScope, nativeAuthority) { mutableStateOf<NativeWorkspaceOpenRequest?>(null) }
         val focusedAvailability = operationalFocusRequest?.workspaceId?.let { nativeSession.availability[it] }
         LaunchedEffect(shellScrollScope, nativeAuthority, operationalFocusRequest, focusedAvailability) {
@@ -446,7 +457,8 @@ fun HiltechShell(
                 }
             }
         }
-        val canFocusPeople = state is HiltechShellState.SignedIn && state.people != null
+        val canFocusPeople = state is HiltechShellState.SignedIn && state.people != null &&
+            (!useWorkspaceNavigation || ShellWorkspace.People in destinations)
         LaunchedEffect(shellScrollScope, peopleFocusRequest, canFocusPeople) {
             if (peopleFocusRequest > 0 && canFocusPeople) {
                 if (useWorkspaceNavigation) {
@@ -539,13 +551,15 @@ fun HiltechShell(
                             HiltechPanel(Modifier.fillMaxWidth()) {
                                 Text("HILTECH / " + (primary?.organizationCode ?: "WORKSPACE"),
                                     color = colors.secondaryText, style = MaterialTheme.typography.labelMedium)
-                                Text(state.people?.ownProfile?.displayName?.let { hiltechText("أهلًا، ", "Welcome, ") + it }
+                                val profile = nativeOwnEmployeeProfile(state.people, state.identity.identityId, primary?.organizationId)
+                                Text(profile?.displayName?.let { hiltechText("أهلًا، ", "Welcome, ") + it }
                                     ?: (primary?.displayName ?: "HILTECH"), style = MaterialTheme.typography.headlineMedium)
                                 Text(hiltechText("مساحة عملك", "Your workspace"), style = MaterialTheme.typography.titleMedium)
-                                state.people?.ownWorkforceAssignment?.let { assignment ->
-                                    Text(assignment.roleLabel ?: assignment.roleCode, color = colors.secondaryText)
-                                }
-                                if (state.identity.teams.isNotEmpty()) Text(state.identity.teams.joinToString { it.name },
+                                state.people?.ownWorkforceAssignment?.takeIf {
+                                    profile != null && it.employeeId == profile.employeeId && it.organizationId == profile.organizationId
+                                }?.roleLabel?.takeIf { it.isNotBlank() }?.let { Text(it, color = colors.secondaryText) }
+                                val teams = state.identity.teams.filter { it.organizationId == primary?.organizationId }
+                                if (teams.isNotEmpty()) Text(teams.joinToString { it.name },
                                     color = colors.secondaryText, style = MaterialTheme.typography.bodySmall)
                             }
                             if (nativeSession.availability["executive-home"] == WorkspaceAvailability.AVAILABLE) {
@@ -553,21 +567,21 @@ fun HiltechShell(
                                     title = hiltechText("الشركة اليوم", "Company today"),
                                     detail = hiltechText("القرارات والمشروعات وإشارات التشغيل", "Decisions, projects and operational signals"),
                                     workspace = ShellWorkspace.Home,
-                                    onOpen = { requestedWorkspace = ShellWorkspace.Explore; nativeSession.open("executive-home") },
+                                    onOpen = { openCurrentNativeWorkspace("executive-home") },
                                 )
                             }
                             if (ShellWorkspace.Work in destinations) {
                                 HomeWorkspaceLink(
                                     title = hiltechText("شغلي اليوم", "My work today"),
-                                    detail = hiltechText("التكليفات المعروضة: ", "Visible assignments: ") + (state.field?.today?.size ?: 0),
+                                    detail = state.field?.let { homeFieldDetail(it) } ?: hiltechText("افتح تكليفاتك", "Open your assignments"),
                                     workspace = ShellWorkspace.Work,
-                                    onOpen = { requestedWorkspace = ShellWorkspace.Work },
+                                    onOpen = { navigateShell(ShellWorkspace.Work) },
                                 )
                             }
                             if (ShellWorkspace.Inbox in destinations) {
                                 HomeWorkspaceLink(hiltechText("الوارد والقرارات", "Inbox & decisions"),
                                     hiltechText("المراجعات والطلبات الموجهة إليك", "Reviews and requests assigned to you"),
-                                    ShellWorkspace.Inbox) { requestedWorkspace = ShellWorkspace.Inbox }
+                                    ShellWorkspace.Inbox) { navigateShell(ShellWorkspace.Inbox) }
                             }
                             val areas = destinations.filter { it in setOf(ShellWorkspace.Projects, ShellWorkspace.People, ShellWorkspace.Warehouse, ShellWorkspace.Purchasing) }
                             if (areas.isNotEmpty()) {
@@ -579,13 +593,22 @@ fun HiltechShell(
                                         ShellWorkspace.Warehouse -> hiltechText("الأصناف والمعدات والحركات", "Stock, equipment and movements")
                                         else -> hiltechText("طلبات التوريد والموردون", "Supply requests and suppliers")
                                     }
-                                    HomeWorkspaceLink(language.text(area.displayLabel, area.label), detail, area) { requestedWorkspace = area }
+                                    HomeWorkspaceLink(language.text(area.displayLabel, area.label), detail, area) { navigateShell(area) }
                                 }
                             }
+                            NativeHomeOperationalWorkspaces(nativeWorkspaces, nativeSession, ::openCurrentNativeWorkspace)
+                            if (ShellWorkspace.Account in destinations) {
+                                Text(hiltechText("شؤوني الشخصية", "Personal"), style = MaterialTheme.typography.titleLarge)
+                                HomeWorkspaceLink(hiltechText("ملفي وحسابي", "My profile & account"),
+                                    hiltechText("بيانات وظيفتي وحساب العمل", "Employment profile and work account"),
+                                    ShellWorkspace.Account) { navigateShell(ShellWorkspace.Account) }
+                                NativeHomePersonalWorkspaces(nativeWorkspaces, nativeSession, ::openCurrentNativeWorkspace)
+                            }
+                            NativeHomeRouteFeedback(nativeSession)
                             if (ShellWorkspace.Explore in destinations) HomeWorkspaceLink(
                                 hiltechText("استكشف الشركة", "Explore the company"),
-                                hiltechText("باقي المساحات المتاحة لحسابك", "Other workspaces available to your account"),
-                                ShellWorkspace.Explore) { requestedWorkspace = ShellWorkspace.Explore }
+                                hiltechText("كل المساحات وحالة الاتصال بالمصادر", "All workspaces and source availability"),
+                                ShellWorkspace.Explore) { navigateShell(ShellWorkspace.Explore) }
                         }
                     }
 
@@ -655,6 +678,24 @@ fun HiltechShell(
                         }
 
                     if (show(ShellWorkspace.Account)) {
+                        if (useWorkspaceNavigation) {
+                            val own = nativeOwnEmployeeProfile(state.people, state.identity.identityId, primary?.organizationId)
+                            if (own != null) {
+                                PersonalEmployeeProfilePanel(own, state.people?.ownWorkforceAssignment)
+                            } else {
+                                HiltechPanel(Modifier.fillMaxWidth()) {
+                                    Text(hiltechText("ملفي الشخصي", "My profile"), style = MaterialTheme.typography.titleMedium)
+                                    Text(if (state.people?.loading == true)
+                                        hiltechText("جارٍ تحميل ملفك…", "Loading your profile…")
+                                    else hiltechText("لم يتأكد ملف موظف مرتبط بحسابك بعد.", "A linked employee profile has not been confirmed."))
+                                }
+                            }
+                            androidx.compose.material3.TextButton(onClick = onRefreshPeople, enabled = state.people?.loading != true) {
+                                Text(hiltechText("تحديث الملف", "Refresh profile"))
+                            }
+                            NativeHomePersonalWorkspaces(nativeWorkspaces, nativeSession, ::openCurrentNativeWorkspace)
+                            NativeHomeRouteFeedback(nativeSession)
+                        }
                         HiltechLanguagePreference(language, onLanguageChange)
                         Text(
                             hiltechText("حسابي والأجهزة", "Me / Sessions"),
@@ -787,6 +828,7 @@ fun HiltechShell(
                             offboardingAvailable = peopleOffboardingAvailable,
                             accountWorkspace = employeeAccountWorkspace,
                             onboardingWorkspace = employeeOnboardingWorkspace,
+                            showOwnProfile = !useWorkspaceNavigation,
                             relatedProjects = state.projects?.list?.items.orEmpty().filter { it.organizationId == primary?.organizationId },
                             openRelatedProject = if (useWorkspaceNavigation && ShellWorkspace.Projects in destinations) { projectId ->
                                 nativeSession.close()
@@ -1359,6 +1401,7 @@ private fun PeopleSection(
     offboardingAvailable: Boolean,
     accountWorkspace: (@Composable (EmployeeDetailDto) -> Unit)?,
     onboardingWorkspace: (@Composable (EmployeeDetailDto) -> Unit)?,
+    showOwnProfile: Boolean = true,
     relatedProjects: List<com.hiltech.shared.core.projects.ProjectSummaryDto> = emptyList(),
     openRelatedProject: ((String) -> Unit)? = null,
 ) {
@@ -1560,20 +1603,28 @@ private fun PeopleSection(
             }
         }
 
-        state.ownProfile?.let { own ->
-            HiltechPanel(Modifier.fillMaxWidth()) {
-                Text(hiltechText("ملفي الشخصي", "My profile"), style = MaterialTheme.typography.titleMedium)
-                Text(own.displayName, style = MaterialTheme.typography.titleLarge)
-                Text(own.employeeCode, color = colors.secondaryText)
-                HiltechStateTag(employeeStateLabel(own.employeeState), HiltechStateTone.NEUTRAL)
-                own.employmentTypeCode?.let { Text(it) }
-                state.ownWorkforceAssignment?.let { assignment ->
-                    com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("المسؤولية", "Responsibility"), assignment.roleLabel ?: assignment.roleCode)
-                    assignment.teamName?.let { com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("الفريق", "Team"), it) }
-                    assignment.reportsToDisplayName?.let { com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("المسؤول المباشر", "Reports to"), it) }
-                    Text(assignment.effectiveFrom, style = MaterialTheme.typography.labelSmall, color = colors.secondaryText)
-                }
+        if (showOwnProfile) state.ownProfile?.let { own ->
+            PersonalEmployeeProfilePanel(own, state.ownWorkforceAssignment)
+        }
+    }
+}
+
+@Composable
+private fun PersonalEmployeeProfilePanel(own: EmployeeDetailDto, assignment: WorkforceAssignmentDto?) {
+    val colors = com.hiltech.shared.core.design.LocalHiltechOperationalColors.current
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("ملفي الشخصي", "My profile"), style = MaterialTheme.typography.titleMedium)
+        Text(own.displayName, style = MaterialTheme.typography.titleLarge)
+        Text(own.employeeCode, color = colors.secondaryText)
+        HiltechStateTag(employeeStateLabel(own.employeeState), HiltechStateTone.NEUTRAL)
+        own.employmentTypeCode?.let { Text(it) }
+        assignment?.takeIf { it.employeeId == own.employeeId && it.organizationId == own.organizationId }?.let { current ->
+            current.roleLabel?.takeIf { it.isNotBlank() }?.let {
+                com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("التعيين الوظيفي", "Workforce assignment"), it)
             }
+            current.teamName?.let { com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("الفريق", "Team"), it) }
+            current.reportsToDisplayName?.let { com.hiltech.shared.core.design.HiltechKeyValue(hiltechText("المسؤول المباشر", "Reports to"), it) }
+            Text(current.effectiveFrom, style = MaterialTheme.typography.labelSmall, color = colors.secondaryText)
         }
     }
 }
