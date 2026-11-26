@@ -222,6 +222,7 @@ fun main() {
         }
     }
 
+    val supportNoteContinuity = com.hiltech.shared.core.service.SupportNoteContinuity()
     var planningSessionEpoch by mutableIntStateOf(0)
     var companyPeopleFocusRequest by mutableIntStateOf(0)
     var employeeReadSequence = 0L
@@ -242,6 +243,8 @@ fun main() {
     fun showSignedIn(
         identity: IdentityBootstrapDto,
     ) {
+        val organization = identity.organizations.firstOrNull { it.primary } ?: identity.organizations.firstOrNull()
+        supportNoteContinuity.bindVerifiedIdentity(identity.identityId, organization?.organizationId)
         invalidatePlanningCommands()
         setState(
             HiltechShellState.SignedIn(
@@ -2674,6 +2677,7 @@ fun main() {
     fun signIn(
         forceReauthentication: Boolean = false,
     ) {
+        if (!forceReauthentication) supportNoteContinuity.clear()
         invalidatePlanningCommands()
         if (!runtime.configured) {
             setState(
@@ -2756,6 +2760,7 @@ fun main() {
     }
 
     fun signOut() {
+        supportNoteContinuity.clear()
         invalidatePlanningCommands()
         setState(
             HiltechShellState.Working(
@@ -2823,7 +2828,9 @@ fun main() {
             val serviceProjects = remember(workspaceApi) {
                 com.hiltech.shared.core.projects.ProjectsApiClient(workspaceApi)
             }
-            val supportDesk = remember(workspaceApi) { com.hiltech.shared.core.service.SupportDeskApiClient(workspaceApi) }
+            val supportDesk = remember(workspaceApi) {
+                supportNoteContinuity.client(workspaceApi, navigationIdentity?.identityId, navigationOrganization?.organizationId)
+            }
             val supportWarranty = remember(workspaceApi) { com.hiltech.shared.core.service.WarrantyCoverageReadinessApiClient(workspaceApi) }
             val supportTime = remember(workspaceApi) { com.hiltech.shared.core.service.SupportTimeApiClient(workspaceApi) }
             val supportAgenda = remember(workspaceApi) { com.hiltech.shared.core.service.MaintenanceAgendaApiClient(workspaceApi) }

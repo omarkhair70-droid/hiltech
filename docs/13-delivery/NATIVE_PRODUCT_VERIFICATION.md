@@ -57,6 +57,18 @@ failure when capture fails. Registry publication is not deployment.
 - Preserve source guards, independent approvals, current membership, audit and
   idempotency. No bypass is justified by making a screen easier to reach.
 
+## Internal support notes
+
+The native support desk opens the selected source ticket and loads its private
+notes from the authenticated project-scoped API. A note mutation is available
+only after a current successful note read. A lost response retains the same
+body and operation identifier; a confirmed write is distinct from a later
+failed read. Both hosts bind the API client to their current session. In-memory
+note drafts and unresolved commands may continue after verified reauthentication
+of the same actor and organization, but not after an explicit sign-out, fresh
+sign-in, or a change of actor/organization. The current server authorization
+check still applies to every read and replay. No note is sent externally.
+
 ## Onboarding and operational choices
 
 The native employee onboarding workspace reads applicable active policy choices

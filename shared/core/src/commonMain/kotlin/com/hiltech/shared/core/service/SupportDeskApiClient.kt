@@ -63,7 +63,12 @@ class SupportDeskApiClient(
         explicitNulls = false
     },
 ) {
-    internal val noteSession = SupportNoteSession()
+    internal var noteSession = SupportNoteSession()
+        private set
+
+    internal constructor(api: HiltechApiClient, noteSession: SupportNoteSession) : this(api) {
+        this.noteSession = noteSession
+    }
 
     suspend fun list(projectId: String, installationId: String): List<InternalSupportTicketDto> {
         requireCanonicalId(projectId)

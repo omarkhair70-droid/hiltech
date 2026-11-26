@@ -306,7 +306,9 @@ class MainActivity : ComponentActivity() {
             val serviceProjects = remember(workspaceApi) {
                 com.hiltech.shared.core.projects.ProjectsApiClient(workspaceApi)
             }
-            val supportDesk = remember(workspaceApi) { com.hiltech.shared.core.service.SupportDeskApiClient(workspaceApi) }
+            val supportDesk = remember(workspaceApi) {
+                supportNoteContinuity.client(workspaceApi, employeeIdentity?.identityId, employeeOrg?.organizationId)
+            }
             val supportWarranty = remember(workspaceApi) { com.hiltech.shared.core.service.WarrantyCoverageReadinessApiClient(workspaceApi) }
             val supportTime = remember(workspaceApi) { com.hiltech.shared.core.service.SupportTimeApiClient(workspaceApi) }
             val supportAgenda = remember(workspaceApi) { com.hiltech.shared.core.service.MaintenanceAgendaApiClient(workspaceApi) }
@@ -1033,6 +1035,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startSignIn() {
+        supportNoteContinuity.clear()
         shellState =
             HiltechShellState.Working(
                 "Opening secure HILTECH sign-in…",
@@ -1083,6 +1086,7 @@ class MainActivity : ComponentActivity() {
         return true
     }
 
+    private val supportNoteContinuity = com.hiltech.shared.core.service.SupportNoteContinuity()
     private var planningSessionEpoch by mutableStateOf(0)
     private var companyPeopleFocusRequest by mutableStateOf(0)
 
@@ -1096,6 +1100,8 @@ class MainActivity : ComponentActivity() {
     private fun showSignedIn(
         identity: IdentityBootstrapDto,
     ) {
+        val organization = identity.organizations.firstOrNull { it.primary } ?: identity.organizations.firstOrNull()
+        supportNoteContinuity.bindVerifiedIdentity(identity.identityId, organization?.organizationId)
         companyPeopleFocusRequest = 0
         planningSessionEpoch += 1
         assetLookupSequence++
@@ -2623,6 +2629,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun signOut() {
+        supportNoteContinuity.clear()
         personalIssuedStockSequence++
         val actor = when (val state = shellState) {
             is HiltechShellState.SignedIn -> state.identity.identityId

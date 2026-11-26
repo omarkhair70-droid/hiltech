@@ -138,6 +138,60 @@ class SupportNoteSessionTest {
     }
 
     @Test
+    fun verifiedReturnToSameActorAndOrganizationRetainsUnresolvedRequest() {
+        val http = HttpClient(MockEngine { error("No network needed") })
+        try {
+            val continuation = SupportNoteContinuity()
+            fun api() = HiltechApiClient(http, "https://api.hiltech.test", { "synthetic" }, { "synthetic" })
+            continuation.bindVerifiedIdentity(target.identityId, "org-a")
+            val first = continuation.client(api(), target.identityId, "org-a").noteSession
+            first.edit(target, "Checked connection")
+            val intent = assertNotNull(first.begin(target) { "operation-a" })
+            first.fail(intent, IllegalStateException("response lost"))
+            // The unauthenticated host must not expose old state.
+            assertNull(continuation.client(api(), null, null).noteSession.pending)
+            assertNull(continuation.client(api(), "employee-b", "org-a").noteSession.pending)
+            continuation.bindVerifiedIdentity(target.identityId, "org-a")
+            val current = continuation.client(api(), target.identityId, "org-a").noteSession
+            assertEquals(intent, current.pending)
+            assertEquals(intent, current.retry(target))
+            current.succeed(intent, note())
+            assertEquals(target, current.receipt)
+        } finally {
+            http.close()
+        }
+    }
+
+    @Test
+    fun actorOrganizationOrExplicitSessionChangeCannotResurrectPrivateState() {
+        val http = HttpClient(MockEngine { error("No network needed") })
+        try {
+            val continuation = SupportNoteContinuity()
+            fun api() = HiltechApiClient(http, "https://api.hiltech.test", { "synthetic" }, { "synthetic" })
+            fun current() = continuation.client(api(), target.identityId, "org-a").noteSession
+            continuation.bindVerifiedIdentity(target.identityId, "org-a")
+            current().edit(target, "Checked connection")
+            continuation.bindVerifiedIdentity(target.identityId, "org-b")
+            continuation.bindVerifiedIdentity(target.identityId, "org-a")
+            assertEquals("", current().draft(target))
+            current().edit(target, "Checked connection")
+            continuation.bindVerifiedIdentity("employee-b", "org-a")
+            continuation.bindVerifiedIdentity(target.identityId, "org-a")
+            assertEquals("", current().draft(target))
+            val prior = current()
+            prior.edit(target, "Checked connection")
+            val intent = assertNotNull(prior.begin(target) { "operation-a" })
+            continuation.clear()
+            continuation.bindVerifiedIdentity(target.identityId, "org-a")
+            prior.fail(intent, IllegalStateException("late response"))
+            assertNull(current().pending)
+            assertEquals("", current().draft(target))
+        } finally {
+            http.close()
+        }
+    }
+
+    @Test
     fun invalidNoteDoesNotAllocateOperationAndDraftsStayWithTheirTicket() {
         val session = SupportNoteSession()
         session.edit(target, " ")

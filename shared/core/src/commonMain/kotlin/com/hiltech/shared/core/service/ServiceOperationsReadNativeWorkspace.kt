@@ -151,6 +151,9 @@ fun serviceOperationsReadNativeWorkspace(
                         OutlinedButton(onClick = { selectedProjectId = source.projectId }) {
                             Text(hiltechText("متابعة ملاحظة معلّقة", "Resume pending note") + " · " + source.name)
                         }
+                    } else if (!projectsLoading) {
+                        Text(hiltechText("هناك ملاحظة معلّقة، لكن المشروع غير متاح حاليًا. حدّث الوصول.",
+                            "A note is unresolved, but its project is currently unavailable. Refresh access."))
                     }
                 }
                 matching.forEach { project ->
@@ -339,6 +342,9 @@ fun serviceOperationsReadNativeWorkspace(
                             OutlinedButton(onClick = { selectedTicketId = pending.ticketId; tab = "TICKETS" }) {
                                 Text(hiltechText("متابعة ملاحظة معلّقة", "Resume pending note"))
                             }
+                        } else if (!ticketsLoading) {
+                            Text(hiltechText("الطلب المعلّق محفوظ، لكن البلاغ غير متاح الآن.",
+                                "The unresolved request is retained, but the ticket is currently unavailable."))
                         }
                     }
                     Row(
