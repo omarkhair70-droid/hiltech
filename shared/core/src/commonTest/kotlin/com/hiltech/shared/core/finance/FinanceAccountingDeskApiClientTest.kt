@@ -1,0 +1,54 @@
+package com.hiltech.shared.core.finance
+
+import com.hiltech.shared.core.network.HiltechApiClient
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class FinanceAccountingDeskApiClientTest {
+    private val org="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+    private val period="11111111-2222-4333-8444-555555555555"
+    private val journal="22222222-3333-4444-8555-666666666666"
+    private val account="33333333-4444-4555-8666-777777777777"
+    private val report=FinanceDeskLedgerDto(org,period,0,false,
+        listOf(FinanceDeskMovementDto(account,"AR","Receivables","CUSTOMER_RECEIVABLE","EGP","150","0")),
+        listOf(FinanceDeskJournalDto(journal,"AR","2026-11-26T12:00:00Z","EGP",
+            listOf(FinanceDeskJournalLineDto(1,"AR","Receivables","DEBIT","150"),
+                FinanceDeskJournalLineDto(2,"SALES","Revenue","CREDIT","150")))),
+        listOf("AP","AR","AP_REVERSAL"),false)
+
+    @Test fun ledgerReadsAuthenticatedSourceAndPreservesPeriodAndCurrency()=runBlocking {
+        val http=HttpClient(MockEngine { call ->
+            assertEquals(HttpMethod.Get,call.method)
+            assertEquals("/v1/finance/organizations/$org/accounting-desk/ledger",call.url.encodedPath)
+            assertEquals(period,call.url.parameters["periodId"])
+            assertEquals("0",call.url.parameters["offset"])
+            assertEquals("synthetic-install",call.headers["X-Device-Installation-Id"])
+            respond(Json.encodeToString(FinanceDeskLedgerDto.serializer(),report),HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType,"application/json"))
+        })
+        try {
+            val client=FinanceAccountingDeskApiClient(HiltechApiClient(http,"https://finance.test",
+                {"synthetic-token"},{"synthetic-correlation"}))
+            assertEquals(report,client.ledger(org,period,0,"synthetic-install"))
+        } finally {http.close()}
+    }
+
+    @Test fun reportCannotBeMisrepresentedAsCompanyWideOrCrossScope() {
+        assertTrue(financeDeskLedgerMatches(report,org,period,0))
+        assertFalse(financeDeskLedgerMatches(report.copy(organizationId=journal),org,period,0))
+        assertFalse(financeDeskLedgerMatches(report.copy(isCompanyWideTrialBalance=true),org,period,0))
+        assertFalse(financeDeskLedgerMatches(report.copy(includedSources=listOf("AP")),org,period,0))
+        assertFalse(financeDeskLedgerMatches(report.copy(offset=50),org,period,0))
+    }
+}

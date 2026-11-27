@@ -58,6 +58,19 @@ failure when capture fails. Registry publication is not deployment.
 - Preserve source guards, independent approvals, current membership, audit and
   idempotency. No bypass is justified by making a screen easier to reach.
 
+## Accounting desk
+
+The shared native Accounts & ledger workspace exposes current supplier/customer
+obligations and exact posted period movements and journal lines. The underlying
+read projections use the existing AP/AR/reversal ledger and recognized allocation
+balance view, with existing financial reporting authority (both legacy reporting
+checks for ledger reads), no new feature switches or write actions. Period
+movement is not a company-wide trial balance, opening/closing balance, cash
+balance or financial statement. Keep currencies separate and disclose missing
+due dates and allocation exceptions. The mixed bank/cash PostgreSQL fixture
+exercises the new read store against the same independently posted/allocated
+source; the native client tests scope and source contracts.
+
 ## Native home and personal context
 
 The shared native home exposes specialized workspaces only after a successful

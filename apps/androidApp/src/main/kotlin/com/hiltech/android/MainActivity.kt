@@ -291,6 +291,9 @@ class MainActivity : ComponentActivity() {
             val workspaceApi = remember(employeeSessionScope) {
                 hiltechApplication.productApiForSession { activePlanningSessionScope() == employeeSessionScope }
             }
+            val accountingDesk = remember(workspaceApi) {
+                com.hiltech.shared.core.finance.FinanceAccountingDeskApiClient(workspaceApi)
+            }
             val sessionWorkforce = remember(workspaceApi) {
                 com.hiltech.shared.core.people.WorkforceAssignmentApiClient(workspaceApi)
             }
@@ -615,6 +618,13 @@ class MainActivity : ComponentActivity() {
                                             .toByteArray(Charsets.UTF_8),
                                     ).toString()
                                 },
+                            ))
+                        }
+                        if (operationAvailable(ProductOperation.FINANCE_AP_AR_BALANCES)) {
+                            add(com.hiltech.shared.core.finance.financeAccountingDeskWorkspace(
+                                client = accountingDesk, identityId = signed.identity.identityId,
+                                organizationId = org.organizationId, installationId = hiltechApplication.installationId,
+                                ledgerEnabled = operationAvailable(ProductOperation.FINANCE_AP_REPORTING),
                             ))
                         }
                         if (financeOperationsAvailable()) {

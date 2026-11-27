@@ -486,6 +486,21 @@ class FinanceMixedBankCashPostgresContractTest {
          """SELECT cash_on_hand FROM finance_cashbox_balance
             WHERE organization_id=? AND cashbox_id=?""",
          BigDecimal::class.java,org,cashbox)?.compareTo(cash50))
+       // The same native reporting source sees posted double-entry movement and
+       // the allocated obligation; allocation does not invent a cash GL journal.
+       val desk=FinanceAccountingDeskReadStore(jdbc)
+       val report=desk.ledger(org,period,0)
+       assertEquals(listOf("AP","AR","AP_REVERSAL"),report.includedSources)
+       assertEquals(false,report.isCompanyWideTrialBalance)
+       assertEquals(journal,report.journals.single().id)
+       assertEquals(2,report.journals.single().lines.size)
+       assertEquals(0,report.movements.sumOf { BigDecimal(it.debit) }.compareTo(money))
+       assertEquals(0,report.movements.sumOf { BigDecimal(it.credit) }.compareTo(money))
+       assertEquals(0,desk.exposure(org,"AR",day,0).totals.single().knownOutstanding.toBigDecimal().compareTo(BigDecimal.ZERO))
+       assertEquals(0,desk.exposure(org,"AR",day,0).records.single().outstanding!!.toBigDecimal().compareTo(BigDecimal.ZERO))
+       assertEquals(false,desk.exposure(org,"AR",day,0).isBankBalance)
+       assertTrue(desk.exposure(customer,"AR",day,0).records.isEmpty())
+       assertTrue(desk.ledger(org,period,50).journals.isEmpty())
        val denied=connection.setSavepoint()
        try {
          assertThrows(DataIntegrityViolationException::class.java) {

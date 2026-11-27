@@ -312,6 +312,7 @@ internal fun nativeWorkspaceTitle(workspace: NativeOperationalWorkspace, languag
         "project-planning" -> "المشاريع وخطط التنفيذ" to "Projects & delivery plans"
         "handover-read" -> "تسليم المشاريع" to "Project handover"
         "service-operations-read" -> "الدعم والصيانة" to "Support & maintenance"
+        "finance-accounting-desk" -> "الحسابات والدفتر" to "Accounts & ledger"
         "finance-evidence-read" -> "المراجعة المالية" to "Financial review"
         "finance-bank-statement" -> "كشف البنك والتحصيلات" to "Bank statements & collections"
         "finance-invoice-read" -> "فواتير الموردين" to "Supplier invoices"
