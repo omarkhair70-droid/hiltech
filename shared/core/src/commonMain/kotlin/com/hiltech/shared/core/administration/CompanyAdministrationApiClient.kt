@@ -98,6 +98,7 @@ class CompanyAdministrationApiClient(
 ) {
     val responsibilities = CompanyResponsibilitiesApiClient(api, json)
     val operationalSettings = CompanyOperationalSettingsApiClient(api, json)
+    val financeConfiguration = FinanceConfigurationApiClient(api, json)
 
     suspend fun capabilities(organizationId: String, installationId: String): CompanyAdministrationCapabilitiesDto {
         requireUuid(organizationId)
