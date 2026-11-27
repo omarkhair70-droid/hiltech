@@ -87,6 +87,24 @@ unallocated bank movements and a full financial-statement ledger remain
 outside this coverage. Do not enable the full-ledger-ready closure switch on
 the strength of this increment alone.
 
+## Employee custody and paid-cost journals
+
+The same daily posting desk can now record approved bank-backed advance and
+imprest funding as assets, and return settlements against the original posted
+custody account. Accepted imprest receipts and bank-confirmed expense
+reimbursement support an explicit company accounting treatment for first
+recognition into a single approved expense or asset account. The operator
+must verify that the amount was not already recognized; split treatments and
+settlement of a previously accrued expense liability are not supported by this
+flow. Source amount, approval, organization, account classification and
+currency are independently guarded in PostgreSQL. No automatic cost
+classification, payroll posting, tax calculation or additional money transfer
+is inferred. The previous native report and queue contracts remain available
+without the new opt-in query parameter. The full-ledger close readiness gate
+remains unchanged. The mixed bank/cash test now exercises the independently
+approved custody, return, accepted receipts and reimbursement sources with
+transaction-local synthetic data.
+
 ## Native home and personal context
 
 The shared native home exposes specialized workspaces only after a successful

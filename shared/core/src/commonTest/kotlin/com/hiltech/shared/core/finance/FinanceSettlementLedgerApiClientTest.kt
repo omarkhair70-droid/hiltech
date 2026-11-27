@@ -32,6 +32,26 @@ class FinanceSettlementLedgerApiClientTest {
         assertFalse(financeSettlementReceiptMatches(org,input,receipt.copy(debitAccountId=credit)))
         assertFalse(financeSettlementReceiptMatches(org,input,receipt.copy(organizationId=credit)))
     }
+    @Test fun employeeFundingAndPaidCostRequireTheirOwnAccountTreatment() {
+        val choice=FinanceSettlementAccountChoiceDto(debit,"CUSTODY","Custody asset","EMPLOYEE_IMPREST_ASSET")
+        val funding=source.copy(sourceType="EMPLOYEE_FUNDING",sourceKind="EI",sourceJournalId=null,
+            employeeFundingRecordId=id,requiredDebitKind="EMPLOYEE_IMPREST_ASSET",debitAccountId=null,debitAccountName=null,
+            debitChoices=listOf(choice))
+        assertNull(financeSettlementIntent(funding,period,id))
+        assertNull(financeSettlementIntent(funding.copy(debitChoices=listOf(choice.copy(accountKind="EXPENSE"))),period,id,debit))
+        val approved=assertNotNull(financeSettlementIntent(funding,period,id,debit))
+        assertNull(approved.accountingTreatmentRef)
+        val paidCost=funding.copy(sourceType="IMPREST_EXPENSE",requiredDebitKind="COST",
+            debitChoices=listOf(choice.copy(accountKind="EXPENSE")))
+        assertNull(financeSettlementIntent(paidCost,period,id,debit))
+        assertNull(financeSettlementIntent(paidCost,period,id,debit,"short"))
+        val intent=assertNotNull(financeSettlementIntent(paidCost,period,id,debit,"SYNTHETIC-TREATMENT"))
+        val receipt=FinanceSettlementReceiptDto(org,id,credit,intent.sourceType,id,"EI",period.id,debit,credit,"100","EGP",
+            false,false,accountingTreatmentRef="SYNTHETIC-TREATMENT")
+        assertTrue(financeSettlementReceiptMatches(org,intent,receipt))
+        assertFalse(financeSettlementReceiptMatches(org,intent,receipt.copy(accountingTreatmentRef=null)))
+        assertNull(financeSettlementIntent(source,period,id,accountingTreatmentRef="UNEXPECTED-TREATMENT"))
+    }
     @Test fun exactSourceIntentIsSentWithIdempotencyKey()=runBlocking {
         val input=assertNotNull(financeSettlementIntent(source,period,id))
         val receipt=FinanceSettlementReceiptDto(org,id,credit,source.sourceType,id,"AR",period.id,debit,credit,"100","EGP",false,false)

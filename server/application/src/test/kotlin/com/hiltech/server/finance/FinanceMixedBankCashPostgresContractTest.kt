@@ -256,8 +256,8 @@ class FinanceMixedBankCashPostgresContractTest {
          gl_account_id,side,amount) VALUES(?,?,?,?,2,?,'CREDIT',?)""",
          UUID.randomUUID(),org,journal,lineCredit,sales,money)
 
-       // Two exact bank rows; only one is allocated. The second must stay
-       // unallocated even though the statement itself is independently imported.
+       // Signed customer receipts and separate employee movements in one bank statement.
+       // The second customer credit remains unallocated until a valid source exists.
        val account=UUID.randomUUID()
        insert("""INSERT INTO finance_bank_account_register(
          id,organization_id,currency,bank_name,masked_account_reference,
@@ -266,15 +266,22 @@ class FinanceMixedBankCashPostgresContractTest {
          account,org,"EG****${account.toString().take(8)}",t)
        val intakeProposal=UUID.randomUUID()
        val bankEvidence=evidence("FINANCE_BANK_STATEMENT_INTAKE",intakeProposal,bankSha)
+       val funding80=BigDecimal("80.000000")
+       val return30=BigDecimal("30.000000")
+       val expense20=BigDecimal("20.000000")
        val bankLines=(1..2).map {idx ->
          FinanceBankIntakeSourceLine(
            "MIX-BANK-${idx}-${intakeProposal.toString().take(8)}",day,
            FinanceBankFlow.CREDIT,"EGP",bank100,
            if(idx==1)"f".repeat(64) else "9".repeat(64))
-       }
+       }+listOf(
+         FinanceBankIntakeSourceLine("MIX-FUND-$intakeProposal",day,FinanceBankFlow.DEBIT,"EGP",funding80,"1".repeat(64)),
+         FinanceBankIntakeSourceLine("MIX-RETURN-$intakeProposal",day,FinanceBankFlow.CREDIT,"EGP",return30,"2".repeat(64)),
+         FinanceBankIntakeSourceLine("MIX-EXPENSE-$intakeProposal",day,FinanceBankFlow.DEBIT,"EGP",expense20,"3".repeat(64))
+       )
        val digest=FinanceBankIntakeRules.validate(FinanceBankIntakeSource(
          org,account,bankEvidence,bankSha,"EGP",day,day,
-         BigDecimal.ZERO,BigDecimal("200.000000"),bankLines,true,true,
+         BigDecimal.ZERO,BigDecimal("130.000000"),bankLines,true,true,
        )).sourceLinesSha256
        val intakePolicy="FINANCE_BANK_STATEMENT_INTAKE"
        insert("""INSERT INTO finance_bank_statement_intake_proposal(
@@ -282,7 +289,7 @@ class FinanceMixedBankCashPostgresContractTest {
          statement_sha256,statement_lines_sha256,date_start,date_end,
          opening_balance,closing_balance,expected_line_count,source_version,
          policy_key,prepared_by_user_id,created_at)
-         VALUES(?,?,?,?,?,?,?,?,?,0,200,2,303,?,?,?)""",
+         VALUES(?,?,?,?,?,?,?,?,?,0,130,5,303,?,?,?)""",
          intakeProposal,UUID.randomUUID(),org,account,bankEvidence,bankSha,
          digest,day,day,intakePolicy,bankPreparer,t)
        val bankLineIds=bankLines.mapIndexed {index,part ->
@@ -290,9 +297,9 @@ class FinanceMixedBankCashPostgresContractTest {
          insert("""INSERT INTO finance_bank_statement_intake_proposal_line(
            id,organization_id,proposal_id,line_number,external_transaction_id,
            booked_on,flow,currency,amount,original_line_sha256)
-           VALUES(?,?,?,?,?,?,'CREDIT','EGP',?,?)""",
+           VALUES(?,?,?,?,?,?,?,'EGP',?,?)""",
            id,org,intakeProposal,index+1,part.externalTransactionId,
-           day,bank100,part.originalLineSha256)
+           day,part.flow.name,part.amount,part.originalLineSha256)
          id
        }
        // Check exact prepared immutable rows before recording final bank lines.
@@ -309,7 +316,7 @@ class FinanceMixedBankCashPostgresContractTest {
          statement_evidence_id,currency,date_start,date_end,opening_balance,
          closing_balance,expected_line_count,imported_by_user_id,
          imported_at,correlation_id)
-         VALUES(?,?,?,?,?,?,?,?,?,'EGP',?,?,0,200,2,?,?,'mixed-bank-source')""",
+         VALUES(?,?,?,?,?,?,?,?,?,'EGP',?,?,0,130,5,?,?,'mixed-bank-source')""",
          intake,UUID.randomUUID(),org,intakeProposal,account,
          bankApproval,bankSha,digest,bankEvidence,day,day,
          bankImporter,t.plusHours(3))
@@ -318,9 +325,9 @@ class FinanceMixedBankCashPostgresContractTest {
          insert("""INSERT INTO finance_bank_statement_intake_line(
            id,organization_id,intake_id,account_id,external_transaction_id,
            booked_on,flow,currency,amount,original_line_sha256)
-           VALUES(?,?,?,?,?,?,'CREDIT','EGP',?,?)""",
+           VALUES(?,?,?,?,?,?,?,'EGP',?,?)""",
            id,org,intake,account,part.externalTransactionId,
-           day,bank100,part.originalLineSha256)
+           day,part.flow.name,part.amount,part.originalLineSha256)
          id
        }
        connection.createStatement().use{
@@ -597,6 +604,145 @@ class FinanceMixedBankCashPostgresContractTest {
        assertEquals(0,corrected.movements.single{it.accountId==bankGl}.credit.toBigDecimal().compareTo(bank100))
        assertEquals(0,desk.exposure(org,"AR",day,0).totals.single().knownOutstanding.toBigDecimal().compareTo(bank100))
        assertEquals(4L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,period))
+
+       // Employee custody has a distinct approval and bank debit, not an expense.
+       val employee=UUID.randomUUID()
+       val employeePerson=UUID.randomUUID()
+       insert("INSERT INTO person(id,display_name,created_at,updated_at) VALUES(?,'Synthetic custodian',?,?)",employeePerson,t,t)
+       insert("""INSERT INTO employee(id,organization_id,person_id,employee_code,state,created_at,updated_at)
+           VALUES(?,?,?,'SYNTH-CUSTODY','ACTIVE',?,?)""",employee,org,employeePerson,t,t)
+       val draft=UUID.randomUUID()
+       insert("""INSERT INTO finance_financial_imprest_draft(id,operation_id,organization_id,custodian_employee_id,
+           requested_amount,currency,purpose,created_by_user_id,created_at,correlation_id)
+           VALUES(?,?,?,?,?,'EGP','Synthetic company custody',?,?,'mixed-custody')""",
+           draft,UUID.randomUUID(),org,employee,funding80,creator,t)
+       val policyApproval=approval("FINANCE_FINANCIAL_IMPREST_POLICY_REVIEW",draft,1,
+           "FINANCE_IMPREST_POLICY",creator)
+       val origin=checkNotNull(jdbc.queryForObject("""SELECT encode(sha256(convert_to(concat_ws('|',
+           'HILTECH_EMPLOYEE_FUNDING_ORIGIN_V1',CAST(? AS text),'FINANCIAL_IMPREST',CAST(? AS text),
+           CAST(? AS text),CAST(CAST(? AS numeric(18,6)) AS text),'EGP',CAST(? AS text),'1'),'UTF8')),'hex')""",
+           String::class.java,org,draft,employee,funding80,policyApproval))
+       val fundingProposal=UUID.randomUUID()
+       val fundingPolicy="FINANCE_EMPLOYEE_FUNDING"
+       insert("""INSERT INTO finance_employee_funding_proposal(id,operation_id,organization_id,draft_kind,employee_draft_id,
+           employee_id,source_policy_approval_id,bank_statement_line_id,amount,currency,source_fingerprint_sha256,
+           review_version,policy_key,prepared_by_user_id,created_at)
+           VALUES(?,?,?,'FINANCIAL_IMPREST',?,?,?,?,?,'EGP',?,707,?,?,?)""",
+           fundingProposal,UUID.randomUUID(),org,draft,employee,policyApproval,actualBankIds[2],funding80,origin,
+           fundingPolicy,issuer,t.plusHours(4))
+       val fundingApproval=approval("FINANCE_EMPLOYEE_FUNDING",fundingProposal,707,fundingPolicy,issuer,t.plusHours(5))
+       val funding=UUID.randomUUID()
+       insert("""INSERT INTO finance_employee_funding_record(id,operation_id,organization_id,proposal_id,employee_draft_id,
+           draft_kind,employee_id,bank_statement_line_id,approval_request_id,amount,currency,recorded_by_user_id,recorded_at,correlation_id)
+           VALUES(?,?,?,?,?,'FINANCIAL_IMPREST',?,?,?,?,'EGP',?,?,'mixed-funded')""",
+           funding,UUID.randomUUID(),org,fundingProposal,draft,employee,actualBankIds[2],fundingApproval,funding80,
+           journalRecorder,t.plusHours(6))
+       fun recordEmployeeSettlement(action:String,bankLine:UUID?,amount:BigDecimal):UUID {
+           val proposal=UUID.randomUUID()
+           val proofHash="4".repeat(64)
+           val proof=evidence("FINANCE_EMPLOYEE_SETTLEMENT",proposal,proofHash)
+           val policy="FINANCE_EMPLOYEE_SETTLEMENT"
+           insert("""INSERT INTO finance_employee_settlement_proposal(id,operation_id,organization_id,funding_record_id,
+               employee_id,action,bank_statement_line_id,settlement_evidence_id,settlement_evidence_sha256,amount,currency,
+               review_version,policy_key,prepared_by_user_id,created_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,'EGP',808,?,?,?)""",
+               proposal,UUID.randomUUID(),org,funding,employee,action,bankLine,proof,proofHash,amount,policy,issuer,t.plusHours(7))
+           val decision=approval("FINANCE_EMPLOYEE_SETTLEMENT",proposal,808,policy,issuer,t.plusHours(8))
+           val id=UUID.randomUUID()
+           insert("""INSERT INTO finance_employee_settlement_record(id,operation_id,organization_id,proposal_id,
+               funding_record_id,employee_id,action,bank_statement_line_id,settlement_evidence_id,approval_request_id,
+               amount,currency,recorded_by_user_id,recorded_at,correlation_id)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,'EGP',?,?,'mixed-custody-settlement')""",
+               id,UUID.randomUUID(),org,proposal,funding,employee,action,bankLine,proof,decision,amount,bankImporter,t.plusHours(9))
+           return id
+       }
+       val returned=recordEmployeeSettlement("IMPREST_CASH_RETURN_CONFIRMED",actualBankIds[3],return30)
+       val accepted=recordEmployeeSettlement("IMPREST_RECEIPTS_ACCEPTED",null,cash50)
+       val custodyGl=chart("EMPLOYEE_IMPREST_ASSET","CUSTODY")
+       val advanceGl=chart("EMPLOYEE_ADVANCE_ASSET","ADVANCE")
+       val expenseGl=chart("EXPENSE","COST")
+       val fundingSource=checkNotNull(settlementStore.source(org,"EMPLOYEE_FUNDING",funding))
+       assertEquals("EI",fundingSource.sourceKind)
+       assertEquals(funding,fundingSource.employeeFundingRecordId)
+       assertEquals(null,fundingSource.sourceJournalId)
+       assertEquals(bankGl,fundingSource.creditAccountId)
+       assertEquals("EMPLOYEE_IMPREST_ASSET",fundingSource.requiredDebitKind)
+       assertEquals(custodyGl,settlementStore.debitChoices(org,"EGP","EMPLOYEE_IMPREST_ASSET").single().id)
+       assertTrue(settlementStore.source(org,"EMPLOYEE_RETURN",returned)?.creditAccountId==null)
+       val notFunded=checkNotNull(settlementStore.source(org,"EMPLOYEE_RETURN",returned))
+       val badReturn=connection.setSavepoint()
+       try {
+           assertThrows(DataIntegrityViolationException::class.java) {
+               settlementStore.insert(org,journalRecorder,FinanceSettlementPost(UUID.randomUUID(),"EMPLOYEE_RETURN",returned,
+                   "EI",period,bankGl,custodyGl,notFunded.amount,"EGP"),notFunded,UUID.randomUUID(),t.plusHours(10),"unposted-origin")
+           }
+       } finally {connection.rollback(badReturn)}
+       val fundRequest=FinanceSettlementPost(UUID.randomUUID(),"EMPLOYEE_FUNDING",funding,"EI",period,custodyGl,bankGl,fundingSource.amount,"EGP")
+       val badClass=connection.setSavepoint()
+       try {
+           assertThrows(DataIntegrityViolationException::class.java) {
+               settlementStore.insert(org,journalRecorder,fundRequest.copy(debitAccountId=advanceGl),fundingSource,UUID.randomUUID(),t.plusHours(10),"wrong-custody-class")
+           }
+       } finally {connection.rollback(badClass)}
+       settlementStore.insert(org,journalRecorder,fundRequest,fundingSource,UUID.randomUUID(),t.plusHours(10),"custody-ledger")
+       val returnSource=checkNotNull(settlementStore.source(org,"EMPLOYEE_RETURN",returned))
+       assertEquals(custodyGl,returnSource.creditAccountId)
+       assertEquals(bankGl,returnSource.debitAccountId)
+       settlementStore.insert(org,journalRecorder,FinanceSettlementPost(UUID.randomUUID(),"EMPLOYEE_RETURN",returned,
+           "EI",period,bankGl,custodyGl,returnSource.amount,"EGP"),returnSource,UUID.randomUUID(),t.plusHours(11),"return-ledger")
+       val acceptedSource=checkNotNull(settlementStore.source(org,"IMPREST_EXPENSE",accepted))
+       assertEquals("COST",acceptedSource.requiredDebitKind)
+       assertEquals(custodyGl,acceptedSource.creditAccountId)
+       val costRequest=FinanceSettlementPost(UUID.randomUUID(),"IMPREST_EXPENSE",accepted,"EI",period,expenseGl,custodyGl,
+           acceptedSource.amount,"EGP","SYNTHETIC-COST-FIRST-RECOGNITION")
+       val noTreatment=connection.setSavepoint()
+       try {
+           assertThrows(DataIntegrityViolationException::class.java) {
+               settlementStore.insert(org,journalRecorder,costRequest.copy(accountingTreatmentRef=null),acceptedSource,UUID.randomUUID(),t.plusHours(12),"no-treatment")
+           }
+       } finally {connection.rollback(noTreatment)}
+       settlementStore.insert(org,journalRecorder,costRequest,acceptedSource,UUID.randomUUID(),t.plusHours(12),"receipts-ledger")
+
+       // Reimbursement is not a new payment. The company confirms cost treatment.
+       val claim=UUID.randomUUID()
+       insert("""INSERT INTO finance_expense_claim_draft(id,operation_id,organization_id,employee_id,amount,currency,
+           purpose,merchant,spent_on,created_by_user_id,created_at,correlation_id)
+           VALUES(?,?,?,?,?,'EGP','Synthetic personal expense','Fixture merchant',?,?,?,'mixed-claim')""",
+           claim,UUID.randomUUID(),org,employee,expense20,day,creator,t)
+       val documentation=approval("FINANCE_EXPENSE_DOCUMENTATION_REVIEW",claim,1,"FINANCE_EXPENSE_DOCUMENTATION",creator)
+       val reimbursementProposal=UUID.randomUUID()
+       val reimbursementPolicy="FINANCE_EXPENSE_REIMBURSEMENT"
+       insert("""INSERT INTO finance_expense_reimbursement_proposal(id,operation_id,organization_id,expense_draft_id,employee_id,
+           documentation_approval_request_id,documentation_version,bank_statement_line_id,amount,currency,
+           review_version,policy_key,prepared_by_user_id,created_at)
+           VALUES(?,?,?,?,?,?,1,?,?,'EGP',909,?,?,?)""",reimbursementProposal,UUID.randomUUID(),org,claim,employee,
+           documentation,actualBankIds[4],expense20,reimbursementPolicy,issuer,t.plusHours(7))
+       val reimbursementApproval=approval("FINANCE_EXPENSE_REIMBURSEMENT",reimbursementProposal,909,reimbursementPolicy,issuer,t.plusHours(8))
+       val reimbursement=UUID.randomUUID()
+       insert("""INSERT INTO finance_expense_reimbursement_record(id,operation_id,organization_id,proposal_id,expense_draft_id,
+           employee_id,bank_statement_line_id,amount,currency,approval_request_id,recorded_by_user_id,recorded_at,correlation_id)
+           VALUES(?,?,?,?,?,?,?,?,'EGP',?,?,?,'mixed-reimbursement')""",reimbursement,UUID.randomUUID(),org,reimbursementProposal,
+           claim,employee,actualBankIds[4],expense20,reimbursementApproval,bankImporter,t.plusHours(9))
+       val expenseSource=checkNotNull(settlementStore.source(org,"EXPENSE_REIMBURSEMENT",reimbursement))
+       assertEquals(claim,expenseSource.expenseClaimId)
+       assertEquals(bankGl,expenseSource.creditAccountId)
+       val expenseRequest=FinanceSettlementPost(UUID.randomUUID(),"EXPENSE_REIMBURSEMENT",reimbursement,"ER",period,expenseGl,bankGl,
+           expenseSource.amount,"EGP","SYNTHETIC-EXPENSE-FIRST-RECOGNITION")
+       settlementStore.insert(org,journalRecorder,expenseRequest,expenseSource,UUID.randomUUID(),t.plusHours(13),"reimbursement-ledger")
+       assertEquals(expenseRequest.accountingTreatmentRef,settlementStore.receipt(org,expenseRequest.operationId,false)?.accountingTreatmentRef)
+
+       val employeePairs=listOf("EMPLOYEE_FUNDING" to "EI","EMPLOYEE_RETURN" to "EI","IMPREST_EXPENSE" to "EI","EXPENSE_REIMBURSEMENT" to "ER")
+       assertTrue(settlementStore.queue(org,employeePairs,0).isEmpty())
+       assertTrue(settlementStore.queue(customer,employeePairs,0).isEmpty())
+       assertEquals(4,desk.ledger(org,period,0,true).journals.size) // previous native contract
+       val employeeReport=desk.ledger(org,period,0,true,true)
+       assertEquals(8,employeeReport.journals.size)
+       assertTrue(employeeReport.currencyTotals.single().balanced)
+       val custodyMovement=employeeReport.movements.single{it.accountId==custodyGl}
+       assertEquals(0,custodyMovement.debit.toBigDecimal().compareTo(funding80))
+       assertEquals(0,custodyMovement.credit.toBigDecimal().compareTo(funding80))
+       assertEquals(0,employeeReport.movements.single{it.accountId==expenseGl}.debit.toBigDecimal().compareTo(cash50+expense20))
+       assertEquals(8L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,period))
      } finally { connection.rollback() }
    }
  }
