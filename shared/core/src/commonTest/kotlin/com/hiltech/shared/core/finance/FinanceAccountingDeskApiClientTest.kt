@@ -25,7 +25,7 @@ class FinanceAccountingDeskApiClientTest {
         listOf(FinanceDeskJournalDto(journal,"AR","2026-11-26T12:00:00Z","EGP",
             listOf(FinanceDeskJournalLineDto(1,"AR","Receivables","DEBIT","150"),
                 FinanceDeskJournalLineDto(2,"SALES","Revenue","CREDIT","150")))),
-        listOf("AP","AR","AP_REVERSAL"),false)
+        listOf("AP","AR","AP_REVERSAL"),false,listOf(FinanceDeskCurrencyTotalDto("EGP","150","150",true)))
 
     @Test fun ledgerReadsAuthenticatedSourceAndPreservesPeriodAndCurrency()=runBlocking {
         val http=HttpClient(MockEngine { call ->
@@ -50,5 +50,6 @@ class FinanceAccountingDeskApiClientTest {
         assertFalse(financeDeskLedgerMatches(report.copy(isCompanyWideTrialBalance=true),org,period,0))
         assertFalse(financeDeskLedgerMatches(report.copy(includedSources=listOf("AP")),org,period,0))
         assertFalse(financeDeskLedgerMatches(report.copy(offset=50),org,period,0))
+        assertFalse(financeDeskLedgerMatches(report.copy(currencyTotals=emptyList()),org,period,0))
     }
 }

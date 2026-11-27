@@ -10,13 +10,15 @@ import kotlinx.serialization.json.Json
 @Serializable data class FinanceDeskPeriodsDto(val organizationId:String,val records:List<FinanceDeskPeriodDto>,val hasMore:Boolean)
 @Serializable data class FinanceDeskMovementDto(val accountId:String,val accountCode:String,val accountName:String,
     val accountKind:String,val currency:String,val debit:String,val credit:String)
+@Serializable data class FinanceDeskCurrencyTotalDto(val currency:String,val debit:String,val credit:String,val balanced:Boolean)
 @Serializable data class FinanceDeskJournalLineDto(val number:Int,val accountCode:String,val accountName:String,
     val side:String,val amount:String)
 @Serializable data class FinanceDeskJournalDto(val id:String,val kind:String,val postedAt:String,val currency:String,
     val lines:List<FinanceDeskJournalLineDto>)
 @Serializable data class FinanceDeskLedgerDto(val organizationId:String,val periodId:String,val offset:Int,val hasMore:Boolean,
     val movements:List<FinanceDeskMovementDto>,val journals:List<FinanceDeskJournalDto>,
-    val includedSources:List<String>,val isCompanyWideTrialBalance:Boolean)
+    val includedSources:List<String>,val isCompanyWideTrialBalance:Boolean,
+    val currencyTotals:List<FinanceDeskCurrencyTotalDto>)
 @Serializable data class FinanceDeskExposureTotalDto(val currency:String,val knownOutstanding:String,val knownOverdue:String,
     val openWithoutDueDate:Long,val exceptionCount:Long,val recordCount:Long)
 @Serializable data class FinanceDeskExposureRowDto(val journalId:String,val counterpartyName:String,val currency:String,
@@ -34,6 +36,9 @@ internal fun financeDeskLedgerMatches(report:FinanceDeskLedgerDto,org:String,per
         !report.isCompanyWideTrialBalance && report.includedSources.toSet()==deskSources &&
         report.movements.all { financeLookupIdIsUuid(it.accountId) && currency(it.currency) && amount(it.debit) && amount(it.credit) } &&
         report.movements.map { it.accountId.lowercase() to it.currency }.distinct().size==report.movements.size &&
+        report.currencyTotals.map { it.currency }.toSet()==report.movements.map { it.currency }.toSet() &&
+        report.currencyTotals.map { it.currency }.distinct().size==report.currencyTotals.size &&
+        report.currencyTotals.all { currency(it.currency) && amount(it.debit) && amount(it.credit) } &&
         report.journals.size<=50 && report.journals.map { it.kind to it.id.lowercase() }.distinct().size==report.journals.size &&
         report.journals.all { j -> financeLookupIdIsUuid(j.id) && j.kind in deskSources && currency(j.currency) &&
             j.lines.isNotEmpty() && j.lines.size<=32 && j.lines.map { it.number }.distinct().size==j.lines.size &&

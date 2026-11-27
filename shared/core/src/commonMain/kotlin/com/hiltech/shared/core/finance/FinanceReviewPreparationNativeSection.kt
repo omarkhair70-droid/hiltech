@@ -731,7 +731,8 @@ fun FinanceReviewPreparationSection(
                     label = hiltechText("حساب دفتر الأستاذ", "General ledger account"),
                     value = line.accountId,
                     choices = accountingChoices?.approvedAccounts.orEmpty().map {
-                        HiltechRecordChoice(it.id, it.accountKind, (it.currency ?: hiltechText("كل العملات", "All currencies")) + " · " + it.id.take(8))
+                        HiltechRecordChoice(it.id, it.accountName ?: it.accountKind,
+                            listOf(it.accountCode ?: it.id.take(8), it.currency ?: hiltechText("كل العملات", "All currencies")).joinToString(" · "))
                     },
                     onChange = { changeLine(line.copy(accountId = it.trim())) },
                     enabled = editable,

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
@@ -112,7 +113,8 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
                 HiltechRecordPicker(hiltechText("الفترة المحاسبية","Accounting period"),periodId,
                     list.records.map { HiltechRecordChoice(it.id,it.dateStart+" — "+it.dateEnd,
                         if(it.state=="CLOSED") hiltechText("مقفلة","Closed") else hiltechText("مفتوحة","Open")) },
-                    onChange={periodId=it;offset=0;ledger=null;loading=true},allowKnownReference=false,allowClear=false,enabled=!loading)
+                    onChange={ if(periodId!=it || offset!=0) {periodId=it;offset=0;ledger=null;loading=true} },
+                    allowKnownReference=false,allowClear=false,enabled=!loading)
                 if(list.hasMore) Text(hiltechText("تظهر أحدث 100 فترة فقط.","Showing the latest 100 periods only."))
             }
             if(periods==null) Text(hiltechText("لم يتأكد الوصول إلى الدفتر الحالي.","Current ledger access was not confirmed."))
@@ -125,6 +127,13 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
                         style=MaterialTheme.typography.bodySmall)
                     data.movements.groupBy { it.currency }.forEach { (currency,rows) ->
                         Text(currency,style=MaterialTheme.typography.titleMedium)
+                        data.currencyTotals.singleOrNull { it.currency==currency }?.let { total ->
+                            HiltechKeyValue(hiltechText("إجمالي الحركة المدينة","Total debit movement"),total.debit+" "+currency)
+                            HiltechKeyValue(hiltechText("إجمالي الحركة الدائنة","Total credit movement"),total.credit+" "+currency)
+                            Text(if(total.balanced) hiltechText("الحركة المسجلة متوازنة","Posted movement balances")
+                                else hiltechText("حركة غير متوازنة؛ يلزم فحص المصدر","Unbalanced movement; source review required"),
+                                color=if(total.balanced) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+                        }
                         HiltechRecordTable(listOf(HiltechTableColumn(hiltechText("الحساب","Account"),2f),
                             HiltechTableColumn(hiltechText("مدين","Debit"),numeric=true),
                             HiltechTableColumn(hiltechText("دائن","Credit"),numeric=true)),

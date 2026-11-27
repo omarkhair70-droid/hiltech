@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import java.math.BigDecimal
 import java.time.Clock
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -28,6 +29,7 @@ data class FinanceDeskMovement(
     val accountId: UUID, val accountCode: String, val accountName: String, val accountKind: String,
     val currency: String, val debit: String, val credit: String,
 )
+data class FinanceDeskCurrencyTotal(val currency: String,val debit: String,val credit: String,val balanced: Boolean)
 data class FinanceDeskJournalLine(val number: Int, val accountCode: String, val accountName: String,
     val side: String, val amount: String)
 data class FinanceDeskJournal(
@@ -39,6 +41,7 @@ data class FinanceDeskLedger(
     // This is a movement report, not opening/closing balances, cash or a complete trial balance.
     val includedSources: List<String> = listOf("AP", "AR", "AP_REVERSAL"),
     val isCompanyWideTrialBalance: Boolean = false,
+    val currencyTotals: List<FinanceDeskCurrencyTotal>,
 )
 data class FinanceDeskExposureTotal(
     val currency: String, val knownOutstanding: String, val knownOverdue: String,
@@ -136,7 +139,13 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
             .groupBy { it.kind to it.id }.values.map { parts ->
                 parts.first().copy(lines=parts.flatMap { it.lines })
             }
-        return FinanceDeskLedger(org,period,offset,page.size>PAGE_SIZE,movements,page.take(PAGE_SIZE))
+        val currencyTotals=movements.groupBy { it.currency }.map { (currency, rows) ->
+            val debit=rows.fold(BigDecimal.ZERO) { total,row -> total+BigDecimal(row.debit) }
+            val credit=rows.fold(BigDecimal.ZERO) { total,row -> total+BigDecimal(row.credit) }
+            FinanceDeskCurrencyTotal(currency,debit.toPlainString(),credit.toPlainString(),debit.compareTo(credit)==0)
+        }
+        return FinanceDeskLedger(org,period,offset,page.size>PAGE_SIZE,movements,page.take(PAGE_SIZE),
+            currencyTotals=currencyTotals)
     }
 
     fun exposure(org: UUID, kind: String, day: LocalDate, offset: Int): FinanceDeskExposure {
