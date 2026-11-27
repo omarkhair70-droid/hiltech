@@ -21,6 +21,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -193,6 +194,8 @@ suspend fun financeCompleteApprovedSource(
 fun financeCompletionOperatorWorkspace(
     identityId: String, organizationId: String, installationId: String,
     apis: FinanceEvidenceReadApis, newOperationId: () -> String,
+    settlementLedger: FinanceSettlementLedgerApiClient? = null,
+    onReauthenticate: (() -> Unit)? = null,
 ): NativeOperationalWorkspace = NativeOperationalWorkspace(
     id = "finance-completion-operator",
     label = "إتمام العمليات المالية",
@@ -211,12 +214,17 @@ fun financeCompletionOperatorWorkspace(
             catch(cancelled:CancellationException){throw cancelled}
             catch(_:Exception){}
         }
+        if(!available && settlementLedger!=null) {
+            try {settlementLedger.queue(organizationId,0,installationId);available=true}
+            catch(cancelled:CancellationException){throw cancelled}
+            catch(_:Exception){}
+        }
         available
     },
     hostOwnsScroll = false,
     content = { _ ->
         key(identityId, organizationId, installationId) {
-            CompletionOperatorSection(identityId,organizationId,installationId,apis,newOperationId)
+            CompletionOperatorSection(identityId,organizationId,installationId,apis,newOperationId,settlementLedger,onReauthenticate)
         }
     },
 )
@@ -302,8 +310,12 @@ private fun financeDailyState(source: FinanceCompletionSource): String = when {
 @Composable
 private fun CompletionOperatorSection(
     identityId: String, org: String, installation: String, apis: FinanceEvidenceReadApis, newOperationId: () -> String,
+    settlementLedger: FinanceSettlementLedgerApiClient?,onReauthenticate:(()->Unit)?,
 ) {
     val scope = rememberCoroutineScope()
+    val areaState=rememberSaveableStateHolder()
+    var settlementAvailable by remember(settlementLedger) {mutableStateOf(false)}
+    var settlementLocked by remember {mutableStateOf(false)}
     var area by remember { mutableStateOf("ACCOUNTING") }
     var snapshot by remember { mutableStateOf<FinanceDailyQueueSnapshot?>(null) }
     var filter by remember { mutableStateOf<FinanceCompletionKind?>(null) }
@@ -321,6 +333,14 @@ private fun CompletionOperatorSection(
     var lookupKind by remember { mutableStateOf(FinanceCompletionKind.AR_INVOICE) }
     var lookup by remember { mutableStateOf("") }
 
+    LaunchedEffect(settlementLedger,org,installation,revision) {
+        settlementAvailable=false
+        if(settlementLedger!=null) {
+            try {settlementLedger.queue(org,0,installation);settlementAvailable=true}
+            catch(cancelled:CancellationException){throw cancelled}
+            catch(_:Exception){}
+        }
+    }
     LaunchedEffect(apis, org, installation, revision, area) {
         if (area != "ACCOUNTING") return@LaunchedEffect
         loading = true
@@ -338,6 +358,11 @@ private fun CompletionOperatorSection(
                         break
                     } catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { }
+                }
+                if(area=="ACCOUNTING" && settlementLedger!=null) {
+                    try {settlementLedger.queue(org,0,installation);settlementAvailable=true;area="SETTLEMENT_LEDGER"}
+                    catch(cancelled:CancellationException){throw cancelled}
+                    catch(_:Exception){}
                 }
             }
         } finally { loading = false }
@@ -387,14 +412,22 @@ private fun CompletionOperatorSection(
             "Review approved work and record its real accounting effect. Recording here does not send money or invoices externally."),
             style = MaterialTheme.typography.bodyMedium)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = area == "ACCOUNTING", enabled = !busy && pending == null, onClick = {
+            FilterChip(selected = area == "ACCOUNTING", enabled = !busy && pending == null && !settlementLocked, onClick = {
                 if (area != "ACCOUNTING") { area = "ACCOUNTING"; selected = null; recordedNotice = false }
             }, label = { Text(hiltechText("الترحيل والتسجيل", "Accounting & recording")) })
-            FilterChip(selected = area == "SIGNED", enabled = !busy && pending == null, onClick = {
+            FilterChip(selected = area == "SIGNED", enabled = !busy && pending == null && !settlementLocked, onClick = {
                 if (area != "SIGNED") { area = "SIGNED"; selected = null; recordedNotice = false }
             }, label = { Text(hiltechText("الخزنة والجرد والمطابقة", "Cashbox, counts & reconciliation")) })
+            if(settlementLedger!=null && (settlementAvailable || area=="SETTLEMENT_LEDGER"))
+                FilterChip(selected=area=="SETTLEMENT_LEDGER",enabled=!busy && pending==null && !settlementLocked,
+                    onClick={area="SETTLEMENT_LEDGER";selected=null;recordedNotice=false},
+                    label={Text(hiltechText("قيود السداد والتحصيل","Settlement journals"))})
         }
-        if (area == "SIGNED") {
+        if(area=="SETTLEMENT_LEDGER" && settlementLedger!=null) {
+            areaState.SaveableStateProvider("SETTLEMENT_LEDGER") {
+                FinanceSettlementLedgerSection(settlementLedger,org,installation,newOperationId,onReauthenticate){settlementLocked=it}
+            }
+        } else if (area == "SIGNED") {
             FinanceSignedCompletionSection(identityId, org, installation, apis, newOperationId, embedded = true)
         } else {
             val data = snapshot

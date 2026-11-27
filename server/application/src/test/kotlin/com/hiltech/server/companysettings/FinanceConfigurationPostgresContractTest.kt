@@ -62,7 +62,16 @@ class FinanceConfigurationPostgresContractTest {
                 val savedBank=service.create(actor,org,bank,"synthetic")
                 assertEquals("TEST:****1234",jdbc.queryForObject("SELECT masked_account_reference FROM finance_bank_account_register WHERE id=?",
                     String::class.java,savedBank.record.id))
-                assertEquals(3,jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE actor_user_id=? AND action='FINANCE_CONFIGURATION_CREATED'",
+                val treasury=FinanceConfigurationInput(UUID.randomUUID(),FinanceConfigurationKind.ACCOUNT,"SYNTHETIC-TREASURY",
+                    code="BANK-GL",name="Synthetic bank ledger",accountKind="BANK_ASSET",currency="EGP",treasuryInstrumentId=savedBank.record.id)
+                assertEquals(savedBank.record.id,service.treasuryInstruments(actor,org,"BANK_ASSET").records.single().id)
+                assertFalse(validFinanceConfiguration(treasury.copy(treasuryInstrumentId=null)))
+                assertThrows(ProductApiException::class.java) {service.create(actor,org,treasury.copy(currency="USD"),"synthetic")}
+                val savedTreasury=service.create(actor,org,treasury,"synthetic")
+                assertEquals(savedBank.record.id,savedTreasury.record.treasuryInstrumentId)
+                assertTrue(service.treasuryInstruments(actor,org,"BANK_ASSET").records.isEmpty())
+                assertThrows(ProductApiException::class.java) {service.create(actor,org,treasury.copy(operationId=UUID.randomUUID(),code="SECOND-BANK"),"synthetic")}
+                assertEquals(4,jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE actor_user_id=? AND action='FINANCE_CONFIGURATION_CREATED'",
                     Int::class.java,actor))
                 assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM finance_ar_posted_journal WHERE organization_id=?",Int::class.java,org))
                 assertThrows(ProductApiException::class.java) {service.page(actor,UUID.randomUUID(),FinanceConfigurationKind.BANK,0)}

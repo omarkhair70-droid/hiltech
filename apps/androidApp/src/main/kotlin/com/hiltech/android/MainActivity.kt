@@ -291,6 +291,9 @@ class MainActivity : ComponentActivity() {
             val workspaceApi = remember(employeeSessionScope) {
                 hiltechApplication.productApiForSession { activePlanningSessionScope() == employeeSessionScope }
             }
+            val settlementLedger = remember(workspaceApi) {
+                com.hiltech.shared.core.finance.FinanceSettlementLedgerApiClient(workspaceApi)
+            }
             val accountingDesk = remember(workspaceApi) {
                 com.hiltech.shared.core.finance.FinanceAccountingDeskApiClient(workspaceApi)
             }
@@ -601,6 +604,8 @@ class MainActivity : ComponentActivity() {
                                 installationId = hiltechApplication.installationId,
                                 apis = hiltechApplication.financeEvidenceReadApis,
                                 newOperationId = { UUID.randomUUID().toString() },
+                                settlementLedger = settlementLedger,
+                                onReauthenticate = ::startReauthentication,
                             ))
                         }
                         if (operationAvailable(ProductOperation.FINANCE_BANK_STATEMENT_INTAKE)) {

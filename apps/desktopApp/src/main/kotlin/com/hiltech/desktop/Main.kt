@@ -2749,6 +2749,9 @@ fun main() {
                     current != null && planningSessionScope(current) == employeeSessionScope
                 }
             }
+            val settlementLedger = remember(workspaceApi) {
+                com.hiltech.shared.core.finance.FinanceSettlementLedgerApiClient(workspaceApi)
+            }
             val accountingDesk = remember(workspaceApi) {
                 com.hiltech.shared.core.finance.FinanceAccountingDeskApiClient(workspaceApi)
             }
@@ -3128,6 +3131,8 @@ fun main() {
                                 installationId = runtime.physicalWarehouseInstallationId,
                                 apis = runtime.financeEvidenceReadApis,
                                 newOperationId = { java.util.UUID.randomUUID().toString() },
+                                settlementLedger = settlementLedger,
+                                onReauthenticate = { signIn(true) },
                             ))
                         }
                         if (operationAvailable(ProductOperation.FINANCE_BANK_STATEMENT_INTAKE)) {

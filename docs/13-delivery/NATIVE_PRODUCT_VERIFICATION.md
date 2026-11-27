@@ -71,6 +71,22 @@ due dates and allocation exceptions. The mixed bank/cash PostgreSQL fixture
 exercises the new read store against the same independently posted/allocated
 source; the native client tests scope and source contracts.
 
+## Settlement journal coverage
+
+The existing daily finance desk now includes source-bound settlement posting.
+Company settings create an approved bank/cashbox ledger account tied to its
+actual instrument and currency. AP/AR allocations, physical vouchers and
+corrections of already-posted bank matches can produce exactly two immutable
+GL lines in the current open period, with unique source keys and an exact
+receipt. Existing source and GL operator responsibilities are checked, and
+posting never initiates a payment or claims a bank refund. Settlement journals
+participate in the existing period-close snapshot. The wider ledger query is
+explicitly requested by the current client; older readers retain the earlier
+partial view. Opening balances, payroll, employee advances, expenses, other
+unallocated bank movements and a full financial-statement ledger remain
+outside this coverage. Do not enable the full-ledger-ready closure switch on
+the strength of this increment alone.
+
 ## Native home and personal context
 
 The shared native home exposes specialized workspaces only after a successful

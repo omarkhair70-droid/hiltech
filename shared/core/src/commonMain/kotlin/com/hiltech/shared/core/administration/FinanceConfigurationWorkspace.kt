@@ -49,6 +49,8 @@ import kotlinx.serialization.json.Json
     "TAX_RECOVERABLE" -> hiltechText("ضرائب قابلة للاسترداد","Recoverable taxes")
     "TAX_PAYABLE" -> hiltechText("ضرائب مستحقة","Tax payable")
     "OTHER_ASSET" -> hiltechText("أصول أخرى","Other assets")
+    "BANK_ASSET" -> hiltechText("حساب بنك محاسبي","Bank ledger account")
+    "CASH_ASSET" -> hiltechText("حساب خزنة محاسبي","Cashbox ledger account")
     else -> kind
 }
 @Composable private fun configurationState(state: String): String = when(state) {
@@ -76,6 +78,10 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
     var code by rememberSaveable(org) { mutableStateOf("") }
     var name by rememberSaveable(org) { mutableStateOf("") }
     var accountKind by rememberSaveable(org) { mutableStateOf("") }
+    var treasuryId by rememberSaveable(org) { mutableStateOf("") }
+    var treasuryName by rememberSaveable(org) { mutableStateOf("") }
+    var instruments by remember { mutableStateOf<FinanceTreasuryInstrumentPageDto?>(null) }
+    var instrumentsLoading by remember { mutableStateOf(false) }
     var currency by rememberSaveable(org) { mutableStateOf("") }
     var start by rememberSaveable(org) { mutableStateOf("") }
     var end by rememberSaveable(org) { mutableStateOf("") }
@@ -86,7 +92,17 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
     var rejected by rememberSaveable(org) { mutableStateOf(false) }
     val pending=pendingJson?.let { Json.decodeFromString(FinanceConfigurationIntent.serializer(),it) }
     val editable=pending==null && !busy && !loading && data!=null
-    fun resetForm() { code="";name="";accountKind="";currency="";start="";end="";reference="" }
+    fun resetForm() { code="";name="";accountKind="";currency="";start="";end="";reference="";treasuryId="";treasuryName="" }
+    LaunchedEffect(org,client,kind,accountKind,revision) {
+        instruments=null
+        if(kind=="ACCOUNT" && accountKind in financeTreasuryAccountKinds) {
+            instrumentsLoading=true
+            try { instruments=client.treasuryInstruments(org,accountKind,installation) }
+            catch(cancelled:CancellationException) { throw cancelled }
+            catch(_:Exception) { instruments=null }
+            finally { instrumentsLoading=false }
+        } else instrumentsLoading=false
+    }
     fun refresh() { data=null;loading=true;revision++ }
 
     LaunchedEffect(org,client,kind,offset,revision) {
@@ -116,6 +132,7 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
                     Text(row.name ?: (row.startDate.orEmpty()+" — "+row.endDate.orEmpty()),style=MaterialTheme.typography.titleMedium)
                     row.code?.let { HiltechKeyValue(hiltechText("الرمز أو المرجع","Code or reference"),it) }
                     row.accountKind?.let { Text(accountKindLabel(it)) }
+                    if(row.treasuryInstrumentId!=null) Text(hiltechText("مرتبط بمصدر الخزينة المعتمد","Linked to an approved treasury source"))
                     row.currency?.let { Text(it) }
                     HiltechKeyValue(hiltechText("الحالة","State"),configurationState(row.state))
                     HiltechKeyValue(hiltechText("مرجع اعتماد الشركة","Company authorization"),row.authorizationReference)
@@ -151,16 +168,33 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
                     "Use a masked reference such as ****1234 or MAIN:****1234; never enter a full account number or IBAN."))
                 else HiltechRecordPicker(hiltechText("تصنيف الحساب","Account classification"),accountKind,
                     financeConfigurationAccountKinds.map { HiltechRecordChoice(it,accountKindLabel(it)) },
-                    onChange={accountKind=it},allowKnownReference=false,allowClear=false,enabled=editable)
-                SetupField(if(kind=="BANK")hiltechText("العملة","Currency") else hiltechText("العملة — اختياري","Currency — optional"),currency,editable){currency=it.uppercase().take(3)}
+                    onChange={ if(accountKind!=it) {accountKind=it;treasuryId="";treasuryName="";currency="";instruments=null} },
+                    allowKnownReference=false,allowClear=false,enabled=editable)
+                if(kind=="ACCOUNT" && accountKind in financeTreasuryAccountKinds) {
+                    val source=instruments?.takeIf {it.accountKind==accountKind}
+                    if(instrumentsLoading) Text(hiltechText("جارٍ قراءة المصادر المعتمدة…","Reading approved instruments…"))
+                    else if(source==null) Text(hiltechText("تعذر تأكيد مصادر الخزينة. حدّث الإعداد.","Treasury sources not confirmed. Refresh setup."))
+                    else if(source.records.isEmpty()) Text(hiltechText("لا يوجد مصدر معتمد غير مرتبط. سجّل البنك أو افتح خزنة أولًا.","No unlinked approved instrument. Register the bank or open a cashbox first."))
+                    else {
+                        HiltechRecordPicker(hiltechText("البنك أو الخزنة الفعلية","Actual bank or cashbox"),treasuryId,
+                            source.records.map {HiltechRecordChoice(it.id,it.name,it.currency)},
+                            onChange={id->source.records.singleOrNull {it.id==id}?.let {treasuryId=it.id;treasuryName=it.name;currency=it.currency}},
+                            allowKnownReference=false,allowClear=false,enabled=editable)
+                        if(source.hasMore) Text(hiltechText("تظهر أول 100 مصدر غير مرتبط.","Showing the first 100 unlinked instruments."))
+                    }
+                    if(currency.isNotBlank()) HiltechKeyValue(hiltechText("عملة المصدر","Source currency"),currency)
+                } else SetupField(if(kind=="BANK")hiltechText("العملة","Currency") else hiltechText("العملة — اختياري","Currency — optional"),currency,editable){currency=it.uppercase().take(3)}
             }
             SetupField(hiltechText("مرجع اعتماد الشركة الفعلي","Actual company authorization reference"),reference,editable){reference=it.take(180)}
             val draft=FinanceConfigurationIntent("",kind,reference.trim(),
                 code.trim().takeIf {kind!="PERIOD"},name.trim().takeIf {kind!="PERIOD"},
                 accountKind.takeIf {kind=="ACCOUNT"},currency.trim().takeIf {kind!="PERIOD" && it.isNotBlank()},
-                start.trim().takeIf {kind=="PERIOD"},end.trim().takeIf {kind=="PERIOD"})
+                start.trim().takeIf {kind=="PERIOD"},end.trim().takeIf {kind=="PERIOD"},
+                treasuryId.takeIf {kind=="ACCOUNT" && accountKind in financeTreasuryAccountKinds && it.isNotBlank()})
+            val treasuryReady=accountKind !in financeTreasuryAccountKinds ||
+                (instruments?.accountKind==accountKind && instruments?.records?.any {it.id==treasuryId && it.currency==currency}==true && !instrumentsLoading)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                Button(enabled=editable && financeConfigurationIntentValid(draft),onClick={
+                Button(enabled=editable && treasuryReady && financeConfigurationIntentValid(draft),onClick={
                     pendingJson=Json.encodeToString(FinanceConfigurationIntent.serializer(),draft.copy(operationId=newOperationId()))
                     attempted=false;uncertain=false;rejected=false;error=null
                 }) { Text(hiltechText("مراجعة قبل الحفظ","Review setup")) }
@@ -173,6 +207,8 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
                 intent.name?.let {Text(it)}
                 intent.code?.let {Text(it)}
                 intent.accountKind?.let {Text(accountKindLabel(it))}
+                if(intent.treasuryInstrumentId!=null) HiltechKeyValue(hiltechText("المصدر المرتبط","Linked instrument"),
+                    treasuryName.ifBlank {hiltechText("المصدر المحدد سابقًا","Previously selected source")})
                 intent.currency?.let {Text(it)}
                 intent.startDate?.let {Text(it+" — "+intent.endDate.orEmpty())}
                 HiltechKeyValue(hiltechText("مرجع الاعتماد","Authorization reference"),intent.authorizationReference)

@@ -28,19 +28,21 @@ import kotlinx.serialization.json.Json
     val isBankBalance:Boolean)
 
 private val deskSources=setOf("AP","AR","AP_REVERSAL")
+private val expandedDeskSources=deskSources+financeSettlementTypes
 private fun currency(value:String)=value.matches(Regex("[A-Z]{3}"))
 private fun amount(value:String)=value.matches(Regex("[0-9]+([.][0-9]+)?"))
 
 internal fun financeDeskLedgerMatches(report:FinanceDeskLedgerDto,org:String,period:String,offset:Int):Boolean =
     report.organizationId.equals(org,true) && report.periodId.equals(period,true) && report.offset==offset &&
-        !report.isCompanyWideTrialBalance && report.includedSources.toSet()==deskSources &&
+        !report.isCompanyWideTrialBalance && report.includedSources.toSet() in setOf(deskSources,expandedDeskSources) &&
+        report.includedSources.distinct().size==report.includedSources.size &&
         report.movements.all { financeLookupIdIsUuid(it.accountId) && currency(it.currency) && amount(it.debit) && amount(it.credit) } &&
         report.movements.map { it.accountId.lowercase() to it.currency }.distinct().size==report.movements.size &&
         report.currencyTotals.map { it.currency }.toSet()==report.movements.map { it.currency }.toSet() &&
         report.currencyTotals.map { it.currency }.distinct().size==report.currencyTotals.size &&
         report.currencyTotals.all { currency(it.currency) && amount(it.debit) && amount(it.credit) } &&
         report.journals.size<=50 && report.journals.map { it.kind to it.id.lowercase() }.distinct().size==report.journals.size &&
-        report.journals.all { j -> financeLookupIdIsUuid(j.id) && j.kind in deskSources && currency(j.currency) &&
+        report.journals.all { j -> financeLookupIdIsUuid(j.id) && j.kind in report.includedSources && currency(j.currency) &&
             j.lines.isNotEmpty() && j.lines.size<=32 && j.lines.map { it.number }.distinct().size==j.lines.size &&
             j.lines.all { it.number in 1..32 && it.side in setOf("DEBIT","CREDIT") && amount(it.amount) } }
 
@@ -62,7 +64,7 @@ class FinanceAccountingDeskApiClient(private val api:HiltechApiClient,
 
     suspend fun ledger(org:String,period:String,offset:Int,installation:String):FinanceDeskLedgerDto {
         require(financeLookupIdIsUuid(period) && offset in 0..1_000_000)
-        val result=api.request(HttpMethod.Get,path(org)+"/ledger?periodId=$period&offset=$offset",
+        val result=api.request(HttpMethod.Get,path(org)+"/ledger?periodId=$period&offset=$offset&includeSettlements=true",
             options=HiltechRequestOptions(installationId=installation),
             decode={json.decodeFromString(FinanceDeskLedgerDto.serializer(),it)})
         check(financeDeskLedgerMatches(result,org,period,offset)) { "FINANCE_DESK_LEDGER_SCOPE_MISMATCH" }

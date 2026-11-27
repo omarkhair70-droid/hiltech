@@ -464,13 +464,14 @@ class FinanceMixedBankCashPostgresContractTest {
          "FINANCE_CASH_VOUCHER",voucherProposal,"6".repeat(64))
        val voucherApproval=approval("FINANCE_CASH_VOUCHER",
          voucherProposal,505,voucherPolicy,creator)
+       val voucherRecord=UUID.randomUUID()
        insert("""INSERT INTO finance_cash_voucher_record(
          id,operation_id,organization_id,proposal_id,cashbox_id,
          source_kind,source_journal_id,direction,amount,currency,
          approval_request_id,custody_evidence_id,recorded_by_user_id,
          recorded_at,correlation_id)
          VALUES(?,?,?,?,?,'AR',?,'RECEIPT',?,'EGP',?,?,?,?,'mixed-physical-cash')""",
-         UUID.randomUUID(),UUID.randomUUID(),org,voucherProposal,cashbox,
+         voucherRecord,UUID.randomUUID(),org,voucherProposal,cashbox,
          journal,cash50,voucherApproval,voucherEvidence,cashCustodian,
          t.plusHours(5))
        val balance=jdbc.queryForMap(
@@ -504,6 +505,55 @@ class FinanceMixedBankCashPostgresContractTest {
        assertEquals(false,desk.exposure(org,"AR",day,0).isBankBalance)
        assertTrue(desk.exposure(customer,"AR",day,0).records.isEmpty())
        assertTrue(desk.ledger(org,period,50).journals.isEmpty())
+       // Actual recorded source -> approved instrument account -> two exact GL lines.
+       val settlementStore=FinanceSettlementLedgerStore(jdbc)
+       val pairs=listOf("BANK_ALLOCATION" to "AR","CASH_VOUCHER" to "AR","BANK_VOID" to "AR")
+       val beforePosting=settlementStore.queue(org,pairs,0)
+       assertEquals(2,beforePosting.size)
+       assertTrue(beforePosting.all {it.debitAccountId==null && it.creditAccountId==receivable})
+       fun treasury(kind:String,code:String,instrument:UUID):UUID {
+         val id=UUID.randomUUID()
+         val bank=instrument.takeIf {kind=="BANK_ASSET"}
+         val cash=instrument.takeIf {kind=="CASH_ASSET"}
+         insert("""INSERT INTO finance_gl_account(id,organization_id,account_code,account_name,account_kind,currency,state,
+           approved_company_chart_reference,created_at,treasury_bank_account_id,treasury_cashbox_id)
+           VALUES(?,?,?,?,?,'EGP','APPROVED','COMPANY-CHART-2026',?,?,?)""",id,org,code,code,kind,t,bank,cash)
+         return id
+       }
+       val bankGl=treasury("BANK_ASSET","BANK-GL",account)
+       val cashGl=treasury("CASH_ASSET","CASH-GL",cashbox)
+       fun postSettlement(type:String,sourceId:UUID,expectedDebit:UUID,expectedCredit:UUID,expectedAmount:BigDecimal):UUID {
+         val source=checkNotNull(settlementStore.source(org,type,sourceId))
+         assertEquals(expectedDebit,source.debitAccountId)
+         assertEquals(expectedCredit,source.creditAccountId)
+         assertEquals(0,BigDecimal(source.amount).compareTo(expectedAmount))
+         val request=FinanceSettlementPost(UUID.randomUUID(),type,sourceId,"AR",period,expectedDebit,expectedCredit,source.amount,"EGP")
+         val id=UUID.randomUUID()
+         val wrong=connection.setSavepoint()
+         try {
+           assertThrows(DataIntegrityViolationException::class.java) {
+             settlementStore.insert(org,journalRecorder,request.copy(debitAccountId=sales),source,UUID.randomUUID(),t.plusHours(6),"wrong-account")
+           }
+         } finally {connection.rollback(wrong)}
+         settlementStore.insert(org,journalRecorder,request,source,id,t.plusHours(6),"mixed-settlement")
+         assertEquals(id,settlementStore.receipt(org,request.operationId,false)?.journalId)
+         val duplicate=connection.setSavepoint()
+         try {
+           assertThrows(DataIntegrityViolationException::class.java) {
+             settlementStore.insert(org,journalRecorder,request.copy(operationId=UUID.randomUUID()),source,UUID.randomUUID(),t.plusHours(6),"duplicate")
+           }
+         } finally {connection.rollback(duplicate)}
+         return id
+       }
+       val postedBank=postSettlement("BANK_ALLOCATION",bankAllocation,bankGl,receivable,bank100)
+       postSettlement("CASH_VOUCHER",voucherRecord,cashGl,receivable,cash50)
+       assertTrue(settlementStore.queue(org,pairs,0).isEmpty())
+       val expanded=desk.ledger(org,period,0,true)
+       assertEquals(3,expanded.journals.size)
+       assertEquals(0,expanded.movements.single {it.accountId==receivable}.credit.toBigDecimal().compareTo(money))
+       assertTrue(expanded.currencyTotals.single().balanced)
+       assertEquals(3L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,period))
+       assertEquals(1,desk.ledger(org,period,0).journals.size)
        val denied=connection.setSavepoint()
        try {
          assertThrows(DataIntegrityViolationException::class.java) {
@@ -518,6 +568,35 @@ class FinanceMixedBankCashPostgresContractTest {
          """SELECT count(*) FROM finance_cash_allocation_effective
             WHERE organization_id=? AND source_journal_id=?""",
          Long::class.java,org,journal)==1L)
+       // An independently reviewed match correction reverses the earlier GL effect,
+       // not the actual bank statement, and the immutable original remains.
+       val correction=UUID.randomUUID()
+       val correctionPolicy="FINANCE_CASH_ALLOCATION_VOID"
+       insert("""INSERT INTO finance_cash_allocation_void_proposal(id,operation_id,organization_id,original_record_id,
+         source_kind,source_journal_id,bank_statement_line_id,currency,amount,source_ledger_sha256,bank_statement_sha256,
+         approval_subject_version,policy_key,reason_reference,prepared_by_user_id,created_at)
+         VALUES(?,?,?,?,'AR',?,?,'EGP',?,?,?,606,?,?,?,?)""",
+         correction,UUID.randomUUID(),org,bankAllocation,journal,actualBankIds[0],bank100,journalSha,bankSha,
+         correctionPolicy,"SYNTHETIC-CORRECTION",alternativeRecorder,t.plusHours(6))
+       val correctionApproval=approval("FINANCE_CASH_ALLOCATION_VOID",correction,606,correctionPolicy,alternativeRecorder,t.plusHours(7))
+       val correctionRecord=UUID.randomUUID()
+       insert("""INSERT INTO finance_cash_allocation_void_record(id,operation_id,organization_id,proposal_id,original_record_id,
+         source_kind,source_journal_id,bank_statement_line_id,amount,currency,approval_request_id,recorded_by_user_id,recorded_at,correlation_id)
+         VALUES(?,?,?,?,?,'AR',?,?,?,'EGP',?,?,?,'synthetic-void')""",correctionRecord,UUID.randomUUID(),org,correction,
+         bankAllocation,journal,actualBankIds[0],bank100,correctionApproval,bankImporter,t.plusHours(8))
+       val reverse=checkNotNull(settlementStore.source(org,"BANK_VOID",correctionRecord))
+       assertEquals(postedBank,reverse.originalSettlementId)
+       assertEquals(receivable,reverse.debitAccountId)
+       assertEquals(bankGl,reverse.creditAccountId)
+       val reverseRequest=FinanceSettlementPost(UUID.randomUUID(),"BANK_VOID",correctionRecord,"AR",period,receivable,bankGl,reverse.amount,"EGP")
+       settlementStore.insert(org,journalRecorder,reverseRequest,reverse,UUID.randomUUID(),t.plusHours(9),"synthetic-void-ledger")
+       assertTrue(settlementStore.queue(org,pairs,0).isEmpty())
+       val corrected=desk.ledger(org,period,0,true)
+       assertEquals(4,corrected.journals.size)
+       assertTrue(corrected.currencyTotals.single().balanced)
+       assertEquals(0,corrected.movements.single{it.accountId==bankGl}.credit.toBigDecimal().compareTo(bank100))
+       assertEquals(0,desk.exposure(org,"AR",day,0).totals.single().knownOutstanding.toBigDecimal().compareTo(bank100))
+       assertEquals(4L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,period))
      } finally { connection.rollback() }
    }
  }
