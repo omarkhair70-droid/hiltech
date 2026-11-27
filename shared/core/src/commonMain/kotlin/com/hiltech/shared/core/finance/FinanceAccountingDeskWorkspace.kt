@@ -50,7 +50,7 @@ private fun deskKind(kind:String):String=when(kind) {
     "AP" -> hiltechText("الموردون","Suppliers")
     "AR" -> hiltechText("العملاء","Customers")
     "AP_REVERSAL" -> hiltechText("عكس قيد مورد","Supplier reversal")
-    "BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID" -> settlementLedgerTitle(kind)
+    "BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID","EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT" -> settlementLedgerTitle(kind)
     else -> hiltechText("القيود","Journal entries")
 }
 
@@ -123,7 +123,10 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
             ledger?.takeIf { it.periodId==periodId && it.offset==offset && !loading }?.let { data ->
                 HiltechPanel(Modifier.fillMaxWidth()) {
                     Text(hiltechText("حركة الحسابات خلال الفترة","Account movements for the period"),style=MaterialTheme.typography.titleLarge)
-                    Text(if(data.includedSources.containsAll(financeSettlementTypes))
+                    Text(if(data.includedSources.containsAll(financeEmployeeSettlementTypes))
+                        hiltechText("تشمل القيود المرحلة للموردين والعملاء والسداد والتحصيل والسلف والعهد والمصروفات. لا تشمل أرصدة الافتتاح والرواتب والحركات غير المرحلة؛ ليست ميزان مراجعة شاملًا.",
+                            "Includes posted AP/AR, settlement, custody and paid-cost journals. Excludes opening balances, payroll and unposted movements; not a complete trial balance.")
+                    else if(data.includedSources.containsAll(financeSettlementTypes))
                         hiltechText("قيود الموردين والعملاء وعكس الموردين وقيود السداد والتحصيل المرحلة. لا يشمل أرصدة الافتتاح أو الرواتب والنقد غير المرحل؛ ليس ميزان مراجعة شاملًا.",
                             "Posted supplier/customer journals, supplier reversals and posted settlement journals. Excludes opening balances, payroll and unposted cash; not a complete trial balance.")
                     else hiltechText("قيود الموردين والعملاء وعكس الموردين فقط. لا يشمل أرصدة الافتتاح أو قيود الرواتب والنقد غير المرحلة؛ ليس ميزان مراجعة شاملًا.",

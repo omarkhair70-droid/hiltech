@@ -10,7 +10,7 @@ import kotlinx.serialization.json.Json
 
 internal val financeConfigurationKinds = listOf("ACCOUNT","PERIOD","BANK")
 internal val financeConfigurationAccountKinds = listOf("SUPPLIER_PAYABLE","EXPENSE","INVENTORY_ASSET","FIXED_ASSET",
-    "TAX_RECOVERABLE","OTHER_ASSET","CUSTOMER_RECEIVABLE","SALES_REVENUE","TAX_PAYABLE","BANK_ASSET","CASH_ASSET")
+    "TAX_RECOVERABLE","OTHER_ASSET","CUSTOMER_RECEIVABLE","SALES_REVENUE","TAX_PAYABLE","BANK_ASSET","CASH_ASSET","EMPLOYEE_ADVANCE_ASSET","EMPLOYEE_IMPREST_ASSET")
 internal val financeTreasuryAccountKinds=setOf("BANK_ASSET","CASH_ASSET")
 private val currencyPattern = Regex("[A-Z]{3}")
 private val bankMaskPattern = Regex("(?:[A-Za-z][A-Za-z0-9_-]{0,23}:)?[*]{2,12}[0-9]{2,4}")

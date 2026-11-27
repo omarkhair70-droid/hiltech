@@ -80,7 +80,7 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
         return FinanceDeskPeriods(org,rows.take(100),rows.size>100)
     }
 
-    private fun lines(includeSettlements:Boolean) = """
+    private fun lines(includeSettlements:Boolean,includeEmployee:Boolean) = """
         WITH scope AS (SELECT CAST(? AS uuid) AS org,CAST(? AS uuid) AS period),
         posted_lines AS (
             SELECT 'AP' AS kind,j.id AS journal_id,j.posted_at,j.currency,
@@ -103,16 +103,17 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
             SELECT j.source_type,j.id,j.posted_at,j.currency,l.line_number,l.gl_account_id,l.side,l.amount
             FROM scope s JOIN finance_settlement_gl_journal j ON j.organization_id=s.org AND j.period_id=s.period
             JOIN finance_settlement_gl_journal_line l ON l.organization_id=s.org AND l.journal_id=j.id
+            ${if(includeEmployee) "" else "WHERE j.source_type IN('BANK_ALLOCATION','CASH_VOUCHER','BANK_VOID')"}
             """ else ""}
         )
     """.trimIndent()
 
-    fun ledger(org: UUID, period: UUID, offset: Int,includeSettlements:Boolean=false): FinanceDeskLedger {
+    fun ledger(org: UUID, period: UUID, offset: Int,includeSettlements:Boolean=false,includeEmployee:Boolean=false): FinanceDeskLedger {
         val exists = jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM finance_gl_period WHERE organization_id=? AND id=?)",
             Boolean::class.java,org,period)
         if (exists != true) financeDeskUnavailable()
-        val movements = jdbc.query(lines(includeSettlements) + """
+        val movements = jdbc.query(lines(includeSettlements,includeEmployee) + """
             SELECT a.id,a.account_code,a.account_name,a.account_kind,l.currency,
                 SUM(CASE WHEN l.side='DEBIT' THEN l.amount ELSE 0 END) AS debit,
                 SUM(CASE WHEN l.side='CREDIT' THEN l.amount ELSE 0 END) AS credit
@@ -124,7 +125,7 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
             r.getString("account_code"),r.getString("account_name"),r.getString("account_kind"),
             r.getString("currency").trim(),r.getBigDecimal("debit").toPlainString(),
             r.getBigDecimal("credit").toPlainString()) },org,period)
-        val page = jdbc.query(lines(includeSettlements) + """,
+        val page = jdbc.query(lines(includeSettlements,includeEmployee) + """,
             ranked AS (
                 SELECT l.*,DENSE_RANK() OVER(ORDER BY posted_at DESC,kind,journal_id) AS journal_rank
                 FROM posted_lines l
@@ -152,7 +153,8 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
         }
         return FinanceDeskLedger(org,period,offset,page.size>PAGE_SIZE,movements,page.take(PAGE_SIZE),
             includedSources=listOf("AP","AR","AP_REVERSAL")+
-                (if(includeSettlements) listOf("BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID") else emptyList()),
+                (if(includeSettlements) listOf("BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID") else emptyList())+
+                (if(includeSettlements && includeEmployee) listOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT") else emptyList()),
             currencyTotals=currencyTotals)
     }
 
@@ -222,10 +224,10 @@ class FinanceAccountingDeskService @org.springframework.beans.factory.annotation
     }
 
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
-    fun ledger(actor: UUID,org: UUID,period: UUID,offset: Int,includeSettlements:Boolean=false): FinanceDeskLedger {
+    fun ledger(actor: UUID,org: UUID,period: UUID,offset: Int,includeSettlements:Boolean=false,includeEmployee:Boolean=false): FinanceDeskLedger {
         if (offset !in 0..1_000_000) financeDeskUnavailable()
         authorize(actor,org,true)
-        return store.ledger(org,period,offset,includeSettlements)
+        return store.ledger(org,period,offset,includeSettlements,includeEmployee)
     }
 
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
@@ -243,8 +245,9 @@ class FinanceAccountingDeskController(private val desk: FinanceAccountingDeskSer
 
     @GetMapping("/v1/finance/organizations/{orgId}/accounting-desk/ledger")
     fun ledger(http: HttpServletRequest,@PathVariable orgId: UUID,@RequestParam periodId: UUID,
-        @RequestParam(defaultValue="0") offset: Int,@RequestParam(defaultValue="false") includeSettlements:Boolean) =
-        desk.ledger(actor(http),orgId,periodId,offset,includeSettlements)
+        @RequestParam(defaultValue="0") offset: Int,@RequestParam(defaultValue="false") includeSettlements:Boolean,
+        @RequestParam(defaultValue="false") includeEmployee:Boolean) =
+        desk.ledger(actor(http),orgId,periodId,offset,includeSettlements,includeEmployee)
 
     @GetMapping("/v1/finance/organizations/{orgId}/accounting-desk/exposure/{kind}")
     fun exposure(http: HttpServletRequest,@PathVariable orgId: UUID,@PathVariable kind: String,

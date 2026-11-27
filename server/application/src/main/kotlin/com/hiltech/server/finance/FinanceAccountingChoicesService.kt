@@ -66,7 +66,7 @@ class FinanceAccountingChoicesService @org.springframework.beans.factory.annotat
         val accounts=jdbc.query(
             """SELECT id,account_kind,currency,account_code,account_name FROM finance_gl_account
                WHERE organization_id=? AND state='APPROVED'
-                 AND account_kind NOT IN('BANK_ASSET','CASH_ASSET')
+                 AND account_kind NOT IN('BANK_ASSET','CASH_ASSET','EMPLOYEE_ADVANCE_ASSET','EMPLOYEE_IMPREST_ASSET')
                ORDER BY account_code,id LIMIT 101""",
             {rs,_->FinanceGlAccountChoice(
                 rs.getObject("id",UUID::class.java),

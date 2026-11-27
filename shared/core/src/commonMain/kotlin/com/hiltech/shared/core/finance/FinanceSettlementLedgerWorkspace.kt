@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -22,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hiltech.shared.core.design.HiltechKeyValue
 import com.hiltech.shared.core.design.HiltechPanel
+import com.hiltech.shared.core.design.HiltechRecordChoice
+import com.hiltech.shared.core.design.HiltechRecordPicker
 import com.hiltech.shared.core.design.hiltechText
 import com.hiltech.shared.core.network.HiltechApiException
 import com.hiltech.shared.core.people.companyResponsibilityFailureDisposition
@@ -38,6 +42,10 @@ internal fun settlementLedgerTitle(type:String):String=when(type) {
     "BANK_ALLOCATION"->hiltechText("تخصيص بنكي","Bank allocation")
     "CASH_VOUCHER"->hiltechText("سند خزنة","Cash voucher")
     "BANK_VOID"->hiltechText("عكس تخصيص سابق","Reverse an earlier allocation")
+    "EMPLOYEE_FUNDING"->hiltechText("صرف سلفة أو عهدة","Employee advance or imprest funding")
+    "EMPLOYEE_RETURN"->hiltechText("استرداد سلفة أو رد عهدة","Employee advance recovery or custody return")
+    "IMPREST_EXPENSE"->hiltechText("تسوية مستندات عهدة","Accepted imprest receipts")
+    "EXPENSE_REIMBURSEMENT"->hiltechText("رد مصروف موظف","Employee expense reimbursement")
     else->hiltechText("قيد تسوية","Settlement journal")
 }
 
@@ -59,6 +67,11 @@ internal fun FinanceSettlementLedgerSection(client:FinanceSettlementLedgerApiCli
     var rejected by rememberSaveable {mutableStateOf(false)}
     var saved by remember {mutableStateOf<FinanceSettlementReceiptDto?>(null)}
     val pending=pendingJson?.let {Json.decodeFromString(SettlementAttempt.serializer(),it)}
+    var choiceSource by rememberSaveable {mutableStateOf("")}
+    var chosenDebit by rememberSaveable {mutableStateOf("")}
+    var treatment by rememberSaveable {mutableStateOf("")}
+    var firstRecognition by rememberSaveable {mutableStateOf(false)}
+    fun clearChoice(){choiceSource="";chosenDebit="";treatment="";firstRecognition=false}
     LaunchedEffect(busy,pendingJson) {onLockedChange(busy || pendingJson!=null)}
     fun refresh() {data=null;loading=true;revision++}
     LaunchedEffect(client,org,installation,offset,revision) {
@@ -70,8 +83,8 @@ internal fun FinanceSettlementLedgerSection(client:FinanceSettlementLedgerApiCli
     }
 
     Text(hiltechText("قيود السداد والتحصيل","Settlement accounting"),style=MaterialTheme.typography.titleLarge)
-    Text(hiltechText("ترحيل أثر السندات والتخصيصات المسجلة مسبقًا إلى دليل الحسابات. لا ينفّذ تحويلًا بنكيًا ولا يؤكد رصيد البنك الكامل.",
-        "Post the accounting effect of recorded allocations and vouchers. This does not initiate a bank transfer or confirm the full bank balance."))
+    Text(hiltechText("ترحيل السداد والتحصيل والسلف والعهد والمصروفات المسجلة. لا ينفّذ تحويلًا بنكيًا ولا يؤكد رصيد البنك الكامل.",
+        "Post recorded payments, collections, employee custody and paid costs. No bank transfer is initiated and no full bank balance is asserted."))
     if(loading) Text(hiltechText("جارٍ قراءة الحركات…","Reading recorded movements…"))
     TextButton(enabled=!busy && !loading,onClick={error=null;refresh()}) {Text(hiltechText("تحديث من المصدر","Refresh source"))}
     saved?.let { receipt ->
@@ -92,20 +105,48 @@ internal fun FinanceSettlementLedgerSection(client:FinanceSettlementLedgerApiCli
                 Text(item.instrumentName)
                 Text(item.amount+" "+item.currency,style=MaterialTheme.typography.headlineSmall)
                 HiltechKeyValue(hiltechText("سُجل المصدر","Source recorded"),item.sourceRecordedAt.replace('T',' '))
-                if(item.debitAccountName==null || item.creditAccountName==null)
-                    Text(hiltechText("الحساب المقابل غير مكتمل. اربط البنك أو الخزنة بحساب معتمد في الإعداد المالي.",
-                        "The counterpart account is incomplete. Link the bank or cashbox to an approved account in financial setup."))
-                else {
-                    HiltechKeyValue(hiltechText("مدين","Debit"),item.debitAccountName)
-                    HiltechKeyValue(hiltechText("دائن","Credit"),item.creditAccountName)
+                val selecting=choiceSource==item.sourceId && pending==null
+                val required=item.requiredDebitKind
+                val selectedChoice=item.debitChoices.singleOrNull {selecting && it.id==chosenDebit}
+                val debitName=selectedChoice?.name ?: item.debitAccountName
+                if(item.creditAccountName==null || (required==null && debitName==null))
+                    Text(hiltechText("الحساب المقابل غير مكتمل. اربط مصدر البنك أو الخزنة أو رحّل أصل السلفة والعهدة أولًا.",
+                        "Counterpart account is incomplete. Link the bank/cashbox or post the original employee funding first."))
+                if(required!=null) {
+                    if(!selecting) TextButton(enabled=pending==null && !busy,onClick={
+                        clearChoice();choiceSource=item.sourceId
+                    }) {Text(hiltechText("اختيار الحساب المدين","Choose debit account"))}
+                    else {
+                        HiltechRecordPicker(hiltechText("الحساب المعتمد","Approved account"),chosenDebit,
+                            item.debitChoices.map {HiltechRecordChoice(it.id,it.name,it.code)},
+                            onChange={chosenDebit=it},allowKnownReference=false,allowClear=false,enabled=!busy)
+                        if(item.debitChoices.isEmpty()) Text(hiltechText("لا يوجد حساب مناسب معتمد في دليل الحسابات.","No suitable approved chart account."))
+                        if(item.hasMoreDebitChoices) Text(hiltechText("تظهر أول 100 حساب مطابق.","Showing the first 100 matching accounts."))
+                        if(required=="COST") {
+                            Text(hiltechText("يستخدم هذا المسار للمبلغ الذي لم يُثبت محاسبيًا من قبل وينتمي بالكامل إلى حساب واحد. إذا سُجل سابقًا أو يحتاج توزيعًا فلا ترحّله هنا.",
+                                "Use only for an amount not previously recognized that belongs entirely to one account. Do not post here if previously accrued or needing a split."))
+                            Row {
+                                Checkbox(checked=firstRecognition,onCheckedChange={firstRecognition=it},enabled=!busy)
+                                Text(hiltechText("تحققت من عدم تسجيل المبلغ سابقًا ومن صحة التصنيف الكامل.","I verified no prior recognition and the classification of the entire amount."))
+                            }
+                            OutlinedTextField(treatment,{treatment=it.take(240)},Modifier.fillMaxWidth(),singleLine=true,
+                                label={Text(hiltechText("مرجع المعالجة المحاسبية المعتمدة","Approved accounting treatment reference"))},enabled=!busy)
+                        }
+                    }
                 }
+                debitName?.let {HiltechKeyValue(hiltechText("مدين","Debit"),it)}
+                item.creditAccountName?.let {HiltechKeyValue(hiltechText("دائن","Credit"),it)}
                 if(item.sourceType=="BANK_VOID") Text(hiltechText("تصحيح قيد التخصيص؛ لا يعني رد أموال من البنك.","Accounting allocation correction, not proof of a bank refund."))
-                val ready=q.period!=null && item.debitAccountId!=null && item.creditAccountId!=null &&
-                    item.debitAccountId!=item.creditAccountId && item.debitAccountName!=null && item.creditAccountName!=null
+                val debitId=selectedChoice?.id ?: item.debitAccountId
+                val treatmentRef=treatment.trim().takeIf {required=="COST"}
+                val ready=q.period!=null && debitId!=null && item.creditAccountId!=null &&
+                    debitId!=item.creditAccountId && debitName!=null && item.creditAccountName!=null &&
+                    (required==null || selectedChoice!=null) && (required!="COST" || (firstRecognition && treatmentRef.orEmpty().length>=8))
                 OutlinedButton(enabled=ready && pending==null && !busy,onClick={
                     val period=q.period ?: return@OutlinedButton
-                    val intent=financeSettlementIntent(item,period,newOperationId()) ?: return@OutlinedButton
-                    pendingJson=Json.encodeToString(SettlementAttempt.serializer(),SettlementAttempt(intent,item,period))
+                    val intent=financeSettlementIntent(item,period,newOperationId(),selectedChoice?.id,treatmentRef) ?: return@OutlinedButton
+                    val reviewed=item.copy(debitAccountId=debitId,debitAccountName=debitName,debitChoices=emptyList())
+                    pendingJson=Json.encodeToString(SettlementAttempt.serializer(),SettlementAttempt(intent,reviewed,period))
                     attempted=false;uncertain=false;rejected=false;error=null;saved=null
                 }) {Text(hiltechText("مراجعة القيد","Review journal"))}
             }
@@ -125,6 +166,7 @@ internal fun FinanceSettlementLedgerSection(client:FinanceSettlementLedgerApiCli
             HiltechKeyValue(hiltechText("الفترة","Period"),attempt.period.dateStart+" — "+attempt.period.dateEnd)
             HiltechKeyValue(hiltechText("مدين","Debit"),attempt.source.debitAccountName.orEmpty())
             HiltechKeyValue(hiltechText("دائن","Credit"),attempt.source.creditAccountName.orEmpty())
+            attempt.intent.accountingTreatmentRef?.let {HiltechKeyValue(hiltechText("مرجع المعالجة","Treatment reference"),it)}
             if(uncertain) Text(hiltechText("نتيجة الطلب السابق غير مؤكدة. إعادة نفس الطلب آمنة ولا تنشئ قيدًا ثانيًا.",
                 "Previous outcome is unconfirmed. Retry the identical request; it cannot create a second journal."))
             Button(enabled=!busy && !loading,onClick={
@@ -136,7 +178,7 @@ internal fun FinanceSettlementLedgerSection(client:FinanceSettlementLedgerApiCli
                         try {
                             attempted=true;uncertain=true
                             saved=client.post(org,attempt.intent,installation)
-                            pendingJson=null;attempted=false;uncertain=false;rejected=false;offset=0;refresh()
+                            pendingJson=null;attempted=false;uncertain=false;rejected=false;clearChoice();offset=0;refresh()
                         } catch(cancelled:CancellationException){throw cancelled}
                         catch(failure:Exception){
                             error=(failure as? HiltechApiException)?.code ?: "OUTCOME_UNCONFIRMED"
