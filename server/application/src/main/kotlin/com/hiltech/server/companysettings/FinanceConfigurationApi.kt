@@ -20,6 +20,11 @@ class FinanceConfigurationController(private val service: FinanceConfigurationSe
         @RequestParam kind: FinanceConfigurationKind,@RequestParam(defaultValue="0") offset: Int): ResponseEntity<FinanceConfigurationPage> =
         ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.page(actor(request),organizationId,kind,offset))
 
+    @GetMapping("/v1/organizations/{organizationId}/administration/financial-configuration/treasury-instruments")
+    fun treasuryInstruments(request: HttpServletRequest,@PathVariable organizationId: UUID,
+        @RequestParam accountKind: String):ResponseEntity<FinanceTreasuryInstrumentPage> =
+        ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.treasuryInstruments(actor(request),organizationId,accountKind))
+
     @PostMapping("/v1/organizations/{organizationId}/administration/financial-configuration")
     fun create(request: HttpServletRequest,@AuthenticationPrincipal jwt: Jwt,@PathVariable organizationId: UUID,
         @RequestHeader("Idempotency-Key") idempotencyKey: String,

@@ -30,6 +30,7 @@ data class FinanceConfigurationInput(
     val currency: String? = null,
     val startDate: String? = null,
     val endDate: String? = null,
+    val treasuryInstrumentId: UUID? = null,
 )
 data class FinanceConfigurationRecord(
     val id: UUID,
@@ -42,14 +43,19 @@ data class FinanceConfigurationRecord(
     val currency: String? = null,
     val startDate: String? = null,
     val endDate: String? = null,
+    val treasuryInstrumentId: UUID? = null,
 )
+data class FinanceTreasuryInstrument(val id: UUID,val name: String,val currency: String)
+data class FinanceTreasuryInstrumentPage(val organizationId: UUID,val accountKind: String,
+    val records: List<FinanceTreasuryInstrument>,val hasMore: Boolean)
 data class FinanceConfigurationPage(val organizationId: UUID, val kind: String,
     val offset: Int, val hasMore: Boolean, val records: List<FinanceConfigurationRecord>)
 data class FinanceConfigurationReceipt(val operationId: UUID, val organizationId: UUID,
     val record: FinanceConfigurationRecord, val replayed: Boolean)
 
 private val financeAccountKinds = setOf("SUPPLIER_PAYABLE", "EXPENSE", "INVENTORY_ASSET", "FIXED_ASSET",
-    "TAX_RECOVERABLE", "OTHER_ASSET", "CUSTOMER_RECEIVABLE", "SALES_REVENUE", "TAX_PAYABLE")
+    "TAX_RECOVERABLE", "OTHER_ASSET", "CUSTOMER_RECEIVABLE", "SALES_REVENUE", "TAX_PAYABLE","BANK_ASSET","CASH_ASSET")
+private val treasuryKinds=setOf("BANK_ASSET","CASH_ASSET")
 private val currencyPattern = Regex("[A-Z]{3}")
 private val maskedBankPattern = Regex("(?:[A-Za-z][A-Za-z0-9_-]{0,23}:)?[*]{2,12}[0-9]{2,4}")
 private fun plain(value: String?, min: Int, max: Int): Boolean =
@@ -65,16 +71,18 @@ internal fun validFinanceConfiguration(input: FinanceConfigurationInput): Boolea
     return when (input.kind) {
         FinanceConfigurationKind.ACCOUNT ->
             plain(input.code, 1, 64) && plain(input.name, 1, 180) && input.accountKind in financeAccountKinds &&
-                input.startDate == null && input.endDate == null
+                input.startDate == null && input.endDate == null &&
+                if(input.accountKind in treasuryKinds) input.treasuryInstrumentId!=null && input.currency!=null
+                else input.treasuryInstrumentId==null
         FinanceConfigurationKind.PERIOD -> {
             val start = date(input.startDate)
             val end = date(input.endDate)
             input.code == null && input.name == null && input.accountKind == null && input.currency == null &&
-                start != null && end != null && !end.isBefore(start)
+                input.treasuryInstrumentId==null && start != null && end != null && !end.isBefore(start)
         }
         FinanceConfigurationKind.BANK ->
             input.code?.matches(maskedBankPattern) == true && plain(input.name, 3, 160) && input.currency != null &&
-                input.accountKind == null && input.startDate == null && input.endDate == null
+                input.accountKind == null && input.startDate == null && input.endDate == null && input.treasuryInstrumentId==null
     }
 }
 
@@ -102,6 +110,28 @@ class FinanceConfigurationService(
         return FinanceConfigurationPage(org, kind.name, offset, rows.size > 50, rows.take(50))
     }
 
+    @Transactional(readOnly=true)
+    fun treasuryInstruments(actor: UUID,org: UUID,kind: String): FinanceTreasuryInstrumentPage {
+        requireAuthority(actor,org)
+        if(kind !in treasuryKinds) invalid()
+        val sql=if(kind=="BANK_ASSET") """
+            SELECT b.id,b.bank_name || ' · ' || b.masked_account_reference AS name,b.currency
+            FROM finance_bank_account_register b WHERE b.organization_id=? AND b.state='APPROVED'
+              AND NOT EXISTS(SELECT 1 FROM finance_gl_account a WHERE a.organization_id=b.organization_id
+                AND a.treasury_bank_account_id=b.id)
+            ORDER BY b.bank_name,b.id LIMIT 101
+        """ else """
+            SELECT b.id,b.cashbox_code AS name,b.currency FROM finance_cashbox_register b
+            WHERE b.organization_id=? AND b.status='ACTIVE'
+              AND NOT EXISTS(SELECT 1 FROM finance_gl_account a WHERE a.organization_id=b.organization_id
+                AND a.treasury_cashbox_id=b.id)
+            ORDER BY b.cashbox_code,b.id LIMIT 101
+        """
+        val rows=jdbc.query(sql,{r,_->FinanceTreasuryInstrument(r.getObject("id",UUID::class.java),r.getString("name"),
+            r.getString("currency").trim())},org)
+        return FinanceTreasuryInstrumentPage(org,kind,rows.take(100),rows.size>100)
+    }
+
     fun create(actor: UUID, org: UUID, input: FinanceConfigurationInput, correlation: String): FinanceConfigurationReceipt {
         requireAuthority(actor, org)
         if (!validFinanceConfiguration(input)) invalid()
@@ -111,6 +141,8 @@ class FinanceConfigurationService(
             put("authorizationReference", input.authorizationReference)
             put("code", input.code); put("name", input.name); put("accountKind", input.accountKind)
             put("currency", input.currency); put("startDate", input.startDate); put("endDate", input.endDate)
+            // Retain the old semantic fingerprint for ordinary account/period/bank requests.
+            input.treasuryInstrumentId?.let { put("treasuryInstrumentId",it.toString()) }
         }.toString())
         val execution = commands.execute(IdempotentCommandSpec(input.operationId, actor,
             "FINANCE_CONFIGURATION_CREATE", "FINANCE_CONFIGURATION", id, fingerprint, correlation)) {
@@ -124,10 +156,23 @@ class FinanceConfigurationService(
                 FinanceConfigurationKind.ACCOUNT -> {
                     if (exists("SELECT EXISTS(SELECT 1 FROM finance_gl_account WHERE organization_id=? AND account_code=?)", org, input.code))
                         conflict("This chart account code already exists.")
+                    val bank=input.treasuryInstrumentId?.takeIf { input.accountKind=="BANK_ASSET" }
+                    val cash=input.treasuryInstrumentId?.takeIf { input.accountKind=="CASH_ASSET" }
+                    if(bank!=null && !exists("""SELECT EXISTS(SELECT 1 FROM finance_bank_account_register b
+                        WHERE b.organization_id=? AND b.id=? AND b.currency=? AND b.state='APPROVED'
+                        AND NOT EXISTS(SELECT 1 FROM finance_gl_account a WHERE a.organization_id=b.organization_id
+                          AND a.treasury_bank_account_id=b.id))""",org,bank,input.currency))
+                        conflict("The approved bank account is unavailable or already linked.")
+                    if(cash!=null && !exists("""SELECT EXISTS(SELECT 1 FROM finance_cashbox_register b
+                        WHERE b.organization_id=? AND b.id=? AND b.currency=? AND b.status='ACTIVE'
+                        AND NOT EXISTS(SELECT 1 FROM finance_gl_account a WHERE a.organization_id=b.organization_id
+                          AND a.treasury_cashbox_id=b.id))""",org,cash,input.currency))
+                        conflict("The approved cashbox is unavailable or already linked.")
                     jdbc.update("""INSERT INTO finance_gl_account
-                        (id,organization_id,account_code,account_name,account_kind,currency,state,approved_company_chart_reference,created_at)
-                        VALUES(?,?,?,?,?,?,'APPROVED',?,?)""",
-                        id,org,input.code,input.name,input.accountKind,input.currency,input.authorizationReference,now)
+                        (id,organization_id,account_code,account_name,account_kind,currency,state,approved_company_chart_reference,
+                         created_at,treasury_bank_account_id,treasury_cashbox_id)
+                        VALUES(?,?,?,?,?,?,'APPROVED',?,?,?,?)""",
+                        id,org,input.code,input.name,input.accountKind,input.currency,input.authorizationReference,now,bank,cash)
                 }
                 FinanceConfigurationKind.PERIOD -> {
                     val start = java.sql.Date.valueOf(requireNotNull(date(input.startDate)))
@@ -173,7 +218,8 @@ class FinanceConfigurationService(
                 WHERE r.organization_id=?$predicate ORDER BY r.account_code,r.id LIMIT ? OFFSET ?""", { r,_ ->
                 FinanceConfigurationRecord(r.getObject("id",UUID::class.java),kind.name,r.getString("state"),
                     r.getString("approved_company_chart_reference"),r.getString("account_code"),r.getString("account_name"),
-                    r.getString("account_kind"),r.getString("currency")?.trim())
+                    r.getString("account_kind"),r.getString("currency")?.trim(),treasuryInstrumentId=
+                    r.getObject("treasury_bank_account_id",UUID::class.java) ?: r.getObject("treasury_cashbox_id",UUID::class.java))
             }, *args)
             FinanceConfigurationKind.PERIOD -> jdbc.query("""SELECT r.*,
                 CASE WHEN EXISTS(SELECT 1 FROM finance_gl_period_close c WHERE c.organization_id=r.organization_id
