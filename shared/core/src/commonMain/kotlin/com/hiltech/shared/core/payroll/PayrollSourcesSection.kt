@@ -73,7 +73,7 @@ internal fun validPayrollSource(request: PayrollSourceRequestDto): Boolean {
 internal fun payrollSourceDomainLabel(domain: String): String = when (domain) {
     "POLICY" -> hiltechText("سياسة الحساب", "Calculation policy")
     "COMPENSATION" -> hiltechText("الأجر والاستحقاقات الثابتة", "Compensation")
-    "APPROVED_TIME" -> hiltechText("الوقت والبدلات المعتمدة", "Approved time and allowances")
+    "APPROVED_TIME" -> hiltechText("البدلات والمتغيرات المعتمدة", "Approved allowances and variable pay")
     "FINANCE" -> hiltechText("الخصومات والمستردات", "Deductions and reimbursements")
     else -> domain
 }
@@ -86,6 +86,17 @@ internal fun payrollSourceStateLabel(state: String): String = when (state) {
     "CHANGE_REQUESTED" -> hiltechText("تعديل مطلوب", "Changes requested")
     "POLICY_REVIEW_REQUIRED" -> hiltechText("سياسة المراجعة تغيّرت", "Review policy changed")
     else -> hiltechText("مسودة", "Draft")
+}
+
+private val employeePayrollDomains = listOf("COMPENSATION", "APPROVED_TIME", "FINANCE")
+
+/** Start with missing facts, then work needing preparation. Pending reviews are not new inputs. */
+internal fun nextEmployeePayrollSource(records: List<PayrollSourceRecordDto>, employeeId: String): String? {
+    val byDomain = records.filter { it.employeeId == employeeId }.groupBy { it.domain }
+    return employeePayrollDomains.firstOrNull { byDomain[it].isNullOrEmpty() }
+        ?: employeePayrollDomains.firstOrNull { domain ->
+            byDomain[domain]?.singleOrNull()?.approvalState in setOf("DRAFT", "REJECTED", "CHANGE_REQUESTED", "POLICY_REVIEW_REQUIRED")
+        }
 }
 
 /** One source editor and review view shared by Windows and Android. */
@@ -116,21 +127,34 @@ fun PayrollSourcesSection(
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         HiltechSectionHeading("INPUTS", hiltechText("مصادر المرتبات", "Payroll sources"),
-            hiltechText("أضف القيم من مستنداتها، ثم أرسل كل مصدر للمراجعة. يحتفظ النظام بكل نسخة وتاريخ اعتمادها.",
-                "Record values from their source documents, then submit each source for review. Every revision and approval is retained."))
+            hiltechText("ابدأ بالموظف واستحقاقاته الفعلية لهذه الفترة. لا يُطلب سجل حضور لتسجيل الأجر أو البدلات؛ استخدم مصدر الاستحقاق المعتمد.",
+                "Start with the employee and actual entitlements for this period. A time clock is not required to record pay or allowances; use the authorized entitlement source."))
         if (!sources.reviewPolicyReady) Text(hiltechText(
             "يمكن تجهيز المصادر الآن. يلزم تعيين مراجع مستقل لسياسة مصادر المرتبات من إدارة الشركة قبل الاعتماد.",
             "Sources can be prepared now. Assign an independent payroll source reviewer in company administration before approval."))
         if (employees.isNotEmpty()) {
-            val complete = employees.count { employee -> listOf("COMPENSATION", "APPROVED_TIME", "FINANCE").all { owner ->
-                sources.records.any { it.domain == owner && it.employeeId == employee.employeeId && it.approvalState == "APPROVED" }
+            val complete = employees.count { employee -> employeePayrollDomains.all { owner ->
+                sources.records.singleOrNull { it.domain == owner && it.employeeId == employee.employeeId }?.approvalState == "APPROVED"
             } }
-            Text(hiltechText("مصادر الموظفين المعتمدة بالكامل: ", "Employees with all sources approved: ") + complete + " / " + employees.size)
+            Text(hiltechText("موظفون اكتملت مراجعة مصادرهم: ", "Employees with reviewed sources: ") + complete + " / " + employees.size)
+            HiltechRecordPicker(hiltechText("ملف استحقاقات موظف", "Employee pay sources"), employeeId,
+                employees.map { employee -> HiltechRecordChoice(employee.employeeId, employee.displayName, employee.employeeCode) },
+                onChange = { id ->
+                    employeeId = id
+                    domain = nextEmployeePayrollSource(sources.records, id) ?: "COMPENSATION"
+                    editing = null
+                }, allowKnownReference = false, allowClear = false, enabled = !locked && editing == null)
+            if (employeeId.isNotBlank() && domain != "POLICY") {
+                val next = nextEmployeePayrollSource(sources.records, employeeId)
+                if (next != null && next != domain) TextButton(enabled = !locked && editing == null, onClick = { domain = next }) {
+                    Text(hiltechText("انتقل للمصدر التالي: ", "Continue to next source: ") + payrollSourceDomainLabel(next))
+                }
+            }
             TextButton(onClick = { showCoverage = !showCoverage }) { Text(if (showCoverage)
                 hiltechText("إخفاء جاهزية الموظفين", "Hide employee readiness") else hiltechText("عرض جاهزية جميع الموظفين", "View every employee's readiness")) }
             if (showCoverage) HiltechRecordTable(
                 listOf(HiltechTableColumn(hiltechText("الموظف", "Employee")), HiltechTableColumn(hiltechText("الأجر", "Compensation")),
-                    HiltechTableColumn(hiltechText("الوقت", "Time")), HiltechTableColumn(hiltechText("المالية", "Finance"))),
+                    HiltechTableColumn(hiltechText("المتغيرات", "Variable pay")), HiltechTableColumn(hiltechText("المالية", "Finance"))),
                 employees.map { employee -> HiltechTableRecord(listOf(employee.displayName) +
                     listOf("COMPENSATION", "APPROVED_TIME", "FINANCE").map { owner ->
                         sources.records.singleOrNull { it.domain == owner && it.employeeId == employee.employeeId }
@@ -149,10 +173,10 @@ fun PayrollSourcesSection(
         HiltechRecordPicker(hiltechText("المصدر", "Source"), domain,
             listOf("POLICY", "COMPENSATION", "APPROVED_TIME", "FINANCE").map { HiltechRecordChoice(it, payrollSourceDomainLabel(it)) },
             onChange = { domain = it; editing = null }, allowKnownReference = false, allowClear = false, enabled = !locked && editing == null)
-        if (domain != "POLICY") HiltechRecordPicker(hiltechText("الموظف", "Employee"), employeeId,
-            employees.map { HiltechRecordChoice(it.employeeId, it.displayName, it.employeeCode) },
-            onChange = { employeeId = it; editing = null }, allowKnownReference = false, allowClear = false,
-            enabled = !locked && editing == null)
+        if (domain == "APPROVED_TIME") Text(hiltechText(
+            "سجّل البدلات والاستحقاقات المتغيرة المقررة فعلًا، والعمل الإضافي إن وجد. عدم وجود بصمة حضور لا يعني عدم وجود أجر مستحق.",
+            "Record actual authorized allowances and variable entitlements, including overtime when applicable. No clock-in record does not mean no earned pay."),
+            style = MaterialTheme.typography.bodySmall)
         if (domain == "POLICY" || employeeId.isNotBlank()) {
             selected?.let { record ->
                 HiltechPanel(Modifier.fillMaxWidth()) {
@@ -227,7 +251,9 @@ fun PayrollSourcesSection(
                     if (draft.domain != "COMPENSATION") Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(draft.noInputs, onCheckedChange = { none -> editing = draft.copy(noInputs = none,
                             components = if (none) emptyList() else listOf(newSourceComponent(draft.domain, 1))) }, enabled = !locked)
-                        Text(hiltechText("تمت مراجعة المصدر ولا توجد قيم لهذه الفترة", "This source was checked and has no inputs for this period"), Modifier.weight(1f))
+                        Text(if (draft.domain == "APPROVED_TIME")
+                            hiltechText("راجعت الاستحقاقات المتغيرة ولا توجد مبالغ إضافية لهذه الفترة", "Variable entitlements were reviewed; no additional amounts for this period")
+                        else hiltechText("تمت مراجعة المصدر ولا توجد قيم لهذه الفترة", "This source was checked and has no inputs for this period"), Modifier.weight(1f))
                     }
                     draft.components.forEachIndexed { index, component ->
                         Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
