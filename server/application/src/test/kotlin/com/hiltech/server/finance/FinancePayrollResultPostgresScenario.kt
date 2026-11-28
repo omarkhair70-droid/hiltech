@@ -157,9 +157,15 @@ object FinancePayrollResultPostgresScenario {
                 assertTrue(adapter.paymentEvents(org,run).isEmpty())
                 assertEquals(1L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,glPeriod))
 
+                fun instructionReview()=jdbc.queryForMap("""SELECT posted_payments,posted_returns,event_count,unposted_count,void_count,pending_count,no_result_count
+                    FROM finance_payroll_instruction_review WHERE organization_id=? AND instruction_id=?""",org,instruction.id)
+                assertEquals(1L,instructionReview()["no_result_count"])
+                assertEquals(0,BigDecimal.ZERO.compareTo(instructionReview()["posted_payments"] as BigDecimal))
+
                 val successRequest = FinancePayrollPrepareResult(UUID.randomUUID(), 0, "SUCCESS", debit.line,
                     beneficiaryConfirmed = true, reason = "Synthetic exact beneficiary and amount checked")
                 val successProposal = service.propose(preparer, org, instruction.id, successRequest, "synthetic-payroll-result")
+                assertEquals(1L,instructionReview()["pending_count"])
                 assertTrue(service.propose(preparer, org, instruction.id, successRequest, "synthetic-payroll-result").replayed)
                 assertTrue(adapter.paymentEvents(org, run).isEmpty())
                 assertTrue(service.run(reviewer, org, run).proposals.single().canReview)
@@ -241,8 +247,13 @@ object FinancePayrollResultPostgresScenario {
                 assertTrue(jdbc.queryForObject("SELECT fully_matched FROM finance_bank_reconciliation_snapshot WHERE organization_id=? AND intake_id=?",
                     Boolean::class.java, org, debit.intake) == true)
                 val firstEvent = repo.latest(org, instruction.id)!!
+                assertEquals(1L,instructionReview()["unposted_count"])
+                assertEquals(0,BigDecimal.ZERO.compareTo(instructionReview()["posted_payments"] as BigDecimal))
                 rejectedPayroll{postPayroll("PAYROLL_PAYMENT",firstEvent.id,null,liabilityGl,creditBankGl)}
                 val firstGl=postPayroll("PAYROLL_PAYMENT",firstEvent.id,null,liabilityGl,debitBankGl)
+                assertEquals(0L,instructionReview()["unposted_count"])
+                assertEquals(0,instruction.amount.compareTo(instructionReview()["posted_payments"] as BigDecimal))
+                assertEquals(0L,instructionReview()["pending_count"])
                 rejectedPayroll{postPayroll("PAYROLL_PAYMENT",firstEvent.id,null,liabilityGl,debitBankGl)}
 
                 val voidRequest = FinancePayrollPrepareResult(UUID.randomUUID(), firstEvent.version, "VOID_MATCH",
@@ -276,6 +287,9 @@ object FinancePayrollResultPostgresScenario {
                 val voidEvent=repo.latest(org,instruction.id)!!
                 rejectedPayroll{postPayroll("PAYROLL_VOID",voidEvent.id,firstGl,creditBankGl,liabilityGl)}
                 postPayroll("PAYROLL_VOID",voidEvent.id,firstGl,debitBankGl,liabilityGl)
+                assertEquals(1L,instructionReview()["void_count"])
+                assertEquals(0,BigDecimal.ZERO.compareTo(instructionReview()["posted_payments"] as BigDecimal))
+                assertEquals(0,BigDecimal.ZERO.compareTo(instructionReview()["posted_returns"] as BigDecimal))
                 assertEquals(instruction.amount, repo.bank(org, debit.line)!!.remaining)
                 assertNotEquals(matchedHash, matchHash(jdbc, org, debit.intake))
                 assertFalse(jdbc.queryForObject("SELECT fully_matched FROM finance_bank_reconciliation_snapshot WHERE organization_id=? AND intake_id=?",
@@ -301,6 +315,9 @@ object FinancePayrollResultPostgresScenario {
                 assertEquals("RETURNED", service.run(preparer, org, run).instructions.single().outcome)
                 val returnedEvent=repo.latest(org,instruction.id)!!
                 postPayroll("PAYROLL_RETURN",returnedEvent.id,secondGl,creditBankGl,liabilityGl)
+                assertEquals(0,instruction.amount.compareTo(instructionReview()["posted_returns"] as BigDecimal))
+                assertEquals(0,instruction.amount.compareTo(instructionReview()["posted_payments"] as BigDecimal))
+                assertEquals(1L,instructionReview()["void_count"])
                 assertEquals(5L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,glPeriod))
                 val balance=requireNotNull(jdbc.queryForObject("""SELECT sum(CASE WHEN l.side='CREDIT' THEN l.amount ELSE -l.amount END)
                     FROM finance_payroll_gl_journal_line l JOIN finance_payroll_gl_journal j ON j.id=l.journal_id AND j.organization_id=l.organization_id

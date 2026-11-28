@@ -602,6 +602,7 @@ private fun FinancePayrollCorrectionSection(client:FinancePayrollDisbursementApi
                 view.records.singleOrNull{it.replacementRunVersionId==selected}?.let{row->
                     HiltechKeyValue(hiltechText("صافي الكشف السابق","Previous net"),row.originalNet+" "+row.currency)
                     HiltechKeyValue(hiltechText("صافي المسودة المصححة","Replacement net"),row.replacementNet+" "+row.currency)
+                    FinancePayrollCorrectionEmployeeReview(client,org,installation,row,refresh)
                     val disposition=row.eligibleDisposition
                     val label=when(disposition){
                         "NO_PRIOR_TRANSFER_VERIFIED"->hiltechText("اعتماد عدم حدوث تحويل سابق","Attest no prior transfer")
@@ -625,6 +626,71 @@ private fun FinancePayrollCorrectionSection(client:FinancePayrollDisbursementApi
                         }){Text(hiltechText("مراجعة اعتماد التصحيح","Review clearance"))}
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FinancePayrollCorrectionEmployeeReview(client:FinancePayrollDisbursementApiClient,org:String,installation:String,
+    row:FinancePayrollCorrectionCandidateDto,refresh:Int) {
+    var expanded by rememberSaveable(org,row.replacementRunVersionId){mutableStateOf(false)}
+    var offset by remember(org,row.replacementRunVersionId){mutableIntStateOf(0)}
+    var revision by remember(org,row.replacementRunVersionId){mutableIntStateOf(0)}
+    var data by remember(org,row.replacementRunVersionId){mutableStateOf<FinancePayrollCorrectionReviewPageDto?>(null)}
+    var loading by remember{mutableStateOf(false)}
+    var failed by remember{mutableStateOf(false)}
+    LaunchedEffect(client,org,installation,row.replacementRunVersionId,expanded,offset,revision,refresh){
+        data=null;failed=false
+        if(expanded){
+            loading=true
+            try{data=client.correctionEmployees(org,row.originalRunVersionId,row.replacementRunVersionId,row.currency,offset,installation)}
+            catch(c:CancellationException){throw c}
+            catch(_:Exception){failed=true}
+            finally{loading=false}
+        }else loading=false
+    }
+    TextButton(onClick={expanded=!expanded}){Text(if(expanded)hiltechText("إخفاء تفاصيل الموظفين","Hide employee details")else
+        hiltechText("مراجعة الفروق لكل موظف","Review differences by employee"))}
+    if(expanded){
+        Text(hiltechText("الفرق بين الكشفين مستقل عن الفرق بين الاستحقاق والصرف المثبت. لا تُجمع مستحقات موظف مع مبالغ زائدة لدى موظف آخر. هذه مراجعة، وليست اعتماد صرف أو خصم.",
+            "Entitlement changes differ from the gap against recorded payments. Do not offset one employee against another. This review does not authorize payment or recovery."),style=MaterialTheme.typography.bodySmall)
+        if(loading)CircularProgressIndicator()
+        if(failed){
+            Text(hiltechText("تعذر قراءة تفاصيل التسوية. حدّث المصدر.","Could not read reconciliation details. Refresh the source."),color=MaterialTheme.colorScheme.error)
+            TextButton(onClick={revision++}){Text(hiltechText("إعادة المحاولة","Retry"))}
+        }
+        data?.let{page->
+            if(page.rows.isEmpty())Text(hiltechText("لا توجد سجلات في هذه الصفحة.","No records on this page."))
+            page.rows.forEach{employee->
+                HorizontalDivider()
+                Text(employee.employeeName,style=MaterialTheme.typography.titleMedium)
+                Text(employee.employeeCode,style=MaterialTheme.typography.bodySmall)
+                HiltechKeyValue(hiltechText("الاستحقاق السابق","Previous entitlement"),employee.originalNet+" "+page.currency)
+                HiltechKeyValue(hiltechText("الاستحقاق المصحح","Corrected entitlement"),employee.replacementNet+" "+page.currency)
+                HiltechKeyValue(hiltechText("فرق الاستحقاق","Entitlement change"),employee.entitlementDelta+" "+page.currency)
+                HiltechKeyValue(hiltechText("مدفوعات مطابقة ومرحلة","Matched posted payments"),employee.postedPayments+" "+page.currency)
+                HiltechKeyValue(hiltechText("مرتجعات بنكية مرحلة","Posted bank returns"),employee.postedReturns+" "+page.currency)
+                val state=when(employee.evidenceState){
+                    "RECORDED_NET_PAYMENT"->hiltechText("صرف صافٍ مسجل","Recorded net payment")
+                    "RECORDED_RETURN"->hiltechText("رجوع الأموال المسجلة","Recorded funds returned")
+                    "NO_RECORDED_TRANSFER"->hiltechText("لا يوجد صرف مسجل؛ لا يثبت عدم التحويل","No recorded payment; not proof of no transfer")
+                    else->hiltechText("تسوية الأدلة غير محسومة","Evidence reconciliation unresolved")
+                }
+                Text(state,style=MaterialTheme.typography.bodyMedium,
+                    color=if(employee.evidenceState=="UNRESOLVED")MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                employee.differenceFromRecorded?.let{difference->
+                    HiltechKeyValue(hiltechText("الفرق عن الصرف المسجل فقط","Difference from recorded payments only"),difference+" "+page.currency)
+                }
+                if(employee.pendingCount>0)HiltechKeyValue(hiltechText("مقترحات غير محسومة","Unresolved proposals"),employee.pendingCount.toString())
+                if(employee.unpostedCount>0)HiltechKeyValue(hiltechText("نتائج بلا ترحيل مؤكد","Results without confirmed posting"),employee.unpostedCount.toString())
+                if(employee.voidCount>0)HiltechKeyValue(hiltechText("مطابقات ملغاة (ليست مرتجعات)","Voided matches (not refunds)"),employee.voidCount.toString())
+                if(employee.noResultCount>0)HiltechKeyValue(hiltechText("تعليمات بدون نتيجة مسجلة","Instructions without recorded results"),employee.noResultCount.toString())
+            }
+            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                TextButton(enabled=offset>0&&!loading,onClick={offset=(offset-50).coerceAtLeast(0)}){Text(hiltechText("السابق","Previous"))}
+                TextButton(enabled=page.hasMore&&!loading,onClick={offset+=50}){Text(hiltechText("التالي","Next"))}
+                TextButton(enabled=!loading,onClick={revision++}){Text(hiltechText("تحديث","Refresh"))}
             }
         }
     }

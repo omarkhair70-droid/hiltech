@@ -102,6 +102,25 @@ internal fun payrollGlIntentValid(input:FinancePayrollGlPostDto):Boolean =
     val eligibleDisposition:String?=null,val alreadyCleared:Boolean,val canRecord:Boolean,
 )
 @Serializable data class FinancePayrollCorrectionCandidatesDto(val organizationId:String,val records:List<FinancePayrollCorrectionCandidateDto>,val hasMore:Boolean)
+@Serializable data class FinancePayrollCorrectionEmployeeReviewDto(
+    val employeeId:String,val employeeName:String,val employeeCode:String,
+    val originalNet:String,val replacementNet:String,val entitlementDelta:String,
+    val postedPayments:String,val postedReturns:String,val recordedNet:String?=null,val differenceFromRecorded:String?=null,
+    val evidenceState:String,val pendingCount:Long,val unpostedCount:Long,val voidCount:Long,val noResultCount:Long,
+)
+@Serializable data class FinancePayrollCorrectionReviewPageDto(val organizationId:String,val originalRunVersionId:String,val replacementRunVersionId:String,
+    val currency:String,val offset:Int,val rows:List<FinancePayrollCorrectionEmployeeReviewDto>,val hasMore:Boolean)
+internal fun validPayrollCorrectionReview(row:FinancePayrollCorrectionEmployeeReviewDto):Boolean {
+    val nonnegative=Regex("[0-9]+([.][0-9]{1,6})?")
+    val signed=Regex("-?[0-9]+([.][0-9]{1,6})?")
+    return financeLookupIdIsUuid(row.employeeId)&&row.employeeName.isNotBlank()&&row.employeeCode.isNotBlank()&&
+        listOf(row.originalNet,row.replacementNet,row.postedPayments,row.postedReturns).all{it.matches(nonnegative)}&&
+        row.entitlementDelta.matches(signed)&&listOf(row.pendingCount,row.unpostedCount,row.voidCount,row.noResultCount).all{it>=0}&&
+        row.evidenceState in setOf("UNRESOLVED","RECORDED_NET_PAYMENT","RECORDED_RETURN","NO_RECORDED_TRANSFER")&&
+        (if(row.evidenceState=="UNRESOLVED")row.recordedNet==null&&row.differenceFromRecorded==null
+         else row.pendingCount==0L&&row.unpostedCount==0L&&row.voidCount==0L&&
+             row.recordedNet?.matches(nonnegative)==true&&row.differenceFromRecorded?.matches(signed)==true)
+}
 @Serializable data class FinancePayrollClearanceInputDto(val operationId:String,val originalRunVersionId:String,val replacementRunVersionId:String,
     val disposition:String,val reasonReference:String,val financeReference:String)
 internal fun payrollClearanceIntentValid(input:FinancePayrollClearanceInputDto)=
@@ -195,6 +214,16 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
                     (!r.canRecord||(r.eligibleDisposition!=null&&!r.alreadyCleared))
                 })
             }})
+    suspend fun correctionEmployees(org:String,original:String,replacement:String,currency:String,offset:Int,installation:String):FinancePayrollCorrectionReviewPageDto {
+        require(listOf(org,original,replacement).all(::financeLookupIdIsUuid)&&offset in 0..1_000_000)
+        return api.request(HttpMethod.Get,path(org)+"/corrections/"+replacement+"/employees?offset="+offset,
+            HiltechRequestOptions(installationId=installation),decode={json.decodeFromString<FinancePayrollCorrectionReviewPageDto>(it).also{v->
+                check(sameId(v.organizationId,org)&&sameId(v.originalRunVersionId,original)&&sameId(v.replacementRunVersionId,replacement)&&
+                    v.currency==currency&&v.offset==offset&&v.rows.size<=50&&
+                    v.rows.map{it.employeeId.lowercase()}.distinct().size==v.rows.size&&v.rows.all(::validPayrollCorrectionReview)&&
+                    (!v.hasMore||v.rows.size==50))
+            }})
+    }
     suspend fun apply(intent: FinancePayrollIntent, installation: String): FinancePayrollCommandReceiptDto {
         val (suffix, body, expectedState) = when (intent.kind) {
             "CLEAR_CORRECTION" -> {

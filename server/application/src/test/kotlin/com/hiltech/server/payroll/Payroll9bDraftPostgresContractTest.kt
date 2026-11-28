@@ -945,6 +945,19 @@ class Payroll9bDraftPostgresContractTest {
                 assertThrows<ProductApiException>{clearanceService.candidates(actor,org)}
                 assertThrows<ProductApiException>{clearanceService.record(actor,org,request,"synthetic-clearance-denied")}
                 assertTrue(clearanceService.candidates(reviewer,org).records.single{it.replacementRunVersionId==correctedRun}.canRecord)
+                assertThrows<ProductApiException>{clearanceService.employeeReview(actor,org,correctedRun,0)}
+                assertThrows<ProductApiException>{clearanceService.employeeReview(reviewer,UUID.randomUUID(),correctedRun,0)}
+                val employeeReview=clearanceService.employeeReview(reviewer,org,correctedRun,0)
+                assertEquals(publishedRunId,employeeReview.originalRunVersionId)
+                assertEquals(correctedRun,employeeReview.replacementRunVersionId)
+                assertFalse(employeeReview.hasMore)
+                val reviewedEmployee=employeeReview.rows.single()
+                assertEquals("NO_RECORDED_TRANSFER",reviewedEmployee.evidenceState)
+                assertEquals(0,newer.first.net.toBigDecimal().compareTo(reviewedEmployee.originalNet.toBigDecimal()))
+                assertEquals(0,corrected.first.net.toBigDecimal().compareTo(reviewedEmployee.replacementNet.toBigDecimal()))
+                assertEquals(0,reviewedEmployee.recordedNet!!.toBigDecimal().signum())
+                assertEquals(0,corrected.first.net.toBigDecimal().compareTo(reviewedEmployee.differenceFromRecorded!!.toBigDecimal()))
+                assertTrue(clearanceService.employeeReview(reviewer,org,correctedRun,50).rows.isEmpty())
                 val clearance=clearanceService.record(reviewer,org,request,"synthetic-clearance")
                 assertEquals("CLEARED",clearance.state)
                 assertFalse(clearance.bankExecutionInitiated)

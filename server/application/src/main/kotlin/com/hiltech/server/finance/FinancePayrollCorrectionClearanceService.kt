@@ -34,6 +34,14 @@ data class FinancePayrollCorrectionCandidate(
     val eligibleDisposition:String?,val alreadyCleared:Boolean,val canRecord:Boolean,
 )
 data class FinancePayrollCorrectionCandidates(val organizationId:UUID,val records:List<FinancePayrollCorrectionCandidate>,val hasMore:Boolean)
+data class FinancePayrollCorrectionEmployeeReview(
+    val employeeId:UUID,val employeeName:String,val employeeCode:String,
+    val originalNet:String,val replacementNet:String,val entitlementDelta:String,
+    val postedPayments:String,val postedReturns:String,val recordedNet:String?,val differenceFromRecorded:String?,
+    val evidenceState:String,val pendingCount:Long,val unpostedCount:Long,val voidCount:Long,val noResultCount:Long,
+)
+data class FinancePayrollCorrectionReviewPage(val organizationId:UUID,val originalRunVersionId:UUID,val replacementRunVersionId:UUID,
+    val currency:String,val offset:Int,val rows:List<FinancePayrollCorrectionEmployeeReview>,val hasMore:Boolean)
 data class FinancePayrollClearanceInput(val operationId:UUID,val originalRunVersionId:UUID,val replacementRunVersionId:UUID,
     val disposition:String,val reasonReference:String,val financeReference:String)
 
@@ -103,6 +111,24 @@ class FinancePayrollCorrectionClearanceService(
         return FinancePayrollCorrectionCandidates(org,rows.take(100),rows.size>100)
     }
 
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    fun employeeReview(actor:UUID,org:UUID,replacement:UUID,offset:Int):FinancePayrollCorrectionReviewPage {
+        requireReview(actor,org)
+        if(offset !in 0..1_000_000)correctionChanged()
+        val candidate=jdbc.query("""SELECT original_run_version_id,currency FROM finance_payroll_correction_candidate
+            WHERE organization_id=? AND replacement_run_version_id=?""",
+            {r,_->r.getObject(1,UUID::class.java) to r.getString(2).trim()},org,replacement).singleOrNull()?:correctionChanged()
+        val rows=jdbc.query("""SELECT employee_id,employee_name,employee_code,original_net,replacement_net,entitlement_delta,
+            posted_payments,posted_returns,recorded_net,difference_from_recorded,evidence_state,pending_count,unposted_count,void_count,no_result_count
+            FROM finance_payroll_correction_employee_review WHERE organization_id=? AND replacement_run_version_id=?
+            ORDER BY employee_name,employee_code,employee_id LIMIT 51 OFFSET ?""",
+            {r,_->FinancePayrollCorrectionEmployeeReview(r.getObject(1,UUID::class.java),r.getString(2),r.getString(3),
+                r.getBigDecimal(4).toPlainString(),r.getBigDecimal(5).toPlainString(),r.getBigDecimal(6).toPlainString(),
+                r.getBigDecimal(7).toPlainString(),r.getBigDecimal(8).toPlainString(),r.getBigDecimal(9)?.toPlainString(),
+                r.getBigDecimal(10)?.toPlainString(),r.getString(11),r.getLong(12),r.getLong(13),r.getLong(14),r.getLong(15))},org,replacement,offset)
+        return FinancePayrollCorrectionReviewPage(org,candidate.first,replacement,candidate.second,offset,rows.take(50),rows.size>50)
+    }
+
     fun record(actor:UUID,org:UUID,input:FinancePayrollClearanceInput,correlation:String):FinancePayrollCommandReceipt {
         requireReview(actor,org)
         if(!validPayrollClearance(input))correctionChanged()
@@ -151,6 +177,10 @@ class FinancePayrollCorrectionClearanceController(private val service:FinancePay
     @GetMapping
     fun candidates(request:HttpServletRequest,@PathVariable orgId:UUID) =
         ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.candidates(actor(request),orgId))
+    @GetMapping("/{replacementRunVersionId}/employees")
+    fun employeeReview(request:HttpServletRequest,@PathVariable orgId:UUID,@PathVariable replacementRunVersionId:UUID,
+        @RequestParam(defaultValue="0") offset:Int)=ResponseEntity.ok().cacheControl(CacheControl.noStore())
+        .body(service.employeeReview(actor(request),orgId,replacementRunVersionId,offset))
     @PostMapping
     fun record(request:HttpServletRequest,@PathVariable orgId:UUID,@AuthenticationPrincipal jwt:Jwt,
         @RequestHeader("X-Device-Installation-Id") installation:UUID,
