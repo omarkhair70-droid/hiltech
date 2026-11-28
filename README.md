@@ -8,9 +8,10 @@ HILTECH is being consolidated and verified as one integrated product, not
 restarted from an earlier phase. Start with [AGENTS.md](AGENTS.md) and the
 [current program status](docs/00-program/CURRENT_PROGRAM_STATUS.md).
 
-The integrated candidate is PR #242 and its follow-up is PR #243. Verify
-current heads before changing code. Do not assume a historical phase label,
-a successful build, or a draft PR means a deployed and accepted release.
+The integrated candidate is PR #242; PR #243 is already incorporated.
+Verify the current unified head before changing code. Do not assume a
+historical phase label, a successful build, or a draft PR means a deployed
+and accepted release.
 
 Complete existing user journeys across native UI, source-owned operations,
 authorization, recovery and both supported platforms. Preserve the historical

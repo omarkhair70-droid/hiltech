@@ -7,7 +7,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 @Serializable
-data class FinanceGlAccountChoiceDto(val id:String,val accountKind:String,val currency:String?=null)
+data class FinanceGlAccountChoiceDto(val id:String,val accountKind:String,val currency:String?=null,
+    val accountCode:String?=null,val accountName:String?=null)
 @Serializable
 data class FinanceGlPeriodChoiceDto(val id:String,val dateStart:String,val dateEnd:String)
 @Serializable
@@ -40,6 +41,8 @@ suspend fun financeReadAccountingChoices(apis:FinanceEvidenceReadApis,
     check(result.organizationId.equals(org,true) && result.kind==kind &&
         result.approvedAccounts.all {financeLookupIdIsUuid(it.id) &&
             it.accountKind.isNotBlank() &&
+            (it.accountCode==null || it.accountCode.isNotBlank()) &&
+            (it.accountName==null || it.accountName.isNotBlank()) &&
             (it.currency==null || it.currency.matches(Regex("[A-Z]{3}")))} &&
         result.openPeriods.all {financeLookupIdIsUuid(it.id) &&
             financeValidCalendarDate(it.dateStart) &&

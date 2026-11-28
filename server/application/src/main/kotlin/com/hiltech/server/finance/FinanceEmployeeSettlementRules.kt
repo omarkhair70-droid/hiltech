@@ -14,12 +14,16 @@ enum class FinanceEmployeeSettlementKind {
     EXPENSE_REIMBURSEMENT,
     EMPLOYEE_ADVANCE,
     FINANCIAL_IMPREST,
+    PAYROLL_OVERPAYMENT,
+    PAYROLL_OPENING_PAYABLE,
 }
 enum class FinanceEmployeeSettlementAction {
     REIMBURSEMENT_CONFIRMED,
     ADVANCE_RECOVERY_CONFIRMED,
     IMPREST_RECEIPTS_ACCEPTED,
     IMPREST_CASH_RETURN_CONFIRMED,
+    PAYROLL_RECOVERY_CONFIRMED,
+    PAYROLL_OPENING_PAID,
 }
 data class FinanceEmployeeSettlementPlan(
     val organizationId: UUID,
@@ -43,6 +47,8 @@ data class FinanceEmployeeSettlementPlan(
     val settlementBankTransactionId: UUID? = null,
     val settlementBankEvidenceSha256: String? = null,
     val approvedPayrollDeductionEventId: UUID? = null,
+    val openingSourceFingerprint:String?=null,
+    val payrollRecoveryFingerprint:String?=null,
 )
 data class FinanceEmployeeSettlementValidation(
     val kind: FinanceEmployeeSettlementKind,
@@ -68,14 +74,37 @@ object FinanceEmployeeSettlementRules {
         require(p.settlementAmount.add(p.previouslySettled)<=p.sourceAmount) {
             "EMPLOYEE_SETTLEMENT_OVERALLOCATED"
         }
+        require(p.kind==FinanceEmployeeSettlementKind.PAYROLL_OVERPAYMENT || p.payrollRecoveryFingerprint==null) {
+            "PAYROLL_RECOVERY_IS_NOT_ADVANCE_OR_CUSTODY"
+        }
         when(p.kind) {
+            FinanceEmployeeSettlementKind.PAYROLL_OPENING_PAYABLE -> {
+                require(p.action==FinanceEmployeeSettlementAction.PAYROLL_OPENING_PAID &&
+                    !p.approvedFundingRecorded && p.sourceBankTransactionId==null &&
+                    p.sourceBankEvidenceSha256==null &&
+                    p.openingSourceFingerprint?.matches(Regex("^[a-f0-9]{64}$"))==true &&
+                    p.recoveryMethod=="CONFIRMED_BANK_DEBIT" && p.approvedPayrollDeductionEventId==null) {
+                    "SEALED_PAYROLL_PAYABLE_AND_SEPARATE_BANK_DEBIT_REQUIRED"
+                }
+                verifiedSettlementBank(p)
+            }
+            FinanceEmployeeSettlementKind.PAYROLL_OVERPAYMENT -> {
+                require(p.action==FinanceEmployeeSettlementAction.PAYROLL_RECOVERY_CONFIRMED &&
+                    !p.approvedFundingRecorded && p.sourceBankTransactionId==null &&
+                    p.sourceBankEvidenceSha256==null && p.openingSourceFingerprint==null &&
+                    p.payrollRecoveryFingerprint?.matches(Regex("^[a-f0-9]{64}$"))==true &&
+                    p.recoveryMethod=="CONFIRMED_BANK_CREDIT" && p.approvedPayrollDeductionEventId==null) {
+                    "POSTED_PAYROLL_RECEIVABLE_AND_SEPARATE_BANK_CREDIT_REQUIRED"
+                }
+                verifiedSettlementBank(p)
+            }
             FinanceEmployeeSettlementKind.EXPENSE_REIMBURSEMENT -> {
                 require(p.action==FinanceEmployeeSettlementAction.REIMBURSEMENT_CONFIRMED) {
                     "EXPENSE_REIMBURSEMENT_IS_NOT_A_LOAN_OR_CUSTODY"
                 }
                 // Employee paid the merchant with personal money.
                 // No prior company funding is needed or allowed here.
-                require(!p.approvedFundingRecorded &&
+                require(!p.approvedFundingRecorded && p.openingSourceFingerprint==null &&
                     p.sourceBankTransactionId==null &&
                     p.sourceBankEvidenceSha256==null) {
                     "PERSONAL_EXPENSE_MUST_NOT_INVENT_EARLIER_COMPANY_FUNDING"
@@ -129,7 +158,7 @@ object FinanceEmployeeSettlementRules {
                 }
             }
         }
-        val canonical=listOf(
+        val canonical=(listOf(
             "FINANCE_EMPLOYEE_SETTLEMENT_V1",p.organizationId,p.employeeId,
             p.financeDraftId,p.kind,p.action,p.currency,p.settlementOperationId,
             p.settlementEvidenceId,p.sourceBankTransactionId,p.sourceBankEvidenceSha256,
@@ -140,7 +169,7 @@ object FinanceEmployeeSettlementRules {
             p.sourceAmount.stripTrailingZeros().toPlainString(),
             p.settlementAmount.stripTrailingZeros().toPlainString(),
             p.previouslySettled.stripTrailingZeros().toPlainString(),
-        ).joinToString("|")
+        )+listOfNotNull(p.openingSourceFingerprint,p.payrollRecoveryFingerprint)).joinToString("|")
         val sha=MessageDigest.getInstance("SHA-256")
             .digest(canonical.toByteArray(Charsets.UTF_8))
         return FinanceEmployeeSettlementValidation(
@@ -160,8 +189,11 @@ object FinanceEmployeeSettlementRules {
         }
     }
     private fun confirmedFunding(p:FinanceEmployeeSettlementPlan) {
-        require(p.approvedFundingRecorded && p.sourceBankTransactionId!=null &&
-            p.sourceBankEvidenceSha256?.matches(Regex("^[a-f0-9]{64}$"))==true) {
+        val actual=p.approvedFundingRecorded && p.sourceBankTransactionId!=null &&
+            p.sourceBankEvidenceSha256?.matches(Regex("^[a-f0-9]{64}$"))==true && p.openingSourceFingerprint==null
+        val opening=!p.approvedFundingRecorded && p.sourceBankTransactionId==null && p.sourceBankEvidenceSha256==null &&
+            p.openingSourceFingerprint?.matches(Regex("^[a-f0-9]{64}$"))==true
+        require(actual||opening) {
             "NO_SETTLEMENT_OF_UNFUNDED_OR_UNVERIFIED_EMPLOYEE_DRAFT"
         }
     }

@@ -15,6 +15,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class EmployeeAccountSetupTest {
@@ -27,10 +28,13 @@ class EmployeeAccountSetupTest {
 
     @Test
     fun nativeAccountSetupUsesServerEligibilityForActiveStaff() {
-        for (status in listOf("READY_TO_INVITE", "CONTINUE_INVITATION")) {
-            assertTrue(accountSetupCanSubmit(availability(status)))
-            assertFalse(accountSetupCanSubmit(availability(status).copy(deliveryModes = emptyList())))
-        }
+        assertTrue(accountSetupCanSubmit(availability("READY_TO_INVITE")))
+        val pending = EmployeeIdentityInvitationPendingDto(operation, "synthetic@example.test", "EMAIL_ACTION_LINK")
+        assertFalse(accountSetupCanSubmit(availability("CONTINUE_INVITATION")))
+        assertTrue(accountSetupCanSubmit(availability("CONTINUE_INVITATION").copy(pending = pending)))
+        assertFalse(accountSetupCanSubmit(availability("CONTINUE_INVITATION").copy(pending = pending, deliveryModes = emptyList())))
+        assertFalse(accountSetupCanSubmit(availability("READY_TO_INVITE").copy(pending = pending)))
+        assertFalse(accountSetupCanSubmit(availability("READY_TO_INVITE").copy(deliveryModes = listOf("UNKNOWN_MODE"))))
         for (status in listOf("LINKED", "ACCOUNT_RESTRICTED", "ACCOUNT_ATTENTION", "NOT_ELIGIBLE", "DELIVERY_UNAVAILABLE", "UNKNOWN")) {
             assertFalse(accountSetupCanSubmit(availability(status)))
         }
@@ -99,6 +103,39 @@ class EmployeeAccountSetupTest {
         assertFailsWith<IllegalArgumentException> { client(http).provisionIdentity(employee, request().copy(deliveryMode = "PLAIN_PASSWORD"), installation) }
         assertEquals(0, sends)
         http.close()
+    }
+
+    @Test
+    fun currentServerStateControlsEveryProvisioningIntent() {
+        val staff = EmployeeDetailDto(employee, organization, "E-01", "ACTIVE", "Synthetic employee", version = 9)
+        for (status in listOf("LINKED", "ACCOUNT_RESTRICTED", "ACCOUNT_ATTENTION", "DELIVERY_UNAVAILABLE")) {
+            assertNull(accountSetupRequest(staff, availability(status), request(), "synthetic@example.test",
+                "EMAIL_ACTION_LINK") { error("Must not allocate another command") })
+        }
+        assertNull(accountSetupRequest(staff.copy(organizationId = identity), availability("READY_TO_INVITE"),
+            null, "synthetic@example.test", "EMAIL_ACTION_LINK") { error("Wrong organization") })
+        assertNull(accountSetupRequest(staff, availability("READY_TO_INVITE"), null, "not-email",
+            "EMAIL_ACTION_LINK") { error("Invalid login") })
+    }
+
+    @Test
+    fun pendingInvitationResumesServerIdentityAndCurrentEmployeeVersion() {
+        val staff = EmployeeDetailDto(employee, organization, "E-01", "PREBOARDING", "Synthetic employee", version = 9)
+        val pending = EmployeeIdentityInvitationPendingDto(identity, "existing@example.test", "EMAIL_ACTION_LINK")
+        val source = availability("CONTINUE_INVITATION").copy(pending = pending)
+        val result = accountSetupRequest(staff, source, request(), "other@example.test", "TEMPORARY_PASSWORD_HANDOFF") {
+            error("Existing invitation must not allocate a new command")
+        }
+        assertEquals(ProvisionEmployeeIdentityRequestDto(identity, 9, pending.requestedLogin, pending.deliveryMode), result)
+    }
+
+    @Test
+    fun unresolvedLocalIntentCannotChangeModeOrBodyAndNeedsCurrentAvailability() {
+        val staff = EmployeeDetailDto(employee, organization, "E-01", "ACTIVE", "Synthetic employee", version = 9)
+        assertEquals(request(), accountSetupRequest(staff, availability("READY_TO_INVITE"),
+            request(), "different@example.test", "TEMPORARY_PASSWORD_HANDOFF") { error("Must replay exactly") })
+        assertNull(accountSetupRequest(staff, availability("READY_TO_INVITE").copy(deliveryModes = listOf("TEMPORARY_PASSWORD_HANDOFF")),
+            request(), "other", "TEMPORARY_PASSWORD_HANDOFF") { error("Old method no longer available") })
     }
 
     private fun availability(status: String) = EmployeeIdentityInvitationAvailabilityDto(employee, organization, status, listOf("EMAIL_ACTION_LINK"))

@@ -328,7 +328,9 @@ jobs:
             --tests com.hiltech.server.administration.CompanyResponsibilityPostgresContractTest \
             --tests com.hiltech.server.operationalaccess.OperationalAuthorityPostgresContractTest \
             --tests com.hiltech.server.companysettings.PurchaseOrderNumberingPostgresContractTest \
+            --tests com.hiltech.server.companysettings.FinanceConfigurationPostgresContractTest \
             --tests com.hiltech.server.finance.FinanceCashboxOpeningPostgresContractTest \
+            --tests com.hiltech.server.finance.FinanceMixedBankCashPostgresContractTest \
             --tests com.hiltech.server.procurement.PurchaseOrderReviewPostgresContractTest \
             --tests com.hiltech.server.procurement.SupplierTechnicalPostgresContractTest \
             --tests com.hiltech.server.administration.CompanyReviewPolicyMaintenancePostgresTest \

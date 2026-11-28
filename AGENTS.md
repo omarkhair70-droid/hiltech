@@ -6,15 +6,16 @@ This repository is the single source of truth for HILTECH OS.
 
 Any coding agent, Codex session, new chat, automation, or human contributor must treat repository state and canonical documents as authoritative. Conversation memory is never the project source of truth.
 
-## Current engineering baseline — 2026-11-25
+## Current engineering baseline — 2026-11-26
 
-The active work is end-to-end product verification and repair on the unified
-candidate, not resuming a historical phase cursor.
+The active work is end-to-end product verification and repair on one unified
+candidate, followed by iterative native product design on that source.
 
-- Unified candidate: PR #242, `integration/hiltech-unified-staging-20261124`,
-  reviewed at `4a3709c5707d39135a6e8034d5ff1eb8ef949145`.
-- Follow-up changes: PR #243, `product/hiltech-reconstruction-20261125`.
-  Fetch the current heads and inspect their diffs before continuing. Neither
+- Unified candidate: PR #242, `integration/hiltech-unified-staging-20261124`.
+  PR #243 was incorporated by fast-forward at the exact tested commit
+  `9965066ed8ab1f80de78f9cf762c3faed80b3aae`; the old branch is historical.
+- Fetch and inspect the current unified head before new work. Keep short-lived
+  review branches based on it and merge the exact verified source. Neither
   branch name nor a historical green check proves deployment or acceptance.
 - Read `docs/13-delivery/NATIVE_PRODUCT_VERIFICATION.md` for the current
   engineering evidence contract and publication boundary.

@@ -15,6 +15,7 @@ data class FinancePayrollBatchDto(
     val reviewBatchId: String, val runVersionId: String, val periodStart: String, val periodEnd: String,
     val generation: Int, val currency: String, val payableTotal: String, val employeeCount: Int,
     val transferCount: Int, val prepared: Boolean,
+    val differential:Boolean=false,val differentialReady:Boolean=true,
 )
 @Serializable
 data class FinancePayrollInstructionDto(
@@ -60,10 +61,111 @@ data class FinancePayrollCommandReceiptDto(
     val operationId: String, val organizationId: String, val targetId: String, val state: String,
     val replayed: Boolean, val bankExecutionInitiated: Boolean, val ledgerPosted: Boolean,
 )
+@Serializable data class FinancePayrollGlAllocationDto(val kind:String,val domain:String,val code:String,val accountId:String,val reference:String)
+@Serializable data class FinancePayrollGlGroupDto(val kind:String,val domain:String,val code:String,val amount:String)
+@Serializable data class FinancePayrollGlPostDto(
+    val operationId:String,val entryType:String,val sourceEventId:String?=null,val originalJournalId:String?=null,
+    val periodId:String,val debitAccountId:String,val creditAccountId:String,val amount:String,val currency:String,
+    val allocations:List<FinancePayrollGlAllocationDto> = emptyList(),
+)
+@Serializable data class FinancePayrollGlEventDto(
+    val eventId:String,val entryType:String,val employeeName:String,val amount:String,val currency:String,
+    val recordedAt:String,val originalJournalId:String?=null,val debitAccountId:String?=null,val debitAccountName:String?=null,
+    val creditAccountId:String?=null,val creditAccountName:String?=null,val ready:Boolean,
+)
+@Serializable data class FinancePayrollGlCorrectionDto(val originalJournalId:String?=null,val clearanceReference:String,
+    val reversalLines:List<FinanceDeskJournalLineDto>,val disposition:String="NO_PRIOR_TRANSFER_VERIFIED",
+    val fixedExpenseAccountId:String?=null,val fixedPayableAccountId:String?=null,
+    val fixedAllocations:List<FinancePayrollGlAllocationDto> = emptyList())
+@Serializable data class FinancePayrollRecoverySummaryDto(val accountCode:String,val accountName:String,val amount:String,
+    val employeeCount:Int,val posted:Boolean,val remainingToRecord:String?=null,val remainingToPost:String?=null)
+@Serializable data class FinancePayrollGlViewDto(
+    val organizationId:String,val runVersionId:String,val period:FinanceDeskPeriodDto?=null,
+    val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
+    val expenseAccounts:List<FinanceSettlementAccountChoiceDto>,val payableAccounts:List<FinanceSettlementAccountChoiceDto>,
+    val hasMoreAccounts:Boolean,val events:List<FinancePayrollGlEventDto>,
+    val net:String=gross,val deductions:String="0",val reimbursements:String="0",val groups:List<FinancePayrollGlGroupDto> = emptyList(),
+    val deductionAccounts:List<FinanceSettlementAccountChoiceDto> = emptyList(),val reimbursementAccounts:List<FinanceSettlementAccountChoiceDto> = emptyList(),
+    val correction:FinancePayrollGlCorrectionDto?=null,val recovery:FinancePayrollRecoverySummaryDto?=null,
+)
+internal fun payrollGlIntentValid(input:FinancePayrollGlPostDto):Boolean =
+    input.entryType in payrollDeskSources &&
+    listOfNotNull(input.operationId,input.periodId,input.debitAccountId,input.creditAccountId,input.sourceEventId,input.originalJournalId).all(::financeLookupIdIsUuid) &&
+    !input.debitAccountId.equals(input.creditAccountId,true) && settlementCanonicalAmount(input.amount)!=null &&
+    input.currency.matches(Regex("[A-Z]{3}")) &&
+    (input.entryType=="PAYROLL_ACCRUAL")==(input.sourceEventId==null) &&
+    (input.entryType=="PAYROLL_ACCRUAL" || (input.entryType in setOf("PAYROLL_RETURN","PAYROLL_VOID"))==(input.originalJournalId!=null)) &&
+    input.allocations.size<=30 && (input.entryType=="PAYROLL_ACCRUAL" || input.allocations.isEmpty()) &&
+    input.allocations.map{Triple(it.kind,it.domain,it.code)}.distinct().size==input.allocations.size &&
+    input.allocations.all{it.kind in setOf("DEDUCTION","REIMBURSEMENT") && financeLookupIdIsUuid(it.accountId) &&
+        it.domain.matches(Regex("[A-Z][A-Z0-9_-]{0,79}")) && it.code.matches(Regex("[A-Z][A-Z0-9_-]{0,79}")) &&
+        it.reference.length in 8..240 && it.reference==it.reference.trim() && it.reference.none{c->c.code<32||c.code==127}}
+
+@Serializable data class FinancePayrollCorrectionCandidateDto(
+    val originalRunVersionId:String,val replacementRunVersionId:String,val periodStart:String,val periodEnd:String,
+    val originalGeneration:Int,val replacementGeneration:Int,val currency:String,val originalNet:String,val replacementNet:String,
+    val eligibleDisposition:String?=null,val alreadyCleared:Boolean,val canRecord:Boolean,
+    val settlementFingerprint:String?=null,val additionalDue:String?=null,
+    val recoveryDue:String?=null,val recoveryAccounts:List<FinanceSettlementAccountChoiceDto> = emptyList(),
+)
+@Serializable data class FinancePayrollCorrectionCandidatesDto(val organizationId:String,val records:List<FinancePayrollCorrectionCandidateDto>,val hasMore:Boolean)
+@Serializable data class FinancePayrollCorrectionEmployeeReviewDto(
+    val employeeId:String,val employeeName:String,val employeeCode:String,
+    val originalNet:String,val replacementNet:String,val entitlementDelta:String,
+    val postedPayments:String,val postedReturns:String,val recordedNet:String?=null,val differenceFromRecorded:String?=null,
+    val evidenceState:String,val pendingCount:Long,val unpostedCount:Long,val voidCount:Long,val noResultCount:Long,
+)
+@Serializable data class FinancePayrollDeltaPreviewLineDto(val lineNumber:Int,val kind:String,val componentCode:String?=null,
+    val accountCode:String?=null,val accountName:String?=null,val side:String,val amount:String)
+@Serializable data class FinancePayrollDeltaPlanDto(val state:String,val employeeCount:Long,val blockedCount:Long,
+    val additionalDue:String?=null,val recoveryDue:String?=null,val grossChange:String,val deductionChange:String,val reimbursementChange:String,
+    val lines:List<FinancePayrollDeltaPreviewLineDto>)
+@Serializable data class FinancePayrollCorrectionReviewPageDto(val organizationId:String,val originalRunVersionId:String,val replacementRunVersionId:String,
+    val currency:String,val offset:Int,val rows:List<FinancePayrollCorrectionEmployeeReviewDto>,val hasMore:Boolean,
+    val deltaPlan:FinancePayrollDeltaPlanDto?=null)
+internal fun validPayrollDeltaPlan(p:FinancePayrollDeltaPlanDto):Boolean {
+    val signed=Regex("-?[0-9]+([.][0-9]{1,6})?")
+    val nonnegative=Regex("[0-9]+([.][0-9]{1,6})?")
+    val preview=p.state in setOf("REVIEW_READY","RECOVERY_ACCOUNT_REQUIRED")
+    return p.state in setOf("EVIDENCE_REQUIRED","COMPONENTS_REQUIRED","ACCOUNT_TREATMENT_REQUIRED","BALANCE_REQUIRED",
+        "RECOVERY_ACCOUNT_REQUIRED","REVIEW_READY") && p.employeeCount>0 && p.blockedCount in 0..p.employeeCount &&
+        listOf(p.grossChange,p.deductionChange,p.reimbursementChange).all{it.matches(signed)} &&
+        (if(p.blockedCount>0) p.state=="EVIDENCE_REQUIRED"&&p.additionalDue==null&&p.recoveryDue==null
+         else p.state!="EVIDENCE_REQUIRED"&&p.additionalDue?.matches(nonnegative)==true&&p.recoveryDue?.matches(nonnegative)==true) &&
+        (preview||p.lines.isEmpty()) && p.lines.size<=33 && p.lines.map{it.lineNumber}.distinct().size==p.lines.size &&
+        p.lines.all{l->l.lineNumber in 1..33&&l.kind in setOf("EARNINGS","DEDUCTION","REIMBURSEMENT","ADDITIONAL_PAYABLE","EMPLOYEE_RECOVERY")&&
+            l.side in setOf("DEBIT","CREDIT")&&settlementCanonicalAmount(l.amount)!=null&&
+            (if(l.kind=="EMPLOYEE_RECOVERY")p.state=="RECOVERY_ACCOUNT_REQUIRED"&&l.side=="DEBIT"&&l.accountCode==null&&l.accountName==null
+             else !l.accountCode.isNullOrBlank()&&!l.accountName.isNullOrBlank())}
+}
+internal fun validPayrollCorrectionReview(row:FinancePayrollCorrectionEmployeeReviewDto):Boolean {
+    val nonnegative=Regex("[0-9]+([.][0-9]{1,6})?")
+    val signed=Regex("-?[0-9]+([.][0-9]{1,6})?")
+    return financeLookupIdIsUuid(row.employeeId)&&row.employeeName.isNotBlank()&&row.employeeCode.isNotBlank()&&
+        listOf(row.originalNet,row.replacementNet,row.postedPayments,row.postedReturns).all{it.matches(nonnegative)}&&
+        row.entitlementDelta.matches(signed)&&listOf(row.pendingCount,row.unpostedCount,row.voidCount,row.noResultCount).all{it>=0}&&
+        row.evidenceState in setOf("UNRESOLVED","RECORDED_NET_PAYMENT","RECORDED_RETURN","NO_RECORDED_TRANSFER")&&
+        (if(row.evidenceState=="UNRESOLVED")row.recordedNet==null&&row.differenceFromRecorded==null
+         else row.pendingCount==0L&&row.unpostedCount==0L&&row.voidCount==0L&&
+             row.recordedNet?.matches(nonnegative)==true&&row.differenceFromRecorded?.matches(signed)==true)
+}
+@Serializable data class FinancePayrollClearanceInputDto(val operationId:String,val originalRunVersionId:String,val replacementRunVersionId:String,
+    val disposition:String,val reasonReference:String,val financeReference:String,val settlementFingerprint:String?=null,
+    val recoveryAccountId:String?=null)
+internal fun payrollClearanceIntentValid(input:FinancePayrollClearanceInputDto)=
+    listOf(input.operationId,input.originalRunVersionId,input.replacementRunVersionId).all(::financeLookupIdIsUuid) &&
+    !input.originalRunVersionId.equals(input.replacementRunVersionId,true) &&
+    input.disposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED","SETTLED_DIFFERENTIAL_AUTHORIZED") &&
+    listOf(input.reasonReference,input.financeReference).all{it.length in 8..240 && it==it.trim() && it.none{c->c.code<32||c.code==127}} &&
+    (if(input.disposition=="SETTLED_DIFFERENTIAL_AUTHORIZED")input.settlementFingerprint?.matches(Regex("[a-f0-9]{64}"))==true&&
+        (input.recoveryAccountId==null||financeLookupIdIsUuid(input.recoveryAccountId))
+     else input.settlementFingerprint==null&&input.recoveryAccountId==null)
+
 @Serializable
 data class FinancePayrollIntent(
     val operationId: String, val organizationId: String, val kind: String, val targetId: String, val title: String,
     val result: FinancePayrollPrepareResultDto? = null, val review: FinancePayrollReviewResultDto? = null,
+    val ledgerPost:FinancePayrollGlPostDto?=null,val clearance:FinancePayrollClearanceInputDto?=null,
 )
 
 class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
@@ -98,8 +200,98 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
             check(source.matchedTransactionReference.length in 5..180 && source.fileName.isNotBlank() && source.fileName.none { it.code < 32 || it.code == 127 })
         } },
     )
+    suspend fun ledger(org:String,run:String,offset:Int,installation:String):FinancePayrollGlViewDto {
+        require(offset in 0..1_000_000)
+        return api.request(HttpMethod.Get,path(org)+"/runs/"+uuid(run)+"/ledger?offset="+offset,HiltechRequestOptions(installationId=installation),
+            decode={json.decodeFromString<FinancePayrollGlViewDto>(it).also { v ->
+                check(sameId(v.organizationId,org) && sameId(v.runVersionId,run) && v.offset==offset &&
+                    v.currency.matches(Regex("[A-Z]{3}")) && v.gross.matches(Regex("[0-9]+([.][0-9]+)?")) &&
+                    v.accrualState in setOf("POSTED","REPLACED","NOT_PREPARED","CORRECTION_REQUIRED","NO_AMOUNT","TREATMENT_REQUIRED","READY") &&
+                    (v.correction==null || (v.accrualState=="READY" && v.correction.clearanceReference.isNotBlank() && v.correction.disposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED","SETTLED_DIFFERENTIAL_AUTHORIZED") &&
+                        (v.correction.originalJournalId==null)==v.correction.reversalLines.isEmpty() &&
+                        (v.correction.originalJournalId==null || financeLookupIdIsUuid(v.correction.originalJournalId)) &&
+                        v.correction.reversalLines.size<=32 &&
+                        v.correction.reversalLines.map{it.number}.distinct().size==v.correction.reversalLines.size &&
+                        v.correction.reversalLines.all{it.number in 1..32 && it.side in setOf("DEBIT","CREDIT") &&
+                            it.accountName.isNotBlank() && settlementCanonicalAmount(it.amount)!=null} &&
+                        (if(v.correction.disposition=="SETTLED_DIFFERENTIAL_AUTHORIZED")
+                            v.correction.originalJournalId!=null&&v.correction.fixedExpenseAccountId!=null&&v.correction.fixedPayableAccountId!=null&&
+                            v.expenseAccounts.singleOrNull()?.id==v.correction.fixedExpenseAccountId&&
+                            v.payableAccounts.singleOrNull()?.id==v.correction.fixedPayableAccountId&&
+                            v.correction.fixedAllocations.size==v.groups.size&&
+                            v.correction.fixedAllocations.map{Triple(it.kind,it.domain,it.code)}.toSet()==v.groups.map{Triple(it.kind,it.domain,it.code)}.toSet()&&
+                            v.correction.fixedAllocations.all{a->(if(a.kind=="DEDUCTION")v.deductionAccounts else v.reimbursementAccounts).any{it.id==a.accountId}&&
+                                a.reference.length in 8..240&&a.reference==a.reference.trim()&&a.reference.none{it.code<32||it.code==127}}
+                         else v.correction.fixedExpenseAccountId==null&&v.correction.fixedPayableAccountId==null&&v.correction.fixedAllocations.isEmpty()))) &&
+                    (v.recovery==null||(v.recovery.accountName.isNotBlank()&&v.recovery.accountCode.isNotBlank()&&
+                        settlementCanonicalAmount(v.recovery.amount)!=null&&v.recovery.employeeCount in 1..10000&&
+                        (v.recovery.posted==(v.accrualState in setOf("POSTED","REPLACED")))&&
+                        (if(v.recovery.posted)v.recovery.remainingToRecord?.matches(Regex("[0-9]+([.][0-9]{1,6})?"))==true&&
+                            v.recovery.remainingToPost?.matches(Regex("[0-9]+([.][0-9]{1,6})?"))==true
+                         else v.recovery.remainingToRecord==null&&v.recovery.remainingToPost==null))) &&
+                    listOf(v.net,v.deductions,v.reimbursements).all{it.matches(Regex("[0-9]+([.][0-9]+)?"))} &&
+                    v.groups.size<=30 && v.groups.map{Triple(it.kind,it.domain,it.code)}.distinct().size==v.groups.size &&
+                    v.groups.all{it.kind in setOf("DEDUCTION","REIMBURSEMENT") && settlementCanonicalAmount(it.amount)!=null &&
+                        it.domain.matches(Regex("[A-Z][A-Z0-9_-]{0,79}")) && it.code.matches(Regex("[A-Z][A-Z0-9_-]{0,79}"))} &&
+                    listOf(v.deductionAccounts to setOf("PAYROLL_DEDUCTION_PAYABLE","TAX_PAYABLE"),v.reimbursementAccounts to setOf("EXPENSE")).all{(rows,kinds)->
+                        rows.size<=100 && rows.map{a->a.id.lowercase()}.distinct().size==rows.size &&
+                        rows.all{a->financeLookupIdIsUuid(a.id) && a.name.isNotBlank() && a.accountKind in kinds}} &&
+                    (v.period==null || (financeLookupIdIsUuid(v.period.id) && v.period.state=="OPEN" && financeValidCalendarDate(v.period.dateStart) && financeValidCalendarDate(v.period.dateEnd) && v.period.dateStart<=v.period.dateEnd)) &&
+                    v.events.size<=50 && v.events.map{e->e.eventId.lowercase()}.distinct().size==v.events.size &&
+                    v.events.all{e-> e.entryType in payrollDeskSources-"PAYROLL_ACCRUAL" && financeLookupIdIsUuid(e.eventId) &&
+                        listOfNotNull(e.originalJournalId,e.debitAccountId,e.creditAccountId).all(::financeLookupIdIsUuid) &&
+                        e.currency==v.currency && settlementCanonicalAmount(e.amount)!=null && e.employeeName.isNotBlank() &&
+                        (!e.ready || (e.debitAccountId!=null && e.creditAccountId!=null && !e.debitAccountId.equals(e.creditAccountId,true) &&
+                            !e.debitAccountName.isNullOrBlank() && !e.creditAccountName.isNullOrBlank() &&
+                            (e.entryType in setOf("PAYROLL_RETURN","PAYROLL_VOID"))==(e.originalJournalId!=null)))} &&
+                    listOf(v.expenseAccounts to "PAYROLL_EXPENSE",v.payableAccounts to "PAYROLL_PAYABLE").all{(rows,kind)->
+                        rows.size<=100 && rows.map{a->a.id.lowercase()}.distinct().size==rows.size &&
+                        rows.all{a->financeLookupIdIsUuid(a.id) && a.name.isNotBlank() && a.accountKind==kind}})
+            }})
+    }
+    suspend fun corrections(org:String,installation:String):FinancePayrollCorrectionCandidatesDto =
+        api.request(HttpMethod.Get,path(org)+"/corrections",HiltechRequestOptions(installationId=installation),
+            decode={json.decodeFromString<FinancePayrollCorrectionCandidatesDto>(it).also{v->
+                check(sameId(v.organizationId,org)&&v.records.size<=100&&v.records.map{it.replacementRunVersionId.lowercase()}.distinct().size==v.records.size&&v.records.all{r->
+                    financeLookupIdIsUuid(r.originalRunVersionId)&&financeLookupIdIsUuid(r.replacementRunVersionId)&&
+                    r.originalRunVersionId!=r.replacementRunVersionId&&r.originalGeneration>0&&r.replacementGeneration>r.originalGeneration&&
+                    financeValidCalendarDate(r.periodStart)&&financeValidCalendarDate(r.periodEnd)&&r.periodStart<=r.periodEnd&&
+                    r.currency.matches(Regex("[A-Z]{3}"))&&listOf(r.originalNet,r.replacementNet).all{a->a.matches(Regex("[0-9]+([.][0-9]+)?"))}&&
+                    (r.eligibleDisposition==null||r.eligibleDisposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED","SETTLED_DIFFERENTIAL_AUTHORIZED"))&&
+                    (if(r.eligibleDisposition=="SETTLED_DIFFERENTIAL_AUTHORIZED")
+                        r.settlementFingerprint?.matches(Regex("[a-f0-9]{64}"))==true&&
+                        r.additionalDue?.matches(Regex("[0-9]+([.][0-9]{1,6})?"))==true&&
+                        r.recoveryDue?.matches(Regex("[0-9]+([.][0-9]{1,6})?"))==true&&
+                        (r.additionalDue?.let{settlementCanonicalAmount(it)}!=null||r.recoveryDue?.let{settlementCanonicalAmount(it)}!=null)&&
+                        r.recoveryAccounts.size<=100&&r.recoveryAccounts.map{it.id.lowercase()}.distinct().size==r.recoveryAccounts.size&&
+                        r.recoveryAccounts.all{financeLookupIdIsUuid(it.id)&&it.name.isNotBlank()&&it.accountKind=="OTHER_ASSET"}&&
+                        (r.recoveryDue?.let{settlementCanonicalAmount(it)}!=null||r.recoveryAccounts.isEmpty())
+                     else r.settlementFingerprint==null&&r.additionalDue==null&&r.recoveryDue==null&&r.recoveryAccounts.isEmpty())&&
+                    (!r.canRecord||(r.eligibleDisposition!=null&&!r.alreadyCleared))
+                })
+            }})
+    suspend fun correctionEmployees(org:String,original:String,replacement:String,currency:String,offset:Int,installation:String):FinancePayrollCorrectionReviewPageDto {
+        require(listOf(org,original,replacement).all(::financeLookupIdIsUuid)&&offset in 0..1_000_000)
+        return api.request(HttpMethod.Get,path(org)+"/corrections/"+replacement+"/employees?offset="+offset,
+            HiltechRequestOptions(installationId=installation),decode={json.decodeFromString<FinancePayrollCorrectionReviewPageDto>(it).also{v->
+                check(sameId(v.organizationId,org)&&sameId(v.originalRunVersionId,original)&&sameId(v.replacementRunVersionId,replacement)&&
+                    v.currency==currency&&v.offset==offset&&v.rows.size<=50&&
+                    v.rows.map{it.employeeId.lowercase()}.distinct().size==v.rows.size&&v.rows.all(::validPayrollCorrectionReview)&&
+                    (!v.hasMore||v.rows.size==50)&&(v.deltaPlan==null||validPayrollDeltaPlan(v.deltaPlan)))
+            }})
+    }
     suspend fun apply(intent: FinancePayrollIntent, installation: String): FinancePayrollCommandReceiptDto {
         val (suffix, body, expectedState) = when (intent.kind) {
+            "CLEAR_CORRECTION" -> {
+                val clearance=requireNotNull(intent.clearance)
+                require(sameId(clearance.operationId,intent.operationId)&&sameId(clearance.replacementRunVersionId,intent.targetId)&&payrollClearanceIntentValid(clearance))
+                Triple("/corrections",json.encodeToString(FinancePayrollClearanceInputDto.serializer(),clearance),"CLEARED")
+            }
+            "POST_GL" -> {
+                val post=requireNotNull(intent.ledgerPost)
+                require(sameId(intent.operationId,post.operationId) && payrollGlIntentValid(post))
+                Triple("/runs/"+uuid(intent.targetId)+"/ledger",json.encodeToString(FinancePayrollGlPostDto.serializer(),post),"POSTED")
+            }
             "PREPARE_BATCH" -> Triple("/batches/${uuid(intent.targetId)}/prepare",
                 json.encodeToString(FinancePayrollOperationDto.serializer(), FinancePayrollOperationDto(intent.operationId)), "PREPARED")
             "PROPOSE_RESULT" -> {
@@ -120,7 +312,7 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
             decode = { json.decodeFromString<FinancePayrollCommandReceiptDto>(it).also { receipt ->
                 check(sameId(receipt.operationId, intent.operationId) && sameId(receipt.organizationId, intent.organizationId))
                 uuid(receipt.targetId)
-                check(receipt.state == expectedState && !receipt.bankExecutionInitiated && !receipt.ledgerPosted)
+                check(receipt.state == expectedState && !receipt.bankExecutionInitiated && receipt.ledgerPosted==(intent.kind=="POST_GL"))
                 if (intent.kind == "REVIEW_RESULT") check(sameId(receipt.targetId, intent.targetId))
             } })
     }

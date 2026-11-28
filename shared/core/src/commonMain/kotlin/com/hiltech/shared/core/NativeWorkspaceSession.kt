@@ -201,7 +201,7 @@ internal fun NativeWorkspacePane(
     Column(Modifier.fillMaxSize()) {
         Surface(color = colors.surface, contentColor = colors.primaryText, modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onExit) { Text(hiltechText("استكشف", "‹ Explore")) }
+                TextButton(onClick = onExit) { Text(hiltechText("رجوع", "Back")) }
                 Text(nativeWorkspaceTitle(workspace, LocalHiltechLanguage.current), modifier = Modifier.weight(1f).padding(start = 8.dp),
                     style = MaterialTheme.typography.titleMedium)
             }
@@ -275,6 +275,7 @@ fun NativeOperationAreas(title: String, description: String, areas: List<NativeO
 }
 
 internal enum class NativeWorkspaceGroup(val ar: String, val en: String) {
+    Personal("شؤوني الشخصية", "Personal"),
     Management("الإدارة", "Management"),
     Finance("المالية والمحاسبة", "Finance & accounting"),
     Payroll("الرواتب", "Payroll"),
@@ -287,6 +288,7 @@ internal enum class NativeWorkspaceGroup(val ar: String, val en: String) {
 }
 
 internal fun nativeWorkspaceGroup(id: String): NativeWorkspaceGroup = when {
+    id == "my-payslips" -> NativeWorkspaceGroup.Personal
     id.startsWith("executive") || id == "company-administration" -> NativeWorkspaceGroup.Management
     id.startsWith("finance") -> NativeWorkspaceGroup.Finance
     id.contains("payroll") || id.contains("payslip") -> NativeWorkspaceGroup.Payroll
@@ -310,6 +312,7 @@ internal fun nativeWorkspaceTitle(workspace: NativeOperationalWorkspace, languag
         "project-planning" -> "المشاريع وخطط التنفيذ" to "Projects & delivery plans"
         "handover-read" -> "تسليم المشاريع" to "Project handover"
         "service-operations-read" -> "الدعم والصيانة" to "Support & maintenance"
+        "finance-accounting-desk" -> "الحسابات والدفتر" to "Accounts & ledger"
         "finance-evidence-read" -> "المراجعة المالية" to "Financial review"
         "finance-bank-statement" -> "كشف البنك والتحصيلات" to "Bank statements & collections"
         "finance-invoice-read" -> "فواتير الموردين" to "Supplier invoices"

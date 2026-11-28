@@ -103,15 +103,13 @@ class FinanceCashAllocationService @org.springframework.beans.factory.annotation
         ) ?: unavailable()
         if(reviewer.organizationId!=org ||
             approvals.actorMatchesAuthority(actor,reviewer,now))unavailable()
-        val table=if(kind=="AP")"finance_ap_posted_journal"
-            else "finance_ar_posted_journal"
         val source=jdbc.query(
             """SELECT gross_amount,currency,ledger_fingerprint_sha256
-               FROM $table WHERE id=? AND organization_id=?""",
+               FROM finance_obligation_source WHERE id=? AND organization_id=? AND source_kind=?""",
             {rs,_ ->FinanceCashSourceRow(
                 rs.getBigDecimal("gross_amount"),rs.getString("currency"),
                 rs.getString("ledger_fingerprint_sha256"))},
-            sourceJournal,org,
+            sourceJournal,org,kind,
         ).singleOrNull() ?: stale()
         if(kind=="AP" && jdbc.queryForObject(
             """SELECT EXISTS(SELECT 1 FROM finance_ap_journal_reversal
@@ -133,6 +131,8 @@ class FinanceCashAllocationService @org.springframework.beans.factory.annotation
                 rs.getDate("booked_on").toLocalDate())},
             request.bankStatementLineId,org,
         ).singleOrNull() ?: stale()
+        if(jdbc.queryForObject("""SELECT EXISTS(SELECT 1 FROM finance_gl_opening_obligation WHERE organization_id=? AND source_kind=? AND id=? AND opening_date>?)""",
+            Boolean::class.java,org,kind,sourceJournal,java.sql.Date.valueOf(bank.bookedOn))==true)stale()
         if(bank.currency!=source.currency ||
             bank.flow!=if(kind=="AR")"CREDIT" else "DEBIT")unavailable()
         // This is a proposal only, NOT an approved or recorded payment.
@@ -368,14 +368,10 @@ class FinanceCashAllocationService @org.springframework.beans.factory.annotation
         replayed=replayed,cashAllocatedToAccountingSource=recorded!=null,
     )
     private fun lockSourceAndBank(org:UUID,kind:String,journal:UUID,bank:UUID) {
-        val table=when(kind){
-            "AP"->"finance_ap_posted_journal"
-            "AR"->"finance_ar_posted_journal"
-            else->unavailable()
-        }
+        if(kind !in setOf("AP","AR"))unavailable()
         if(jdbc.query(
-            """SELECT id FROM $table WHERE id=? AND organization_id=? FOR UPDATE""",
-            {rs,_ ->rs.getObject("id",UUID::class.java)},journal,org,
+            """SELECT id FROM finance_lock_obligation_source(?,?,?)""",
+            {rs,_ ->rs.getObject("id",UUID::class.java)},org,kind,journal,
         ).singleOrNull()!=journal)stale()
         if(jdbc.query(
             """SELECT id FROM finance_bank_statement_intake_line
@@ -397,9 +393,8 @@ class FinanceCashAllocationService @org.springframework.beans.factory.annotation
         val s=all.filter {
             it["source_kind"]==kind && it["source_journal_id"]==journal
         }.fold(BigDecimal.ZERO){a,v->a.add(v["allocated_amount"] as BigDecimal)}
-        val b=all.filter {
-            it["bank_statement_line_id"]==bank
-        }.fold(BigDecimal.ZERO){a,v->a.add(v["allocated_amount"] as BigDecimal)}
+        val b=jdbc.queryForObject("SELECT coalesce(sum(amount),0) FROM finance_bank_committed_usage WHERE organization_id=? AND bank_statement_line_id=?",
+            BigDecimal::class.java,org,bank)?:BigDecimal.ZERO
         // A posted customer/supplier invoice can be settled partly in a
         // company cashbox and partly by bank: never advertise the same
         // remaining invoice balance twice.

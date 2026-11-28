@@ -64,21 +64,17 @@ class FinanceCashVoucherApprovalSubject(
     "hiltech.finance.cashbox.enabled",Boolean::class.java,false)
  fun policyKey():String?=CompanyReviewPolicyKeys.resolve(environment, "hiltech.finance.cashbox.voucher-policy-key").takeIf{Regex("^[A-Z][A-Z0-9_]{2,79}$").matches(it)}
  fun source(org:UUID,kind:String,journal:UUID):Triple<BigDecimal,String,String>? {
-   val table=when(kind){
-      "AP"->"finance_ap_posted_journal"
-      "AR"->"finance_ar_posted_journal"
-      else->return null
-   }
+   if(kind !in setOf("AP","AR"))return null
    if(kind=="AP" && jdbc.queryForObject(
       """SELECT EXISTS(SELECT 1 FROM finance_ap_journal_reversal
          WHERE organization_id=? AND original_journal_id=?)""",
       Boolean::class.java,org,journal)==true)return null
    return jdbc.query(
      """SELECT gross_amount,currency,ledger_fingerprint_sha256
-        FROM $table WHERE id=? AND organization_id=?""",
+        FROM finance_obligation_source WHERE id=? AND organization_id=? AND source_kind=?""",
      {rs,_ ->Triple(rs.getBigDecimal("gross_amount"),
        rs.getString("currency"),rs.getString("ledger_fingerprint_sha256"))},
-     journal,org,
+     journal,org,kind,
    ).singleOrNull()
  }
  fun outstanding(org:UUID,kind:String,journal:UUID,total:BigDecimal):BigDecimal {

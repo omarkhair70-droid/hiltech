@@ -49,6 +49,28 @@ OpenFGA, Keycloak, idempotency, projections, sync engines, provider adapters, ob
 
 ---
 
+# 1A. Work autonomy and financial truth
+
+HILTECH is an operating and accounting tool, not an employee surveillance
+system. Design ordinary work around agreed responsibilities, deliverables,
+available resources, and outcomes. Do not add clock-in/out, presence scoring,
+location monitoring, mandatory leave request chains, or working-hours controls
+as generic defaults. Operational scheduling, site safety, and legally required
+employment records remain distinct from monitoring. Record genuine company
+agreements and required employment facts; do not infer a waiver of employee rights.
+
+For money, prioritize accurate obligations, supporting documents, custody,
+approved entitlements, accounting records, actual payment/collection and
+reconciliation. Routine work should be possible within the existing delegated
+authority without invented additional sign-offs. Keep independent decisions where
+they protect an actual financial commitment, sensitive access, or correction.
+Security mechanisms remain behind ordinary product actions.
+
+Team budget planning, bonus allocation and any profit-sharing rules need
+company-approved sources and scope. Do not invent budget amounts, statutory
+rates, automatic wage deductions, or automatic surplus distributions. An
+approved amount is not a transfer; an unconfirmed source is not zero.
+
 # 2. Reality before invention
 
 HILTECH must be grounded in reality.

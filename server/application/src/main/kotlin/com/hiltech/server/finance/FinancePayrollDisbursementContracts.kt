@@ -25,6 +25,7 @@ data class FinancePayrollBatchView(
     val reviewBatchId: UUID, val runVersionId: UUID, val periodStart: LocalDate, val periodEnd: LocalDate,
     val generation: Int, val currency: String, val payableTotal: String, val employeeCount: Int,
     val transferCount: Int, val prepared: Boolean, val sourceFingerprint: String,
+    val differential:Boolean=false,val differentialReady:Boolean=true,
 )
 data class FinancePayrollInstructionView(
     val instructionId: UUID, val employeeId: UUID, val employeeName: String, val employeeCode: String,

@@ -139,6 +139,7 @@ fun CompanyAdministrationWorkspace(
         }
         if (section == "OPERATIONAL_SETTINGS" && section in options) state.SaveableStateProvider("OPERATIONAL_SETTINGS") {
             CompanyOperationalSettingsWorkspace(organizationId, client.operationalSettings, installationId, newOperationId, onReauthenticate)
+            FinanceConfigurationWorkspace(organizationId, client.financeConfiguration, installationId, newOperationId, onReauthenticate)
         }
     }
 }

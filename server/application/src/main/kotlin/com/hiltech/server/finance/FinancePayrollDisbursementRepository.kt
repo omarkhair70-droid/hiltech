@@ -17,17 +17,25 @@ import java.util.UUID
 @Repository
 class FinancePayrollDisbursementRepository(private val jdbc: JdbcTemplate) {
     fun batches(org: UUID): List<FinancePayrollBatchView> = jdbc.query(
-        """SELECT b.id,b.run_version_id,p.start_date,p.end_date,r.generation,b.currency,b.payable_total,
-          b.line_count,b.positive_transfer_count,r.source_fingerprint,
+        """SELECT b.id,b.run_version_id,p.start_date,p.end_date,r.generation,b.currency,
+          CASE WHEN c.id IS NULL THEN b.payable_total ELSE coalesce(d.total,0) END AS payable_total,
+          b.line_count,CASE WHEN c.id IS NULL THEN b.positive_transfer_count ELSE d.transfer_count END AS positive_transfer_count,r.source_fingerprint,
+          (c.id IS NOT NULL) AS differential,(c.id IS NULL OR d.row_count=b.line_count) AS differential_ready,
           EXISTS(SELECT 1 FROM finance_payroll_payment_batch x WHERE x.organization_id=b.organization_id AND x.run_version_id=b.run_version_id) AS prepared
         FROM finance_payroll_review_batch b JOIN payroll_run_version r ON r.id=b.run_version_id
-        JOIN payroll_period p ON p.id=r.payroll_period_id WHERE b.organization_id=?
+        JOIN payroll_period p ON p.id=r.payroll_period_id
+        LEFT JOIN payroll_run_correction c ON c.organization_id=b.organization_id AND c.replacement_run_version_id=b.run_version_id
+          AND c.finance_disposition='SETTLED_DIFFERENTIAL_AUTHORIZED'
+        LEFT JOIN LATERAL (SELECT count(*) AS row_count, count(*) FILTER(WHERE e.amount>0) AS transfer_count,sum(e.amount) AS total
+           FROM finance_payroll_instruction_entitlement e WHERE e.organization_id=b.organization_id AND e.run_version_id=b.run_version_id) d ON c.id IS NOT NULL
+        WHERE b.organization_id=?
         ORDER BY p.end_date DESC,r.generation DESC LIMIT 100""",
         { row, _ -> FinancePayrollBatchView(
             row.getObject("id", UUID::class.java), row.getObject("run_version_id", UUID::class.java),
             row.getObject("start_date", LocalDate::class.java), row.getObject("end_date", LocalDate::class.java),
             row.getInt("generation"), row.getString("currency"), row.getBigDecimal("payable_total").toPlainString(),
             row.getInt("line_count"), row.getInt("positive_transfer_count"), row.getBoolean("prepared"), row.getString("source_fingerprint"),
+            row.getBoolean("differential"),row.getBoolean("differential_ready"),
         ) }, org,
     )
 
@@ -49,6 +57,11 @@ class FinancePayrollDisbursementRepository(private val jdbc: JdbcTemplate) {
         Boolean::class.java, run,
     ) == true
 
+    fun differentialReady(org:UUID,run:UUID):Boolean = jdbc.queryForObject(
+        """SELECT EXISTS(SELECT 1 FROM finance_payroll_gl_correction_source
+            WHERE organization_id=? AND replacement_run_version_id=? AND finance_disposition='SETTLED_DIFFERENTIAL_AUTHORIZED')""",
+        Boolean::class.java,org,run)==true
+
     fun latestReleased(org: UUID, run: UUID): Boolean = jdbc.queryForObject(
         """SELECT EXISTS(SELECT 1 FROM payroll_run_version v JOIN payroll_run_release r ON r.run_version_id=v.id
           WHERE v.id=? AND v.organization_id=? AND NOT EXISTS(
@@ -60,8 +73,8 @@ class FinancePayrollDisbursementRepository(private val jdbc: JdbcTemplate) {
     fun prepareBatch(id: UUID, org: UUID, batch: FinancePayrollBatchView, operation: UUID, actor: UUID, at: Instant) {
         check(jdbc.update("""INSERT INTO finance_payroll_payment_batch(id,operation_id,organization_id,review_batch_id,run_version_id,prepared_by_user_id,prepared_at)
             VALUES (?,?,?,?,?,?,?)""", id, operation, org, batch.reviewBatchId, batch.runVersionId, actor, at.atOffset(ZoneOffset.UTC)) == 1)
-        val lines = jdbc.query("SELECT employee_id,net,currency FROM payroll_run_employee_line WHERE run_version_id=? AND net>0 ORDER BY employee_id",
-            { row, _ -> Triple(row.getObject("employee_id", UUID::class.java), row.getBigDecimal("net"), row.getString("currency")) }, batch.runVersionId)
+        val lines = jdbc.query("SELECT employee_id,amount,currency FROM finance_payroll_instruction_entitlement WHERE organization_id=? AND run_version_id=? AND amount>0 ORDER BY employee_id",
+            { row, _ -> Triple(row.getObject("employee_id", UUID::class.java), row.getBigDecimal("amount"), row.getString("currency")) }, org,batch.runVersionId)
         lines.forEach { line ->
             val instructionId = UUID.nameUUIDFromBytes("hiltech:finance:payroll-instruction:${batch.runVersionId}:${line.first}".toByteArray(Charsets.UTF_8))
             check(jdbc.update("""INSERT INTO finance_payroll_instruction(id,organization_id,batch_id,run_version_id,employee_id,amount,currency,source_fingerprint)
@@ -232,6 +245,23 @@ class FinancePayrollDisbursementRepository(private val jdbc: JdbcTemplate) {
              AND a.principal_user_id=?)""", Boolean::class.java, org, proposal, actor,
     ) == true
 
+    fun differentialPaymentBasis(org:UUID,run:UUID):com.hiltech.server.payroll.PayrollDifferentialPaymentBasis? {
+        val differential=jdbc.queryForObject("""SELECT EXISTS(SELECT 1 FROM payroll_run_correction
+            WHERE organization_id=? AND replacement_run_version_id=? AND finance_disposition='SETTLED_DIFFERENTIAL_AUTHORIZED')""",
+            Boolean::class.java,org,run)==true
+        if(!differential)return null
+        val lines=jdbc.query("""SELECT employee_id,amount,currency FROM finance_payroll_instruction_entitlement
+            WHERE organization_id=? AND run_version_id=? ORDER BY employee_id""",
+            {r,_->com.hiltech.server.payroll.PayrollFrozenPaymentLine(r.getObject(1,UUID::class.java),r.getBigDecimal(2),r.getString(3).trim())},org,run)
+        val recoveryEmployees=jdbc.query("""SELECT (x->>'employeeId')::uuid FROM finance_payroll_recovery_source s
+            CROSS JOIN LATERAL jsonb_array_elements(s.recovery_schedule) x
+            LEFT JOIN finance_payroll_recovery_balance b ON b.organization_id=s.organization_id
+               AND b.run_version_id=s.run_version_id AND b.employee_id=(x->>'employeeId')::uuid
+            WHERE s.organization_id=? AND s.run_version_id=? AND (b.id IS NULL OR b.remaining_to_post>0)""",
+            {r,_->r.getObject(1,UUID::class.java)},org,run).toSet()
+        return com.hiltech.server.payroll.PayrollDifferentialPaymentBasis(lines.isNotEmpty(),lines,recoveryEmployees)
+    }
+
     fun expected(org: UUID, run: UUID): List<PayrollExpectedPayment> = jdbc.query(
         "SELECT * FROM finance_payroll_instruction WHERE organization_id=? AND run_version_id=? ORDER BY employee_id",
         { row, _ -> PayrollExpectedPayment(org, run, row.getObject("employee_id", UUID::class.java), row.getObject("id", UUID::class.java),
@@ -252,4 +282,5 @@ class FinancePayrollDisbursementRepository(private val jdbc: JdbcTemplate) {
 class FinancePayrollPaymentResultsAdapter(private val repository: FinancePayrollDisbursementRepository) : PayrollFinancePaymentResultsPort {
     override fun expectedPayments(organizationId: UUID, runVersionId: UUID): List<PayrollExpectedPayment> = repository.expected(organizationId, runVersionId)
     override fun paymentEvents(organizationId: UUID, runVersionId: UUID): List<PayrollFinanceResult> = repository.events(organizationId, runVersionId)
+    override fun differentialPaymentBasis(organizationId:UUID,runVersionId:UUID)=repository.differentialPaymentBasis(organizationId,runVersionId)
 }

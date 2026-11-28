@@ -67,6 +67,33 @@ class FinanceEmployeeSettlementRulesTest {
         rejects(advance.copy(action=
             FinanceEmployeeSettlementAction.IMPREST_RECEIPTS_ACCEPTED))
     }
+    @Test fun historicalResidualDoesNotInventOriginalBankFunding() {
+        val opening=base.copy(approvedFundingRecorded=false,sourceBankTransactionId=null,sourceBankEvidenceSha256=null,
+            openingSourceFingerprint="a".repeat(64))
+        assertEquals("650.000000",FinanceEmployeeSettlementRules.validate(opening).unsettledAmount)
+        rejects(opening.copy(openingSourceFingerprint=null))
+        rejects(opening.copy(sourceBankTransactionId=UUID.randomUUID()))
+        rejects(opening.copy(approvedFundingRecorded=true))
+        rejects(opening.copy(openingSourceFingerprint="fake"))
+    }
+    @Test fun payrollOverpaymentNeedsPostedReceivableAndBankCreditWithoutFundingOrWageDeduction() {
+        val recovery=base.copy(kind=FinanceEmployeeSettlementKind.PAYROLL_OVERPAYMENT,
+            action=FinanceEmployeeSettlementAction.PAYROLL_RECOVERY_CONFIRMED,
+            approvedFundingRecorded=false,sourceBankTransactionId=null,sourceBankEvidenceSha256=null,
+            payrollRecoveryFingerprint="e".repeat(64),recoveryMethod="CONFIRMED_BANK_CREDIT",
+            settlementBankTransactionId=UUID.randomUUID(),settlementBankEvidenceSha256="c".repeat(64))
+        val valid=FinanceEmployeeSettlementRules.validate(recovery)
+        assertEquals("650.000000",valid.unsettledAmount)
+        assertFalse(valid.fundsTransferredBySystem)
+        rejects(recovery.copy(payrollRecoveryFingerprint=null))
+        rejects(recovery.copy(openingSourceFingerprint="a".repeat(64)))
+        rejects(recovery.copy(approvedFundingRecorded=true))
+        rejects(recovery.copy(recoveryMethod="SEPARATELY_APPROVED_PAYROLL_DEDUCTION"))
+        rejects(recovery.copy(approvedPayrollDeductionEventId=UUID.randomUUID()))
+        rejects(recovery.copy(action=FinanceEmployeeSettlementAction.ADVANCE_RECOVERY_CONFIRMED))
+        rejects(recovery.copy(settlementBankTransactionId=null))
+        rejects(recovery.copy(previouslySettled=BigDecimal("900")))
+    }
     @Test fun refuseUnfundedDraftsAndOverSettlement() {
         rejects(base.copy(approvedFundingRecorded=false))
         rejects(base.copy(sourceBankTransactionId=null))
@@ -86,5 +113,19 @@ class FinanceEmployeeSettlementRulesTest {
         FinanceEmployeeSettlementRules.validate(paid)
         rejects(paid.copy(recoveryMethod="SEPARATELY_APPROVED_PAYROLL_DEDUCTION"))
         rejects(paid.copy(settlementBankTransactionId=null))
+    }
+    @Test fun historicalPayrollPaymentNeedsSealedLiabilityAndBankDebit() {
+        val payment=base.copy(kind=FinanceEmployeeSettlementKind.PAYROLL_OPENING_PAYABLE,
+            action=FinanceEmployeeSettlementAction.PAYROLL_OPENING_PAID,approvedFundingRecorded=false,
+            sourceBankTransactionId=null,sourceBankEvidenceSha256=null,openingSourceFingerprint="a".repeat(64),
+            recoveryMethod="CONFIRMED_BANK_DEBIT",settlementBankTransactionId=UUID.randomUUID(),
+            settlementBankEvidenceSha256="c".repeat(64))
+        assertEquals("650.000000",FinanceEmployeeSettlementRules.validate(payment).unsettledAmount)
+        rejects(payment.copy(recoveryMethod="CONFIRMED_BANK_CREDIT"))
+        rejects(payment.copy(openingSourceFingerprint=null))
+        rejects(payment.copy(approvedFundingRecorded=true))
+        rejects(payment.copy(settlementBankTransactionId=null))
+        rejects(payment.copy(previouslySettled=BigDecimal("900")))
+        rejects(payment.copy(action=FinanceEmployeeSettlementAction.PAYROLL_RECOVERY_CONFIRMED))
     }
 }

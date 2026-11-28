@@ -205,12 +205,17 @@ class Payroll9cFinalPayService(
                                 Payroll9cReconciler.reconcile(
                                     case.organizationId, run.runId, expected, events,
                                 )
-                            paymentStatus = if (run.net.signum() == 0)
-                                "NO_PAYMENT_REQUIRED"
+                            val differential=financePort.differentialPaymentBasis(case.organizationId,run.runId)
+                            val employeeDelta=differential?.takeIf{it.available}?.lines?.singleOrNull{it.employeeId==case.employeeId}
+                            val recoveryUnresolved=case.employeeId in differential?.recoveryEmployees.orEmpty()
+                            if(recoveryUnresolved)blockers += "FINAL_PAY_PAYMENT_NOT_CONFIRMED"
+                            paymentStatus = if(recoveryUnresolved)"PAYMENT_STATUS_UNAVAILABLE"
+                            else if (run.net.signum() == 0) "NO_PAYMENT_REQUIRED"
+                            else if(employeeDelta!=null&&employeeDelta.currency==run.currency&&employeeDelta.net.signum()==0)PayrollFinanceOutcome.SUCCESS.name
                             else result?.employees?.singleOrNull {
                                 it.employeeId == case.employeeId
                             }?.result?.name
-                            if (run.net.signum() > 0 &&
+                            if (!recoveryUnresolved && run.net.signum() > 0 &&
                                 paymentStatus != PayrollFinanceOutcome.SUCCESS.name
                             ) {
                                 blockers += "FINAL_PAY_PAYMENT_NOT_CONFIRMED"

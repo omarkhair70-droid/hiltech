@@ -1,12 +1,12 @@
 # HILTECH Program Status
 
-Current engineering review: **2026-11-25 — verification and repair in progress**
+Current engineering review: **2026-11-26 — unified source, native product work**
 
-The unified candidate is PR #242 at
-`4a3709c5707d39135a6e8034d5ff1eb8ef949145`. Review changes are in PR #243,
-`product/hiltech-reconstruction-20261125`, targeting that candidate.
-Fetch and verify current heads before work; `main` is not automatically the
-current integrated source.
+PR #243 was incorporated into PR #242 by fast-forward at the tested commit
+`9965066ed8ab1f80de78f9cf762c3faed80b3aae`. The single integrated candidate
+is `integration/hiltech-unified-staging-20261124`. Fetch and verify its
+current head before work; `main` is not automatically the current integrated
+source. Source consolidation is distinct from production release acceptance.
 
 The public verification contract is
 [`NATIVE_PRODUCT_VERIFICATION.md`](../13-delivery/NATIVE_PRODUCT_VERIFICATION.md).

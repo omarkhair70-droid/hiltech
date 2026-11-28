@@ -6,10 +6,11 @@ Status: active engineering contract; acceptance remains open
 
 ## Source and publication
 
-PR #242 is the reviewed integrated candidate. PR #243 contains follow-up code,
-tests and sanitized engineering documentation and targets the candidate branch.
-Always fetch and inspect their current heads. Reconcile unique work in other
-checkouts before merging; preserve dirty files, local history and evidence.
+PR #242 is the reviewed integrated candidate, including the fast-forwarded
+PR #243 source. Always fetch and inspect its current head. Keep new work on
+short-lived review branches based on this candidate. Preserve dirty files,
+local history and evidence in other checkouts; do not treat source consolidation
+as release acceptance.
 
 This repository is public. Detailed internal audits, company-specific matrices,
 role assignments, deployment evidence and the canonical closeout register remain
@@ -56,6 +57,68 @@ failure when capture fails. Registry publication is not deployment.
   and scopes; do not infer power to grant a responsibility from merely holding it.
 - Preserve source guards, independent approvals, current membership, audit and
   idempotency. No bypass is justified by making a screen easier to reach.
+
+## Accounting desk
+
+The shared native Accounts & ledger workspace exposes current supplier/customer
+obligations and exact posted period movements and journal lines. The underlying
+read projections use the existing AP/AR/reversal ledger and recognized allocation
+balance view, with existing financial reporting authority (both legacy reporting
+checks for ledger reads), no new feature switches or write actions. Period
+movement is not a company-wide trial balance, opening/closing balance, cash
+balance or financial statement. Keep currencies separate and disclose missing
+due dates and allocation exceptions. The mixed bank/cash PostgreSQL fixture
+exercises the new read store against the same independently posted/allocated
+source; the native client tests scope and source contracts.
+
+## Settlement journal coverage
+
+The existing daily finance desk now includes source-bound settlement posting.
+Company settings create an approved bank/cashbox ledger account tied to its
+actual instrument and currency. AP/AR allocations, physical vouchers and
+corrections of already-posted bank matches can produce exactly two immutable
+GL lines in the current open period, with unique source keys and an exact
+receipt. Existing source and GL operator responsibilities are checked, and
+posting never initiates a payment or claims a bank refund. Settlement journals
+participate in the existing period-close snapshot. The wider ledger query is
+explicitly requested by the current client; older readers retain the earlier
+partial view. Opening balances, payroll, employee advances, expenses, other
+unallocated bank movements and a full financial-statement ledger remain
+outside this coverage. Do not enable the full-ledger-ready closure switch on
+the strength of this increment alone.
+
+## Employee custody and paid-cost journals
+
+The same daily posting desk can now record approved bank-backed advance and
+imprest funding as assets, and return settlements against the original posted
+custody account. Accepted imprest receipts and bank-confirmed expense
+reimbursement support an explicit company accounting treatment for first
+recognition into a single approved expense or asset account. The operator
+must verify that the amount was not already recognized; split treatments and
+settlement of a previously accrued expense liability are not supported by this
+flow. Source amount, approval, organization, account classification and
+currency are independently guarded in PostgreSQL. No automatic cost
+classification, payroll posting, tax calculation or additional money transfer
+is inferred. The previous native report and queue contracts remain available
+without the new opt-in query parameter. The full-ledger close readiness gate
+remains unchanged. The mixed bank/cash test now exercises the independently
+approved custody, return, accepted receipts and reimbursement sources with
+transaction-local synthetic data.
+
+## Native home and personal context
+
+The shared native home exposes specialized workspaces only after a successful
+current source authorization read. One account can reach all of its available
+operational groups; job titles and team labels never grant access. Personal
+employee details and own payslips belong to Account rather than People or
+payroll administration. The employee directory needs its own authorized read.
+Direct home/account routes use the existing current-source preflight and
+return to their originating context. Loading, failed reads, cached assignments
+and a confirmed empty assignment list are distinct presentation states.
+
+The shared tests verify route selection, revoked and duplicate routes, personal
+profile scope and assignment source states. Device rendering and authenticated
+role acceptance remain separate from these source checks.
 
 ## Internal support notes
 

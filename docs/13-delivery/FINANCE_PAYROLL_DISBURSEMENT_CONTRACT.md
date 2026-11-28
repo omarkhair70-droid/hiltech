@@ -9,10 +9,35 @@ required approval policy and an independently authorized named reviewer through
 the company review-workflow administration API. No grants or company data are
 seeded by the migration.
 
-An internal instruction batch freezes every positive employee net from one
-released payroll review envelope. Zero-net employees need no instruction. A
-correction with `SETTLED_DIFFERENTIAL_AUTHORIZED` cannot be converted to a full
-second payment batch; differential settlement requires its own approved source.
+An ordinary internal instruction batch freezes every positive employee net
+from one released payroll review envelope. Zero-net employees need no instruction.
+A correction with `SETTLED_DIFFERENTIAL_AUTHORIZED` uses the separately reviewed
+per-employee remaining amount against cumulative, verified posted prior settlement,
+never another full salary instruction when prior funds remain with the employee.
+An evidenced partial net (including actual posted bank returns) can participate
+in the same clearance: corrected net minus verified net paid determines the
+remaining payment or recovery. The previously unpaid liability is already in
+the ledger; the correction preview subtracts that balance from the new payable.
+A missing result, unposted event, unresolved proposal or voided match is not
+proof of zero payment and blocks the differential. All-return and separately
+reviewed no-transfer cases retain their existing paths. This does not add
+split bank matching against a single instruction. A negative difference requires an explicit approved
+OTHER_ASSET account selected for employee overpayment receivables. Finance
+clearance freezes the source fingerprint and individual recovery schedule.
+Posting the replacement accrual reverses the original base lines, records the
+new accrual, and reclassifies the overpayment from payroll payable to the
+selected receivable account in the same journal. Additional payables and
+receivables are not netted across employees. A recovery-only batch has no
+payment instructions. Recognition is not collection: no automatic wage
+deduction, bank collection or new employee funding is introduced. Bank-backed collection uses the existing employee settlement preparation,
+independent approval, recording and general ledger posting. The posted
+receivable is a distinct PAYROLL_OVERPAYMENT source, not company funding.
+The existing shared bank allocation cap and source balance cap apply to each
+partial collection. Operational remaining and GL remaining are separate; a
+recovery employee is unresolved until all collections have been posted.
+Automatic payroll deduction remains unsupported. Recovery corrections currently
+require the same employee cohort; another correction of a run carrying a
+recovery schedule remains blocked pending explicit recovery reconciliation.
 
 A preparer selects an employee and an independently approved bank statement
 line by displayed reference, date, account and amount. Amount/currency come from
@@ -66,3 +91,23 @@ Native commands retain their exact operation IDs after uncertain transport
 outcomes. Receipts and follow-up refresh are separate states. Public tests use
 synthetic identities and evidence only; production acceptance is recorded in
 the private canonical closeout register.
+
+## Historical payroll opening
+
+A cutover payroll payable is an immutable CREDIT line in the existing balanced
+opening journal. The schedule identifies each company employee, legacy payroll
+reference, historical period end and positive unpaid net residual. Its exact
+sum must equal the control account. The source is not an advance, expense,
+new payroll run, bank result or authorization to pay. Duplicate employee
+periods/references and overlaps with already released payroll are rejected;
+later payroll release also rejects overlap with a recorded opening. The
+existing opening journal authority and company/source references apply.
+Historical settlement uses the existing employee settlement review with the distinct
+PAYROLL_OPENING_PAYABLE source and PAYROLL_OPENING_PAID action. Only an approved
+bank debit on or after cutover, independently reviewed restricted evidence and
+remaining bank and liability capacity can record a payment. The employee cannot
+authorize their own payment. GL posting debits the frozen opening payroll
+payable and credits the approved bank asset; it creates no payroll expense,
+funding, current payslip or bank execution. Multiple recorded payments may reduce
+one historical obligation, with separate remaining-to-record and remaining-to-post
+balances. No new cash-voucher route or reversal is included.

@@ -132,20 +132,20 @@ class FinanceCashAllocationApprovalSubject(
             !approvals.isActiveOrganizationMember(org,p.preparedBy,now) ||
             approvals.actorMatchesAuthority(p.preparedBy,reviewer,now))
             return null
-        val table=when(p.kind){
-            "AP"->"finance_ap_posted_journal"
-            "AR"->"finance_ar_posted_journal"
-            else->return null
-        }
+        if(p.kind !in setOf("AP","AR"))return null
         val posted=jdbc.query(
             """SELECT gross_amount,currency,ledger_fingerprint_sha256
-               FROM $table WHERE id=? AND organization_id=?""",
+               FROM finance_obligation_source WHERE id=? AND organization_id=? AND source_kind=?""",
             {rs,_ ->Triple(rs.getBigDecimal("gross_amount"),
                 rs.getString("currency"),
                 rs.getString("ledger_fingerprint_sha256"))},
-            p.journalId,org,
+            p.journalId,org,p.kind,
         ).singleOrNull() ?: return null
         if(posted.second!=p.currency || posted.third!=p.sourceHash) return null
+        if(jdbc.queryForObject("""SELECT EXISTS(SELECT 1 FROM finance_gl_opening_obligation o
+            JOIN finance_bank_statement_intake_line b ON b.organization_id=o.organization_id AND b.id=?
+            WHERE o.organization_id=? AND o.source_kind=? AND o.id=? AND b.booked_on<o.opening_date)""",
+            Boolean::class.java,p.bankLineId,org,p.kind,p.journalId)==true)return null
         if(p.kind=="AP" && jdbc.queryForObject(
             """SELECT EXISTS(SELECT 1 FROM finance_ap_journal_reversal
                WHERE organization_id=? AND original_journal_id=?)""",

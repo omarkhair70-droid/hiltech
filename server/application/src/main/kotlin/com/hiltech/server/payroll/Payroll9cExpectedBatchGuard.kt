@@ -67,11 +67,9 @@ object Payroll9cExpectedBatchGuard {
         // No other employee's amounts are exposed through any API response.
         val frozen = jdbc.query(
             """
-            SELECT line.employee_id, line.net, line.currency
-            FROM payroll_run_employee_line line
-            JOIN payroll_run_version run
-              ON run.id = line.run_version_id
-            WHERE run.id = ? AND run.organization_id = ?
+            SELECT employee_id, amount AS net, currency
+            FROM finance_payroll_instruction_entitlement
+            WHERE run_version_id = ? AND organization_id = ?
             """.trimIndent(),
             { rs, _ ->
                 PayrollFrozenPaymentLine(

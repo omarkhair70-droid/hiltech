@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.hiltech.shared.core.design.HiltechKeyValue
 import com.hiltech.shared.core.design.HiltechPanel
 import com.hiltech.shared.core.design.HiltechRecordChoice
 import com.hiltech.shared.core.design.HiltechRecordPicker
@@ -154,6 +155,8 @@ fun FinancePayrollDisbursementWorkspace(
                     "PREPARED" -> hiltechText("تم تجهيز سجل المطابقة", "Reconciliation instructions prepared")
                     "SUBMITTED_FOR_REVIEW" -> hiltechText("أُرسلت المطابقة للمراجع المستقل", "Match submitted for independent review")
                     "REJECTED" -> hiltechText("تم رفض المطابقة دون تسجيل صرف", "Match rejected without recording payment")
+                    "POSTED" -> hiltechText("تم ترحيل القيد المحاسبي", "Accounting journal posted")
+                    "CLEARED" -> hiltechText("تم تسجيل اعتماد المالية للتصحيح", "Finance correction clearance recorded")
                     else -> hiltechText("تم تسجيل النتيجة المعتمدة", "Approved result recorded")
                 }, HiltechStateTone.CURRENT)
                 if (error != null || runFailed) Text(hiltechText("النتيجة مؤكدة، لكن العرض المحدث لم يُحمّل. أعد التحديث دون إنشاء طلب آخر.",
@@ -179,22 +182,43 @@ fun FinancePayrollDisbursementWorkspace(
                 label = hiltechText("كشف الرواتب", "Payroll run"), value = runId,
                 choices = batches.map { HiltechRecordChoice(it.runVersionId,
                     hiltechDateText(it.periodStart) + " — " + hiltechDateText(it.periodEnd),
-                    hiltechText("الإصدار ", "Generation ") + it.generation + " · " + it.payableTotal + " " + it.currency) },
+                    hiltechText("الإصدار ", "Generation ") + it.generation + " · " +
+                        (if(it.differential&&!it.differentialReady)hiltechText("تسوية الفرق تحتاج مراجعة","Differential requires review")
+                         else (if(it.differential)hiltechText("فرق فقط: ","Difference only: ")else "")+it.payableTotal+" "+it.currency)) },
                 onChange = { runId = it; instructionId = "" }, allowKnownReference = false, allowClear = false,
                 enabled = !loading && pending == null && !submitting,
             ) else if (!loading && error == null && access?.let { it.canPrepare || it.canReview } == true) Text(hiltechText(
                 "لا توجد كشوف محالة إلى المالية. بعد اعتماد كشف الرواتب، أرسله للمراجعة المالية من مساحة الرواتب.",
                 "No payroll runs have been handed to Finance. Release a payroll run and hand it off from the payroll workspace."))
             batch?.let { current ->
-                Text(hiltechText("الموظفون: ", "Employees: ") + current.employeeCount + " · " + current.payableTotal + " " + current.currency)
+                Text(hiltechText("الموظفون: ", "Employees: ") + current.employeeCount)
+                if(current.differential&&!current.differentialReady)Text(hiltechText("تغير مصدر تسوية الفرق؛ راجع الأدلة. لا يُجهز كامل الراتب.","The differential evidence changed; review the source. Full payroll cannot be prepared."),color=MaterialTheme.colorScheme.error)
+                else {
+                Text((if(current.differential)hiltechText("فرق مستحق فقط: ","Additional payable only: ")else "")+current.payableTotal+" "+current.currency)
                 if (current.transferCount == 0) Text(hiltechText("لا توجد مبالغ مستحقة للتحويل في هذا الكشف.", "This run has no positive amounts requiring payment."))
-                else if (!current.prepared && access?.canPrepare == true) Button(enabled = enabled, onClick = {
+                if (!current.prepared && access?.canPrepare == true && (current.transferCount>0||current.differential)) Button(enabled = enabled, onClick = {
                     prepare(FinancePayrollIntent(newOperationId(), organizationId, "PREPARE_BATCH", current.reviewBatchId,
                         current.periodStart + " — " + current.periodEnd), current.payableTotal + " " + current.currency)
-                }) { Text(hiltechText("تجهيز مطابقة الموظفين", "Prepare employee reconciliation")) }
+                }) { Text(when{
+                    current.differential&&current.transferCount==0->hiltechText("تجهيز التصحيح دون تحويل","Prepare correction without transfer")
+                    current.differential->hiltechText("تجهيز الفروق فقط","Prepare differences only")
+                    else->hiltechText("تجهيز مطابقة الموظفين", "Prepare employee reconciliation")
+                }) }
+                }
             }
             if (runLoading) CircularProgressIndicator()
             if (runFailed) Text(hiltechText("تعذر تحميل تفاصيل الكشف. استخدم التحديث للمحاولة مجددًا.", "The run details could not load. Refresh to retry."))
+        }
+
+        if(access?.canReview==true) FinancePayrollCorrectionSection(client,organizationId,installationId,refresh,
+            pending==null&&!submitting&&!loading,newOperationId){input,title,detail->
+            prepare(FinancePayrollIntent(input.operationId,organizationId,"CLEAR_CORRECTION",input.replacementRunVersionId,title,clearance=input),detail)
+        }
+
+        if(batch?.prepared==true && access?.canPrepare==true && runId.isNotBlank()) key(runId) {
+            FinancePayrollGlSection(client,organizationId,runId,installationId,refresh,enabled,newOperationId){post,title,detail->
+                prepare(FinancePayrollIntent(post.operationId,organizationId,"POST_GL",runId,title,ledgerPost=post),detail)
+            }
         }
 
         if (run?.instructions?.isNotEmpty() == true) BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -338,6 +362,8 @@ fun FinancePayrollDisbursementWorkspace(
             Text(when (intent.kind) {
                 "PREPARE_BATCH" -> hiltechText("تجهيز سجل داخلي بالمستحقات المعتمدة لمطابقتها مع الحركات البنكية.", "Prepare internal approved obligations for matching to actual bank movements.")
                 "PROPOSE_RESULT" -> hiltechText("ستُرسل المطابقة للمراجعة المستقلة قبل تغيير حالة صرف الموظف.", "Submit the match for independent review before changing the employee's payment status.")
+                "POST_GL" -> hiltechText("ترحيل الأثر المحاسبي للمصدر المسجل فقط. لا ينفذ تحويلًا بنكيًا أو يغير حالة الصرف.", "Post the accounting effect of the recorded source only. No bank transfer or payment-status change.")
+                "CLEAR_CORRECTION" -> hiltechText("أؤكد أنني راجعت إثبات التصحيح وحالة الأموال السابقة. هذا اعتماد مالي وليس صرفًا أو إصدارًا للكشف.", "I attest that I reviewed the correction evidence and prior funds. This is Finance clearance, not payment or payroll release.")
                 else -> if (intent.review?.decision == "APPROVE") hiltechText("أعتمد تطابق المستفيد والمبلغ والدليل المعروض، وأسجل النتيجة في تاريخ صرف الموظف.",
                     "I approve the beneficiary, amount and evidence match and record its result in the employee's disbursement history.")
                     else hiltechText("سيُحفظ الرفض مع سببه، ولن يُسجل صرف من هذا الطلب.", "Record the rejection and its reason without recording payment from this request.")
@@ -403,7 +429,364 @@ private fun financePayrollError(code: String): String = when (code) {
     "FINANCE_PAYROLL_EVIDENCE_UNAVAILABLE" -> hiltechText("المستند غير متاح ضمن صلاحيتك الحالية أو لم يعد مرتبطًا بهذا الطلب. حدّث شاشة المراجعة.", "This document is unavailable under your current responsibility or source relationship. Refresh the review.")
     "FINANCE_PAYROLL_EVIDENCE_SOURCE_MISMATCH" -> hiltechText("تعذر التحقق من مطابقة الملف المحفوظ لكشف البنك المعتمد. لم يُسجل فتح دليل صالح للاعتماد.", "The stored file could not be verified against the approved bank source. No valid evidence-view receipt was recorded.")
     "EVIDENCE_STORAGE_UNAVAILABLE" -> hiltechText("تعذر تحميل المستند حاليًا. أعد فتحه عندما يعود الاتصال.", "The source document could not be loaded. Reopen it when the connection is available.")
+    "FINANCE_PAYROLL_CORRECTION_CHANGED" -> hiltechText("تغير مصدر التصحيح أو حالة التحويل السابق؛ حدّث الكشف.", "The correction or prior payment source changed; refresh the run.")
     "FINANCE_PAYROLL_DIFFERENTIAL_SOURCE_REQUIRED" -> hiltechText("هذا تصحيح بفروق تسوية؛ لا يمكن تجهيز كامل الراتب مرة أخرى من هذا المسار.", "This correction requires differential settlement; the full salary cannot be prepared again through this flow.")
+    "FINANCE_PAYROLL_GL_CHANGED" -> hiltechText("تغير المصدر أو الحساب أو الفترة. حدّث القيد قبل المحاولة.", "The source, account or period changed. Refresh the journal before retrying.")
+    "FINANCE_PAYROLL_GL_UNAVAILABLE" -> hiltechText("مسؤولية ترحيل القيود المالية غير متاحة.", "Current accounting posting responsibility is unavailable.")
     "FINANCE_PAYROLL_UNAVAILABLE" -> hiltechText("الصلاحية الحالية لا تتيح هذا الإجراء. راجع مسؤول المسؤوليات.", "Your current responsibility does not permit this action. Contact the responsibility administrator.")
     else -> hiltechText("تعذر تأكيد النتيجة. تحقق من الاتصال ثم تابع نفس الطلب.", "The result could not be confirmed. Check the connection and resume the same request.")
+}
+
+@Composable
+internal fun payrollGlTitle(kind:String):String=when(kind) {
+    "PAYROLL_ACCRUAL"->hiltechText("استحقاق الرواتب","Payroll accrual")
+    "PAYROLL_PAYMENT"->hiltechText("صرف رواتب مؤكد","Recorded payroll payment")
+    "PAYROLL_RETURN"->hiltechText("مرتجع رواتب","Payroll bank return")
+    else->hiltechText("عكس مطابقة رواتب","Payroll match reversal")
+}
+
+@Composable
+private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,org:String,run:String,installation:String,
+    refresh:Int,enabled:Boolean,newOperationId:()->String,onReview:(FinancePayrollGlPostDto,String,String)->Unit) {
+    var offset by rememberSaveable { mutableIntStateOf(0) }
+    var view by remember { mutableStateOf<FinancePayrollGlViewDto?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var unavailable by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf(false) }
+    var expenseId by rememberSaveable { mutableStateOf("") }
+    var payableId by rememberSaveable { mutableStateOf("") }
+    var mapped by remember { mutableStateOf<Map<String,String>>(emptyMap()) }
+    var references by remember { mutableStateOf<Map<String,String>>(emptyMap()) }
+    LaunchedEffect(client,org,run,installation,offset,refresh) {
+        view=null;loading=true;error=false;unavailable=false
+        try { view=client.ledger(org,run,offset,installation) }
+        catch(cancelled:CancellationException){throw cancelled}
+        catch(failure:HiltechApiException){if(failure.httpStatus in setOf(401,403,404))unavailable=true else error=true}
+        catch(_:Exception){error=true}
+        finally{loading=false}
+    }
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("الترحيل المحاسبي للرواتب","Payroll accounting"),style=MaterialTheme.typography.titleLarge)
+        Text(hiltechText("افصل استحقاق الراتب عن نتيجة الصرف. القيود لا تنفذ تحويلات ولا تغيّر نتيجة المطابقة.",
+            "Separate the salary obligation from payment results. Journal entries do not initiate transfers or change match outcomes."))
+        if(loading) CircularProgressIndicator()
+        if(unavailable)Text(hiltechText("تحتاج أيضًا مسؤولية ترحيل القيود المالية الحالية.","Current accounting posting responsibility is also required."))
+        if(error)Text(hiltechText("تعذر قراءة القيود من المصدر. حدّث الكشف.","The accounting source could not load. Refresh the run."))
+        view?.let { data ->
+            val period=data.period
+            val canPost=enabled && period!=null
+            if(period==null)Text(hiltechText("لا توجد فترة محاسبية مفتوحة للتاريخ الحالي.","No accounting period is open for the current date."))
+            else Text(hiltechText("الفترة المحاسبية: ","Accounting period: ")+period.dateStart+" — "+period.dateEnd)
+            Text(payrollGlTitle("PAYROLL_ACCRUAL"),style=MaterialTheme.typography.titleMedium)
+            Text(data.gross+" "+data.currency)
+            data.recovery?.let{recovery->
+                Text(when{
+                    !recovery.posted->hiltechText("رصيد استرداد معتمد للترحيل","Approved recovery receivable to post")
+                    recovery.remainingToPost?.let{settlementCanonicalAmount(it)}==null->hiltechText("تم تحصيل الرصيد وترحيله","Recovery collected and posted")
+                    else->hiltechText("رصيد استرداد مثبت","Posted recovery receivable")
+                },style=MaterialTheme.typography.titleMedium)
+                HiltechKeyValue(recovery.accountCode+" · "+recovery.accountName,recovery.amount+" "+data.currency)
+                HiltechKeyValue(hiltechText("عدد الموظفين","Employees"),recovery.employeeCount.toString())
+                recovery.remainingToRecord?.let{HiltechKeyValue(hiltechText("متبقي للتحصيل المثبت","Remaining to record"),it+" "+data.currency)}
+                recovery.remainingToPost?.let{HiltechKeyValue(hiltechText("متبقي في دفتر الأستاذ","Remaining in ledger"),it+" "+data.currency)}
+                Text(hiltechText("سجل التحصيل البنكي من تسويات الموظفين، ثم رحّله. لا خصم أو تحصيل تلقائي.","Record bank collection through employee settlements, then post it. No automatic deduction or collection."))
+            }
+            when(data.accrualState) {
+                "POSTED"->HiltechStateTag(hiltechText("تم إثبات الاستحقاق","Accrual posted"),HiltechStateTone.CURRENT)
+                "REPLACED"->Text(hiltechText("تم عكس هذا الاستحقاق في قيد النسخة المصححة؛ التاريخ محفوظ.","This accrual was reversed in the replacement journal; history is preserved."))
+                "TREATMENT_REQUIRED"->Text(hiltechText("تعذر إثبات اكتمال مكونات الكشف أو تجاوزت البنود حد القيد الواحد. لا يُرحل أي مبلغ غير مطابق.","Source components are incomplete or exceed the single-journal limit. No unmatched amount can be posted."))
+                "CORRECTION_REQUIRED"->Text(hiltechText("لا يتوفر تصحيح مؤيد بعدم تحويل سابق، أو يوجد صرف أو مقترح سابق يحتاج تسوية. لا يمكن تكرار الاستحقاق.","No eligible no-transfer correction is available, or earlier payment evidence needs reconciliation. The accrual cannot be duplicated."))
+                "NO_AMOUNT"->Text(hiltechText("لا يوجد استحقاق موجب.","No positive accrual."))
+                "NOT_PREPARED"->Text(hiltechText("جهز سجل المطابقة المالي أولًا.","Prepare the Finance reconciliation record first."))
+                "READY"->{
+                    val fixed=data.correction?.takeIf{it.disposition=="SETTLED_DIFFERENTIAL_AUTHORIZED"}
+                    val dr=data.expenseAccounts.singleOrNull{it.id==(fixed?.fixedExpenseAccountId?:expenseId)}
+                    val cr=data.payableAccounts.singleOrNull{it.id==(fixed?.fixedPayableAccountId?:payableId)}
+                    val netLabel=hiltechText("صافي المستحق: ","Net payable: ")
+                    Text(netLabel+data.net+" "+data.currency)
+                    data.correction?.let{correction->
+                        Text(when(correction.disposition){
+                            "SETTLED_DIFFERENTIAL_AUTHORIZED"->hiltechText("تصحيح راتب مصروف — إثبات الفرق دون تكرار الصرف","Settled payroll correction — recognize difference only")
+                            "REVERSAL_VERIFIED"->hiltechText("استحقاق مصحح — رجوع التحويل مؤيد","Corrected accrual — documented bank return")
+                            else->hiltechText("استحقاق مصحح — عدم تحويل سابق معتمد","Corrected accrual — approved no-transfer clearance")
+                        },style=MaterialTheme.typography.titleMedium)
+                        Text(correction.clearanceReference,style=MaterialTheme.typography.bodySmall)
+                        Text(if(correction.originalJournalId==null)hiltechText("لا يوجد استحقاق سابق مرحل.","No earlier accrual was posted.") else hiltechText("ستنعكس البنود التالية تلقائيًا في نفس القيد.","The following lines are reversed automatically in the same journal."))
+                        correction.reversalLines.forEach{line->HiltechKeyValue(line.accountName,(if(line.side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+line.amount+" "+data.currency)}
+                    }
+                    if(fixed!=null)Text(hiltechText("الحسابات والمعالجة مستمدة من القيد الأصلي المعتمد. الصرف السابق محفوظ؛ تُجهز المستحقات الإضافية وحدها.","Accounts and treatment are inherited from the approved original journal. Previous payments remain recorded; only additional amounts are prepared."))
+                    else if(data.groups.isNotEmpty()) Text(hiltechText("حدد حساب كل بند. استخدم الخصومات المستحقة لجهة أخرى فقط، والمستردات التي لم تُثبت تكلفتها سابقًا. لا تستخدم هذا المسار لاسترداد السلف أو تكرار المصروف.",
+                        "Map each component. Only third-party deduction obligations and costs not previously recognized belong here. Do not use for advance recovery or duplicate expenses."))
+                    if(data.expenseAccounts.isEmpty()||data.payableAccounts.isEmpty()) Text(hiltechText(
+                        "أضف حساب تكلفة الرواتب وحساب الرواتب المستحقة المعتمدين في الإعداد المالي.",
+                        "Add approved payroll expense and payroll payable accounts in financial configuration."))
+                    else {
+                        if(fixed!=null){
+                            dr?.let{HiltechKeyValue(hiltechText("مدين: تكلفة الرواتب","Debit: payroll expense"),it.name)}
+                            cr?.let{HiltechKeyValue(hiltechText("دائن: الرواتب المستحقة","Credit: payroll payable"),it.name)}
+                        }else{
+                            HiltechRecordPicker(hiltechText("مدين: تكلفة الرواتب","Debit: payroll expense"),expenseId,
+                                data.expenseAccounts.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={expenseId=it},allowKnownReference=false,enabled=canPost)
+                            HiltechRecordPicker(hiltechText("دائن: الرواتب المستحقة","Credit: payroll payable"),payableId,
+                                data.payableAccounts.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={payableId=it},allowKnownReference=false,enabled=canPost)
+                        }
+                        if(data.hasMoreAccounts)Text(hiltechText("تظهر أول 100 حساب معتمد من كل نوع.","Showing the first 100 approved accounts of each kind."))
+                        data.groups.forEach { group ->
+                            val k=group.kind+"|"+group.domain+"|"+group.code
+                            val choices=if(group.kind=="DEDUCTION") data.deductionAccounts else data.reimbursementAccounts
+                            val side=if(group.kind=="DEDUCTION") hiltechText("خصم — دائن","Deduction — credit") else hiltechText("مسترد — مدين","Reimbursement — debit")
+                            Text(side+" · "+group.code+" · "+group.amount+" "+data.currency)
+                            if(fixed!=null){
+                                fixed.fixedAllocations.singleOrNull{it.kind==group.kind&&it.domain==group.domain&&it.code==group.code}?.let{a->
+                                    choices.singleOrNull{it.id==a.accountId}?.let{account->HiltechKeyValue(hiltechText("الحساب المعتمد","Approved account"),account.name)}
+                                    Text(a.reference,style=MaterialTheme.typography.bodySmall)
+                                }
+                            }else{
+                                HiltechRecordPicker(hiltechText("الحساب المعتمد","Approved account"),mapped[k].orEmpty(),
+                                    choices.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={mapped=mapped+(k to it)},allowKnownReference=false,enabled=canPost)
+                                OutlinedTextField(references[k].orEmpty(),onValueChange={value->if(value.length<=240 && value.none{it.code<32||it.code==127})references=references+(k to value)},
+                                    label={Text(hiltechText("مرجع المعالجة المعتمدة","Approved treatment reference"))},modifier=Modifier.fillMaxWidth(),enabled=canPost)
+                            }
+                        }
+                        val allocations=fixed?.fixedAllocations?:data.groups.mapNotNull{group->
+                            val k=group.kind+"|"+group.domain+"|"+group.code
+                            val choices=if(group.kind=="DEDUCTION") data.deductionAccounts else data.reimbursementAccounts
+                            val account=choices.singleOrNull{it.id==mapped[k]}
+                            val reference=references[k].orEmpty().trim()
+                            if(account==null || reference.length !in 8..240)null else FinancePayrollGlAllocationDto(group.kind,group.domain,group.code,account.id,reference)
+                        }
+                        val title=payrollGlTitle("PAYROLL_ACCRUAL")
+                        val debitLabel=hiltechText("مدين: ","Debit: ");val creditLabel=hiltechText("دائن: ","Credit: ")
+                        val reversalLabel=hiltechText("عكس الاستحقاق السابق","Reverse prior accrual")
+                        val recoveryDetail=data.recovery?.let{r->
+                            debitLabel+r.accountName+" · "+r.amount+" "+data.currency+"\n"+
+                                creditLabel+(cr?.name?:"")+" · "+r.amount+" "+data.currency+"\n"
+                        }.orEmpty()
+                        Button(enabled=canPost && dr!=null && cr!=null && allocations.size==data.groups.size,onClick={
+                            val fiscal=period?:return@Button
+                            val debit=dr?:return@Button;val credit=cr?:return@Button
+                            val post=FinancePayrollGlPostDto(newOperationId(),"PAYROLL_ACCRUAL",originalJournalId=data.correction?.originalJournalId,periodId=fiscal.id,
+                                debitAccountId=debit.id,creditAccountId=credit.id,amount=data.gross,currency=data.currency,allocations=allocations)
+                            val detail=allocations.joinToString("\n"){a->
+                                val group=data.groups.single{it.kind==a.kind&&it.domain==a.domain&&it.code==a.code}
+                                val choices=if(a.kind=="DEDUCTION")data.deductionAccounts else data.reimbursementAccounts
+                                (if(a.kind=="DEDUCTION")creditLabel else debitLabel)+choices.single{it.id==a.accountId}.name+" · "+group.code+" · "+group.amount+" · "+a.reference
+                            }
+                            val reversal=data.correction?.let{c->reversalLabel+" · "+c.clearanceReference+"\n"+c.reversalLines.joinToString("\n"){line->
+                                (if(line.side=="DEBIT")debitLabel else creditLabel)+line.accountName+" · "+line.amount+" "+data.currency
+                            }+"\n"} .orEmpty()
+                            if(payrollGlIntentValid(post))onReview(post,title,reversal+debitLabel+debit.name+" · "+data.gross+" "+data.currency+"\n"+creditLabel+credit.name+" · "+data.net+" "+data.currency+"\n"+detail+"\n"+recoveryDetail+fiscal.dateStart+" — "+fiscal.dateEnd)
+                        }){Text(hiltechText("مراجعة قيد الاستحقاق","Review accrual journal"))}
+                    }
+                }
+            }
+            HorizontalDivider()
+            Text(hiltechText("نتائج الصرف غير المرحلة","Unposted payment results"),style=MaterialTheme.typography.titleMedium)
+            if(data.events.isEmpty())Text(hiltechText("لا توجد نتائج صرف تحتاج قيدًا ضمن هذه الصفحة.","No payment results need a journal on this page."))
+            data.events.forEach { event ->
+                val title=payrollGlTitle(event.entryType)
+                val debitLabel=hiltechText("مدين: ","Debit: ");val creditLabel=hiltechText("دائن: ","Credit: ")
+                Text(title+" · "+event.employeeName,style=MaterialTheme.typography.titleMedium)
+                Text(event.amount+" "+event.currency)
+                event.debitAccountName?.let{Text(debitLabel+it)}
+                event.creditAccountName?.let{Text(creditLabel+it)}
+                if(!event.ready)Text(hiltechText("أكمل القيد السابق أو ربط الحساب البنكي المعتمد أولًا.","Post the preceding journal or link the approved bank account first."))
+                else OutlinedButton(enabled=canPost,onClick={
+                    val fiscal=period?:return@OutlinedButton
+                    val dr=event.debitAccountId?:return@OutlinedButton;val cr=event.creditAccountId?:return@OutlinedButton
+                    val post=FinancePayrollGlPostDto(newOperationId(),event.entryType,event.eventId,event.originalJournalId,
+                        fiscal.id,dr,cr,event.amount,event.currency)
+                    if(payrollGlIntentValid(post)) onReview(post,title+" · "+event.employeeName,
+                        event.amount+" "+event.currency+"\n"+debitLabel+event.debitAccountName.orEmpty()+"\n"+creditLabel+event.creditAccountName.orEmpty()+"\n"+fiscal.dateStart+" — "+fiscal.dateEnd)
+                }){Text(hiltechText("مراجعة القيد","Review journal"))}
+                HorizontalDivider()
+            }
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                TextButton(enabled=enabled&&offset>0,onClick={offset=(offset-50).coerceAtLeast(0)}){Text(hiltechText("السابق","Previous"))}
+                TextButton(enabled=enabled&&data.hasMore,onClick={offset+=50}){Text(hiltechText("التالي","Next"))}
+            }
+        }
+    }
+}
+
+@Composable
+private fun FinancePayrollCorrectionSection(client:FinancePayrollDisbursementApiClient,org:String,installation:String,refresh:Int,
+    enabled:Boolean,newOperationId:()->String,onReview:(FinancePayrollClearanceInputDto,String,String)->Unit) {
+    var expanded by rememberSaveable {mutableStateOf(false)}
+    var data by remember {mutableStateOf<FinancePayrollCorrectionCandidatesDto?>(null)}
+    var loading by remember {mutableStateOf(false)}
+    var error by remember {mutableStateOf(false)}
+    var selected by rememberSaveable {mutableStateOf("")}
+    var recoveryAccount by rememberSaveable {mutableStateOf("")}
+    var reason by rememberSaveable {mutableStateOf("")}
+    var evidence by rememberSaveable {mutableStateOf("")}
+    var confirmed by rememberSaveable {mutableStateOf(false)}
+    LaunchedEffect(client,org,installation,expanded,refresh) {
+        data=null;error=false
+        if(expanded){
+            loading=true
+            try{data=client.corrections(org,installation)}
+            catch(c:CancellationException){throw c}
+            catch(_:Exception){error=true}
+            finally{loading=false}
+        }
+    }
+    HiltechPanel(Modifier.fillMaxWidth()){
+        Text(hiltechText("تصحيحات الرواتب","Payroll corrections"),style=MaterialTheme.typography.titleLarge)
+        TextButton(enabled=enabled,onClick={expanded=!expanded}){Text(if(expanded)hiltechText("إخفاء","Hide")else hiltechText("مراجعة التصحيحات","Review corrections"))}
+        if(expanded){
+            if(loading)CircularProgressIndicator()
+            if(error)Text(hiltechText("تعذر قراءة التصحيحات من المصدر.","Could not read corrections from source."),color=MaterialTheme.colorScheme.error)
+            data?.let{view->
+                if(view.records.isEmpty())Text(hiltechText("لا توجد مسودات مصححة بعد إصدار سابق.","No replacement drafts after an earlier release."))
+                else HiltechRecordPicker(hiltechText("الكشف المصحح","Replacement draft"),selected,
+                    view.records.map{HiltechRecordChoice(it.replacementRunVersionId,it.periodStart+" — "+it.periodEnd,
+                        hiltechText("الإصدار ","Generation ")+it.originalGeneration+" → "+it.replacementGeneration)},
+                    onChange={selected=it;reason="";evidence="";recoveryAccount="";confirmed=false},allowKnownReference=false,enabled=enabled&&!loading)
+                if(view.hasMore)Text(hiltechText("تظهر أول 100 مسودة.","Showing first 100 drafts."))
+                view.records.singleOrNull{it.replacementRunVersionId==selected}?.let{row->
+                    HiltechKeyValue(hiltechText("صافي الكشف السابق","Previous net"),row.originalNet+" "+row.currency)
+                    HiltechKeyValue(hiltechText("صافي المسودة المصححة","Replacement net"),row.replacementNet+" "+row.currency)
+                    FinancePayrollCorrectionEmployeeReview(client,org,installation,row,refresh)
+                    val disposition=row.eligibleDisposition
+                    val hasRecovery=row.recoveryDue?.let{settlementCanonicalAmount(it)}!=null
+                    val selectedRecovery=row.recoveryAccounts.singleOrNull{it.id==recoveryAccount}
+                    val label=when(disposition){
+                        "NO_PRIOR_TRANSFER_VERIFIED"->hiltechText("اعتماد عدم حدوث تحويل سابق","Attest no prior transfer")
+                        "REVERSAL_VERIFIED"->hiltechText("اعتماد رجوع التحويلات المثبتة","Clear recorded returned transfers")
+                        "SETTLED_DIFFERENTIAL_AUTHORIZED"->if(hasRecovery)hiltechText("اعتماد فروق الصرف ورصيد الاسترداد","Authorize differences and recovery receivable")
+                            else hiltechText("اعتماد الفروق الإضافية فقط","Authorize additional differences only")
+                        else->hiltechText("تسوية الأموال السابقة مطلوبة","Prior funds require reconciliation")
+                    }
+                    Text(label,style=MaterialTheme.typography.titleMedium)
+                    row.additionalDue?.let{HiltechKeyValue(hiltechText("فرق الصرف المعتمد للمراجعة","Additional payment under review"),it+" "+row.currency)}
+                    if(hasRecovery)row.recoveryDue?.let{HiltechKeyValue(hiltechText("رصيد استرداد الزيادات","Overpayment receivable"),it+" "+row.currency)}
+                    if(row.alreadyCleared)Text(hiltechText("اعتماد المالية مسجل؛ استكمل إصدار الكشف من مساحة الرواتب.","Finance clearance recorded; complete release in the payroll workspace."))
+                    else if(!row.canRecord)Text(hiltechText("لا يمكن اعتماد هذا التصحيح الآن؛ راجع استقلال المراجع وحالة التحويلات السابقة.","This correction cannot be cleared now; check reviewer independence and prior transfers."))
+                    else if(disposition!=null){
+                        Text(hiltechText("راجع إثبات الموارد البشرية وسجلات الأموال الأصلية. غياب المطابقة وحده لا يثبت عدم التحويل.","Review HR correction evidence and actual funds records. Missing matches alone do not prove no transfer."))
+                        if(hasRecovery){
+                            Text(hiltechText("حدد حساب أصل معتمد ومخصص لاسترداد الزيادات؛ لا تُنشئ سلفة ولا خصمًا تلقائيًا.","Select an approved asset account designated for overpayment recovery; this creates neither a loan nor automatic deduction."))
+                            if(row.recoveryAccounts.isEmpty())Text(hiltechText("يلزم إعداد حساب الاسترداد في دليل الحسابات.","Configure the recovery account in the chart of accounts."))
+                            else HiltechRecordPicker(hiltechText("حساب الاسترداد","Recovery account"),recoveryAccount,
+                                row.recoveryAccounts.map{HiltechRecordChoice(it.id,it.name,it.code)},
+                                onChange={recoveryAccount=it;confirmed=false},allowKnownReference=false,enabled=enabled)
+                        }
+                        OutlinedTextField(reason,{reason=it.take(240)},label={Text(hiltechText("مرجع إثبات سبب التصحيح","Correction evidence reference"))},modifier=Modifier.fillMaxWidth(),enabled=enabled)
+                        OutlinedTextField(evidence,{evidence=it.take(240)},label={Text(hiltechText("مرجع مراجعة المالية","Finance review reference"))},modifier=Modifier.fillMaxWidth(),enabled=enabled)
+                        Row(verticalAlignment=Alignment.CenterVertically){
+                            Checkbox(confirmed,{confirmed=it},enabled=enabled)
+                            Text(hiltechText("راجعت الإثبات الحقيقي وحالة الأموال السابقة.","I reviewed the actual evidence and prior funds."))
+                        }
+                        val draft=FinancePayrollClearanceInputDto(row.replacementRunVersionId,row.originalRunVersionId,row.replacementRunVersionId,disposition,reason.trim(),evidence.trim(),row.settlementFingerprint,selectedRecovery?.id.takeIf{hasRecovery})
+                        val additionalLabel=hiltechText("فرق مستحق فقط: ","Additional payable only: ")
+                        val recoveryLabel=hiltechText("رصيد استرداد — دون تحصيل: ","Recovery receivable — no collection: ")
+                        val recoveryDetail=if(hasRecovery&&selectedRecovery!=null)"\n"+recoveryLabel+row.recoveryDue+" "+row.currency+" · "+selectedRecovery.name else ""
+                        val reviewDetail=row.periodStart+" — "+row.periodEnd+"\n"+row.originalNet+" → "+row.replacementNet+" "+row.currency+
+                            (row.additionalDue?.let{"\n"+additionalLabel+it+" "+row.currency}?: "")+recoveryDetail+"\n"+reason.trim()+"\n"+evidence.trim()
+                        Button(enabled=enabled&&confirmed&&(!hasRecovery||selectedRecovery!=null)&&payrollClearanceIntentValid(draft),onClick={
+                            onReview(draft.copy(operationId=newOperationId()),label,reviewDetail)
+                        }){Text(hiltechText("مراجعة اعتماد التصحيح","Review clearance"))}
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FinancePayrollCorrectionEmployeeReview(client:FinancePayrollDisbursementApiClient,org:String,installation:String,
+    row:FinancePayrollCorrectionCandidateDto,refresh:Int) {
+    var expanded by rememberSaveable(org,row.replacementRunVersionId){mutableStateOf(false)}
+    var offset by remember(org,row.replacementRunVersionId){mutableIntStateOf(0)}
+    var revision by remember(org,row.replacementRunVersionId){mutableIntStateOf(0)}
+    var data by remember(org,row.replacementRunVersionId){mutableStateOf<FinancePayrollCorrectionReviewPageDto?>(null)}
+    var loading by remember{mutableStateOf(false)}
+    var failed by remember{mutableStateOf(false)}
+    LaunchedEffect(client,org,installation,row.replacementRunVersionId,expanded,offset,revision,refresh){
+        data=null;failed=false
+        if(expanded){
+            loading=true
+            try{data=client.correctionEmployees(org,row.originalRunVersionId,row.replacementRunVersionId,row.currency,offset,installation)}
+            catch(c:CancellationException){throw c}
+            catch(_:Exception){failed=true}
+            finally{loading=false}
+        }else loading=false
+    }
+    TextButton(onClick={expanded=!expanded}){Text(if(expanded)hiltechText("إخفاء تفاصيل الموظفين","Hide employee details")else
+        hiltechText("مراجعة الفروق لكل موظف","Review differences by employee"))}
+    if(expanded){
+        Text(hiltechText("الفرق بين الكشفين مستقل عن الفرق بين الاستحقاق والصرف المثبت. لا تُجمع مستحقات موظف مع مبالغ زائدة لدى موظف آخر. هذه مراجعة، وليست اعتماد صرف أو خصم.",
+            "Entitlement changes differ from the gap against recorded payments. Do not offset one employee against another. This review does not authorize payment or recovery."),style=MaterialTheme.typography.bodySmall)
+        if(loading)CircularProgressIndicator()
+        if(failed){
+            Text(hiltechText("تعذر قراءة تفاصيل التسوية. حدّث المصدر.","Could not read reconciliation details. Refresh the source."),color=MaterialTheme.colorScheme.error)
+            TextButton(onClick={revision++}){Text(hiltechText("إعادة المحاولة","Retry"))}
+        }
+        data?.let{page->
+            page.deltaPlan?.let{plan->
+                HorizontalDivider()
+                Text(hiltechText("المعالجة المحاسبية للفروق","Differential accounting"),style=MaterialTheme.typography.titleMedium)
+                val planLabel=when(plan.state){
+                    "REVIEW_READY"->hiltechText("معاينة قيد الفروق من المصدر","Source-bound journal preview")
+                    "RECOVERY_ACCOUNT_REQUIRED"->hiltechText("معاينة القيد؛ يلزم حساب معتمد لاسترداد الزيادات","Journal preview; approved recovery account required")
+                    "COMPONENTS_REQUIRED"->hiltechText("راجع مكونات الكشفين","Review both payroll component sets")
+                    "ACCOUNT_TREATMENT_REQUIRED"->hiltechText("يلزم اعتماد المعالجة المحاسبية للمكونات المتغيرة","Changed components require approved account treatment")
+                    "BALANCE_REQUIRED"->hiltechText("توازن الفروق غير مؤكد","Differential source does not balance")
+                    else->hiltechText("أكمل تسوية الصرف السابق لكل الموظفين","Reconcile prior settlement for all employees")
+                }
+                Text(planLabel,style=MaterialTheme.typography.bodyMedium)
+                if(plan.blockedCount>0)HiltechKeyValue(hiltechText("موظفون يحتاجون مراجعة","Employees requiring review"),plan.blockedCount.toString()+" / "+plan.employeeCount)
+                plan.additionalDue?.let{HiltechKeyValue(hiltechText("إجمالي المتبقي للصرف","Total remaining payment"),it+" "+page.currency)}
+                plan.recoveryDue?.let{HiltechKeyValue(hiltechText("إجمالي الزيادات المطلوب تسويتها","Total excess to reconcile"),it+" "+page.currency)}
+                if(plan.state in setOf("REVIEW_READY","RECOVERY_ACCOUNT_REQUIRED")){
+                    plan.lines.forEach{line->
+                        val name=line.accountName?.let{line.accountCode.orEmpty()+" · "+it}
+                            ?:hiltechText("حساب استرداد الموظفين غير محدد","Employee recovery account not selected")
+                        val side=if(line.side=="DEBIT")hiltechText("مدين","Debit")else hiltechText("دائن","Credit")
+                        HiltechKeyValue(side+" · "+name+(line.componentCode?.let{" · "+it}?: ""),line.amount+" "+page.currency)
+                    }
+                    if(plan.lines.isEmpty())Text(hiltechText("لا توجد فروق قيد من المكونات المسجلة.","No journal difference in the recorded components."))
+                    Text(hiltechText("معاينة فقط؛ لا ترحيل ولا صرف ولا خصم تلقائي.","Preview only; no posting, payment or automatic deduction."),style=MaterialTheme.typography.bodySmall)
+                }
+            }
+            if(page.rows.isEmpty())Text(hiltechText("لا توجد سجلات في هذه الصفحة.","No records on this page."))
+            page.rows.forEach{employee->
+                HorizontalDivider()
+                Text(employee.employeeName,style=MaterialTheme.typography.titleMedium)
+                Text(employee.employeeCode,style=MaterialTheme.typography.bodySmall)
+                HiltechKeyValue(hiltechText("الاستحقاق السابق","Previous entitlement"),employee.originalNet+" "+page.currency)
+                HiltechKeyValue(hiltechText("الاستحقاق المصحح","Corrected entitlement"),employee.replacementNet+" "+page.currency)
+                HiltechKeyValue(hiltechText("فرق الاستحقاق","Entitlement change"),employee.entitlementDelta+" "+page.currency)
+                HiltechKeyValue(hiltechText("مدفوعات مطابقة ومرحلة","Matched posted payments"),employee.postedPayments+" "+page.currency)
+                HiltechKeyValue(hiltechText("مرتجعات بنكية مرحلة","Posted bank returns"),employee.postedReturns+" "+page.currency)
+                val state=when(employee.evidenceState){
+                    "RECORDED_NET_PAYMENT"->hiltechText("صرف صافٍ مسجل","Recorded net payment")
+                    "RECORDED_RETURN"->hiltechText("رجوع الأموال المسجلة","Recorded funds returned")
+                    "NO_RECORDED_TRANSFER"->hiltechText("لا يوجد صرف مسجل؛ لا يثبت عدم التحويل","No recorded payment; not proof of no transfer")
+                    else->hiltechText("تسوية الأدلة غير محسومة","Evidence reconciliation unresolved")
+                }
+                Text(state,style=MaterialTheme.typography.bodyMedium,
+                    color=if(employee.evidenceState=="UNRESOLVED")MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                employee.recordedNet?.takeIf { employee.evidenceState != "NO_RECORDED_TRANSFER" }?.let{net->
+                    HiltechKeyValue(hiltechText("صافي الصرف المثبت","Verified net paid"),net+" "+page.currency)
+                }
+                employee.differenceFromRecorded?.takeIf { employee.noResultCount==0L && employee.evidenceState!="NO_RECORDED_TRANSFER" }?.let{difference->
+                    HiltechKeyValue(hiltechText("الفرق عن الصرف المسجل فقط","Difference from recorded payments only"),difference+" "+page.currency)
+                }
+                if(employee.pendingCount>0)HiltechKeyValue(hiltechText("مقترحات غير محسومة","Unresolved proposals"),employee.pendingCount.toString())
+                if(employee.unpostedCount>0)HiltechKeyValue(hiltechText("نتائج بلا ترحيل مؤكد","Results without confirmed posting"),employee.unpostedCount.toString())
+                if(employee.voidCount>0)HiltechKeyValue(hiltechText("مطابقات ملغاة (ليست مرتجعات)","Voided matches (not refunds)"),employee.voidCount.toString())
+                if(employee.noResultCount>0){
+                    HiltechKeyValue(hiltechText("تعليمات بدون نتيجة مسجلة","Instructions without recorded results"),employee.noResultCount.toString())
+                    Text(hiltechText("أكمل إثبات الصرف السابق قبل تجهيز أي مبلغ إضافي.","Resolve prior payment evidence before preparing any additional amount."),color=MaterialTheme.colorScheme.error)
+                }
+            }
+            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                TextButton(enabled=offset>0&&!loading,onClick={offset=(offset-50).coerceAtLeast(0)}){Text(hiltechText("السابق","Previous"))}
+                TextButton(enabled=page.hasMore&&!loading,onClick={offset+=50}){Text(hiltechText("التالي","Next"))}
+                TextButton(enabled=!loading,onClick={revision++}){Text(hiltechText("تحديث","Refresh"))}
+            }
+        }
+    }
 }

@@ -22,6 +22,7 @@ import java.util.UUID
 
 data class FinanceGlAccountChoice(
     val id:UUID,val accountKind:String,val currency:String?,
+    val accountCode:String?=null,val accountName:String?=null,
 )
 data class FinanceGlPeriodChoice(
     val id:UUID,val dateStart:String,val dateEnd:String,
@@ -63,12 +64,14 @@ class FinanceAccountingChoicesService @org.springframework.beans.factory.annotat
 
         val today=LocalDate.ofInstant(now,ZoneOffset.UTC)
         val accounts=jdbc.query(
-            """SELECT id,account_kind,currency FROM finance_gl_account
+            """SELECT id,account_kind,currency,account_code,account_name FROM finance_gl_account
                WHERE organization_id=? AND state='APPROVED'
-               ORDER BY account_kind,id LIMIT 101""",
+                 AND account_kind NOT IN('BANK_ASSET','CASH_ASSET','EMPLOYEE_ADVANCE_ASSET','EMPLOYEE_IMPREST_ASSET')
+               ORDER BY account_code,id LIMIT 101""",
             {rs,_->FinanceGlAccountChoice(
                 rs.getObject("id",UUID::class.java),
-                rs.getString("account_kind"),rs.getString("currency"))},org,
+                rs.getString("account_kind"),rs.getString("currency"),
+                rs.getString("account_code"),rs.getString("account_name"))},org,
         )
         val periods=jdbc.query(
             """SELECT p.id,p.date_start,p.date_end FROM finance_gl_period p

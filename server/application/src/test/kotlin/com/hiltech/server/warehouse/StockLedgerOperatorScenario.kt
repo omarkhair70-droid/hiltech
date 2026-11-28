@@ -75,6 +75,14 @@ internal class StockLedgerOperatorScenario(
         assertTrue(service.opening(context(opening.operationId), item.id, opening).replayed)
         assertTrue(service.item(actor, item.id).openingInitialized)
         assertEquals("10.123456", service.balances(actor, item.id).single().onHandQuantity)
+        val financeSource=jdbc.queryForMap("""SELECT movement_id,quantity,unit_code,source_fingerprint,opening_date
+            FROM finance_stock_opening_source WHERE organization_id=? AND stock_item_id=?""",org,item.id)
+        assertEquals(BigDecimal("10.123456"),financeSource["quantity"])
+        assertEquals(unit.code,financeSource["unit_code"])
+        assertTrue((financeSource["source_fingerprint"] as String).matches(Regex("[0-9a-f]{64}")))
+        assertEquals(clock.instant().atOffset(ZoneOffset.UTC).toLocalDate().toString(),financeSource["opening_date"].toString())
+        assertEquals(0L,jdbc.queryForObject("SELECT count(*) FROM finance_stock_opening_source WHERE organization_id=? AND stock_item_id=?",Long::class.java,org,native.id))
+        assertEquals(0L,jdbc.queryForObject("SELECT count(*) FROM finance_gl_opening_stock_value WHERE organization_id=? AND movement_id=?",Long::class.java,org,financeSource["movement_id"]))
         val duplicate = opening.copy(operationId = UUID.randomUUID())
         assertEquals("STOCK_CONSTRAINT_CONFLICT", assertThrows<ProductApiException> {
             service.opening(context(duplicate.operationId), item.id, duplicate)
@@ -122,6 +130,10 @@ internal class StockLedgerOperatorScenario(
         ).toMap()
         assertEquals(balances.associate { it.storageLocationId to BigDecimal(it.onHandQuantity) }, rebuilt)
         assertEquals(3, service.movements(actor, item.id).size)
+        // Later transfers do not invent another opening valuation or alter the
+        // original exact quantity fingerprint offered to Finance.
+        assertEquals(financeSource["source_fingerprint"],jdbc.queryForObject(
+            "SELECT source_fingerprint FROM finance_stock_opening_source WHERE organization_id=? AND stock_item_id=?",String::class.java,org,item.id))
         assertThrows<DataIntegrityViolationException> {
             jdbc.update("UPDATE stock_balance SET on_hand_qty = 0 WHERE stock_item_id = ?", item.id)
         }
