@@ -35,6 +35,20 @@ class FinanceConfigurationApiClientTest {
         assertFalse(financeConfigurationReceiptMatches(org,intent,receipt.copy(record=row.copy(currency="USD"))))
         assertFalse(financeConfigurationReceiptMatches(org,intent,receipt.copy(organizationId=account)))
     }
+    @Test fun openingScheduleUsesExactDecimalTotals() {
+        val credit="33333333-4444-4555-8666-777777777777"
+        val second="44444444-5555-4666-8777-888888888888"
+        val debitLine=FinanceOpeningLineDto(account,"DEBIT","0.1","SYNTHETIC-ASSET")
+        val debitTwo=FinanceOpeningLineDto(second,"DEBIT","0.2","SYNTHETIC-ASSET-TWO")
+        val creditLine=FinanceOpeningLineDto(credit,"CREDIT","0.300000","SYNTHETIC-EQUITY")
+        val opening=FinanceOpeningInputDto(operation,org,"EGP","SYNTHETIC-AUTH","SYNTHETIC-SCHEDULE",listOf(debitLine,debitTwo,creditLine))
+        assertTrue(openingInputValid(opening))
+        assertEquals("0.300000",openingTotal(opening.lines,"DEBIT"))
+        assertFalse(openingInputValid(opening.copy(lines=listOf(debitLine,debitTwo,creditLine.copy(amount="0.299999")))))
+        assertFalse(openingInputValid(opening.copy(lines=listOf(debitLine,debitLine,creditLine))))
+        assertEquals("999999999999999999.999999",openingTotal(listOf(debitLine.copy(amount="999999999999999999.999999")),"DEBIT"))
+    }
+
     @Test fun onlyTypedApprovedSetupCanBePrepared() {
         assertTrue(financeConfigurationIntentValid(intent))
         assertFalse(financeConfigurationIntentValid(intent.copy(authorizationReference="")))

@@ -782,6 +782,53 @@ class FinanceMixedBankCashPostgresContractTest {
        assertEquals(0,carriedCost.periodDebit.toBigDecimal().signum())
        assertEquals(0,carriedCost.closingDebit.toBigDecimal().compareTo(cash50+expense20))
        assertEquals(0,carry.totals.single().recognizedExpense.toBigDecimal().signum())
+
+       // Cutover is separate from movements, never fabricated AP/AR or bank cash.
+       val fixed=chart("FIXED_ASSET","OPENING-FIXED")
+       val equity=chart("EQUITY","OPENING-EQUITY")
+       fun openingPayload(debit:UUID,credit:UUID,creditAmount:String="250",bankStatement:UUID?=null):String {
+           val bank=bankStatement?.let{""","bankStatementId":"$it""""}.orEmpty()
+           return """[{"accountId":"$debit","side":"DEBIT","amount":"250","reference":"SYNTHETIC-ASSET-SCHEDULE"$bank},
+               {"accountId":"$credit","side":"CREDIT","amount":"$creditAmount","reference":"SYNTHETIC-EQUITY-SCHEDULE"}]"""
+       }
+       fun postOpening(payload:String,whichPeriod:UUID=period,openingDate:LocalDate=day.minusDays(15)):UUID {
+           val id=UUID.randomUUID()
+           insert("""INSERT INTO finance_gl_opening_journal(id,operation_id,organization_id,period_id,opening_date,currency,
+               company_reference,source_reference,lines,posted_by_user_id,posted_at,correlation_id)
+               VALUES(?,?,?,?,?,'EGP','SYNTHETIC-OPENING-AUTH','SYNTHETIC-CUTOVER-SCHEDULE',CAST(? AS jsonb),?,?,'synthetic-opening')""",
+               id,UUID.randomUUID(),org,whichPeriod,openingDate,payload,journalRecorder,t.plusHours(15))
+           return id
+       }
+       fun rejectedOpening(block:()->Unit) {
+           val sp=connection.setSavepoint()
+           try{assertThrows(DataIntegrityViolationException::class.java){block()}}
+           finally{connection.rollback(sp);connection.releaseSavepoint(sp)}
+       }
+       rejectedOpening{postOpening(openingPayload(fixed,equity,"249.999999"))}
+       rejectedOpening{postOpening(openingPayload(receivable,equity))}
+       rejectedOpening{postOpening(openingPayload(bankGl,equity,bankStatement=intake))}
+       rejectedOpening{postOpening(openingPayload(fixed,equity),nextPeriod,end.plusDays(1))}
+       val openingId=postOpening(openingPayload(fixed,equity))
+       rejectedOpening{postOpening(openingPayload(fixed,equity))}
+       rejectedOpening{insert("UPDATE finance_gl_opening_journal SET source_reference='MUTATED-REFERENCE' WHERE id=?",openingId)}
+       rejectedOpening{
+           insert("""INSERT INTO finance_gl_period(id,organization_id,date_start,date_end,state,approved_company_period_reference,created_at)
+               VALUES(?,?,?,?,'OPEN','SYNTHETIC-BEFORE-CUTOVER',?)""",
+               UUID.randomUUID(),org,day.minusDays(30),day.minusDays(16),t.plusHours(16))
+       }
+       val initial=desk.balances(org,period,true,true,false)
+       assertEquals("RECORDED_OPENING_PLUS_PRIOR_MOVEMENTS",initial.openingBasis)
+       assertEquals(listOf("EGP"),initial.recordedOpeningCurrencies)
+       assertTrue(initial.totals.single().balanced)
+       assertEquals(0,initial.rows.single{it.accountId==fixed}.openingDebit.toBigDecimal().compareTo(BigDecimal("250")))
+       assertEquals(0,initial.rows.single{it.accountId==fixed}.periodDebit.toBigDecimal().signum())
+       assertEquals(0,initial.totals.single().recognizedResult.toBigDecimal().compareTo(balances.totals.single().recognizedResult.toBigDecimal()))
+       assertEquals(9L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,period))
+       assertEquals(9,desk.ledger(org,period,0,true,true,includeOpening=true).journals.size)
+       val openingCarry=desk.balances(org,nextPeriod,true,true,false)
+       assertEquals(0,openingCarry.rows.single{it.accountId==fixed}.closingDebit.toBigDecimal().compareTo(BigDecimal("250")))
+       assertTrue(openingCarry.totals.single().balanced)
+       assertFalse(openingCarry.isCompanyWideTrialBalance)
      } finally { connection.rollback() }
    }
  }

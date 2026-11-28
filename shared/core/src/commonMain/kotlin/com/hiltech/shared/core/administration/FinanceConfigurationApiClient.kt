@@ -79,10 +79,25 @@ internal val openingKinds=setOf("FIXED_ASSET","OTHER_ASSET","OTHER_LIABILITY","E
 internal fun openingLineValid(line:FinanceOpeningLineDto)=financeLookupIdIsUuid(line.accountId) &&
     line.side in setOf("DEBIT","CREDIT") && com.hiltech.shared.core.finance.settlementCanonicalAmount(line.amount)!=null &&
     plain(line.reference,8,240) && (line.bankStatementId==null||financeLookupIdIsUuid(line.bankStatementId))
+// Exact decimal addition for common Kotlin, without Double or currency rounding.
+internal fun openingTotal(lines:List<FinanceOpeningLineDto>,side:String):String? {
+    val digits=IntArray(26)
+    if(lines.size>32)return null
+    for(line in lines.filter{it.side==side}){
+        val value=com.hiltech.shared.core.finance.settlementCanonicalAmount(line.amount)?:return null
+        val parts=value.split('.')
+        val scaled=parts[0]+parts.getOrNull(1).orEmpty().padEnd(6,'0')
+        scaled.reversed().forEachIndexed{i,c->digits[i]+=c-'0'}
+    }
+    for(i in 0 until digits.lastIndex){digits[i+1]+=digits[i]/10;digits[i]%=10}
+    val scaled=digits.reversed().joinToString("").trimStart('0').padStart(7,'0')
+    return scaled.dropLast(6)+"."+scaled.takeLast(6)
+}
 internal fun openingInputValid(input:FinanceOpeningInputDto)=financeLookupIdIsUuid(input.periodId) &&
     currencyPattern.matches(input.currency) && plain(input.companyReference,8,160) && plain(input.sourceReference,8,240) &&
     input.lines.size in 2..32 && input.lines.map{it.accountId.lowercase()}.distinct().size==input.lines.size &&
-    input.lines.all(::openingLineValid) && input.lines.any{it.side=="DEBIT"} && input.lines.any{it.side=="CREDIT"}
+    input.lines.all(::openingLineValid) && input.lines.any{it.side=="DEBIT"} && input.lines.any{it.side=="CREDIT"} &&
+    openingTotal(input.lines,"DEBIT")?.let{it==openingTotal(input.lines,"CREDIT")&&it!="0.000000"}==true
 
 class FinanceConfigurationApiClient(private val api: HiltechApiClient,
     private val json: Json=Json { ignoreUnknownKeys=true; explicitNulls=false }) {

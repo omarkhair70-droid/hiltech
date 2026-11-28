@@ -353,6 +353,11 @@ private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClien
                         HiltechKeyValue(name,(if(line.side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+line.amount+" "+currency)
                         TextButton(enabled=editable,onClick={lines=lines.filterNot{it.accountId==line.accountId}}){Text(hiltechText("حذف البند","Remove line"))}
                     }
+                    val totalDebit=openingTotal(lines,"DEBIT")
+                    val totalCredit=openingTotal(lines,"CREDIT")
+                    HiltechKeyValue(hiltechText("إجمالي المدين","Total debit"),totalDebit.orEmpty()+" "+currency)
+                    HiltechKeyValue(hiltechText("إجمالي الدائن","Total credit"),totalCredit.orEmpty()+" "+currency)
+                    if(totalDebit!=totalCredit)Text(hiltechText("المدين والدائن غير متساويين.","Debits and credits are not equal."),color=MaterialTheme.colorScheme.error)
                     val input=FinanceOpeningInputDto("",first?.id.orEmpty(),currency,companyReference.trim(),sourceReference.trim(),lines)
                     Button(enabled=editable&&openingInputValid(input)&&lines.all{line->data.accounts.any{it.id==line.accountId}},onClick={
                         pendingJson=Json.encodeToString(FinanceOpeningInputDto.serializer(),input.copy(operationId=newOperationId()))

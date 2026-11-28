@@ -56,6 +56,9 @@ class FinanceAccountingDeskApiClientTest {
         assertFalse(financeDeskBalancesMatches(data.copy(openingBasis="VERIFIED_OPENING"),org,period))
         assertFalse(financeDeskBalancesMatches(data.copy(isCompleteIncomeStatement=true),org,period))
         assertFalse(financeDeskBalancesMatches(data.copy(periodId=journal),org,period))
+        val recorded=data.copy(openingBasis="RECORDED_OPENING_PLUS_PRIOR_MOVEMENTS",recordedOpeningCurrencies=listOf("EGP"),includedSources=sources+"OPENING_BALANCE")
+        assertTrue(financeDeskBalancesMatches(recorded,org,period))
+        assertFalse(financeDeskBalancesMatches(recorded.copy(recordedOpeningCurrencies=emptyList()),org,period))
     }
 
     @Test fun reportCannotBeMisrepresentedAsCompanyWideOrCrossScope() {
