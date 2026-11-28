@@ -91,31 +91,15 @@ BEGIN
          OR NOT (obligation ?& ARRAY['counterpartyId','documentReference','documentDate','amount'])
          OR EXISTS(SELECT 1 FROM jsonb_object_keys(obligation) k WHERE k NOT IN('counterpartyId','documentReference','documentDate','dueDate','amount'))
          OR EXISTS(SELECT 1 FROM jsonb_each(obligation) v WHERE jsonb_typeof(v.value)<>'string')
-         OR obligation->>'counterpartyId' !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}
- END LOOP;
- IF debit<=0 OR debit<>credit THEN RAISE EXCEPTION 'Opening debit and credit must balance exactly' USING ERRCODE='23514'; END IF;
- RETURN NEW;
-END; $$;
+         OR obligation->>'counterpartyId' !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
          OR length(btrim(obligation->>'documentReference')) NOT BETWEEN 2 AND 96
          OR obligation->>'documentReference'<>btrim(obligation->>'documentReference')
          OR obligation->>'documentReference' ~ '[[:cntrl:]]'
-         OR obligation->>'documentDate' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}
- END LOOP;
- IF debit<=0 OR debit<>credit THEN RAISE EXCEPTION 'Opening debit and credit must balance exactly' USING ERRCODE='23514'; END IF;
- RETURN NEW;
-END; $$;
+         OR obligation->>'documentDate' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
          OR (obligation->>'documentDate')::date>=NEW.opening_date
-         OR (obligation ? 'dueDate' AND (obligation->>'dueDate' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}
- END LOOP;
- IF debit<=0 OR debit<>credit THEN RAISE EXCEPTION 'Opening debit and credit must balance exactly' USING ERRCODE='23514'; END IF;
- RETURN NEW;
-END; $$;
+         OR (obligation ? 'dueDate' AND (obligation->>'dueDate' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
               OR (obligation->>'dueDate')::date<(obligation->>'documentDate')::date))
-         OR obligation->>'amount' !~ '^[0-9]{1,18}([.][0-9]{1,6})?
- END LOOP;
- IF debit<=0 OR debit<>credit THEN RAISE EXCEPTION 'Opening debit and credit must balance exactly' USING ERRCODE='23514'; END IF;
- RETURN NEW;
-END; $$;
+         OR obligation->>'amount' !~ '^[0-9]{1,18}([.][0-9]{1,6})?$'
          OR (obligation->>'amount')::numeric<=0
          OR NOT EXISTS(SELECT 1 FROM finance_opening_counterparty c WHERE c.organization_id=NEW.organization_id
              AND c.source_kind=obligation_kind AND c.counterparty_id=(obligation->>'counterpartyId')::uuid)
