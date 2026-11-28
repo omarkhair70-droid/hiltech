@@ -817,19 +817,81 @@ class FinanceMixedBankCashPostgresContractTest {
            source_reference,recorded_by_user_id,recorded_at,correlation_id)
            VALUES(?,?,?,1,'ACTIVE','SYNTHETIC-SUPPLIER-LINK',?,?,'synthetic-opening-link')""",UUID.randomUUID(),org,supplier,creator,t)
        val payable=chart("SUPPLIER_PAYABLE","OPENING-AP")
+       val stockAsset=chart("INVENTORY_ASSET","OPENING-STOCK")
+       // Build a real physical opening through the same verified import and
+       // append-only movement contract used by Warehouse. Candidate spreadsheet
+       // value is deliberately different: it is not the approved carrying value.
+       val warehouse=UUID.randomUUID();val location=UUID.randomUUID();val category=UUID.randomUUID()
+       val batch=UUID.randomUUID();val row=UUID.randomUUID();val stockItem=UUID.randomUUID();val stockMovement=UUID.randomUUID()
+       val stockCutover=t.minusDays(15)
+       val quantity=BigDecimal("10.123456")
+       val stockValue=BigDecimal("125.50")
+       val stockSha="9".repeat(64)
+       insert("INSERT INTO warehouse(id,organization_id,code,name) VALUES(?,?,'SYNTH-OPENING','Synthetic opening warehouse')",warehouse,org)
+       insert("""INSERT INTO storage_location(id,organization_id,warehouse_id,code,name,kind,lifecycle_state)
+           VALUES(?,?,?,'SYNTH-STOCK-LOC','Synthetic opening storage','WAREHOUSE','ACTIVE')""",location,org,warehouse)
+       insert("INSERT INTO stock_unit(organization_id,code,name,active) VALUES(?,'SYNTH-PC','Synthetic pieces',true)",org)
+       insert("""INSERT INTO config_revision(id,scope_type,scope_organization_id,family,code,name,lifecycle_state,
+           revision_number,created_at,created_by,activated_at,activated_by)
+           VALUES(?,'ORGANIZATION',?,'stock-categories','SYNTH-CUTOVER','Synthetic opening category','ACTIVE',1,?,?,?,?)""",
+           category,org,t,creator,t,creator)
+       insert("INSERT INTO stock_item_category_definition VALUES (?,'SYNTH-PC')",category)
+       insert("""INSERT INTO inventory_import_batch(id,organization_id,source_file_name,source_sha256,source_type,state,
+           created_by_user_id,created_at,updated_at,cutover_date)
+           VALUES(?,?,'synthetic-opening.xlsx',?,'LEGACY_EXCEL','IN_REVIEW',?,?,?,?)""",batch,org,stockSha,creator,t,t,stockCutover.toLocalDate())
+       insert("""INSERT INTO inventory_import_row(id,batch_id,organization_id,source_sheet,source_row_number,raw_payload,
+           candidate_class,candidate_uom,candidate_quantity,candidate_value,candidate_currency_code,review_state,
+           reviewed_by_user_id,reviewed_at,created_at,updated_at,version)
+           VALUES(?,?,?,'STOCK',1,'{"source":"synthetic"}'::jsonb,'STOCK_QUANTITY','SYNTH-PC',?,999,'EGP',
+           'NEEDS_REVIEW',?,?,?,?,2)""",row,batch,org,quantity,creator,t,t,t)
+       insert("""INSERT INTO stock_import_verification(source_row_id,organization_id,source_row_version,source_sha256,
+           storage_location_id,category_definition_id,verified_by,cutover_approver_id,evidence_ref,verified_at,cutover_at)
+           VALUES(?,?,2,?,?,?,?,?,'SYNTHETIC-VERIFIED-OPENING',?,?)""",row,org,stockSha,location,category,reviewer,creator,t,stockCutover)
+       insert("""INSERT INTO stock_item(id,organization_id,item_code,name,category_definition_id,category_revision,
+           unit_of_measure_code,classification,serialized,lot_tracked,active,source_import_row_id)
+           VALUES(?,?,'SYNTH-OPENING-PC','Synthetic opening item',?,1,'SYNTH-PC','STOCK_QUANTITY',false,false,true,?)""",
+           stockItem,org,category,row)
+       insert("""UPDATE inventory_import_row SET review_state='APPROVED',approved_target_type='STOCK_ITEM',
+           approved_target_id=?,reviewed_by_user_id=?,reviewed_at=?,updated_at=?,version=version+1 WHERE id=? AND version=2""",
+           stockItem,creator,t,t,row)
+       insert("""INSERT INTO stock_movement(id,stock_item_id,organization_id,operation_id,quantity,unit_code,movement_type,
+           to_storage_location_id,source_import_row_id,occurred_at,recorded_at,recorded_by,correlation_id,reason_code)
+           VALUES(?,?,?,?,?,'SYNTH-PC','INITIALIZE_OPENING',?,?,?,?,?,'synthetic-opening-stock','INITIALIZE_OPENING')""",
+           stockMovement,stockItem,org,UUID.randomUUID(),quantity,location,row,stockCutover,t,creator)
+       val stockFingerprint=checkNotNull(jdbc.queryForObject(
+           "SELECT source_fingerprint FROM finance_stock_opening_source WHERE organization_id=? AND movement_id=? AND opening_date=?",
+           String::class.java,org,stockMovement,stockCutover.toLocalDate()))
+       assertEquals(0,quantity.compareTo(jdbc.queryForObject(
+           "SELECT on_hand_qty FROM stock_balance WHERE stock_item_id=? AND storage_location_id=?",BigDecimal::class.java,stockItem,location)))
        fun openingWithObligations(customerId:UUID=customer,customerRef:String="SYNTHETIC-OLD-AR",residual:String="200",
-           supplierRef:String="SYNTHETIC-OLD-AP",documentDate:LocalDate=day.minusDays(30)):String =
+           supplierRef:String="SYNTHETIC-OLD-AP",documentDate:LocalDate=day.minusDays(30),
+           stockQuantity:String="10.123456",sourceFingerprint:String=stockFingerprint,stockAmount:String="125.50"):String =
            """[{"accountId":"$fixed","side":"DEBIT","amount":"250","reference":"SYNTHETIC-ASSET-SCHEDULE"},
-               {"accountId":"$equity","side":"CREDIT","amount":"300","reference":"SYNTHETIC-EQUITY-SCHEDULE"},
+               {"accountId":"$equity","side":"CREDIT","amount":"425.50","reference":"SYNTHETIC-EQUITY-SCHEDULE"},
                {"accountId":"$receivable","side":"DEBIT","amount":"200","reference":"SYNTHETIC-CUSTOMER-SCHEDULE",
                 "obligations":[{"counterpartyId":"$customerId","documentReference":"$customerRef","documentDate":"$documentDate","dueDate":"$day","amount":"$residual"}]},
                {"accountId":"$payable","side":"CREDIT","amount":"150","reference":"SYNTHETIC-SUPPLIER-SCHEDULE",
-                "obligations":[{"counterpartyId":"$supplier","documentReference":"$supplierRef","documentDate":"$documentDate","amount":"150"}]}]"""
+                "obligations":[{"counterpartyId":"$supplier","documentReference":"$supplierRef","documentDate":"$documentDate","amount":"150"}]},
+               {"accountId":"$stockAsset","side":"DEBIT","amount":"125.50","reference":"SYNTHETIC-STOCK-SCHEDULE",
+                "stockValues":[{"movementId":"$stockMovement","quantity":"$stockQuantity","unit":"SYNTH-PC","sourceFingerprint":"$sourceFingerprint",
+                    "amount":"$stockAmount","valuationReference":"SYNTHETIC-FINANCE-VALUATION"}]}]"""
        rejectedOpening{postOpening(openingWithObligations(residual="199.999999"))}
        rejectedOpening{postOpening(openingWithObligations(customerId=UUID.randomUUID()))}
        rejectedOpening{postOpening(openingWithObligations(documentDate=day))}
        rejectedOpening{postOpening(openingWithObligations(customerRef="MIX-AR-${candidate.toString().take(8)}"))}
+       rejectedOpening{postOpening(openingPayload(stockAsset,equity))}
+       rejectedOpening{postOpening(openingWithObligations(stockQuantity="10.123455"))}
+       rejectedOpening{postOpening(openingWithObligations(sourceFingerprint="0".repeat(64)))}
+       rejectedOpening{postOpening(openingWithObligations(stockAmount="125.49"))}
        val openingId=postOpening(openingWithObligations())
+       val postedStock=jdbc.queryForMap("""SELECT movement_id,quantity,carrying_amount FROM finance_gl_opening_stock_value
+           WHERE organization_id=? AND opening_journal_id=?""",org,openingId)
+       assertEquals(stockMovement,postedStock["movement_id"])
+       assertEquals(0,quantity.compareTo(postedStock["quantity"] as BigDecimal))
+       assertEquals(0,stockValue.compareTo(postedStock["carrying_amount"] as BigDecimal))
+       assertEquals(1L,jdbc.queryForObject("SELECT count(*) FROM stock_movement WHERE organization_id=? AND stock_item_id=?",Long::class.java,org,stockItem))
+       assertEquals(0,quantity.compareTo(jdbc.queryForObject(
+           "SELECT on_hand_qty FROM stock_balance WHERE stock_item_id=? AND storage_location_id=?",BigDecimal::class.java,stockItem,location)))
        rejectedOpening{postOpening(openingPayload(fixed,equity))}
        rejectedOpening{insert("UPDATE finance_gl_opening_journal SET source_reference='MUTATED-REFERENCE' WHERE id=?",openingId)}
        rejectedOpening{
@@ -843,6 +905,8 @@ class FinanceMixedBankCashPostgresContractTest {
        assertTrue(initial.totals.single().balanced)
        assertEquals(0,initial.rows.single{it.accountId==fixed}.openingDebit.toBigDecimal().compareTo(BigDecimal("250")))
        assertEquals(0,initial.rows.single{it.accountId==fixed}.periodDebit.toBigDecimal().signum())
+       assertEquals(0,initial.rows.single{it.accountId==stockAsset}.openingDebit.toBigDecimal().compareTo(stockValue))
+       assertEquals(0,initial.rows.single{it.accountId==stockAsset}.periodDebit.toBigDecimal().signum())
        assertEquals(0,initial.totals.single().recognizedResult.toBigDecimal().compareTo(balances.totals.single().recognizedResult.toBigDecimal()))
        assertEquals(9L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,period))
        assertEquals(9,desk.ledger(org,period,0,true,true,includeOpening=true).journals.size)
@@ -852,7 +916,7 @@ class FinanceMixedBankCashPostgresContractTest {
        assertFalse(openingCarry.isCompanyWideTrialBalance)
        val position=initial.positions.single()
        assertTrue(position.equationBalances)
-       assertEquals(0,position.equity.toBigDecimal().compareTo(BigDecimal("300")))
+       assertEquals(0,position.equity.toBigDecimal().compareTo(BigDecimal("425.50")))
        assertEquals(0,position.cumulativeRecognizedResult.toBigDecimal().compareTo(initial.totals.single().recognizedResult.toBigDecimal()))
        assertFalse(initial.isCompleteBalanceSheet)
        assertFalse(initial.isCompleteCashFlowStatement)
