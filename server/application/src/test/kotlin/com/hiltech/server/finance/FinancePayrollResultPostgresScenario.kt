@@ -101,6 +101,51 @@ object FinancePayrollResultPostgresScenario {
                 assertEquals(listOf(debit.line), service.bankChoices(preparer, org, instruction.id, "SUCCESS").map { it.bankStatementLineId })
                 assertEquals(listOf(credit.line), service.bankChoices(preparer, org, instruction.id, "RETURNED").map { it.bankStatementLineId })
 
+                // The same released earnings-only source can acquire an accounting
+                // accrual, not a payment, before any bank result exists.
+                val payrollPeriod = requireNotNull(jdbc.queryForObject(
+                    "SELECT payroll_period_id FROM payroll_run_version WHERE organization_id=? AND id=?", UUID::class.java,org,run))
+                val release = requireNotNull(jdbc.queryForObject(
+                    "SELECT id FROM payroll_run_release WHERE organization_id=? AND run_version_id=?",UUID::class.java,org,run))
+                val preparedAt = requireNotNull(jdbc.queryForObject(
+                    "SELECT prepared_at FROM finance_payroll_payment_batch WHERE organization_id=? AND run_version_id=?",OffsetDateTime::class.java,org,run))
+                val glPeriod=UUID.randomUUID()
+                jdbc.update("""INSERT INTO finance_gl_period(id,organization_id,date_start,date_end,state,approved_company_period_reference,created_at)
+                    VALUES(?,?,?,?,'OPEN','SYNTHETIC-PAYROLL-PERIOD',?)""",glPeriod,org,at.toLocalDate().minusDays(1),at.toLocalDate().plusDays(1),at)
+                fun payrollChart(kind:String,code:String,bankLine:UUID?=null):UUID {
+                    val id=UUID.randomUUID()
+                    val bankId=bankLine?.let{jdbc.queryForObject("SELECT account_id FROM finance_bank_statement_intake_line WHERE organization_id=? AND id=?",UUID::class.java,org,it)}
+                    jdbc.update("""INSERT INTO finance_gl_account(id,organization_id,account_code,account_name,account_kind,
+                        currency,state,approved_company_chart_reference,created_at,treasury_bank_account_id)
+                        VALUES(?,?,?,?,?,?,'APPROVED','SYNTHETIC-PAYROLL-CHART',?,?)""",id,org,code,code,kind,instruction.currency,at,bankId)
+                    return id
+                }
+                val wageGl=payrollChart("PAYROLL_EXPENSE","SYNTH-WAGES")
+                val liabilityGl=payrollChart("PAYROLL_PAYABLE","SYNTH-WAGES-DUE")
+                val debitBankGl=payrollChart("BANK_ASSET","SYNTH-PAYROLL-DEBIT",debit.line)
+                val creditBankGl=payrollChart("BANK_ASSET","SYNTH-PAYROLL-CREDIT",credit.line)
+                fun postPayroll(kind:String,source:UUID?,original:UUID?,dr:UUID,cr:UUID,amount:BigDecimal=instruction.amount):UUID {
+                    val id=UUID.randomUUID()
+                    val sourceAt=source?.let{jdbc.queryForObject("SELECT recorded_at FROM finance_payroll_result_event WHERE organization_id=? AND id=?",OffsetDateTime::class.java,org,it)}?:preparedAt
+                    jdbc.update("""INSERT INTO finance_payroll_gl_journal(id,operation_id,organization_id,payroll_period_id,run_version_id,
+                        release_id,entry_type,source_event_id,original_journal_id,period_id,debit_account_id,credit_account_id,amount,
+                        currency,source_recorded_at,posted_by_user_id,posted_at,correlation_id)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'synthetic-payroll-gl')""",
+                        id,UUID.randomUUID(),org,payrollPeriod,run,release,kind,source,original,glPeriod,dr,cr,amount,instruction.currency,sourceAt,preparer,at)
+                    return id
+                }
+                fun rejectedPayroll(block:()->Unit) {
+                    val sp=transaction.createSavepoint()
+                    try { assertThrows<Exception> { block() } }
+                    finally { transaction.rollbackToSavepoint(sp);transaction.releaseSavepoint(sp) }
+                }
+                rejectedPayroll{postPayroll("PAYROLL_ACCRUAL",null,null,wageGl,liabilityGl,instruction.amount+BigDecimal.ONE)}
+                rejectedPayroll{postPayroll("PAYROLL_ACCRUAL",null,null,debitBankGl,liabilityGl)}
+                postPayroll("PAYROLL_ACCRUAL",null,null,wageGl,liabilityGl)
+                rejectedPayroll{postPayroll("PAYROLL_ACCRUAL",null,null,wageGl,liabilityGl)}
+                assertTrue(adapter.paymentEvents(org,run).isEmpty())
+                assertEquals(1L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,glPeriod))
+
                 val successRequest = FinancePayrollPrepareResult(UUID.randomUUID(), 0, "SUCCESS", debit.line,
                     beneficiaryConfirmed = true, reason = "Synthetic exact beneficiary and amount checked")
                 val successProposal = service.propose(preparer, org, instruction.id, successRequest, "synthetic-payroll-result")
@@ -185,6 +230,9 @@ object FinancePayrollResultPostgresScenario {
                 assertTrue(jdbc.queryForObject("SELECT fully_matched FROM finance_bank_reconciliation_snapshot WHERE organization_id=? AND intake_id=?",
                     Boolean::class.java, org, debit.intake) == true)
                 val firstEvent = repo.latest(org, instruction.id)!!
+                rejectedPayroll{postPayroll("PAYROLL_PAYMENT",firstEvent.id,null,liabilityGl,creditBankGl)}
+                val firstGl=postPayroll("PAYROLL_PAYMENT",firstEvent.id,null,liabilityGl,debitBankGl)
+                rejectedPayroll{postPayroll("PAYROLL_PAYMENT",firstEvent.id,null,liabilityGl,debitBankGl)}
 
                 val voidRequest = FinancePayrollPrepareResult(UUID.randomUUID(), firstEvent.version, "VOID_MATCH",
                     correctsEventId = firstEvent.id, reason = "Synthetic match correction preserves original bank proof")
@@ -214,6 +262,9 @@ object FinancePayrollResultPostgresScenario {
                 evidence.read(reviewer, org, voidProposal.targetId, "synthetic-payroll-proof")
                 service.review(reviewer, org, voidProposal.targetId, FinancePayrollReviewResult(UUID.randomUUID(), "APPROVE"), "synthetic-payroll-result")
                 assertEquals(PayrollFinanceOutcome.UNKNOWN, adapter.paymentEvents(org, run).last().outcome)
+                val voidEvent=repo.latest(org,instruction.id)!!
+                rejectedPayroll{postPayroll("PAYROLL_VOID",voidEvent.id,firstGl,creditBankGl,liabilityGl)}
+                postPayroll("PAYROLL_VOID",voidEvent.id,firstGl,debitBankGl,liabilityGl)
                 assertEquals(instruction.amount, repo.bank(org, debit.line)!!.remaining)
                 assertNotEquals(matchedHash, matchHash(jdbc, org, debit.intake))
                 assertFalse(jdbc.queryForObject("SELECT fully_matched FROM finance_bank_reconciliation_snapshot WHERE organization_id=? AND intake_id=?",
@@ -222,6 +273,7 @@ object FinancePayrollResultPostgresScenario {
                     successRequest.copy(operationId = UUID.randomUUID(), baseResultVersion = 2), "synthetic-payroll-result")
                 evidence.read(reviewer, org, matchedAgain.targetId, "synthetic-payroll-proof")
                 service.review(reviewer, org, matchedAgain.targetId, FinancePayrollReviewResult(UUID.randomUUID(), "APPROVE"), "synthetic-payroll-result")
+                val secondGl=postPayroll("PAYROLL_PAYMENT",repo.latest(org,instruction.id)!!.id,null,liabilityGl,debitBankGl)
                 val returnProposal = service.propose(preparer, org, instruction.id,
                     FinancePayrollPrepareResult(UUID.randomUUID(), 3, "RETURNED", credit.line, beneficiaryConfirmed = true,
                         reason = "Synthetic bank return matched to the original beneficiary"), "synthetic-payroll-result")
@@ -236,6 +288,13 @@ object FinancePayrollResultPostgresScenario {
                 assertEquals(listOf(PayrollFinanceOutcome.SUCCESS, PayrollFinanceOutcome.UNKNOWN, PayrollFinanceOutcome.SUCCESS, PayrollFinanceOutcome.RETURNED),
                     adapter.paymentEvents(org, run).map { it.outcome })
                 assertEquals("RETURNED", service.run(preparer, org, run).instructions.single().outcome)
+                val returnedEvent=repo.latest(org,instruction.id)!!
+                postPayroll("PAYROLL_RETURN",returnedEvent.id,secondGl,creditBankGl,liabilityGl)
+                assertEquals(5L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,glPeriod))
+                val balance=requireNotNull(jdbc.queryForObject("""SELECT sum(CASE WHEN l.side='CREDIT' THEN l.amount ELSE -l.amount END)
+                    FROM finance_payroll_gl_journal_line l JOIN finance_payroll_gl_journal j ON j.id=l.journal_id AND j.organization_id=l.organization_id
+                    WHERE j.organization_id=? AND j.period_id=? AND l.gl_account_id=?""",BigDecimal::class.java,org,glPeriod,liabilityGl))
+                assertEquals(0,balance.compareTo(instruction.amount))
                 assertEquals(BigDecimal.ZERO, repo.bank(org, credit.line)!!.remaining.stripTrailingZeros())
                 assertEquals(2, jdbc.queryForObject("SELECT count(*) FROM finance_bank_committed_usage WHERE organization_id=?", Int::class.java, org))
 

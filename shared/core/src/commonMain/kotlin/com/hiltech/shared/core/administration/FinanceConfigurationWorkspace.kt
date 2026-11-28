@@ -53,6 +53,8 @@ import kotlinx.serialization.json.Json
     "CASH_ASSET" -> hiltechText("حساب خزنة محاسبي","Cashbox ledger account")
     "EMPLOYEE_ADVANCE_ASSET" -> hiltechText("سلف الموظفين — أصل","Employee advances — asset")
     "EMPLOYEE_IMPREST_ASSET" -> hiltechText("العهد المالية — أصل","Employee imprests — asset")
+    "PAYROLL_EXPENSE" -> hiltechText("تكلفة الرواتب","Payroll expense")
+    "PAYROLL_PAYABLE" -> hiltechText("الرواتب المستحقة","Payroll payable")
     else -> kind
 }
 @Composable private fun configurationState(state: String): String = when(state) {
