@@ -313,12 +313,11 @@ class FinanceCashVoidService @org.springframework.beans.factory.annotation.Autow
         replayed=replayed,originalMatchStillEffective=recordId==null,
     )
     private fun lockSource(org:UUID,s:FinanceCashVoidSource){
-        val table=if(s.kind=="AP")"finance_ap_posted_journal"
-            else "finance_ar_posted_journal"
+        if(s.kind !in setOf("AP","AR"))stale()
         if(jdbc.query(
-            """SELECT id FROM $table WHERE id=? AND organization_id=? FOR UPDATE""",
+            """SELECT id FROM finance_lock_obligation_source(?,?,?)""",
             {rs,_ ->rs.getObject("id",UUID::class.java)},
-            s.journalId,org,
+            org,s.kind,s.journalId,
         ).singleOrNull()!=s.journalId)stale()
         if(jdbc.query(
             """SELECT id FROM finance_bank_statement_intake_line

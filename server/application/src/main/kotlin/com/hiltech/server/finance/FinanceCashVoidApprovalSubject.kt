@@ -116,20 +116,16 @@ class FinanceCashVoidApprovalSubject(
         if(raw.second!=r.currency ||
             (r.kind=="AP" && raw.third!="DEBIT") ||
             (r.kind=="AR" && raw.third!="CREDIT"))return null
-        val table=when(r.kind) {
-            "AP"->"finance_ap_posted_journal"
-            "AR"->"finance_ar_posted_journal"
-            else->return null
-        }
+        if(r.kind !in setOf("AP","AR"))return null
         val journal=jdbc.query(
             """SELECT fiscal_period_id,ledger_fingerprint_sha256,gross_amount,currency
-               FROM $table WHERE id=? AND organization_id=?""",
+               FROM finance_obligation_source WHERE id=? AND organization_id=? AND source_kind=?""",
             {rs,_ ->listOf(
                 rs.getObject("fiscal_period_id",UUID::class.java),
                 rs.getString("ledger_fingerprint_sha256"),
                 rs.getBigDecimal("gross_amount"),
                 rs.getString("currency"),
-            )},r.journalId,org,
+            )},r.journalId,org,r.kind,
         ).singleOrNull() ?: return null
         val periodId=journal[0] as UUID
         val periodOpen=jdbc.queryForObject(

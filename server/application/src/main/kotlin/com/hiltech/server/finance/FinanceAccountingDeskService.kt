@@ -94,6 +94,7 @@ data class FinanceDeskExposureRow(
     val journalId: UUID, val counterpartyName: String, val currency: String,
     val gross: String, val allocated: String, val outstanding: String?,
     val dueDate: String?, val state: String, val reversed: Boolean,
+    val openingDocumentReference:String?=null,val openingDocumentDate:String?=null,
 )
 data class FinanceDeskExposure(
     val organizationId: UUID, val kind: String, val asOfDate: String, val offset: Int, val hasMore: Boolean,
@@ -424,15 +425,19 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
             r.getLong("missing_due"),r.getLong("exceptions"),r.getLong("record_count")) },java.sql.Date.valueOf(day),org,kind)
         val rows = jdbc.query("""
             SELECT b.journal_id,o.display_name,b.currency,b.gross_amount,b.allocated_amount,
-                b.outstanding_amount,b.contractual_due_date,b.accounting_state,b.reversed
+                b.outstanding_amount,b.contractual_due_date,b.accounting_state,b.reversed,
+                legacy.document_reference,legacy.document_date
             FROM finance_ap_ar_source_balance b
             JOIN organization o ON o.id=b.counterparty_id
+            LEFT JOIN finance_gl_opening_obligation legacy ON legacy.organization_id=b.organization_id
+                AND legacy.source_kind=b.source_kind AND legacy.id=b.journal_id
             WHERE b.organization_id=? AND b.source_kind=?
             ORDER BY b.recognized_at DESC,b.journal_id LIMIT ? OFFSET ?
         """.trimIndent(), { r,_ -> FinanceDeskExposureRow(r.getObject("journal_id",UUID::class.java),
             r.getString("display_name"),r.getString("currency").trim(),r.getBigDecimal("gross_amount").toPlainString(),
             r.getBigDecimal("allocated_amount").toPlainString(),r.getBigDecimal("outstanding_amount")?.toPlainString(),
-            r.getDate("contractual_due_date")?.toString(),r.getString("accounting_state"),r.getBoolean("reversed"))
+            r.getDate("contractual_due_date")?.toString(),r.getString("accounting_state"),r.getBoolean("reversed"),
+            r.getString("document_reference"),r.getDate("document_date")?.toString())
         },org,kind,PAGE_SIZE+1,offset)
         return FinanceDeskExposure(org,kind,day.toString(),offset,rows.size>PAGE_SIZE,totals,rows.take(PAGE_SIZE))
     }

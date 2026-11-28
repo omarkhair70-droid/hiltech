@@ -27,14 +27,19 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.UUID
 
-data class FinanceOpeningLine(val accountId:UUID,val side:String,val amount:String,val reference:String,val bankStatementId:UUID?=null)
+data class FinanceOpeningObligation(val counterpartyId:UUID,val documentReference:String,val documentDate:String,
+    val amount:String,val dueDate:String?=null)
+data class FinanceOpeningLine(val accountId:UUID,val side:String,val amount:String,val reference:String,val bankStatementId:UUID?=null,
+    val obligations:List<FinanceOpeningObligation> = emptyList())
 data class FinanceOpeningInput(val operationId:UUID,val periodId:UUID,val currency:String,
     val companyReference:String,val sourceReference:String,val lines:List<FinanceOpeningLine>)
 data class FinanceOpeningAccount(val id:UUID,val code:String,val name:String,val accountKind:String,
     val bankStatementId:UUID?,val bankSide:String?,val bankAmount:String?)
 data class FinanceOpeningPeriod(val id:UUID,val dateStart:String,val dateEnd:String)
+data class FinanceOpeningCounterparty(val id:UUID,val kind:String,val code:String,val name:String)
 data class FinanceOpeningView(val organizationId:UUID,val currency:String,val period:FinanceOpeningPeriod?,
-    val existingJournalId:UUID?,val canPost:Boolean,val accounts:List<FinanceOpeningAccount>,val hasMore:Boolean)
+    val existingJournalId:UUID?,val canPost:Boolean,val accounts:List<FinanceOpeningAccount>,val hasMore:Boolean,
+    val counterparties:List<FinanceOpeningCounterparty> = emptyList(),val hasMoreCounterparties:Boolean=false)
 data class FinanceOpeningReceipt(val organizationId:UUID,val operationId:UUID,val journalId:UUID,val periodId:UUID,
     val currency:String,val openingDate:String,val replayed:Boolean)
 
@@ -47,6 +52,18 @@ internal fun validFinanceOpening(input:FinanceOpeningInput):Boolean {
         !openingRef(input.sourceReference,240) || input.lines.size !in 2..32 ||
         input.lines.map{it.accountId}.distinct().size!=input.lines.size)return false
     if(input.lines.any{it.side !in setOf("DEBIT","CREDIT")||openingAmount(it.amount)==null||!openingRef(it.reference,240)})return false
+    if(input.lines.sumOf{it.obligations.size}>1000)return false
+    for(line in input.lines){
+        if(line.obligations.isEmpty())continue
+        if(line.bankStatementId!=null||line.obligations.any{o->
+            val date=runCatching{LocalDate.parse(o.documentDate)}.getOrNull()
+            val due=o.dueDate?.let{runCatching{LocalDate.parse(it)}.getOrNull()}
+            o.documentReference.length !in 2..96||o.documentReference!=o.documentReference.trim()||
+            o.documentReference.any{it.code<32||it.code==127}||date==null||
+            (o.dueDate!=null&&(due==null||due<date))||openingAmount(o.amount)==null
+        }||line.obligations.map{it.counterpartyId to it.documentReference.lowercase(java.util.Locale.ROOT)}.distinct().size!=line.obligations.size)return false
+        if(line.obligations.fold(BigDecimal.ZERO){s,o->s+BigDecimal(o.amount)}.compareTo(BigDecimal(line.amount))!=0)return false
+    }
     fun total(side:String)=input.lines.filter{it.side==side}.fold(BigDecimal.ZERO){sum,line->sum+BigDecimal(line.amount)}
     val debit=total("DEBIT")
     return debit.signum()>0 && debit.compareTo(total("CREDIT"))==0
@@ -94,7 +111,7 @@ class FinanceOpeningService @org.springframework.beans.factory.annotation.Autowi
                       AND x.account_id=b.account_id AND x.currency=b.currency AND x.date_start=b.date_start)=1
             ) s ON a.account_kind='BANK_ASSET'
             WHERE a.organization_id=? AND a.state='APPROVED' AND (a.currency IS NULL OR a.currency=?)
-            AND a.account_kind IN('FIXED_ASSET','OTHER_ASSET','OTHER_LIABILITY','EQUITY','BANK_ASSET')
+            AND a.account_kind IN('FIXED_ASSET','OTHER_ASSET','OTHER_LIABILITY','EQUITY','BANK_ASSET','CUSTOMER_RECEIVABLE','SUPPLIER_PAYABLE')
             AND (a.account_kind<>'BANK_ASSET' OR s.id IS NOT NULL)
             ORDER BY a.account_code,a.id LIMIT 101
         """.trimIndent(),{r,_->
@@ -103,7 +120,14 @@ class FinanceOpeningService @org.springframework.beans.factory.annotation.Autowi
                 r.getString("account_kind"),r.getObject("statement_id",UUID::class.java),
                 bank?.let{if(it.signum()>0)"DEBIT" else "CREDIT"},bank?.abs()?.toPlainString())
         },currency,java.sql.Date.valueOf(first.dateStart),clock.instant().atOffset(ZoneOffset.UTC),org,currency)
-        return FinanceOpeningView(org,currency,first,existing,first!=null&&existing==null,accounts.take(100),accounts.size>100)
+        val counterparties=if(first==null||existing!=null)emptyList()else jdbc.query("""
+            SELECT c.counterparty_id,c.source_kind,o.organization_code,o.display_name
+            FROM finance_opening_counterparty c JOIN organization o ON o.id=c.counterparty_id
+            WHERE c.organization_id=? ORDER BY c.source_kind,o.display_name,o.id LIMIT 501
+        """.trimIndent(),{r,_->FinanceOpeningCounterparty(r.getObject(1,UUID::class.java),r.getString(2),
+            r.getString(3),r.getString(4))},org)
+        return FinanceOpeningView(org,currency,first,existing,first!=null&&existing==null,accounts.take(100),accounts.size>100,
+            counterparties.take(500),counterparties.size>500)
     }
 
     fun post(actor:UUID,org:UUID,input:FinanceOpeningInput,correlation:String):FinanceOpeningReceipt {
@@ -115,6 +139,15 @@ class FinanceOpeningService @org.springframework.beans.factory.annotation.Autowi
                 put("accountId",line.accountId.toString());put("side",line.side)
                 put("amount",BigDecimal(line.amount).stripTrailingZeros().toPlainString());put("reference",line.reference)
                 line.bankStatementId?.let{put("bankStatementId",it.toString())}
+                if(line.obligations.isNotEmpty())put("obligations",buildJsonArray{
+                    line.obligations.sortedWith(compareBy({it.counterpartyId.toString()},{it.documentReference})).forEach{o->
+                        add(buildJsonObject{
+                            put("counterpartyId",o.counterpartyId.toString());put("documentReference",o.documentReference)
+                            put("documentDate",o.documentDate);put("amount",BigDecimal(o.amount).stripTrailingZeros().toPlainString())
+                            o.dueDate?.let{put("dueDate",it)}
+                        })
+                    }
+                })
             })}
         }
         val fingerprint=IdempotencyKeyContract.fingerprint(buildJsonObject{

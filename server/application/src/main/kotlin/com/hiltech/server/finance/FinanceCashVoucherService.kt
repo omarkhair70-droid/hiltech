@@ -314,15 +314,11 @@ class FinanceCashVoucherService @org.springframework.beans.factory.annotation.Au
    replayed,physicalCustodyConfirmed=recorded!=null,
  )
  private fun lockSourceAndBox(org:UUID,kind:String,journal:UUID,box:UUID) {
-   val table=when(kind) {
-      "AR"->"finance_ar_posted_journal"
-      "AP"->"finance_ap_posted_journal"
-      else->unavailable()
-   }
+   if(kind !in setOf("AP","AR"))unavailable()
    if(jdbc.query(
-      """SELECT id FROM $table WHERE id=? AND organization_id=? FOR UPDATE""",
+      """SELECT id FROM finance_lock_obligation_source(?,?,?)""",
       {rs,_ ->rs.getObject("id",UUID::class.java)},
-      journal,org).singleOrNull()!=journal)stale()
+      org,kind,journal).singleOrNull()!=journal)stale()
    if(jdbc.query(
       """SELECT id FROM finance_cashbox_register
          WHERE id=? AND organization_id=? AND status='ACTIVE' FOR UPDATE""",
