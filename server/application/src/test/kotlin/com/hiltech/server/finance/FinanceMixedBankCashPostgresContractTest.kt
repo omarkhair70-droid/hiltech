@@ -656,6 +656,17 @@ class FinanceMixedBankCashPostgresContractTest {
                proposal,UUID.randomUUID(),org,funding,employee,action,bankLine,proof,proofHash,amount,policy,issuer,t.plusHours(7))
            val decision=approval("FINANCE_EMPLOYEE_SETTLEMENT",proposal,808,policy,issuer,t.plusHours(8))
            val id=UUID.randomUUID()
+           val unrelated=approval("FINANCE_EMPLOYEE_SETTLEMENT",UUID.randomUUID(),808,policy,issuer,t.plusHours(8))
+           val wrongSubject=connection.setSavepoint()
+           try {
+               assertThrows(DataIntegrityViolationException::class.java) {
+                   insert("""INSERT INTO finance_employee_settlement_record(id,operation_id,organization_id,proposal_id,
+                       funding_record_id,employee_id,action,bank_statement_line_id,settlement_evidence_id,approval_request_id,
+                       amount,currency,recorded_by_user_id,recorded_at,correlation_id)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,'EGP',?,?,'mixed-wrong-subject')""",
+                       id,UUID.randomUUID(),org,proposal,funding,employee,action,bankLine,proof,unrelated,amount,bankImporter,t.plusHours(9))
+               }
+           } finally {connection.rollback(wrongSubject);connection.releaseSavepoint(wrongSubject)}
            insert("""INSERT INTO finance_employee_settlement_record(id,operation_id,organization_id,proposal_id,
                funding_record_id,employee_id,action,bank_statement_line_id,settlement_evidence_id,approval_request_id,
                amount,currency,recorded_by_user_id,recorded_at,correlation_id)
