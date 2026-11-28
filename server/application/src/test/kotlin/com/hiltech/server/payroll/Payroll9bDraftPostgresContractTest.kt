@@ -958,6 +958,31 @@ class Payroll9bDraftPostgresContractTest {
                 assertEquals(0,reviewedEmployee.recordedNet!!.toBigDecimal().signum())
                 assertEquals(0,corrected.first.net.toBigDecimal().compareTo(reviewedEmployee.differenceFromRecorded!!.toBigDecimal()))
                 assertTrue(clearanceService.employeeReview(reviewer,org,correctedRun,50).rows.isEmpty())
+
+                // A review amount is not a settlement-ready payment source.
+                // Check each signed differential separately; never offset employees.
+                fun settledDeltaState(oldNet:String,newNet:String,recorded:String?,paid:String,missing:Long,activeAccrual:Boolean):String =
+                    requireNotNull(jdbc.queryForObject(
+                        "SELECT finance_payroll_settled_delta_state(CAST(? AS numeric),CAST(? AS numeric),CAST(? AS numeric),CAST(? AS numeric),CAST(? AS bigint),CAST(? AS boolean))",
+                        String::class.java,oldNet,newNet,recorded,paid,missing,activeAccrual))
+                assertEquals("ADDITIONAL_DUE",settledDeltaState("8000","8500","8000","8000",0,true))
+                assertEquals("RECOVERY_DUE",settledDeltaState("8000","7500","8000","8000",0,true))
+                assertEquals("NO_NET_CHANGE",settledDeltaState("8000","8000","8000","8000",0,true))
+                assertEquals("PRIOR_SETTLEMENT_NOT_EXACT",settledDeltaState("8000","8500","4000","4000",0,true))
+                assertEquals("PRIOR_SETTLEMENT_NOT_EXACT",settledDeltaState("8000","8500","0","0",0,true))
+                assertEquals("PRIOR_SETTLEMENT_NOT_EXACT",settledDeltaState("0","500","0","0",0,true))
+                assertEquals("UNRESOLVED_EVIDENCE",settledDeltaState("8000","8500",null,"8000",0,true))
+                assertEquals("UNRESOLVED_EVIDENCE",settledDeltaState("8000","8500","8000","8000",1,true))
+                assertEquals("MISSING_ACTIVE_ACCRUAL",settledDeltaState("8000","8500","8000","8000",0,false))
+                val deltaBasis=jdbc.queryForMap("""SELECT basis_state,additional_due,recovery_due,all_employees_ready,original_journal_id
+                    FROM finance_payroll_settled_delta_basis WHERE organization_id=? AND replacement_run_version_id=? AND employee_id=?""",
+                    org,correctedRun,reviewedEmployee.employeeId)
+                assertEquals(if(reviewedEmployee.noResultCount>0L) "UNRESOLVED_EVIDENCE" else "PRIOR_SETTLEMENT_NOT_EXACT",deltaBasis["basis_state"])
+                assertEquals(previous,deltaBasis["original_journal_id"])
+                assertNull(deltaBasis["additional_due"])
+                assertNull(deltaBasis["recovery_due"])
+                assertEquals(false,deltaBasis["all_employees_ready"])
+
                 val clearance=clearanceService.record(reviewer,org,request,"synthetic-clearance")
                 assertEquals("CLEARED",clearance.state)
                 assertFalse(clearance.bankExecutionInitiated)
