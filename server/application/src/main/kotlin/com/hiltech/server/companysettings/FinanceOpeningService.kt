@@ -31,8 +31,10 @@ data class FinanceOpeningObligation(val counterpartyId:UUID,val documentReferenc
     val amount:String,val dueDate:String?=null)
 data class FinanceOpeningStockValue(val movementId:UUID,val quantity:String,val unit:String,val sourceFingerprint:String,
     val amount:String,val valuationReference:String)
+data class FinanceOpeningEmployeeObligation(val employeeId:UUID,val documentReference:String,val documentDate:String,val amount:String)
 data class FinanceOpeningLine(val accountId:UUID,val side:String,val amount:String,val reference:String,val bankStatementId:UUID?=null,
-    val obligations:List<FinanceOpeningObligation> = emptyList(),val stockValues:List<FinanceOpeningStockValue> = emptyList())
+    val obligations:List<FinanceOpeningObligation> = emptyList(),val stockValues:List<FinanceOpeningStockValue> = emptyList(),
+    val employeeObligations:List<FinanceOpeningEmployeeObligation> = emptyList())
 data class FinanceOpeningInput(val operationId:UUID,val periodId:UUID,val currency:String,
     val companyReference:String,val sourceReference:String,val lines:List<FinanceOpeningLine>)
 data class FinanceOpeningAccount(val id:UUID,val code:String,val name:String,val accountKind:String,
@@ -79,6 +81,16 @@ internal fun validFinanceOpening(input:FinanceOpeningInput):Boolean {
                 !v.sourceFingerprint.matches(Regex("[0-9a-f]{64}"))||
                 openingAmount(v.amount)==null||!openingRef(v.valuationReference,240)}||
             line.stockValues.fold(BigDecimal.ZERO){s,v->s+BigDecimal(v.amount)}.compareTo(BigDecimal(line.amount))!=0)return false
+    }
+    val employees=input.lines.flatMap{it.employeeObligations}
+    if(employees.size>1000)return false
+    for(line in input.lines.filter{it.employeeObligations.isNotEmpty()}){
+        if(line.side!="DEBIT"||line.bankStatementId!=null||line.stockValues.isNotEmpty()||line.obligations.isNotEmpty()||
+            line.employeeObligations.any{o->o.documentReference.length !in 2..96||o.documentReference!=o.documentReference.trim()||
+                o.documentReference.any{it.code<32||it.code==127}||runCatching{LocalDate.parse(o.documentDate)}.getOrNull()==null||
+                !o.amount.matches(Regex("[0-9]{1,12}([.][0-9]{1,6})?"))||openingAmount(o.amount)==null}||
+            line.employeeObligations.map{it.employeeId to it.documentReference.lowercase(java.util.Locale.ROOT)}.distinct().size!=line.employeeObligations.size||
+            line.employeeObligations.fold(BigDecimal.ZERO){s,o->s+BigDecimal(o.amount)}.compareTo(BigDecimal(line.amount))!=0)return false
     }
     fun total(side:String)=input.lines.filter{it.side==side}.fold(BigDecimal.ZERO){sum,line->sum+BigDecimal(line.amount)}
     val debit=total("DEBIT")
@@ -127,7 +139,7 @@ class FinanceOpeningService @org.springframework.beans.factory.annotation.Autowi
                       AND x.account_id=b.account_id AND x.currency=b.currency AND x.date_start=b.date_start)=1
             ) s ON a.account_kind='BANK_ASSET'
             WHERE a.organization_id=? AND a.state='APPROVED' AND (a.currency IS NULL OR a.currency=?)
-            AND a.account_kind IN('FIXED_ASSET','OTHER_ASSET','OTHER_LIABILITY','EQUITY','BANK_ASSET','CUSTOMER_RECEIVABLE','SUPPLIER_PAYABLE','INVENTORY_ASSET')
+            AND a.account_kind IN('FIXED_ASSET','OTHER_ASSET','OTHER_LIABILITY','EQUITY','BANK_ASSET','CUSTOMER_RECEIVABLE','SUPPLIER_PAYABLE','INVENTORY_ASSET','EMPLOYEE_ADVANCE_ASSET','EMPLOYEE_IMPREST_ASSET')
             AND (a.account_kind<>'BANK_ASSET' OR s.id IS NOT NULL)
             ORDER BY a.account_code,a.id LIMIT 101
         """.trimIndent(),{r,_->
@@ -137,11 +149,14 @@ class FinanceOpeningService @org.springframework.beans.factory.annotation.Autowi
                 bank?.let{if(it.signum()>0)"DEBIT" else "CREDIT"},bank?.abs()?.toPlainString())
         },currency,java.sql.Date.valueOf(first.dateStart),clock.instant().atOffset(ZoneOffset.UTC),org,currency)
         val counterparties=if(first==null||existing!=null)emptyList()else jdbc.query("""
-            SELECT c.counterparty_id,c.source_kind,o.organization_code,o.display_name
-            FROM finance_opening_counterparty c JOIN organization o ON o.id=c.counterparty_id
-            WHERE c.organization_id=? ORDER BY c.source_kind,o.display_name,o.id LIMIT 501
+            SELECT q.id,q.kind,q.code,q.name FROM (
+                SELECT c.counterparty_id AS id,c.source_kind AS kind,o.organization_code AS code,o.display_name AS name
+                FROM finance_opening_counterparty c JOIN organization o ON o.id=c.counterparty_id WHERE c.organization_id=?
+                UNION ALL
+                SELECT e.id,'EMPLOYEE',e.employee_code,p.display_name FROM employee e JOIN person p ON p.id=e.person_id WHERE e.organization_id=?
+            ) q ORDER BY q.kind,q.name,q.id LIMIT 501
         """.trimIndent(),{r,_->FinanceOpeningCounterparty(r.getObject(1,UUID::class.java),r.getString(2),
-            r.getString(3),r.getString(4))},org)
+            r.getString(3),r.getString(4))},org,org)
         return FinanceOpeningView(org,currency,first,existing,first!=null&&existing==null,accounts.take(100),accounts.size>100,
             counterparties.take(500),counterparties.size>500)
     }
@@ -173,6 +188,12 @@ class FinanceOpeningService @org.springframework.beans.factory.annotation.Autowi
                 put("accountId",line.accountId.toString());put("side",line.side)
                 put("amount",BigDecimal(line.amount).stripTrailingZeros().toPlainString());put("reference",line.reference)
                 line.bankStatementId?.let{put("bankStatementId",it.toString())}
+                if(line.employeeObligations.isNotEmpty())put("employeeObligations",buildJsonArray{
+                    line.employeeObligations.sortedWith(compareBy({it.employeeId.toString()},{it.documentReference})).forEach{o->add(buildJsonObject{
+                        put("employeeId",o.employeeId.toString());put("documentReference",o.documentReference)
+                        put("documentDate",o.documentDate);put("amount",BigDecimal(o.amount).stripTrailingZeros().toPlainString())
+                    })}
+                })
                 if(line.stockValues.isNotEmpty())put("stockValues",buildJsonArray{
                     line.stockValues.sortedBy{it.movementId.toString()}.forEach{v->add(buildJsonObject{
                         put("movementId",v.movementId.toString());put("quantity",BigDecimal(v.quantity).stripTrailingZeros().toPlainString())

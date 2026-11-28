@@ -43,6 +43,7 @@ data class FinanceEmployeeSettlementPlan(
     val settlementBankTransactionId: UUID? = null,
     val settlementBankEvidenceSha256: String? = null,
     val approvedPayrollDeductionEventId: UUID? = null,
+    val openingSourceFingerprint:String?=null,
 )
 data class FinanceEmployeeSettlementValidation(
     val kind: FinanceEmployeeSettlementKind,
@@ -75,7 +76,7 @@ object FinanceEmployeeSettlementRules {
                 }
                 // Employee paid the merchant with personal money.
                 // No prior company funding is needed or allowed here.
-                require(!p.approvedFundingRecorded &&
+                require(!p.approvedFundingRecorded && p.openingSourceFingerprint==null &&
                     p.sourceBankTransactionId==null &&
                     p.sourceBankEvidenceSha256==null) {
                     "PERSONAL_EXPENSE_MUST_NOT_INVENT_EARLIER_COMPANY_FUNDING"
@@ -129,7 +130,7 @@ object FinanceEmployeeSettlementRules {
                 }
             }
         }
-        val canonical=listOf(
+        val canonical=(listOf(
             "FINANCE_EMPLOYEE_SETTLEMENT_V1",p.organizationId,p.employeeId,
             p.financeDraftId,p.kind,p.action,p.currency,p.settlementOperationId,
             p.settlementEvidenceId,p.sourceBankTransactionId,p.sourceBankEvidenceSha256,
@@ -140,7 +141,7 @@ object FinanceEmployeeSettlementRules {
             p.sourceAmount.stripTrailingZeros().toPlainString(),
             p.settlementAmount.stripTrailingZeros().toPlainString(),
             p.previouslySettled.stripTrailingZeros().toPlainString(),
-        ).joinToString("|")
+        )+listOfNotNull(p.openingSourceFingerprint)).joinToString("|")
         val sha=MessageDigest.getInstance("SHA-256")
             .digest(canonical.toByteArray(Charsets.UTF_8))
         return FinanceEmployeeSettlementValidation(
@@ -160,8 +161,11 @@ object FinanceEmployeeSettlementRules {
         }
     }
     private fun confirmedFunding(p:FinanceEmployeeSettlementPlan) {
-        require(p.approvedFundingRecorded && p.sourceBankTransactionId!=null &&
-            p.sourceBankEvidenceSha256?.matches(Regex("^[a-f0-9]{64}$"))==true) {
+        val actual=p.approvedFundingRecorded && p.sourceBankTransactionId!=null &&
+            p.sourceBankEvidenceSha256?.matches(Regex("^[a-f0-9]{64}$"))==true && p.openingSourceFingerprint==null
+        val opening=!p.approvedFundingRecorded && p.sourceBankTransactionId==null && p.sourceBankEvidenceSha256==null &&
+            p.openingSourceFingerprint?.matches(Regex("^[a-f0-9]{64}$"))==true
+        require(actual||opening) {
             "NO_SETTLEMENT_OF_UNFUNDED_OR_UNVERIFIED_EMPLOYEE_DRAFT"
         }
     }

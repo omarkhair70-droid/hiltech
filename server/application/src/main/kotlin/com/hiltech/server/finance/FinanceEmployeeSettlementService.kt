@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
 import java.math.BigDecimal
@@ -38,6 +39,9 @@ data class FinanceEmployeeSettlementPrepare(
     val settlementEvidenceSha256:String,val bankStatementLineId:UUID?=null,
 )
 data class FinanceEmployeeSettlementOperation(val operationId:UUID)
+data class FinanceEmployeeCustodyChoice(val id:UUID,val employeeName:String,val employeeCode:String,val kind:String,val currency:String,
+    val remaining:String,val openingDocumentReference:String?)
+data class FinanceEmployeeCustodyChoices(val organizationId:UUID,val offset:Int,val records:List<FinanceEmployeeCustodyChoice>,val hasMore:Boolean)
 data class FinanceEmployeeSettlementReceipt(
     val proposalId:UUID,val organizationId:UUID,
     val fundingRecordId:UUID,val employeeId:UUID,val action:String,
@@ -64,6 +68,18 @@ class FinanceEmployeeSettlementService @org.springframework.beans.factory.annota
     private val clock:Clock,
     private val operationalAuthority: OperationalAuthorityPort? = null,
 ) {
+    @Transactional(readOnly=true)
+    fun choices(actor:UUID,org:UUID,offset:Int):FinanceEmployeeCustodyChoices {
+        authority(actor,org,"hiltech.finance.employee-settlement.preparer-authority-key")
+        if(offset !in 0..1_000_000)unavailable()
+        val rows=jdbc.query("""SELECT s.id,p.display_name,e.employee_code,s.draft_kind,s.currency,s.remaining_amount,s.document_reference
+            FROM finance_employee_custody_balance s JOIN employee e ON e.organization_id=s.organization_id AND e.id=s.employee_id
+            JOIN person p ON p.id=e.person_id WHERE s.organization_id=? AND s.remaining_amount>0
+            ORDER BY p.display_name,s.recorded_at,s.id LIMIT 51 OFFSET ?""",
+            {r,_->FinanceEmployeeCustodyChoice(r.getObject(1,UUID::class.java),r.getString(2),r.getString(3),r.getString(4),
+                r.getString(5).trim(),r.getBigDecimal(6).toPlainString(),r.getString(7))},org,offset)
+        return FinanceEmployeeCustodyChoices(org,offset,rows.take(50),rows.size>50)
+    }
     @Transactional
     fun prepare(
         actor:UUID,org:UUID,funding:UUID,
@@ -72,13 +88,13 @@ class FinanceEmployeeSettlementService @org.springframework.beans.factory.annota
         authority(actor,org,
             "hiltech.finance.employee-settlement.preparer-authority-key")
         val source=jdbc.query(
-            """SELECT employee_id,draft_kind,amount,currency
-               FROM finance_employee_funding_record
+            """SELECT employee_id,draft_kind,amount,currency,opening_fingerprint,opening_date
+               FROM finance_employee_custody_source
                WHERE id=? AND organization_id=?""",
             {rs,_ ->SettlementFundingSource(
                 rs.getObject("employee_id",UUID::class.java),
                 rs.getString("draft_kind"),rs.getBigDecimal("amount"),
-                rs.getString("currency"))},
+                rs.getString("currency"),rs.getString("opening_fingerprint"),rs.getDate("opening_date")?.toLocalDate())},
             funding,org,
         ).singleOrNull() ?: stale()
         val action=request.action
@@ -105,7 +121,8 @@ class FinanceEmployeeSettlementService @org.springframework.beans.factory.annota
         }
         if(bank!=null &&
             (bank.flow!="CREDIT" ||
-                bank.currency!=source.currency || bank.amount<amount))
+                bank.currency!=source.currency || bank.amount<amount ||
+                (source.openingDate!=null&&(bank.bookedOn==null||bank.bookedOn<source.openingDate))))
             unavailable()
         val id=UUID.nameUUIDFromBytes(
             "hiltech:employee-settlement:${request.operationId}"
@@ -130,7 +147,7 @@ class FinanceEmployeeSettlementService @org.springframework.beans.factory.annota
             org,funding,source.employeeId,action,
             request.settlementEvidenceId,request.settlementEvidenceSha256,
             request.bankStatementLineId,amount,source.currency,
-            policy.versionNumber,reviewer.id,reviewer.version,
+            policy.versionNumber,reviewer.id,reviewer.version,source.openingFingerprint,
         )
         val fingerprint=IdempotencyKeyContract.fingerprint(
             listOf(org,funding,action,amount,request.settlementEvidenceId,
@@ -143,7 +160,7 @@ class FinanceEmployeeSettlementService @org.springframework.beans.factory.annota
             fingerprint,correlation,
         )){
             val locked=jdbc.query(
-                """SELECT id FROM finance_employee_funding_record
+                """SELECT id FROM finance_employee_custody_registry
                    WHERE id=? AND organization_id=? FOR UPDATE""",
                 {rs,_ ->rs.getObject("id",UUID::class.java)},
                 funding,org,
@@ -256,7 +273,7 @@ class FinanceEmployeeSettlementService @org.springframework.beans.factory.annota
             fingerprint,correlation,
         )){
             val locked=jdbc.query(
-                """SELECT id FROM finance_employee_funding_record
+                """SELECT id FROM finance_employee_custody_registry
                    WHERE id=? AND organization_id=? FOR UPDATE""",
                 {rs,_ ->rs.getObject("id",UUID::class.java)},
                 snap.fundingRecordId,org,
@@ -280,7 +297,8 @@ class FinanceEmployeeSettlementService @org.springframework.beans.factory.annota
                 else FinanceEmployeeSettlementKind.FINANCIAL_IMPREST,
                 action=FinanceEmployeeSettlementAction.valueOf(snap.action),
                 sourceAmount=snap.fundedAmount,currency=snap.currency,
-                sourceApproved=true,approvedFundingRecorded=true,
+                sourceApproved=true,approvedFundingRecorded=snap.openingFingerprint==null,
+                openingSourceFingerprint=snap.openingFingerprint,
                 sourceBankTransactionId=snap.fundingBankLineId,
                 sourceBankEvidenceSha256=snap.fundingStatementSha,
                 settlementOperationId=operation,
@@ -411,12 +429,16 @@ class FinanceEmployeeSettlementService @org.springframework.beans.factory.annota
 }
 private data class SettlementFundingSource(
     val employeeId:UUID,val kind:String,
-    val amount:BigDecimal,val currency:String,
+    val amount:BigDecimal,val currency:String,val openingFingerprint:String?,val openingDate:java.time.LocalDate?,
 )
 @RestController
 class FinanceEmployeeSettlementController(
     private val settlement:FinanceEmployeeSettlementService,
 ) {
+    @GetMapping("/v1/finance/organizations/{orgId}/employee-funded/choices")
+    fun choices(http:HttpServletRequest,@PathVariable orgId:UUID,@RequestParam(defaultValue="0") offset:Int)=
+        org.springframework.http.ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+            .body(settlement.choices(actor(http),orgId,offset))
     @PostMapping("/v1/finance/organizations/{orgId}/employee-funded/{fundingId}/settlements/prepare")
     fun prepare(
         http:HttpServletRequest,@PathVariable orgId:UUID,

@@ -22,15 +22,15 @@ object FinanceEmployeeSettlementReviewVersion {
         org:UUID,source:UUID,employee:UUID,action:String,
         evidence:UUID,evidenceHash:String,bankLine:UUID?,
         amount:BigDecimal,currency:String,
-        policyVersion:Int,reviewerId:UUID,reviewerVersion:Long,
+        policyVersion:Int,reviewerId:UUID,reviewerVersion:Long,openingFingerprint:String?=null,
     ):Long {
         require(policyVersion>0 && reviewerVersion>0)
-        val raw=listOf(
+        val raw=(listOf(
             "HILTECH_EMPLOYEE_SETTLEMENT_REVIEW_V1",
             org,source,employee,action,evidence,evidenceHash,
             bankLine ?: "-",amount.stripTrailingZeros().toPlainString(),
             currency,policyVersion,reviewerId,reviewerVersion,
-        ).joinToString("|")
+        )+listOfNotNull(openingFingerprint)).joinToString("|")
         val bytes=MessageDigest.getInstance("SHA-256")
             .digest(raw.toByteArray(Charsets.UTF_8))
         return (ByteBuffer.wrap(bytes,0,8).long and Long.MAX_VALUE).coerceAtLeast(1L)
@@ -42,10 +42,10 @@ data class FinanceEmployeeSettlementVerified(
     val evidenceId:UUID,val evidenceSha256:String,
     val amount:BigDecimal,val currency:String,
     val fundedKind:String,val fundedAmount:BigDecimal,
-    val fundingBankLineId:UUID,val fundingStatementSha:String,
+    val fundingBankLineId:UUID?,val fundingStatementSha:String?,
     val bankStatementSha:String?,val remainingBefore:BigDecimal,
     val reviewVersion:Long,val policyKey:String,val policyVersion:Int,
-    val preparedBy:UUID,
+    val preparedBy:UUID,val openingFingerprint:String?=null,
 )
 private data class FinanceSettlementDbRow(
     val id:UUID,val fundingId:UUID,val employee:UUID,
@@ -54,11 +54,12 @@ private data class FinanceSettlementDbRow(
     val amount:BigDecimal,val currency:String,
     val version:Long,val policyKey:String,val preparedBy:UUID,
     val fundedKind:String,val fundedAmount:BigDecimal,
-    val fundedBankLine:UUID,val fundedCurrency:String,
+    val fundedBankLine:UUID?,val fundedCurrency:String,val fundedEmployee:UUID,
+    val openingFingerprint:String?,val openingDate:java.time.LocalDate?,
 )
 data class FinanceSettlementBankLine(
     val amount:BigDecimal,val currency:String,val flow:String,
-    val statementHash:String,
+    val statementHash:String,val bookedOn:java.time.LocalDate?=null,
 )
 @Component
 class FinanceEmployeeSettlementApprovalSubject(
@@ -98,14 +99,14 @@ class FinanceEmployeeSettlementApprovalSubject(
 
     fun bank(org:UUID,id:UUID):FinanceSettlementBankLine?=
         jdbc.query(
-            """SELECT l.amount,l.currency,l.flow,h.statement_sha256
+            """SELECT l.amount,l.currency,l.flow,h.statement_sha256,l.booked_on
                FROM finance_bank_statement_intake_line l
                JOIN finance_bank_statement_intake h
                  ON h.id=l.intake_id AND h.organization_id=l.organization_id
                WHERE l.id=? AND l.organization_id=?""",
             {rs,_ ->FinanceSettlementBankLine(
                 rs.getBigDecimal("amount"),rs.getString("currency"),
-                rs.getString("flow"),rs.getString("statement_sha256"),
+                rs.getString("flow"),rs.getString("statement_sha256"),rs.getDate("booked_on")?.toLocalDate(),
             )},id,org,
         ).singleOrNull()
 
@@ -140,9 +141,9 @@ class FinanceEmployeeSettlementApprovalSubject(
               p.review_version,p.policy_key,p.prepared_by_user_id,
               f.draft_kind AS funded_kind,f.amount AS funded_amount,
               f.bank_statement_line_id AS funded_bank,
-              f.currency AS funded_currency
+              f.currency AS funded_currency,f.employee_id AS funded_employee,f.opening_fingerprint,f.opening_date
             FROM finance_employee_settlement_proposal p
-            JOIN finance_employee_funding_record f
+            JOIN finance_employee_custody_source f
               ON f.id=p.funding_record_id AND f.organization_id=p.organization_id
             WHERE p.id=? AND p.organization_id=?
             """.trimIndent(),
@@ -159,10 +160,11 @@ class FinanceEmployeeSettlementApprovalSubject(
                 rs.getObject("prepared_by_user_id",UUID::class.java),
                 rs.getString("funded_kind"),rs.getBigDecimal("funded_amount"),
                 rs.getObject("funded_bank",UUID::class.java),
-                rs.getString("funded_currency"),
+                rs.getString("funded_currency"),rs.getObject("funded_employee",UUID::class.java),
+                rs.getString("opening_fingerprint"),rs.getDate("opening_date")?.toLocalDate(),
             )},id,org,
         ).singleOrNull() ?: return null
-        if(row.policyKey!=key || row.fundedCurrency!=row.currency ||
+        if(row.policyKey!=key || row.fundedCurrency!=row.currency || row.employee!=row.fundedEmployee ||
             row.amount<=BigDecimal.ZERO || row.amount>row.fundedAmount ||
             (row.fundedKind=="EMPLOYEE_ADVANCE" &&
                 row.action!="ADVANCE_RECOVERY_CONFIRMED") ||
@@ -175,16 +177,18 @@ class FinanceEmployeeSettlementApprovalSubject(
             return null
         val remaining=remaining(org,row.fundingId,row.fundedAmount)
         if(remaining<row.amount)return null
-        val fundingBank=bank(org,row.fundedBankLine) ?: return null
-        if(fundingBank.flow!="DEBIT" || fundingBank.currency!=row.currency)
-            return null
+        val fundingBank=row.fundedBankLine?.let{bank(org,it)?:return null}
+        if(row.openingFingerprint==null){
+            if(fundingBank==null||fundingBank.flow!="DEBIT"||fundingBank.currency!=row.currency)return null
+        } else if(fundingBank!=null||row.openingDate==null||!row.openingFingerprint.matches(Regex("[0-9a-f]{64}")))return null
         val bank=if(row.bankLine==null)null else bank(org,row.bankLine)
         if(row.bankLine!=null && bank==null)return null
         if(row.action=="IMPREST_RECEIPTS_ACCEPTED") {
             if(row.bankLine!=null)return null
         } else {
             if(bank==null || bank.flow!="CREDIT" ||
-                bank.currency!=row.currency || bank.amount<row.amount)
+                bank.currency!=row.currency || bank.amount<row.amount ||
+                (row.openingDate!=null&&(bank.bookedOn==null||bank.bookedOn<row.openingDate)))
                 return null
             val total=jdbc.queryForObject(
                 """SELECT coalesce(sum(amount),0)
@@ -197,7 +201,7 @@ class FinanceEmployeeSettlementApprovalSubject(
         val expected=FinanceEmployeeSettlementReviewVersion.derive(
             org,row.fundingId,row.employee,row.action,
             row.evidenceId,row.evidenceHash,row.bankLine,row.amount,row.currency,
-            policy.versionNumber,reviewer.id,reviewer.version,
+            policy.versionNumber,reviewer.id,reviewer.version,row.openingFingerprint,
         )
         if(expected!=row.version)return null
         if(jdbc.queryForObject(
@@ -213,11 +217,11 @@ class FinanceEmployeeSettlementApprovalSubject(
             currency=row.currency,fundedKind=row.fundedKind,
             fundedAmount=row.fundedAmount,
             fundingBankLineId=row.fundedBankLine,
-            fundingStatementSha=fundingBank.statementHash,
+            fundingStatementSha=fundingBank?.statementHash,
             bankStatementSha=bank?.statementHash,
             remainingBefore=remaining,reviewVersion=expected,
             policyKey=key,policyVersion=policy.versionNumber,
-            preparedBy=row.preparedBy,
+            preparedBy=row.preparedBy,openingFingerprint=row.openingFingerprint,
         )
     }
 }
