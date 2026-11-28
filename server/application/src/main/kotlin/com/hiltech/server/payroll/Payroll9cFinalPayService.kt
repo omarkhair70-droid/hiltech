@@ -205,8 +205,11 @@ class Payroll9cFinalPayService(
                                 Payroll9cReconciler.reconcile(
                                     case.organizationId, run.runId, expected, events,
                                 )
+                            val differential=financePort.differentialPaymentBasis(case.organizationId,run.runId)
+                            val employeeDelta=differential?.takeIf{it.available}?.lines?.singleOrNull{it.employeeId==case.employeeId}
                             paymentStatus = if (run.net.signum() == 0)
                                 "NO_PAYMENT_REQUIRED"
+                            else if(employeeDelta!=null&&employeeDelta.currency==run.currency&&employeeDelta.net.signum()==0)PayrollFinanceOutcome.SUCCESS.name
                             else result?.employees?.singleOrNull {
                                 it.employeeId == case.employeeId
                             }?.result?.name

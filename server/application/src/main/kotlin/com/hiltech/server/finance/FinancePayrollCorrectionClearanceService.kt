@@ -32,6 +32,7 @@ data class FinancePayrollCorrectionCandidate(
     val periodStart:String,val periodEnd:String,val originalGeneration:Int,val replacementGeneration:Int,
     val currency:String,val originalNet:String,val replacementNet:String,
     val eligibleDisposition:String?,val alreadyCleared:Boolean,val canRecord:Boolean,
+    val settlementFingerprint:String?=null,val additionalDue:String?=null,
 )
 data class FinancePayrollCorrectionCandidates(val organizationId:UUID,val records:List<FinancePayrollCorrectionCandidate>,val hasMore:Boolean)
 data class FinancePayrollCorrectionEmployeeReview(
@@ -49,7 +50,7 @@ data class FinancePayrollCorrectionReviewPage(val organizationId:UUID,val origin
     val currency:String,val offset:Int,val rows:List<FinancePayrollCorrectionEmployeeReview>,val hasMore:Boolean,
     val deltaPlan:FinancePayrollDeltaPlan?=null)
 data class FinancePayrollClearanceInput(val operationId:UUID,val originalRunVersionId:UUID,val replacementRunVersionId:UUID,
-    val disposition:String,val reasonReference:String,val financeReference:String)
+    val disposition:String,val reasonReference:String,val financeReference:String,val settlementFingerprint:String?=null)
 
 private fun correctionUnavailable():Nothing=throw ProductApiException("FINANCE_PAYROLL_CORRECTION_UNAVAILABLE",
     "Current finance payroll review authority is required.",HttpStatus.NOT_FOUND)
@@ -58,8 +59,10 @@ private fun correctionChanged():Nothing=throw ProductApiException("FINANCE_PAYRO
 private fun validReference(value:String)=value.length in 8..240 && value==value.trim() && value.none{it.code<32||it.code==127}
 internal fun validPayrollClearance(input:FinancePayrollClearanceInput)=
     input.originalRunVersionId!=input.replacementRunVersionId &&
-    input.disposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED") &&
-    validReference(input.reasonReference)&&validReference(input.financeReference)
+    input.disposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED","SETTLED_DIFFERENTIAL_AUTHORIZED") &&
+    validReference(input.reasonReference)&&validReference(input.financeReference)&&
+    (if(input.disposition=="SETTLED_DIFFERENTIAL_AUTHORIZED")input.settlementFingerprint?.matches(Regex("[a-f0-9]{64}"))==true
+     else input.settlementFingerprint==null)
 
 /** Real Finance-side source for Payroll's existing independently approved release.
  * References are attestations by the assigned reviewer, not machine verification
@@ -77,6 +80,7 @@ class FinancePayrollCorrectionSource(private val jdbc:JdbcTemplate):PayrollVerif
               AND c.original_run_version_id=v.original_run_version_id
               AND c.original_fingerprint=v.original_fingerprint AND c.replacement_fingerprint=v.replacement_fingerprint
               AND c.disposition=v.eligible_disposition AND c.reviewed_by_user_id<>v.draft_creator
+              AND (c.disposition<>'SETTLED_DIFFERENTIAL_AUTHORIZED' OR c.settlement_fingerprint=finance_payroll_settled_delta_fingerprint(v.organization_id,v.replacement_run_version_id))
               AND finance_payroll_current_authority(c.organization_id,c.reviewed_by_user_id,'REVIEW')
         """.trimIndent(),{r,_->
             PayrollVerifiedCorrectionAuthorization(organizationId,originalRunVersionId,replacementRunVersionId,
@@ -100,7 +104,13 @@ class FinancePayrollCorrectionClearanceService(
         val rows=jdbc.query("""
             SELECT v.*,(c.disposition=v.eligible_disposition AND c.original_run_version_id=v.original_run_version_id
               AND c.original_fingerprint=v.original_fingerprint AND c.replacement_fingerprint=v.replacement_fingerprint
-              AND finance_payroll_current_authority(c.organization_id,c.reviewed_by_user_id,'REVIEW')) AS cleared
+              AND (c.disposition<>'SETTLED_DIFFERENTIAL_AUTHORIZED' OR c.settlement_fingerprint=finance_payroll_settled_delta_fingerprint(v.organization_id,v.replacement_run_version_id))
+              AND finance_payroll_current_authority(c.organization_id,c.reviewed_by_user_id,'REVIEW')) AS cleared,
+              CASE WHEN v.eligible_disposition='SETTLED_DIFFERENTIAL_AUTHORIZED'
+                THEN finance_payroll_settled_delta_fingerprint(v.organization_id,v.replacement_run_version_id) END AS settlement_fingerprint,
+              CASE WHEN v.eligible_disposition='SETTLED_DIFFERENTIAL_AUTHORIZED' THEN
+                (SELECT p.additional_due FROM finance_payroll_settled_delta_plan p WHERE p.organization_id=v.organization_id
+                  AND p.replacement_run_version_id=v.replacement_run_version_id) END AS additional_due
             FROM finance_payroll_correction_candidate v
             LEFT JOIN LATERAL (SELECT * FROM finance_payroll_correction_clearance r
                 WHERE r.organization_id=v.organization_id AND r.replacement_run_version_id=v.replacement_run_version_id
@@ -112,7 +122,8 @@ class FinancePayrollCorrectionClearanceService(
             FinancePayrollCorrectionCandidate(r.getObject("original_run_version_id",UUID::class.java),r.getObject("replacement_run_version_id",UUID::class.java),
                 r.getDate("start_date").toString(),r.getDate("end_date").toString(),r.getInt("original_generation"),r.getInt("replacement_generation"),
                 r.getString("currency").trim(),r.getBigDecimal("original_net").toPlainString(),r.getBigDecimal("replacement_net").toPlainString(),
-                disposition,cleared,disposition!=null&&!cleared&&r.getObject("draft_creator",UUID::class.java)!=actor)
+                disposition,cleared,disposition!=null&&!cleared&&r.getObject("draft_creator",UUID::class.java)!=actor,
+                r.getString("settlement_fingerprint")?.trim(),r.getBigDecimal("additional_due")?.toPlainString())
         },org)
         return FinancePayrollCorrectionCandidates(org,rows.take(100),rows.size>100)
     }
@@ -156,6 +167,7 @@ class FinancePayrollCorrectionClearanceService(
             put("organizationId",org.toString());put("originalRunVersionId",input.originalRunVersionId.toString())
             put("replacementRunVersionId",input.replacementRunVersionId.toString());put("disposition",input.disposition)
             put("reasonReference",input.reasonReference);put("financeReference",input.financeReference)
+            input.settlementFingerprint?.let{put("settlementFingerprint",it)}
         }.toString())
         val result=try{commands.execute(IdempotentCommandSpec(input.operationId,actor,"FINANCE_PAYROLL_CORRECTION_CLEARANCE",
             "FINANCE_PAYROLL_CORRECTION_CLEARANCE",id,fingerprint,correlation)){
@@ -166,18 +178,23 @@ class FinancePayrollCorrectionClearanceService(
             val at=clock.instant()
             val inserted=jdbc.update("""
                 INSERT INTO finance_payroll_correction_clearance(id,operation_id,organization_id,original_run_version_id,replacement_run_version_id,
-                    original_fingerprint,replacement_fingerprint,revision,disposition,reason_reference,finance_reference,reviewed_by_user_id,reviewed_at)
+                    original_fingerprint,replacement_fingerprint,revision,disposition,reason_reference,finance_reference,reviewed_by_user_id,reviewed_at,settlement_fingerprint)
                 SELECT ?,?,v.organization_id,v.original_run_version_id,v.replacement_run_version_id,v.original_fingerprint,v.replacement_fingerprint,
                     (SELECT coalesce(max(r.revision),0)+1 FROM finance_payroll_correction_clearance r WHERE r.organization_id=v.organization_id AND r.replacement_run_version_id=v.replacement_run_version_id),
-                    ?,?,?,?,? FROM finance_payroll_correction_candidate v
+                    ?,?,?,?,?,CASE WHEN v.eligible_disposition='SETTLED_DIFFERENTIAL_AUTHORIZED'
+                        THEN finance_payroll_settled_delta_fingerprint(v.organization_id,v.replacement_run_version_id) END
+                    FROM finance_payroll_correction_candidate v
                 WHERE v.organization_id=? AND v.original_run_version_id=? AND v.replacement_run_version_id=? AND v.eligible_disposition=?
                   AND v.draft_creator<>?
+                  AND (v.eligible_disposition<>'SETTLED_DIFFERENTIAL_AUTHORIZED' OR
+                    finance_payroll_settled_delta_fingerprint(v.organization_id,v.replacement_run_version_id)=?)
                   AND NOT EXISTS(SELECT 1 FROM finance_payroll_correction_clearance c WHERE c.organization_id=v.organization_id
                     AND c.replacement_run_version_id=v.replacement_run_version_id AND c.disposition=v.eligible_disposition
                     AND c.revision=(SELECT max(r.revision) FROM finance_payroll_correction_clearance r WHERE r.organization_id=v.organization_id AND r.replacement_run_version_id=v.replacement_run_version_id)
+                    AND (c.disposition<>'SETTLED_DIFFERENTIAL_AUTHORIZED' OR c.settlement_fingerprint=finance_payroll_settled_delta_fingerprint(v.organization_id,v.replacement_run_version_id))
                     AND finance_payroll_current_authority(c.organization_id,c.reviewed_by_user_id,'REVIEW'))
             """.trimIndent(),id,input.operationId,input.disposition,input.reasonReference,input.financeReference,actor,at.atOffset(ZoneOffset.UTC),
-                org,input.originalRunVersionId,input.replacementRunVersionId,input.disposition,actor)
+                org,input.originalRunVersionId,input.replacementRunVersionId,input.disposition,actor,input.settlementFingerprint)
             if(inserted!=1)correctionChanged()
             audit.append(AuditEventRecord(actorUserId=actor,action="FINANCE_PAYROLL_CORRECTION_CLEARED",targetType="FINANCE_PAYROLL_CORRECTION_CLEARANCE",
                 targetId=id,occurredAt=at,correlationId=correlation))

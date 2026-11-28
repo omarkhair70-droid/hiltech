@@ -128,16 +128,22 @@ class Payroll9cPayslipService(
             }
             val expected = financePort?.expectedPayments(organizationId, row.runId).orEmpty()
             val events = financePort?.paymentEvents(organizationId, row.runId).orEmpty()
+            val differential=financePort?.differentialPaymentBasis(organizationId,row.runId)
+            val ownDelta=differential?.lines?.singleOrNull{it.employeeId==employee.employeeId}
+            val differentialUnavailable=differential!=null&&(!differential.available||ownDelta==null||
+                ownDelta.currency!=row.currency||ownDelta.net.signum()<0||ownDelta.net>row.net)
             if (expected.isEmpty() && events.isNotEmpty()) {
                 Payroll9aPolicy.fail("PAYROLL_FINANCE_UNEXPECTED_EVENT", HttpStatus.CONFLICT)
             }
             // Missing payment preparation does not erase an authorized,
             // published payslip. A non-empty batch must still match every
             // frozen employee exactly before any result is trusted.
-            if (expected.isNotEmpty()) Payroll9cExpectedBatchGuard.validateAgainstDatabase(
+            if (expected.isNotEmpty()&&!differentialUnavailable) Payroll9cExpectedBatchGuard.validateAgainstDatabase(
                 jdbc, organizationId, row.runId, expected,
             )
-            val outcome = if (row.net.signum() == 0) {
+            val outcome = if(differentialUnavailable) "PAYMENT_STATUS_UNAVAILABLE"
+            else if(ownDelta!=null&&ownDelta.net.signum()==0) "SUCCESS"
+            else if (row.net.signum() == 0) {
                 // No transfer was required for this employee; do not assert
                 // SUCCESS or invent a zero-value Finance instruction.
                 if (expected.isNotEmpty()) {

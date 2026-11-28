@@ -26,7 +26,8 @@ import java.util.UUID
 /** Extends the existing genuine released-payroll SQL fixture; never disables source guards. */
 object FinancePayrollInstructionPostgresScenario {
     fun verify(jdbc: JdbcTemplate, tx: TransactionTemplate, org: UUID, actor: UUID, run: UUID,
-        reviewBatch: UUID, clock: Clock, publication: PayrollRunPublicationPort) {
+        reviewBatch: UUID, clock: Clock, publication: PayrollRunPublicationPort,
+        settledCorrection:((FinancePayrollResultPostgresScenario.SettledCorrectionFixture)->UUID)?=null) {
         val at = clock.instant().atOffset(ZoneOffset.UTC)
         jdbc.update("""INSERT INTO finance_payroll_authority_binding(id,organization_id,identity_id,authority_key,
             effective_from,created_by_user_id,created_at) VALUES (?,?,?,'PREPARE',?,?,?)""",
@@ -84,7 +85,7 @@ object FinancePayrollInstructionPostgresScenario {
         assertEquals("PAYMENT_NOT_RECORDED", service.run(actor, org, run).instructions.single().outcome)
         assertThrows<Exception> { jdbc.update("UPDATE finance_payroll_instruction SET amount=amount+1 WHERE organization_id=? AND run_version_id=?", org, run) }
         assertEquals(frozen.first().second.stripTrailingZeros(), repo.expected(org, run).first().amount.stripTrailingZeros())
-        FinancePayrollResultPostgresScenario.verify(jdbc, tx, org, actor, run, clock, publication)
+        FinancePayrollResultPostgresScenario.verify(jdbc, tx, org, actor, run, clock, publication,settledCorrection)
         jdbc.update("UPDATE finance_payroll_authority_binding SET active=false,version=version+1 WHERE organization_id=? AND identity_id=?", org, actor)
         assertFalse(actualAuthority.canPrepare(actor, org))
         assertThrows<Exception> { service.run(actor, org, run) }

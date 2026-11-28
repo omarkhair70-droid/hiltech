@@ -51,7 +51,9 @@ data class FinancePayrollGlEvent(
     val creditAccountId:UUID?,val creditAccountName:String?,val ready:Boolean,
 )
 data class FinancePayrollGlCorrection(val originalJournalId:UUID?,val clearanceReference:String,
-    val reversalLines:List<FinanceDeskJournalLine>,val disposition:String="NO_PRIOR_TRANSFER_VERIFIED")
+    val reversalLines:List<FinanceDeskJournalLine>,val disposition:String="NO_PRIOR_TRANSFER_VERIFIED",
+    val fixedExpenseAccountId:UUID?=null,val fixedPayableAccountId:UUID?=null,
+    val fixedAllocations:List<FinancePayrollGlAllocation> = emptyList())
 data class FinancePayrollGlView(
     val organizationId:UUID,val runVersionId:UUID,val period:FinanceDeskPeriod?,
     val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
@@ -118,7 +120,29 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
             WHERE l.organization_id=? AND l.journal_id=? ORDER BY l.line_number
         """.trimIndent(),{r,_->FinanceDeskJournalLine(r.getInt("line_number"),r.getString("account_code"),
             r.getString("account_name"),r.getString("side"),r.getBigDecimal("amount").toPlainString())},org,id)}?:emptyList()
+        if(source.third=="SETTLED_DIFFERENTIAL_AUTHORIZED"){
+            val original=source.first?:return null
+            val accounts=jdbc.query("""SELECT debit_account_id,credit_account_id FROM finance_payroll_gl_journal
+                WHERE organization_id=? AND id=? AND entry_type='PAYROLL_ACCRUAL'""",
+                {r,_->r.getObject(1,UUID::class.java) to r.getObject(2,UUID::class.java)},org,original).singleOrNull()?:return null
+            val allocations=jdbc.query("""SELECT a.value->>'kind',a.value->>'domain',a.value->>'code',
+                (a.value->>'accountId')::uuid,a.value->>'reference'
+                FROM finance_payroll_gl_journal j CROSS JOIN LATERAL jsonb_array_elements(j.component_allocations) a(value)
+                WHERE j.organization_id=? AND j.id=? ORDER BY a.value->>'kind',a.value->>'domain',a.value->>'code'""",
+                {r,_->FinancePayrollGlAllocation(r.getString(1),r.getString(2),r.getString(3),r.getObject(4,UUID::class.java),r.getString(5))},org,original)
+            return FinancePayrollGlCorrection(original,source.second,lines,source.third,accounts.first,accounts.second,allocations)
+        }
         return FinancePayrollGlCorrection(source.first,source.second,lines,source.third)
+    }
+
+    private fun fixedChoices(org:UUID,currency:String,ids:List<UUID>):List<FinanceSettlementAccountChoice> {
+        val unique=ids.distinct()
+        if(unique.isEmpty())return emptyList()
+        val args=listOf<Any>(org,currency)+unique
+        return jdbc.query("""SELECT id,account_code,account_name,account_kind FROM finance_gl_account
+            WHERE organization_id=? AND state='APPROVED' AND (currency IS NULL OR currency=?)
+              AND id IN (${unique.joinToString(","){"?"}}) ORDER BY account_code,id""",
+            {r,_->FinanceSettlementAccountChoice(r.getObject(1,UUID::class.java),r.getString(2),r.getString(3),r.getString(4))},*args.toTypedArray())
     }
 
     private fun groups(org:UUID,run:UUID)=jdbc.query("""SELECT component_kind,source_domain,component_code,amount
@@ -193,12 +217,18 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
             !source.eligible || components.size>30 -> "TREATMENT_REQUIRED"
             else -> "READY"
         }
-        val expense=if(state=="READY") accounting.debitChoices(org,source.currency,"PAYROLL_EXPENSE") else emptyList()
-        val payable=if(state=="READY") accounting.debitChoices(org,source.currency,"PAYROLL_PAYABLE") else emptyList()
+        val fixed=correction?.takeIf{it.disposition=="SETTLED_DIFFERENTIAL_AUTHORIZED"}
+        val expense=if(state=="READY") fixed?.let{fixedChoices(org,source.currency,listOfNotNull(it.fixedExpenseAccountId))}
+            ?:accounting.debitChoices(org,source.currency,"PAYROLL_EXPENSE") else emptyList()
+        val payable=if(state=="READY") fixed?.let{fixedChoices(org,source.currency,listOfNotNull(it.fixedPayableAccountId))}
+            ?:accounting.debitChoices(org,source.currency,"PAYROLL_PAYABLE") else emptyList()
         val deduction=if(state=="READY" && components.any{it.kind=="DEDUCTION"})
-            (accounting.debitChoices(org,source.currency,"PAYROLL_DEDUCTION_PAYABLE")+accounting.debitChoices(org,source.currency,"TAX_PAYABLE")).sortedBy{it.code}
+            fixed?.let{fixedChoices(org,source.currency,it.fixedAllocations.filter{a->a.kind=="DEDUCTION"}.map{a->a.accountId})}
+            ?:(accounting.debitChoices(org,source.currency,"PAYROLL_DEDUCTION_PAYABLE")+accounting.debitChoices(org,source.currency,"TAX_PAYABLE")).sortedBy{it.code}
             else emptyList()
-        val reimbursement=if(state=="READY" && components.any{it.kind=="REIMBURSEMENT"}) accounting.debitChoices(org,source.currency,"EXPENSE") else emptyList()
+        val reimbursement=if(state=="READY" && components.any{it.kind=="REIMBURSEMENT"})
+            fixed?.let{fixedChoices(org,source.currency,it.fixedAllocations.filter{a->a.kind=="REIMBURSEMENT"}.map{a->a.accountId})}
+            ?:accounting.debitChoices(org,source.currency,"EXPENSE") else emptyList()
         val rows=events(org,runId,offset)
         return FinancePayrollGlView(org,runId,period,state,source.gross.toPlainString(),source.currency,offset,rows.size>50,
             expense.take(100),payable.take(100),listOf(expense,payable,deduction,reimbursement).any{it.size>100},rows.take(50),

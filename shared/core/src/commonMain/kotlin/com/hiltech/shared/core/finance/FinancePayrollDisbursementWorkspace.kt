@@ -182,19 +182,25 @@ fun FinancePayrollDisbursementWorkspace(
                 label = hiltechText("كشف الرواتب", "Payroll run"), value = runId,
                 choices = batches.map { HiltechRecordChoice(it.runVersionId,
                     hiltechDateText(it.periodStart) + " — " + hiltechDateText(it.periodEnd),
-                    hiltechText("الإصدار ", "Generation ") + it.generation + " · " + it.payableTotal + " " + it.currency) },
+                    hiltechText("الإصدار ", "Generation ") + it.generation + " · " +
+                        (if(it.differential&&!it.differentialReady)hiltechText("تسوية الفرق تحتاج مراجعة","Differential requires review")
+                         else (if(it.differential)hiltechText("فرق فقط: ","Difference only: ")else "")+it.payableTotal+" "+it.currency)) },
                 onChange = { runId = it; instructionId = "" }, allowKnownReference = false, allowClear = false,
                 enabled = !loading && pending == null && !submitting,
             ) else if (!loading && error == null && access?.let { it.canPrepare || it.canReview } == true) Text(hiltechText(
                 "لا توجد كشوف محالة إلى المالية. بعد اعتماد كشف الرواتب، أرسله للمراجعة المالية من مساحة الرواتب.",
                 "No payroll runs have been handed to Finance. Release a payroll run and hand it off from the payroll workspace."))
             batch?.let { current ->
-                Text(hiltechText("الموظفون: ", "Employees: ") + current.employeeCount + " · " + current.payableTotal + " " + current.currency)
+                Text(hiltechText("الموظفون: ", "Employees: ") + current.employeeCount)
+                if(current.differential&&!current.differentialReady)Text(hiltechText("تغير مصدر تسوية الفرق؛ راجع الأدلة. لا يُجهز كامل الراتب.","The differential evidence changed; review the source. Full payroll cannot be prepared."),color=MaterialTheme.colorScheme.error)
+                else {
+                Text((if(current.differential)hiltechText("فرق مستحق فقط: ","Additional payable only: ")else "")+current.payableTotal+" "+current.currency)
                 if (current.transferCount == 0) Text(hiltechText("لا توجد مبالغ مستحقة للتحويل في هذا الكشف.", "This run has no positive amounts requiring payment."))
                 else if (!current.prepared && access?.canPrepare == true) Button(enabled = enabled, onClick = {
                     prepare(FinancePayrollIntent(newOperationId(), organizationId, "PREPARE_BATCH", current.reviewBatchId,
                         current.periodStart + " — " + current.periodEnd), current.payableTotal + " " + current.currency)
-                }) { Text(hiltechText("تجهيز مطابقة الموظفين", "Prepare employee reconciliation")) }
+                }) { Text(if(current.differential)hiltechText("تجهيز الفروق فقط","Prepare differences only")else hiltechText("تجهيز مطابقة الموظفين", "Prepare employee reconciliation")) }
+                }
             }
             if (runLoading) CircularProgressIndicator()
             if (runFailed) Text(hiltechText("تعذر تحميل تفاصيل الكشف. استخدم التحديث للمحاولة مجددًا.", "The run details could not load. Refresh to retry."))
@@ -477,38 +483,56 @@ private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,o
                 "NO_AMOUNT"->Text(hiltechText("لا يوجد استحقاق موجب.","No positive accrual."))
                 "NOT_PREPARED"->Text(hiltechText("جهز سجل المطابقة المالي أولًا.","Prepare the Finance reconciliation record first."))
                 "READY"->{
-                    val dr=data.expenseAccounts.singleOrNull{it.id==expenseId}
-                    val cr=data.payableAccounts.singleOrNull{it.id==payableId}
+                    val fixed=data.correction?.takeIf{it.disposition=="SETTLED_DIFFERENTIAL_AUTHORIZED"}
+                    val dr=data.expenseAccounts.singleOrNull{it.id==(fixed?.fixedExpenseAccountId?:expenseId)}
+                    val cr=data.payableAccounts.singleOrNull{it.id==(fixed?.fixedPayableAccountId?:payableId)}
                     val netLabel=hiltechText("صافي المستحق: ","Net payable: ")
                     Text(netLabel+data.net+" "+data.currency)
                     data.correction?.let{correction->
-                        Text(if(correction.disposition=="REVERSAL_VERIFIED")hiltechText("استحقاق مصحح — رجوع التحويل مؤيد","Corrected accrual — documented bank return") else hiltechText("استحقاق مصحح — عدم تحويل سابق معتمد","Corrected accrual — approved no-transfer clearance"),style=MaterialTheme.typography.titleMedium)
+                        Text(when(correction.disposition){
+                            "SETTLED_DIFFERENTIAL_AUTHORIZED"->hiltechText("تصحيح راتب مصروف — إثبات الفرق دون تكرار الصرف","Settled payroll correction — recognize difference only")
+                            "REVERSAL_VERIFIED"->hiltechText("استحقاق مصحح — رجوع التحويل مؤيد","Corrected accrual — documented bank return")
+                            else->hiltechText("استحقاق مصحح — عدم تحويل سابق معتمد","Corrected accrual — approved no-transfer clearance")
+                        },style=MaterialTheme.typography.titleMedium)
                         Text(correction.clearanceReference,style=MaterialTheme.typography.bodySmall)
                         Text(if(correction.originalJournalId==null)hiltechText("لا يوجد استحقاق سابق مرحل.","No earlier accrual was posted.") else hiltechText("ستنعكس البنود التالية تلقائيًا في نفس القيد.","The following lines are reversed automatically in the same journal."))
                         correction.reversalLines.forEach{line->HiltechKeyValue(line.accountName,(if(line.side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+line.amount+" "+data.currency)}
                     }
-                    if(data.groups.isNotEmpty()) Text(hiltechText("حدد حساب كل بند. استخدم الخصومات المستحقة لجهة أخرى فقط، والمستردات التي لم تُثبت تكلفتها سابقًا. لا تستخدم هذا المسار لاسترداد السلف أو تكرار المصروف.",
+                    if(fixed!=null)Text(hiltechText("الحسابات والمعالجة مستمدة من القيد الأصلي المعتمد. الصرف السابق محفوظ؛ تُجهز المستحقات الإضافية وحدها.","Accounts and treatment are inherited from the approved original journal. Previous payments remain recorded; only additional amounts are prepared."))
+                    else if(data.groups.isNotEmpty()) Text(hiltechText("حدد حساب كل بند. استخدم الخصومات المستحقة لجهة أخرى فقط، والمستردات التي لم تُثبت تكلفتها سابقًا. لا تستخدم هذا المسار لاسترداد السلف أو تكرار المصروف.",
                         "Map each component. Only third-party deduction obligations and costs not previously recognized belong here. Do not use for advance recovery or duplicate expenses."))
                     if(data.expenseAccounts.isEmpty()||data.payableAccounts.isEmpty()) Text(hiltechText(
                         "أضف حساب تكلفة الرواتب وحساب الرواتب المستحقة المعتمدين في الإعداد المالي.",
                         "Add approved payroll expense and payroll payable accounts in financial configuration."))
                     else {
-                        HiltechRecordPicker(hiltechText("مدين: تكلفة الرواتب","Debit: payroll expense"),expenseId,
-                            data.expenseAccounts.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={expenseId=it},allowKnownReference=false,enabled=canPost)
-                        HiltechRecordPicker(hiltechText("دائن: الرواتب المستحقة","Credit: payroll payable"),payableId,
-                            data.payableAccounts.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={payableId=it},allowKnownReference=false,enabled=canPost)
+                        if(fixed!=null){
+                            dr?.let{HiltechKeyValue(hiltechText("مدين: تكلفة الرواتب","Debit: payroll expense"),it.name)}
+                            cr?.let{HiltechKeyValue(hiltechText("دائن: الرواتب المستحقة","Credit: payroll payable"),it.name)}
+                        }else{
+                            HiltechRecordPicker(hiltechText("مدين: تكلفة الرواتب","Debit: payroll expense"),expenseId,
+                                data.expenseAccounts.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={expenseId=it},allowKnownReference=false,enabled=canPost)
+                            HiltechRecordPicker(hiltechText("دائن: الرواتب المستحقة","Credit: payroll payable"),payableId,
+                                data.payableAccounts.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={payableId=it},allowKnownReference=false,enabled=canPost)
+                        }
                         if(data.hasMoreAccounts)Text(hiltechText("تظهر أول 100 حساب معتمد من كل نوع.","Showing the first 100 approved accounts of each kind."))
                         data.groups.forEach { group ->
                             val k=group.kind+"|"+group.domain+"|"+group.code
                             val choices=if(group.kind=="DEDUCTION") data.deductionAccounts else data.reimbursementAccounts
                             val side=if(group.kind=="DEDUCTION") hiltechText("خصم — دائن","Deduction — credit") else hiltechText("مسترد — مدين","Reimbursement — debit")
                             Text(side+" · "+group.code+" · "+group.amount+" "+data.currency)
-                            HiltechRecordPicker(hiltechText("الحساب المعتمد","Approved account"),mapped[k].orEmpty(),
-                                choices.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={mapped=mapped+(k to it)},allowKnownReference=false,enabled=canPost)
-                            OutlinedTextField(references[k].orEmpty(),onValueChange={value->if(value.length<=240 && value.none{it.code<32||it.code==127})references=references+(k to value)},
-                                label={Text(hiltechText("مرجع المعالجة المعتمدة","Approved treatment reference"))},modifier=Modifier.fillMaxWidth(),enabled=canPost)
+                            if(fixed!=null){
+                                fixed.fixedAllocations.singleOrNull{it.kind==group.kind&&it.domain==group.domain&&it.code==group.code}?.let{a->
+                                    choices.singleOrNull{it.id==a.accountId}?.let{account->HiltechKeyValue(hiltechText("الحساب المعتمد","Approved account"),account.name)}
+                                    Text(a.reference,style=MaterialTheme.typography.bodySmall)
+                                }
+                            }else{
+                                HiltechRecordPicker(hiltechText("الحساب المعتمد","Approved account"),mapped[k].orEmpty(),
+                                    choices.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={mapped=mapped+(k to it)},allowKnownReference=false,enabled=canPost)
+                                OutlinedTextField(references[k].orEmpty(),onValueChange={value->if(value.length<=240 && value.none{it.code<32||it.code==127})references=references+(k to value)},
+                                    label={Text(hiltechText("مرجع المعالجة المعتمدة","Approved treatment reference"))},modifier=Modifier.fillMaxWidth(),enabled=canPost)
+                            }
                         }
-                        val allocations=data.groups.mapNotNull{group->
+                        val allocations=fixed?.fixedAllocations?:data.groups.mapNotNull{group->
                             val k=group.kind+"|"+group.domain+"|"+group.code
                             val choices=if(group.kind=="DEDUCTION") data.deductionAccounts else data.reimbursementAccounts
                             val account=choices.singleOrNull{it.id==mapped[k]}
@@ -607,9 +631,11 @@ private fun FinancePayrollCorrectionSection(client:FinancePayrollDisbursementApi
                     val label=when(disposition){
                         "NO_PRIOR_TRANSFER_VERIFIED"->hiltechText("اعتماد عدم حدوث تحويل سابق","Attest no prior transfer")
                         "REVERSAL_VERIFIED"->hiltechText("اعتماد رجوع التحويلات المثبتة","Clear recorded returned transfers")
+                        "SETTLED_DIFFERENTIAL_AUTHORIZED"->hiltechText("اعتماد الفروق الإضافية فقط","Authorize additional differences only")
                         else->hiltechText("تسوية الأموال السابقة مطلوبة","Prior funds require reconciliation")
                     }
                     Text(label,style=MaterialTheme.typography.titleMedium)
+                    row.additionalDue?.let{HiltechKeyValue(hiltechText("فرق الصرف المعتمد للمراجعة","Additional payment under review"),it+" "+row.currency)}
                     if(row.alreadyCleared)Text(hiltechText("اعتماد المالية مسجل؛ استكمل إصدار الكشف من مساحة الرواتب.","Finance clearance recorded; complete release in the payroll workspace."))
                     else if(!row.canRecord)Text(hiltechText("لا يمكن اعتماد هذا التصحيح الآن؛ راجع استقلال المراجع وحالة التحويلات السابقة.","This correction cannot be cleared now; check reviewer independence and prior transfers."))
                     else if(disposition!=null){
@@ -620,9 +646,10 @@ private fun FinancePayrollCorrectionSection(client:FinancePayrollDisbursementApi
                             Checkbox(confirmed,{confirmed=it},enabled=enabled)
                             Text(hiltechText("راجعت الإثبات الحقيقي وحالة الأموال السابقة.","I reviewed the actual evidence and prior funds."))
                         }
-                        val draft=FinancePayrollClearanceInputDto(row.replacementRunVersionId,row.originalRunVersionId,row.replacementRunVersionId,disposition,reason.trim(),evidence.trim())
+                        val draft=FinancePayrollClearanceInputDto(row.replacementRunVersionId,row.originalRunVersionId,row.replacementRunVersionId,disposition,reason.trim(),evidence.trim(),row.settlementFingerprint)
                         Button(enabled=enabled&&confirmed&&payrollClearanceIntentValid(draft),onClick={
-                            onReview(draft.copy(operationId=newOperationId()),label,row.periodStart+" — "+row.periodEnd+"\n"+row.originalNet+" → "+row.replacementNet+" "+row.currency+"\n"+reason.trim()+"\n"+evidence.trim())
+                            onReview(draft.copy(operationId=newOperationId()),label,row.periodStart+" — "+row.periodEnd+"\n"+row.originalNet+" → "+row.replacementNet+" "+row.currency+
+                                (row.additionalDue?.let{"\n"+hiltechText("فرق مستحق فقط: ","Additional payable only: ")+it+" "+row.currency}?: "")+"\n"+reason.trim()+"\n"+evidence.trim())
                         }){Text(hiltechText("مراجعة اعتماد التصحيح","Review clearance"))}
                     }
                 }

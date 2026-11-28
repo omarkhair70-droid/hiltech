@@ -47,8 +47,10 @@ import java.util.Base64
  * Original canonical CSV bytes are delivered through the protected storage port and verified.
  */
 object FinancePayrollResultPostgresScenario {
+    data class SettledCorrectionFixture(val reviewer:UUID,val originalJournal:UUID,val wageAccount:UUID,
+        val payableAccount:UUID,val accountingPeriod:UUID,val allocations:String,val disbursements:FinancePayrollDisbursementService)
     fun verify(jdbc: JdbcTemplate, tx: TransactionTemplate, org: UUID, preparer: UUID, run: UUID,
-        clock: Clock, publication: PayrollRunPublicationPort) {
+        clock: Clock, publication: PayrollRunPublicationPort,settledCorrection:((SettledCorrectionFixture)->UUID)?=null) {
         // Keep the parent release/correction fixture unchanged after verifying this separate journey.
         tx.execute { transaction ->
             try {
@@ -77,6 +79,7 @@ object FinancePayrollResultPostgresScenario {
                 }
                 val commands = JdbcIdempotentCommandExecutor(jdbc, manager, clock, HiltechTelemetryRuntime(OpenTelemetry.noop()) {})
                 val audit = JdbcAuditEventWriter(jdbc)
+                val storageFixtures=mutableListOf(debit,credit)
                 var beforeStorageRead: (() -> Unit)? = null
                 var corruptStorage = false
                 var storageReads = 0
@@ -85,7 +88,7 @@ object FinancePayrollResultPostgresScenario {
                     override fun readRestrictedObject(objectKey: String, maxBytes: Long): ByteArray {
                         storageReads++
                         beforeStorageRead?.invoke()
-                        val original = listOf(debit, credit).single { it.objectKey == objectKey }.bytes
+                        val original = storageFixtures.single { it.objectKey == objectKey }.bytes
                         check(original.size.toLong() <= maxBytes)
                         return if (corruptStorage) original.copyOf().also { it[it.lastIndex - 1] = '9'.code.toByte() } else original
                     }
@@ -255,6 +258,46 @@ object FinancePayrollResultPostgresScenario {
                 assertEquals(0,instruction.amount.compareTo(instructionReview()["posted_payments"] as BigDecimal))
                 assertEquals(0L,instructionReview()["pending_count"])
                 rejectedPayroll{postPayroll("PAYROLL_PAYMENT",firstEvent.id,null,liabilityGl,debitBankGl)}
+
+                if(settledCorrection!=null){
+                    val correctionBranch=transaction.createSavepoint()
+                    val readsBefore=storageReads
+                    try {
+                        val correctedRun=settledCorrection(SettledCorrectionFixture(reviewer,accrual,wageGl,liabilityGl,glPeriod,allocations,service))
+                        val extraInstruction=repo.instruction(org,repo.expected(org,correctedRun).single().financeInstructionId)!!
+                        assertEquals(0,BigDecimal("5").compareTo(extraInstruction.amount))
+                        val extraBank=bank(jdbc,org,preparer,reviewer,importer,extraInstruction.amount,extraInstruction.currency,FinanceBankFlow.DEBIT,at)
+                        storageFixtures.add(extraBank)
+                        jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE")
+                        val extraBankGl=payrollChart("BANK_ASSET","SYNTH-DELTA-BANK",extraBank.line)
+                        val proposal=service.propose(preparer,org,extraInstruction.id,FinancePayrollPrepareResult(UUID.randomUUID(),0,
+                            "SUCCESS",extraBank.line,beneficiaryConfirmed=true,reason="Synthetic exact additional payment evidence"),"synthetic-settled-delta")
+                        evidence.read(reviewer,org,proposal.targetId,"synthetic-settled-delta")
+                        val extraReceipt=service.review(reviewer,org,proposal.targetId,FinancePayrollReviewResult(UUID.randomUUID(),"APPROVE"),"synthetic-settled-delta")
+                        assertEquals("RECORDED",extraReceipt.state)
+                        assertFalse(extraReceipt.bankExecutionInitiated)
+                        assertFalse(extraReceipt.ledgerPosted)
+                        val event=repo.latest(org,extraInstruction.id)!!
+                        val extraRelease=jdbc.queryForObject("SELECT id FROM payroll_run_release WHERE organization_id=? AND run_version_id=?",UUID::class.java,org,correctedRun)
+                        val recordedAt=jdbc.queryForObject("SELECT recorded_at FROM finance_payroll_result_event WHERE organization_id=? AND id=?",OffsetDateTime::class.java,org,event.id)
+                        jdbc.update("""INSERT INTO finance_payroll_gl_journal(id,operation_id,organization_id,payroll_period_id,run_version_id,
+                            release_id,entry_type,source_event_id,period_id,debit_account_id,credit_account_id,amount,currency,
+                            source_recorded_at,posted_by_user_id,posted_at,correlation_id,component_allocations)
+                            VALUES(?,?,?,?,?,?,'PAYROLL_PAYMENT',?,?,?,?,?,?,?,?,?,'synthetic-delta-payment','[]'::jsonb)""",
+                            UUID.randomUUID(),UUID.randomUUID(),org,payrollPeriod,correctedRun,extraRelease,event.id,glPeriod,
+                            liabilityGl,extraBankGl,extraInstruction.amount,extraInstruction.currency,recordedAt,preparer,at)
+                        val remaining=jdbc.queryForObject("""SELECT coalesce(sum(CASE WHEN l.side='CREDIT' THEN l.amount ELSE -l.amount END),0)
+                            FROM finance_payroll_gl_journal_line l WHERE l.organization_id=? AND l.gl_account_id=?""",BigDecimal::class.java,org,liabilityGl)
+                        assertEquals(0,remaining!!.signum())
+                        assertEquals(PayrollFinanceOutcome.SUCCESS,adapter.paymentEvents(org,correctedRun).single().outcome)
+                        assertEquals(PayrollFinanceOutcome.SUCCESS,adapter.paymentEvents(org,run).single().outcome)
+                        assertEquals(BigDecimal.ZERO,repo.bank(org,extraBank.line)!!.remaining.stripTrailingZeros())
+                    } finally {
+                        transaction.rollbackToSavepoint(correctionBranch);transaction.releaseSavepoint(correctionBranch)
+                        while(storageFixtures.size>2)storageFixtures.removeAt(storageFixtures.lastIndex)
+                        storageReads=readsBefore
+                    }
+                }
 
                 val voidRequest = FinancePayrollPrepareResult(UUID.randomUUID(), firstEvent.version, "VOID_MATCH",
                     correctsEventId = firstEvent.id, reason = "Synthetic match correction preserves original bank proof")

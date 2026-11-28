@@ -21,6 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
 import org.springframework.jdbc.datasource.DriverManagerDataSource
 import org.springframework.transaction.support.TransactionTemplate
+import org.springframework.transaction.TransactionDefinition
 import java.math.RoundingMode
 import java.time.Clock
 import java.time.Instant
@@ -181,6 +182,7 @@ class Payroll9bDraftPostgresContractTest {
             component.copy(componentCode="SYNTHETIC_REIMBURSEMENT",kind=PayrollComponentKind.REIMBURSEMENT,
                 sourceId=UUID.randomUUID(),amount="10"))
         var mixed=false
+        var correctionExtra=BigDecimal.ZERO
         var attestationVersion = 1L
         val sources = object : PayrollApprovedInputSourcePort {
             override fun verifiedFor(
@@ -201,7 +203,11 @@ class Payroll9bDraftPostgresContractTest {
                         complete = true,
                     )
                 },
-                components = if(mixed) mixedComponents else listOf(component),
+                components = if(mixed) mixedComponents.map{
+                    if(it.kind==PayrollComponentKind.EARNING&&correctionExtra.signum()!=0)
+                        it.copy(amount=BigDecimal(it.amount).add(correctionExtra).toPlainString(),sourceVersion=it.sourceVersion+1)
+                    else it
+                } else listOf(component),
             )
 
             override fun policyFor(
@@ -657,7 +663,111 @@ class Payroll9bDraftPostgresContractTest {
         assertTrue(reviewedAgain.replayed)
         com.hiltech.server.finance.FinancePayrollInstructionPostgresScenario.verify(
             jdbc, tx, org, actor, currentSubject.subjectId, UUID.fromString(review.financeReviewBatchId), clock, realPublication,
-        )
+        ){fixture->
+            val previousSubject=permittedSubject
+            val previousCorrection=verifiedCorrection
+            val previousAttestation=attestationVersion
+            try {
+                jdbc.execute("SET CONSTRAINTS ALL DEFERRED")
+                attestationVersion=2L
+                correctionExtra=BigDecimal("5")
+                val corrected=service.create(periodId,UUID.randomUUID(),actor,"synthetic-settled-positive").first
+                val correctedRun=UUID.fromString(corrected.runVersionId)
+                permittedSubject=ApprovalSubjectRef(org,"PAYROLL_RUN_VERSION",correctedRun,1)
+                assertEquals(0,BigDecimal("105").compareTo(BigDecimal(corrected.net)))
+                val clearanceSource=com.hiltech.server.finance.FinancePayrollCorrectionSource(jdbc)
+                val commands=com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor(jdbc,
+                    DataSourceTransactionManager(datasource),clock,
+                    com.hiltech.server.telemetry.HiltechTelemetryRuntime(io.opentelemetry.api.OpenTelemetry.noop()){})
+                val clearance=com.hiltech.server.finance.FinancePayrollCorrectionClearanceService(jdbc,
+                    com.hiltech.server.finance.CurrentFinancePayrollAuthority(jdbc,clock),commands,AuditEventWriter.NOOP,clock)
+                val candidate=clearance.candidates(fixture.reviewer,org).records.single{it.replacementRunVersionId==correctedRun}
+                assertEquals("SETTLED_DIFFERENTIAL_AUTHORIZED",candidate.eligibleDisposition)
+                assertTrue(candidate.canRecord)
+                assertEquals(0,BigDecimal("5").compareTo(BigDecimal(candidate.additionalDue!!)))
+                val fingerprint=requireNotNull(candidate.settlementFingerprint)
+                assertNull(clearanceSource.verifiedFor(org,currentSubject.subjectId,correctedRun))
+                val nested=TransactionTemplate(DataSourceTransactionManager(datasource)).apply{
+                    propagationBehavior=TransactionDefinition.PROPAGATION_NESTED
+                }
+                // A different reviewed fingerprint cannot be substituted even with a real reviewer.
+                assertThrows<Exception>{nested.execute{
+                    jdbc.update("""INSERT INTO finance_payroll_correction_clearance(id,operation_id,organization_id,original_run_version_id,replacement_run_version_id,
+                        original_fingerprint,replacement_fingerprint,revision,disposition,reason_reference,finance_reference,reviewed_by_user_id,reviewed_at,settlement_fingerprint)
+                        VALUES(?,?,?,?,?,?,?,1,'SETTLED_DIFFERENTIAL_AUTHORIZED','synthetic-correction','synthetic-evidence',?,?,?)""",
+                        UUID.randomUUID(),UUID.randomUUID(),org,currentSubject.subjectId,correctedRun,newer.first.sourceFingerprint,
+                        corrected.sourceFingerprint,fixture.reviewer,time,if(fingerprint=="0".repeat(64))"1".repeat(64)else "0".repeat(64))
+                }}
+                val request=com.hiltech.server.finance.FinancePayrollClearanceInput(UUID.randomUUID(),currentSubject.subjectId,correctedRun,
+                    "SETTLED_DIFFERENTIAL_AUTHORIZED","synthetic-approved-input","synthetic-settled-source",fingerprint)
+                val receipt=clearance.record(fixture.reviewer,org,request,"synthetic-settled-positive")
+                assertEquals("CLEARED",receipt.state)
+                assertFalse(receipt.bankExecutionInitiated)
+                assertTrue(clearance.record(fixture.reviewer,org,request,"synthetic-settled-positive").replayed)
+                verifiedCorrection=checkNotNull(clearanceSource.verifiedFor(org,currentSubject.subjectId,correctedRun))
+                assertEquals(PayrollFinanceCorrectionDisposition.SETTLED_DIFFERENTIAL_AUTHORIZED,verifiedCorrection!!.financeDisposition)
+                val release=releases.release(actor,correctedRun,UUID.randomUUID(),"synthetic-settled-positive")
+                val handoff=realHandoff.handoff(actor,correctedRun,UUID.randomUUID(),"synthetic-settled-positive")
+                val reviewBatch=UUID.fromString(handoff.financeReviewBatchId)
+                // Direct SQL must reject paying the entire corrected salary, even with a genuine release.
+                assertThrows<Exception>{nested.execute{
+                    jdbc.execute("SET CONSTRAINTS finance_payroll_batch_complete,finance_payroll_instruction_complete DEFERRED")
+                    val batch=UUID.randomUUID()
+                    jdbc.update("""INSERT INTO finance_payroll_payment_batch(id,operation_id,organization_id,review_batch_id,run_version_id,prepared_by_user_id,prepared_at)
+                        VALUES(?,?,?,?,?,?,?)""",batch,UUID.randomUUID(),org,reviewBatch,correctedRun,actor,time)
+                    jdbc.update("""INSERT INTO finance_payroll_instruction(id,organization_id,batch_id,run_version_id,employee_id,amount,currency,source_fingerprint)
+                        VALUES(?,?,?,?,?,?,?,?)""",UUID.randomUUID(),org,batch,correctedRun,employee,BigDecimal(corrected.net),"EGP",corrected.sourceFingerprint)
+                    jdbc.execute("SET CONSTRAINTS finance_payroll_batch_complete,finance_payroll_instruction_complete IMMEDIATE")
+                }}
+                jdbc.execute("SET CONSTRAINTS finance_payroll_batch_complete,finance_payroll_instruction_complete DEFERRED")
+                val prepared=fixture.disbursements.prepareBatch(actor,org,reviewBatch,UUID.randomUUID(),"synthetic-settled-positive")
+                assertEquals("PREPARED",prepared.state)
+                assertFalse(prepared.bankExecutionInitiated)
+                assertFalse(prepared.ledgerPosted)
+                jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE")
+                val repo=com.hiltech.server.finance.FinancePayrollDisbursementRepository(jdbc)
+                val expected=repo.expected(org,correctedRun)
+                assertEquals(0,BigDecimal("5").compareTo(expected.single().amount))
+                Payroll9cExpectedBatchGuard.validateAgainstDatabase(jdbc,org,correctedRun,expected)
+                val basis=requireNotNull(repo.differentialPaymentBasis(org,correctedRun))
+                assertTrue(basis.available)
+                assertEquals(0,BigDecimal("5").compareTo(basis.lines.single().net))
+                val adapter=com.hiltech.server.finance.FinancePayrollPaymentResultsAdapter(repo)
+                val status=Payroll9cRunFinanceStatusService(service,permission,reviewPublisher,
+                    StaticListableBeanFactory(mapOf("actualFinance" to adapter)).getBeanProvider(PayrollFinancePaymentResultsPort::class.java))
+                assertEquals("PAYMENT_NOT_RECORDED",status.status(actor,correctedRun).status)
+                val slip=Payroll9cPayslipService(jdbc,JdbcPeoplePersistence(jdbc),JdbcRoleTeamSourceAuthority(jdbc),reviewPublisher,
+                    StaticListableBeanFactory(mapOf("actualFinance" to adapter)).getBeanProvider(PayrollFinancePaymentResultsPort::class.java),clock)
+                val own=slip.own(actor,org,"synthetic-settled-positive").items.single()
+                assertEquals(corrected.runVersionId,own.runVersionId)
+                assertEquals("PAYMENT_NOT_RECORDED",own.paymentStatus)
+                val preparedAt=jdbc.queryForObject("SELECT prepared_at FROM finance_payroll_payment_batch WHERE organization_id=? AND run_version_id=?",
+                    java.time.OffsetDateTime::class.java,org,correctedRun)
+                fun postCorrection(wageAccount:UUID):UUID {
+                    val id=UUID.randomUUID()
+                    jdbc.update("""INSERT INTO finance_payroll_gl_journal(id,operation_id,organization_id,payroll_period_id,run_version_id,
+                        release_id,entry_type,original_journal_id,period_id,debit_account_id,credit_account_id,amount,currency,
+                        source_recorded_at,posted_by_user_id,posted_at,correlation_id,component_allocations)
+                        VALUES(?,?,?,?,?,?,'PAYROLL_ACCRUAL',?,?,?,?,?,'EGP',?,?,?,'synthetic-settled-delta',CAST(? AS jsonb))""",
+                        id,UUID.randomUUID(),org,periodId,correctedRun,UUID.fromString(release.releaseId),fixture.originalJournal,
+                        fixture.accountingPeriod,wageAccount,fixture.payableAccount,BigDecimal(corrected.gross),preparedAt,actor,time,fixture.allocations)
+                    return id
+                }
+                val alternate=UUID.randomUUID()
+                jdbc.update("""INSERT INTO finance_gl_account(id,organization_id,account_code,account_name,account_kind,currency,state,approved_company_chart_reference,created_at)
+                    VALUES(?,?,'SYNTH-DELTA-WRONG','Synthetic alternative','PAYROLL_EXPENSE','EGP','APPROVED','SYNTHETIC-CHART',?)""",alternate,org,time)
+                assertThrows<Exception>{nested.execute{postCorrection(alternate)}}
+                postCorrection(fixture.wageAccount)
+                val remaining=jdbc.queryForObject("""SELECT coalesce(sum(CASE WHEN l.side='CREDIT' THEN l.amount ELSE -l.amount END),0)
+                    FROM finance_payroll_gl_journal_line l WHERE l.organization_id=? AND l.gl_account_id=?""",BigDecimal::class.java,org,fixture.payableAccount)
+                assertEquals(0,BigDecimal("5").compareTo(remaining!!))
+                assertEquals(0,BigDecimal("5").compareTo(repo.expected(org,correctedRun).single().amount))
+                correctedRun
+            } finally {
+                permittedSubject=previousSubject;verifiedCorrection=previousCorrection
+                attestationVersion=previousAttestation;correctionExtra=BigDecimal.ZERO
+            }
+        }
         // One exact run may never be handed off with a second operation/hash.
         assertThrows<ProductApiException> {
             tx.execute {

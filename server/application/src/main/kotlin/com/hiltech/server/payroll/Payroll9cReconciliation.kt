@@ -130,7 +130,11 @@ object Payroll9cReconciler {
 }
 
 /** Finance provides immutable, source-versioned events, never a mutable PAID flag. */
+data class PayrollDifferentialPaymentBasis(val available:Boolean,val lines:List<PayrollFrozenPaymentLine>)
+
 interface PayrollFinancePaymentResultsPort {
+    // Null means ordinary payroll. Unavailable differential evidence never falls back to a full transfer.
+    fun differentialPaymentBasis(organizationId:UUID,runVersionId:UUID):PayrollDifferentialPaymentBasis? = null
     fun expectedPayments(
         organizationId: UUID,
         runVersionId: UUID,

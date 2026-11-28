@@ -78,7 +78,8 @@ class FinancePayrollResultSubject(
         publication.ifAvailable?.canPublish(org, run, fingerprint) == true
 
     fun payable(org: UUID, run: UUID, fingerprint: String): Boolean =
-        published(org, run, fingerprint) && repository.latestReleased(org, run)
+        published(org, run, fingerprint) && repository.latestReleased(org, run) &&
+            (!repository.differentialCorrection(run) || repository.differentialReady(org,run))
 
     internal fun current(org: UUID, id: UUID): FinancePayrollVerifiedProposal? {
         val p = repository.proposal(org, id) ?: return null

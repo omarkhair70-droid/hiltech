@@ -53,34 +53,40 @@ class Payroll9cRunFinanceStatusService(
 
         val expected = financePort.expectedPayments(org, runVersionId)
         val events = financePort.paymentEvents(org, runVersionId)
+        val ordinaryLines=run.lines.map{PayrollFrozenPaymentLine(UUID.fromString(it.employeeId),BigDecimal(it.net),it.currency)}
+        val differential=financePort.differentialPaymentBasis(org,runVersionId)
+        val originalByEmployee=ordinaryLines.associateBy{it.employeeId}
+        if(differential!=null&&(!differential.available||differential.lines.size!=ordinaryLines.size||
+            differential.lines.map{it.employeeId}.toSet()!=originalByEmployee.keys||
+            differential.lines.any{line->val original=originalByEmployee[line.employeeId]
+                original==null||line.currency!=original.currency||line.net.signum()<0||line.net>original.net})) {
+            return pending(run,"REQUIRES_REVIEW",true,true).copy(unresolvedCount=run.lines.size,
+                employeeOutcomes=run.lines.map{PayrollEmployeeFinanceStatusDto(it.employeeId,"PAYMENT_STATUS_UNAVAILABLE")}.sortedBy{it.employeeId})
+        }
+        val payableLines=differential?.lines?:ordinaryLines
+        val zeroDifference=differential?.lines.orEmpty().filter{it.net.signum()==0}.map{it.employeeId}.toSet()
         if (expected.isEmpty() && events.isNotEmpty()) {
             Payroll9aPolicy.fail("PAYROLL_FINANCE_UNEXPECTED_EVENT", HttpStatus.CONFLICT)
         }
-        if (expected.isEmpty() && run.lines.any { BigDecimal(it.net).signum() > 0 }) {
-            return pending(run, "PAYMENT_NOT_RECORDED", true, true)
+        if (expected.isEmpty() && payableLines.any { it.net.signum() > 0 }) {
+            val pending=pending(run, "PAYMENT_NOT_RECORDED", true, true)
+            return if(differential==null)pending else pending.copy(settledCount=zeroDifference.size,
+                unresolvedCount=payableLines.count{it.net.signum()>0},
+                employeeOutcomes=payableLines.map{PayrollEmployeeFinanceStatusDto(it.employeeId.toString(),
+                    if(it.employeeId in zeroDifference)"SUCCESS" else "PAYMENT_NOT_RECORDED")}.sortedBy{it.employeeId})
         }
-        Payroll9cExpectedBatchGuard.validate(
-            org, runVersionId,
-            run.lines.map {
-                PayrollFrozenPaymentLine(
-                    employeeId = UUID.fromString(it.employeeId),
-                    net = BigDecimal(it.net),
-                    currency = it.currency,
-                )
-            },
-            expected,
-        )
+        Payroll9cExpectedBatchGuard.validate(org,runVersionId,payableLines,expected)
         val reconciled = if (expected.isEmpty()) null else
             Payroll9cReconciler.reconcile(org, runVersionId, expected, events)
-        val noTransferEmployees = run.lines.filter { BigDecimal(it.net).signum() == 0 }
+        val noTransferEmployees = payableLines.filter { it.net.signum()==0 }
         return Payroll9cRunFinanceStatusDto(
             runVersionId = run.runVersionId,
             status = if (expected.isNotEmpty() && events.isEmpty()) "PAYMENT_NOT_RECORDED"
-                else reconciled?.status?.name ?: "NO_PAYMENT_REQUIRED",
+                else reconciled?.status?.name ?: if(differential!=null)"PAID" else "NO_PAYMENT_REQUIRED",
             financeConnected = true,
             publicationApproved = true,
             employeeCount = run.lines.size,
-            settledCount = reconciled?.settledCount ?: 0,
+            settledCount = (reconciled?.settledCount ?: 0)+zeroDifference.size,
             unresolvedCount = reconciled?.unresolvedCount ?: 0,
             employeeOutcomes = (
                 (reconciled?.employees ?: emptyList()).map {
@@ -90,8 +96,8 @@ class Payroll9cRunFinanceStatusService(
                     )
                 } + noTransferEmployees.map {
                     PayrollEmployeeFinanceStatusDto(
-                        employeeId = it.employeeId,
-                        outcome = "NOT_APPLICABLE",
+                        employeeId = it.employeeId.toString(),
+                        outcome = if(it.employeeId in zeroDifference)"SUCCESS" else "NOT_APPLICABLE",
                     )
                 }
             ).sortedBy { it.employeeId },

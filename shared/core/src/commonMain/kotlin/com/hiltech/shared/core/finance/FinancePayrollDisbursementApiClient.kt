@@ -15,6 +15,7 @@ data class FinancePayrollBatchDto(
     val reviewBatchId: String, val runVersionId: String, val periodStart: String, val periodEnd: String,
     val generation: Int, val currency: String, val payableTotal: String, val employeeCount: Int,
     val transferCount: Int, val prepared: Boolean,
+    val differential:Boolean=false,val differentialReady:Boolean=true,
 )
 @Serializable
 data class FinancePayrollInstructionDto(
@@ -73,7 +74,9 @@ data class FinancePayrollCommandReceiptDto(
     val creditAccountId:String?=null,val creditAccountName:String?=null,val ready:Boolean,
 )
 @Serializable data class FinancePayrollGlCorrectionDto(val originalJournalId:String?=null,val clearanceReference:String,
-    val reversalLines:List<FinanceDeskJournalLineDto>,val disposition:String="NO_PRIOR_TRANSFER_VERIFIED")
+    val reversalLines:List<FinanceDeskJournalLineDto>,val disposition:String="NO_PRIOR_TRANSFER_VERIFIED",
+    val fixedExpenseAccountId:String?=null,val fixedPayableAccountId:String?=null,
+    val fixedAllocations:List<FinancePayrollGlAllocationDto> = emptyList())
 @Serializable data class FinancePayrollGlViewDto(
     val organizationId:String,val runVersionId:String,val period:FinanceDeskPeriodDto?=null,
     val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
@@ -100,6 +103,7 @@ internal fun payrollGlIntentValid(input:FinancePayrollGlPostDto):Boolean =
     val originalRunVersionId:String,val replacementRunVersionId:String,val periodStart:String,val periodEnd:String,
     val originalGeneration:Int,val replacementGeneration:Int,val currency:String,val originalNet:String,val replacementNet:String,
     val eligibleDisposition:String?=null,val alreadyCleared:Boolean,val canRecord:Boolean,
+    val settlementFingerprint:String?=null,val additionalDue:String?=null,
 )
 @Serializable data class FinancePayrollCorrectionCandidatesDto(val organizationId:String,val records:List<FinancePayrollCorrectionCandidateDto>,val hasMore:Boolean)
 @Serializable data class FinancePayrollCorrectionEmployeeReviewDto(
@@ -143,12 +147,14 @@ internal fun validPayrollCorrectionReview(row:FinancePayrollCorrectionEmployeeRe
              row.recordedNet?.matches(nonnegative)==true&&row.differenceFromRecorded?.matches(signed)==true)
 }
 @Serializable data class FinancePayrollClearanceInputDto(val operationId:String,val originalRunVersionId:String,val replacementRunVersionId:String,
-    val disposition:String,val reasonReference:String,val financeReference:String)
+    val disposition:String,val reasonReference:String,val financeReference:String,val settlementFingerprint:String?=null)
 internal fun payrollClearanceIntentValid(input:FinancePayrollClearanceInputDto)=
     listOf(input.operationId,input.originalRunVersionId,input.replacementRunVersionId).all(::financeLookupIdIsUuid) &&
     !input.originalRunVersionId.equals(input.replacementRunVersionId,true) &&
-    input.disposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED") &&
-    listOf(input.reasonReference,input.financeReference).all{it.length in 8..240 && it==it.trim() && it.none{c->c.code<32||c.code==127}}
+    input.disposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED","SETTLED_DIFFERENTIAL_AUTHORIZED") &&
+    listOf(input.reasonReference,input.financeReference).all{it.length in 8..240 && it==it.trim() && it.none{c->c.code<32||c.code==127}} &&
+    (if(input.disposition=="SETTLED_DIFFERENTIAL_AUTHORIZED")input.settlementFingerprint?.matches(Regex("[a-f0-9]{64}"))==true
+     else input.settlementFingerprint==null)
 
 @Serializable
 data class FinancePayrollIntent(
@@ -196,13 +202,22 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
                 check(sameId(v.organizationId,org) && sameId(v.runVersionId,run) && v.offset==offset &&
                     v.currency.matches(Regex("[A-Z]{3}")) && v.gross.matches(Regex("[0-9]+([.][0-9]+)?")) &&
                     v.accrualState in setOf("POSTED","REPLACED","NOT_PREPARED","CORRECTION_REQUIRED","NO_AMOUNT","TREATMENT_REQUIRED","READY") &&
-                    (v.correction==null || (v.accrualState=="READY" && v.correction.clearanceReference.isNotBlank() && v.correction.disposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED") &&
+                    (v.correction==null || (v.accrualState=="READY" && v.correction.clearanceReference.isNotBlank() && v.correction.disposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED","SETTLED_DIFFERENTIAL_AUTHORIZED") &&
                         (v.correction.originalJournalId==null)==v.correction.reversalLines.isEmpty() &&
                         (v.correction.originalJournalId==null || financeLookupIdIsUuid(v.correction.originalJournalId)) &&
                         v.correction.reversalLines.size<=32 &&
                         v.correction.reversalLines.map{it.number}.distinct().size==v.correction.reversalLines.size &&
                         v.correction.reversalLines.all{it.number in 1..32 && it.side in setOf("DEBIT","CREDIT") &&
-                            it.accountName.isNotBlank() && settlementCanonicalAmount(it.amount)!=null})) &&
+                            it.accountName.isNotBlank() && settlementCanonicalAmount(it.amount)!=null} &&
+                        (if(v.correction.disposition=="SETTLED_DIFFERENTIAL_AUTHORIZED")
+                            v.correction.originalJournalId!=null&&v.correction.fixedExpenseAccountId!=null&&v.correction.fixedPayableAccountId!=null&&
+                            v.expenseAccounts.singleOrNull()?.id==v.correction.fixedExpenseAccountId&&
+                            v.payableAccounts.singleOrNull()?.id==v.correction.fixedPayableAccountId&&
+                            v.correction.fixedAllocations.size==v.groups.size&&
+                            v.correction.fixedAllocations.map{Triple(it.kind,it.domain,it.code)}.toSet()==v.groups.map{Triple(it.kind,it.domain,it.code)}.toSet()&&
+                            v.correction.fixedAllocations.all{a->(if(a.kind=="DEDUCTION")v.deductionAccounts else v.reimbursementAccounts).any{it.id==a.accountId}&&
+                                a.reference.length in 8..240&&a.reference==a.reference.trim()&&a.reference.none{it.code<32||it.code==127}}
+                         else v.correction.fixedExpenseAccountId==null&&v.correction.fixedPayableAccountId==null&&v.correction.fixedAllocations.isEmpty()))) &&
                     listOf(v.net,v.deductions,v.reimbursements).all{it.matches(Regex("[0-9]+([.][0-9]+)?"))} &&
                     v.groups.size<=30 && v.groups.map{Triple(it.kind,it.domain,it.code)}.distinct().size==v.groups.size &&
                     v.groups.all{it.kind in setOf("DEDUCTION","REIMBURSEMENT") && settlementCanonicalAmount(it.amount)!=null &&
@@ -231,7 +246,10 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
                     r.originalRunVersionId!=r.replacementRunVersionId&&r.originalGeneration>0&&r.replacementGeneration>r.originalGeneration&&
                     financeValidCalendarDate(r.periodStart)&&financeValidCalendarDate(r.periodEnd)&&r.periodStart<=r.periodEnd&&
                     r.currency.matches(Regex("[A-Z]{3}"))&&listOf(r.originalNet,r.replacementNet).all{a->a.matches(Regex("[0-9]+([.][0-9]+)?"))}&&
-                    (r.eligibleDisposition==null||r.eligibleDisposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED"))&&
+                    (r.eligibleDisposition==null||r.eligibleDisposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED","SETTLED_DIFFERENTIAL_AUTHORIZED"))&&
+                    (if(r.eligibleDisposition=="SETTLED_DIFFERENTIAL_AUTHORIZED")
+                        r.settlementFingerprint?.matches(Regex("[a-f0-9]{64}"))==true&&r.additionalDue?.let{settlementCanonicalAmount(it)}!=null
+                     else r.settlementFingerprint==null&&r.additionalDue==null)&&
                     (!r.canRecord||(r.eligibleDisposition!=null&&!r.alreadyCleared))
                 })
             }})
