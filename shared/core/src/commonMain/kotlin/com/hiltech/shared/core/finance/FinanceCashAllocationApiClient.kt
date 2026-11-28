@@ -34,6 +34,11 @@ data class FinanceCashAllocationReceiptDto(
     val bankReconciled:Boolean=false,
 )
 
+@Serializable data class FinanceObligationChoiceDto(val id:String,val counterpartyName:String,val currency:String,val outstanding:String,
+    val dueDate:String?=null,val openingDocumentReference:String?=null)
+@Serializable data class FinanceObligationChoicesDto(val organizationId:String,val kind:String,val channel:String,val offset:Int,
+    val records:List<FinanceObligationChoiceDto>,val hasMore:Boolean)
+
 /**
  * KMP transport only. Company-verified bank intake and Finance approvals must
  * exist before its screens are mounted. No bank transfer endpoint is exposed.
@@ -42,6 +47,19 @@ class FinanceCashAllocationApiClient(
     private val api:HiltechApiClient,
     private val json:Json=Json { ignoreUnknownKeys=true; explicitNulls=false },
 ) {
+    suspend fun obligations(org:String,kind:String,channel:String,offset:Int,installation:String):FinanceObligationChoicesDto {
+        require(kind in setOf("AP","AR")&&channel in setOf("BANK","CASH")&&offset in 0..1_000_000)
+        return api.request(HttpMethod.Get,base(org)+"/obligation-choices?kind="+kind+"&channel="+channel+"&offset="+offset,
+            HiltechRequestOptions(installationId=installation),
+            decode={json.decodeFromString<FinanceObligationChoicesDto>(it)}).also{page->
+                check(page.organizationId.equals(org,true)&&page.kind==kind&&page.channel==channel&&page.offset==offset&&
+                    page.records.size<=50&&page.records.map{it.id.lowercase()}.distinct().size==page.records.size&&page.records.all{r->
+                        financeLookupIdIsUuid(r.id)&&r.counterpartyName.isNotBlank()&&r.currency.matches(Regex("[A-Z]{3}"))&&
+                        settlementCanonicalAmount(r.outstanding)!=null&&(r.dueDate==null||financeValidCalendarDate(r.dueDate))&&
+                        (r.openingDocumentReference==null||r.openingDocumentReference.isNotBlank())
+                    })
+            }
+    }
     suspend fun propose(
         org:String,kind:String,sourceJournal:String,bankLine:String,
         operation:String,amount:String,reason:String,installation:String,

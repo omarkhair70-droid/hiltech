@@ -60,4 +60,17 @@ class FinanceConfigurationApiClientTest {
         assertFalse(financeConfigurationIntentValid(bank.copy(code="1234567890123456")))
         assertFalse(financeConfigurationIntentValid(bank.copy(accountKind="EXPENSE")))
     }
+    @Test fun openingObligationsRequireExactResidualAmountsAndHistoricalDocumentIdentity() {
+        val party="11111111-2222-4333-8444-555555555555"
+        val account="22222222-3333-4444-8555-666666666666"
+        val row=FinanceOpeningObligationDto(party,"SYNTHETIC-OLD-INVOICE","2026-10-01","100.10","2026-11-01")
+        val second=row.copy(documentReference="SYNTHETIC-OTHER-INVOICE",amount="0.20")
+        val line=FinanceOpeningLineDto(account,"DEBIT","100.30","SYNTHETIC-SCHEDULE",obligations=listOf(row,second))
+        assertTrue(openingLineValid(line))
+        assertEquals("100.300000",openingObligationTotal(line.obligations))
+        assertFalse(openingLineValid(line.copy(amount="100.31")))
+        assertFalse(openingLineValid(line.copy(obligations=listOf(row,row))))
+        assertFalse(openingLineValid(line.copy(obligations=listOf(row.copy(dueDate="2026-09-30")))))
+        assertFalse(openingLineValid(line.copy(bankStatementId=party)))
+    }
 }

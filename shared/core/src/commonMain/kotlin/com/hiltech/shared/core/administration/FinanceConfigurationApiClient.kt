@@ -65,26 +65,41 @@ internal fun financeConfigurationReceiptMatches(org: String,input: FinanceConfig
         row.treasuryInstrumentId==input.treasuryInstrumentId
 }
 
-@Serializable data class FinanceOpeningLineDto(val accountId:String,val side:String,val amount:String,val reference:String,val bankStatementId:String?=null)
+@Serializable data class FinanceOpeningObligationDto(val counterpartyId:String,val documentReference:String,val documentDate:String,
+    val amount:String,val dueDate:String?=null)
+@Serializable data class FinanceOpeningLineDto(val accountId:String,val side:String,val amount:String,val reference:String,val bankStatementId:String?=null,
+    val obligations:List<FinanceOpeningObligationDto> = emptyList())
 @Serializable data class FinanceOpeningInputDto(val operationId:String,val periodId:String,val currency:String,
     val companyReference:String,val sourceReference:String,val lines:List<FinanceOpeningLineDto>)
 @Serializable data class FinanceOpeningAccountDto(val id:String,val code:String,val name:String,val accountKind:String,
     val bankStatementId:String?=null,val bankSide:String?=null,val bankAmount:String?=null)
 @Serializable data class FinanceOpeningPeriodDto(val id:String,val dateStart:String,val dateEnd:String)
+@Serializable data class FinanceOpeningCounterpartyDto(val id:String,val kind:String,val code:String,val name:String)
 @Serializable data class FinanceOpeningViewDto(val organizationId:String,val currency:String,val period:FinanceOpeningPeriodDto?=null,
-    val existingJournalId:String?=null,val canPost:Boolean,val accounts:List<FinanceOpeningAccountDto>,val hasMore:Boolean)
+    val existingJournalId:String?=null,val canPost:Boolean,val accounts:List<FinanceOpeningAccountDto>,val hasMore:Boolean,
+    val counterparties:List<FinanceOpeningCounterpartyDto> = emptyList(),val hasMoreCounterparties:Boolean=false)
 @Serializable data class FinanceOpeningReceiptDto(val organizationId:String,val operationId:String,val journalId:String,val periodId:String,
     val currency:String,val openingDate:String,val replayed:Boolean)
-internal val openingKinds=setOf("FIXED_ASSET","OTHER_ASSET","OTHER_LIABILITY","EQUITY","BANK_ASSET")
+internal val openingControlKinds=setOf("CUSTOMER_RECEIVABLE","SUPPLIER_PAYABLE")
+internal val openingKinds=setOf("FIXED_ASSET","OTHER_ASSET","OTHER_LIABILITY","EQUITY","BANK_ASSET")+openingControlKinds
+internal fun openingObligationValid(o:FinanceOpeningObligationDto)=financeLookupIdIsUuid(o.counterpartyId) &&
+    plain(o.documentReference,2,96)&&financeValidCalendarDate(o.documentDate)&&
+    (o.dueDate==null||(financeValidCalendarDate(o.dueDate)&&o.dueDate>=o.documentDate))&&
+    com.hiltech.shared.core.finance.settlementCanonicalAmount(o.amount)!=null
 internal fun openingLineValid(line:FinanceOpeningLineDto)=financeLookupIdIsUuid(line.accountId) &&
     line.side in setOf("DEBIT","CREDIT") && com.hiltech.shared.core.finance.settlementCanonicalAmount(line.amount)!=null &&
-    plain(line.reference,8,240) && (line.bankStatementId==null||financeLookupIdIsUuid(line.bankStatementId))
-// Exact decimal addition for common Kotlin, without Double or currency rounding.
-internal fun openingTotal(lines:List<FinanceOpeningLineDto>,side:String):String? {
-    val digits=IntArray(26)
-    if(lines.size>32)return null
-    for(line in lines.filter{it.side==side}){
-        val value=com.hiltech.shared.core.finance.settlementCanonicalAmount(line.amount)?:return null
+    plain(line.reference,8,240) && (line.bankStatementId==null||financeLookupIdIsUuid(line.bankStatementId)) &&
+    (line.obligations.isEmpty()||(line.bankStatementId==null&&line.obligations.size<=1000&&line.obligations.all(::openingObligationValid)&&
+        line.obligations.map{it.counterpartyId.lowercase() to it.documentReference.lowercase()}.distinct().size==line.obligations.size&&
+        openingAmountsTotal(line.obligations.map{it.amount})==openingAmountsTotal(listOf(line.amount))))
+// Exact decimal addition without Double or currency rounding. A schedule may
+// contain up to 1000 source documents; a single posting account still has
+// its existing numeric(24,6) bound.
+private fun openingAmountsTotal(amounts:List<String>):String? {
+    val digits=IntArray(28)
+    if(amounts.size>1000)return null
+    for(amount in amounts){
+        val value=com.hiltech.shared.core.finance.settlementCanonicalAmount(amount)?:return null
         val parts=value.split('.')
         val scaled=parts[0]+parts.getOrNull(1).orEmpty().padEnd(6,'0')
         scaled.reversed().forEachIndexed{i,c->digits[i]+=c-'0'}
@@ -93,9 +108,12 @@ internal fun openingTotal(lines:List<FinanceOpeningLineDto>,side:String):String?
     val scaled=digits.reversed().joinToString("").trimStart('0').padStart(7,'0')
     return scaled.dropLast(6)+"."+scaled.takeLast(6)
 }
+internal fun openingObligationTotal(rows:List<FinanceOpeningObligationDto>):String?=openingAmountsTotal(rows.map{it.amount})
+internal fun openingTotal(lines:List<FinanceOpeningLineDto>,side:String):String? =
+    if(lines.size>32)null else openingAmountsTotal(lines.filter{it.side==side}.map{it.amount})
 internal fun openingInputValid(input:FinanceOpeningInputDto)=financeLookupIdIsUuid(input.periodId) &&
     currencyPattern.matches(input.currency) && plain(input.companyReference,8,160) && plain(input.sourceReference,8,240) &&
-    input.lines.size in 2..32 && input.lines.map{it.accountId.lowercase()}.distinct().size==input.lines.size &&
+    input.lines.size in 2..32 && input.lines.sumOf{it.obligations.size}<=1000 && input.lines.map{it.accountId.lowercase()}.distinct().size==input.lines.size &&
     input.lines.all(::openingLineValid) && input.lines.any{it.side=="DEBIT"} && input.lines.any{it.side=="CREDIT"} &&
     openingTotal(input.lines,"DEBIT")?.let{it==openingTotal(input.lines,"CREDIT")&&it!="0.000000"}==true
 
@@ -132,6 +150,8 @@ class FinanceConfigurationApiClient(private val api: HiltechApiClient,
                     (v.period==null||(financeLookupIdIsUuid(v.period.id)&&financeValidCalendarDate(v.period.dateStart)&&financeValidCalendarDate(v.period.dateEnd)&&v.period.dateStart<=v.period.dateEnd))&&
                     (v.existingJournalId==null||financeLookupIdIsUuid(v.existingJournalId))&&
                     (!v.canPost||(v.period!=null&&v.existingJournalId==null))&&v.accounts.size<=100&&
+                    v.counterparties.size<=500&&v.counterparties.map{it.kind to it.id.lowercase()}.distinct().size==v.counterparties.size&&
+                    v.counterparties.all{financeLookupIdIsUuid(it.id)&&it.kind in setOf("AP","AR")&&it.code.isNotBlank()&&it.name.isNotBlank()}&&
                     v.accounts.map{it.id.lowercase()}.distinct().size==v.accounts.size&&v.accounts.all{a->
                         financeLookupIdIsUuid(a.id)&&a.name.isNotBlank()&&a.code.isNotBlank()&&a.accountKind in openingKinds&&
                         (if(a.accountKind=="BANK_ASSET")a.bankStatementId?.let(::financeLookupIdIsUuid)==true&&

@@ -62,7 +62,8 @@ import kotlinx.serialization.json.Json
 @Serializable data class FinanceDeskExposureTotalDto(val currency:String,val knownOutstanding:String,val knownOverdue:String,
     val openWithoutDueDate:Long,val exceptionCount:Long,val recordCount:Long)
 @Serializable data class FinanceDeskExposureRowDto(val journalId:String,val counterpartyName:String,val currency:String,
-    val gross:String,val allocated:String,val outstanding:String?=null,val dueDate:String?=null,val state:String,val reversed:Boolean)
+    val gross:String,val allocated:String,val outstanding:String?=null,val dueDate:String?=null,val state:String,val reversed:Boolean,
+    val openingDocumentReference:String?=null,val openingDocumentDate:String?=null)
 @Serializable data class FinanceDeskExposureDto(val organizationId:String,val kind:String,val asOfDate:String,val offset:Int,
     val hasMore:Boolean,val totals:List<FinanceDeskExposureTotalDto>,val records:List<FinanceDeskExposureRowDto>,
     val isBankBalance:Boolean)

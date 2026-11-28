@@ -199,6 +199,7 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
             data.records.forEach { row ->
                 HiltechPanel(Modifier.fillMaxWidth()) {
                     Text(row.counterpartyName,style=MaterialTheme.typography.titleMedium)
+                    row.openingDocumentReference?.let{ref->Text(hiltechText("مستحق افتتاحي: ","Opening obligation: ")+ref+(row.openingDocumentDate?.let{" · "+it}.orEmpty()),style=MaterialTheme.typography.bodySmall)}
                     HiltechKeyValue(hiltechText("القيمة الأصلية","Original amount"),row.gross+" "+row.currency)
                     HiltechKeyValue(hiltechText("المخصص محاسبيًا","Recorded allocation"),row.allocated+" "+row.currency)
                     HiltechKeyValue(hiltechText("المتبقي","Outstanding"),if(row.reversed || row.outstanding==null || row.outstanding.startsWith("-"))

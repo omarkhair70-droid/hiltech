@@ -643,7 +643,10 @@ fun FinanceReviewPreparationSection(
             FinanceReviewKind.AR_JOURNAL -> "معرّف فاتورة العميل الصادرة"
             FinanceReviewKind.PERIOD_CLOSE -> "معرّف الفترة المحاسبية"
         }
-        OutlinedTextField(
+        if(kind in setOf(FinanceReviewKind.CASH_ALLOCATION,FinanceReviewKind.CASH_VOUCHER)) {
+            FinanceObligationPicker(apis.allocation,organizationId,draft.sourceKind,if(kind==FinanceReviewKind.CASH_ALLOCATION)"BANK"else "CASH",
+                installationId,draft.sourceId,editable){id->draft=draft.copy(sourceId=id);resetForFormChange()}
+        } else OutlinedTextField(
             value = draft.sourceId,
             onValueChange = {
                 draft = draft.copy(sourceId = it.trim())
@@ -756,7 +759,7 @@ fun FinanceReviewPreparationSection(
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 listOf("AR" to "قبض عميل","AP" to "صرف مورد").forEach { (value,label) ->
                     OutlinedButton(enabled=editable && draft.sourceKind!=value,onClick={
-                        draft=draft.copy(sourceKind=value);resetForFormChange()
+                        draft=draft.copy(sourceKind=value,sourceId="");resetForFormChange()
                     }) {Text(label)}
                 }
             }
@@ -773,7 +776,7 @@ fun FinanceReviewPreparationSection(
                     OutlinedButton(
                         enabled = !preparing && !requestingReview && prepared == null &&
                             draft.sourceKind != type,
-                        onClick = { draft = draft.copy(sourceKind = type); resetForFormChange() },
+                        onClick = { draft = draft.copy(sourceKind = type,sourceId=""); resetForFormChange() },
                     ) { Text(type) }
                 }
             }
@@ -1090,4 +1093,41 @@ fun FinanceSignedCompletionSection(identityId:String,org:String,install:String,
             error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
         }
     }
+}
+
+@Composable
+private fun FinanceObligationPicker(client:FinanceCashAllocationApiClient,org:String,kind:String,channel:String,
+    installation:String,selected:String,enabled:Boolean,onSelect:(String)->Unit) {
+    var offset by remember(org,kind,channel){mutableIntStateOf(0)}
+    var revision by remember(org,kind,channel){mutableIntStateOf(0)}
+    var page by remember(org,kind,channel){mutableStateOf<FinanceObligationChoicesDto?>(null)}
+    var loading by remember{mutableStateOf(false)}
+    var failed by remember{mutableStateOf(false)}
+    LaunchedEffect(client,org,kind,channel,installation,offset,revision){
+        page=null;loading=true;failed=false
+        try{page=client.obligations(org,kind,channel,offset,installation)}
+        catch(c:CancellationException){throw c}
+        catch(_:Exception){failed=true}
+        finally{loading=false}
+    }
+    Text(hiltechText("اختر مستحقًا من السجل","Select a recorded obligation"),style=MaterialTheme.typography.titleSmall)
+    if(loading)Text(hiltechText("جارٍ قراءة المستحقات…","Reading obligations…"))
+    if(failed)Text(hiltechText("تعذر تحميل المستحقات المتاحة. حدّث المصدر.","Could not load available obligations. Refresh the source."),color=MaterialTheme.colorScheme.error)
+    page?.let{data->
+        if(data.records.isEmpty())Text(hiltechText("لا توجد مستحقات مفتوحة في هذه الصفحة.","No open obligations on this page."))
+        else HiltechRecordPicker(hiltechText("المستحق المسجل","Recorded obligation"),selected,
+            data.records.map{r->HiltechRecordChoice(r.id,r.counterpartyName+(r.openingDocumentReference?.let{" · "+it}.orEmpty()),
+                r.outstanding+" "+r.currency+(r.dueDate?.let{" · "+it}.orEmpty()))},
+            onChange=onSelect,allowKnownReference=false,enabled=enabled&&!loading)
+        data.records.singleOrNull{it.id==selected}?.let{r->
+            Text(hiltechText("المتبقي: ","Outstanding: ")+r.outstanding+" "+r.currency)
+            if(r.openingDocumentReference!=null)Text(hiltechText("مستحق افتتاحي: ","Opening obligation: ")+r.openingDocumentReference)
+        }
+        if(selected.isNotBlank()&&data.records.none{it.id==selected})Text(hiltechText("تم اختيار مصدر من شاشة سابقة؛ يُراجع المبلغ والصلاحية قبل الحفظ.","A source was selected on an earlier screen; amount and access are rechecked before saving."))
+        Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+            TextButton(enabled=enabled&&offset>0,onClick={offset=(offset-50).coerceAtLeast(0);onSelect("")}){Text(hiltechText("السابق","Previous"))}
+            TextButton(enabled=enabled&&data.hasMore,onClick={offset+=50;onSelect("")}){Text(hiltechText("التالي","Next"))}
+        }
+    }
+    TextButton(enabled=enabled&&!loading,onClick={revision++}){Text(hiltechText("تحديث المستحقات","Refresh obligations"))}
 }

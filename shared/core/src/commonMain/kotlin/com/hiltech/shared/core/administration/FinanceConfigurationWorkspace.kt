@@ -264,7 +264,7 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
                 TextButton(enabled=!busy,onClick=onReauthenticate) {Text(hiltechText("تأكيد تسجيل الدخول","Confirm sign-in"))}
         }
     }
-    if(pending==null && !busy) FinanceOpeningSection(org,client,installation,newOperationId,onReauthenticate,revision)
+    FinanceOpeningSection(org,client,installation,newOperationId,onReauthenticate,revision,pending!=null||busy)
 }
 
 @Composable private fun SetupField(label:String,value:String,enabled:Boolean,onChange:(String)->Unit) {
@@ -273,7 +273,7 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
 
 @Composable
 private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClient,installation:String,
-    newOperationId:()->String,onReauthenticate:(()->Unit)?,setupRevision:Int) {
+    newOperationId:()->String,onReauthenticate:(()->Unit)?,setupRevision:Int,setupLocked:Boolean) {
     val scope=rememberCoroutineScope()
     var expanded by rememberSaveable(org){mutableStateOf(false)}
     var currency by rememberSaveable(org){mutableStateOf("")}
@@ -288,6 +288,12 @@ private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClien
     var side by remember{mutableStateOf("DEBIT")}
     var amount by remember{mutableStateOf("")}
     var reference by remember{mutableStateOf("")}
+    var obligations by remember(org,currency,accountId){mutableStateOf<List<FinanceOpeningObligationDto>>(emptyList())}
+    var partyId by remember(org,currency,accountId){mutableStateOf("")}
+    var documentRef by remember(org,currency,accountId){mutableStateOf("")}
+    var documentDate by remember(org,currency,accountId){mutableStateOf("")}
+    var dueDate by remember(org,currency,accountId){mutableStateOf("")}
+    var residual by remember(org,currency,accountId){mutableStateOf("")}
     var lines by remember(org,currency){mutableStateOf<List<FinanceOpeningLineDto>>(emptyList())}
     var pendingJson by rememberSaveable(org){mutableStateOf<String?>(null)}
     var attempted by rememberSaveable(org){mutableStateOf(false)}
@@ -308,9 +314,9 @@ private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClien
         Text(hiltechText("الأرصدة الافتتاحية","Opening balances"),style=MaterialTheme.typography.titleLarge)
         Text(hiltechText("سجّل كشف افتتاح معتمدًا في أول فترة فقط. البنك من كشفه المعتمد؛ لا يولّد النظام حقوق ملكية أو رصيدًا موازنًا.",
             "Record an authorized opening schedule in the first period only. Bank openings come from approved statements; no equity or balancing amount is invented."))
-        TextButton(enabled=!busy&&pending==null,onClick={expanded=!expanded}){Text(if(expanded)hiltechText("إخفاء","Hide")else hiltechText("فتح الأرصدة","Open balances"))}
+        TextButton(enabled=!setupLocked&&!busy&&pending==null,onClick={expanded=!expanded}){Text(if(expanded)hiltechText("إخفاء","Hide")else hiltechText("فتح الأرصدة","Open balances"))}
         if(expanded||pending!=null) {
-            val editable=!busy&&!loading&&pending==null
+            val editable=!setupLocked&&!busy&&!loading&&pending==null
             SetupField(hiltechText("عملة كشف الافتتاح","Opening currency"),currency,editable){currency=it.uppercase().take(3);accountId="";posted=false}
             if(loading)Text(hiltechText("جارٍ قراءة الحسابات المعتمدة…","Reading approved accounts…"))
             if(posted)Text(hiltechText("تم حفظ قيد الافتتاح.","Opening journal recorded."))
@@ -320,20 +326,45 @@ private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClien
                 else if(pending==null) {
                     val first=data.period
                     if(first!=null)HiltechKeyValue(hiltechText("تاريخ الافتتاح","Opening date"),first.dateStart)
-                    Text(hiltechText("المسار الحالي للأصول غير المرتبطة بدفتر فرعي، والالتزامات الأخرى، وحقوق الملكية، والبنوك المؤيدة. لا تدخل أرصدة العملاء والموردين والمخزون والسلف أو الرواتب هنا.",
-                        "Current scope: non-control assets, other liabilities, equity and evidenced bank openings. Do not enter customer, supplier, inventory, staff advance or payroll balances here."))
+                    Text(hiltechText("يشمل الأصول والالتزامات الأخرى وحقوق الملكية والبنوك المؤيدة، وأرصدة العملاء والموردين من المستندات القديمة. المخزون والسلف والرواتب تحتاج مصادر افتتاح منفصلة.",
+                        "Includes non-control assets, other liabilities, equity, evidenced bank openings and individually documented customer/supplier residuals. Inventory, staff advances and payroll need separate opening sources."))
                     SetupField(hiltechText("مرجع اعتماد الشركة","Company authorization"),companyReference,editable){companyReference=it.take(160)}
                     SetupField(hiltechText("مرجع كشف الأرصدة الأصلي","Original opening schedule reference"),sourceReference,editable){sourceReference=it.take(240)}
                     val choices=data.accounts.filter{a->lines.none{it.accountId==a.id}}
                     val account=choices.singleOrNull{it.id==accountId}
+                    val control=account?.accountKind in openingControlKinds
                     if(choices.isNotEmpty()&&lines.size<32) {
                         HiltechRecordPicker(hiltechText("الحساب المعتمد","Approved account"),accountId,
                             choices.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={id->
                                 accountId=id;val picked=choices.singleOrNull{it.id==id}
-                                side=picked?.bankSide?:"DEBIT";amount=picked?.bankAmount.orEmpty()
+                                side=picked?.bankSide?:if(picked?.accountKind=="SUPPLIER_PAYABLE")"CREDIT" else "DEBIT";amount=picked?.bankAmount.orEmpty()
                                 reference=if(picked?.bankStatementId!=null)"APPROVED BANK STATEMENT" else ""
                             },allowKnownReference=false,enabled=editable)
-                        if(account?.bankStatementId==null) {
+                        if(control && account!=null) {
+                            val kind=if(account.accountKind=="CUSTOMER_RECEIVABLE")"AR" else "AP"
+                            val parties=data.counterparties.filter{it.kind==kind}
+                            Text(hiltechText("المبالغ المتبقية عند بدء الدفتر — لا تدخل القيمة الأصلية المسددة.","Residual amounts at cutover — do not enter the already settled original amount."),style=MaterialTheme.typography.bodySmall)
+                            HiltechRecordPicker(if(kind=="AR")hiltechText("العميل","Customer")else hiltechText("المورد","Supplier"),partyId,
+                                parties.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={partyId=it},allowKnownReference=false,enabled=editable)
+                            if(data.hasMoreCounterparties)Text(hiltechText("تظهر أول 500 جهة مرتبطة بالشركة.","Showing the first 500 company-linked counterparties."))
+                            SetupField(hiltechText("رقم المستند التاريخي","Historical document reference"),documentRef,editable){documentRef=it.take(96)}
+                            SetupField(hiltechText("تاريخ المستند YYYY-MM-DD","Document date YYYY-MM-DD"),documentDate,editable){documentDate=it.take(10)}
+                            SetupField(hiltechText("موعد الاستحقاق إن وجد","Due date if known"),dueDate,editable){dueDate=it.take(10)}
+                            SetupField(hiltechText("المبلغ المتبقي عند الافتتاح","Residual amount at cutover"),residual,editable){residual=it.take(25)}
+                            val item=FinanceOpeningObligationDto(partyId,documentRef.trim(),documentDate,residual,dueDate.takeIf{it.isNotBlank()})
+                            val valid=openingObligationValid(item)&&first!=null&&documentDate<first.dateStart&&parties.any{it.id==partyId}&&
+                                obligations.none{it.counterpartyId==partyId&&it.documentReference.equals(item.documentReference,true)}&&
+                                lines.sumOf{it.obligations.size}+obligations.size<1000
+                            TextButton(enabled=editable&&valid,onClick={
+                                obligations=obligations+item;documentRef="";documentDate="";dueDate="";residual=""
+                            }){Text(hiltechText("إضافة المستحق","Add obligation"))}
+                            obligations.forEachIndexed{index,o->
+                                HiltechKeyValue(parties.singleOrNull{it.id==o.counterpartyId}?.name.orEmpty()+" · "+o.documentReference,o.amount+" "+currency)
+                                Text(o.documentDate+(o.dueDate?.let{" — "+it}.orEmpty()),style=MaterialTheme.typography.bodySmall)
+                                TextButton(enabled=editable,onClick={obligations=obligations.filterIndexed{i,_->i!=index}}){Text(hiltechText("حذف المستحق","Remove obligation"))}
+                            }
+                            HiltechKeyValue(hiltechText("إجمالي المستحقات","Obligation total"),openingObligationTotal(obligations).orEmpty()+" "+currency)
+                        } else if(account?.bankStatementId==null) {
                             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                                 listOf("DEBIT","CREDIT").forEach{s->FilterChip(selected=side==s,enabled=editable,onClick={side=s},
                                     label={Text(if(s=="DEBIT")hiltechText("مدين","Debit")else hiltechText("دائن","Credit"))})}
@@ -342,8 +373,9 @@ private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClien
                         } else HiltechKeyValue(hiltechText("رصيد البنك المؤيد","Evidenced bank opening"),
                             (if(side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+amount+" "+currency)
                         SetupField(hiltechText("مرجع إثبات البند","Line source reference"),reference,editable){reference=it.take(240)}
-                        val line=FinanceOpeningLineDto(accountId,side,amount,reference.trim(),account?.bankStatementId)
-                        TextButton(enabled=editable&&account!=null&&openingLineValid(line),onClick={
+                        val line=FinanceOpeningLineDto(accountId,side,if(control)openingObligationTotal(obligations).orEmpty()else amount,
+                            reference.trim(),account?.bankStatementId,if(control)obligations else emptyList())
+                        TextButton(enabled=editable&&account!=null&&(!control||obligations.isNotEmpty())&&openingLineValid(line),onClick={
                             lines=lines+line;accountId="";amount="";reference="";side="DEBIT"
                         }){Text(hiltechText("إضافة بند","Add line"))}
                     }
@@ -351,6 +383,9 @@ private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClien
                     lines.forEach{line->
                         val name=data.accounts.singleOrNull{it.id==line.accountId}?.name.orEmpty()
                         HiltechKeyValue(name,(if(line.side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+line.amount+" "+currency)
+                        line.obligations.forEach{o->
+                            Text((data.counterparties.firstOrNull{it.id==o.counterpartyId}?.name.orEmpty())+" · "+o.documentReference+" · "+o.amount+" "+currency,style=MaterialTheme.typography.bodySmall)
+                        }
                         TextButton(enabled=editable,onClick={lines=lines.filterNot{it.accountId==line.accountId}}){Text(hiltechText("حذف البند","Remove line"))}
                     }
                     val totalDebit=openingTotal(lines,"DEBIT")
@@ -372,11 +407,12 @@ private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClien
                     val name=view?.accounts?.singleOrNull{it.id==line.accountId}?.name?:hiltechText("الحساب المحدد سابقًا","Previously selected account")
                     HiltechKeyValue(name,(if(line.side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+line.amount+" "+input.currency)
                     Text(line.reference,style=MaterialTheme.typography.bodySmall)
+                    line.obligations.forEach{o->Text(o.documentReference+" · "+o.documentDate+" · "+o.amount+" "+input.currency,style=MaterialTheme.typography.bodySmall)}
                 }
                 Text(hiltechText("أقر بأن الكشف يعكس الأرصدة المعتمدة عند بدء الدفتر. لن ينفذ هذا القيد أي تحويل.",
                     "I confirm the schedule reflects approved balances at ledger cutover. This journal does not execute a transfer."))
                 if(uncertain)Text(hiltechText("النتيجة غير مؤكدة؛ أعد نفس الطلب فقط.","Outcome unconfirmed; retry the same request only."))
-                Button(enabled=!busy,onClick={
+                Button(enabled=!setupLocked&&!busy,onClick={
                     if(rejected){pendingJson=null;attempted=false;uncertain=false;rejected=false;revision++}
                     else {
                         val previous=uncertain
