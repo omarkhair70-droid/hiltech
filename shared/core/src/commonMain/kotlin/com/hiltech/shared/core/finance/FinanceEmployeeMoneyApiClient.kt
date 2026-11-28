@@ -50,6 +50,10 @@ data class FinanceEmployeeSettlementReceiptDto(
     val payrollDeductionInitiated:Boolean=false,
 )
 
+@Serializable data class FinanceEmployeeCustodyChoiceDto(val id:String,val employeeName:String,val employeeCode:String,
+    val kind:String,val currency:String,val remaining:String,val openingDocumentReference:String?=null)
+@Serializable data class FinanceEmployeeCustodyChoicesDto(val organizationId:String,val offset:Int,val records:List<FinanceEmployeeCustodyChoiceDto>,val hasMore:Boolean)
+
 /** Typed KMP transport, NOT a money transfer API or self-service approval. */
 class FinanceEmployeeMoneyApiClient(
     private val api:HiltechApiClient,
@@ -98,6 +102,17 @@ class FinanceEmployeeMoneyApiClient(
         decode={json.decodeFromString(
             FinanceEmployeeFundingReceiptDto.serializer(),it)},
     )
+    suspend fun custodyChoices(org:String,offset:Int,installation:String):FinanceEmployeeCustodyChoicesDto {
+        require(offset in 0..1_000_000)
+        return api.request(HttpMethod.Get,base(org)+"/employee-funded/choices?offset="+offset,
+            HiltechRequestOptions(installationId=installation),decode={json.decodeFromString<FinanceEmployeeCustodyChoicesDto>(it)}).also{page->
+            check(page.organizationId.equals(org,true)&&page.offset==offset&&page.records.size<=50&&
+                page.records.map{it.id.lowercase()}.distinct().size==page.records.size&&page.records.all{r->
+                    financeLookupIdIsUuid(r.id)&&r.employeeName.isNotBlank()&&r.employeeCode.isNotBlank()&&
+                    r.kind in setOf("EMPLOYEE_ADVANCE","FINANCIAL_IMPREST")&&r.currency.matches(Regex("[A-Z]{3}"))&&
+                    settlementCanonicalAmount(r.remaining)!=null&&(r.openingDocumentReference==null||r.openingDocumentReference.isNotBlank())})
+        }
+    }
     suspend fun prepareSettlement(
         org:String,fundingId:String,body:FinanceEmployeeSettlementPrepareDto,
         installation:String,

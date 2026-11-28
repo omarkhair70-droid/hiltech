@@ -69,8 +69,10 @@ internal fun financeConfigurationReceiptMatches(org: String,input: FinanceConfig
     val amount:String,val dueDate:String?=null)
 @Serializable data class FinanceOpeningStockValueDto(val movementId:String,val quantity:String,val unit:String,val sourceFingerprint:String,
     val amount:String,val valuationReference:String)
+@Serializable data class FinanceOpeningEmployeeObligationDto(val employeeId:String,val documentReference:String,val documentDate:String,val amount:String)
 @Serializable data class FinanceOpeningLineDto(val accountId:String,val side:String,val amount:String,val reference:String,val bankStatementId:String?=null,
-    val obligations:List<FinanceOpeningObligationDto> = emptyList(),val stockValues:List<FinanceOpeningStockValueDto> = emptyList())
+    val obligations:List<FinanceOpeningObligationDto> = emptyList(),val stockValues:List<FinanceOpeningStockValueDto> = emptyList(),
+    val employeeObligations:List<FinanceOpeningEmployeeObligationDto> = emptyList())
 @Serializable data class FinanceOpeningInputDto(val operationId:String,val periodId:String,val currency:String,
     val companyReference:String,val sourceReference:String,val lines:List<FinanceOpeningLineDto>)
 @Serializable data class FinanceOpeningAccountDto(val id:String,val code:String,val name:String,val accountKind:String,
@@ -87,7 +89,8 @@ internal fun financeConfigurationReceiptMatches(org: String,input: FinanceConfig
 @Serializable data class FinanceOpeningReceiptDto(val organizationId:String,val operationId:String,val journalId:String,val periodId:String,
     val currency:String,val openingDate:String,val replayed:Boolean)
 internal val openingControlKinds=setOf("CUSTOMER_RECEIVABLE","SUPPLIER_PAYABLE")
-internal val openingKinds=setOf("FIXED_ASSET","OTHER_ASSET","OTHER_LIABILITY","EQUITY","BANK_ASSET","INVENTORY_ASSET")+openingControlKinds
+internal val openingEmployeeKinds=setOf("EMPLOYEE_ADVANCE_ASSET","EMPLOYEE_IMPREST_ASSET")
+internal val openingKinds=setOf("FIXED_ASSET","OTHER_ASSET","OTHER_LIABILITY","EQUITY","BANK_ASSET","INVENTORY_ASSET")+openingControlKinds+openingEmployeeKinds
 internal fun openingObligationValid(o:FinanceOpeningObligationDto)=financeLookupIdIsUuid(o.counterpartyId) &&
     plain(o.documentReference,2,96)&&financeValidCalendarDate(o.documentDate)&&
     (o.dueDate==null||(financeValidCalendarDate(o.dueDate)&&o.dueDate>=o.documentDate))&&
@@ -96,6 +99,9 @@ internal fun openingStockValueValid(v:FinanceOpeningStockValueDto)=financeLookup
     v.quantity.matches(Regex("[0-9]{1,14}([.][0-9]{1,6})?"))&&v.quantity.any{it in '1'..'9'}&&
     v.unit.isNotBlank()&&v.unit.length<=32&&v.sourceFingerprint.matches(Regex("[0-9a-f]{64}"))&&
     com.hiltech.shared.core.finance.settlementCanonicalAmount(v.amount)!=null&&plain(v.valuationReference,8,240)
+internal fun openingEmployeeObligationValid(o:FinanceOpeningEmployeeObligationDto)=financeLookupIdIsUuid(o.employeeId)&&
+    plain(o.documentReference,2,96)&&financeValidCalendarDate(o.documentDate)&&
+    o.amount.matches(Regex("[0-9]{1,12}([.][0-9]{1,6})?"))&&com.hiltech.shared.core.finance.settlementCanonicalAmount(o.amount)!=null
 internal fun openingLineValid(line:FinanceOpeningLineDto)=financeLookupIdIsUuid(line.accountId) &&
     line.side in setOf("DEBIT","CREDIT") && com.hiltech.shared.core.finance.settlementCanonicalAmount(line.amount)!=null &&
     plain(line.reference,8,240) && (line.bankStatementId==null||financeLookupIdIsUuid(line.bankStatementId)) &&
@@ -105,7 +111,11 @@ internal fun openingLineValid(line:FinanceOpeningLineDto)=financeLookupIdIsUuid(
     (line.stockValues.isEmpty()||(line.side=="DEBIT"&&line.bankStatementId==null&&line.obligations.isEmpty()&&
         line.stockValues.size<=1000&&line.stockValues.all(::openingStockValueValid)&&
         line.stockValues.map{it.movementId.lowercase()}.distinct().size==line.stockValues.size&&
-        openingStockTotal(line.stockValues)==openingAmountsTotal(listOf(line.amount))))
+        openingStockTotal(line.stockValues)==openingAmountsTotal(listOf(line.amount)))) &&
+    (line.employeeObligations.isEmpty()||(line.side=="DEBIT"&&line.bankStatementId==null&&line.stockValues.isEmpty()&&line.obligations.isEmpty()&&
+        line.employeeObligations.size<=1000&&line.employeeObligations.all(::openingEmployeeObligationValid)&&
+        line.employeeObligations.map{it.employeeId.lowercase() to it.documentReference.lowercase()}.distinct().size==line.employeeObligations.size&&
+        openingEmployeeTotal(line.employeeObligations)==openingAmountsTotal(listOf(line.amount))))
 // Exact decimal addition without Double or currency rounding. A schedule may
 // contain up to 1000 source documents; a single posting account still has
 // its existing numeric(24,6) bound.
@@ -122,6 +132,7 @@ private fun openingAmountsTotal(amounts:List<String>):String? {
     val scaled=digits.reversed().joinToString("").trimStart('0').padStart(7,'0')
     return scaled.dropLast(6)+"."+scaled.takeLast(6)
 }
+internal fun openingEmployeeTotal(rows:List<FinanceOpeningEmployeeObligationDto>):String?=openingAmountsTotal(rows.map{it.amount})
 internal fun openingStockTotal(rows:List<FinanceOpeningStockValueDto>):String?=openingAmountsTotal(rows.map{it.amount})
 internal fun openingObligationTotal(rows:List<FinanceOpeningObligationDto>):String?=openingAmountsTotal(rows.map{it.amount})
 internal fun openingTotal(lines:List<FinanceOpeningLineDto>,side:String):String? =
@@ -129,7 +140,7 @@ internal fun openingTotal(lines:List<FinanceOpeningLineDto>,side:String):String?
 internal fun openingInputValid(input:FinanceOpeningInputDto)=financeLookupIdIsUuid(input.periodId) &&
     currencyPattern.matches(input.currency) && plain(input.companyReference,8,160) && plain(input.sourceReference,8,240) &&
     input.lines.size in 2..32 && input.lines.sumOf{it.obligations.size}<=1000 && input.lines.map{it.accountId.lowercase()}.distinct().size==input.lines.size &&
-    input.lines.sumOf{it.stockValues.size}<=1000 &&
+    input.lines.sumOf{it.stockValues.size}<=1000 && input.lines.sumOf{it.employeeObligations.size}<=1000 &&
     input.lines.flatMap{it.stockValues}.let{values->values.map{it.movementId.lowercase()}.distinct().size==values.size} &&
     input.lines.all(::openingLineValid) && input.lines.any{it.side=="DEBIT"} && input.lines.any{it.side=="CREDIT"} &&
     openingTotal(input.lines,"DEBIT")?.let{it==openingTotal(input.lines,"CREDIT")&&it!="0.000000"}==true
@@ -168,7 +179,7 @@ class FinanceConfigurationApiClient(private val api: HiltechApiClient,
                     (v.existingJournalId==null||financeLookupIdIsUuid(v.existingJournalId))&&
                     (!v.canPost||(v.period!=null&&v.existingJournalId==null))&&v.accounts.size<=100&&
                     v.counterparties.size<=500&&v.counterparties.map{it.kind to it.id.lowercase()}.distinct().size==v.counterparties.size&&
-                    v.counterparties.all{financeLookupIdIsUuid(it.id)&&it.kind in setOf("AP","AR")&&it.code.isNotBlank()&&it.name.isNotBlank()}&&
+                    v.counterparties.all{financeLookupIdIsUuid(it.id)&&it.kind in setOf("AP","AR","EMPLOYEE")&&it.code.isNotBlank()&&it.name.isNotBlank()}&&
                     v.accounts.map{it.id.lowercase()}.distinct().size==v.accounts.size&&v.accounts.all{a->
                         financeLookupIdIsUuid(a.id)&&a.name.isNotBlank()&&a.code.isNotBlank()&&a.accountKind in openingKinds&&
                         (if(a.accountKind=="BANK_ASSET")a.bankStatementId?.let(::financeLookupIdIsUuid)==true&&

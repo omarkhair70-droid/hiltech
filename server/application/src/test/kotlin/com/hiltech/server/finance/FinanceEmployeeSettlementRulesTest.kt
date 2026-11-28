@@ -67,6 +67,15 @@ class FinanceEmployeeSettlementRulesTest {
         rejects(advance.copy(action=
             FinanceEmployeeSettlementAction.IMPREST_RECEIPTS_ACCEPTED))
     }
+    @Test fun historicalResidualDoesNotInventOriginalBankFunding() {
+        val opening=base.copy(approvedFundingRecorded=false,sourceBankTransactionId=null,sourceBankEvidenceSha256=null,
+            openingSourceFingerprint="a".repeat(64))
+        assertEquals("650.000000",FinanceEmployeeSettlementRules.validate(opening).unsettledAmount)
+        rejects(opening.copy(openingSourceFingerprint=null))
+        rejects(opening.copy(sourceBankTransactionId=UUID.randomUUID()))
+        rejects(opening.copy(approvedFundingRecorded=true))
+        rejects(opening.copy(openingSourceFingerprint="fake"))
+    }
     @Test fun refuseUnfundedDraftsAndOverSettlement() {
         rejects(base.copy(approvedFundingRecorded=false))
         rejects(base.copy(sourceBankTransactionId=null))

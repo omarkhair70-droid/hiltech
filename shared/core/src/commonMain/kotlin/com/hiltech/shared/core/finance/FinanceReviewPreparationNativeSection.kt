@@ -647,6 +647,11 @@ fun FinanceReviewPreparationSection(
         if(kind in setOf(FinanceReviewKind.CASH_ALLOCATION,FinanceReviewKind.CASH_VOUCHER)) {
             FinanceObligationPicker(apis.allocation,organizationId,draft.sourceKind,if(kind==FinanceReviewKind.CASH_ALLOCATION)"BANK"else "CASH",
                 installationId,draft.sourceId,editable){id->draft=draft.copy(sourceId=id);resetForFormChange()}
+        } else if(kind==FinanceReviewKind.EMPLOYEE_SETTLEMENT){
+            FinanceEmployeeCustodyPicker(apis.employeeMoney,organizationId,installationId,draft.sourceId,editable){source->
+                draft=draft.copy(sourceId=source.id,settlementAction=if(source.kind=="EMPLOYEE_ADVANCE")"ADVANCE_RECOVERY_CONFIRMED" else "IMPREST_CASH_RETURN_CONFIRMED",bankLineId="")
+                resetForFormChange()
+            }
         } else OutlinedTextField(
             value = draft.sourceId,
             onValueChange = {
@@ -1131,4 +1136,35 @@ private fun FinanceObligationPicker(client:FinanceCashAllocationApiClient,org:St
         }
     }
     TextButton(enabled=enabled&&!loading,onClick={revision++}){Text(hiltechText("تحديث المستحقات","Refresh obligations"))}
+}
+
+@Composable
+private fun FinanceEmployeeCustodyPicker(client:FinanceEmployeeMoneyApiClient,org:String,installation:String,selected:String,
+    enabled:Boolean,onSelect:(FinanceEmployeeCustodyChoiceDto)->Unit){
+    var offset by remember(org){mutableIntStateOf(0)}
+    var revision by remember(org){mutableIntStateOf(0)}
+    var data by remember(org){mutableStateOf<FinanceEmployeeCustodyChoicesDto?>(null)}
+    var loading by remember{mutableStateOf(false)}
+    var failed by remember{mutableStateOf(false)}
+    LaunchedEffect(client,org,installation,offset,revision){
+        data=null;loading=true;failed=false
+        try{data=client.custodyChoices(org,offset,installation)}
+        catch(c:CancellationException){throw c}
+        catch(_:Exception){failed=true}
+        finally{loading=false}
+    }
+    if(loading)Text(hiltechText("جارٍ قراءة السلف والعهد…","Reading advances and imprests…"))
+    if(failed)Text(hiltechText("تعذر تحميل أرصدة الموظفين.","Could not load employee balances."),color=MaterialTheme.colorScheme.error)
+    data?.let{page->
+        if(page.records.isEmpty())Text(hiltechText("لا توجد أرصدة مفتوحة في هذه الصفحة.","No open employee balances on this page."))
+        else HiltechRecordPicker(hiltechText("رصيد الموظف","Employee balance"),selected,
+            page.records.map{r->HiltechRecordChoice(r.id,r.employeeName+" · "+r.employeeCode+(r.openingDocumentReference?.let{" · "+it}.orEmpty()),
+                (if(r.kind=="EMPLOYEE_ADVANCE")hiltechText("سلفة","Advance")else hiltechText("عهدة","Imprest"))+" · "+r.remaining+" "+r.currency)},
+            onChange={id->page.records.singleOrNull{it.id==id}?.let(onSelect)},allowKnownReference=false,enabled=enabled&&!loading)
+        Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+            TextButton(enabled=enabled&&offset>0,onClick={offset=(offset-50).coerceAtLeast(0)}){Text(hiltechText("السابق","Previous"))}
+            TextButton(enabled=enabled&&page.hasMore,onClick={offset+=50}){Text(hiltechText("التالي","Next"))}
+        }
+    }
+    TextButton(enabled=enabled&&!loading,onClick={revision++}){Text(hiltechText("تحديث الأرصدة","Refresh balances"))}
 }
