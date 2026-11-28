@@ -58,6 +58,7 @@ data class FinanceDeskBalances(
     val includedSources:List<String>,val priorPeriodCount:Int,val firstIncludedDate:String,
     val priorCoverageHasGaps:Boolean,val openingBasis:String="PRIOR_POSTED_MOVEMENTS_ONLY",
     val isCompanyWideTrialBalance:Boolean=false,val isCompleteIncomeStatement:Boolean=false,
+    val recordedOpeningCurrencies:List<String> = emptyList(),
     val rows:List<FinanceDeskAccountBalance>,val totals:List<FinanceDeskBalanceTotal>,
 )
 data class FinanceDeskExposureTotal(
@@ -97,7 +98,7 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
         return FinanceDeskPeriods(org,rows.take(100),rows.size>100)
     }
 
-    private fun lines(includeSettlements:Boolean,includeEmployee:Boolean,includePayroll:Boolean,cumulative:Boolean=false) = """
+    private fun lines(includeSettlements:Boolean,includeEmployee:Boolean,includePayroll:Boolean,cumulative:Boolean=false,includeOpening:Boolean=false) = """
         WITH scope AS (SELECT CAST(? AS uuid) AS org,CAST(? AS uuid) AS period),
         period_scope AS (
             SELECT p.organization_id AS org,p.id AS period,(p.id=s.period) AS current_period
@@ -134,15 +135,21 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
             FROM period_scope s JOIN finance_payroll_gl_journal j ON j.organization_id=s.org AND j.period_id=s.period
             JOIN finance_payroll_gl_journal_line l ON l.organization_id=s.org AND l.journal_id=j.id
             """ else ""}
+            ${if(includeOpening) """
+            UNION ALL
+            SELECT 'OPENING_BALANCE',j.id,j.posted_at,j.currency,l.line_number,l.gl_account_id,l.side,l.amount,false
+            FROM period_scope s JOIN finance_gl_opening_journal j ON j.organization_id=s.org AND j.period_id=s.period
+            JOIN finance_gl_opening_journal_line l ON l.organization_id=s.org AND l.journal_id=j.id
+            """ else ""}
         )
     """.trimIndent()
 
-    fun ledger(org: UUID, period: UUID, offset: Int,includeSettlements:Boolean=false,includeEmployee:Boolean=false,includePayroll:Boolean=false): FinanceDeskLedger {
+    fun ledger(org: UUID, period: UUID, offset: Int,includeSettlements:Boolean=false,includeEmployee:Boolean=false,includePayroll:Boolean=false,includeOpening:Boolean=false): FinanceDeskLedger {
         val exists = jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM finance_gl_period WHERE organization_id=? AND id=?)",
             Boolean::class.java,org,period)
         if (exists != true) financeDeskUnavailable()
-        val movements = jdbc.query(lines(includeSettlements,includeEmployee,includePayroll) + """
+        val movements = jdbc.query(lines(includeSettlements,includeEmployee,includePayroll,includeOpening=includeOpening) + """
             SELECT a.id,a.account_code,a.account_name,a.account_kind,l.currency,
                 SUM(CASE WHEN l.side='DEBIT' THEN l.amount ELSE 0 END) AS debit,
                 SUM(CASE WHEN l.side='CREDIT' THEN l.amount ELSE 0 END) AS credit
@@ -154,7 +161,7 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
             r.getString("account_code"),r.getString("account_name"),r.getString("account_kind"),
             r.getString("currency").trim(),r.getBigDecimal("debit").toPlainString(),
             r.getBigDecimal("credit").toPlainString()) },org,period)
-        val page = jdbc.query(lines(includeSettlements,includeEmployee,includePayroll) + """,
+        val page = jdbc.query(lines(includeSettlements,includeEmployee,includePayroll,includeOpening=includeOpening) + """,
             ranked AS (
                 SELECT l.*,DENSE_RANK() OVER(ORDER BY posted_at DESC,kind,journal_id) AS journal_rank
                 FROM posted_lines l
@@ -184,7 +191,8 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
             includedSources=listOf("AP","AR","AP_REVERSAL")+
                 (if(includeSettlements) listOf("BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID") else emptyList())+
                 (if(includeSettlements && includeEmployee) listOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT") else emptyList())+
-                (if(includePayroll) listOf("PAYROLL_ACCRUAL","PAYROLL_PAYMENT","PAYROLL_RETURN","PAYROLL_VOID") else emptyList()),
+                (if(includePayroll) listOf("PAYROLL_ACCRUAL","PAYROLL_PAYMENT","PAYROLL_RETURN","PAYROLL_VOID") else emptyList())+
+                (if(includeOpening) listOf("OPENING_BALANCE") else emptyList()),
             currencyTotals=currencyTotals)
     }
 
@@ -210,7 +218,7 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
         """.trimIndent(),{r,_->Coverage(r.getDate("date_start").toString(),r.getDate("date_end").toString(),
             r.getInt("prior_count"),r.getDate("first_date").toString(),r.getBoolean("gaps"))},org,period,org).singleOrNull()
             ?:financeDeskUnavailable()
-        val rows=jdbc.query(lines(includeSettlements,includeEmployee,includePayroll,cumulative=true)+"""
+        val rows=jdbc.query(lines(includeSettlements,includeEmployee,includePayroll,cumulative=true,includeOpening=true)+"""
             , account_sums AS (
                 SELECT gl_account_id,currency,
                     sum(CASE WHEN NOT current_period AND side='DEBIT' THEN amount
@@ -245,12 +253,17 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
                 cd.toPlainString(),cc.toPlainString(),od.compareTo(oc)==0&&pd.compareTo(pc)==0&&cd.compareTo(cc)==0,
                 revenue.toPlainString(),expense.toPlainString(),(revenue-expense).toPlainString())
         }
+        val recordedOpenings=jdbc.query("""SELECT j.currency FROM finance_gl_opening_journal j
+            JOIN finance_gl_period p ON p.organization_id=j.organization_id AND p.id=j.period_id
+            WHERE j.organization_id=? AND p.date_start<=? ORDER BY j.currency""",
+            {r,_->r.getString(1).trim()},org,java.sql.Date.valueOf(coverage.start))
         return FinanceDeskBalances(org,period,coverage.start,coverage.end,
             listOf("AP","AR","AP_REVERSAL")+
                 (if(includeSettlements)listOf("BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID")else emptyList())+
                 (if(includeSettlements&&includeEmployee)listOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT")else emptyList())+
-                (if(includePayroll)listOf("PAYROLL_ACCRUAL","PAYROLL_PAYMENT","PAYROLL_RETURN","PAYROLL_VOID")else emptyList()),
-            coverage.count,coverage.first,coverage.gaps,rows=rows,totals=totals)
+                (if(includePayroll)listOf("PAYROLL_ACCRUAL","PAYROLL_PAYMENT","PAYROLL_RETURN","PAYROLL_VOID")else emptyList())+listOf("OPENING_BALANCE"),
+            coverage.count,coverage.first,coverage.gaps,openingBasis=if(recordedOpenings.isEmpty())"PRIOR_POSTED_MOVEMENTS_ONLY" else "RECORDED_OPENING_PLUS_PRIOR_MOVEMENTS",
+            recordedOpeningCurrencies=recordedOpenings,rows=rows,totals=totals)
     }
     private data class Coverage(val start:String,val end:String,val count:Int,val first:String,val gaps:Boolean)
 
@@ -321,11 +334,11 @@ class FinanceAccountingDeskService @org.springframework.beans.factory.annotation
     }
 
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
-    fun ledger(actor: UUID,org: UUID,period: UUID,offset: Int,includeSettlements:Boolean=false,includeEmployee:Boolean=false,includePayroll:Boolean=false): FinanceDeskLedger {
+    fun ledger(actor: UUID,org: UUID,period: UUID,offset: Int,includeSettlements:Boolean=false,includeEmployee:Boolean=false,includePayroll:Boolean=false,includeOpening:Boolean=false): FinanceDeskLedger {
         if (offset !in 0..1_000_000) financeDeskUnavailable()
         authorize(actor,org,true)
         val payrollAllowed=includePayroll && (payrollAuthority?.canPrepare(actor,org)==true || payrollAuthority?.canReview(actor,org)==true)
-        return store.ledger(org,period,offset,includeSettlements,includeEmployee,payrollAllowed)
+        return store.ledger(org,period,offset,includeSettlements,includeEmployee,payrollAllowed,includeOpening)
     }
 
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
@@ -351,8 +364,9 @@ class FinanceAccountingDeskController(private val desk: FinanceAccountingDeskSer
     @GetMapping("/v1/finance/organizations/{orgId}/accounting-desk/ledger")
     fun ledger(http: HttpServletRequest,@PathVariable orgId: UUID,@RequestParam periodId: UUID,
         @RequestParam(defaultValue="0") offset: Int,@RequestParam(defaultValue="false") includeSettlements:Boolean,
-        @RequestParam(defaultValue="false") includeEmployee:Boolean,@RequestParam(defaultValue="false") includePayroll:Boolean) =
-        desk.ledger(actor(http),orgId,periodId,offset,includeSettlements,includeEmployee,includePayroll)
+        @RequestParam(defaultValue="false") includeEmployee:Boolean,@RequestParam(defaultValue="false") includePayroll:Boolean,
+        @RequestParam(defaultValue="false") includeOpening:Boolean) =
+        desk.ledger(actor(http),orgId,periodId,offset,includeSettlements,includeEmployee,includePayroll,includeOpening)
 
     @GetMapping("/v1/finance/organizations/{orgId}/accounting-desk/balances")
     fun balances(http:HttpServletRequest,@PathVariable orgId:UUID,@RequestParam periodId:UUID,

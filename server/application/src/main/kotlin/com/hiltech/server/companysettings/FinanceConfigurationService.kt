@@ -54,7 +54,7 @@ data class FinanceConfigurationReceipt(val operationId: UUID, val organizationId
     val record: FinanceConfigurationRecord, val replayed: Boolean)
 
 private val financeAccountKinds = setOf("SUPPLIER_PAYABLE", "EXPENSE", "INVENTORY_ASSET", "FIXED_ASSET",
-    "TAX_RECOVERABLE", "OTHER_ASSET", "CUSTOMER_RECEIVABLE", "SALES_REVENUE", "TAX_PAYABLE","BANK_ASSET","CASH_ASSET","EMPLOYEE_ADVANCE_ASSET","EMPLOYEE_IMPREST_ASSET","PAYROLL_EXPENSE","PAYROLL_PAYABLE","PAYROLL_DEDUCTION_PAYABLE")
+    "TAX_RECOVERABLE", "OTHER_ASSET", "CUSTOMER_RECEIVABLE", "SALES_REVENUE", "TAX_PAYABLE","BANK_ASSET","CASH_ASSET","EMPLOYEE_ADVANCE_ASSET","EMPLOYEE_IMPREST_ASSET","PAYROLL_EXPENSE","PAYROLL_PAYABLE","PAYROLL_DEDUCTION_PAYABLE","EQUITY","OTHER_LIABILITY")
 private val treasuryKinds=setOf("BANK_ASSET","CASH_ASSET")
 private val currencyPattern = Regex("[A-Z]{3}")
 private val maskedBankPattern = Regex("(?:[A-Za-z][A-Za-z0-9_-]{0,23}:)?[*]{2,12}[0-9]{2,4}")

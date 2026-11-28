@@ -56,6 +56,8 @@ import kotlinx.serialization.json.Json
     "PAYROLL_EXPENSE" -> hiltechText("تكلفة الرواتب","Payroll expense")
     "PAYROLL_PAYABLE" -> hiltechText("الرواتب المستحقة","Payroll payable")
     "PAYROLL_DEDUCTION_PAYABLE" -> hiltechText("خصومات الرواتب المستحقة للغير","Payroll deductions payable")
+    "EQUITY" -> hiltechText("حقوق الملكية","Equity")
+    "OTHER_LIABILITY" -> hiltechText("التزامات أخرى","Other liabilities")
     else -> kind
 }
 @Composable private fun configurationState(state: String): String = when(state) {
@@ -262,8 +264,141 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
                 TextButton(enabled=!busy,onClick=onReauthenticate) {Text(hiltechText("تأكيد تسجيل الدخول","Confirm sign-in"))}
         }
     }
+    if(pending==null && !busy) FinanceOpeningSection(org,client,installation,newOperationId,onReauthenticate,revision)
 }
 
 @Composable private fun SetupField(label:String,value:String,enabled:Boolean,onChange:(String)->Unit) {
     OutlinedTextField(value,onChange,Modifier.fillMaxWidth(),singleLine=true,enabled=enabled,label={Text(label)})
+}
+
+@Composable
+private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClient,installation:String,
+    newOperationId:()->String,onReauthenticate:(()->Unit)?,setupRevision:Int) {
+    val scope=rememberCoroutineScope()
+    var expanded by rememberSaveable(org){mutableStateOf(false)}
+    var currency by rememberSaveable(org){mutableStateOf("")}
+    var companyReference by rememberSaveable(org){mutableStateOf("")}
+    var sourceReference by rememberSaveable(org){mutableStateOf("")}
+    var view by remember{mutableStateOf<FinanceOpeningViewDto?>(null)}
+    var error by remember{mutableStateOf<String?>(null)}
+    var loading by remember{mutableStateOf(false)}
+    var busy by remember{mutableStateOf(false)}
+    var revision by remember{mutableIntStateOf(0)}
+    var accountId by remember{mutableStateOf("")}
+    var side by remember{mutableStateOf("DEBIT")}
+    var amount by remember{mutableStateOf("")}
+    var reference by remember{mutableStateOf("")}
+    var lines by remember(org,currency){mutableStateOf<List<FinanceOpeningLineDto>>(emptyList())}
+    var pendingJson by rememberSaveable(org){mutableStateOf<String?>(null)}
+    var attempted by rememberSaveable(org){mutableStateOf(false)}
+    var uncertain by rememberSaveable(org){mutableStateOf(false)}
+    var rejected by rememberSaveable(org){mutableStateOf(false)}
+    var posted by remember{mutableStateOf(false)}
+    val pending=pendingJson?.let{Json.decodeFromString(FinanceOpeningInputDto.serializer(),it)}
+    LaunchedEffect(org,client,currency,expanded,revision,setupRevision) {
+        view=null;error=null
+        if(!expanded||!currency.matches(Regex("[A-Z]{3}")))return@LaunchedEffect
+        loading=true
+        try{view=client.opening(org,currency,installation)}
+        catch(cancelled:CancellationException){throw cancelled}
+        catch(failure:Exception){error=(failure as? HiltechApiException)?.code?:"SOURCE_UNAVAILABLE"}
+        finally{loading=false}
+    }
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("الأرصدة الافتتاحية","Opening balances"),style=MaterialTheme.typography.titleLarge)
+        Text(hiltechText("سجّل كشف افتتاح معتمدًا في أول فترة فقط. البنك من كشفه المعتمد؛ لا يولّد النظام حقوق ملكية أو رصيدًا موازنًا.",
+            "Record an authorized opening schedule in the first period only. Bank openings come from approved statements; no equity or balancing amount is invented."))
+        TextButton(enabled=!busy&&pending==null,onClick={expanded=!expanded}){Text(if(expanded)hiltechText("إخفاء","Hide")else hiltechText("فتح الأرصدة","Open balances"))}
+        if(expanded||pending!=null) {
+            val editable=!busy&&!loading&&pending==null
+            SetupField(hiltechText("عملة كشف الافتتاح","Opening currency"),currency,editable){currency=it.uppercase().take(3);accountId="";posted=false}
+            if(loading)Text(hiltechText("جارٍ قراءة الحسابات المعتمدة…","Reading approved accounts…"))
+            if(posted)Text(hiltechText("تم حفظ قيد الافتتاح.","Opening journal recorded."))
+            view?.takeIf{it.currency==currency}?.let{data->
+                if(data.existingJournalId!=null)Text(hiltechText("يوجد قيد افتتاح مسجل لهذه العملة. لا يمكن تكراره.","An opening journal already exists for this currency. It cannot be duplicated."))
+                else if(!data.canPost)Text(hiltechText("لا توجد فترة أولى مفتوحة وغير متداخلة.","No eligible first open non-overlapping period."))
+                else if(pending==null) {
+                    val first=data.period
+                    if(first!=null)HiltechKeyValue(hiltechText("تاريخ الافتتاح","Opening date"),first.dateStart)
+                    Text(hiltechText("المسار الحالي للأصول غير المرتبطة بدفتر فرعي، والالتزامات الأخرى، وحقوق الملكية، والبنوك المؤيدة. لا تدخل أرصدة العملاء والموردين والمخزون والسلف أو الرواتب هنا.",
+                        "Current scope: non-control assets, other liabilities, equity and evidenced bank openings. Do not enter customer, supplier, inventory, staff advance or payroll balances here."))
+                    SetupField(hiltechText("مرجع اعتماد الشركة","Company authorization"),companyReference,editable){companyReference=it.take(160)}
+                    SetupField(hiltechText("مرجع كشف الأرصدة الأصلي","Original opening schedule reference"),sourceReference,editable){sourceReference=it.take(240)}
+                    val choices=data.accounts.filter{a->lines.none{it.accountId==a.id}}
+                    val account=choices.singleOrNull{it.id==accountId}
+                    if(choices.isNotEmpty()&&lines.size<32) {
+                        HiltechRecordPicker(hiltechText("الحساب المعتمد","Approved account"),accountId,
+                            choices.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={id->
+                                accountId=id;val picked=choices.singleOrNull{it.id==id}
+                                side=picked?.bankSide?:"DEBIT";amount=picked?.bankAmount.orEmpty()
+                                reference=if(picked?.bankStatementId!=null)"APPROVED BANK STATEMENT" else ""
+                            },allowKnownReference=false,enabled=editable)
+                        if(account?.bankStatementId==null) {
+                            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                                listOf("DEBIT","CREDIT").forEach{s->FilterChip(selected=side==s,enabled=editable,onClick={side=s},
+                                    label={Text(if(s=="DEBIT")hiltechText("مدين","Debit")else hiltechText("دائن","Credit"))})}
+                            }
+                            SetupField(hiltechText("المبلغ من الكشف","Amount from schedule"),amount,editable){amount=it.take(25)}
+                        } else HiltechKeyValue(hiltechText("رصيد البنك المؤيد","Evidenced bank opening"),
+                            (if(side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+amount+" "+currency)
+                        SetupField(hiltechText("مرجع إثبات البند","Line source reference"),reference,editable){reference=it.take(240)}
+                        val line=FinanceOpeningLineDto(accountId,side,amount,reference.trim(),account?.bankStatementId)
+                        TextButton(enabled=editable&&account!=null&&openingLineValid(line),onClick={
+                            lines=lines+line;accountId="";amount="";reference="";side="DEBIT"
+                        }){Text(hiltechText("إضافة بند","Add line"))}
+                    }
+                    if(data.hasMore)Text(hiltechText("تظهر أول 100 حساب مؤهل.","Showing the first 100 eligible accounts."))
+                    lines.forEach{line->
+                        val name=data.accounts.singleOrNull{it.id==line.accountId}?.name.orEmpty()
+                        HiltechKeyValue(name,(if(line.side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+line.amount+" "+currency)
+                        TextButton(enabled=editable,onClick={lines=lines.filterNot{it.accountId==line.accountId}}){Text(hiltechText("حذف البند","Remove line"))}
+                    }
+                    val input=FinanceOpeningInputDto("",first?.id.orEmpty(),currency,companyReference.trim(),sourceReference.trim(),lines)
+                    Button(enabled=editable&&openingInputValid(input)&&lines.all{line->data.accounts.any{it.id==line.accountId}},onClick={
+                        pendingJson=Json.encodeToString(FinanceOpeningInputDto.serializer(),input.copy(operationId=newOperationId()))
+                        attempted=false;uncertain=false;rejected=false;error=null
+                    }){Text(hiltechText("مراجعة كشف الافتتاح","Review opening schedule"))}
+                }
+            }
+            pending?.let{input->
+                Text(hiltechText("تأكيد قيد افتتاح غير قابل للتعديل","Confirm immutable opening journal"),style=MaterialTheme.typography.titleMedium)
+                Text(input.currency+" · "+input.companyReference+" · "+input.sourceReference)
+                input.lines.forEach{line->
+                    val name=view?.accounts?.singleOrNull{it.id==line.accountId}?.name?:hiltechText("الحساب المحدد سابقًا","Previously selected account")
+                    HiltechKeyValue(name,(if(line.side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+line.amount+" "+input.currency)
+                    Text(line.reference,style=MaterialTheme.typography.bodySmall)
+                }
+                Text(hiltechText("أقر بأن الكشف يعكس الأرصدة المعتمدة عند بدء الدفتر. لن ينفذ هذا القيد أي تحويل.",
+                    "I confirm the schedule reflects approved balances at ledger cutover. This journal does not execute a transfer."))
+                if(uncertain)Text(hiltechText("النتيجة غير مؤكدة؛ أعد نفس الطلب فقط.","Outcome unconfirmed; retry the same request only."))
+                Button(enabled=!busy,onClick={
+                    if(rejected){pendingJson=null;attempted=false;uncertain=false;rejected=false;revision++}
+                    else {
+                        val previous=uncertain
+                        busy=true;attempted=true;uncertain=true;error=null
+                        scope.launch {
+                            try{client.postOpening(org,input,installation);pendingJson=null;lines=emptyList();posted=true;attempted=false;uncertain=false;rejected=false;revision++}
+                            catch(cancelled:CancellationException){throw cancelled}
+                            catch(failure:Exception){
+                                error=(failure as? HiltechApiException)?.code?:"OUTCOME_UNCONFIRMED"
+                                val disposition=companyResponsibilityFailureDisposition(previous,failure)
+                                uncertain=disposition.hasUnknownOutcome;rejected=disposition.rejectionConfirmed
+                            }finally{busy=false}
+                        }
+                    }
+                }){Text(if(rejected)hiltechText("مراجعة المصدر","Review source")else if(attempted)hiltechText("إعادة نفس الطلب","Retry same request")else hiltechText("تأكيد وترحيل","Confirm and post"))}
+                if(!attempted&&!busy)TextButton(onClick={pendingJson=null}){Text(hiltechText("رجوع","Back"))}
+            }
+            error?.let{problem->
+                Text(when(problem){
+                    "FINANCE_OPENING_CHANGED"->hiltechText("راجع توازن المدين والدائن والحسابات وكشف البنك وتاريخ الافتتاح.","Review equal debit/credit totals, accounts, bank statement and opening date.")
+                    "FINANCE_OPENING_UNAVAILABLE"->hiltechText("تحتاج مسؤولية الإعداد والترحيل المالي الحالية.","Current company setup and accounting posting responsibilities are required.")
+                    else->hiltechText("لم تتأكد النتيجة. تحقق من الاتصال أو الدخول.","Outcome not confirmed. Check connection or sign-in.")
+                },color=MaterialTheme.colorScheme.error)
+                if(onReauthenticate!=null&&problem in setOf("REAUTH_REQUIRED","RECENT_REAUTH_REQUIRED","UNAUTHENTICATED","SESSION_NOT_ACTIVE"))
+                    TextButton(enabled=!busy,onClick=onReauthenticate){Text(hiltechText("تأكيد الدخول","Confirm sign-in"))}
+                if(pending==null)TextButton(enabled=!busy&&!loading,onClick={revision++}){Text(hiltechText("تحديث","Refresh"))}
+            }
+        }
+    }
 }

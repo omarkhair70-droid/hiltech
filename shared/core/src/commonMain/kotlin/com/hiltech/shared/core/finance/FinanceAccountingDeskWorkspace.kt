@@ -51,6 +51,7 @@ private fun deskKind(kind:String):String=when(kind) {
     "AR" -> hiltechText("العملاء","Customers")
     "AP_REVERSAL" -> hiltechText("عكس قيد مورد","Supplier reversal")
     "BALANCES" -> hiltechText("أرصدة الحسابات","Account balances")
+    "OPENING_BALANCE" -> hiltechText("قيد افتتاح","Opening journal")
     "BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID","EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT" -> settlementLedgerTitle(kind)
     in payrollDeskSources -> payrollGlTitle(kind)
     else -> hiltechText("القيود","Journal entries")
@@ -129,7 +130,9 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
             ledger?.takeIf { tab=="LEDGER"&&it.periodId==periodId && it.offset==offset && !loading }?.let { data ->
                 HiltechPanel(Modifier.fillMaxWidth()) {
                     Text(hiltechText("حركة الحسابات خلال الفترة","Account movements for the period"),style=MaterialTheme.typography.titleLarge)
-                    Text(if(data.includedSources.containsAll(payrollDeskSources))
+                    Text(if("OPENING_BALANCE" in data.includedSources)
+                        hiltechText("قيود المصادر المتاحة تشمل قيود الافتتاح المسجلة؛ لا تعني اكتمال أرصدة الدفاتر الفرعية أو الحركات غير المرحلة.","Available posted sources include recorded opening journals; unposted movements and complete subledger openings are not implied.")
+                    else if(data.includedSources.containsAll(payrollDeskSources))
                         hiltechText("تشمل القيود المرحلة ضمن المصادر المتاحة، ومنها قيود الرواتب الموزعة. لا تشمل أرصدة الافتتاح أو الرواتب غير المرحلة أو حركات لم ترحل؛ ليست ميزان مراجعة شاملًا.",
                             "Includes posted journals from available sources, including allocated payroll. Excludes opening balances, unposted payroll, and unposted movements; not a complete trial balance.")
                     else if(data.includedSources.containsAll(financeEmployeeSettlementTypes))
@@ -222,10 +225,12 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
 private fun DeskBalances(data:FinanceDeskBalancesDto) {
     HiltechPanel(Modifier.fillMaxWidth()) {
         Text(hiltechText("الأرصدة من القيود المرحلة","Balances from posted journals"),style=MaterialTheme.typography.titleLarge)
-        Text(hiltechText("الرصيد المرحّل هو صافي القيود السابقة المتاحة، وليس رصيد افتتاح معتمدًا. التقرير لا يشمل الحركات غير المرحلة أو مصادر غير متاحة؛ ليس ميزان مراجعة أو قائمة دخل كاملة.",
+        Text(if(data.recordedOpeningCurrencies.isNotEmpty()) hiltechText("يشمل الرصيد المرحّل قيود الافتتاح المسجلة وصافي القيود السابقة. لا يعني اكتمال افتتاح الدفاتر الفرعية أو كل الحركات؛ ليس ميزان مراجعة شاملًا.","Carried balances include recorded opening journals and net prior entries. Subledger openings and all movements are not necessarily complete; not a complete trial balance.")
+            else hiltechText("الرصيد المرحّل هو صافي القيود السابقة المتاحة، وليس رصيد افتتاح معتمدًا. التقرير لا يشمل الحركات غير المرحلة أو مصادر غير متاحة؛ ليس ميزان مراجعة أو قائمة دخل كاملة.",
             "Carried balances are net prior posted entries, not verified opening balances. Unposted or unavailable sources are excluded; this is not a complete trial balance or income statement."),
             style=MaterialTheme.typography.bodySmall)
         Text(hiltechText("أقدم فترة مشمولة: ","Earliest included period: ")+data.firstIncludedDate)
+        if(data.recordedOpeningCurrencies.isNotEmpty())Text(hiltechText("عملات لها قيد افتتاح مسجل: ","Currencies with recorded opening: ")+data.recordedOpeningCurrencies.joinToString(", "))
         if(data.priorCoverageHasGaps) Text(hiltechText("توجد فجوات أو تداخلات في الفترات السابقة. راجع التقويم المحاسبي.","Earlier periods have gaps or overlaps. Review the accounting calendar."),color=MaterialTheme.colorScheme.error)
         if(!data.includedSources.containsAll(payrollDeskSources)) Text(hiltechText("قيود الرواتب غير مشمولة في صلاحيتك الحالية.","Payroll journals are outside your current reporting scope."))
     }

@@ -34,6 +34,7 @@ import kotlinx.serialization.json.Json
     val includedSources:List<String>,val priorPeriodCount:Int,val firstIncludedDate:String,
     val priorCoverageHasGaps:Boolean,val openingBasis:String,val isCompanyWideTrialBalance:Boolean,
     val isCompleteIncomeStatement:Boolean,val rows:List<FinanceDeskAccountBalanceDto>,val totals:List<FinanceDeskBalanceTotalDto>,
+    val recordedOpeningCurrencies:List<String> = emptyList(),
 )
 @Serializable data class FinanceDeskExposureTotalDto(val currency:String,val knownOutstanding:String,val knownOverdue:String,
     val openWithoutDueDate:Long,val exceptionCount:Long,val recordCount:Long)
@@ -52,7 +53,7 @@ private fun amount(value:String)=value.matches(Regex("[0-9]+([.][0-9]+)?"))
 
 internal fun financeDeskLedgerMatches(report:FinanceDeskLedgerDto,org:String,period:String,offset:Int):Boolean =
     report.organizationId.equals(org,true) && report.periodId.equals(period,true) && report.offset==offset &&
-        !report.isCompanyWideTrialBalance && report.includedSources.toSet() in setOf(deskSources,expandedDeskSources,employeeDeskSources,deskSources+payrollDeskSources,expandedDeskSources+payrollDeskSources,employeeDeskSources+payrollDeskSources) &&
+        !report.isCompanyWideTrialBalance && (report.includedSources.toSet()-"OPENING_BALANCE") in setOf(deskSources,expandedDeskSources,employeeDeskSources,deskSources+payrollDeskSources,expandedDeskSources+payrollDeskSources,employeeDeskSources+payrollDeskSources) &&
         report.includedSources.distinct().size==report.includedSources.size &&
         report.movements.all { financeLookupIdIsUuid(it.accountId) && currency(it.currency) && amount(it.debit) && amount(it.credit) } &&
         report.movements.map { it.accountId.lowercase() to it.currency }.distinct().size==report.movements.size &&
@@ -68,9 +69,12 @@ internal fun financeDeskBalancesMatches(data:FinanceDeskBalancesDto,org:String,p
     data.organizationId.equals(org,true) && data.periodId.equals(period,true) &&
         financeValidCalendarDate(data.dateStart) && financeValidCalendarDate(data.dateEnd) &&
         financeValidCalendarDate(data.firstIncludedDate) && data.firstIncludedDate<=data.dateStart && data.dateStart<=data.dateEnd &&
-        data.priorPeriodCount>=0 && data.openingBasis=="PRIOR_POSTED_MOVEMENTS_ONLY" &&
+        data.priorPeriodCount>=0 && data.openingBasis in setOf("PRIOR_POSTED_MOVEMENTS_ONLY","RECORDED_OPENING_PLUS_PRIOR_MOVEMENTS") &&
+        (data.openingBasis=="PRIOR_POSTED_MOVEMENTS_ONLY")==data.recordedOpeningCurrencies.isEmpty() &&
+        data.recordedOpeningCurrencies.distinct().size==data.recordedOpeningCurrencies.size && data.recordedOpeningCurrencies.all(::currency) &&
         !data.isCompanyWideTrialBalance && !data.isCompleteIncomeStatement &&
-        data.includedSources.toSet() in setOf(employeeDeskSources,employeeDeskSources+payrollDeskSources) &&
+        (data.includedSources.toSet()-"OPENING_BALANCE") in setOf(employeeDeskSources,employeeDeskSources+payrollDeskSources) &&
+        (data.recordedOpeningCurrencies.isEmpty() || "OPENING_BALANCE" in data.includedSources) &&
         data.includedSources.distinct().size==data.includedSources.size &&
         data.rows.map{it.accountId.lowercase() to it.currency}.distinct().size==data.rows.size &&
         data.rows.all{r->financeLookupIdIsUuid(r.accountId)&&r.accountCode.isNotBlank()&&r.accountName.isNotBlank()&&currency(r.currency)&&
@@ -100,7 +104,7 @@ class FinanceAccountingDeskApiClient(private val api:HiltechApiClient,
 
     suspend fun ledger(org:String,period:String,offset:Int,installation:String):FinanceDeskLedgerDto {
         require(financeLookupIdIsUuid(period) && offset in 0..1_000_000)
-        val result=api.request(HttpMethod.Get,path(org)+"/ledger?periodId=$period&offset=$offset&includeSettlements=true&includeEmployee=true&includePayroll=true",
+        val result=api.request(HttpMethod.Get,path(org)+"/ledger?periodId=$period&offset=$offset&includeSettlements=true&includeEmployee=true&includePayroll=true&includeOpening=true",
             options=HiltechRequestOptions(installationId=installation),
             decode={json.decodeFromString(FinanceDeskLedgerDto.serializer(),it)})
         check(financeDeskLedgerMatches(result,org,period,offset)) { "FINANCE_DESK_LEDGER_SCOPE_MISMATCH" }

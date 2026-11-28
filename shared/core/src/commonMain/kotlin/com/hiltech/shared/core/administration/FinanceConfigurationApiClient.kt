@@ -10,7 +10,7 @@ import kotlinx.serialization.json.Json
 
 internal val financeConfigurationKinds = listOf("ACCOUNT","PERIOD","BANK")
 internal val financeConfigurationAccountKinds = listOf("SUPPLIER_PAYABLE","EXPENSE","INVENTORY_ASSET","FIXED_ASSET",
-    "TAX_RECOVERABLE","OTHER_ASSET","CUSTOMER_RECEIVABLE","SALES_REVENUE","TAX_PAYABLE","BANK_ASSET","CASH_ASSET","EMPLOYEE_ADVANCE_ASSET","EMPLOYEE_IMPREST_ASSET","PAYROLL_EXPENSE","PAYROLL_PAYABLE","PAYROLL_DEDUCTION_PAYABLE")
+    "TAX_RECOVERABLE","OTHER_ASSET","CUSTOMER_RECEIVABLE","SALES_REVENUE","TAX_PAYABLE","BANK_ASSET","CASH_ASSET","EMPLOYEE_ADVANCE_ASSET","EMPLOYEE_IMPREST_ASSET","PAYROLL_EXPENSE","PAYROLL_PAYABLE","PAYROLL_DEDUCTION_PAYABLE","EQUITY","OTHER_LIABILITY")
 internal val financeTreasuryAccountKinds=setOf("BANK_ASSET","CASH_ASSET")
 private val currencyPattern = Regex("[A-Z]{3}")
 private val bankMaskPattern = Regex("(?:[A-Za-z][A-Za-z0-9_-]{0,23}:)?[*]{2,12}[0-9]{2,4}")
@@ -65,6 +65,25 @@ internal fun financeConfigurationReceiptMatches(org: String,input: FinanceConfig
         row.treasuryInstrumentId==input.treasuryInstrumentId
 }
 
+@Serializable data class FinanceOpeningLineDto(val accountId:String,val side:String,val amount:String,val reference:String,val bankStatementId:String?=null)
+@Serializable data class FinanceOpeningInputDto(val operationId:String,val periodId:String,val currency:String,
+    val companyReference:String,val sourceReference:String,val lines:List<FinanceOpeningLineDto>)
+@Serializable data class FinanceOpeningAccountDto(val id:String,val code:String,val name:String,val accountKind:String,
+    val bankStatementId:String?=null,val bankSide:String?=null,val bankAmount:String?=null)
+@Serializable data class FinanceOpeningPeriodDto(val id:String,val dateStart:String,val dateEnd:String)
+@Serializable data class FinanceOpeningViewDto(val organizationId:String,val currency:String,val period:FinanceOpeningPeriodDto?=null,
+    val existingJournalId:String?=null,val canPost:Boolean,val accounts:List<FinanceOpeningAccountDto>,val hasMore:Boolean)
+@Serializable data class FinanceOpeningReceiptDto(val organizationId:String,val operationId:String,val journalId:String,val periodId:String,
+    val currency:String,val openingDate:String,val replayed:Boolean)
+internal val openingKinds=setOf("FIXED_ASSET","OTHER_ASSET","OTHER_LIABILITY","EQUITY","BANK_ASSET")
+internal fun openingLineValid(line:FinanceOpeningLineDto)=financeLookupIdIsUuid(line.accountId) &&
+    line.side in setOf("DEBIT","CREDIT") && com.hiltech.shared.core.finance.settlementCanonicalAmount(line.amount)!=null &&
+    plain(line.reference,8,240) && (line.bankStatementId==null||financeLookupIdIsUuid(line.bankStatementId))
+internal fun openingInputValid(input:FinanceOpeningInputDto)=financeLookupIdIsUuid(input.periodId) &&
+    currencyPattern.matches(input.currency) && plain(input.companyReference,8,160) && plain(input.sourceReference,8,240) &&
+    input.lines.size in 2..32 && input.lines.map{it.accountId.lowercase()}.distinct().size==input.lines.size &&
+    input.lines.all(::openingLineValid) && input.lines.any{it.side=="DEBIT"} && input.lines.any{it.side=="CREDIT"}
+
 class FinanceConfigurationApiClient(private val api: HiltechApiClient,
     private val json: Json=Json { ignoreUnknownKeys=true; explicitNulls=false }) {
     private fun path(org: String): String {
@@ -89,6 +108,31 @@ class FinanceConfigurationApiClient(private val api: HiltechApiClient,
                 it.records.map { row -> row.id.lowercase() }.distinct().size==it.records.size &&
                 it.records.all { row -> financeLookupIdIsUuid(row.id) && row.name.isNotBlank() && currencyPattern.matches(row.currency) })
         }
+    }
+    suspend fun opening(org:String,currency:String,installation:String):FinanceOpeningViewDto {
+        require(currencyPattern.matches(currency))
+        return api.request(HttpMethod.Get,path(org)+"/opening?currency="+currency,HiltechRequestOptions(installation),
+            decode={json.decodeFromString(FinanceOpeningViewDto.serializer(),it)}).also {v->
+                check(v.organizationId.equals(org,true)&&v.currency==currency&&
+                    (v.period==null||(financeLookupIdIsUuid(v.period.id)&&financeValidCalendarDate(v.period.dateStart)&&financeValidCalendarDate(v.period.dateEnd)&&v.period.dateStart<=v.period.dateEnd))&&
+                    (v.existingJournalId==null||financeLookupIdIsUuid(v.existingJournalId))&&
+                    (!v.canPost||(v.period!=null&&v.existingJournalId==null))&&v.accounts.size<=100&&
+                    v.accounts.map{it.id.lowercase()}.distinct().size==v.accounts.size&&v.accounts.all{a->
+                        financeLookupIdIsUuid(a.id)&&a.name.isNotBlank()&&a.code.isNotBlank()&&a.accountKind in openingKinds&&
+                        (if(a.accountKind=="BANK_ASSET")a.bankStatementId?.let(::financeLookupIdIsUuid)==true&&
+                            a.bankSide in setOf("DEBIT","CREDIT")&&a.bankAmount?.let{com.hiltech.shared.core.finance.settlementCanonicalAmount(it)!=null}==true
+                         else a.bankStatementId==null&&a.bankSide==null&&a.bankAmount==null)})
+            }
+    }
+    suspend fun postOpening(org:String,input:FinanceOpeningInputDto,installation:String):FinanceOpeningReceiptDto {
+        require(financeLookupIdIsUuid(input.operationId)&&openingInputValid(input))
+        return api.request(HttpMethod.Post,path(org)+"/opening",HiltechRequestOptions(installation,input.operationId),
+            json.encodeToString(FinanceOpeningInputDto.serializer(),input),
+            decode={json.decodeFromString(FinanceOpeningReceiptDto.serializer(),it)}).also{
+                check(it.organizationId.equals(org,true)&&it.operationId.equals(input.operationId,true)&&
+                    financeLookupIdIsUuid(it.journalId)&&it.periodId.equals(input.periodId,true)&&
+                    it.currency==input.currency&&financeValidCalendarDate(it.openingDate))
+            }
     }
     suspend fun create(org: String,input: FinanceConfigurationIntent,installation: String): FinanceConfigurationReceiptDto {
         require(financeLookupIdIsUuid(input.operationId) && financeConfigurationIntentValid(input))
