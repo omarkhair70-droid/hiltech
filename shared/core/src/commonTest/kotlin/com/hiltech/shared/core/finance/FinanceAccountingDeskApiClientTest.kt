@@ -44,6 +44,20 @@ class FinanceAccountingDeskApiClientTest {
         } finally {http.close()}
     }
 
+    @Test fun carriedBalancesNeverClaimVerifiedOpeningOrFullIncomeStatement() {
+        val row=FinanceDeskAccountBalanceDto(account,"AR","Receivables","CUSTOMER_RECEIVABLE","EGP",
+            "100","0","50","0","150","0")
+        val sources=report.includedSources+financeSettlementTypes+financeEmployeeSettlementTypes
+        val data=FinanceDeskBalancesDto(org,period,"2026-11-01","2026-11-30",sources,1,"2026-10-01",false,
+            "PRIOR_POSTED_MOVEMENTS_ONLY",false,false,listOf(row),
+            listOf(FinanceDeskBalanceTotalDto("EGP","100","0","50","0","150","0",false,"0","0","0")))
+        assertTrue(financeDeskBalancesMatches(data,org,period))
+        assertFalse(financeDeskBalancesMatches(data.copy(isCompanyWideTrialBalance=true),org,period))
+        assertFalse(financeDeskBalancesMatches(data.copy(openingBasis="VERIFIED_OPENING"),org,period))
+        assertFalse(financeDeskBalancesMatches(data.copy(isCompleteIncomeStatement=true),org,period))
+        assertFalse(financeDeskBalancesMatches(data.copy(periodId=journal),org,period))
+    }
+
     @Test fun reportCannotBeMisrepresentedAsCompanyWideOrCrossScope() {
         assertTrue(financeDeskLedgerMatches(report,org,period,0))
         assertFalse(financeDeskLedgerMatches(report.copy(organizationId=journal),org,period,0))

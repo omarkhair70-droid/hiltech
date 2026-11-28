@@ -50,6 +50,7 @@ private fun deskKind(kind:String):String=when(kind) {
     "AP" -> hiltechText("الموردون","Suppliers")
     "AR" -> hiltechText("العملاء","Customers")
     "AP_REVERSAL" -> hiltechText("عكس قيد مورد","Supplier reversal")
+    "BALANCES" -> hiltechText("أرصدة الحسابات","Account balances")
     "BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID","EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT" -> settlementLedgerTitle(kind)
     in payrollDeskSources -> payrollGlTitle(kind)
     else -> hiltechText("القيود","Journal entries")
@@ -62,6 +63,7 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
     var periodId by remember { mutableStateOf("") }
     var exposure by remember { mutableStateOf<FinanceDeskExposureDto?>(null) }
     var ledger by remember { mutableStateOf<FinanceDeskLedgerDto?>(null) }
+    var balances by remember { mutableStateOf<FinanceDeskBalancesDto?>(null) }
     var offset by remember { mutableIntStateOf(0) }
     var revision by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
@@ -83,11 +85,13 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
         }
     }
     LaunchedEffect(client,org,installation,tab,periodId,offset,revision,periods?.records) {
-        loading=true; error=false; exposure=null; ledger=null; selectedJournal=null
+        loading=true; error=false; exposure=null; ledger=null; balances=null; selectedJournal=null
         try {
             if (tab=="LEDGER") {
                 if (periods?.records?.any { it.id==periodId }==true)
                     ledger=client.ledger(org,periodId,offset,installation)
+            } else if(tab=="BALANCES") {
+                if(periods?.records?.any{it.id==periodId}==true) balances=client.balances(org,periodId,installation)
             } else exposure=client.exposure(org,tab,offset,installation)
         } catch (cancelled:CancellationException) { throw cancelled }
         catch (_:Exception) { error=true }
@@ -100,28 +104,29 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
             hiltechText("من القيود المسجلة إلى المستحقات الفعلية، دون خلط العملات أو افتراض حركة نقدية.",
                 "From posted journals to recorded obligations, without mixing currencies or inferring cash movement."))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            val tabs=listOf("AP","AR")+(if(periods!=null) listOf("LEDGER") else emptyList())
+            val tabs=listOf("AP","AR")+(if(periods!=null) listOf("BALANCES","LEDGER") else emptyList())
             tabs.forEach { item ->
                 FilterChip(selected=tab==item,onClick={
-                    if(tab!=item) { tab=item; offset=0; exposure=null; ledger=null; loading=true }
+                    if(tab!=item) { tab=item; offset=0; exposure=null; ledger=null; balances=null; loading=true }
                 },label={Text(deskKind(item))})
             }
         }
-        TextButton(onClick={offset=0;exposure=null;ledger=null;loading=true;revision++},enabled=!loading) {
+        TextButton(onClick={offset=0;exposure=null;ledger=null;balances=null;loading=true;revision++},enabled=!loading) {
             Text(hiltechText("تحديث من المصدر","Refresh from source"))
         }
-        if(tab=="LEDGER") {
+        if(tab=="LEDGER"||tab=="BALANCES") {
             periods?.let { list ->
                 HiltechRecordPicker(hiltechText("الفترة المحاسبية","Accounting period"),periodId,
                     list.records.map { HiltechRecordChoice(it.id,it.dateStart+" — "+it.dateEnd,
                         if(it.state=="CLOSED") hiltechText("مقفلة","Closed") else hiltechText("مفتوحة","Open")) },
-                    onChange={ if(periodId!=it || offset!=0) {periodId=it;offset=0;ledger=null;loading=true} },
+                    onChange={ if(periodId!=it || offset!=0) {periodId=it;offset=0;ledger=null;balances=null;loading=true} },
                     allowKnownReference=false,allowClear=false,enabled=!loading)
                 if(list.hasMore) Text(hiltechText("تظهر أحدث 100 فترة فقط.","Showing the latest 100 periods only."))
             }
             if(periods==null) Text(hiltechText("لم يتأكد الوصول إلى الدفتر الحالي.","Current ledger access was not confirmed."))
             else if(periodId.isBlank()) Text(hiltechText("لا توجد فترة محاسبية مسجلة.","No recorded accounting period."))
-            ledger?.takeIf { it.periodId==periodId && it.offset==offset && !loading }?.let { data ->
+            balances?.takeIf{tab=="BALANCES"&&it.periodId==periodId&&!loading}?.let{DeskBalances(it)}
+            ledger?.takeIf { tab=="LEDGER"&&it.periodId==periodId && it.offset==offset && !loading }?.let { data ->
                 HiltechPanel(Modifier.fillMaxWidth()) {
                     Text(hiltechText("حركة الحسابات خلال الفترة","Account movements for the period"),style=MaterialTheme.typography.titleLarge)
                     Text(if(data.includedSources.containsAll(payrollDeskSources))
@@ -211,6 +216,44 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
         if(error) Text(hiltechText("تعذر تأكيد المصدر الحالي. حدّث السجل؛ لا يُعرض مبلغ تقديري.",
             "Current source could not be confirmed. Refresh; no estimated amount is displayed."),color=MaterialTheme.colorScheme.error)
     }
+}
+
+@Composable
+private fun DeskBalances(data:FinanceDeskBalancesDto) {
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("الأرصدة من القيود المرحلة","Balances from posted journals"),style=MaterialTheme.typography.titleLarge)
+        Text(hiltechText("الرصيد المرحّل هو صافي القيود السابقة المتاحة، وليس رصيد افتتاح معتمدًا. التقرير لا يشمل الحركات غير المرحلة أو مصادر غير متاحة؛ ليس ميزان مراجعة أو قائمة دخل كاملة.",
+            "Carried balances are net prior posted entries, not verified opening balances. Unposted or unavailable sources are excluded; this is not a complete trial balance or income statement."),
+            style=MaterialTheme.typography.bodySmall)
+        Text(hiltechText("أقدم فترة مشمولة: ","Earliest included period: ")+data.firstIncludedDate)
+        if(data.priorCoverageHasGaps) Text(hiltechText("توجد فجوات أو تداخلات في الفترات السابقة. راجع التقويم المحاسبي.","Earlier periods have gaps or overlaps. Review the accounting calendar."),color=MaterialTheme.colorScheme.error)
+        if(!data.includedSources.containsAll(payrollDeskSources)) Text(hiltechText("قيود الرواتب غير مشمولة في صلاحيتك الحالية.","Payroll journals are outside your current reporting scope."))
+    }
+    data.totals.forEach { total ->
+        HiltechPanel(Modifier.fillMaxWidth()) {
+            Text(total.currency,style=MaterialTheme.typography.titleLarge)
+            HiltechKeyValue(hiltechText("الختامي — مدين","Closing debit"),total.closingDebit+" "+total.currency)
+            HiltechKeyValue(hiltechText("الختامي — دائن","Closing credit"),total.closingCredit+" "+total.currency)
+            Text(if(total.balanced)hiltechText("الأرصدة والحركة المسجلة متوازنة","Recorded balances and movement balance")
+                else hiltechText("الأرصدة غير متوازنة؛ راجع المصدر","Balances are not balanced; review the source"),
+                color=if(total.balanced)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+            Text(hiltechText("نتيجة الفترة من المصادر المتاحة","Period result from available sources"),style=MaterialTheme.typography.titleMedium)
+            HiltechKeyValue(hiltechText("الإيرادات المثبتة","Recognized revenue"),total.recognizedRevenue+" "+total.currency)
+            HiltechKeyValue(hiltechText("المصروفات المثبتة","Recognized expense"),total.recognizedExpense+" "+total.currency)
+            Text(total.recognizedResult+" "+total.currency,style=MaterialTheme.typography.headlineSmall)
+        }
+        data.rows.filter{it.currency==total.currency}.forEach { account ->
+            HiltechPanel(Modifier.fillMaxWidth()) {
+                Text(account.accountName+" · "+account.accountCode,style=MaterialTheme.typography.titleMedium)
+                HiltechRecordTable(listOf(HiltechTableColumn(hiltechText("الرصيد / الحركة","Balance / movement"),2f),
+                    HiltechTableColumn(hiltechText("مدين","Debit"),numeric=true),HiltechTableColumn(hiltechText("دائن","Credit"),numeric=true)),
+                    listOf(HiltechTableRecord(listOf(hiltechText("مرحّل من السابق","Carried forward"),account.openingDebit,account.openingCredit)),
+                        HiltechTableRecord(listOf(hiltechText("حركة الفترة","Period movement"),account.periodDebit,account.periodCredit)),
+                        HiltechTableRecord(listOf(hiltechText("ختامي","Closing"),account.closingDebit,account.closingCredit))),"")
+            }
+        }
+    }
+    if(data.rows.isEmpty()) Text(hiltechText("لا توجد قيود مرحلة في نطاق التقرير.","No posted entries in this report scope."))
 }
 
 @Composable

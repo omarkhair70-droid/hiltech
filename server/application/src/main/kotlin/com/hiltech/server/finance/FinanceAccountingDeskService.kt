@@ -43,6 +43,23 @@ data class FinanceDeskLedger(
     val isCompanyWideTrialBalance: Boolean = false,
     val currencyTotals: List<FinanceDeskCurrencyTotal>,
 )
+data class FinanceDeskAccountBalance(
+    val accountId:UUID,val accountCode:String,val accountName:String,val accountKind:String,val currency:String,
+    val openingDebit:String,val openingCredit:String,val periodDebit:String,val periodCredit:String,
+    val closingDebit:String,val closingCredit:String,
+)
+data class FinanceDeskBalanceTotal(
+    val currency:String,val openingDebit:String,val openingCredit:String,val periodDebit:String,val periodCredit:String,
+    val closingDebit:String,val closingCredit:String,val balanced:Boolean,
+    val recognizedRevenue:String,val recognizedExpense:String,val recognizedResult:String,
+)
+data class FinanceDeskBalances(
+    val organizationId:UUID,val periodId:UUID,val dateStart:String,val dateEnd:String,
+    val includedSources:List<String>,val priorPeriodCount:Int,val firstIncludedDate:String,
+    val priorCoverageHasGaps:Boolean,val openingBasis:String="PRIOR_POSTED_MOVEMENTS_ONLY",
+    val isCompanyWideTrialBalance:Boolean=false,val isCompleteIncomeStatement:Boolean=false,
+    val rows:List<FinanceDeskAccountBalance>,val totals:List<FinanceDeskBalanceTotal>,
+)
 data class FinanceDeskExposureTotal(
     val currency: String, val knownOutstanding: String, val knownOverdue: String,
     val openWithoutDueDate: Long, val exceptionCount: Long, val recordCount: Long,
@@ -80,35 +97,41 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
         return FinanceDeskPeriods(org,rows.take(100),rows.size>100)
     }
 
-    private fun lines(includeSettlements:Boolean,includeEmployee:Boolean,includePayroll:Boolean) = """
+    private fun lines(includeSettlements:Boolean,includeEmployee:Boolean,includePayroll:Boolean,cumulative:Boolean=false) = """
         WITH scope AS (SELECT CAST(? AS uuid) AS org,CAST(? AS uuid) AS period),
+        period_scope AS (
+            SELECT p.organization_id AS org,p.id AS period,(p.id=s.period) AS current_period
+            FROM scope s JOIN finance_gl_period selected ON selected.organization_id=s.org AND selected.id=s.period
+            JOIN finance_gl_period p ON p.organization_id=s.org
+            WHERE p.id=s.period ${if(cumulative) "OR p.date_end<selected.date_start" else ""}
+        ),
         posted_lines AS (
             SELECT 'AP' AS kind,j.id AS journal_id,j.posted_at,j.currency,
-                l.line_number,l.gl_account_id,l.side,l.amount
-            FROM scope s JOIN finance_ap_posted_journal j
+                l.line_number,l.gl_account_id,l.side,l.amount,s.current_period
+            FROM period_scope s JOIN finance_ap_posted_journal j
                 ON j.organization_id=s.org AND j.fiscal_period_id=s.period
             JOIN finance_ap_posted_journal_line l ON l.journal_id=j.id AND l.organization_id=s.org
             UNION ALL
-            SELECT 'AR',j.id,j.posted_at,j.currency,l.line_number,l.gl_account_id,l.side,l.amount
-            FROM scope s JOIN finance_ar_posted_journal j
+            SELECT 'AR',j.id,j.posted_at,j.currency,l.line_number,l.gl_account_id,l.side,l.amount,s.current_period
+            FROM period_scope s JOIN finance_ar_posted_journal j
                 ON j.organization_id=s.org AND j.fiscal_period_id=s.period
             JOIN finance_ar_posted_journal_line l ON l.journal_id=j.id AND l.organization_id=s.org
             UNION ALL
-            SELECT 'AP_REVERSAL',j.id,j.posted_at,j.currency,l.line_number,l.gl_account_id,l.side,l.amount
-            FROM scope s JOIN finance_ap_journal_reversal j
+            SELECT 'AP_REVERSAL',j.id,j.posted_at,j.currency,l.line_number,l.gl_account_id,l.side,l.amount,s.current_period
+            FROM period_scope s JOIN finance_ap_journal_reversal j
                 ON j.organization_id=s.org AND j.target_period_id=s.period
             JOIN finance_ap_journal_reversal_line l ON l.reversal_id=j.id AND l.organization_id=s.org
             ${if(includeSettlements) """
             UNION ALL
-            SELECT j.source_type,j.id,j.posted_at,j.currency,l.line_number,l.gl_account_id,l.side,l.amount
-            FROM scope s JOIN finance_settlement_gl_journal j ON j.organization_id=s.org AND j.period_id=s.period
+            SELECT j.source_type,j.id,j.posted_at,j.currency,l.line_number,l.gl_account_id,l.side,l.amount,s.current_period
+            FROM period_scope s JOIN finance_settlement_gl_journal j ON j.organization_id=s.org AND j.period_id=s.period
             JOIN finance_settlement_gl_journal_line l ON l.organization_id=s.org AND l.journal_id=j.id
             ${if(includeEmployee) "" else "WHERE j.source_type IN('BANK_ALLOCATION','CASH_VOUCHER','BANK_VOID')"}
             """ else ""}
             ${if(includePayroll) """
             UNION ALL
-            SELECT j.entry_type,j.id,j.posted_at,j.currency,l.line_number,l.gl_account_id,l.side,l.amount
-            FROM scope s JOIN finance_payroll_gl_journal j ON j.organization_id=s.org AND j.period_id=s.period
+            SELECT j.entry_type,j.id,j.posted_at,j.currency,l.line_number,l.gl_account_id,l.side,l.amount,s.current_period
+            FROM period_scope s JOIN finance_payroll_gl_journal j ON j.organization_id=s.org AND j.period_id=s.period
             JOIN finance_payroll_gl_journal_line l ON l.organization_id=s.org AND l.journal_id=j.id
             """ else ""}
         )
@@ -164,6 +187,72 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
                 (if(includePayroll) listOf("PAYROLL_ACCRUAL","PAYROLL_PAYMENT","PAYROLL_RETURN","PAYROLL_VOID") else emptyList()),
             currencyTotals=currencyTotals)
     }
+
+    /**
+     * Net carried movements are not a verified migration opening. Never infer
+     * a missing opening, combine currencies, or label a partial source set a
+     * company-wide trial balance. Current-period P&L is a posted-source view.
+     */
+    fun balances(org:UUID,period:UUID,includeSettlements:Boolean,includeEmployee:Boolean,includePayroll:Boolean):FinanceDeskBalances {
+        val coverage=jdbc.query("""
+            WITH selected AS (SELECT id,date_start,date_end FROM finance_gl_period WHERE organization_id=? AND id=?),
+            earlier AS (
+                SELECT p.date_start,p.date_end,lag(p.date_end) OVER(ORDER BY p.date_start,p.date_end,p.id) AS previous_end
+                FROM finance_gl_period p CROSS JOIN selected s
+                WHERE p.organization_id=? AND p.date_end<s.date_start
+            )
+            SELECT s.date_start,s.date_end,
+                (SELECT count(*) FROM earlier)::int AS prior_count,
+                coalesce((SELECT min(date_start) FROM earlier),s.date_start) AS first_date,
+                (EXISTS(SELECT 1 FROM earlier WHERE previous_end IS NOT NULL AND date_start<>previous_end+1)
+                    OR coalesce((SELECT max(date_end)+1<>s.date_start FROM earlier),false)) AS gaps
+            FROM selected s
+        """.trimIndent(),{r,_->Coverage(r.getDate("date_start").toString(),r.getDate("date_end").toString(),
+            r.getInt("prior_count"),r.getDate("first_date").toString(),r.getBoolean("gaps"))},org,period,org).singleOrNull()
+            ?:financeDeskUnavailable()
+        val rows=jdbc.query(lines(includeSettlements,includeEmployee,includePayroll,cumulative=true)+"""
+            , account_sums AS (
+                SELECT gl_account_id,currency,
+                    sum(CASE WHEN NOT current_period AND side='DEBIT' THEN amount
+                             WHEN NOT current_period AND side='CREDIT' THEN -amount ELSE 0 END) AS opening,
+                    sum(CASE WHEN current_period AND side='DEBIT' THEN amount ELSE 0 END) AS period_debit,
+                    sum(CASE WHEN current_period AND side='CREDIT' THEN amount ELSE 0 END) AS period_credit
+                FROM posted_lines GROUP BY gl_account_id,currency
+            )
+            SELECT a.id,a.account_code,a.account_name,a.account_kind,m.currency,
+                greatest(m.opening,0) AS opening_debit,greatest(-m.opening,0) AS opening_credit,
+                m.period_debit,m.period_credit,
+                greatest(m.opening+m.period_debit-m.period_credit,0) AS closing_debit,
+                greatest(-m.opening-m.period_debit+m.period_credit,0) AS closing_credit
+            FROM account_sums m JOIN scope s ON true
+            JOIN finance_gl_account a ON a.organization_id=s.org AND a.id=m.gl_account_id
+            ORDER BY m.currency,a.account_code,a.id
+        """,{r,_->FinanceDeskAccountBalance(r.getObject("id",UUID::class.java),r.getString("account_code"),
+            r.getString("account_name"),r.getString("account_kind"),r.getString("currency").trim(),
+            r.getBigDecimal("opening_debit").toPlainString(),r.getBigDecimal("opening_credit").toPlainString(),
+            r.getBigDecimal("period_debit").toPlainString(),r.getBigDecimal("period_credit").toPlainString(),
+            r.getBigDecimal("closing_debit").toPlainString(),r.getBigDecimal("closing_credit").toPlainString())},org,period)
+        val totals=rows.groupBy{it.currency}.map{(currency,accounts)->
+            fun sum(amount:(FinanceDeskAccountBalance)->String)=accounts.fold(BigDecimal.ZERO){total,a->total+BigDecimal(amount(a))}
+            val od=sum{it.openingDebit};val oc=sum{it.openingCredit}
+            val pd=sum{it.periodDebit};val pc=sum{it.periodCredit}
+            val cd=sum{it.closingDebit};val cc=sum{it.closingCredit}
+            val revenue=accounts.filter{it.accountKind=="SALES_REVENUE"}.fold(BigDecimal.ZERO){total,a->
+                total+BigDecimal(a.periodCredit)-BigDecimal(a.periodDebit)}
+            val expense=accounts.filter{it.accountKind in setOf("EXPENSE","PAYROLL_EXPENSE")}.fold(BigDecimal.ZERO){total,a->
+                total+BigDecimal(a.periodDebit)-BigDecimal(a.periodCredit)}
+            FinanceDeskBalanceTotal(currency,od.toPlainString(),oc.toPlainString(),pd.toPlainString(),pc.toPlainString(),
+                cd.toPlainString(),cc.toPlainString(),od.compareTo(oc)==0&&pd.compareTo(pc)==0&&cd.compareTo(cc)==0,
+                revenue.toPlainString(),expense.toPlainString(),(revenue-expense).toPlainString())
+        }
+        return FinanceDeskBalances(org,period,coverage.start,coverage.end,
+            listOf("AP","AR","AP_REVERSAL")+
+                (if(includeSettlements)listOf("BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID")else emptyList())+
+                (if(includeSettlements&&includeEmployee)listOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT")else emptyList())+
+                (if(includePayroll)listOf("PAYROLL_ACCRUAL","PAYROLL_PAYMENT","PAYROLL_RETURN","PAYROLL_VOID")else emptyList()),
+            coverage.count,coverage.first,coverage.gaps,rows=rows,totals=totals)
+    }
+    private data class Coverage(val start:String,val end:String,val count:Int,val first:String,val gaps:Boolean)
 
     fun exposure(org: UUID, kind: String, day: LocalDate, offset: Int): FinanceDeskExposure {
         require(kind in setOf("AP","AR"))
@@ -240,6 +329,13 @@ class FinanceAccountingDeskService @org.springframework.beans.factory.annotation
     }
 
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
+    fun balances(actor:UUID,org:UUID,period:UUID,includePayroll:Boolean):FinanceDeskBalances {
+        authorize(actor,org,true)
+        val payrollAllowed=includePayroll && (payrollAuthority?.canPrepare(actor,org)==true || payrollAuthority?.canReview(actor,org)==true)
+        return store.balances(org,period,true,true,payrollAllowed)
+    }
+
+    @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
     fun exposure(actor: UUID,org: UUID,kind: String,offset: Int): FinanceDeskExposure {
         if (offset !in 0..1_000_000 || kind !in setOf("AP","AR")) financeDeskUnavailable()
         authorize(actor,org,false)
@@ -257,6 +353,12 @@ class FinanceAccountingDeskController(private val desk: FinanceAccountingDeskSer
         @RequestParam(defaultValue="0") offset: Int,@RequestParam(defaultValue="false") includeSettlements:Boolean,
         @RequestParam(defaultValue="false") includeEmployee:Boolean,@RequestParam(defaultValue="false") includePayroll:Boolean) =
         desk.ledger(actor(http),orgId,periodId,offset,includeSettlements,includeEmployee,includePayroll)
+
+    @GetMapping("/v1/finance/organizations/{orgId}/accounting-desk/balances")
+    fun balances(http:HttpServletRequest,@PathVariable orgId:UUID,@RequestParam periodId:UUID,
+        @RequestParam(defaultValue="false") includePayroll:Boolean) =
+        org.springframework.http.ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+            .body(desk.balances(actor(http),orgId,periodId,includePayroll))
 
     @GetMapping("/v1/finance/organizations/{orgId}/accounting-desk/exposure/{kind}")
     fun exposure(http: HttpServletRequest,@PathVariable orgId: UUID,@PathVariable kind: String,

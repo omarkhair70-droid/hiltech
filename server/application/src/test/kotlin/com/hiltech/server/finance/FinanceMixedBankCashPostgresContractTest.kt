@@ -3,6 +3,7 @@ package com.hiltech.server.finance
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -761,6 +762,26 @@ class FinanceMixedBankCashPostgresContractTest {
        assertEquals(0,custodyMovement.credit.toBigDecimal().compareTo(funding80))
        assertEquals(0,employeeReport.movements.single{it.accountId==expenseGl}.debit.toBigDecimal().compareTo(cash50+expense20))
        assertEquals(8L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,period))
+       val balances=desk.balances(org,period,true,true,false)
+       assertFalse(balances.isCompanyWideTrialBalance)
+       assertEquals("PRIOR_POSTED_MOVEMENTS_ONLY",balances.openingBasis)
+       assertTrue(balances.totals.single().balanced)
+       assertEquals(0,balances.rows.single{it.accountId==custodyGl}.closingDebit.toBigDecimal().signum())
+       assertEquals(0,balances.rows.single{it.accountId==custodyGl}.closingCredit.toBigDecimal().signum())
+       assertEquals(0,balances.rows.single{it.accountId==expenseGl}.closingDebit.toBigDecimal().compareTo(cash50+expense20))
+       val nextPeriod=UUID.randomUUID()
+       val end=checkNotNull(jdbc.queryForObject("SELECT date_end FROM finance_gl_period WHERE organization_id=? AND id=?",LocalDate::class.java,org,period))
+       insert("""INSERT INTO finance_gl_period(id,organization_id,date_start,date_end,state,approved_company_period_reference,created_at)
+           VALUES(?,?,?,?,'OPEN','SYNTHETIC-NEXT-PERIOD',?)""",nextPeriod,org,end.plusDays(1),end.plusDays(30),t.plusHours(14))
+       val carry=desk.balances(org,nextPeriod,true,true,false)
+       assertEquals(1,carry.priorPeriodCount)
+       assertFalse(carry.priorCoverageHasGaps)
+       assertTrue(carry.totals.single().balanced)
+       val carriedCost=carry.rows.single{it.accountId==expenseGl}
+       assertEquals(0,carriedCost.openingDebit.toBigDecimal().compareTo(cash50+expense20))
+       assertEquals(0,carriedCost.periodDebit.toBigDecimal().signum())
+       assertEquals(0,carriedCost.closingDebit.toBigDecimal().compareTo(cash50+expense20))
+       assertEquals(0,carry.totals.single().recognizedExpense.toBigDecimal().signum())
      } finally { connection.rollback() }
    }
  }

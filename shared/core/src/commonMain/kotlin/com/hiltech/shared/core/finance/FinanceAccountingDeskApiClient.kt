@@ -19,6 +19,22 @@ import kotlinx.serialization.json.Json
     val movements:List<FinanceDeskMovementDto>,val journals:List<FinanceDeskJournalDto>,
     val includedSources:List<String>,val isCompanyWideTrialBalance:Boolean,
     val currencyTotals:List<FinanceDeskCurrencyTotalDto>)
+@Serializable data class FinanceDeskAccountBalanceDto(
+    val accountId:String,val accountCode:String,val accountName:String,val accountKind:String,val currency:String,
+    val openingDebit:String,val openingCredit:String,val periodDebit:String,val periodCredit:String,
+    val closingDebit:String,val closingCredit:String,
+)
+@Serializable data class FinanceDeskBalanceTotalDto(
+    val currency:String,val openingDebit:String,val openingCredit:String,val periodDebit:String,val periodCredit:String,
+    val closingDebit:String,val closingCredit:String,val balanced:Boolean,
+    val recognizedRevenue:String,val recognizedExpense:String,val recognizedResult:String,
+)
+@Serializable data class FinanceDeskBalancesDto(
+    val organizationId:String,val periodId:String,val dateStart:String,val dateEnd:String,
+    val includedSources:List<String>,val priorPeriodCount:Int,val firstIncludedDate:String,
+    val priorCoverageHasGaps:Boolean,val openingBasis:String,val isCompanyWideTrialBalance:Boolean,
+    val isCompleteIncomeStatement:Boolean,val rows:List<FinanceDeskAccountBalanceDto>,val totals:List<FinanceDeskBalanceTotalDto>,
+)
 @Serializable data class FinanceDeskExposureTotalDto(val currency:String,val knownOutstanding:String,val knownOverdue:String,
     val openWithoutDueDate:Long,val exceptionCount:Long,val recordCount:Long)
 @Serializable data class FinanceDeskExposureRowDto(val journalId:String,val counterpartyName:String,val currency:String,
@@ -48,6 +64,24 @@ internal fun financeDeskLedgerMatches(report:FinanceDeskLedgerDto,org:String,per
             j.lines.isNotEmpty() && j.lines.size<=32 && j.lines.map { it.number }.distinct().size==j.lines.size &&
             j.lines.all { it.number in 1..32 && it.side in setOf("DEBIT","CREDIT") && amount(it.amount) } }
 
+internal fun financeDeskBalancesMatches(data:FinanceDeskBalancesDto,org:String,period:String):Boolean =
+    data.organizationId.equals(org,true) && data.periodId.equals(period,true) &&
+        financeValidCalendarDate(data.dateStart) && financeValidCalendarDate(data.dateEnd) &&
+        financeValidCalendarDate(data.firstIncludedDate) && data.firstIncludedDate<=data.dateStart && data.dateStart<=data.dateEnd &&
+        data.priorPeriodCount>=0 && data.openingBasis=="PRIOR_POSTED_MOVEMENTS_ONLY" &&
+        !data.isCompanyWideTrialBalance && !data.isCompleteIncomeStatement &&
+        data.includedSources.toSet() in setOf(employeeDeskSources,employeeDeskSources+payrollDeskSources) &&
+        data.includedSources.distinct().size==data.includedSources.size &&
+        data.rows.map{it.accountId.lowercase() to it.currency}.distinct().size==data.rows.size &&
+        data.rows.all{r->financeLookupIdIsUuid(r.accountId)&&r.accountCode.isNotBlank()&&r.accountName.isNotBlank()&&currency(r.currency)&&
+            listOf(r.openingDebit,r.openingCredit,r.periodDebit,r.periodCredit,r.closingDebit,r.closingCredit).all(::amount)&&
+            (settlementCanonicalAmount(r.openingDebit)==null||settlementCanonicalAmount(r.openingCredit)==null)&&
+            (settlementCanonicalAmount(r.closingDebit)==null||settlementCanonicalAmount(r.closingCredit)==null)} &&
+        data.totals.map{it.currency}.distinct().size==data.totals.size &&
+        data.totals.map{it.currency}.toSet()==data.rows.map{it.currency}.toSet() &&
+        data.totals.all{r->currency(r.currency)&&listOf(r.openingDebit,r.openingCredit,r.periodDebit,r.periodCredit,r.closingDebit,r.closingCredit).all(::amount)&&
+            listOf(r.recognizedRevenue,r.recognizedExpense,r.recognizedResult).all{amount(it.removePrefix("-"))}}
+
 class FinanceAccountingDeskApiClient(private val api:HiltechApiClient,
     private val json:Json=Json { ignoreUnknownKeys=true; explicitNulls=false }) {
     private fun path(org:String):String {
@@ -71,6 +105,15 @@ class FinanceAccountingDeskApiClient(private val api:HiltechApiClient,
             decode={json.decodeFromString(FinanceDeskLedgerDto.serializer(),it)})
         check(financeDeskLedgerMatches(result,org,period,offset)) { "FINANCE_DESK_LEDGER_SCOPE_MISMATCH" }
         return result
+    }
+
+    suspend fun balances(org:String,period:String,installation:String):FinanceDeskBalancesDto {
+        require(financeLookupIdIsUuid(period))
+        return api.request(HttpMethod.Get,path(org)+"/balances?periodId=$period&includePayroll=true",
+            options=HiltechRequestOptions(installationId=installation),
+            decode={json.decodeFromString(FinanceDeskBalancesDto.serializer(),it)}).also {
+                check(financeDeskBalancesMatches(it,org,period)){"FINANCE_DESK_BALANCE_SCOPE_MISMATCH"}
+            }
     }
 
     suspend fun exposure(org:String,kind:String,offset:Int,installation:String):FinanceDeskExposureDto {
