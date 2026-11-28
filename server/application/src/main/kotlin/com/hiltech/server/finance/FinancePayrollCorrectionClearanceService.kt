@@ -40,8 +40,14 @@ data class FinancePayrollCorrectionEmployeeReview(
     val postedPayments:String,val postedReturns:String,val recordedNet:String?,val differenceFromRecorded:String?,
     val evidenceState:String,val pendingCount:Long,val unpostedCount:Long,val voidCount:Long,val noResultCount:Long,
 )
+data class FinancePayrollDeltaPreviewLine(val lineNumber:Int,val kind:String,val componentCode:String?,
+    val accountCode:String?,val accountName:String?,val side:String,val amount:String)
+data class FinancePayrollDeltaPlan(val state:String,val employeeCount:Long,val blockedCount:Long,
+    val additionalDue:String?,val recoveryDue:String?,val grossChange:String,val deductionChange:String,val reimbursementChange:String,
+    val lines:List<FinancePayrollDeltaPreviewLine>)
 data class FinancePayrollCorrectionReviewPage(val organizationId:UUID,val originalRunVersionId:UUID,val replacementRunVersionId:UUID,
-    val currency:String,val offset:Int,val rows:List<FinancePayrollCorrectionEmployeeReview>,val hasMore:Boolean)
+    val currency:String,val offset:Int,val rows:List<FinancePayrollCorrectionEmployeeReview>,val hasMore:Boolean,
+    val deltaPlan:FinancePayrollDeltaPlan?=null)
 data class FinancePayrollClearanceInput(val operationId:UUID,val originalRunVersionId:UUID,val replacementRunVersionId:UUID,
     val disposition:String,val reasonReference:String,val financeReference:String)
 
@@ -126,7 +132,20 @@ class FinancePayrollCorrectionClearanceService(
                 r.getBigDecimal(4).toPlainString(),r.getBigDecimal(5).toPlainString(),r.getBigDecimal(6).toPlainString(),
                 r.getBigDecimal(7).toPlainString(),r.getBigDecimal(8).toPlainString(),r.getBigDecimal(9)?.toPlainString(),
                 r.getBigDecimal(10)?.toPlainString(),r.getString(11),r.getLong(12),r.getLong(13),r.getLong(14),r.getLong(15))},org,replacement,offset)
-        return FinancePayrollCorrectionReviewPage(org,candidate.first,replacement,candidate.second,offset,rows.take(50),rows.size>50)
+        val deltaPlan=jdbc.query("""SELECT plan_state,employee_count,blocked_count,additional_due,recovery_due,gross_change,deduction_change,reimbursement_change
+            FROM finance_payroll_settled_delta_plan WHERE organization_id=? AND replacement_run_version_id=?""",
+            {r,_->FinancePayrollDeltaPlan(r.getString(1),r.getLong(2),r.getLong(3),r.getBigDecimal(4)?.toPlainString(),
+                r.getBigDecimal(5)?.toPlainString(),r.getBigDecimal(6).toPlainString(),r.getBigDecimal(7).toPlainString(),
+                r.getBigDecimal(8).toPlainString(),emptyList())},org,replacement).singleOrNull()
+        val preview=deltaPlan?.let{plan->
+            val lines=if(plan.state in setOf("REVIEW_READY","RECOVERY_ACCOUNT_REQUIRED"))jdbc.query("""
+                SELECT line_number,line_kind,component_code,account_code,account_name,side,amount
+                FROM finance_payroll_settled_delta_preview_line WHERE organization_id=? AND replacement_run_version_id=? ORDER BY line_number
+            """,{r,_->FinancePayrollDeltaPreviewLine(r.getInt(1),r.getString(2),r.getString(3),r.getString(4),r.getString(5),
+                r.getString(6),r.getBigDecimal(7).toPlainString())},org,replacement)else emptyList()
+            plan.copy(lines=lines)
+        }
+        return FinancePayrollCorrectionReviewPage(org,candidate.first,replacement,candidate.second,offset,rows.take(50),rows.size>50,preview)
     }
 
     fun record(actor:UUID,org:UUID,input:FinancePayrollClearanceInput,correlation:String):FinancePayrollCommandReceipt {

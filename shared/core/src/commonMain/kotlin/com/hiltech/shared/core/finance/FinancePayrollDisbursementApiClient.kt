@@ -108,8 +108,29 @@ internal fun payrollGlIntentValid(input:FinancePayrollGlPostDto):Boolean =
     val postedPayments:String,val postedReturns:String,val recordedNet:String?=null,val differenceFromRecorded:String?=null,
     val evidenceState:String,val pendingCount:Long,val unpostedCount:Long,val voidCount:Long,val noResultCount:Long,
 )
+@Serializable data class FinancePayrollDeltaPreviewLineDto(val lineNumber:Int,val kind:String,val componentCode:String?=null,
+    val accountCode:String?=null,val accountName:String?=null,val side:String,val amount:String)
+@Serializable data class FinancePayrollDeltaPlanDto(val state:String,val employeeCount:Long,val blockedCount:Long,
+    val additionalDue:String?=null,val recoveryDue:String?=null,val grossChange:String,val deductionChange:String,val reimbursementChange:String,
+    val lines:List<FinancePayrollDeltaPreviewLineDto>)
 @Serializable data class FinancePayrollCorrectionReviewPageDto(val organizationId:String,val originalRunVersionId:String,val replacementRunVersionId:String,
-    val currency:String,val offset:Int,val rows:List<FinancePayrollCorrectionEmployeeReviewDto>,val hasMore:Boolean)
+    val currency:String,val offset:Int,val rows:List<FinancePayrollCorrectionEmployeeReviewDto>,val hasMore:Boolean,
+    val deltaPlan:FinancePayrollDeltaPlanDto?=null)
+internal fun validPayrollDeltaPlan(p:FinancePayrollDeltaPlanDto):Boolean {
+    val signed=Regex("-?[0-9]+([.][0-9]{1,6})?")
+    val nonnegative=Regex("[0-9]+([.][0-9]{1,6})?")
+    val preview=p.state in setOf("REVIEW_READY","RECOVERY_ACCOUNT_REQUIRED")
+    return p.state in setOf("EVIDENCE_REQUIRED","COMPONENTS_REQUIRED","ACCOUNT_TREATMENT_REQUIRED","BALANCE_REQUIRED",
+        "RECOVERY_ACCOUNT_REQUIRED","REVIEW_READY") && p.employeeCount>0 && p.blockedCount in 0..p.employeeCount &&
+        listOf(p.grossChange,p.deductionChange,p.reimbursementChange).all{it.matches(signed)} &&
+        (if(p.blockedCount>0) p.state=="EVIDENCE_REQUIRED"&&p.additionalDue==null&&p.recoveryDue==null
+         else p.state!="EVIDENCE_REQUIRED"&&p.additionalDue?.matches(nonnegative)==true&&p.recoveryDue?.matches(nonnegative)==true) &&
+        (preview||p.lines.isEmpty()) && p.lines.size<=33 && p.lines.map{it.lineNumber}.distinct().size==p.lines.size &&
+        p.lines.all{l->l.lineNumber in 1..33&&l.kind in setOf("EARNINGS","DEDUCTION","REIMBURSEMENT","ADDITIONAL_PAYABLE","EMPLOYEE_RECOVERY")&&
+            l.side in setOf("DEBIT","CREDIT")&&settlementCanonicalAmount(l.amount)!=null&&
+            (if(l.kind=="EMPLOYEE_RECOVERY")p.state=="RECOVERY_ACCOUNT_REQUIRED"&&l.side=="DEBIT"&&l.accountCode==null&&l.accountName==null
+             else !l.accountCode.isNullOrBlank()&&!l.accountName.isNullOrBlank())}
+}
 internal fun validPayrollCorrectionReview(row:FinancePayrollCorrectionEmployeeReviewDto):Boolean {
     val nonnegative=Regex("[0-9]+([.][0-9]{1,6})?")
     val signed=Regex("-?[0-9]+([.][0-9]{1,6})?")
@@ -221,7 +242,7 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
                 check(sameId(v.organizationId,org)&&sameId(v.originalRunVersionId,original)&&sameId(v.replacementRunVersionId,replacement)&&
                     v.currency==currency&&v.offset==offset&&v.rows.size<=50&&
                     v.rows.map{it.employeeId.lowercase()}.distinct().size==v.rows.size&&v.rows.all(::validPayrollCorrectionReview)&&
-                    (!v.hasMore||v.rows.size==50))
+                    (!v.hasMore||v.rows.size==50)&&(v.deltaPlan==null||validPayrollDeltaPlan(v.deltaPlan)))
             }})
     }
     suspend fun apply(intent: FinancePayrollIntent, installation: String): FinancePayrollCommandReceiptDto {

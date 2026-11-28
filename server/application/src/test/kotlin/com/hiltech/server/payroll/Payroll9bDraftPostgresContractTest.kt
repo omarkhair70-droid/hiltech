@@ -982,6 +982,24 @@ class Payroll9bDraftPostgresContractTest {
                 assertNull(deltaBasis["additional_due"])
                 assertNull(deltaBasis["recovery_due"])
                 assertEquals(false,deltaBasis["all_employees_ready"])
+                // Differential accounting must keep employee receivables and payables distinct.
+                fun deltaBalanced(gross:String,deduction:String,reimbursement:String,additional:String,recovery:String):Boolean =
+                    jdbc.queryForObject("""SELECT finance_payroll_settled_delta_balanced(
+                        CAST(? AS numeric),CAST(? AS numeric),CAST(? AS numeric),CAST(? AS numeric),CAST(? AS numeric))""",
+                        Boolean::class.java,gross,deduction,reimbursement,additional,recovery)==true
+                assertTrue(deltaBalanced("500","0","0","500","0"))
+                assertTrue(deltaBalanced("-500","0","0","0","500"))
+                assertTrue(deltaBalanced("600","200","100","800","300"))
+                assertTrue(deltaBalanced("0","0","0","500","500"))
+                assertFalse(deltaBalanced("600","200","100","500","500"))
+                assertFalse(deltaBalanced("-500","0","0","-500","0"))
+                val blockedPlan=checkNotNull(clearanceService.employeeReview(reviewer,org,correctedRun,0).deltaPlan)
+                assertEquals("EVIDENCE_REQUIRED",blockedPlan.state)
+                assertEquals(1L,blockedPlan.employeeCount)
+                assertEquals(1L,blockedPlan.blockedCount)
+                assertNull(blockedPlan.additionalDue)
+                assertNull(blockedPlan.recoveryDue)
+                assertTrue(blockedPlan.lines.isEmpty())
 
                 val clearance=clearanceService.record(reviewer,org,request,"synthetic-clearance")
                 assertEquals("CLEARED",clearance.state)

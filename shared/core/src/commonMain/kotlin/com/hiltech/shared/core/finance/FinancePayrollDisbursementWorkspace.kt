@@ -661,6 +661,32 @@ private fun FinancePayrollCorrectionEmployeeReview(client:FinancePayrollDisburse
             TextButton(onClick={revision++}){Text(hiltechText("إعادة المحاولة","Retry"))}
         }
         data?.let{page->
+            page.deltaPlan?.let{plan->
+                HorizontalDivider()
+                Text(hiltechText("المعالجة المحاسبية للفروق","Differential accounting"),style=MaterialTheme.typography.titleMedium)
+                val planLabel=when(plan.state){
+                    "REVIEW_READY"->hiltechText("معاينة قيد الفروق من المصدر","Source-bound journal preview")
+                    "RECOVERY_ACCOUNT_REQUIRED"->hiltechText("معاينة القيد؛ يلزم حساب معتمد لاسترداد الزيادات","Journal preview; approved recovery account required")
+                    "COMPONENTS_REQUIRED"->hiltechText("راجع مكونات الكشفين","Review both payroll component sets")
+                    "ACCOUNT_TREATMENT_REQUIRED"->hiltechText("يلزم اعتماد المعالجة المحاسبية للمكونات المتغيرة","Changed components require approved account treatment")
+                    "BALANCE_REQUIRED"->hiltechText("توازن الفروق غير مؤكد","Differential source does not balance")
+                    else->hiltechText("أكمل تسوية الصرف السابق لكل الموظفين","Reconcile prior settlement for all employees")
+                }
+                Text(planLabel,style=MaterialTheme.typography.bodyMedium)
+                if(plan.blockedCount>0)HiltechKeyValue(hiltechText("موظفون يحتاجون مراجعة","Employees requiring review"),plan.blockedCount.toString()+" / "+plan.employeeCount)
+                plan.additionalDue?.let{HiltechKeyValue(hiltechText("إجمالي الفروق المستحقة","Total additional payable"),it+" "+page.currency)}
+                plan.recoveryDue?.let{HiltechKeyValue(hiltechText("إجمالي الزيادات المطلوب تسويتها","Total excess to reconcile"),it+" "+page.currency)}
+                if(plan.state in setOf("REVIEW_READY","RECOVERY_ACCOUNT_REQUIRED")){
+                    plan.lines.forEach{line->
+                        val name=line.accountName?.let{line.accountCode.orEmpty()+" · "+it}
+                            ?:hiltechText("حساب استرداد الموظفين غير محدد","Employee recovery account not selected")
+                        val side=if(line.side=="DEBIT")hiltechText("مدين","Debit")else hiltechText("دائن","Credit")
+                        HiltechKeyValue(side+" · "+name+(line.componentCode?.let{" · "+it}?: ""),line.amount+" "+page.currency)
+                    }
+                    if(plan.lines.isEmpty())Text(hiltechText("لا توجد فروق قيد من المكونات المسجلة.","No journal difference in the recorded components."))
+                    Text(hiltechText("معاينة فقط؛ لا ترحيل ولا صرف ولا خصم تلقائي.","Preview only; no posting, payment or automatic deduction."),style=MaterialTheme.typography.bodySmall)
+                }
+            }
             if(page.rows.isEmpty())Text(hiltechText("لا توجد سجلات في هذه الصفحة.","No records on this page."))
             page.rows.forEach{employee->
                 HorizontalDivider()
