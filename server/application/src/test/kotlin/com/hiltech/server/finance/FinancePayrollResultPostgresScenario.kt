@@ -295,6 +295,12 @@ object FinancePayrollResultPostgresScenario {
                     FROM finance_payroll_gl_journal_line l JOIN finance_payroll_gl_journal j ON j.id=l.journal_id AND j.organization_id=l.organization_id
                     WHERE j.organization_id=? AND j.period_id=? AND l.gl_account_id=?""",BigDecimal::class.java,org,glPeriod,liabilityGl))
                 assertEquals(0,balance.compareTo(instruction.amount))
+                val accountingDesk=FinanceAccountingDeskReadStore(jdbc)
+                assertTrue(accountingDesk.ledger(org,glPeriod,0).journals.isEmpty())
+                val payrollLedger=accountingDesk.ledger(org,glPeriod,0,includePayroll=true)
+                assertEquals(5,payrollLedger.journals.size)
+                assertTrue(payrollLedger.currencyTotals.single().balanced)
+                assertEquals(0,payrollLedger.movements.single{it.accountId==wageGl}.debit.toBigDecimal().compareTo(instruction.amount))
                 assertEquals(BigDecimal.ZERO, repo.bank(org, credit.line)!!.remaining.stripTrailingZeros())
                 assertEquals(2, jdbc.queryForObject("SELECT count(*) FROM finance_bank_committed_usage WHERE organization_id=?", Int::class.java, org))
 

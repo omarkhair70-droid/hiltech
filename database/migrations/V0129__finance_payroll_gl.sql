@@ -193,7 +193,7 @@ FROM finance_gl_period p CROSS JOIN LATERAL (
  UNION ALL
  SELECT concat_ws(':','PAYROLL_GL',j.id::text,j.entry_type,j.run_version_id::text,j.release_id::text,
     j.source_event_id::text,j.original_journal_id::text,j.debit_account_id::text,j.credit_account_id::text,
-    j.amount::text,j.currency,j.source_recorded_at::text)
+    j.amount::text,j.currency,extract(epoch FROM j.source_recorded_at)::text)
  FROM finance_payroll_gl_journal j WHERE j.organization_id=p.organization_id AND j.period_id=p.id
  ) x
 ) e;

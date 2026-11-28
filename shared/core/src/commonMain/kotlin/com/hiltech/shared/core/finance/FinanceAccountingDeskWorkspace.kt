@@ -51,6 +51,7 @@ private fun deskKind(kind:String):String=when(kind) {
     "AR" -> hiltechText("العملاء","Customers")
     "AP_REVERSAL" -> hiltechText("عكس قيد مورد","Supplier reversal")
     "BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID","EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT" -> settlementLedgerTitle(kind)
+    in payrollDeskSources -> payrollGlTitle(kind)
     else -> hiltechText("القيود","Journal entries")
 }
 
@@ -123,7 +124,10 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
             ledger?.takeIf { it.periodId==periodId && it.offset==offset && !loading }?.let { data ->
                 HiltechPanel(Modifier.fillMaxWidth()) {
                     Text(hiltechText("حركة الحسابات خلال الفترة","Account movements for the period"),style=MaterialTheme.typography.titleLarge)
-                    Text(if(data.includedSources.containsAll(financeEmployeeSettlementTypes))
+                    Text(if(data.includedSources.containsAll(payrollDeskSources))
+                        hiltechText("تشمل القيود المرحلة ضمن المصادر المتاحة، ومنها قيود الرواتب البسيطة. لا تشمل أرصدة الافتتاح أو الرواتب التي تتطلب توزيعًا محاسبيًا أو حركات لم ترحل؛ ليست ميزان مراجعة شاملًا.",
+                            "Includes posted journals from available sources, including earnings-only payroll. Excludes opening balances, payroll requiring allocation, and unposted movements; not a complete trial balance.")
+                    else if(data.includedSources.containsAll(financeEmployeeSettlementTypes))
                         hiltechText("تشمل القيود المرحلة للموردين والعملاء والسداد والتحصيل والسلف والعهد والمصروفات. لا تشمل أرصدة الافتتاح والرواتب والحركات غير المرحلة؛ ليست ميزان مراجعة شاملًا.",
                             "Includes posted AP/AR, settlement, custody and paid-cost journals. Excludes opening balances, payroll and unposted movements; not a complete trial balance.")
                     else if(data.includedSources.containsAll(financeSettlementTypes))

@@ -154,6 +154,7 @@ fun FinancePayrollDisbursementWorkspace(
                     "PREPARED" -> hiltechText("تم تجهيز سجل المطابقة", "Reconciliation instructions prepared")
                     "SUBMITTED_FOR_REVIEW" -> hiltechText("أُرسلت المطابقة للمراجع المستقل", "Match submitted for independent review")
                     "REJECTED" -> hiltechText("تم رفض المطابقة دون تسجيل صرف", "Match rejected without recording payment")
+                    "POSTED" -> hiltechText("تم ترحيل القيد المحاسبي", "Accounting journal posted")
                     else -> hiltechText("تم تسجيل النتيجة المعتمدة", "Approved result recorded")
                 }, HiltechStateTone.CURRENT)
                 if (error != null || runFailed) Text(hiltechText("النتيجة مؤكدة، لكن العرض المحدث لم يُحمّل. أعد التحديث دون إنشاء طلب آخر.",
@@ -195,6 +196,12 @@ fun FinancePayrollDisbursementWorkspace(
             }
             if (runLoading) CircularProgressIndicator()
             if (runFailed) Text(hiltechText("تعذر تحميل تفاصيل الكشف. استخدم التحديث للمحاولة مجددًا.", "The run details could not load. Refresh to retry."))
+        }
+
+        if(batch?.prepared==true && access?.canPrepare==true && runId.isNotBlank()) key(runId) {
+            FinancePayrollGlSection(client,organizationId,runId,installationId,refresh,enabled,newOperationId){post,title,detail->
+                prepare(FinancePayrollIntent(post.operationId,organizationId,"POST_GL",runId,title,ledgerPost=post),detail)
+            }
         }
 
         if (run?.instructions?.isNotEmpty() == true) BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -338,6 +345,7 @@ fun FinancePayrollDisbursementWorkspace(
             Text(when (intent.kind) {
                 "PREPARE_BATCH" -> hiltechText("تجهيز سجل داخلي بالمستحقات المعتمدة لمطابقتها مع الحركات البنكية.", "Prepare internal approved obligations for matching to actual bank movements.")
                 "PROPOSE_RESULT" -> hiltechText("ستُرسل المطابقة للمراجعة المستقلة قبل تغيير حالة صرف الموظف.", "Submit the match for independent review before changing the employee's payment status.")
+                "POST_GL" -> hiltechText("ترحيل الأثر المحاسبي للمصدر المسجل فقط. لا ينفذ تحويلًا بنكيًا أو يغير حالة الصرف.", "Post the accounting effect of the recorded source only. No bank transfer or payment-status change.")
                 else -> if (intent.review?.decision == "APPROVE") hiltechText("أعتمد تطابق المستفيد والمبلغ والدليل المعروض، وأسجل النتيجة في تاريخ صرف الموظف.",
                     "I approve the beneficiary, amount and evidence match and record its result in the employee's disbursement history.")
                     else hiltechText("سيُحفظ الرفض مع سببه، ولن يُسجل صرف من هذا الطلب.", "Record the rejection and its reason without recording payment from this request.")
@@ -404,6 +412,107 @@ private fun financePayrollError(code: String): String = when (code) {
     "FINANCE_PAYROLL_EVIDENCE_SOURCE_MISMATCH" -> hiltechText("تعذر التحقق من مطابقة الملف المحفوظ لكشف البنك المعتمد. لم يُسجل فتح دليل صالح للاعتماد.", "The stored file could not be verified against the approved bank source. No valid evidence-view receipt was recorded.")
     "EVIDENCE_STORAGE_UNAVAILABLE" -> hiltechText("تعذر تحميل المستند حاليًا. أعد فتحه عندما يعود الاتصال.", "The source document could not be loaded. Reopen it when the connection is available.")
     "FINANCE_PAYROLL_DIFFERENTIAL_SOURCE_REQUIRED" -> hiltechText("هذا تصحيح بفروق تسوية؛ لا يمكن تجهيز كامل الراتب مرة أخرى من هذا المسار.", "This correction requires differential settlement; the full salary cannot be prepared again through this flow.")
+    "FINANCE_PAYROLL_GL_CHANGED" -> hiltechText("تغير المصدر أو الحساب أو الفترة. حدّث القيد قبل المحاولة.", "The source, account or period changed. Refresh the journal before retrying.")
+    "FINANCE_PAYROLL_GL_UNAVAILABLE" -> hiltechText("مسؤولية ترحيل القيود المالية غير متاحة.", "Current accounting posting responsibility is unavailable.")
     "FINANCE_PAYROLL_UNAVAILABLE" -> hiltechText("الصلاحية الحالية لا تتيح هذا الإجراء. راجع مسؤول المسؤوليات.", "Your current responsibility does not permit this action. Contact the responsibility administrator.")
     else -> hiltechText("تعذر تأكيد النتيجة. تحقق من الاتصال ثم تابع نفس الطلب.", "The result could not be confirmed. Check the connection and resume the same request.")
+}
+
+@Composable
+internal fun payrollGlTitle(kind:String):String=when(kind) {
+    "PAYROLL_ACCRUAL"->hiltechText("استحقاق الرواتب","Payroll accrual")
+    "PAYROLL_PAYMENT"->hiltechText("صرف رواتب مؤكد","Recorded payroll payment")
+    "PAYROLL_RETURN"->hiltechText("مرتجع رواتب","Payroll bank return")
+    else->hiltechText("عكس مطابقة رواتب","Payroll match reversal")
+}
+
+@Composable
+private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,org:String,run:String,installation:String,
+    refresh:Int,enabled:Boolean,newOperationId:()->String,onReview:(FinancePayrollGlPostDto,String,String)->Unit) {
+    var offset by rememberSaveable { mutableIntStateOf(0) }
+    var view by remember { mutableStateOf<FinancePayrollGlViewDto?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var unavailable by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf(false) }
+    var expenseId by rememberSaveable { mutableStateOf("") }
+    var payableId by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(client,org,run,installation,offset,refresh) {
+        view=null;loading=true;error=false;unavailable=false
+        try { view=client.ledger(org,run,offset,installation) }
+        catch(cancelled:CancellationException){throw cancelled}
+        catch(failure:HiltechApiException){if(failure.httpStatus in setOf(401,403,404))unavailable=true else error=true}
+        catch(_:Exception){error=true}
+        finally{loading=false}
+    }
+    HiltechPanel(Modifier.fillMaxWidth()) {
+        Text(hiltechText("الترحيل المحاسبي للرواتب","Payroll accounting"),style=MaterialTheme.typography.titleLarge)
+        Text(hiltechText("افصل استحقاق الراتب عن نتيجة الصرف. القيود لا تنفذ تحويلات ولا تغيّر نتيجة المطابقة.",
+            "Separate the salary obligation from payment results. Journal entries do not initiate transfers or change match outcomes."))
+        if(loading) CircularProgressIndicator()
+        if(unavailable)Text(hiltechText("تحتاج أيضًا مسؤولية ترحيل القيود المالية الحالية.","Current accounting posting responsibility is also required."))
+        if(error)Text(hiltechText("تعذر قراءة القيود من المصدر. حدّث الكشف.","The accounting source could not load. Refresh the run."))
+        view?.let { data ->
+            val period=data.period
+            val canPost=enabled && period!=null
+            if(period==null)Text(hiltechText("لا توجد فترة محاسبية مفتوحة للتاريخ الحالي.","No accounting period is open for the current date."))
+            else Text(hiltechText("الفترة المحاسبية: ","Accounting period: ")+period.dateStart+" — "+period.dateEnd)
+            Text(payrollGlTitle("PAYROLL_ACCRUAL"),style=MaterialTheme.typography.titleMedium)
+            Text(data.gross+" "+data.currency)
+            when(data.accrualState) {
+                "POSTED"->HiltechStateTag(hiltechText("تم إثبات الاستحقاق","Accrual posted"),HiltechStateTone.CURRENT)
+                "TREATMENT_REQUIRED"->Text(hiltechText("يتضمن الكشف خصومات أو مستردات تحتاج توزيعًا محاسبيًا. لا يُرحل صافي الراتب كتكلفة.","Deductions or reimbursements require accounting allocation. Net pay is not posted as expense."))
+                "CORRECTION_REQUIRED"->Text(hiltechText("تحتاج النسخة المصححة معالجة الفروق قبل ترحيل استحقاق آخر.","The corrected run requires differential accounting before another accrual."))
+                "NO_AMOUNT"->Text(hiltechText("لا يوجد استحقاق موجب.","No positive accrual."))
+                "NOT_PREPARED"->Text(hiltechText("جهز سجل المطابقة المالي أولًا.","Prepare the Finance reconciliation record first."))
+                "READY"->{
+                    val dr=data.expenseAccounts.singleOrNull{it.id==expenseId}
+                    val cr=data.payableAccounts.singleOrNull{it.id==payableId}
+                    if(data.expenseAccounts.isEmpty()||data.payableAccounts.isEmpty()) Text(hiltechText(
+                        "أضف حساب تكلفة الرواتب وحساب الرواتب المستحقة المعتمدين في الإعداد المالي.",
+                        "Add approved payroll expense and payroll payable accounts in financial configuration."))
+                    else {
+                        HiltechRecordPicker(hiltechText("مدين: تكلفة الرواتب","Debit: payroll expense"),expenseId,
+                            data.expenseAccounts.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={expenseId=it},allowKnownReference=false,enabled=canPost)
+                        HiltechRecordPicker(hiltechText("دائن: الرواتب المستحقة","Credit: payroll payable"),payableId,
+                            data.payableAccounts.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={payableId=it},allowKnownReference=false,enabled=canPost)
+                        if(data.hasMoreAccounts)Text(hiltechText("تظهر أول 100 حساب معتمد من كل نوع.","Showing the first 100 approved accounts of each kind."))
+                        val title=payrollGlTitle("PAYROLL_ACCRUAL")
+                        val debitLabel=hiltechText("مدين: ","Debit: ");val creditLabel=hiltechText("دائن: ","Credit: ")
+                        Button(enabled=canPost && dr!=null && cr!=null,onClick={
+                            val fiscal=period?:return@Button
+                            val debit=dr?:return@Button;val credit=cr?:return@Button
+                            val post=FinancePayrollGlPostDto(newOperationId(),"PAYROLL_ACCRUAL",periodId=fiscal.id,
+                                debitAccountId=debit.id,creditAccountId=credit.id,amount=data.gross,currency=data.currency)
+                            onReview(post,title,data.gross+" "+data.currency+"\n"+debitLabel+debit.name+"\n"+creditLabel+credit.name+"\n"+fiscal.dateStart+" — "+fiscal.dateEnd)
+                        }){Text(hiltechText("مراجعة قيد الاستحقاق","Review accrual journal"))}
+                    }
+                }
+            }
+            HorizontalDivider()
+            Text(hiltechText("نتائج الصرف غير المرحلة","Unposted payment results"),style=MaterialTheme.typography.titleMedium)
+            if(data.events.isEmpty())Text(hiltechText("لا توجد نتائج صرف تحتاج قيدًا ضمن هذه الصفحة.","No payment results need a journal on this page."))
+            data.events.forEach { event ->
+                val title=payrollGlTitle(event.entryType)
+                val debitLabel=hiltechText("مدين: ","Debit: ");val creditLabel=hiltechText("دائن: ","Credit: ")
+                Text(title+" · "+event.employeeName,style=MaterialTheme.typography.titleMedium)
+                Text(event.amount+" "+event.currency)
+                event.debitAccountName?.let{Text(debitLabel+it)}
+                event.creditAccountName?.let{Text(creditLabel+it)}
+                if(!event.ready)Text(hiltechText("أكمل القيد السابق أو ربط الحساب البنكي المعتمد أولًا.","Post the preceding journal or link the approved bank account first."))
+                else OutlinedButton(enabled=canPost,onClick={
+                    val fiscal=period?:return@OutlinedButton
+                    val dr=event.debitAccountId?:return@OutlinedButton;val cr=event.creditAccountId?:return@OutlinedButton
+                    val post=FinancePayrollGlPostDto(newOperationId(),event.entryType,event.eventId,event.originalJournalId,
+                        fiscal.id,dr,cr,event.amount,event.currency)
+                    if(payrollGlIntentValid(post)) onReview(post,title+" · "+event.employeeName,
+                        event.amount+" "+event.currency+"\n"+debitLabel+event.debitAccountName.orEmpty()+"\n"+creditLabel+event.creditAccountName.orEmpty()+"\n"+fiscal.dateStart+" — "+fiscal.dateEnd)
+                }){Text(hiltechText("مراجعة القيد","Review journal"))}
+                HorizontalDivider()
+            }
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                TextButton(enabled=enabled&&offset>0,onClick={offset=(offset-50).coerceAtLeast(0)}){Text(hiltechText("السابق","Previous"))}
+                TextButton(enabled=enabled&&data.hasMore,onClick={offset+=50}){Text(hiltechText("التالي","Next"))}
+            }
+        }
+    }
 }
