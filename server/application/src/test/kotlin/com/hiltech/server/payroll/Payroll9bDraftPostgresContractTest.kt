@@ -1132,11 +1132,18 @@ class Payroll9bDraftPostgresContractTest {
                 assertEquals(correctedRun,employeeReview.replacementRunVersionId)
                 assertFalse(employeeReview.hasMore)
                 val reviewedEmployee=employeeReview.rows.single()
-                assertEquals("NO_RECORDED_TRANSFER",reviewedEmployee.evidenceState)
+                // The real instruction was prepared by the earlier fixture;
+                // its nested bank outcomes were rolled back. Lack of a result is
+                // unknown, not an observed zero. The separate, independent
+                // NO_PRIOR_TRANSFER_VERIFIED attestation below is still required.
+                assertTrue(reviewedEmployee.noResultCount>0L)
+                assertEquals("UNRESOLVED",reviewedEmployee.evidenceState)
                 assertEquals(0,newer.first.net.toBigDecimal().compareTo(reviewedEmployee.originalNet.toBigDecimal()))
                 assertEquals(0,corrected.first.net.toBigDecimal().compareTo(reviewedEmployee.replacementNet.toBigDecimal()))
-                assertEquals(0,reviewedEmployee.recordedNet!!.toBigDecimal().signum())
-                assertEquals(0,corrected.first.net.toBigDecimal().compareTo(reviewedEmployee.differenceFromRecorded!!.toBigDecimal()))
+                assertNull(reviewedEmployee.recordedNet)
+                assertNull(reviewedEmployee.differenceFromRecorded)
+                assertNull(jdbc.queryForObject("SELECT finance_payroll_settled_delta_fingerprint(?,?)",
+                    String::class.java,org,correctedRun))
                 assertTrue(clearanceService.employeeReview(reviewer,org,correctedRun,50).rows.isEmpty())
 
                 // A review amount is not a settlement-ready payment source.
