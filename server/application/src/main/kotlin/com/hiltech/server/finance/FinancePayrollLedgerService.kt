@@ -51,7 +51,7 @@ data class FinancePayrollGlEvent(
     val creditAccountId:UUID?,val creditAccountName:String?,val ready:Boolean,
 )
 data class FinancePayrollGlCorrection(val originalJournalId:UUID?,val clearanceReference:String,
-    val reversalLines:List<FinanceDeskJournalLine>)
+    val reversalLines:List<FinanceDeskJournalLine>,val disposition:String="NO_PRIOR_TRANSFER_VERIFIED")
 data class FinancePayrollGlView(
     val organizationId:UUID,val runVersionId:UUID,val period:FinanceDeskPeriod?,
     val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
@@ -108,9 +108,9 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
         r.getBigDecimal("net"),r.getBigDecimal("deductions"),r.getBigDecimal("reimbursements"))},org,id).singleOrNull()
 
     private fun correction(org:UUID,run:UUID):FinancePayrollGlCorrection? {
-        val source=jdbc.query("""SELECT original_journal_id,finance_clearance_ref FROM finance_payroll_gl_correction_source
+        val source=jdbc.query("""SELECT original_journal_id,finance_clearance_ref,finance_disposition FROM finance_payroll_gl_correction_source
             WHERE organization_id=? AND replacement_run_version_id=?""",
-            {r,_->r.getObject("original_journal_id",UUID::class.java) to r.getString("finance_clearance_ref")},org,run).singleOrNull()?:return null
+            {r,_->Triple(r.getObject("original_journal_id",UUID::class.java),r.getString("finance_clearance_ref"),r.getString("finance_disposition"))},org,run).singleOrNull()?:return null
         val lines=source.first?.let{id->jdbc.query("""
             SELECT l.line_number,a.account_code,a.account_name,
               CASE WHEN l.side='DEBIT' THEN 'CREDIT' ELSE 'DEBIT' END AS side,l.amount
@@ -118,7 +118,7 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
             WHERE l.organization_id=? AND l.journal_id=? ORDER BY l.line_number
         """.trimIndent(),{r,_->FinanceDeskJournalLine(r.getInt("line_number"),r.getString("account_code"),
             r.getString("account_name"),r.getString("side"),r.getBigDecimal("amount").toPlainString())},org,id)}?:emptyList()
-        return FinancePayrollGlCorrection(source.first,source.second,lines)
+        return FinancePayrollGlCorrection(source.first,source.second,lines,source.third)
     }
 
     private fun groups(org:UUID,run:UUID)=jdbc.query("""SELECT component_kind,source_domain,component_code,amount

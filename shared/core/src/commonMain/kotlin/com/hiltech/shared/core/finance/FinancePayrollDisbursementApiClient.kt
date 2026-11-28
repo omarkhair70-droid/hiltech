@@ -73,7 +73,7 @@ data class FinancePayrollCommandReceiptDto(
     val creditAccountId:String?=null,val creditAccountName:String?=null,val ready:Boolean,
 )
 @Serializable data class FinancePayrollGlCorrectionDto(val originalJournalId:String?=null,val clearanceReference:String,
-    val reversalLines:List<FinanceDeskJournalLineDto>)
+    val reversalLines:List<FinanceDeskJournalLineDto>,val disposition:String="NO_PRIOR_TRANSFER_VERIFIED")
 @Serializable data class FinancePayrollGlViewDto(
     val organizationId:String,val runVersionId:String,val period:FinanceDeskPeriodDto?=null,
     val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
@@ -96,11 +96,25 @@ internal fun payrollGlIntentValid(input:FinancePayrollGlPostDto):Boolean =
         it.domain.matches(Regex("[A-Z][A-Z0-9_-]{0,79}")) && it.code.matches(Regex("[A-Z][A-Z0-9_-]{0,79}")) &&
         it.reference.length in 8..240 && it.reference==it.reference.trim() && it.reference.none{c->c.code<32||c.code==127}}
 
+@Serializable data class FinancePayrollCorrectionCandidateDto(
+    val originalRunVersionId:String,val replacementRunVersionId:String,val periodStart:String,val periodEnd:String,
+    val originalGeneration:Int,val replacementGeneration:Int,val currency:String,val originalNet:String,val replacementNet:String,
+    val eligibleDisposition:String?=null,val alreadyCleared:Boolean,val canRecord:Boolean,
+)
+@Serializable data class FinancePayrollCorrectionCandidatesDto(val organizationId:String,val records:List<FinancePayrollCorrectionCandidateDto>,val hasMore:Boolean)
+@Serializable data class FinancePayrollClearanceInputDto(val operationId:String,val originalRunVersionId:String,val replacementRunVersionId:String,
+    val disposition:String,val reasonReference:String,val financeReference:String)
+internal fun payrollClearanceIntentValid(input:FinancePayrollClearanceInputDto)=
+    listOf(input.operationId,input.originalRunVersionId,input.replacementRunVersionId).all(::financeLookupIdIsUuid) &&
+    !input.originalRunVersionId.equals(input.replacementRunVersionId,true) &&
+    input.disposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED") &&
+    listOf(input.reasonReference,input.financeReference).all{it.length in 8..240 && it==it.trim() && it.none{c->c.code<32||c.code==127}}
+
 @Serializable
 data class FinancePayrollIntent(
     val operationId: String, val organizationId: String, val kind: String, val targetId: String, val title: String,
     val result: FinancePayrollPrepareResultDto? = null, val review: FinancePayrollReviewResultDto? = null,
-    val ledgerPost:FinancePayrollGlPostDto?=null,
+    val ledgerPost:FinancePayrollGlPostDto?=null,val clearance:FinancePayrollClearanceInputDto?=null,
 )
 
 class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
@@ -142,7 +156,7 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
                 check(sameId(v.organizationId,org) && sameId(v.runVersionId,run) && v.offset==offset &&
                     v.currency.matches(Regex("[A-Z]{3}")) && v.gross.matches(Regex("[0-9]+([.][0-9]+)?")) &&
                     v.accrualState in setOf("POSTED","REPLACED","NOT_PREPARED","CORRECTION_REQUIRED","NO_AMOUNT","TREATMENT_REQUIRED","READY") &&
-                    (v.correction==null || (v.accrualState=="READY" && v.correction.clearanceReference.isNotBlank() &&
+                    (v.correction==null || (v.accrualState=="READY" && v.correction.clearanceReference.isNotBlank() && v.correction.disposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED") &&
                         (v.correction.originalJournalId==null)==v.correction.reversalLines.isEmpty() &&
                         (v.correction.originalJournalId==null || financeLookupIdIsUuid(v.correction.originalJournalId)) &&
                         v.correction.reversalLines.size<=32 &&
@@ -169,8 +183,25 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
                         rows.all{a->financeLookupIdIsUuid(a.id) && a.name.isNotBlank() && a.accountKind==kind}})
             }})
     }
+    suspend fun corrections(org:String,installation:String):FinancePayrollCorrectionCandidatesDto =
+        api.request(HttpMethod.Get,path(org)+"/corrections",HiltechRequestOptions(installationId=installation),
+            decode={json.decodeFromString<FinancePayrollCorrectionCandidatesDto>(it).also{v->
+                check(sameId(v.organizationId,org)&&v.records.size<=100&&v.records.map{it.replacementRunVersionId.lowercase()}.distinct().size==v.records.size&&v.records.all{r->
+                    financeLookupIdIsUuid(r.originalRunVersionId)&&financeLookupIdIsUuid(r.replacementRunVersionId)&&
+                    r.originalRunVersionId!=r.replacementRunVersionId&&r.originalGeneration>0&&r.replacementGeneration>r.originalGeneration&&
+                    financeValidCalendarDate(r.periodStart)&&financeValidCalendarDate(r.periodEnd)&&r.periodStart<=r.periodEnd&&
+                    r.currency.matches(Regex("[A-Z]{3}"))&&listOf(r.originalNet,r.replacementNet).all{a->a.matches(Regex("[0-9]+([.][0-9]+)?"))}&&
+                    (r.eligibleDisposition==null||r.eligibleDisposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED"))&&
+                    (!r.canRecord||(r.eligibleDisposition!=null&&!r.alreadyCleared))
+                })
+            }})
     suspend fun apply(intent: FinancePayrollIntent, installation: String): FinancePayrollCommandReceiptDto {
         val (suffix, body, expectedState) = when (intent.kind) {
+            "CLEAR_CORRECTION" -> {
+                val clearance=requireNotNull(intent.clearance)
+                require(sameId(clearance.operationId,intent.operationId)&&sameId(clearance.replacementRunVersionId,intent.targetId)&&payrollClearanceIntentValid(clearance))
+                Triple("/corrections",json.encodeToString(FinancePayrollClearanceInputDto.serializer(),clearance),"CLEARED")
+            }
             "POST_GL" -> {
                 val post=requireNotNull(intent.ledgerPost)
                 require(sameId(intent.operationId,post.operationId) && payrollGlIntentValid(post))

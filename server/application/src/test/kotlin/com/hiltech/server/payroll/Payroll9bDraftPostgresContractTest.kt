@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -920,6 +921,12 @@ class Payroll9bDraftPostgresContractTest {
                     return id
                 }
                 val previous=post(publishedRunId,null,oldWages)
+                // Finance clearance must be bound to the actual latest draft
+                // and independent reviewer, not a free-text release request.
+                val actualSource=com.hiltech.server.finance.FinancePayrollCorrectionSource(jdbc)
+                assertNull(actualSource.verifiedFor(org,publishedRunId,correctedRun))
+                assertEquals("NO_PRIOR_TRANSFER_VERIFIED",jdbc.queryForObject(
+                    "SELECT eligible_disposition FROM finance_payroll_correction_candidate WHERE organization_id=? AND replacement_run_version_id=?",String::class.java,org,correctedRun))
                 checkNotNull(releases.release(actor,correctedRun,UUID.randomUUID(),"synthetic-no-transfer-release"))
                 val handoff=checkNotNull(realHandoff.handoff(actor,correctedRun,UUID.randomUUID(),"synthetic-no-transfer-review"))
                 val batch=UUID.randomUUID()
