@@ -266,8 +266,16 @@ object FinancePayrollResultPostgresScenario {
                         val correctedRun=settledCorrection(SettledCorrectionFixture(reviewer,accrual,wageGl,liabilityGl,glPeriod,allocations,service))
                         val extraInstruction=repo.instruction(org,repo.expected(org,correctedRun).single().financeInstructionId)!!
                         assertEquals(0,BigDecimal("5").compareTo(extraInstruction.amount))
+                        // This fixture creates a bank statement header and its exact line
+                        // in one transaction. The earlier payroll assertions left the
+                        // deferred constraints immediate; restore only the four bank
+                        // completeness guards for this atomic source construction.
+                        val bankCompleteness="finance_bank_proposal_complete_header,finance_bank_proposal_complete_line,"+
+                            "finance_bank_intake_complete_header,finance_bank_intake_complete_line"
+                        jdbc.execute("SET CONSTRAINTS "+bankCompleteness+" DEFERRED")
                         val extraBank=bank(jdbc,org,preparer,reviewer,importer,extraInstruction.amount,extraInstruction.currency,FinanceBankFlow.DEBIT,at)
                         storageFixtures.add(extraBank)
+                        jdbc.execute("SET CONSTRAINTS "+bankCompleteness+" IMMEDIATE")
                         jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE")
                         val extraBankGl=payrollChart("BANK_ASSET","SYNTH-DELTA-BANK",extraBank.line)
                         val proposal=service.propose(preparer,org,extraInstruction.id,FinancePayrollPrepareResult(UUID.randomUUID(),0,

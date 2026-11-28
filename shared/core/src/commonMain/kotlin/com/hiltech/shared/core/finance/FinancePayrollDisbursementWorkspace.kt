@@ -647,9 +647,11 @@ private fun FinancePayrollCorrectionSection(client:FinancePayrollDisbursementApi
                             Text(hiltechText("راجعت الإثبات الحقيقي وحالة الأموال السابقة.","I reviewed the actual evidence and prior funds."))
                         }
                         val draft=FinancePayrollClearanceInputDto(row.replacementRunVersionId,row.originalRunVersionId,row.replacementRunVersionId,disposition,reason.trim(),evidence.trim(),row.settlementFingerprint)
+                        val additionalLabel=hiltechText("فرق مستحق فقط: ","Additional payable only: ")
+                        val reviewDetail=row.periodStart+" — "+row.periodEnd+"\n"+row.originalNet+" → "+row.replacementNet+" "+row.currency+
+                            (row.additionalDue?.let{"\n"+additionalLabel+it+" "+row.currency}?: "")+"\n"+reason.trim()+"\n"+evidence.trim()
                         Button(enabled=enabled&&confirmed&&payrollClearanceIntentValid(draft),onClick={
-                            onReview(draft.copy(operationId=newOperationId()),label,row.periodStart+" — "+row.periodEnd+"\n"+row.originalNet+" → "+row.replacementNet+" "+row.currency+
-                                (row.additionalDue?.let{"\n"+hiltechText("فرق مستحق فقط: ","Additional payable only: ")+it+" "+row.currency}?: "")+"\n"+reason.trim()+"\n"+evidence.trim())
+                            onReview(draft.copy(operationId=newOperationId()),label,reviewDetail)
                         }){Text(hiltechText("مراجعة اعتماد التصحيح","Review clearance"))}
                     }
                 }
