@@ -91,3 +91,16 @@ Native commands retain their exact operation IDs after uncertain transport
 outcomes. Receipts and follow-up refresh are separate states. Public tests use
 synthetic identities and evidence only; production acceptance is recorded in
 the private canonical closeout register.
+
+## Historical payroll opening
+
+A cutover payroll payable is an immutable CREDIT line in the existing balanced
+opening journal. The schedule identifies each company employee, legacy payroll
+reference, historical period end and positive unpaid net residual. Its exact
+sum must equal the control account. The source is not an advance, expense,
+new payroll run, bank result or authorization to pay. Duplicate employee
+periods/references and overlaps with already released payroll are rejected;
+later payroll release also rejects overlap with a recorded opening. The
+existing opening journal authority and company/source references apply.
+Historical settlement through bank evidence and its operational remaining
+balance are a separate follow-up; no payment source is fabricated by opening.

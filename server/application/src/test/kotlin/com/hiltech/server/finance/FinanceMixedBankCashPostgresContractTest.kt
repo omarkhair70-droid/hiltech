@@ -810,6 +810,41 @@ class FinanceMixedBankCashPostgresContractTest {
        rejectedOpening{postOpening(openingPayload(receivable,equity))}
        rejectedOpening{postOpening(openingPayload(bankGl,equity,bankStatement=intake))}
        rejectedOpening{postOpening(openingPayload(fixed,equity),nextPeriod,end.plusDays(1))}
+       // A historical payroll residual is an opening liability only; isolate
+       // this fixture from the mixed AP/AR, stock and custody opening below.
+       val payrollOpening=chart("PAYROLL_PAYABLE","OPENING-PAYROLL")
+       val payrollDate=day.minusDays(30)
+       fun payrollPayload(employeeId:UUID=employee,date:LocalDate=payrollDate,residual:String="250",
+           account:UUID=payrollOpening,side:String="CREDIT",schedule:Boolean=true,duplicate:Boolean=false):String {
+           val item="""{"employeeId":"$employeeId","documentReference":"SYNTH-OLD-PAYROLL","documentDate":"$date","amount":"$residual"}"""
+           val rows=if(duplicate)"$item,"+item.replace("SYNTH-OLD-PAYROLL","SYNTH-SECOND-REF") else item
+           val details=if(schedule)""","payrollObligations":[$rows]""" else ""
+           val otherSide=if(side=="CREDIT")"DEBIT" else "CREDIT"
+           return """[{"accountId":"$fixed","side":"$otherSide","amount":"250","reference":"SYNTHETIC-ASSET-SCHEDULE"},
+               {"accountId":"$account","side":"$side","amount":"250","reference":"SYNTHETIC-PAYROLL-SCHEDULE"$details}]"""
+       }
+       rejectedOpening{postOpening(payrollPayload(schedule=false))}
+       rejectedOpening{postOpening(payrollPayload(residual="249.999999"))}
+       rejectedOpening{postOpening(payrollPayload(employeeId=UUID.randomUUID()))}
+       rejectedOpening{postOpening(payrollPayload(date=day))}
+       rejectedOpening{postOpening(payrollPayload(side="DEBIT"))}
+       rejectedOpening{postOpening(payrollPayload(account=equity))}
+       rejectedOpening{postOpening(payrollPayload(residual="125",duplicate=true))}
+       val payrollOpeningSavepoint=connection.setSavepoint()
+       try {
+           val payrollJournal=postOpening(payrollPayload())
+           val historical=jdbc.queryForMap("""SELECT employee_id,control_account_id,amount,payroll_period_end,source_fingerprint
+               FROM finance_gl_opening_payroll_obligation WHERE organization_id=? AND opening_journal_id=?""",org,payrollJournal)
+           assertEquals(employee,historical["employee_id"])
+           assertEquals(payrollOpening,historical["control_account_id"])
+           assertEquals(0,BigDecimal("250").compareTo(historical["amount"] as BigDecimal))
+           assertEquals(payrollDate.toString(),historical["payroll_period_end"].toString())
+           assertEquals(64,(historical["source_fingerprint"] as String).length)
+           assertEquals(0L,jdbc.queryForObject("SELECT count(*) FROM finance_gl_opening_employee_obligation WHERE organization_id=? AND opening_journal_id=?",Long::class.java,org,payrollJournal))
+           val openingBalances=desk.balances(org,period,true,true,false)
+           assertEquals(0,openingBalances.rows.single{it.accountId==payrollOpening}.openingCredit.toBigDecimal().compareTo(BigDecimal("250")))
+           assertTrue(openingBalances.totals.single().balanced)
+       } finally {connection.rollback(payrollOpeningSavepoint);connection.releaseSavepoint(payrollOpeningSavepoint)}
        val supplier=UUID.randomUUID()
        insert("""INSERT INTO organization(id,organization_code,legal_name,display_name,organization_type,status,created_at)
            VALUES(?,?,?,?,'SUPPLIER','ACTIVE',?)""",supplier,"SYNTH-LEGACY-SUPPLIER","Synthetic legacy supplier","Synthetic legacy supplier",t)

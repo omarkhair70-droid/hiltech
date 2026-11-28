@@ -72,7 +72,8 @@ internal fun financeConfigurationReceiptMatches(org: String,input: FinanceConfig
 @Serializable data class FinanceOpeningEmployeeObligationDto(val employeeId:String,val documentReference:String,val documentDate:String,val amount:String)
 @Serializable data class FinanceOpeningLineDto(val accountId:String,val side:String,val amount:String,val reference:String,val bankStatementId:String?=null,
     val obligations:List<FinanceOpeningObligationDto> = emptyList(),val stockValues:List<FinanceOpeningStockValueDto> = emptyList(),
-    val employeeObligations:List<FinanceOpeningEmployeeObligationDto> = emptyList())
+    val employeeObligations:List<FinanceOpeningEmployeeObligationDto> = emptyList(),
+    val payrollObligations:List<FinanceOpeningEmployeeObligationDto> = emptyList())
 @Serializable data class FinanceOpeningInputDto(val operationId:String,val periodId:String,val currency:String,
     val companyReference:String,val sourceReference:String,val lines:List<FinanceOpeningLineDto>)
 @Serializable data class FinanceOpeningAccountDto(val id:String,val code:String,val name:String,val accountKind:String,
@@ -90,7 +91,7 @@ internal fun financeConfigurationReceiptMatches(org: String,input: FinanceConfig
     val currency:String,val openingDate:String,val replayed:Boolean)
 internal val openingControlKinds=setOf("CUSTOMER_RECEIVABLE","SUPPLIER_PAYABLE")
 internal val openingEmployeeKinds=setOf("EMPLOYEE_ADVANCE_ASSET","EMPLOYEE_IMPREST_ASSET")
-internal val openingKinds=setOf("FIXED_ASSET","OTHER_ASSET","OTHER_LIABILITY","EQUITY","BANK_ASSET","INVENTORY_ASSET")+openingControlKinds+openingEmployeeKinds
+internal val openingKinds=setOf("FIXED_ASSET","OTHER_ASSET","OTHER_LIABILITY","EQUITY","BANK_ASSET","INVENTORY_ASSET")+openingControlKinds+openingEmployeeKinds+setOf("PAYROLL_PAYABLE")
 internal fun openingObligationValid(o:FinanceOpeningObligationDto)=financeLookupIdIsUuid(o.counterpartyId) &&
     plain(o.documentReference,2,96)&&financeValidCalendarDate(o.documentDate)&&
     (o.dueDate==null||(financeValidCalendarDate(o.dueDate)&&o.dueDate>=o.documentDate))&&
@@ -115,7 +116,12 @@ internal fun openingLineValid(line:FinanceOpeningLineDto)=financeLookupIdIsUuid(
     (line.employeeObligations.isEmpty()||(line.side=="DEBIT"&&line.bankStatementId==null&&line.stockValues.isEmpty()&&line.obligations.isEmpty()&&
         line.employeeObligations.size<=1000&&line.employeeObligations.all(::openingEmployeeObligationValid)&&
         line.employeeObligations.map{it.employeeId.lowercase() to it.documentReference.lowercase()}.distinct().size==line.employeeObligations.size&&
-        openingEmployeeTotal(line.employeeObligations)==openingAmountsTotal(listOf(line.amount))))
+        openingEmployeeTotal(line.employeeObligations)==openingAmountsTotal(listOf(line.amount)))) &&
+    (line.payrollObligations.isEmpty()||(line.side=="CREDIT"&&line.bankStatementId==null&&line.stockValues.isEmpty()&&line.obligations.isEmpty()&&line.employeeObligations.isEmpty()&&
+        line.payrollObligations.size<=1000&&line.payrollObligations.all(::openingEmployeeObligationValid)&&
+        line.payrollObligations.map{it.employeeId.lowercase() to it.documentReference.lowercase()}.distinct().size==line.payrollObligations.size&&
+        line.payrollObligations.map{it.employeeId.lowercase() to it.documentDate}.distinct().size==line.payrollObligations.size&&
+        openingEmployeeTotal(line.payrollObligations)==openingAmountsTotal(listOf(line.amount))))
 // Exact decimal addition without Double or currency rounding. A schedule may
 // contain up to 1000 source documents; a single posting account still has
 // its existing numeric(24,6) bound.
@@ -140,7 +146,9 @@ internal fun openingTotal(lines:List<FinanceOpeningLineDto>,side:String):String?
 internal fun openingInputValid(input:FinanceOpeningInputDto)=financeLookupIdIsUuid(input.periodId) &&
     currencyPattern.matches(input.currency) && plain(input.companyReference,8,160) && plain(input.sourceReference,8,240) &&
     input.lines.size in 2..32 && input.lines.sumOf{it.obligations.size}<=1000 && input.lines.map{it.accountId.lowercase()}.distinct().size==input.lines.size &&
-    input.lines.sumOf{it.stockValues.size}<=1000 && input.lines.sumOf{it.employeeObligations.size}<=1000 &&
+    input.lines.sumOf{it.stockValues.size}<=1000 && input.lines.sumOf{it.employeeObligations.size+it.payrollObligations.size}<=1000 &&
+    input.lines.flatMap{it.payrollObligations}.let{rows->rows.map{it.employeeId.lowercase() to it.documentDate}.distinct().size==rows.size&&
+        rows.map{it.employeeId.lowercase() to it.documentReference.lowercase()}.distinct().size==rows.size} &&
     input.lines.flatMap{it.stockValues}.let{values->values.map{it.movementId.lowercase()}.distinct().size==values.size} &&
     input.lines.all(::openingLineValid) && input.lines.any{it.side=="DEBIT"} && input.lines.any{it.side=="CREDIT"} &&
     openingTotal(input.lines,"DEBIT")?.let{it==openingTotal(input.lines,"CREDIT")&&it!="0.000000"}==true

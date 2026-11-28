@@ -27,4 +27,17 @@ class FinanceOpeningServiceTest {
         assertFalse(validFinanceOpening(input.copy(lines=listOf(account.copy(stockValues=listOf(stock,stock)),capital))))
         assertFalse(validFinanceOpening(input.copy(lines=listOf(account.copy(bankStatementId=UUID.randomUUID()),capital))))
     }
+    @Test fun historicalPayrollOpeningRequiresExactCreditAndDistinctEmployeePeriods() {
+        val row=FinanceOpeningEmployeeObligation(UUID.randomUUID(),"SYNTH-OLD-PAYROLL","2026-09-30","150.25")
+        val liability=FinanceOpeningLine(UUID.randomUUID(),"CREDIT","150.25","SYNTHETIC-PAYROLL-SCHEDULE",payrollObligations=listOf(row))
+        val debit=FinanceOpeningLine(UUID.randomUUID(),"DEBIT","150.25","SYNTHETIC-OPENING-SCHEDULE")
+        val input=FinanceOpeningInput(UUID.randomUUID(),UUID.randomUUID(),"EGP","SYNTHETIC-AUTH","SYNTHETIC-SCHEDULE",listOf(debit,liability))
+        assertTrue(validFinanceOpening(input))
+        assertFalse(validFinanceOpening(input.copy(lines=listOf(debit,liability.copy(payrollObligations=listOf(row.copy(amount="150.24")))))))
+        assertFalse(validFinanceOpening(input.copy(lines=listOf(debit.copy(side="CREDIT"),liability.copy(side="DEBIT")))))
+        assertFalse(validFinanceOpening(input.copy(lines=listOf(debit,liability.copy(bankStatementId=UUID.randomUUID())))))
+        assertFalse(validFinanceOpening(input.copy(lines=listOf(debit,liability.copy(employeeObligations=listOf(row))))))
+        assertFalse(validFinanceOpening(input.copy(lines=listOf(debit.copy(amount="300.50"),liability.copy(amount="300.50",
+            payrollObligations=listOf(row,row.copy(documentReference="SYNTH-OTHER-REF")))))))
+    }
 }

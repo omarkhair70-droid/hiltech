@@ -95,4 +95,15 @@ class FinanceConfigurationApiClientTest {
         assertFalse(openingLineValid(line.copy(bankStatementId=employee)))
         assertFalse(openingLineValid(line.copy(side="CREDIT")))
     }
+    @Test fun openingPayrollResidualRequiresCreditAndExactIndividualSchedule() {
+        val employee="44444444-5555-4666-8777-888888888888"
+        val row=FinanceOpeningEmployeeObligationDto(employee,"SYNTH-OLD-PAYROLL","2026-09-30","150.25")
+        val line=FinanceOpeningLineDto(account,"CREDIT","150.25","SYNTHETIC-PAYROLL-SCHEDULE",payrollObligations=listOf(row))
+        assertTrue(openingLineValid(line))
+        assertFalse(openingLineValid(line.copy(side="DEBIT")))
+        assertFalse(openingLineValid(line.copy(amount="150.24")))
+        assertFalse(openingLineValid(line.copy(employeeObligations=listOf(row))))
+        assertFalse(openingLineValid(line.copy(bankStatementId=employee)))
+        assertFalse(openingLineValid(line.copy(amount="300.50",payrollObligations=listOf(row,row.copy(documentReference="SYNTH-OTHER-REF")))))
+    }
 }

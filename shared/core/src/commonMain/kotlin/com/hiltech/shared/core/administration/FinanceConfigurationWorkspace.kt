@@ -328,8 +328,8 @@ private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClien
                 else if(pending==null) {
                     val first=data.period
                     if(first!=null)HiltechKeyValue(hiltechText("تاريخ الافتتاح","Opening date"),first.dateStart)
-                    Text(hiltechText("يشمل الأصول والالتزامات الأخرى وحقوق الملكية والبنوك المؤيدة، وأرصدة العملاء والموردين من المستندات القديمة. ويشمل المخزون المثبت في تاريخ الافتتاح بقيمة مراجعة. السلف والعهد التاريخية من مستنداتها المتبقية. الرواتب تحتاج مصدر افتتاح منفصل.",
-                        "Includes non-control assets, other liabilities, equity, evidenced bank openings and individually documented customer/supplier residuals. Includes verified stock openings with reviewed values. Historical staff advances and imprests use individual residuals. Payroll needs a separate opening source."))
+                    Text(hiltechText("يشمل الأصول والالتزامات الأخرى وحقوق الملكية والبنوك المؤيدة، وأرصدة العملاء والموردين من المستندات القديمة. ويشمل المخزون المثبت في تاريخ الافتتاح بقيمة مراجعة. السلف والعهد التاريخية من مستنداتها المتبقية. الرواتب المستحقة القديمة تدخل برصيد مستقل لكل موظف وفترة تاريخية.",
+                        "Includes non-control assets, other liabilities, equity, evidenced bank openings and individually documented customer/supplier residuals. Includes verified stock openings with reviewed values. Historical staff advances and imprests use individual residuals. Historical unpaid net payroll uses a separate employee-and-period residual schedule."))
                     SetupField(hiltechText("مرجع اعتماد الشركة","Company authorization"),companyReference,editable){companyReference=it.take(160)}
                     SetupField(hiltechText("مرجع كشف الأرصدة الأصلي","Original opening schedule reference"),sourceReference,editable){sourceReference=it.take(240)}
                     val choices=data.accounts.filter{a->lines.none{it.accountId==a.id}}
@@ -337,26 +337,29 @@ private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClien
                     val control=account?.accountKind in openingControlKinds
                     val inventory=account?.accountKind=="INVENTORY_ASSET"
                     val employeeControl=account?.accountKind in openingEmployeeKinds
+                    val payrollControl=account?.accountKind=="PAYROLL_PAYABLE"
                     if(choices.isNotEmpty()&&lines.size<32) {
                         HiltechRecordPicker(hiltechText("الحساب المعتمد","Approved account"),accountId,
                             choices.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={id->
                                 accountId=id;val picked=choices.singleOrNull{it.id==id}
-                                side=picked?.bankSide?:if(picked?.accountKind=="SUPPLIER_PAYABLE")"CREDIT" else "DEBIT";amount=picked?.bankAmount.orEmpty()
+                                side=picked?.bankSide?:if(picked?.accountKind in setOf("SUPPLIER_PAYABLE","PAYROLL_PAYABLE"))"CREDIT" else "DEBIT";amount=picked?.bankAmount.orEmpty()
                                 reference=if(picked?.bankStatementId!=null)"APPROVED BANK STATEMENT" else ""
                             },allowKnownReference=false,enabled=editable)
-                        if(employeeControl&&first!=null){
+                        if((employeeControl||payrollControl)&&first!=null){
                             val employees=data.counterparties.filter{it.kind=="EMPLOYEE"}
-                            Text(hiltechText("الرصيد التاريخي المتبقي على الموظف عند الافتتاح، وليس تمويلًا جديدًا.","Historical residual owed by the employee at cutover, not a new disbursement."),style=MaterialTheme.typography.bodySmall)
+                            Text(if(payrollControl)hiltechText("صافي الراتب القديم غير المصروف لكل موظف؛ لا يُنشئ مصروفًا أو صرفًا جديدًا.","Historical unpaid net salary per employee; does not create an expense or payment.")
+                                else hiltechText("الرصيد التاريخي المتبقي على الموظف عند الافتتاح، وليس تمويلًا جديدًا.","Historical residual owed by the employee at cutover, not a new disbursement."),style=MaterialTheme.typography.bodySmall)
                             HiltechRecordPicker(hiltechText("الموظف","Employee"),partyId,employees.map{HiltechRecordChoice(it.id,it.name,it.code)},
                                 onChange={partyId=it},allowKnownReference=false,enabled=editable)
                             if(data.hasMoreCounterparties)Text(hiltechText("قائمة الجهات والموظفين تعرض أول 500 سجل.","The combined counterparty and employee list shows the first 500 records."))
                             SetupField(hiltechText("مرجع المستند التاريخي","Historical document reference"),documentRef,editable){documentRef=it.take(96)}
-                            SetupField(hiltechText("تاريخ المستند YYYY-MM-DD","Document date YYYY-MM-DD"),documentDate,editable){documentDate=it.take(10)}
+                            SetupField(if(payrollControl)hiltechText("نهاية فترة الراتب YYYY-MM-DD","Payroll period end YYYY-MM-DD")else hiltechText("تاريخ المستند YYYY-MM-DD","Document date YYYY-MM-DD"),documentDate,editable){documentDate=it.take(10)}
                             SetupField(hiltechText("الرصيد المتبقي","Residual balance"),residual,editable){residual=it.take(19)}
                             val item=FinanceOpeningEmployeeObligationDto(partyId,documentRef.trim(),documentDate,residual)
                             TextButton(enabled=editable&&openingEmployeeObligationValid(item)&&documentDate<first.dateStart&&
                                 employees.any{it.id==partyId}&&employeeObligations.none{it.employeeId==partyId&&it.documentReference.equals(item.documentReference,true)}&&
-                                lines.sumOf{it.employeeObligations.size}+employeeObligations.size<1000,onClick={
+                                (!payrollControl||employeeObligations.none{it.employeeId==partyId&&it.documentDate==documentDate})&&
+                                lines.sumOf{it.employeeObligations.size+it.payrollObligations.size}+employeeObligations.size<1000,onClick={
                                 employeeObligations=employeeObligations+item;documentRef="";documentDate="";residual=""
                             }){Text(hiltechText("إضافة الرصيد","Add residual"))}
                             employeeObligations.forEachIndexed{index,o->
@@ -402,13 +405,13 @@ private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClien
                             (if(side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+amount+" "+currency)
                         SetupField(hiltechText("مرجع إثبات البند","Line source reference"),reference,editable){reference=it.take(240)}
                         val line=FinanceOpeningLineDto(accountId,side,when{
-                            employeeControl->openingEmployeeTotal(employeeObligations).orEmpty()
+                            (employeeControl||payrollControl)->openingEmployeeTotal(employeeObligations).orEmpty()
                             inventory->openingStockTotal(stockValues).orEmpty()
                             control->openingObligationTotal(obligations).orEmpty()
                             else->amount
-                        },reference.trim(),account?.bankStatementId,if(control)obligations else emptyList(),if(inventory)stockValues else emptyList(),if(employeeControl)employeeObligations else emptyList())
+                        },reference.trim(),account?.bankStatementId,if(control)obligations else emptyList(),if(inventory)stockValues else emptyList(),if(employeeControl)employeeObligations else emptyList(),if(payrollControl)employeeObligations else emptyList())
                         TextButton(enabled=editable&&account!=null&&(!control||obligations.isNotEmpty())&&
-                            (!employeeControl||employeeObligations.isNotEmpty())&&(!inventory||(stockValues.isNotEmpty()&&lines.sumOf{it.stockValues.size}+stockValues.size<=1000))&&openingLineValid(line),onClick={
+                            (!(employeeControl||payrollControl)||employeeObligations.isNotEmpty())&&(!inventory||(stockValues.isNotEmpty()&&lines.sumOf{it.stockValues.size}+stockValues.size<=1000))&&openingLineValid(line),onClick={
                             lines=lines+line;accountId="";amount="";reference="";side="DEBIT"
                         }){Text(hiltechText("إضافة بند","Add line"))}
                     }
@@ -416,7 +419,7 @@ private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClien
                     lines.forEach{line->
                         val name=data.accounts.singleOrNull{it.id==line.accountId}?.name.orEmpty()
                         HiltechKeyValue(name,(if(line.side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+line.amount+" "+currency)
-                        line.employeeObligations.forEach{o->Text((data.counterparties.singleOrNull{it.kind=="EMPLOYEE"&&it.id==o.employeeId}?.name.orEmpty())+" · "+o.documentReference+" · "+o.amount+" "+currency,style=MaterialTheme.typography.bodySmall)}
+                        (line.employeeObligations+line.payrollObligations).forEach{o->Text((data.counterparties.singleOrNull{it.kind=="EMPLOYEE"&&it.id==o.employeeId}?.name.orEmpty())+" · "+o.documentReference+" · "+o.documentDate+" · "+o.amount+" "+currency,style=MaterialTheme.typography.bodySmall)}
                         line.stockValues.forEach{v->Text(v.quantity+" "+v.unit+" · "+v.amount+" "+currency+" · "+v.valuationReference,style=MaterialTheme.typography.bodySmall)}
                         line.obligations.forEach{o->
                             Text((data.counterparties.firstOrNull{it.id==o.counterpartyId}?.name.orEmpty())+" · "+o.documentReference+" · "+o.amount+" "+currency,style=MaterialTheme.typography.bodySmall)
@@ -442,7 +445,7 @@ private fun FinanceOpeningSection(org:String,client:FinanceConfigurationApiClien
                     val name=view?.accounts?.singleOrNull{it.id==line.accountId}?.name?:hiltechText("الحساب المحدد سابقًا","Previously selected account")
                     HiltechKeyValue(name,(if(line.side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+line.amount+" "+input.currency)
                     Text(line.reference,style=MaterialTheme.typography.bodySmall)
-                    line.employeeObligations.forEach{o->Text(o.documentReference+" · "+o.documentDate+" · "+o.amount+" "+input.currency,style=MaterialTheme.typography.bodySmall)}
+                    (line.employeeObligations+line.payrollObligations).forEach{o->Text((view?.counterparties?.singleOrNull{it.kind=="EMPLOYEE"&&it.id==o.employeeId}?.name?:o.employeeId)+" · "+o.documentReference+" · "+o.documentDate+" · "+o.amount+" "+input.currency,style=MaterialTheme.typography.bodySmall)}
                     line.stockValues.forEach{v->Text(v.quantity+" "+v.unit+" · "+v.amount+" "+input.currency+" · "+v.valuationReference,style=MaterialTheme.typography.bodySmall)}
                     line.obligations.forEach{o->Text(o.documentReference+" · "+o.documentDate+" · "+o.amount+" "+input.currency,style=MaterialTheme.typography.bodySmall)}
                 }

@@ -34,7 +34,8 @@ data class FinanceOpeningStockValue(val movementId:UUID,val quantity:String,val 
 data class FinanceOpeningEmployeeObligation(val employeeId:UUID,val documentReference:String,val documentDate:String,val amount:String)
 data class FinanceOpeningLine(val accountId:UUID,val side:String,val amount:String,val reference:String,val bankStatementId:UUID?=null,
     val obligations:List<FinanceOpeningObligation> = emptyList(),val stockValues:List<FinanceOpeningStockValue> = emptyList(),
-    val employeeObligations:List<FinanceOpeningEmployeeObligation> = emptyList())
+    val employeeObligations:List<FinanceOpeningEmployeeObligation> = emptyList(),
+    val payrollObligations:List<FinanceOpeningEmployeeObligation> = emptyList())
 data class FinanceOpeningInput(val operationId:UUID,val periodId:UUID,val currency:String,
     val companyReference:String,val sourceReference:String,val lines:List<FinanceOpeningLine>)
 data class FinanceOpeningAccount(val id:UUID,val code:String,val name:String,val accountKind:String,
@@ -83,7 +84,7 @@ internal fun validFinanceOpening(input:FinanceOpeningInput):Boolean {
             line.stockValues.fold(BigDecimal.ZERO){s,v->s+BigDecimal(v.amount)}.compareTo(BigDecimal(line.amount))!=0)return false
     }
     val employees=input.lines.flatMap{it.employeeObligations}
-    if(employees.size>1000)return false
+    if(employees.size+input.lines.sumOf{it.payrollObligations.size}>1000)return false
     for(line in input.lines.filter{it.employeeObligations.isNotEmpty()}){
         if(line.side!="DEBIT"||line.bankStatementId!=null||line.stockValues.isNotEmpty()||line.obligations.isNotEmpty()||
             line.employeeObligations.any{o->o.documentReference.length !in 2..96||o.documentReference!=o.documentReference.trim()||
@@ -92,6 +93,17 @@ internal fun validFinanceOpening(input:FinanceOpeningInput):Boolean {
             line.employeeObligations.map{it.employeeId to it.documentReference.lowercase(java.util.Locale.ROOT)}.distinct().size!=line.employeeObligations.size||
             line.employeeObligations.fold(BigDecimal.ZERO){s,o->s+BigDecimal(o.amount)}.compareTo(BigDecimal(line.amount))!=0)return false
     }
+    for(line in input.lines.filter{it.payrollObligations.isNotEmpty()}){
+        if(line.side!="CREDIT"||line.bankStatementId!=null||line.stockValues.isNotEmpty()||line.obligations.isNotEmpty()||line.employeeObligations.isNotEmpty()||
+            line.payrollObligations.any{o->o.documentReference.length !in 2..96||o.documentReference!=o.documentReference.trim()||
+                o.documentReference.any{it.code<32||it.code==127}||runCatching{LocalDate.parse(o.documentDate)}.getOrNull()==null||
+                !o.amount.matches(Regex("[0-9]{1,12}([.][0-9]{1,6})?"))||openingAmount(o.amount)==null}||
+            line.payrollObligations.map{it.employeeId to it.documentReference.lowercase(java.util.Locale.ROOT)}.distinct().size!=line.payrollObligations.size||
+            line.payrollObligations.fold(BigDecimal.ZERO){s,o->s+BigDecimal(o.amount)}.compareTo(BigDecimal(line.amount))!=0)return false
+    }
+    val payroll=input.lines.flatMap{it.payrollObligations}
+    if(payroll.map{it.employeeId to it.documentDate}.distinct().size!=payroll.size||
+        payroll.map{it.employeeId to it.documentReference.lowercase(java.util.Locale.ROOT)}.distinct().size!=payroll.size)return false
     fun total(side:String)=input.lines.filter{it.side==side}.fold(BigDecimal.ZERO){sum,line->sum+BigDecimal(line.amount)}
     val debit=total("DEBIT")
     return debit.signum()>0 && debit.compareTo(total("CREDIT"))==0
@@ -139,7 +151,7 @@ class FinanceOpeningService @org.springframework.beans.factory.annotation.Autowi
                       AND x.account_id=b.account_id AND x.currency=b.currency AND x.date_start=b.date_start)=1
             ) s ON a.account_kind='BANK_ASSET'
             WHERE a.organization_id=? AND a.state='APPROVED' AND (a.currency IS NULL OR a.currency=?)
-            AND a.account_kind IN('FIXED_ASSET','OTHER_ASSET','OTHER_LIABILITY','EQUITY','BANK_ASSET','CUSTOMER_RECEIVABLE','SUPPLIER_PAYABLE','INVENTORY_ASSET','EMPLOYEE_ADVANCE_ASSET','EMPLOYEE_IMPREST_ASSET')
+            AND a.account_kind IN('FIXED_ASSET','OTHER_ASSET','OTHER_LIABILITY','EQUITY','BANK_ASSET','CUSTOMER_RECEIVABLE','SUPPLIER_PAYABLE','INVENTORY_ASSET','EMPLOYEE_ADVANCE_ASSET','EMPLOYEE_IMPREST_ASSET','PAYROLL_PAYABLE')
             AND (a.account_kind<>'BANK_ASSET' OR s.id IS NOT NULL)
             ORDER BY a.account_code,a.id LIMIT 101
         """.trimIndent(),{r,_->
@@ -190,6 +202,12 @@ class FinanceOpeningService @org.springframework.beans.factory.annotation.Autowi
                 line.bankStatementId?.let{put("bankStatementId",it.toString())}
                 if(line.employeeObligations.isNotEmpty())put("employeeObligations",buildJsonArray{
                     line.employeeObligations.sortedWith(compareBy({it.employeeId.toString()},{it.documentReference})).forEach{o->add(buildJsonObject{
+                        put("employeeId",o.employeeId.toString());put("documentReference",o.documentReference)
+                        put("documentDate",o.documentDate);put("amount",BigDecimal(o.amount).stripTrailingZeros().toPlainString())
+                    })}
+                })
+                if(line.payrollObligations.isNotEmpty())put("payrollObligations",buildJsonArray{
+                    line.payrollObligations.sortedWith(compareBy({it.employeeId.toString()},{it.documentReference})).forEach{o->add(buildJsonObject{
                         put("employeeId",o.employeeId.toString());put("documentReference",o.documentReference)
                         put("documentDate",o.documentDate);put("amount",BigDecimal(o.amount).stripTrailingZeros().toPlainString())
                     })}
