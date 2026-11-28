@@ -2,13 +2,14 @@ package com.hiltech.shared.core.administration
 
 import com.hiltech.shared.core.finance.financeLookupIdIsUuid
 import com.hiltech.shared.core.finance.financeValidCalendarDate
+import com.hiltech.shared.core.finance.settlementCanonicalAmount
 import com.hiltech.shared.core.network.HiltechApiClient
 import com.hiltech.shared.core.network.HiltechRequestOptions
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-internal val financeConfigurationKinds = listOf("ACCOUNT","PERIOD","BANK")
+internal val financeConfigurationKinds = listOf("ACCOUNT","PERIOD","BANK","FINANCING")
 internal val financeConfigurationAccountKinds = listOf("SUPPLIER_PAYABLE","EXPENSE","INVENTORY_ASSET","FIXED_ASSET",
     "TAX_RECOVERABLE","OTHER_ASSET","CUSTOMER_RECEIVABLE","SALES_REVENUE","TAX_PAYABLE","BANK_ASSET","CASH_ASSET","EMPLOYEE_ADVANCE_ASSET","EMPLOYEE_IMPREST_ASSET","PAYROLL_EXPENSE","PAYROLL_PAYABLE","PAYROLL_DEDUCTION_PAYABLE","EQUITY","OTHER_LIABILITY")
 internal val financeTreasuryAccountKinds=setOf("BANK_ASSET","CASH_ASSET")
@@ -20,16 +21,27 @@ private val bankMaskPattern = Regex("(?:[A-Za-z][A-Za-z0-9_-]{0,23}:)?[*]{2,12}[
     val code: String?=null,val name: String?=null,val accountKind: String?=null,
     val currency: String?=null,val startDate: String?=null,val endDate: String?=null,
     val treasuryInstrumentId: String?=null,
+    val financingKind: String?=null,val financingAccountId: String?=null,val authorizedAmount: String?=null,
 )
 @Serializable data class FinanceConfigurationRecordDto(
     val id: String,val kind: String,val state: String,val authorizationReference: String,
     val code: String?=null,val name: String?=null,val accountKind: String?=null,
     val currency: String?=null,val startDate: String?=null,val endDate: String?=null,
     val treasuryInstrumentId: String?=null,
+    val financingKind: String?=null,val financingAccountId: String?=null,val authorizedAmount: String?=null,
 )
 @Serializable data class FinanceTreasuryInstrumentDto(val id:String,val name:String,val currency:String)
 @Serializable data class FinanceTreasuryInstrumentPageDto(val organizationId:String,val accountKind:String,
     val records:List<FinanceTreasuryInstrumentDto>,val hasMore:Boolean)
+@Serializable data class FinanceFinancingAccountDto(val id:String,val code:String,val name:String,val accountKind:String)
+@Serializable data class FinanceFinancingAccountPageDto(val organizationId:String,val financingKind:String,val currency:String,
+    val records:List<FinanceFinancingAccountDto>,val hasMore:Boolean)
+internal val financingKinds=listOf("OWNER_CAPITAL","OWNER_LOAN","EXTERNAL_LOAN")
+internal fun financingControlKind(kind:String?):String?=when(kind){
+    "OWNER_CAPITAL"->"EQUITY"
+    "OWNER_LOAN","EXTERNAL_LOAN"->"OTHER_LIABILITY"
+    else->null
+}
 @Serializable data class FinanceConfigurationPageDto(val organizationId: String,val kind: String,
     val offset: Int,val hasMore: Boolean,val records: List<FinanceConfigurationRecordDto>)
 @Serializable data class FinanceConfigurationReceiptDto(val operationId: String,val organizationId: String,
@@ -41,6 +53,7 @@ private fun plain(value: String?, min: Int, max: Int) =
 internal fun financeConfigurationIntentValid(input: FinanceConfigurationIntent): Boolean {
     if (!plain(input.authorizationReference,8,if(input.kind=="BANK")180 else 160) ||
         (input.currency!=null && !currencyPattern.matches(input.currency))) return false
+    if(input.kind!="FINANCING"&&(input.financingKind!=null||input.financingAccountId!=null||input.authorizedAmount!=null))return false
     return when(input.kind) {
         "ACCOUNT" -> plain(input.code,1,64) && plain(input.name,1,180) && input.accountKind in financeConfigurationAccountKinds &&
             input.startDate==null && input.endDate==null &&
@@ -49,6 +62,10 @@ internal fun financeConfigurationIntentValid(input: FinanceConfigurationIntent):
         "PERIOD" -> input.code==null && input.name==null && input.accountKind==null && input.currency==null &&
             input.treasuryInstrumentId==null && input.startDate!=null && input.endDate!=null && financeValidCalendarDate(input.startDate) &&
             financeValidCalendarDate(input.endDate) && !input.startDate.startsWith("0000") && input.endDate>=input.startDate
+        "FINANCING" -> plain(input.code,2,64)&&plain(input.name,2,180)&&input.currency!=null&&
+            financingControlKind(input.financingKind)!=null&&input.financingAccountId?.let(::financeLookupIdIsUuid)==true&&
+            input.authorizedAmount?.let(::settlementCanonicalAmount)!=null&&input.accountKind==null&&
+            input.startDate==null&&input.endDate==null&&input.treasuryInstrumentId==null
         "BANK" -> input.code?.matches(bankMaskPattern)==true && plain(input.name,3,160) && input.currency!=null &&
             input.accountKind==null && input.startDate==null && input.endDate==null && input.treasuryInstrumentId==null
         else -> false
@@ -62,7 +79,8 @@ internal fun financeConfigurationReceiptMatches(org: String,input: FinanceConfig
         row.state in (if(row.kind=="PERIOD") setOf("OPEN","CLOSED") else setOf("APPROVED","RETIRED")) &&
         row.authorizationReference==input.authorizationReference && row.code==input.code && row.name==input.name &&
         row.accountKind==input.accountKind && row.currency==input.currency && row.startDate==input.startDate && row.endDate==input.endDate &&
-        row.treasuryInstrumentId==input.treasuryInstrumentId
+        row.treasuryInstrumentId==input.treasuryInstrumentId&&row.financingKind==input.financingKind&&
+        row.financingAccountId==input.financingAccountId&&row.authorizedAmount==input.authorizedAmount?.let(::settlementCanonicalAmount)
 }
 
 @Serializable data class FinanceOpeningObligationDto(val counterpartyId:String,val documentReference:String,val documentDate:String,
@@ -166,7 +184,22 @@ class FinanceConfigurationApiClient(private val api: HiltechApiClient,
             require(result.organizationId.equals(org,true) && result.kind==kind && result.offset==offset &&
                 result.records.size<=50 && result.records.map { it.id.lowercase() }.distinct().size==result.records.size &&
                 result.records.all { row -> financeLookupIdIsUuid(row.id) && row.kind==kind &&
-                    row.state in (if(kind=="PERIOD") setOf("OPEN","CLOSED") else setOf("APPROVED","RETIRED")) })
+                    row.state in (if(kind=="PERIOD") setOf("OPEN","CLOSED") else setOf("APPROVED","RETIRED")) &&
+                    (if(kind=="FINANCING") financingControlKind(row.financingKind)!=null&&
+                        row.financingAccountId?.let(::financeLookupIdIsUuid)==true&&
+                        row.authorizedAmount?.let(::settlementCanonicalAmount)!=null&&row.currency?.let{currencyPattern.matches(it)}==true&&
+                        plain(row.code,2,64)&&plain(row.name,2,180)&&plain(row.authorizationReference,8,160)
+                     else row.financingKind==null&&row.financingAccountId==null&&row.authorizedAmount==null) })
+        }
+    }
+    suspend fun financingAccounts(org:String,kind:String,currency:String,installation:String):FinanceFinancingAccountPageDto {
+        val expected=requireNotNull(financingControlKind(kind))
+        require(currencyPattern.matches(currency))
+        return api.request(HttpMethod.Get,path(org)+"/financing-accounts?financingKind=$kind&currency=$currency",
+            HiltechRequestOptions(installation),decode={json.decodeFromString(FinanceFinancingAccountPageDto.serializer(),it)}).also{page->
+            check(page.organizationId.equals(org,true)&&page.financingKind==kind&&page.currency==currency&&
+                page.records.size<=100&&page.records.map{it.id.lowercase()}.distinct().size==page.records.size&&
+                page.records.all{financeLookupIdIsUuid(it.id)&&it.accountKind==expected&&it.code.isNotBlank()&&it.name.isNotBlank()})
         }
     }
     suspend fun treasuryInstruments(org:String,accountKind:String,installation:String):FinanceTreasuryInstrumentPageDto {

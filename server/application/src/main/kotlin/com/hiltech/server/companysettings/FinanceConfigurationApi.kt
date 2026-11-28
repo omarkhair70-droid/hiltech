@@ -25,6 +25,11 @@ class FinanceConfigurationController(private val service: FinanceConfigurationSe
         @RequestParam accountKind: String):ResponseEntity<FinanceTreasuryInstrumentPage> =
         ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.treasuryInstruments(actor(request),organizationId,accountKind))
 
+    @GetMapping("/v1/organizations/{organizationId}/administration/financial-configuration/financing-accounts")
+    fun financingAccounts(request:HttpServletRequest,@PathVariable organizationId:UUID,
+        @RequestParam financingKind:String,@RequestParam currency:String):ResponseEntity<FinanceFinancingAccountPage> =
+        ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.financingAccounts(actor(request),organizationId,financingKind,currency))
+
     @PostMapping("/v1/organizations/{organizationId}/administration/financial-configuration")
     fun create(request: HttpServletRequest,@AuthenticationPrincipal jwt: Jwt,@PathVariable organizationId: UUID,
         @RequestHeader("Idempotency-Key") idempotencyKey: String,

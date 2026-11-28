@@ -37,7 +37,14 @@ import kotlinx.serialization.json.Json
 @Composable private fun configurationLabel(kind: String): String = when(kind) {
     "ACCOUNT" -> hiltechText("دليل الحسابات","Chart of accounts")
     "PERIOD" -> hiltechText("الفترات المحاسبية","Accounting periods")
+    "FINANCING" -> hiltechText("مصادر التمويل","Financing sources")
     else -> hiltechText("حسابات البنوك","Bank accounts")
+}
+@Composable private fun financingKindLabel(kind:String):String=when(kind){
+    "OWNER_CAPITAL"->hiltechText("مساهمة رأس مال","Owner capital contribution")
+    "OWNER_LOAN"->hiltechText("قرض من المالك","Owner loan")
+    "EXTERNAL_LOAN"->hiltechText("قرض خارجي","External loan")
+    else->kind
 }
 @Composable private fun accountKindLabel(kind: String): String = when(kind) {
     "SUPPLIER_PAYABLE" -> hiltechText("مستحقات الموردين","Supplier payables")
@@ -93,13 +100,19 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
     var start by rememberSaveable(org) { mutableStateOf("") }
     var end by rememberSaveable(org) { mutableStateOf("") }
     var reference by rememberSaveable(org) { mutableStateOf("") }
+    var financingKind by rememberSaveable(org){mutableStateOf("")}
+    var financingAccount by rememberSaveable(org){mutableStateOf("")}
+    var financingAccountName by rememberSaveable(org){mutableStateOf("")}
+    var authorizedAmount by rememberSaveable(org){mutableStateOf("")}
+    var financingAccounts by remember{mutableStateOf<FinanceFinancingAccountPageDto?>(null)}
+    var financingLoading by remember{mutableStateOf(false)}
     var pendingJson by rememberSaveable(org) { mutableStateOf<String?>(null) }
     var attempted by rememberSaveable(org) { mutableStateOf(false) }
     var uncertain by rememberSaveable(org) { mutableStateOf(false) }
     var rejected by rememberSaveable(org) { mutableStateOf(false) }
     val pending=pendingJson?.let { Json.decodeFromString(FinanceConfigurationIntent.serializer(),it) }
     val editable=pending==null && !busy && !loading && data!=null
-    fun resetForm() { code="";name="";accountKind="";currency="";start="";end="";reference="";treasuryId="";treasuryName="" }
+    fun resetForm() { code="";name="";accountKind="";currency="";start="";end="";reference="";treasuryId="";treasuryName="";financingKind="";financingAccount="";financingAccountName="";authorizedAmount="" }
     LaunchedEffect(org,client,kind,accountKind,revision) {
         instruments=null
         if(kind=="ACCOUNT" && accountKind in financeTreasuryAccountKinds) {
@@ -109,6 +122,16 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
             catch(_:Exception) { instruments=null }
             finally { instrumentsLoading=false }
         } else instrumentsLoading=false
+    }
+    LaunchedEffect(org,client,kind,financingKind,currency,revision){
+        financingAccounts=null
+        if(kind=="FINANCING"&&financingKind in financingKinds&&currency.matches(Regex("[A-Z]{3}"))){
+            financingLoading=true
+            try{financingAccounts=client.financingAccounts(org,financingKind,currency,installation)}
+            catch(cancelled:CancellationException){throw cancelled}
+            catch(_:Exception){financingAccounts=null}
+            finally{financingLoading=false}
+        }else financingLoading=false
     }
     fun refresh() { data=null;loading=true;revision++ }
 
@@ -121,8 +144,8 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
     }
     HiltechPanel(Modifier.fillMaxWidth()) {
         Text(hiltechText("الإعداد المالي","Financial setup"),style=MaterialTheme.typography.titleLarge)
-        Text(hiltechText("سجّل دليل الحسابات والفترات وحسابات البنوك التي اعتمدتها الشركة. تستخدمها مسارات المحاسبة وكشوف البنك الحالية مباشرة.",
-            "Register the company-approved chart, accounting periods and bank accounts. Existing journal and bank-statement workflows use these same records."))
+        Text(hiltechText("سجّل دليل الحسابات والفترات وحسابات البنوك ومصادر التمويل المعتمدة. تسجيل مصدر التمويل لا يثبت وصول الأموال.",
+            "Register the approved chart, periods, bank accounts and financing sources. Financing setup does not prove funds received."))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             financeConfigurationKinds.forEach { tab ->
                 FilterChip(selected=kind==tab,enabled=!busy && pending==null,onClick={
@@ -141,6 +164,9 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
                     row.accountKind?.let { Text(accountKindLabel(it)) }
                     if(row.treasuryInstrumentId!=null) Text(hiltechText("مرتبط بمصدر الخزينة المعتمد","Linked to an approved treasury source"))
                     row.currency?.let { Text(it) }
+                    row.financingKind?.let{Text(financingKindLabel(it))}
+                    row.authorizedAmount?.let{HiltechKeyValue(hiltechText("المبلغ المعتمد — ليس رصيدًا","Authorized amount — not a balance"),it+" "+row.currency.orEmpty())}
+                    if(row.financingAccountId!=null)Text(hiltechText("مرتبط بحساب حقوق ملكية أو التزام معتمد","Linked to an approved equity or liability account"))
                     HiltechKeyValue(hiltechText("الحالة","State"),configurationState(row.state))
                     HiltechKeyValue(hiltechText("مرجع اعتماد الشركة","Company authorization"),row.authorizationReference)
                 }
@@ -160,6 +186,7 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
             Text(when(kind) {
                 "ACCOUNT" -> hiltechText("إضافة حساب محاسبي","Add chart account")
                 "PERIOD" -> hiltechText("فتح فترة محاسبية","Add accounting period")
+                "FINANCING" -> hiltechText("تسجيل مصدر تمويل","Register financing source")
                 else -> hiltechText("إضافة حساب بنك","Add bank account")
             })
         }
@@ -168,6 +195,27 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
                 SetupField(hiltechText("بداية الفترة YYYY-MM-DD","Period start YYYY-MM-DD"),start,editable){start=it.take(10)}
                 SetupField(hiltechText("نهاية الفترة YYYY-MM-DD","Period end YYYY-MM-DD"),end,editable){end=it.take(10)}
                 Text(hiltechText("لا يمكن إنشاء فترة تتداخل مع فترة مسجلة.","Periods cannot overlap an existing accounting period."))
+            } else if(kind=="FINANCING"){
+                HiltechRecordPicker(hiltechText("نوع التمويل","Financing type"),financingKind,
+                    financingKinds.map{HiltechRecordChoice(it,financingKindLabel(it))},
+                    onChange={financingKind=it;financingAccount="";financingAccountName="";financingAccounts=null},allowKnownReference=false,allowClear=false,enabled=editable)
+                SetupField(hiltechText("اسم أو مرجع الممول","Funder name or reference"),name,editable){name=it.take(180)}
+                SetupField(hiltechText("مرجع اتفاق التمويل","Financing agreement reference"),code,editable){code=it.take(64)}
+                SetupField(hiltechText("العملة","Currency"),currency,editable){currency=it.uppercase().take(3);financingAccount="";financingAccountName="";financingAccounts=null}
+                SetupField(hiltechText("المبلغ المعتمد في الاتفاق","Authorized agreement amount"),authorizedAmount,editable){authorizedAmount=it.take(25)}
+                val choices=financingAccounts?.takeIf{it.financingKind==financingKind&&it.currency==currency}
+                if(financingLoading)Text(hiltechText("جارٍ قراءة حسابات التمويل المعتمدة…","Reading approved financing accounts…"))
+                else if(financingKind.isNotBlank()&&currency.length==3){
+                    if(choices==null)Text(hiltechText("لم يتأكد دليل الحسابات. حدّث الإعداد.","Chart not confirmed. Refresh setup."))
+                    else if(choices.records.isEmpty())Text(hiltechText("أضف حساب حقوق ملكية للمساهمة أو حساب التزام للقرض أولًا.","First register an equity account for capital or a liability account for a loan."))
+                    else{
+                        HiltechRecordPicker(hiltechText("حساب التمويل المعتمد","Approved financing account"),financingAccount,
+                            choices.records.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={id->choices.records.singleOrNull{it.id==id}?.let{financingAccount=it.id;financingAccountName=it.name}},
+                            allowKnownReference=false,allowClear=false,enabled=editable)
+                        if(choices.hasMore)Text(hiltechText("تظهر أول 100 حساب مؤهل.","Showing the first 100 eligible accounts."))
+                    }
+                }
+                Text(hiltechText("يسجل الاتفاق فقط؛ لا يعد إيرادًا أو مبلغًا مستلمًا أو رصيد قرض.","Records agreement terms only; not revenue, received funds, or outstanding loan principal."))
             } else {
                 SetupField(if(kind=="BANK")hiltechText("اسم البنك","Bank name") else hiltechText("اسم الحساب","Account name"),name,editable){name=it.take(180)}
                 SetupField(if(kind=="BANK")hiltechText("مرجع الحساب المخفي","Masked account reference") else hiltechText("كود الحساب","Account code"),code,editable){code=it.take(64)}
@@ -197,11 +245,15 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
                 code.trim().takeIf {kind!="PERIOD"},name.trim().takeIf {kind!="PERIOD"},
                 accountKind.takeIf {kind=="ACCOUNT"},currency.trim().takeIf {kind!="PERIOD" && it.isNotBlank()},
                 start.trim().takeIf {kind=="PERIOD"},end.trim().takeIf {kind=="PERIOD"},
-                treasuryId.takeIf {kind=="ACCOUNT" && accountKind in financeTreasuryAccountKinds && it.isNotBlank()})
+                treasuryId.takeIf {kind=="ACCOUNT" && accountKind in financeTreasuryAccountKinds && it.isNotBlank()},
+                financingKind=financingKind.takeIf{kind=="FINANCING"},financingAccountId=financingAccount.takeIf{kind=="FINANCING"},
+                authorizedAmount=authorizedAmount.takeIf{kind=="FINANCING"})
             val treasuryReady=accountKind !in financeTreasuryAccountKinds ||
                 (instruments?.accountKind==accountKind && instruments?.records?.any {it.id==treasuryId && it.currency==currency}==true && !instrumentsLoading)
+            val financingReady=kind!="FINANCING"||(!financingLoading&&financingAccounts?.takeIf{it.financingKind==financingKind&&it.currency==currency}
+                ?.records?.any{it.id==financingAccount}==true)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                Button(enabled=editable && treasuryReady && financeConfigurationIntentValid(draft),onClick={
+                Button(enabled=editable && treasuryReady && financingReady && financeConfigurationIntentValid(draft),onClick={
                     pendingJson=Json.encodeToString(FinanceConfigurationIntent.serializer(),draft.copy(operationId=newOperationId()))
                     attempted=false;uncertain=false;rejected=false;error=null
                 }) { Text(hiltechText("مراجعة قبل الحفظ","Review setup")) }
@@ -217,6 +269,9 @@ fun FinanceConfigurationWorkspace(org: String,client: FinanceConfigurationApiCli
                 if(intent.treasuryInstrumentId!=null) HiltechKeyValue(hiltechText("المصدر المرتبط","Linked instrument"),
                     treasuryName.ifBlank {hiltechText("المصدر المحدد سابقًا","Previously selected source")})
                 intent.currency?.let {Text(it)}
+                intent.financingKind?.let{Text(financingKindLabel(it))}
+                intent.authorizedAmount?.let{HiltechKeyValue(hiltechText("المبلغ المعتمد","Authorized amount"),it+" "+intent.currency.orEmpty())}
+                if(intent.financingAccountId!=null)HiltechKeyValue(hiltechText("حساب التمويل","Financing account"),financingAccountName.ifBlank{intent.financingAccountId})
                 intent.startDate?.let {Text(it+" — "+intent.endDate.orEmpty())}
                 HiltechKeyValue(hiltechText("مرجع الاعتماد","Authorization reference"),intent.authorizationReference)
                 Text(hiltechText("تأكيدك يسجّل الإعداد المعتمد فقط. لا يصرف أموالًا ولا ينشئ قيدًا أو رصيد افتتاح.",

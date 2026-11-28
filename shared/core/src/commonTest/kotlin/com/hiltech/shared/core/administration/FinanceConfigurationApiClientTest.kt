@@ -60,6 +60,24 @@ class FinanceConfigurationApiClientTest {
         assertFalse(financeConfigurationIntentValid(bank.copy(code="1234567890123456")))
         assertFalse(financeConfigurationIntentValid(bank.copy(accountKind="EXPENSE")))
     }
+    @Test fun financingSetupSeparatesCapitalFromLoansAndNeverClaimsBankReceipt() {
+        val financing=FinanceConfigurationIntent(operation,"FINANCING","SYNTHETIC-FINANCING-AUTH",
+            code="AGREEMENT-01",name="Synthetic funder",currency="EGP",financingKind="OWNER_CAPITAL",
+            financingAccountId=account,authorizedAmount="1000.250000")
+        assertTrue(financeConfigurationIntentValid(financing))
+        assertEquals("EQUITY",financingControlKind(financing.financingKind))
+        assertEquals("OTHER_LIABILITY",financingControlKind("OWNER_LOAN"))
+        assertEquals("OTHER_LIABILITY",financingControlKind("EXTERNAL_LOAN"))
+        assertFalse(financeConfigurationIntentValid(financing.copy(financingKind="REVENUE")))
+        assertFalse(financeConfigurationIntentValid(financing.copy(authorizedAmount="0")))
+        assertFalse(financeConfigurationIntentValid(financing.copy(financingAccountId=null)))
+        assertFalse(financeConfigurationIntentValid(intent.copy(financingKind="OWNER_CAPITAL")))
+        val saved=FinanceConfigurationRecordDto(account,"FINANCING","APPROVED",financing.authorizationReference,
+            financing.code,financing.name,currency="EGP",financingKind="OWNER_CAPITAL",financingAccountId=account,authorizedAmount="1000.25")
+        val receipt=FinanceConfigurationReceiptDto(operation,org,saved,false)
+        assertTrue(financeConfigurationReceiptMatches(org,financing,receipt))
+        assertFalse(financeConfigurationReceiptMatches(org,financing,receipt.copy(record=saved.copy(financingKind="OWNER_LOAN"))))
+    }
     @Test fun openingObligationsRequireExactResidualAmountsAndHistoricalDocumentIdentity() {
         val party="11111111-2222-4333-8444-555555555555"
         val account="22222222-3333-4444-8555-666666666666"

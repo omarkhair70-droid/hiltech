@@ -71,7 +71,38 @@ class FinanceConfigurationPostgresContractTest {
                 assertEquals(savedBank.record.id,savedTreasury.record.treasuryInstrumentId)
                 assertTrue(service.treasuryInstruments(actor,org,"BANK_ASSET").records.isEmpty())
                 assertThrows(ProductApiException::class.java) {service.create(actor,org,treasury.copy(operationId=UUID.randomUUID(),code="SECOND-BANK"),"synthetic")}
-                assertEquals(4,jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE actor_user_id=? AND action='FINANCE_CONFIGURATION_CREATED'",
+                val equity=service.create(actor,org,account.copy(operationId=UUID.randomUUID(),code="EQUITY-TEST",
+                    name="Synthetic equity",accountKind="EQUITY"),"synthetic").record.id
+                val liability=service.create(actor,org,account.copy(operationId=UUID.randomUUID(),code="LOAN-TEST",
+                    name="Synthetic financing liability",accountKind="OTHER_LIABILITY"),"synthetic").record.id
+                val capital=FinanceConfigurationInput(UUID.randomUUID(),FinanceConfigurationKind.FINANCING,"SYNTHETIC-CAPITAL-APPROVAL",
+                    code="CAPITAL-AGREEMENT-01",name="Synthetic capital source",currency="EGP",financingKind="OWNER_CAPITAL",
+                    financingAccountId=equity,authorizedAmount="1000.250000")
+                assertTrue(validFinanceConfiguration(capital))
+                assertFalse(validFinanceConfiguration(capital.copy(authorizedAmount="0")))
+                assertFalse(validFinanceConfiguration(capital.copy(authorizedAmount="1e3")))
+                assertFalse(validFinanceConfiguration(account.copy(financingKind="OWNER_CAPITAL")))
+                assertEquals(equity,service.financingAccounts(actor,org,"OWNER_CAPITAL","EGP").records.single().id)
+                assertEquals(liability,service.financingAccounts(actor,org,"OWNER_LOAN","EGP").records.single().id)
+                assertTrue(service.financingAccounts(actor,org,"EXTERNAL_LOAN","USD").records.isEmpty())
+                assertThrows(ProductApiException::class.java){service.create(actor,org,capital.copy(financingAccountId=liability),"synthetic")}
+                val savedCapital=service.create(actor,org,capital,"synthetic").record
+                assertEquals("1000.25",savedCapital.authorizedAmount)
+                assertEquals(equity,savedCapital.financingAccountId)
+                val loan=capital.copy(operationId=UUID.randomUUID(),code="LOAN-AGREEMENT-01",name="Synthetic loan",
+                    financingKind="OWNER_LOAN",financingAccountId=liability)
+                val savedLoan=service.create(actor,org,loan,"synthetic").record
+                assertEquals("OWNER_LOAN",savedLoan.financingKind)
+                assertEquals(setOf(savedCapital,savedLoan),service.page(actor,org,FinanceConfigurationKind.FINANCING,0).records.toSet())
+                assertThrows(ProductApiException::class.java){service.create(actor,org,loan.copy(operationId=UUID.randomUUID(),code="loan-agreement-01"),"synthetic")}
+                val savepoint=connection.setSavepoint()
+                try{
+                    assertThrows(org.springframework.dao.DataIntegrityViolationException::class.java){
+                        jdbc.update("UPDATE finance_financing_source SET authorized_amount=1 WHERE id=?",savedCapital.id)
+                    }
+                }finally{connection.rollback(savepoint);connection.releaseSavepoint(savepoint)}
+                assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM finance_settlement_gl_journal WHERE organization_id=?",Int::class.java,org))
+                assertEquals(8,jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE actor_user_id=? AND action='FINANCE_CONFIGURATION_CREATED'",
                     Int::class.java,actor))
                 assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM finance_ar_posted_journal WHERE organization_id=?",Int::class.java,org))
                 assertThrows(ProductApiException::class.java) {service.page(actor,UUID.randomUUID(),FinanceConfigurationKind.BANK,0)}
