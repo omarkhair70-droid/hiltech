@@ -164,7 +164,7 @@ class Payroll9bDraftPostgresContractTest {
             companyAuthorizationReference = "synthetic-p9b-policy",
             statutoryPolicyReference = "synthetic-statutory-reviewed",
             statutoryVerified = true,
-            deductionLimitPolicyReference = null, deductionLimitsVerified = false,
+            deductionLimitPolicyReference = "SYNTHETIC-DEDUCTION-POLICY", deductionLimitsVerified = true,
         )
         val component = PayrollApprovedComponent(
             organizationId = org, employeeId = employee, componentCode = "SYNTHETIC_BASE",
@@ -174,6 +174,12 @@ class Payroll9bDraftPostgresContractTest {
             approval = PayrollInputApproval.APPROVED,
             currency = "EGP", amount = "100.005",
         )
+        val mixedComponents = listOf(component.copy(amount="110.005"),
+            component.copy(componentCode="SYNTHETIC_DEDUCTION",kind=PayrollComponentKind.DEDUCTION,
+                sourceId=UUID.randomUUID(),amount="20",approvedDeductionPlanReference="SYNTHETIC-DEDUCTION-PLAN"),
+            component.copy(componentCode="SYNTHETIC_REIMBURSEMENT",kind=PayrollComponentKind.REIMBURSEMENT,
+                sourceId=UUID.randomUUID(),amount="10"))
+        var mixed=false
         var attestationVersion = 1L
         val sources = object : PayrollApprovedInputSourcePort {
             override fun verifiedFor(
@@ -194,7 +200,7 @@ class Payroll9bDraftPostgresContractTest {
                         complete = true,
                     )
                 },
-                components = listOf(component),
+                components = if(mixed) mixedComponents else listOf(component),
             )
 
             override fun policyFor(
@@ -251,6 +257,7 @@ class Payroll9bDraftPostgresContractTest {
             service.read(UUID.randomUUID(), UUID.fromString(first.first.runVersionId))
         }
 
+        mixed=true
         val newer = tx.execute {
             service.create(periodId, UUID.randomUUID(), actor, "p9b-test")
         }!!

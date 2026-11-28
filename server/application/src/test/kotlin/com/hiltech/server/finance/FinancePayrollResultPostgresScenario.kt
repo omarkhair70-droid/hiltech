@@ -101,7 +101,7 @@ object FinancePayrollResultPostgresScenario {
                 assertEquals(listOf(debit.line), service.bankChoices(preparer, org, instruction.id, "SUCCESS").map { it.bankStatementLineId })
                 assertEquals(listOf(credit.line), service.bankChoices(preparer, org, instruction.id, "RETURNED").map { it.bankStatementLineId })
 
-                // The same released earnings-only source can acquire an accounting
+                // The same released payroll source can acquire an accounting
                 // accrual, not a payment, before any bank result exists.
                 val payrollPeriod = requireNotNull(jdbc.queryForObject(
                     "SELECT payroll_period_id FROM payroll_run_version WHERE organization_id=? AND id=?", UUID::class.java,org,run))
@@ -124,14 +124,20 @@ object FinancePayrollResultPostgresScenario {
                 val liabilityGl=payrollChart("PAYROLL_PAYABLE","SYNTH-WAGES-DUE")
                 val debitBankGl=payrollChart("BANK_ASSET","SYNTH-PAYROLL-DEBIT",debit.line)
                 val creditBankGl=payrollChart("BANK_ASSET","SYNTH-PAYROLL-CREDIT",credit.line)
-                fun postPayroll(kind:String,source:UUID?,original:UUID?,dr:UUID,cr:UUID,amount:BigDecimal=instruction.amount):UUID {
+                val gross=requireNotNull(jdbc.queryForObject("SELECT gross FROM payroll_run_version WHERE organization_id=? AND id=?",BigDecimal::class.java,org,run))
+                val deductionGl=payrollChart("PAYROLL_DEDUCTION_PAYABLE","SYNTH-PAYROLL-DEDUCTION")
+                val reimbursementGl=payrollChart("EXPENSE","SYNTH-PAYROLL-REIMBURSEMENT")
+                val allocations="""[{"kind":"DEDUCTION","domain":"SYNTHETIC_FIXTURE","code":"SYNTHETIC_DEDUCTION","accountId":"$deductionGl","reference":"SYNTHETIC-TREATMENT-01"},{"kind":"REIMBURSEMENT","domain":"SYNTHETIC_FIXTURE","code":"SYNTHETIC_REIMBURSEMENT","accountId":"$reimbursementGl","reference":"SYNTHETIC-FIRST-RECOGNITION"}]"""
+                fun postPayroll(kind:String,source:UUID?,original:UUID?,dr:UUID,cr:UUID,
+                    amount:BigDecimal=if(kind=="PAYROLL_ACCRUAL")gross else instruction.amount,
+                    componentAllocations:String=if(kind=="PAYROLL_ACCRUAL")allocations else "[]"):UUID {
                     val id=UUID.randomUUID()
                     val sourceAt=source?.let{jdbc.queryForObject("SELECT recorded_at FROM finance_payroll_result_event WHERE organization_id=? AND id=?",OffsetDateTime::class.java,org,it)}?:preparedAt
                     jdbc.update("""INSERT INTO finance_payroll_gl_journal(id,operation_id,organization_id,payroll_period_id,run_version_id,
                         release_id,entry_type,source_event_id,original_journal_id,period_id,debit_account_id,credit_account_id,amount,
-                        currency,source_recorded_at,posted_by_user_id,posted_at,correlation_id)
-                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'synthetic-payroll-gl')""",
-                        id,UUID.randomUUID(),org,payrollPeriod,run,release,kind,source,original,glPeriod,dr,cr,amount,instruction.currency,sourceAt,preparer,at)
+                        currency,source_recorded_at,posted_by_user_id,posted_at,correlation_id,component_allocations)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'synthetic-payroll-gl',CAST(? AS jsonb))""",
+                        id,UUID.randomUUID(),org,payrollPeriod,run,release,kind,source,original,glPeriod,dr,cr,amount,instruction.currency,sourceAt,preparer,at,componentAllocations)
                     return id
                 }
                 fun rejectedPayroll(block:()->Unit) {
@@ -139,9 +145,14 @@ object FinancePayrollResultPostgresScenario {
                     try { assertThrows<Exception> { block() } }
                     finally { transaction.rollbackToSavepoint(sp);transaction.releaseSavepoint(sp) }
                 }
-                rejectedPayroll{postPayroll("PAYROLL_ACCRUAL",null,null,wageGl,liabilityGl,instruction.amount+BigDecimal.ONE)}
+                rejectedPayroll{postPayroll("PAYROLL_ACCRUAL",null,null,wageGl,liabilityGl,gross+BigDecimal.ONE)}
+                rejectedPayroll{postPayroll("PAYROLL_ACCRUAL",null,null,wageGl,liabilityGl,componentAllocations="[]")}
+                rejectedPayroll{postPayroll("PAYROLL_ACCRUAL",null,null,wageGl,liabilityGl,componentAllocations=allocations.replace(deductionGl.toString(),debitBankGl.toString()))}
+                rejectedPayroll{postPayroll("PAYROLL_ACCRUAL",null,null,wageGl,liabilityGl,componentAllocations=allocations.replace("SYNTHETIC_REIMBURSEMENT","UNKNOWN_COMPONENT"))}
                 rejectedPayroll{postPayroll("PAYROLL_ACCRUAL",null,null,debitBankGl,liabilityGl)}
-                postPayroll("PAYROLL_ACCRUAL",null,null,wageGl,liabilityGl)
+                val accrual=postPayroll("PAYROLL_ACCRUAL",null,null,wageGl,liabilityGl)
+                assertEquals(4,jdbc.queryForObject("SELECT count(*) FROM finance_payroll_gl_journal_line WHERE organization_id=? AND journal_id=?",Int::class.java,org,accrual))
+                assertEquals(0,gross.compareTo(BigDecimal("110")))
                 rejectedPayroll{postPayroll("PAYROLL_ACCRUAL",null,null,wageGl,liabilityGl)}
                 assertTrue(adapter.paymentEvents(org,run).isEmpty())
                 assertEquals(1L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,glPeriod))
@@ -300,7 +311,9 @@ object FinancePayrollResultPostgresScenario {
                 val payrollLedger=accountingDesk.ledger(org,glPeriod,0,includePayroll=true)
                 assertEquals(5,payrollLedger.journals.size)
                 assertTrue(payrollLedger.currencyTotals.single().balanced)
-                assertEquals(0,payrollLedger.movements.single{it.accountId==wageGl}.debit.toBigDecimal().compareTo(instruction.amount))
+                assertEquals(0,payrollLedger.movements.single{it.accountId==wageGl}.debit.toBigDecimal().compareTo(gross))
+                assertEquals(0,payrollLedger.movements.single{it.accountId==deductionGl}.credit.toBigDecimal().compareTo(BigDecimal("20")))
+                assertEquals(0,payrollLedger.movements.single{it.accountId==reimbursementGl}.debit.toBigDecimal().compareTo(BigDecimal("10")))
                 assertEquals(BigDecimal.ZERO, repo.bank(org, credit.line)!!.remaining.stripTrailingZeros())
                 assertEquals(2, jdbc.queryForObject("SELECT count(*) FROM finance_bank_committed_usage WHERE organization_id=?", Int::class.java, org))
 

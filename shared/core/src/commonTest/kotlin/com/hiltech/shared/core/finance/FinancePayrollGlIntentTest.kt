@@ -19,5 +19,10 @@ class FinancePayrollGlIntentTest {
         assertTrue(payrollGlIntentValid(post.copy(entryType="PAYROLL_VOID",sourceEventId=b,originalJournalId=c)))
         assertFalse(payrollGlIntentValid(post.copy(amount="0")))
         assertFalse(payrollGlIntentValid(post.copy(creditAccountId=c)))
+        val component=FinancePayrollGlAllocationDto("DEDUCTION","FINANCE","SYNTHETIC_TAX",d,"SYNTHETIC-TREATMENT")
+        assertTrue(payrollGlIntentValid(post.copy(allocations=listOf(component))))
+        assertFalse(payrollGlIntentValid(post.copy(allocations=listOf(component,component))))
+        assertFalse(payrollGlIntentValid(post.copy(allocations=listOf(component.copy(reference="")))))
+        assertFalse(payrollGlIntentValid(post.copy(entryType="PAYROLL_PAYMENT",sourceEventId=b,allocations=listOf(component))))
     }
 }
