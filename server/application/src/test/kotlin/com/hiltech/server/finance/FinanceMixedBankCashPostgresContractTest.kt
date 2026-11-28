@@ -608,16 +608,23 @@ class FinanceMixedBankCashPostgresContractTest {
        // Employee custody has a distinct approval and bank debit, not an expense.
        val employee=UUID.randomUUID()
        val employeePerson=UUID.randomUUID()
+       val employeeActor=UUID.randomUUID()
        insert("INSERT INTO person(id,display_name,created_at,updated_at) VALUES(?,'Synthetic custodian',?,?)",employeePerson,t,t)
        insert("""INSERT INTO employee(id,organization_id,person_id,employee_code,state,created_at,updated_at)
            VALUES(?,?,?,'SYNTH-CUSTODY','ACTIVE',?,?)""",employee,org,employeePerson,t,t)
+       insert("""INSERT INTO user_identity(id,auth_provider,auth_subject,person_id,status,created_at)
+           VALUES(?,'finance-contract',?,?,'ACTIVE',?)""",employeeActor,UUID.randomUUID().toString(),employeePerson,t)
+       insert("""INSERT INTO employment(id,employee_id,start_date,state,created_at,updated_at)
+           VALUES(?,?,?,'ACTIVE',?,?)""",UUID.randomUUID(),employee,day.minusDays(1),t,t)
+       insert("""INSERT INTO organization_membership(id,organization_id,user_identity_id,membership_type,state,valid_from)
+           VALUES(?,?,?,'EMPLOYEE','ACTIVE',?)""",UUID.randomUUID(),org,employeeActor,t)
        val draft=UUID.randomUUID()
        insert("""INSERT INTO finance_financial_imprest_draft(id,operation_id,organization_id,custodian_employee_id,
            requested_amount,currency,purpose,created_by_user_id,created_at,correlation_id)
            VALUES(?,?,?,?,?,'EGP','Synthetic company custody',?,?,'mixed-custody')""",
-           draft,UUID.randomUUID(),org,employee,funding80,creator,t)
+           draft,UUID.randomUUID(),org,employee,funding80,employeeActor,t)
        val policyApproval=approval("FINANCE_FINANCIAL_IMPREST_POLICY_REVIEW",draft,1,
-           "FINANCE_IMPREST_POLICY",creator)
+           "FINANCE_IMPREST_POLICY",employeeActor)
        val origin=checkNotNull(jdbc.queryForObject("""SELECT encode(sha256(convert_to(concat_ws('|',
            'HILTECH_EMPLOYEE_FUNDING_ORIGIN_V1',CAST(? AS text),'FINANCIAL_IMPREST',CAST(? AS text),
            CAST(? AS text),CAST(CAST(? AS numeric(18,6)) AS text),'EGP',CAST(? AS text),'1'),'UTF8')),'hex')""",
@@ -708,8 +715,8 @@ class FinanceMixedBankCashPostgresContractTest {
        insert("""INSERT INTO finance_expense_claim_draft(id,operation_id,organization_id,employee_id,amount,currency,
            purpose,merchant,spent_on,created_by_user_id,created_at,correlation_id)
            VALUES(?,?,?,?,?,'EGP','Synthetic personal expense','Fixture merchant',?,?,?,'mixed-claim')""",
-           claim,UUID.randomUUID(),org,employee,expense20,day,creator,t)
-       val documentation=approval("FINANCE_EXPENSE_DOCUMENTATION_REVIEW",claim,1,"FINANCE_EXPENSE_DOCUMENTATION",creator)
+           claim,UUID.randomUUID(),org,employee,expense20,day,employeeActor,t)
+       val documentation=approval("FINANCE_EXPENSE_DOCUMENTATION_REVIEW",claim,1,"FINANCE_EXPENSE_DOCUMENTATION",employeeActor)
        val reimbursementProposal=UUID.randomUUID()
        val reimbursementPolicy="FINANCE_EXPENSE_REIMBURSEMENT"
        insert("""INSERT INTO finance_expense_reimbursement_proposal(id,operation_id,organization_id,expense_draft_id,employee_id,
