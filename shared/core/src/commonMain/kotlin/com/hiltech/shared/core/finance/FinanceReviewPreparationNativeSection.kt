@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -1116,7 +1117,7 @@ private fun FinanceObligationPicker(client:FinanceCashAllocationApiClient,org:St
     page?.let{data->
         if(data.records.isEmpty())Text(hiltechText("لا توجد مستحقات مفتوحة في هذه الصفحة.","No open obligations on this page."))
         else HiltechRecordPicker(hiltechText("المستحق المسجل","Recorded obligation"),selected,
-            data.records.map{r->HiltechRecordChoice(r.id,r.counterpartyName+(r.openingDocumentReference?.let{" · "+it}.orEmpty()),
+            data.records.map{r->HiltechRecordChoice(r.id,r.counterpartyName+((r.documentReference?:r.openingDocumentReference)?.let{" · "+it}.orEmpty()),
                 r.outstanding+" "+r.currency+(r.dueDate?.let{" · "+it}.orEmpty()))},
             onChange=onSelect,allowKnownReference=false,enabled=enabled&&!loading)
         data.records.singleOrNull{it.id==selected}?.let{r->

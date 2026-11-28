@@ -35,7 +35,7 @@ data class FinanceCashAllocationReceiptDto(
 )
 
 @Serializable data class FinanceObligationChoiceDto(val id:String,val counterpartyName:String,val currency:String,val outstanding:String,
-    val dueDate:String?=null,val openingDocumentReference:String?=null)
+    val dueDate:String?=null,val openingDocumentReference:String?=null,val documentReference:String?=null)
 @Serializable data class FinanceObligationChoicesDto(val organizationId:String,val kind:String,val channel:String,val offset:Int,
     val records:List<FinanceObligationChoiceDto>,val hasMore:Boolean)
 
@@ -56,7 +56,8 @@ class FinanceCashAllocationApiClient(
                     page.records.size<=50&&page.records.map{it.id.lowercase()}.distinct().size==page.records.size&&page.records.all{r->
                         financeLookupIdIsUuid(r.id)&&r.counterpartyName.isNotBlank()&&r.currency.matches(Regex("[A-Z]{3}"))&&
                         settlementCanonicalAmount(r.outstanding)!=null&&(r.dueDate==null||financeValidCalendarDate(r.dueDate))&&
-                        (r.openingDocumentReference==null||r.openingDocumentReference.isNotBlank())
+                        (r.openingDocumentReference==null||r.openingDocumentReference.isNotBlank())&&
+                        (r.documentReference==null||r.documentReference.isNotBlank())
                     })
             }
     }

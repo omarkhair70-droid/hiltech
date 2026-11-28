@@ -18,7 +18,7 @@ import java.time.Clock
 import java.util.UUID
 
 data class FinanceObligationChoice(val id:UUID,val counterpartyName:String,val currency:String,val outstanding:String,
-    val dueDate:String?,val openingDocumentReference:String?)
+    val dueDate:String?,val openingDocumentReference:String?,val documentReference:String?=null)
 data class FinanceObligationChoices(val organizationId:UUID,val kind:String,val channel:String,val offset:Int,
     val records:List<FinanceObligationChoice>,val hasMore:Boolean)
 
@@ -38,14 +38,20 @@ class FinanceObligationChoicesService @org.springframework.beans.factory.annotat
         if(!environment.getProperty(enabled,Boolean::class.java,false)||
             currentOperationalAuthority(operationalAuthority,approvals,actor,org,key,environment.getProperty(key),clock.instant())==null)denied()
         val rows=jdbc.query("""
-            SELECT b.journal_id,o.display_name,b.currency,b.outstanding_amount,b.contractual_due_date,legacy.document_reference
+            SELECT b.journal_id,o.display_name,b.currency,b.outstanding_amount,b.contractual_due_date,legacy.document_reference,
+                coalesce(legacy.document_reference,invoice.invoice_number,supplier_invoice.invoice_number) AS source_document
             FROM finance_ap_ar_source_balance b JOIN organization o ON o.id=b.counterparty_id
             LEFT JOIN finance_gl_opening_obligation legacy ON legacy.organization_id=b.organization_id
                 AND legacy.source_kind=b.source_kind AND legacy.id=b.journal_id
+            LEFT JOIN finance_ar_posted_journal ar ON ar.organization_id=b.organization_id AND ar.id=b.journal_id AND b.source_kind='AR'
+            LEFT JOIN finance_ar_issued_invoice invoice ON invoice.organization_id=ar.organization_id AND invoice.id=ar.issued_invoice_id
+            LEFT JOIN finance_ap_posted_journal ap ON ap.organization_id=b.organization_id AND ap.id=b.journal_id AND b.source_kind='AP'
+            LEFT JOIN finance_ap_posting_proposal proposal ON proposal.organization_id=ap.organization_id AND proposal.id=ap.proposal_id
+            LEFT JOIN procurement_supplier_invoice_intake supplier_invoice ON supplier_invoice.organization_id=proposal.organization_id AND supplier_invoice.id=proposal.supplier_invoice_id
             WHERE b.organization_id=? AND b.source_kind=? AND NOT b.reversed AND b.outstanding_amount>0
             ORDER BY b.contractual_due_date NULLS LAST,b.recognized_at,b.journal_id LIMIT 51 OFFSET ?
         """.trimIndent(),{r,_->FinanceObligationChoice(r.getObject(1,UUID::class.java),r.getString(2),
-            r.getString(3).trim(),r.getBigDecimal(4).toPlainString(),r.getDate(5)?.toString(),r.getString(6))},org,kind,offset)
+            r.getString(3).trim(),r.getBigDecimal(4).toPlainString(),r.getDate(5)?.toString(),r.getString(6),r.getString(7))},org,kind,offset)
         return FinanceObligationChoices(org,kind,channel,offset,rows.take(50),rows.size>50)
     }
     private fun denied():Nothing=throw ProductApiException("FINANCE_OBLIGATION_CHOICES_UNAVAILABLE",

@@ -337,7 +337,8 @@ class FinanceMixedBankCashPostgresContractTest {
        }
        // Approved bank allocation of 100 against exact posted AR 150.
        val allocationPolicy="FINANCE_AP_AR_CASH_ALLOCATION"
-       fun recordBankAllocation(bankLine:UUID,amount:BigDecimal,recordBy:UUID):UUID {
+       fun recordBankAllocation(bankLine:UUID,amount:BigDecimal,recordBy:UUID,
+         sourceJournal:UUID=journal,sourceHash:String=journalSha,recordAt:OffsetDateTime=t.plusHours(5)):UUID {
          val prepared=UUID.randomUUID()
          insert("""INSERT INTO finance_cash_allocation_proposal(
            id,operation_id,organization_id,source_kind,source_journal_id,
@@ -346,8 +347,8 @@ class FinanceMixedBankCashPostgresContractTest {
            approval_subject_version,policy_key,allocation_reason,
            prepared_by_user_id,created_at)
            VALUES(?,?,?,'AR',?,?,'EGP',?,?,?,404,?,?,?,?)""",
-           prepared,UUID.randomUUID(),org,journal,bankLine,amount,
-           journalSha,bankSha,allocationPolicy,
+           prepared,UUID.randomUUID(),org,sourceJournal,bankLine,amount,
+           sourceHash,bankSha,allocationPolicy,
            "SIGNED-RECEIPT-MATCH",creator,t.plusHours(4))
          val review=approval("FINANCE_AP_AR_CASH_ALLOCATION",
            prepared,404,allocationPolicy,creator)
@@ -373,8 +374,8 @@ class FinanceMixedBankCashPostgresContractTest {
                AND v.effective_from<=?
                AND (v.effective_to IS NULL OR v.effective_to>?)) AS active_policy
              FROM approval_request a WHERE a.id=? AND a.organization_id=?""",
-           prepared,allocationPolicy,creator,recordBy,t.plusHours(5),
-           recordBy,org,t.plusHours(5),t.plusHours(5),review,org)
+           prepared,allocationPolicy,creator,recordBy,recordAt,
+           recordBy,org,recordAt,recordAt,review,org)
          check(approvalFlags["approval_state"]=="APPROVED" &&
            approvalFlags["approval_subject_type"]=="FINANCE_AP_AR_CASH_ALLOCATION" &&
            listOf("subject_matches","version_matches","policy_matches",
@@ -390,8 +391,8 @@ class FinanceMixedBankCashPostgresContractTest {
            approval_subject_version,policy_key,currency,allocated_amount,
            recorded_by_user_id,recorded_at,correlation_id)
            VALUES(?,?,?,?,'AR',?,?,?,404,?,'EGP',?,?,?,'mixed-bank-match')""",
-           record,UUID.randomUUID(),org,prepared,journal,bankLine,review,
-           allocationPolicy,amount,recordBy,t.plusHours(5))
+           record,UUID.randomUUID(),org,prepared,sourceJournal,bankLine,review,
+           allocationPolicy,amount,recordBy,recordAt)
          } catch(ex:DataIntegrityViolationException) {
            connection.rollback(attemptSavepoint)
            if(recordBy==allocationRecorder){
@@ -419,7 +420,7 @@ class FinanceMixedBankCashPostgresContractTest {
              throw AssertionError(
                "Unexpected REAL approved cash allocation rejection: " +
                "facts=$approvalFlags db=$actual; actor=$recordBy, " +
-               "recordedAt=${t.plusHours(5)}, cause=${ex.mostSpecificCause.message}",
+               "recordedAt=${recordAt}, cause=${ex.mostSpecificCause.message}",
                ex)
            }
            throw ex
@@ -808,7 +809,27 @@ class FinanceMixedBankCashPostgresContractTest {
        rejectedOpening{postOpening(openingPayload(receivable,equity))}
        rejectedOpening{postOpening(openingPayload(bankGl,equity,bankStatement=intake))}
        rejectedOpening{postOpening(openingPayload(fixed,equity),nextPeriod,end.plusDays(1))}
-       val openingId=postOpening(openingPayload(fixed,equity))
+       val supplier=UUID.randomUUID()
+       insert("""INSERT INTO organization(id,organization_code,legal_name,display_name,organization_type,status,created_at)
+           VALUES(?,?,?,?,'SUPPLIER','ACTIVE',?)""",supplier,"SYNTH-LEGACY-SUPPLIER","Synthetic legacy supplier","Synthetic legacy supplier",t)
+       insert("INSERT INTO commercial_client_relationship(organization_id,client_organization_id) VALUES(?,?) ON CONFLICT DO NOTHING",org,customer)
+       insert("""INSERT INTO procurement_supplier_link_event(id,organization_id,supplier_organization_id,revision_number,state,
+           source_reference,recorded_by_user_id,recorded_at,correlation_id)
+           VALUES(?,?,?,1,'ACTIVE','SYNTHETIC-SUPPLIER-LINK',?,?,'synthetic-opening-link')""",UUID.randomUUID(),org,supplier,creator,t)
+       val payable=chart("SUPPLIER_PAYABLE","OPENING-AP")
+       fun openingWithObligations(customerId:UUID=customer,customerRef:String="SYNTHETIC-OLD-AR",residual:String="200",
+           supplierRef:String="SYNTHETIC-OLD-AP",documentDate:LocalDate=day.minusDays(30)):String =
+           """[{"accountId":"$fixed","side":"DEBIT","amount":"250","reference":"SYNTHETIC-ASSET-SCHEDULE"},
+               {"accountId":"$equity","side":"CREDIT","amount":"300","reference":"SYNTHETIC-EQUITY-SCHEDULE"},
+               {"accountId":"$receivable","side":"DEBIT","amount":"200","reference":"SYNTHETIC-CUSTOMER-SCHEDULE",
+                "obligations":[{"counterpartyId":"$customerId","documentReference":"$customerRef","documentDate":"$documentDate","dueDate":"$day","amount":"$residual"}]},
+               {"accountId":"$payable","side":"CREDIT","amount":"150","reference":"SYNTHETIC-SUPPLIER-SCHEDULE",
+                "obligations":[{"counterpartyId":"$supplier","documentReference":"$supplierRef","documentDate":"$documentDate","amount":"150"}]}]"""
+       rejectedOpening{postOpening(openingWithObligations(residual="199.999999"))}
+       rejectedOpening{postOpening(openingWithObligations(customerId=UUID.randomUUID()))}
+       rejectedOpening{postOpening(openingWithObligations(documentDate=day))}
+       rejectedOpening{postOpening(openingWithObligations(customerRef="MIX-AR-${candidate.toString().take(8)}"))}
+       val openingId=postOpening(openingWithObligations())
        rejectedOpening{postOpening(openingPayload(fixed,equity))}
        rejectedOpening{insert("UPDATE finance_gl_opening_journal SET source_reference='MUTATED-REFERENCE' WHERE id=?",openingId)}
        rejectedOpening{
@@ -831,7 +852,7 @@ class FinanceMixedBankCashPostgresContractTest {
        assertFalse(openingCarry.isCompanyWideTrialBalance)
        val position=initial.positions.single()
        assertTrue(position.equationBalances)
-       assertEquals(0,position.equity.toBigDecimal().compareTo(BigDecimal("250")))
+       assertEquals(0,position.equity.toBigDecimal().compareTo(BigDecimal("300")))
        assertEquals(0,position.cumulativeRecognizedResult.toBigDecimal().compareTo(initial.totals.single().recognizedResult.toBigDecimal()))
        assertFalse(initial.isCompleteBalanceSheet)
        assertFalse(initial.isCompleteCashFlowStatement)
@@ -859,6 +880,53 @@ class FinanceMixedBankCashPostgresContractTest {
        assertTrue(openingCarry.cashFlow.single().categories.isEmpty())
        assertTrue(openingCarry.cashFlow.single().reconcilesToLedger)
        assertTrue(openingCarry.treasury.all{it.netMovement.toBigDecimal().signum()==0&&it.movementBalances})
+       // The historical source is not another invoice or sales/expense journal.
+       val historicalAr=jdbc.queryForMap("""SELECT id,ledger_fingerprint_sha256 FROM finance_gl_opening_obligation
+           WHERE organization_id=? AND opening_journal_id=? AND source_kind='AR'""",org,openingId)
+       val historicalAp=jdbc.queryForMap("""SELECT id,ledger_fingerprint_sha256 FROM finance_gl_opening_obligation
+           WHERE organization_id=? AND opening_journal_id=? AND source_kind='AP'""",org,openingId)
+       val arId=historicalAr["id"] as UUID;val apId=historicalAp["id"] as UUID
+       assertEquals(0,initial.rows.single{it.accountId==receivable}.openingDebit.toBigDecimal().compareTo(BigDecimal("200")))
+       assertEquals(0,initial.rows.single{it.accountId==payable}.openingCredit.toBigDecimal().compareTo(money))
+       assertEquals(1L,jdbc.queryForObject("SELECT count(*) FROM finance_ar_issued_invoice WHERE organization_id=?",Long::class.java,org))
+       assertEquals(0L,jdbc.queryForObject("SELECT count(*) FROM finance_ap_posted_journal WHERE organization_id=?",Long::class.java,org))
+       assertTrue(desk.exposure(org,"AR",day,0).records.any{it.journalId==arId&&it.openingDocumentReference=="SYNTHETIC-OLD-AR"})
+       assertTrue(desk.exposure(customer,"AR",day,0).records.isEmpty())
+       val importedArReceipt=recordBankAllocation(actualBankIds[0],bank100,allocationRecorder,arId,
+           historicalAr["ledger_fingerprint_sha256"] as String,t.plusHours(17))
+       val apProposal=UUID.randomUUID()
+       insert("""INSERT INTO finance_cash_voucher_proposal(id,operation_id,organization_id,cashbox_id,source_kind,
+           source_journal_id,direction,currency,amount,source_ledger_sha256,voucher_reference,reason_reference,
+           approval_subject_version,policy_key,prepared_by_user_id,created_at)
+           VALUES(?,?,?,?,'AP',?,'PAYMENT','EGP',?,?,?,?,505,?,?,?)""",apProposal,UUID.randomUUID(),org,cashbox,apId,cash50,
+           historicalAp["ledger_fingerprint_sha256"] as String,"SYNTH-OLD-AP-CASH","SYNTHETIC-SUPPLIER-PAYMENT",voucherPolicy,creator,t.plusHours(16))
+       val apEvidence=evidence("FINANCE_CASH_VOUCHER",apProposal,"7".repeat(64))
+       val apApproval=approval("FINANCE_CASH_VOUCHER",apProposal,505,voucherPolicy,creator,t.plusHours(16))
+       val apRecord=UUID.randomUUID()
+       insert("""INSERT INTO finance_cash_voucher_record(id,operation_id,organization_id,proposal_id,cashbox_id,source_kind,
+           source_journal_id,direction,amount,currency,approval_request_id,custody_evidence_id,recorded_by_user_id,recorded_at,correlation_id)
+           VALUES(?,?,?,?,?,'AP',?,'PAYMENT',?,'EGP',?,?,?,?,'synthetic-old-supplier-payment')""",
+           apRecord,UUID.randomUUID(),org,apProposal,cashbox,apId,cash50,apApproval,apEvidence,cashCustodian,t.plusHours(17))
+       fun postHistorical(kind:String,type:String,sourceId:UUID,debit:UUID,credit:UUID,expected:BigDecimal) {
+           val source=checkNotNull(settlementStore.source(org,type,sourceId))
+           assertEquals(debit,source.debitAccountId);assertEquals(credit,source.creditAccountId)
+           assertEquals(0,source.amount.toBigDecimal().compareTo(expected))
+           val request=FinanceSettlementPost(UUID.randomUUID(),type,sourceId,kind,period,debit,credit,source.amount,"EGP")
+           settlementStore.insert(org,journalRecorder,request,source,UUID.randomUUID(),t.plusHours(18),"synthetic-historical-settlement")
+       }
+       postHistorical("AR","BANK_ALLOCATION",importedArReceipt,bankGl,receivable,bank100)
+       postHistorical("AP","CASH_VOUCHER",apRecord,payable,cashGl,cash50)
+       val afterCutover=desk.balances(org,period,true,true,false)
+       assertTrue(afterCutover.totals.single().balanced)
+       assertEquals(0,afterCutover.totals.single().recognizedResult.toBigDecimal().compareTo(initial.totals.single().recognizedResult.toBigDecimal()))
+       assertEquals(0,afterCutover.rows.single{it.accountId==payable}.closingCredit.toBigDecimal().compareTo(bank100))
+       assertEquals(0,desk.exposure(org,"AR",day,0).records.single{it.journalId==arId}.outstanding!!.toBigDecimal().compareTo(bank100))
+       assertEquals(0,desk.exposure(org,"AP",day,0).records.single{it.journalId==apId}.outstanding!!.toBigDecimal().compareTo(bank100))
+       assertEquals(0,jdbc.queryForObject("SELECT cash_on_hand FROM finance_cashbox_balance WHERE organization_id=? AND cashbox_id=?",BigDecimal::class.java,org,cashbox)!!.signum())
+       assertTrue(afterCutover.cashFlow.single().reconcilesToLedger)
+       // The new source shares the same bank/cash capacity, with no double recognition.
+       rejectedOpening{recordBankAllocation(actualBankIds[1],money,alternativeRecorder,arId,historicalAr["ledger_fingerprint_sha256"] as String,t.plusHours(19))}
+       assertEquals(11L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,period))
      } finally { connection.rollback() }
    }
  }
