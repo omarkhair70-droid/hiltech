@@ -12,8 +12,16 @@ seeded by the migration.
 An ordinary internal instruction batch freezes every positive employee net
 from one released payroll review envelope. Zero-net employees need no instruction.
 A correction with `SETTLED_DIFFERENTIAL_AUTHORIZED` uses the separately reviewed
-per-employee difference against exact posted prior settlement, never another full
-salary instruction. A negative difference requires an explicit approved
+per-employee remaining amount against cumulative, verified posted prior settlement,
+never another full salary instruction when prior funds remain with the employee.
+An evidenced partial net (including actual posted bank returns) can participate
+in the same clearance: corrected net minus verified net paid determines the
+remaining payment or recovery. The previously unpaid liability is already in
+the ledger; the correction preview subtracts that balance from the new payable.
+A missing result, unposted event, unresolved proposal or voided match is not
+proof of zero payment and blocks the differential. All-return and separately
+reviewed no-transfer cases retain their existing paths. This does not add
+split bank matching against a single instruction. A negative difference requires an explicit approved
 OTHER_ASSET account selected for employee overpayment receivables. Finance
 clearance freezes the source fingerprint and individual recovery schedule.
 Posting the replacement accrual reverses the original base lines, records the

@@ -1154,6 +1154,32 @@ class Payroll9bDraftPostgresContractTest {
                 assertEquals("UNRESOLVED_EVIDENCE",settledDeltaState("8000","8500",null,"8000",0,true))
                 assertEquals("UNRESOLVED_EVIDENCE",settledDeltaState("8000","8500","8000","8000",1,true))
                 assertEquals("MISSING_ACTIVE_ACCRUAL",settledDeltaState("8000","8500","8000","8000",0,false))
+                // A verified partial payment leaves a prior liability; a missing
+                // result or a void cannot be treated as a zero payment.
+                fun verifiedDeltaState(oldNet:String,newNet:String,recorded:String?,paid:String,missing:Long,active:Boolean):String =
+                    requireNotNull(jdbc.queryForObject(
+                        "SELECT finance_payroll_verified_delta_state(CAST(? AS numeric),CAST(? AS numeric),CAST(? AS numeric),CAST(? AS numeric),CAST(? AS bigint),CAST(? AS boolean))",
+                        String::class.java,oldNet,newNet,recorded,paid,missing,active))
+                assertEquals("ADDITIONAL_DUE",verifiedDeltaState("8000","8500","4000","4000",0,true))
+                assertEquals("ADDITIONAL_DUE",verifiedDeltaState("8000","7500","4000","4000",0,true))
+                assertEquals("RECOVERY_DUE",verifiedDeltaState("8000","3500","4000","4000",0,true))
+                assertEquals("NO_NET_CHANGE",verifiedDeltaState("8000","4000","4000","4000",0,true))
+                assertEquals("ADDITIONAL_DUE",verifiedDeltaState("8000","7500","0","8000",0,true))
+                assertEquals("PRIOR_SETTLEMENT_NOT_EXACT",verifiedDeltaState("8000","7500","0","0",0,true))
+                assertEquals("PRIOR_SETTLEMENT_NOT_EXACT",verifiedDeltaState("8000","7500","9000","9000",0,true))
+                assertEquals("UNRESOLVED_EVIDENCE",verifiedDeltaState("8000","8500","4000","4000",1,true))
+                assertEquals("UNRESOLVED_EVIDENCE",verifiedDeltaState("8000","8500",null,"4000",0,true))
+                assertEquals("MISSING_ACTIVE_ACCRUAL",verifiedDeltaState("8000","8500","4000","4000",0,false))
+                fun verifiedBalance(change:String,additional:String,recovery:String,prior:String):Boolean =
+                    jdbc.queryForObject("SELECT finance_payroll_verified_delta_balanced(CAST(? AS numeric),0,0,CAST(? AS numeric),CAST(? AS numeric),CAST(? AS numeric))",
+                        Boolean::class.java,change,additional,recovery,prior)==true
+                assertTrue(verifiedBalance("500","4500","0","4000"))
+                assertTrue(verifiedBalance("-500","3500","0","4000"))
+                assertTrue(verifiedBalance("-4500","0","500","4000"))
+                assertTrue(verifiedBalance("-4000","0","0","4000"))
+                assertTrue(verifiedBalance("0","4500","500","4000"))
+                assertFalse(verifiedBalance("500","8500","0","4000"))
+                assertFalse(verifiedBalance("500","4500","0","0"))
                 val deltaBasis=jdbc.queryForMap("""SELECT basis_state,additional_due,recovery_due,all_employees_ready,original_journal_id
                     FROM finance_payroll_settled_delta_basis WHERE organization_id=? AND replacement_run_version_id=? AND employee_id=?""",
                     org,correctedRun,reviewedEmployee.employeeId)

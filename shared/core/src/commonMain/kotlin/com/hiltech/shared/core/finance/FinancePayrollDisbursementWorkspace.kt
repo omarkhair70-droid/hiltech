@@ -737,7 +737,7 @@ private fun FinancePayrollCorrectionEmployeeReview(client:FinancePayrollDisburse
                 }
                 Text(planLabel,style=MaterialTheme.typography.bodyMedium)
                 if(plan.blockedCount>0)HiltechKeyValue(hiltechText("موظفون يحتاجون مراجعة","Employees requiring review"),plan.blockedCount.toString()+" / "+plan.employeeCount)
-                plan.additionalDue?.let{HiltechKeyValue(hiltechText("إجمالي الفروق المستحقة","Total additional payable"),it+" "+page.currency)}
+                plan.additionalDue?.let{HiltechKeyValue(hiltechText("إجمالي المتبقي للصرف","Total remaining payment"),it+" "+page.currency)}
                 plan.recoveryDue?.let{HiltechKeyValue(hiltechText("إجمالي الزيادات المطلوب تسويتها","Total excess to reconcile"),it+" "+page.currency)}
                 if(plan.state in setOf("REVIEW_READY","RECOVERY_ACCOUNT_REQUIRED")){
                     plan.lines.forEach{line->
@@ -768,13 +768,19 @@ private fun FinancePayrollCorrectionEmployeeReview(client:FinancePayrollDisburse
                 }
                 Text(state,style=MaterialTheme.typography.bodyMedium,
                     color=if(employee.evidenceState=="UNRESOLVED")MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
-                employee.differenceFromRecorded?.let{difference->
+                employee.recordedNet?.takeIf { employee.evidenceState != "NO_RECORDED_TRANSFER" }?.let{net->
+                    HiltechKeyValue(hiltechText("صافي الصرف المثبت","Verified net paid"),net+" "+page.currency)
+                }
+                employee.differenceFromRecorded?.takeIf { employee.noResultCount==0L && employee.evidenceState!="NO_RECORDED_TRANSFER" }?.let{difference->
                     HiltechKeyValue(hiltechText("الفرق عن الصرف المسجل فقط","Difference from recorded payments only"),difference+" "+page.currency)
                 }
                 if(employee.pendingCount>0)HiltechKeyValue(hiltechText("مقترحات غير محسومة","Unresolved proposals"),employee.pendingCount.toString())
                 if(employee.unpostedCount>0)HiltechKeyValue(hiltechText("نتائج بلا ترحيل مؤكد","Results without confirmed posting"),employee.unpostedCount.toString())
                 if(employee.voidCount>0)HiltechKeyValue(hiltechText("مطابقات ملغاة (ليست مرتجعات)","Voided matches (not refunds)"),employee.voidCount.toString())
-                if(employee.noResultCount>0)HiltechKeyValue(hiltechText("تعليمات بدون نتيجة مسجلة","Instructions without recorded results"),employee.noResultCount.toString())
+                if(employee.noResultCount>0){
+                    HiltechKeyValue(hiltechText("تعليمات بدون نتيجة مسجلة","Instructions without recorded results"),employee.noResultCount.toString())
+                    Text(hiltechText("أكمل إثبات الصرف السابق قبل تجهيز أي مبلغ إضافي.","Resolve prior payment evidence before preparing any additional amount."),color=MaterialTheme.colorScheme.error)
+                }
             }
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
                 TextButton(enabled=offset>0&&!loading,onClick={offset=(offset-50).coerceAtLeast(0)}){Text(hiltechText("السابق","Previous"))}
