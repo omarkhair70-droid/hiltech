@@ -63,6 +63,15 @@ data class FinanceDeskTreasury(
 )
 data class FinanceDeskTreasurySource(
     val currency:String,val accountKind:String,val sourceKind:String,val debits:String,val credits:String,
+    val category:String="UNCLASSIFIED",
+)
+data class FinanceDeskCashFlowCategory(
+    val category:String,val debit:String,val credit:String,val net:String,
+)
+data class FinanceDeskCashFlow(
+    val currency:String,val carriedNet:String,val closingNet:String,
+    val netClassifiedMovement:String,val accountingAdjustmentNet:String,val unclassifiedNet:String,
+    val totalMovement:String,val reconcilesToLedger:Boolean,val categories:List<FinanceDeskCashFlowCategory>,
 )
 data class FinanceDeskBalances(
     val organizationId:UUID,val periodId:UUID,val dateStart:String,val dateEnd:String,
@@ -75,6 +84,7 @@ data class FinanceDeskBalances(
     val treasury:List<FinanceDeskTreasury> = emptyList(),
     val treasurySources:List<FinanceDeskTreasurySource> = emptyList(),
     val isCompleteBalanceSheet:Boolean=false,val isCompleteCashFlowStatement:Boolean=false,
+    val cashFlow:List<FinanceDeskCashFlow> = emptyList(),
 )
 data class FinanceDeskExposureTotal(
     val currency: String, val knownOutstanding: String, val knownOverdue: String,
@@ -99,6 +109,33 @@ private val expenseKinds=setOf("EXPENSE","PAYROLL_EXPENSE")
 private val resultKinds=expenseKinds+"SALES_REVENUE"
 private val classifiedKinds=assetKinds+liabilityKinds+resultKinds+"EQUITY"
 private val treasuryKinds=setOf("BANK_ASSET","CASH_ASSET")
+private val cashFlowCategories=listOf("OPERATING","INVESTING","UNCLASSIFIED","ACCOUNTING_ADJUSTMENT")
+
+/** Aggregate only recorded cash account lines. An unclassified line or void
+ * remains explicit; none is silently assigned to a financing or cash receipt. */
+internal fun financeDeskCashFlow(currency:String,treasury:List<FinanceDeskTreasury>,sources:List<FinanceDeskTreasurySource>):FinanceDeskCashFlow {
+    fun List<FinanceDeskTreasury>.sum(amount:(FinanceDeskTreasury)->String)=fold(BigDecimal.ZERO){s,r->s+BigDecimal(amount(r))}
+    val categories=cashFlowCategories.mapNotNull{category->
+        val rows=sources.filter{it.category==category}
+        if(rows.isEmpty())null else {
+            val debit=rows.fold(BigDecimal.ZERO){sum,row->sum+BigDecimal(row.debits)}
+            val credit=rows.fold(BigDecimal.ZERO){sum,row->sum+BigDecimal(row.credits)}
+            FinanceDeskCashFlowCategory(category,debit.toPlainString(),credit.toPlainString(),(debit-credit).toPlainString())
+        }
+    }
+    fun net(category:String)=categories.singleOrNull{it.category==category}?.net?.let(::BigDecimal)?:BigDecimal.ZERO
+    val classified=net("OPERATING")+net("INVESTING")
+    val adjustment=net("ACCOUNTING_ADJUSTMENT")
+    val unresolved=net("UNCLASSIFIED")
+    val total=classified+adjustment+unresolved
+    val opening=treasury.sum{it.carriedNet};val closing=treasury.sum{it.closingNet}
+    val sourceDebit=categories.fold(BigDecimal.ZERO){sum,row->sum+BigDecimal(row.debit)}
+    val sourceCredit=categories.fold(BigDecimal.ZERO){sum,row->sum+BigDecimal(row.credit)}
+    return FinanceDeskCashFlow(currency,opening.toPlainString(),closing.toPlainString(),classified.toPlainString(),
+        adjustment.toPlainString(),unresolved.toPlainString(),total.toPlainString(),
+        treasury.all{it.movementBalances} && total.compareTo(closing-opening)==0 &&
+            sourceDebit.compareTo(treasury.sum{it.debits})==0 && sourceCredit.compareTo(treasury.sum{it.credits})==0,categories)
+}
 
 private fun FinanceDeskAccountBalance.closingNet()=BigDecimal(closingDebit)-BigDecimal(closingCredit)
 private fun FinanceDeskAccountBalance.carriedNet()=BigDecimal(openingDebit)-BigDecimal(openingCredit)
@@ -311,15 +348,48 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
         // and non-cash accruals are excluded. Voids remain visible as accounting
         // adjustments, not implied physical receipts or payments.
         val treasurySources=jdbc.query(lines(includeSettlements,includeEmployee,includePayroll)+"""
-            SELECT l.currency,a.account_kind,l.kind,
-                sum(CASE WHEN l.side='DEBIT' THEN l.amount ELSE 0 END) AS debit,
-                sum(CASE WHEN l.side='CREDIT' THEN l.amount ELSE 0 END) AS credit
-            FROM posted_lines l JOIN scope s ON true
-            JOIN finance_gl_account a ON a.organization_id=s.org AND a.id=l.gl_account_id
-            WHERE a.account_kind IN('BANK_ASSET','CASH_ASSET')
-            GROUP BY l.currency,a.account_kind,l.kind ORDER BY l.currency,a.account_kind,l.kind
+            , categorized AS (
+                SELECT l.currency,a.account_kind,l.kind,l.side,l.amount,
+                  CASE
+                    WHEN l.kind IN('BANK_VOID','PAYROLL_VOID') THEN 'ACCOUNTING_ADJUSTMENT'
+                    WHEN l.kind IN('PAYROLL_PAYMENT','PAYROLL_RETURN') THEN 'OPERATING'
+                    WHEN l.kind IN('BANK_ALLOCATION','CASH_VOUCHER') AND settlement.source_kind='AR' THEN 'OPERATING'
+                    WHEN l.kind IN('BANK_ALLOCATION','CASH_VOUCHER') AND settlement.source_kind='AP' THEN
+                      COALESCE(ap.category,'UNCLASSIFIED')
+                    WHEN l.kind='EXPENSE_REIMBURSEMENT' AND cost.account_kind IN('EXPENSE','INVENTORY_ASSET') THEN 'OPERATING'
+                    WHEN l.kind='EXPENSE_REIMBURSEMENT' AND cost.account_kind='FIXED_ASSET' THEN 'INVESTING'
+                    ELSE 'UNCLASSIFIED'
+                  END AS category
+                FROM posted_lines l JOIN scope s ON true
+                JOIN finance_gl_account a ON a.organization_id=s.org AND a.id=l.gl_account_id
+                LEFT JOIN finance_settlement_gl_journal settlement ON settlement.organization_id=s.org
+                    AND settlement.id=l.journal_id AND settlement.source_type=l.kind
+                LEFT JOIN finance_gl_account cost ON cost.organization_id=s.org AND cost.id=settlement.debit_account_id
+                LEFT JOIN LATERAL (
+                    SELECT CASE
+                      WHEN count(*)>0 AND bool_and(original_account.account_kind IN('EXPENSE','INVENTORY_ASSET'))
+                        THEN 'OPERATING'
+                      WHEN count(*)>0 AND bool_and(original_account.account_kind='FIXED_ASSET')
+                        THEN 'INVESTING'
+                      ELSE 'UNCLASSIFIED' END AS category
+                    FROM finance_ap_posted_journal_line original
+                    JOIN finance_gl_account original_account ON original_account.organization_id=original.organization_id
+                        AND original_account.id=original.gl_account_id
+                    WHERE original.organization_id=s.org AND original.journal_id=settlement.source_journal_id AND original.side='DEBIT'
+                ) ap ON settlement.source_kind='AP' AND l.kind IN('BANK_ALLOCATION','CASH_VOUCHER')
+                WHERE a.account_kind IN('BANK_ASSET','CASH_ASSET')
+            )
+            SELECT currency,account_kind,kind,category,
+                sum(CASE WHEN side='DEBIT' THEN amount ELSE 0 END) AS debit,
+                sum(CASE WHEN side='CREDIT' THEN amount ELSE 0 END) AS credit
+            FROM categorized GROUP BY currency,account_kind,kind,category
+            ORDER BY currency,account_kind,kind,category
         """,{r,_->FinanceDeskTreasurySource(r.getString("currency").trim(),r.getString("account_kind"),
-            r.getString("kind"),r.getBigDecimal("debit").toPlainString(),r.getBigDecimal("credit").toPlainString())},org,period)
+            r.getString("kind"),r.getBigDecimal("debit").toPlainString(),r.getBigDecimal("credit").toPlainString(),
+            r.getString("category"))},org,period)
+        val cashFlow=treasury.groupBy{it.currency}.map{(currency,accounts)->
+            financeDeskCashFlow(currency,accounts,treasurySources.filter{it.currency==currency})
+        }
         val recordedOpenings=jdbc.query("""SELECT j.currency FROM finance_gl_opening_journal j
             JOIN finance_gl_period p ON p.organization_id=j.organization_id AND p.id=j.period_id
             WHERE j.organization_id=? AND p.date_start<=? ORDER BY j.currency""",
@@ -331,7 +401,7 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
                 (if(includePayroll)listOf("PAYROLL_ACCRUAL","PAYROLL_PAYMENT","PAYROLL_RETURN","PAYROLL_VOID")else emptyList())+listOf("OPENING_BALANCE"),
             coverage.count,coverage.first,coverage.gaps,openingBasis=if(recordedOpenings.isEmpty())"PRIOR_POSTED_MOVEMENTS_ONLY" else "RECORDED_OPENING_PLUS_PRIOR_MOVEMENTS",
             recordedOpeningCurrencies=recordedOpenings,rows=rows,totals=totals,
-            positions=positions,treasury=treasury,treasurySources=treasurySources)
+            positions=positions,treasury=treasury,treasurySources=treasurySources,cashFlow=cashFlow)
     }
     private data class Coverage(val start:String,val end:String,val count:Int,val first:String,val gaps:Boolean)
 

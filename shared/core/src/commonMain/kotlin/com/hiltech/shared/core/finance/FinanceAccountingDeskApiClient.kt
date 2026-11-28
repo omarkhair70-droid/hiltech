@@ -39,6 +39,13 @@ import kotlinx.serialization.json.Json
 )
 @Serializable data class FinanceDeskTreasurySourceDto(
     val currency:String,val accountKind:String,val sourceKind:String,val debits:String,val credits:String,
+    val category:String="UNCLASSIFIED",
+)
+@Serializable data class FinanceDeskCashFlowCategoryDto(val category:String,val debit:String,val credit:String,val net:String)
+@Serializable data class FinanceDeskCashFlowDto(
+    val currency:String,val carriedNet:String,val closingNet:String,val netClassifiedMovement:String,
+    val accountingAdjustmentNet:String,val unclassifiedNet:String,val totalMovement:String,
+    val reconcilesToLedger:Boolean,val categories:List<FinanceDeskCashFlowCategoryDto>,
 )
 @Serializable data class FinanceDeskBalancesDto(
     val organizationId:String,val periodId:String,val dateStart:String,val dateEnd:String,
@@ -50,6 +57,7 @@ import kotlinx.serialization.json.Json
     val treasury:List<FinanceDeskTreasuryDto> = emptyList(),
     val treasurySources:List<FinanceDeskTreasurySourceDto> = emptyList(),
     val isCompleteBalanceSheet:Boolean=false,val isCompleteCashFlowStatement:Boolean=false,
+    val cashFlow:List<FinanceDeskCashFlowDto> = emptyList(),
 )
 @Serializable data class FinanceDeskExposureTotalDto(val currency:String,val knownOutstanding:String,val knownOverdue:String,
     val openWithoutDueDate:Long,val exceptionCount:Long,val recordCount:Long)
@@ -68,6 +76,7 @@ private fun amount(value:String)=value.matches(Regex("[0-9]+([.][0-9]+)?"))
 private fun signedAmount(value:String)=amount(value.removePrefix("-"))
 private fun nonzero(value:String)=value.any{it in '1'..'9'}
 private val treasuryAccountKinds=setOf("BANK_ASSET","CASH_ASSET")
+private val cashFlowCategories=setOf("OPERATING","INVESTING","UNCLASSIFIED","ACCOUNTING_ADJUSTMENT")
 
 internal fun financeDeskLedgerMatches(report:FinanceDeskLedgerDto,org:String,period:String,offset:Int):Boolean =
     report.organizationId.equals(org,true) && report.periodId.equals(period,true) && report.offset==offset &&
@@ -110,9 +119,18 @@ internal fun financeDeskBalancesMatches(data:FinanceDeskBalancesDto,org:String,p
         data.treasury.map{it.currency to it.accountKind}.toSet()==data.rows.filter{it.accountKind in treasuryAccountKinds}.map{it.currency to it.accountKind}.toSet() &&
         data.treasury.all{currency(it.currency)&&it.accountKind in treasuryAccountKinds&&amount(it.debits)&&amount(it.credits)&&
             listOf(it.carriedNet,it.netMovement,it.closingNet).all(::signedAmount)} &&
-        data.treasurySources.map{Triple(it.currency,it.accountKind,it.sourceKind)}.distinct().size==data.treasurySources.size &&
+        data.treasurySources.map{listOf(it.currency,it.accountKind,it.sourceKind,it.category)}.distinct().size==data.treasurySources.size &&
         data.treasurySources.all{s->s.sourceKind in data.includedSources&&s.sourceKind!="OPENING_BALANCE"&&
-            amount(s.debits)&&amount(s.credits)&&data.treasury.any{it.currency==s.currency&&it.accountKind==s.accountKind}}
+            s.category in cashFlowCategories &&
+            ((s.sourceKind in setOf("BANK_VOID","PAYROLL_VOID"))==(s.category=="ACCOUNTING_ADJUSTMENT")) &&
+            amount(s.debits)&&amount(s.credits)&&data.treasury.any{it.currency==s.currency&&it.accountKind==s.accountKind}} &&
+        data.cashFlow.map{it.currency}.distinct().size==data.cashFlow.size &&
+        data.cashFlow.map{it.currency}.toSet()==data.treasury.map{it.currency}.toSet() &&
+        data.cashFlow.all{f->currency(f.currency)&&
+            listOf(f.carriedNet,f.closingNet,f.netClassifiedMovement,f.accountingAdjustmentNet,f.unclassifiedNet,f.totalMovement).all(::signedAmount) &&
+            f.categories.map{it.category}.distinct().size==f.categories.size &&
+            f.categories.map{it.category}.toSet()==data.treasurySources.filter{it.currency==f.currency}.map{it.category}.toSet() &&
+            f.categories.all{it.category in cashFlowCategories && amount(it.debit)&&amount(it.credit)&&signedAmount(it.net)}}
 
 class FinanceAccountingDeskApiClient(private val api:HiltechApiClient,
     private val json:Json=Json { ignoreUnknownKeys=true; explicitNulls=false }) {

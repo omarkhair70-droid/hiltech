@@ -28,6 +28,21 @@ class FinanceDeskStatementsTest {
         assertEquals("20",treasury.netMovement)
         assertEquals("120",treasury.closingNet)
     }
+    @Test fun cashClassificationReconcilesButDoesNotConflateVoidsOrUnclassifiedCustody() {
+        val treasury=FinanceDeskTreasury("EGP","BANK_ASSET","100","50","30","20","120",true)
+        val sources=listOf(
+            FinanceDeskTreasurySource("EGP","BANK_ASSET","BANK_ALLOCATION","50","0","OPERATING"),
+            FinanceDeskTreasurySource("EGP","BANK_ASSET","BANK_VOID","0","10","ACCOUNTING_ADJUSTMENT"),
+            FinanceDeskTreasurySource("EGP","BANK_ASSET","EMPLOYEE_FUNDING","0","20","UNCLASSIFIED"))
+        val flow=financeDeskCashFlow("EGP",listOf(treasury),sources)
+        assertTrue(flow.reconcilesToLedger)
+        assertEquals("50",flow.netClassifiedMovement)
+        assertEquals("-10",flow.accountingAdjustmentNet)
+        assertEquals("-20",flow.unclassifiedNet)
+        assertEquals("20",flow.totalMovement)
+        assertFalse(financeDeskCashFlow("EGP",listOf(treasury),sources.dropLast(1)).reconcilesToLedger)
+    }
+
     @Test fun negativeLedgerCashStaysNegativeWithoutInventedFunding() {
         val row=balance("BANK_ASSET",openingCredit="2.50",debit="1.00",credit="4.00",closingCredit="5.50")
         val treasury=financeDeskTreasury("EGP","BANK_ASSET",listOf(row))

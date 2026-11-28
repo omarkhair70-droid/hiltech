@@ -299,10 +299,38 @@ private fun DeskRecordedPosition(data:FinanceDeskBalancesDto) {
 }
 
 @Composable
+private fun cashFlowCategoryLabel(category:String):String=when(category){
+    "OPERATING"->hiltechText("تشغيلية","Operating")
+    "INVESTING"->hiltechText("استثمارية","Investing")
+    "ACCOUNTING_ADJUSTMENT"->hiltechText("تصحيح محاسبي — ليس تحويلًا","Accounting adjustment — not a transfer")
+    else->hiltechText("تحتاج تصنيفًا","Needs classification")
+}
+
+@Composable
 private fun DeskTreasury(data:FinanceDeskBalancesDto) {
     Text(hiltechText("حركة النقد والبنوك المرحلة","Posted cash & bank movement"),style=MaterialTheme.typography.titleLarge)
     Text(hiltechText("حركة حسابات الخزائن والبنوك في الدفتر، لا رصيد كشف البنك أو دليل حركة نقدية فعلية. تشمل تصحيحات القيود؛ لا تمثل قائمة تدفقات نقدية مصنفة مكتملة.",
         "Ledger movements of cashboxes and banks, not statement balances or proof of actual cash transfer. Includes accounting adjustments; not a complete classified cash flow statement."),style=MaterialTheme.typography.bodySmall)
+    data.cashFlow.forEach{flow->
+        HiltechPanel(Modifier.fillMaxWidth()){
+            Text(hiltechText("تصنيف حركة الفترة","Period movement classification")+" · "+flow.currency,style=MaterialTheme.typography.titleMedium)
+            if(flow.categories.isNotEmpty())HiltechRecordTable(listOf(
+                HiltechTableColumn(hiltechText("التصنيف","Category"),2f),
+                HiltechTableColumn(hiltechText("مدين","Debit"),numeric=true),
+                HiltechTableColumn(hiltechText("دائن","Credit"),numeric=true),
+                HiltechTableColumn(hiltechText("صافي","Net"),numeric=true)),
+                flow.categories.map{HiltechTableRecord(listOf(cashFlowCategoryLabel(it.category),it.debit,it.credit,it.net))},"")
+            HiltechKeyValue(hiltechText("صافي الحركة المصنفة","Classified net movement"),flow.netClassifiedMovement)
+            HiltechKeyValue(hiltechText("صافي تصحيحات القيود","Accounting adjustments net"),flow.accountingAdjustmentNet)
+            HiltechKeyValue(hiltechText("صافي الحركة التي تحتاج تصنيفًا","Unclassified net movement"),flow.unclassifiedNet)
+            HiltechKeyValue(hiltechText("صافي حركة الدفتر بالكامل","Total ledger movement"),flow.totalMovement)
+            if(flow.categories.any{it.category=="UNCLASSIFIED"})Text(hiltechText("حركات السلف والعهد والمشتريات المختلطة وغيرها تحتاج أساس تصنيف معتمد؛ لا تُوزع تقديريًا.","Staff advances, custody, mixed purchases and other movements need an approved classification basis; no estimated split is made."),color=MaterialTheme.colorScheme.error)
+            Text(hiltechText("مصادر التمويل ليست مكتملة في هذا التقرير؛ عدم وجود بند لا يعني عدم وجود حركة تمويل.","Financing sources are not complete in this report; an absent category does not prove no financing movement."),style=MaterialTheme.typography.bodySmall)
+            Text(if(flow.reconcilesToLedger)hiltechText("التصنيفات تتطابق مع حركة حسابات النقد والبنوك","Categories reconcile to posted cash and bank movement")
+                else hiltechText("التصنيفات لا تتطابق مع حركة الدفتر","Categories do not reconcile to ledger movement"),
+                color=if(flow.reconcilesToLedger)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+        }
+    }
     data.treasury.forEach{t->
         HiltechPanel(Modifier.fillMaxWidth()){
             Text((if(t.accountKind=="BANK_ASSET")hiltechText("البنوك","Banks")else hiltechText("الخزائن","Cashboxes"))+" · "+t.currency,style=MaterialTheme.typography.titleMedium)
@@ -315,7 +343,7 @@ private fun DeskTreasury(data:FinanceDeskBalancesDto) {
             val sources=data.treasurySources.filter{it.currency==t.currency&&it.accountKind==t.accountKind}
             if(sources.isNotEmpty())HiltechRecordTable(listOf(HiltechTableColumn(hiltechText("مصدر القيد","Journal source"),2f),
                 HiltechTableColumn(hiltechText("مدين","Debit"),numeric=true),HiltechTableColumn(hiltechText("دائن","Credit"),numeric=true)),
-                sources.map{HiltechTableRecord(listOf(deskKind(it.sourceKind),it.debits,it.credits))},"")
+                sources.map{HiltechTableRecord(listOf(deskKind(it.sourceKind)+" · "+cashFlowCategoryLabel(it.category),it.debits,it.credits))},"")
         }
     }
     if(data.treasury.isEmpty())Text(hiltechText("لا توجد قيود خزائن أو بنوك في النطاق الحالي.","No cashbox or bank journals in the current scope."))

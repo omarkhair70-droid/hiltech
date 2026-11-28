@@ -846,7 +846,18 @@ class FinanceMixedBankCashPostgresContractTest {
            assertEquals(0,sources.fold(BigDecimal.ZERO){sum,s->sum+s.credits.toBigDecimal()}.compareTo(treasury.credits.toBigDecimal()))
        }
        assertTrue(initial.treasurySources.none{it.sourceKind in setOf("OPENING_BALANCE","IMPREST_EXPENSE","AR","AP")})
+       val flow=initial.cashFlow.single()
+       assertTrue(flow.reconcilesToLedger)
+       assertEquals("EGP",flow.currency)
+       assertTrue(initial.treasurySources.filter{it.sourceKind=="BANK_VOID"}.isNotEmpty())
+       assertTrue(initial.treasurySources.filter{it.sourceKind=="BANK_VOID"}.all{it.category=="ACCOUNTING_ADJUSTMENT"})
+       assertTrue(initial.treasurySources.filter{it.sourceKind in setOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN")}.all{it.category=="UNCLASSIFIED"})
+       assertEquals(0,flow.categories.single{it.category=="UNCLASSIFIED"}.net.toBigDecimal().compareTo(return30-funding80))
+       assertEquals(0,flow.categories.single{it.category=="ACCOUNTING_ADJUSTMENT"}.net.toBigDecimal().compareTo(-bank100))
+       assertEquals(0,flow.totalMovement.toBigDecimal().compareTo(flow.closingNet.toBigDecimal()-flow.carriedNet.toBigDecimal()))
        assertTrue(openingCarry.treasurySources.isEmpty())
+       assertTrue(openingCarry.cashFlow.single().categories.isEmpty())
+       assertTrue(openingCarry.cashFlow.single().reconcilesToLedger)
        assertTrue(openingCarry.treasury.all{it.netMovement.toBigDecimal().signum()==0&&it.movementBalances})
      } finally { connection.rollback() }
    }
