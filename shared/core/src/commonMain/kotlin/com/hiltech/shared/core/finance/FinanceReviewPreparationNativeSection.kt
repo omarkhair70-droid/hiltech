@@ -105,7 +105,7 @@ fun financeReviewDraftIsValid(
             draft.fundingKind in setOf("EMPLOYEE_ADVANCE","FINANCIAL_IMPREST") &&
                 financeLookupIdIsUuid(draft.policyApprovalId) && financeLookupIdIsUuid(draft.bankLineId)
         FinanceReviewKind.EMPLOYEE_SETTLEMENT ->
-            draft.settlementAction in setOf("ADVANCE_RECOVERY_CONFIRMED","IMPREST_CASH_RETURN_CONFIRMED","IMPREST_RECEIPTS_ACCEPTED","PAYROLL_RECOVERY_CONFIRMED") &&
+            draft.settlementAction in setOf("ADVANCE_RECOVERY_CONFIRMED","IMPREST_CASH_RETURN_CONFIRMED","IMPREST_RECEIPTS_ACCEPTED","PAYROLL_RECOVERY_CONFIRMED","PAYROLL_OPENING_PAID") &&
                 financeReviewIsAmount(draft.amount,false) && financeLookupIdIsUuid(draft.documentEvidenceId) &&
                 draft.evidenceSha256.matches(Regex("^[a-f0-9]{64}$")) &&
                 (if (draft.settlementAction=="IMPREST_RECEIPTS_ACCEPTED") draft.bankLineId.isBlank()
@@ -652,6 +652,7 @@ fun FinanceReviewPreparationSection(
                 draft=draft.copy(sourceId=source.id,settlementAction=when(source.kind){
                     "EMPLOYEE_ADVANCE"->"ADVANCE_RECOVERY_CONFIRMED"
                     "PAYROLL_OVERPAYMENT"->"PAYROLL_RECOVERY_CONFIRMED"
+                    "PAYROLL_OPENING_PAYABLE"->"PAYROLL_OPENING_PAID"
                     else->"IMPREST_CASH_RETURN_CONFIRMED"
                 },bankLineId="")
                 resetForFormChange()
@@ -678,7 +679,7 @@ fun FinanceReviewPreparationSection(
         if (kind == FinanceReviewKind.EMPLOYEE_SETTLEMENT) {
             Column {
                 listOf("ADVANCE_RECOVERY_CONFIRMED" to "استرداد سلفة","IMPREST_CASH_RETURN_CONFIRMED" to "رد نقد العهدة",
-                    "IMPREST_RECEIPTS_ACCEPTED" to "قبول مستندات العهدة","PAYROLL_RECOVERY_CONFIRMED" to "استرداد زيادة راتب").forEach { (value,label) ->
+                    "IMPREST_RECEIPTS_ACCEPTED" to "قبول مستندات العهدة","PAYROLL_RECOVERY_CONFIRMED" to "استرداد زيادة راتب","PAYROLL_OPENING_PAID" to "صرف راتب افتتاحي").forEach { (value,label) ->
                     OutlinedButton(enabled=editable && draft.settlementAction!=value,onClick={
                         draft=draft.copy(settlementAction=value,bankLineId=""); resetForFormChange()
                     }) {Text(label)}
@@ -1157,7 +1158,7 @@ private fun FinanceEmployeeCustodyPicker(client:FinanceEmployeeMoneyApiClient,or
         catch(_:Exception){failed=true}
         finally{loading=false}
     }
-    if(loading)Text(hiltechText("جارٍ قراءة السلف والعهد…","Reading advances and imprests…"))
+    if(loading)Text(hiltechText("جارٍ قراءة أرصدة الموظفين…","Reading employee balances…"))
     if(failed)Text(hiltechText("تعذر تحميل أرصدة الموظفين.","Could not load employee balances."),color=MaterialTheme.colorScheme.error)
     data?.let{page->
         if(page.records.isEmpty())Text(hiltechText("لا توجد أرصدة مفتوحة في هذه الصفحة.","No open employee balances on this page."))
@@ -1166,6 +1167,7 @@ private fun FinanceEmployeeCustodyPicker(client:FinanceEmployeeMoneyApiClient,or
                 (when(r.kind){
                     "EMPLOYEE_ADVANCE"->hiltechText("سلفة","Advance")
                     "PAYROLL_OVERPAYMENT"->hiltechText("زيادة راتب","Payroll overpayment")
+                    "PAYROLL_OPENING_PAYABLE"->hiltechText("راتب افتتاحي مستحق","Historical payroll payable")
                     else->hiltechText("عهدة","Imprest")
                 })+" · "+r.remaining+" "+r.currency)},
             onChange={id->page.records.singleOrNull{it.id==id}?.let(onSelect)},allowKnownReference=false,enabled=enabled&&!loading)

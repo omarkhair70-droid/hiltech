@@ -114,4 +114,18 @@ class FinanceEmployeeSettlementRulesTest {
         rejects(paid.copy(recoveryMethod="SEPARATELY_APPROVED_PAYROLL_DEDUCTION"))
         rejects(paid.copy(settlementBankTransactionId=null))
     }
+    @Test fun historicalPayrollPaymentNeedsSealedLiabilityAndBankDebit() {
+        val payment=base.copy(kind=FinanceEmployeeSettlementKind.PAYROLL_OPENING_PAYABLE,
+            action=FinanceEmployeeSettlementAction.PAYROLL_OPENING_PAID,approvedFundingRecorded=false,
+            sourceBankTransactionId=null,sourceBankEvidenceSha256=null,openingSourceFingerprint="a".repeat(64),
+            recoveryMethod="CONFIRMED_BANK_DEBIT",settlementBankTransactionId=UUID.randomUUID(),
+            settlementBankEvidenceSha256="c".repeat(64))
+        assertEquals("650.000000",FinanceEmployeeSettlementRules.validate(payment).unsettledAmount)
+        rejects(payment.copy(recoveryMethod="CONFIRMED_BANK_CREDIT"))
+        rejects(payment.copy(openingSourceFingerprint=null))
+        rejects(payment.copy(approvedFundingRecorded=true))
+        rejects(payment.copy(settlementBankTransactionId=null))
+        rejects(payment.copy(previouslySettled=BigDecimal("900")))
+        rejects(payment.copy(action=FinanceEmployeeSettlementAction.PAYROLL_RECOVERY_CONFIRMED))
+    }
 }

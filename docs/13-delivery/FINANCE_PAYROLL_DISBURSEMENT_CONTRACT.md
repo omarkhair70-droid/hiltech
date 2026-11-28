@@ -102,5 +102,12 @@ new payroll run, bank result or authorization to pay. Duplicate employee
 periods/references and overlaps with already released payroll are rejected;
 later payroll release also rejects overlap with a recorded opening. The
 existing opening journal authority and company/source references apply.
-Historical settlement through bank evidence and its operational remaining
-balance are a separate follow-up; no payment source is fabricated by opening.
+Historical settlement uses the existing employee settlement review with the distinct
+PAYROLL_OPENING_PAYABLE source and PAYROLL_OPENING_PAID action. Only an approved
+bank debit on or after cutover, independently reviewed restricted evidence and
+remaining bank and liability capacity can record a payment. The employee cannot
+authorize their own payment. GL posting debits the frozen opening payroll
+payable and credits the approved bank asset; it creates no payroll expense,
+funding, current payslip or bank execution. Multiple recorded payments may reduce
+one historical obligation, with separate remaining-to-record and remaining-to-post
+balances. No new cash-voucher route or reversal is included.

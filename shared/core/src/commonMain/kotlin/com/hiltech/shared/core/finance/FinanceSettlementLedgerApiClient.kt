@@ -7,13 +7,14 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 internal val financeSettlementTypes=setOf("BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID")
-internal val financeEmployeeSettlementTypes=setOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT","PAYROLL_RECOVERY")
+internal val financeEmployeeSettlementTypes=setOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT","PAYROLL_RECOVERY","PAYROLL_OPENING_PAYMENT")
 private fun validSettlementPair(type:String,kind:String)=when(type) {
     in financeSettlementTypes -> kind in setOf("AP","AR")
     "EMPLOYEE_FUNDING","EMPLOYEE_RETURN" -> kind in setOf("EA","EI")
     "IMPREST_EXPENSE" -> kind=="EI"
     "EXPENSE_REIMBURSEMENT" -> kind=="ER"
     "PAYROLL_RECOVERY" -> kind=="PR"
+    "PAYROLL_OPENING_PAYMENT" -> kind=="PO"
     else -> false
 }
 private fun validDebitKind(required:String,kind:String)=if(required=="COST")
@@ -102,7 +103,7 @@ class FinanceSettlementLedgerApiClient(private val api:HiltechApiClient,
                     listOf(s.sourceId,s.sourceApprovalId).all(::financeLookupIdIsUuid) &&
                     listOfNotNull(s.sourceJournalId,s.originalSettlementId,s.debitAccountId,s.creditAccountId,s.employeeFundingRecordId,s.expenseClaimId).all(::financeLookupIdIsUuid) &&
                     (s.sourceKind in setOf("AP","AR"))==(s.sourceJournalId!=null) &&
-                    (s.sourceKind in setOf("EA","EI","PR"))==(s.employeeFundingRecordId!=null) &&
+                    (s.sourceKind in setOf("EA","EI","PR","PO"))==(s.employeeFundingRecordId!=null) &&
                     (s.sourceKind=="ER")==(s.expenseClaimId!=null) &&
                     s.requiredDebitKind==requiredDebitKind(s.sourceType,s.sourceKind) &&
                     (s.requiredDebitKind==null || s.debitAccountId==null) &&

@@ -15,6 +15,7 @@ enum class FinanceEmployeeSettlementKind {
     EMPLOYEE_ADVANCE,
     FINANCIAL_IMPREST,
     PAYROLL_OVERPAYMENT,
+    PAYROLL_OPENING_PAYABLE,
 }
 enum class FinanceEmployeeSettlementAction {
     REIMBURSEMENT_CONFIRMED,
@@ -22,6 +23,7 @@ enum class FinanceEmployeeSettlementAction {
     IMPREST_RECEIPTS_ACCEPTED,
     IMPREST_CASH_RETURN_CONFIRMED,
     PAYROLL_RECOVERY_CONFIRMED,
+    PAYROLL_OPENING_PAID,
 }
 data class FinanceEmployeeSettlementPlan(
     val organizationId: UUID,
@@ -76,6 +78,16 @@ object FinanceEmployeeSettlementRules {
             "PAYROLL_RECOVERY_IS_NOT_ADVANCE_OR_CUSTODY"
         }
         when(p.kind) {
+            FinanceEmployeeSettlementKind.PAYROLL_OPENING_PAYABLE -> {
+                require(p.action==FinanceEmployeeSettlementAction.PAYROLL_OPENING_PAID &&
+                    !p.approvedFundingRecorded && p.sourceBankTransactionId==null &&
+                    p.sourceBankEvidenceSha256==null &&
+                    p.openingSourceFingerprint?.matches(Regex("^[a-f0-9]{64}$"))==true &&
+                    p.recoveryMethod=="CONFIRMED_BANK_DEBIT" && p.approvedPayrollDeductionEventId==null) {
+                    "SEALED_PAYROLL_PAYABLE_AND_SEPARATE_BANK_DEBIT_REQUIRED"
+                }
+                verifiedSettlementBank(p)
+            }
             FinanceEmployeeSettlementKind.PAYROLL_OVERPAYMENT -> {
                 require(p.action==FinanceEmployeeSettlementAction.PAYROLL_RECOVERY_CONFIRMED &&
                     !p.approvedFundingRecorded && p.sourceBankTransactionId==null &&

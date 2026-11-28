@@ -99,7 +99,9 @@ class FinanceEmployeeSettlementService @org.springframework.beans.factory.annota
             funding,org,
         ).singleOrNull() ?: stale()
         val action=request.action
-        if(source.kind !in setOf("EMPLOYEE_ADVANCE","FINANCIAL_IMPREST","PAYROLL_OVERPAYMENT"))unavailable()
+        if(source.kind !in setOf("EMPLOYEE_ADVANCE","FINANCIAL_IMPREST","PAYROLL_OVERPAYMENT","PAYROLL_OPENING_PAYABLE"))unavailable()
+        if(source.kind=="PAYROLL_OPENING_PAYABLE" && (action!="PAYROLL_OPENING_PAID"||source.openingDate==null||
+            source.openingFingerprint?.matches(Regex("[0-9a-f]{64}"))!=true))unavailable()
         if(source.kind=="PAYROLL_OVERPAYMENT" && (action!="PAYROLL_RECOVERY_CONFIRMED"||!source.recoveryCurrent||
             source.recoveryFingerprint?.matches(Regex("[0-9a-f]{64}"))!=true))unavailable()
         if(source.kind=="EMPLOYEE_ADVANCE" &&
@@ -124,7 +126,7 @@ class FinanceEmployeeSettlementService @org.springframework.beans.factory.annota
             subject.bank(org,it) ?: stale()
         }
         if(bank!=null &&
-            (bank.flow!="CREDIT" ||
+            (bank.flow!=(if(source.kind=="PAYROLL_OPENING_PAYABLE")"DEBIT" else "CREDIT") ||
                 bank.currency!=source.currency || bank.amount<amount ||
                 (source.openingDate!=null&&(bank.bookedOn==null||bank.bookedOn<source.openingDate)) ||
                 (source.recoveryDate!=null&&(bank.bookedOn==null||bank.bookedOn<source.recoveryDate))))
@@ -311,7 +313,7 @@ class FinanceEmployeeSettlementService @org.springframework.beans.factory.annota
                 settlementAmount=snap.amount,previouslySettled=previous,
                 independentReviewerApproved=true,
                 recoveryMethod=if(snap.bankLineId!=null)
-                    "CONFIRMED_BANK_CREDIT" else null,
+                    (if(snap.fundedKind=="PAYROLL_OPENING_PAYABLE")"CONFIRMED_BANK_DEBIT" else "CONFIRMED_BANK_CREDIT") else null,
                 settlementBankTransactionId=snap.bankLineId,
                 settlementBankEvidenceSha256=snap.bankStatementSha,
             )

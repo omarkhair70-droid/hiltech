@@ -276,7 +276,7 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
         return FinanceDeskLedger(org,period,offset,page.size>PAGE_SIZE,movements,page.take(PAGE_SIZE),
             includedSources=listOf("AP","AR","AP_REVERSAL")+
                 (if(includeSettlements) listOf("BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID") else emptyList())+
-                (if(includeSettlements && includeEmployee) listOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT","PAYROLL_RECOVERY") else emptyList())+
+                (if(includeSettlements && includeEmployee) listOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT","PAYROLL_RECOVERY","PAYROLL_OPENING_PAYMENT") else emptyList())+
                 (if(includePayroll) listOf("PAYROLL_ACCRUAL","PAYROLL_PAYMENT","PAYROLL_RETURN","PAYROLL_VOID") else emptyList())+
                 (if(includeOpening) listOf("OPENING_BALANCE") else emptyList()),
             currencyTotals=currencyTotals)
@@ -353,7 +353,7 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
                 SELECT l.currency,a.account_kind,l.kind,l.side,l.amount,
                   CASE
                     WHEN l.kind IN('BANK_VOID','PAYROLL_VOID') THEN 'ACCOUNTING_ADJUSTMENT'
-                    WHEN l.kind IN('PAYROLL_PAYMENT','PAYROLL_RETURN','PAYROLL_RECOVERY') THEN 'OPERATING'
+                    WHEN l.kind IN('PAYROLL_PAYMENT','PAYROLL_RETURN','PAYROLL_RECOVERY','PAYROLL_OPENING_PAYMENT') THEN 'OPERATING'
                     WHEN l.kind IN('BANK_ALLOCATION','CASH_VOUCHER') AND settlement.source_kind='AR' THEN 'OPERATING'
                     WHEN l.kind IN('BANK_ALLOCATION','CASH_VOUCHER') AND settlement.source_kind='AP' THEN
                       COALESCE(ap.category,'UNCLASSIFIED')
@@ -398,7 +398,7 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
         return FinanceDeskBalances(org,period,coverage.start,coverage.end,
             listOf("AP","AR","AP_REVERSAL")+
                 (if(includeSettlements)listOf("BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID")else emptyList())+
-                (if(includeSettlements&&includeEmployee)listOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT","PAYROLL_RECOVERY")else emptyList())+
+                (if(includeSettlements&&includeEmployee)listOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT","PAYROLL_RECOVERY","PAYROLL_OPENING_PAYMENT")else emptyList())+
                 (if(includePayroll)listOf("PAYROLL_ACCRUAL","PAYROLL_PAYMENT","PAYROLL_RETURN","PAYROLL_VOID")else emptyList())+listOf("OPENING_BALANCE"),
             coverage.count,coverage.first,coverage.gaps,openingBasis=if(recordedOpenings.isEmpty())"PRIOR_POSTED_MOVEMENTS_ONLY" else "RECORDED_OPENING_PLUS_PRIOR_MOVEMENTS",
             recordedOpeningCurrencies=recordedOpenings,rows=rows,totals=totals,

@@ -833,7 +833,7 @@ class FinanceMixedBankCashPostgresContractTest {
        val payrollOpeningSavepoint=connection.setSavepoint()
        try {
            val payrollJournal=postOpening(payrollPayload())
-           val historical=jdbc.queryForMap("""SELECT employee_id,control_account_id,amount,payroll_period_end,source_fingerprint
+           val historical=jdbc.queryForMap("""SELECT id,employee_id,control_account_id,amount,payroll_period_end,source_fingerprint
                FROM finance_gl_opening_payroll_obligation WHERE organization_id=? AND opening_journal_id=?""",org,payrollJournal)
            assertEquals(employee,historical["employee_id"])
            assertEquals(payrollOpening,historical["control_account_id"])
@@ -844,6 +844,71 @@ class FinanceMixedBankCashPostgresContractTest {
            val openingBalances=desk.balances(org,period,true,true,false)
            assertEquals(0,openingBalances.rows.single{it.accountId==payrollOpening}.openingCredit.toBigDecimal().compareTo(BigDecimal("250")))
            assertTrue(openingBalances.totals.single().balanced)
+           val historicalSource=historical["id"] as UUID
+           assertNull(settlementStore.source(org,"EMPLOYEE_FUNDING",historicalSource))
+           fun remaining(column:String)=checkNotNull(jdbc.queryForObject(
+               "SELECT "+column+" FROM finance_payroll_opening_balance WHERE organization_id=? AND id=?",
+               BigDecimal::class.java,org,historicalSource))
+           assertEquals(0,BigDecimal("250").compareTo(remaining("remaining_to_record")))
+           assertEquals(0,BigDecimal("250").compareTo(remaining("remaining_to_post")))
+           rejectedOpening{recordEmployeeSettlement("PAYROLL_OPENING_PAID",actualBankIds[0],bank100,historicalSource,t.plusHours(17))}
+           rejectedOpening{recordEmployeeSettlement("PAYROLL_OPENING_PAID",actualBankIds[2],expense20,historicalSource,t.plusHours(17))}
+           rejectedOpening{recordEmployeeSettlement("PAYROLL_RECOVERY_CONFIRMED",actualBankIds[1],bank100,historicalSource,t.plusHours(17))}
+           val payBank=UUID.randomUUID()
+           insert("""INSERT INTO finance_bank_account_register(id,organization_id,currency,bank_name,masked_account_reference,
+               company_approval_reference,state,created_at)
+               VALUES(?,?,'EGP','Synthetic payroll bank',?,'SYNTHETIC-BANK-APPROVAL','APPROVED',?)""",payBank,org,"EG****"+payBank.toString().take(8),t)
+           val payGl=treasury("BANK_ASSET","OPENING-PAYROLL-BANK",payBank)
+           val payProposal=UUID.randomUUID()
+           val paySha="6".repeat(64)
+           val payEvidence=evidence("FINANCE_BANK_STATEMENT_INTAKE",payProposal,paySha)
+           val payAmount=BigDecimal("250.000000")
+           val payPart=FinanceBankIntakeSourceLine("SYNTH-OPENING-PAY-"+payProposal,day,FinanceBankFlow.DEBIT,"EGP",payAmount,"5".repeat(64))
+           val payDigest=FinanceBankIntakeRules.validate(FinanceBankIntakeSource(org,payBank,payEvidence,paySha,"EGP",day,day,
+               payAmount,BigDecimal.ZERO,listOf(payPart),true,true)).sourceLinesSha256
+           connection.createStatement().use{it.execute("SET CONSTRAINTS ALL DEFERRED")}
+           insert("""INSERT INTO finance_bank_statement_intake_proposal(id,operation_id,organization_id,account_id,statement_evidence_id,
+               statement_sha256,statement_lines_sha256,date_start,date_end,opening_balance,closing_balance,expected_line_count,source_version,
+               policy_key,prepared_by_user_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,250,0,1,909,?,?,?)""",
+               payProposal,UUID.randomUUID(),org,payBank,payEvidence,paySha,payDigest,day,day,intakePolicy,bankPreparer,t)
+           insert("""INSERT INTO finance_bank_statement_intake_proposal_line(id,organization_id,proposal_id,line_number,external_transaction_id,
+               booked_on,flow,currency,amount,original_line_sha256) VALUES(?,?,?,1,?,?,'DEBIT','EGP',?,?)""",
+               UUID.randomUUID(),org,payProposal,payPart.externalTransactionId,day,payAmount,payPart.originalLineSha256)
+           connection.createStatement().use{it.execute("SET CONSTRAINTS ALL IMMEDIATE");it.execute("SET CONSTRAINTS ALL DEFERRED")}
+           val payApproval=approval("FINANCE_BANK_STATEMENT_INTAKE",payProposal,909,intakePolicy,bankPreparer)
+           val payIntake=UUID.randomUUID();val payLine=UUID.randomUUID()
+           insert("""INSERT INTO finance_bank_statement_intake(id,operation_id,organization_id,proposal_id,account_id,
+               approval_request_id,statement_sha256,statement_lines_sha256,statement_evidence_id,currency,date_start,date_end,opening_balance,
+               closing_balance,expected_line_count,imported_by_user_id,imported_at,correlation_id)
+               VALUES(?,?,?,?,?,?,?,?,?,'EGP',?,?,250,0,1,?,?,'synthetic-payroll-opening-bank')""",
+               payIntake,UUID.randomUUID(),org,payProposal,payBank,payApproval,paySha,payDigest,payEvidence,day,day,bankImporter,t.plusHours(3))
+           insert("""INSERT INTO finance_bank_statement_intake_line(id,organization_id,intake_id,account_id,external_transaction_id,
+               booked_on,flow,currency,amount,original_line_sha256) VALUES(?,?,?,?,?,?,'DEBIT','EGP',?,?)""",
+               payLine,org,payIntake,payBank,payPart.externalTransactionId,day,payAmount,payPart.originalLineSha256)
+           connection.createStatement().use{it.execute("SET CONSTRAINTS ALL IMMEDIATE");it.execute("SET CONSTRAINTS ALL DEFERRED")}
+           fun pay(amount:String,remainingBeforePost:String,remainingAfter:String) {
+               val value=BigDecimal(amount)
+               val record=recordEmployeeSettlement("PAYROLL_OPENING_PAID",payLine,value,historicalSource,t.plusHours(17))
+               assertEquals(0,BigDecimal(remainingAfter).compareTo(remaining("remaining_to_record")))
+               assertEquals(0,BigDecimal(remainingBeforePost).compareTo(remaining("remaining_to_post")))
+               val payment=checkNotNull(settlementStore.source(org,"PAYROLL_OPENING_PAYMENT",record))
+               assertEquals("PO",payment.sourceKind)
+               assertEquals(payrollOpening,payment.debitAccountId)
+               assertEquals(payGl,payment.creditAccountId)
+               val request=FinanceSettlementPost(UUID.randomUUID(),"PAYROLL_OPENING_PAYMENT",record,"PO",period,
+                   payrollOpening,payGl,payment.amount,"EGP")
+               rejectedOpening{settlementStore.insert(org,journalRecorder,request.copy(debitAccountId=fixed),payment,UUID.randomUUID(),t.plusHours(18),"wrong-opening-payroll-account")}
+               settlementStore.insert(org,journalRecorder,request,payment,UUID.randomUUID(),t.plusHours(18),"synthetic-opening-payroll")
+               rejectedOpening{settlementStore.insert(org,journalRecorder,request.copy(operationId=UUID.randomUUID()),payment,UUID.randomUUID(),t.plusHours(18),"duplicate-opening-payroll")}
+               assertEquals(0,BigDecimal(remainingAfter).compareTo(remaining("remaining_to_post")))
+           }
+           pay("100","250","150")
+           rejectedOpening{recordEmployeeSettlement("PAYROLL_OPENING_PAID",payLine,BigDecimal("150.000001"),historicalSource,t.plusHours(17))}
+           pay("150","150","0")
+           val paidBalances=desk.balances(org,period,true,true,false)
+           assertEquals(0,paidBalances.rows.single{it.accountId==payrollOpening}.closingCredit.toBigDecimal().signum())
+           assertTrue(paidBalances.totals.single().balanced)
+           assertEquals(0,paidBalances.totals.single().recognizedResult.toBigDecimal().compareTo(openingBalances.totals.single().recognizedResult.toBigDecimal()))
        } finally {connection.rollback(payrollOpeningSavepoint);connection.releaseSavepoint(payrollOpeningSavepoint)}
        val supplier=UUID.randomUUID()
        insert("""INSERT INTO organization(id,organization_code,legal_name,display_name,organization_type,status,created_at)

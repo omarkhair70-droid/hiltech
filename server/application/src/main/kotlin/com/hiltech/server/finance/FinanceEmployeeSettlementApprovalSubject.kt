@@ -170,7 +170,8 @@ class FinanceEmployeeSettlementApprovalSubject(
         ).singleOrNull() ?: return null
         if(row.policyKey!=key || row.fundedCurrency!=row.currency || row.employee!=row.fundedEmployee ||
             row.amount<=BigDecimal.ZERO || row.amount>row.fundedAmount ||
-            row.fundedKind !in setOf("EMPLOYEE_ADVANCE","FINANCIAL_IMPREST","PAYROLL_OVERPAYMENT") ||
+            row.fundedKind !in setOf("EMPLOYEE_ADVANCE","FINANCIAL_IMPREST","PAYROLL_OVERPAYMENT","PAYROLL_OPENING_PAYABLE") ||
+            (row.fundedKind=="PAYROLL_OPENING_PAYABLE" && (row.action!="PAYROLL_OPENING_PAID"||row.openingFingerprint==null||row.openingDate==null)) ||
             (row.fundedKind=="PAYROLL_OVERPAYMENT" && (row.action!="PAYROLL_RECOVERY_CONFIRMED"||!row.recoveryCurrent)) ||
             (row.fundedKind=="EMPLOYEE_ADVANCE" &&
                 row.action!="ADVANCE_RECOVERY_CONFIRMED") ||
@@ -195,11 +196,15 @@ class FinanceEmployeeSettlementApprovalSubject(
         if(row.action=="IMPREST_RECEIPTS_ACCEPTED") {
             if(row.bankLine!=null)return null
         } else {
-            if(bank==null || bank.flow!="CREDIT" ||
+            if(bank==null || bank.flow!=(if(row.fundedKind=="PAYROLL_OPENING_PAYABLE")"DEBIT" else "CREDIT") ||
                 bank.currency!=row.currency || bank.amount<row.amount ||
                 (row.openingDate!=null&&(bank.bookedOn==null||bank.bookedOn<row.openingDate)) ||
                 (row.recoveryDate!=null&&(bank.bookedOn==null||bank.bookedOn<row.recoveryDate)))
                 return null
+            if(row.fundedKind=="PAYROLL_OPENING_PAYABLE" && jdbc.queryForObject(
+                """SELECT EXISTS(SELECT 1 FROM finance_bank_statement_intake_line l JOIN finance_bank_reconciliation_record r
+                   ON r.organization_id=l.organization_id AND r.intake_id=l.intake_id
+                   WHERE l.organization_id=? AND l.id=?)""",Boolean::class.java,org,row.bankLine)==true)return null
             val total=jdbc.queryForObject(
                 """SELECT coalesce(sum(amount),0)
                    FROM finance_bank_committed_usage
