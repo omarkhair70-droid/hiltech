@@ -196,10 +196,14 @@ fun FinancePayrollDisbursementWorkspace(
                 else {
                 Text((if(current.differential)hiltechText("فرق مستحق فقط: ","Additional payable only: ")else "")+current.payableTotal+" "+current.currency)
                 if (current.transferCount == 0) Text(hiltechText("لا توجد مبالغ مستحقة للتحويل في هذا الكشف.", "This run has no positive amounts requiring payment."))
-                else if (!current.prepared && access?.canPrepare == true) Button(enabled = enabled, onClick = {
+                if (!current.prepared && access?.canPrepare == true && (current.transferCount>0||current.differential)) Button(enabled = enabled, onClick = {
                     prepare(FinancePayrollIntent(newOperationId(), organizationId, "PREPARE_BATCH", current.reviewBatchId,
                         current.periodStart + " — " + current.periodEnd), current.payableTotal + " " + current.currency)
-                }) { Text(if(current.differential)hiltechText("تجهيز الفروق فقط","Prepare differences only")else hiltechText("تجهيز مطابقة الموظفين", "Prepare employee reconciliation")) }
+                }) { Text(when{
+                    current.differential&&current.transferCount==0->hiltechText("تجهيز التصحيح دون تحويل","Prepare correction without transfer")
+                    current.differential->hiltechText("تجهيز الفروق فقط","Prepare differences only")
+                    else->hiltechText("تجهيز مطابقة الموظفين", "Prepare employee reconciliation")
+                }) }
                 }
             }
             if (runLoading) CircularProgressIndicator()
@@ -475,6 +479,13 @@ private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,o
             else Text(hiltechText("الفترة المحاسبية: ","Accounting period: ")+period.dateStart+" — "+period.dateEnd)
             Text(payrollGlTitle("PAYROLL_ACCRUAL"),style=MaterialTheme.typography.titleMedium)
             Text(data.gross+" "+data.currency)
+            data.recovery?.let{recovery->
+                Text(if(recovery.posted)hiltechText("رصيد استرداد مثبت — لم يُحصّل بعد","Recovery receivable posted — not collected")
+                    else hiltechText("رصيد استرداد معتمد للترحيل","Approved recovery receivable to post"),style=MaterialTheme.typography.titleMedium)
+                HiltechKeyValue(recovery.accountCode+" · "+recovery.accountName,recovery.amount+" "+data.currency)
+                HiltechKeyValue(hiltechText("عدد الموظفين","Employees"),recovery.employeeCount.toString())
+                Text(hiltechText("لا يتم تنفيذ خصم أو تحصيل تلقائي.","No automatic deduction or collection."))
+            }
             when(data.accrualState) {
                 "POSTED"->HiltechStateTag(hiltechText("تم إثبات الاستحقاق","Accrual posted"),HiltechStateTone.CURRENT)
                 "REPLACED"->Text(hiltechText("تم عكس هذا الاستحقاق في قيد النسخة المصححة؛ التاريخ محفوظ.","This accrual was reversed in the replacement journal; history is preserved."))
@@ -542,6 +553,10 @@ private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,o
                         val title=payrollGlTitle("PAYROLL_ACCRUAL")
                         val debitLabel=hiltechText("مدين: ","Debit: ");val creditLabel=hiltechText("دائن: ","Credit: ")
                         val reversalLabel=hiltechText("عكس الاستحقاق السابق","Reverse prior accrual")
+                        val recoveryDetail=data.recovery?.let{r->
+                            debitLabel+r.accountName+" · "+r.amount+" "+data.currency+"\n"+
+                                creditLabel+(cr?.name?:"")+" · "+r.amount+" "+data.currency+"\n"
+                        }.orEmpty()
                         Button(enabled=canPost && dr!=null && cr!=null && allocations.size==data.groups.size,onClick={
                             val fiscal=period?:return@Button
                             val debit=dr?:return@Button;val credit=cr?:return@Button
@@ -555,7 +570,7 @@ private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,o
                             val reversal=data.correction?.let{c->reversalLabel+" · "+c.clearanceReference+"\n"+c.reversalLines.joinToString("\n"){line->
                                 (if(line.side=="DEBIT")debitLabel else creditLabel)+line.accountName+" · "+line.amount+" "+data.currency
                             }+"\n"} .orEmpty()
-                            if(payrollGlIntentValid(post))onReview(post,title,reversal+debitLabel+debit.name+" · "+data.gross+" "+data.currency+"\n"+creditLabel+credit.name+" · "+data.net+" "+data.currency+"\n"+detail+"\n"+fiscal.dateStart+" — "+fiscal.dateEnd)
+                            if(payrollGlIntentValid(post))onReview(post,title,reversal+debitLabel+debit.name+" · "+data.gross+" "+data.currency+"\n"+creditLabel+credit.name+" · "+data.net+" "+data.currency+"\n"+detail+"\n"+recoveryDetail+fiscal.dateStart+" — "+fiscal.dateEnd)
                         }){Text(hiltechText("مراجعة قيد الاستحقاق","Review accrual journal"))}
                     }
                 }
@@ -597,6 +612,7 @@ private fun FinancePayrollCorrectionSection(client:FinancePayrollDisbursementApi
     var loading by remember {mutableStateOf(false)}
     var error by remember {mutableStateOf(false)}
     var selected by rememberSaveable {mutableStateOf("")}
+    var recoveryAccount by rememberSaveable {mutableStateOf("")}
     var reason by rememberSaveable {mutableStateOf("")}
     var evidence by rememberSaveable {mutableStateOf("")}
     var confirmed by rememberSaveable {mutableStateOf(false)}
@@ -621,36 +637,49 @@ private fun FinancePayrollCorrectionSection(client:FinancePayrollDisbursementApi
                 else HiltechRecordPicker(hiltechText("الكشف المصحح","Replacement draft"),selected,
                     view.records.map{HiltechRecordChoice(it.replacementRunVersionId,it.periodStart+" — "+it.periodEnd,
                         hiltechText("الإصدار ","Generation ")+it.originalGeneration+" → "+it.replacementGeneration)},
-                    onChange={selected=it;reason="";evidence="";confirmed=false},allowKnownReference=false,enabled=enabled&&!loading)
+                    onChange={selected=it;reason="";evidence="";recoveryAccount="";confirmed=false},allowKnownReference=false,enabled=enabled&&!loading)
                 if(view.hasMore)Text(hiltechText("تظهر أول 100 مسودة.","Showing first 100 drafts."))
                 view.records.singleOrNull{it.replacementRunVersionId==selected}?.let{row->
                     HiltechKeyValue(hiltechText("صافي الكشف السابق","Previous net"),row.originalNet+" "+row.currency)
                     HiltechKeyValue(hiltechText("صافي المسودة المصححة","Replacement net"),row.replacementNet+" "+row.currency)
                     FinancePayrollCorrectionEmployeeReview(client,org,installation,row,refresh)
                     val disposition=row.eligibleDisposition
+                    val hasRecovery=row.recoveryDue?.let{settlementCanonicalAmount(it)}!=null
+                    val selectedRecovery=row.recoveryAccounts.singleOrNull{it.id==recoveryAccount}
                     val label=when(disposition){
                         "NO_PRIOR_TRANSFER_VERIFIED"->hiltechText("اعتماد عدم حدوث تحويل سابق","Attest no prior transfer")
                         "REVERSAL_VERIFIED"->hiltechText("اعتماد رجوع التحويلات المثبتة","Clear recorded returned transfers")
-                        "SETTLED_DIFFERENTIAL_AUTHORIZED"->hiltechText("اعتماد الفروق الإضافية فقط","Authorize additional differences only")
+                        "SETTLED_DIFFERENTIAL_AUTHORIZED"->if(hasRecovery)hiltechText("اعتماد فروق الصرف ورصيد الاسترداد","Authorize differences and recovery receivable")
+                            else hiltechText("اعتماد الفروق الإضافية فقط","Authorize additional differences only")
                         else->hiltechText("تسوية الأموال السابقة مطلوبة","Prior funds require reconciliation")
                     }
                     Text(label,style=MaterialTheme.typography.titleMedium)
                     row.additionalDue?.let{HiltechKeyValue(hiltechText("فرق الصرف المعتمد للمراجعة","Additional payment under review"),it+" "+row.currency)}
+                    if(hasRecovery)row.recoveryDue?.let{HiltechKeyValue(hiltechText("رصيد استرداد الزيادات","Overpayment receivable"),it+" "+row.currency)}
                     if(row.alreadyCleared)Text(hiltechText("اعتماد المالية مسجل؛ استكمل إصدار الكشف من مساحة الرواتب.","Finance clearance recorded; complete release in the payroll workspace."))
                     else if(!row.canRecord)Text(hiltechText("لا يمكن اعتماد هذا التصحيح الآن؛ راجع استقلال المراجع وحالة التحويلات السابقة.","This correction cannot be cleared now; check reviewer independence and prior transfers."))
                     else if(disposition!=null){
                         Text(hiltechText("راجع إثبات الموارد البشرية وسجلات الأموال الأصلية. غياب المطابقة وحده لا يثبت عدم التحويل.","Review HR correction evidence and actual funds records. Missing matches alone do not prove no transfer."))
+                        if(hasRecovery){
+                            Text(hiltechText("حدد حساب أصل معتمد ومخصص لاسترداد الزيادات؛ لا تُنشئ سلفة ولا خصمًا تلقائيًا.","Select an approved asset account designated for overpayment recovery; this creates neither a loan nor automatic deduction."))
+                            if(row.recoveryAccounts.isEmpty())Text(hiltechText("يلزم إعداد حساب الاسترداد في دليل الحسابات.","Configure the recovery account in the chart of accounts."))
+                            else HiltechRecordPicker(hiltechText("حساب الاسترداد","Recovery account"),recoveryAccount,
+                                row.recoveryAccounts.map{HiltechRecordChoice(it.id,it.name,it.code)},
+                                onChange={recoveryAccount=it;confirmed=false},allowKnownReference=false,enabled=enabled)
+                        }
                         OutlinedTextField(reason,{reason=it.take(240)},label={Text(hiltechText("مرجع إثبات سبب التصحيح","Correction evidence reference"))},modifier=Modifier.fillMaxWidth(),enabled=enabled)
                         OutlinedTextField(evidence,{evidence=it.take(240)},label={Text(hiltechText("مرجع مراجعة المالية","Finance review reference"))},modifier=Modifier.fillMaxWidth(),enabled=enabled)
                         Row(verticalAlignment=Alignment.CenterVertically){
                             Checkbox(confirmed,{confirmed=it},enabled=enabled)
                             Text(hiltechText("راجعت الإثبات الحقيقي وحالة الأموال السابقة.","I reviewed the actual evidence and prior funds."))
                         }
-                        val draft=FinancePayrollClearanceInputDto(row.replacementRunVersionId,row.originalRunVersionId,row.replacementRunVersionId,disposition,reason.trim(),evidence.trim(),row.settlementFingerprint)
+                        val draft=FinancePayrollClearanceInputDto(row.replacementRunVersionId,row.originalRunVersionId,row.replacementRunVersionId,disposition,reason.trim(),evidence.trim(),row.settlementFingerprint,selectedRecovery?.id.takeIf{hasRecovery})
                         val additionalLabel=hiltechText("فرق مستحق فقط: ","Additional payable only: ")
+                        val recoveryLabel=hiltechText("رصيد استرداد — دون تحصيل: ","Recovery receivable — no collection: ")
+                        val recoveryDetail=if(hasRecovery&&selectedRecovery!=null)"\n"+recoveryLabel+row.recoveryDue+" "+row.currency+" · "+selectedRecovery.name else ""
                         val reviewDetail=row.periodStart+" — "+row.periodEnd+"\n"+row.originalNet+" → "+row.replacementNet+" "+row.currency+
-                            (row.additionalDue?.let{"\n"+additionalLabel+it+" "+row.currency}?: "")+"\n"+reason.trim()+"\n"+evidence.trim()
-                        Button(enabled=enabled&&confirmed&&payrollClearanceIntentValid(draft),onClick={
+                            (row.additionalDue?.let{"\n"+additionalLabel+it+" "+row.currency}?: "")+recoveryDetail+"\n"+reason.trim()+"\n"+evidence.trim()
+                        Button(enabled=enabled&&confirmed&&(!hasRecovery||selectedRecovery!=null)&&payrollClearanceIntentValid(draft),onClick={
                             onReview(draft.copy(operationId=newOperationId()),label,reviewDetail)
                         }){Text(hiltechText("مراجعة اعتماد التصحيح","Review clearance"))}
                     }

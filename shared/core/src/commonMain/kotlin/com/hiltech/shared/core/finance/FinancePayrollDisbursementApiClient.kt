@@ -77,6 +77,8 @@ data class FinancePayrollCommandReceiptDto(
     val reversalLines:List<FinanceDeskJournalLineDto>,val disposition:String="NO_PRIOR_TRANSFER_VERIFIED",
     val fixedExpenseAccountId:String?=null,val fixedPayableAccountId:String?=null,
     val fixedAllocations:List<FinancePayrollGlAllocationDto> = emptyList())
+@Serializable data class FinancePayrollRecoverySummaryDto(val accountCode:String,val accountName:String,val amount:String,
+    val employeeCount:Int,val posted:Boolean)
 @Serializable data class FinancePayrollGlViewDto(
     val organizationId:String,val runVersionId:String,val period:FinanceDeskPeriodDto?=null,
     val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
@@ -84,7 +86,7 @@ data class FinancePayrollCommandReceiptDto(
     val hasMoreAccounts:Boolean,val events:List<FinancePayrollGlEventDto>,
     val net:String=gross,val deductions:String="0",val reimbursements:String="0",val groups:List<FinancePayrollGlGroupDto> = emptyList(),
     val deductionAccounts:List<FinanceSettlementAccountChoiceDto> = emptyList(),val reimbursementAccounts:List<FinanceSettlementAccountChoiceDto> = emptyList(),
-    val correction:FinancePayrollGlCorrectionDto?=null,
+    val correction:FinancePayrollGlCorrectionDto?=null,val recovery:FinancePayrollRecoverySummaryDto?=null,
 )
 internal fun payrollGlIntentValid(input:FinancePayrollGlPostDto):Boolean =
     input.entryType in payrollDeskSources &&
@@ -104,6 +106,7 @@ internal fun payrollGlIntentValid(input:FinancePayrollGlPostDto):Boolean =
     val originalGeneration:Int,val replacementGeneration:Int,val currency:String,val originalNet:String,val replacementNet:String,
     val eligibleDisposition:String?=null,val alreadyCleared:Boolean,val canRecord:Boolean,
     val settlementFingerprint:String?=null,val additionalDue:String?=null,
+    val recoveryDue:String?=null,val recoveryAccounts:List<FinanceSettlementAccountChoiceDto> = emptyList(),
 )
 @Serializable data class FinancePayrollCorrectionCandidatesDto(val organizationId:String,val records:List<FinancePayrollCorrectionCandidateDto>,val hasMore:Boolean)
 @Serializable data class FinancePayrollCorrectionEmployeeReviewDto(
@@ -147,14 +150,16 @@ internal fun validPayrollCorrectionReview(row:FinancePayrollCorrectionEmployeeRe
              row.recordedNet?.matches(nonnegative)==true&&row.differenceFromRecorded?.matches(signed)==true)
 }
 @Serializable data class FinancePayrollClearanceInputDto(val operationId:String,val originalRunVersionId:String,val replacementRunVersionId:String,
-    val disposition:String,val reasonReference:String,val financeReference:String,val settlementFingerprint:String?=null)
+    val disposition:String,val reasonReference:String,val financeReference:String,val settlementFingerprint:String?=null,
+    val recoveryAccountId:String?=null)
 internal fun payrollClearanceIntentValid(input:FinancePayrollClearanceInputDto)=
     listOf(input.operationId,input.originalRunVersionId,input.replacementRunVersionId).all(::financeLookupIdIsUuid) &&
     !input.originalRunVersionId.equals(input.replacementRunVersionId,true) &&
     input.disposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED","SETTLED_DIFFERENTIAL_AUTHORIZED") &&
     listOf(input.reasonReference,input.financeReference).all{it.length in 8..240 && it==it.trim() && it.none{c->c.code<32||c.code==127}} &&
-    (if(input.disposition=="SETTLED_DIFFERENTIAL_AUTHORIZED")input.settlementFingerprint?.matches(Regex("[a-f0-9]{64}"))==true
-     else input.settlementFingerprint==null)
+    (if(input.disposition=="SETTLED_DIFFERENTIAL_AUTHORIZED")input.settlementFingerprint?.matches(Regex("[a-f0-9]{64}"))==true&&
+        (input.recoveryAccountId==null||financeLookupIdIsUuid(input.recoveryAccountId))
+     else input.settlementFingerprint==null&&input.recoveryAccountId==null)
 
 @Serializable
 data class FinancePayrollIntent(
@@ -218,6 +223,9 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
                             v.correction.fixedAllocations.all{a->(if(a.kind=="DEDUCTION")v.deductionAccounts else v.reimbursementAccounts).any{it.id==a.accountId}&&
                                 a.reference.length in 8..240&&a.reference==a.reference.trim()&&a.reference.none{it.code<32||it.code==127}}
                          else v.correction.fixedExpenseAccountId==null&&v.correction.fixedPayableAccountId==null&&v.correction.fixedAllocations.isEmpty()))) &&
+                    (v.recovery==null||(v.recovery.accountName.isNotBlank()&&v.recovery.accountCode.isNotBlank()&&
+                        settlementCanonicalAmount(v.recovery.amount)!=null&&v.recovery.employeeCount in 1..10000&&
+                        (v.recovery.posted==(v.accrualState in setOf("POSTED","REPLACED"))))) &&
                     listOf(v.net,v.deductions,v.reimbursements).all{it.matches(Regex("[0-9]+([.][0-9]+)?"))} &&
                     v.groups.size<=30 && v.groups.map{Triple(it.kind,it.domain,it.code)}.distinct().size==v.groups.size &&
                     v.groups.all{it.kind in setOf("DEDUCTION","REIMBURSEMENT") && settlementCanonicalAmount(it.amount)!=null &&
@@ -248,8 +256,14 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
                     r.currency.matches(Regex("[A-Z]{3}"))&&listOf(r.originalNet,r.replacementNet).all{a->a.matches(Regex("[0-9]+([.][0-9]+)?"))}&&
                     (r.eligibleDisposition==null||r.eligibleDisposition in setOf("NO_PRIOR_TRANSFER_VERIFIED","REVERSAL_VERIFIED","SETTLED_DIFFERENTIAL_AUTHORIZED"))&&
                     (if(r.eligibleDisposition=="SETTLED_DIFFERENTIAL_AUTHORIZED")
-                        r.settlementFingerprint?.matches(Regex("[a-f0-9]{64}"))==true&&r.additionalDue?.let{settlementCanonicalAmount(it)}!=null
-                     else r.settlementFingerprint==null&&r.additionalDue==null)&&
+                        r.settlementFingerprint?.matches(Regex("[a-f0-9]{64}"))==true&&
+                        r.additionalDue?.matches(Regex("[0-9]+([.][0-9]{1,6})?"))==true&&
+                        r.recoveryDue?.matches(Regex("[0-9]+([.][0-9]{1,6})?"))==true&&
+                        (r.additionalDue?.let{settlementCanonicalAmount(it)}!=null||r.recoveryDue?.let{settlementCanonicalAmount(it)}!=null)&&
+                        r.recoveryAccounts.size<=100&&r.recoveryAccounts.map{it.id.lowercase()}.distinct().size==r.recoveryAccounts.size&&
+                        r.recoveryAccounts.all{financeLookupIdIsUuid(it.id)&&it.name.isNotBlank()&&it.accountKind=="OTHER_ASSET"}&&
+                        (r.recoveryDue?.let{settlementCanonicalAmount(it)}!=null||r.recoveryAccounts.isEmpty())
+                     else r.settlementFingerprint==null&&r.additionalDue==null&&r.recoveryDue==null&&r.recoveryAccounts.isEmpty())&&
                     (!r.canRecord||(r.eligibleDisposition!=null&&!r.alreadyCleared))
                 })
             }})

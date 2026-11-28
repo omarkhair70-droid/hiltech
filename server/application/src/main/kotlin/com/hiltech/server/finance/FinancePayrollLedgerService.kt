@@ -54,6 +54,8 @@ data class FinancePayrollGlCorrection(val originalJournalId:UUID?,val clearanceR
     val reversalLines:List<FinanceDeskJournalLine>,val disposition:String="NO_PRIOR_TRANSFER_VERIFIED",
     val fixedExpenseAccountId:UUID?=null,val fixedPayableAccountId:UUID?=null,
     val fixedAllocations:List<FinancePayrollGlAllocation> = emptyList())
+data class FinancePayrollRecoverySummary(val accountCode:String,val accountName:String,val amount:String,
+    val employeeCount:Int,val posted:Boolean)
 data class FinancePayrollGlView(
     val organizationId:UUID,val runVersionId:UUID,val period:FinanceDeskPeriod?,
     val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
@@ -61,7 +63,7 @@ data class FinancePayrollGlView(
     val hasMoreAccounts:Boolean,val events:List<FinancePayrollGlEvent>,
     val net:String,val deductions:String,val reimbursements:String,val groups:List<FinancePayrollGlGroup>,
     val deductionAccounts:List<FinanceSettlementAccountChoice>,val reimbursementAccounts:List<FinanceSettlementAccountChoice>,
-    val correction:FinancePayrollGlCorrection?=null,
+    val correction:FinancePayrollGlCorrection?=null,val recovery:FinancePayrollRecoverySummary?=null,
 )
 private data class PayrollGlRun(
     val payrollPeriodId:UUID,val releaseId:UUID,val preparedAt:OffsetDateTime?,val gross:BigDecimal,
@@ -230,11 +232,18 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
             fixed?.let{fixedChoices(org,source.currency,it.fixedAllocations.filter{a->a.kind=="REIMBURSEMENT"}.map{a->a.accountId})}
             ?:accounting.debitChoices(org,source.currency,"EXPENSE") else emptyList()
         val rows=events(org,runId,offset)
+        val recovery=jdbc.query("""SELECT a.account_code,a.account_name,s.amount,jsonb_array_length(s.recovery_schedule),
+            EXISTS(SELECT 1 FROM finance_payroll_gl_journal j WHERE j.organization_id=s.organization_id
+                AND j.run_version_id=s.run_version_id AND j.entry_type='PAYROLL_ACCRUAL') AS posted
+            FROM finance_payroll_recovery_source s JOIN finance_gl_account a ON a.organization_id=s.organization_id
+                AND a.id=s.recovery_account_id WHERE s.organization_id=? AND s.run_version_id=?""",
+            {r,_->FinancePayrollRecoverySummary(r.getString(1),r.getString(2),r.getBigDecimal(3).toPlainString(),r.getInt(4),r.getBoolean(5))},
+            org,runId).singleOrNull()
         return FinancePayrollGlView(org,runId,period,state,source.gross.toPlainString(),source.currency,offset,rows.size>50,
             expense.take(100),payable.take(100),listOf(expense,payable,deduction,reimbursement).any{it.size>100},rows.take(50),
             source.net.toPlainString(),source.deductions.toPlainString(),source.reimbursements.toPlainString(),
             if(state=="READY") components else emptyList(),deduction.take(100),reimbursement.take(100),
-            correction.takeIf{state=="READY"})
+            correction.takeIf{state=="READY"},recovery)
     }
 
     fun post(actor:UUID,org:UUID,runId:UUID,request:FinancePayrollGlPost,correlation:String):FinancePayrollCommandReceipt {

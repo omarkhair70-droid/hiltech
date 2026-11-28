@@ -253,7 +253,10 @@ class FinancePayrollDisbursementRepository(private val jdbc: JdbcTemplate) {
         val lines=jdbc.query("""SELECT employee_id,amount,currency FROM finance_payroll_instruction_entitlement
             WHERE organization_id=? AND run_version_id=? ORDER BY employee_id""",
             {r,_->com.hiltech.server.payroll.PayrollFrozenPaymentLine(r.getObject(1,UUID::class.java),r.getBigDecimal(2),r.getString(3).trim())},org,run)
-        return com.hiltech.server.payroll.PayrollDifferentialPaymentBasis(lines.isNotEmpty(),lines)
+        val recoveryEmployees=jdbc.query("""SELECT (x->>'employeeId')::uuid FROM finance_payroll_recovery_source s
+            CROSS JOIN LATERAL jsonb_array_elements(s.recovery_schedule) x
+            WHERE s.organization_id=? AND s.run_version_id=?""",{r,_->r.getObject(1,UUID::class.java)},org,run).toSet()
+        return com.hiltech.server.payroll.PayrollDifferentialPaymentBasis(lines.isNotEmpty(),lines,recoveryEmployees)
     }
 
     fun expected(org: UUID, run: UUID): List<PayrollExpectedPayment> = jdbc.query(

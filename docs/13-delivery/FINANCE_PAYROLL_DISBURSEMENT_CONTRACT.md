@@ -9,10 +9,23 @@ required approval policy and an independently authorized named reviewer through
 the company review-workflow administration API. No grants or company data are
 seeded by the migration.
 
-An internal instruction batch freezes every positive employee net from one
-released payroll review envelope. Zero-net employees need no instruction. A
-correction with `SETTLED_DIFFERENTIAL_AUTHORIZED` cannot be converted to a full
-second payment batch; differential settlement requires its own approved source.
+An ordinary internal instruction batch freezes every positive employee net
+from one released payroll review envelope. Zero-net employees need no instruction.
+A correction with `SETTLED_DIFFERENTIAL_AUTHORIZED` uses the separately reviewed
+per-employee difference against exact posted prior settlement, never another full
+salary instruction. A negative difference requires an explicit approved
+OTHER_ASSET account selected for employee overpayment receivables. Finance
+clearance freezes the source fingerprint and individual recovery schedule.
+Posting the replacement accrual reverses the original base lines, records the
+new accrual, and reclassifies the overpayment from payroll payable to the
+selected receivable account in the same journal. Additional payables and
+receivables are not netted across employees. A recovery-only batch has no
+payment instructions. Recognition is not collection: no automatic wage
+deduction, bank collection or new employee funding is introduced. Recovery
+employees remain unresolved in payroll settlement and final-pay reads until a
+separate evidence-backed settlement path exists. Recovery corrections currently
+require the same employee cohort; another correction of a run carrying a
+recovery schedule remains blocked pending explicit recovery reconciliation.
 
 A preparer selects an employee and an independently approved bank statement
 line by displayed reference, date, account and amount. Amount/currency come from

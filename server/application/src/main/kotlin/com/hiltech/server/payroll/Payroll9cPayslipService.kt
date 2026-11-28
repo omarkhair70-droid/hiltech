@@ -141,7 +141,7 @@ class Payroll9cPayslipService(
             if (expected.isNotEmpty()&&!differentialUnavailable) Payroll9cExpectedBatchGuard.validateAgainstDatabase(
                 jdbc, organizationId, row.runId, expected,
             )
-            val outcome = if(differentialUnavailable) "PAYMENT_STATUS_UNAVAILABLE"
+            val outcome = if(differentialUnavailable||employee.employeeId in differential?.recoveryEmployees.orEmpty()) "PAYMENT_STATUS_UNAVAILABLE"
             else if(ownDelta!=null&&ownDelta.net.signum()==0) "SUCCESS"
             else if (row.net.signum() == 0) {
                 // No transfer was required for this employee; do not assert

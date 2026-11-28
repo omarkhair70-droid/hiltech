@@ -664,17 +664,21 @@ class Payroll9bDraftPostgresContractTest {
         com.hiltech.server.finance.FinancePayrollInstructionPostgresScenario.verify(
             jdbc, tx, org, actor, currentSubject.subjectId, UUID.fromString(review.financeReviewBatchId), clock, realPublication,
         ){fixture->
+            fun verifyDifferential(extra:BigDecimal,recoveryAccount:UUID?):UUID {
+            val recovering=extra.signum()<0
+            val additional=extra.max(BigDecimal.ZERO)
+            val recovery=extra.negate().max(BigDecimal.ZERO)
             val previousSubject=permittedSubject
             val previousCorrection=verifiedCorrection
             val previousAttestation=attestationVersion
-            try {
+            return try {
                 jdbc.execute("SET CONSTRAINTS ALL DEFERRED")
                 attestationVersion=2L
-                correctionExtra=BigDecimal("5")
+                correctionExtra=extra
                 val corrected=service.create(periodId,UUID.randomUUID(),actor,"synthetic-settled-positive").first
                 val correctedRun=UUID.fromString(corrected.runVersionId)
                 permittedSubject=ApprovalSubjectRef(org,"PAYROLL_RUN_VERSION",correctedRun,1)
-                assertEquals(0,BigDecimal("105").compareTo(BigDecimal(corrected.net)))
+                assertEquals(0,BigDecimal("100").add(extra).compareTo(BigDecimal(corrected.net)))
                 val clearanceSource=com.hiltech.server.finance.FinancePayrollCorrectionSource(jdbc)
                 val commands=com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor(jdbc,
                     DataSourceTransactionManager(datasource),clock,
@@ -684,7 +688,9 @@ class Payroll9bDraftPostgresContractTest {
                 val candidate=clearance.candidates(fixture.reviewer,org).records.single{it.replacementRunVersionId==correctedRun}
                 assertEquals("SETTLED_DIFFERENTIAL_AUTHORIZED",candidate.eligibleDisposition)
                 assertTrue(candidate.canRecord)
-                assertEquals(0,BigDecimal("5").compareTo(BigDecimal(candidate.additionalDue!!)))
+                assertEquals(0,additional.compareTo(BigDecimal(candidate.additionalDue!!)))
+                assertEquals(0,recovery.compareTo(BigDecimal(candidate.recoveryDue!!)))
+                if(recovering)assertTrue(candidate.recoveryAccounts.any{it.id==recoveryAccount})
                 val fingerprint=requireNotNull(candidate.settlementFingerprint)
                 assertNull(clearanceSource.verifiedFor(org,currentSubject.subjectId,correctedRun))
                 val nested=TransactionTemplate(DataSourceTransactionManager(datasource)).apply{
@@ -698,8 +704,21 @@ class Payroll9bDraftPostgresContractTest {
                         UUID.randomUUID(),UUID.randomUUID(),org,currentSubject.subjectId,correctedRun,newer.first.sourceFingerprint,
                         corrected.sourceFingerprint,fixture.reviewer,time,if(fingerprint=="0".repeat(64))"1".repeat(64)else "0".repeat(64))
                 }}
+                if(recovering) {
+                    fun rejectRecoveryAccount(account:UUID?) {
+                        assertThrows<Exception>{nested.execute{
+                            jdbc.update("""INSERT INTO finance_payroll_correction_clearance(id,operation_id,organization_id,original_run_version_id,replacement_run_version_id,
+                                original_fingerprint,replacement_fingerprint,revision,disposition,reason_reference,finance_reference,reviewed_by_user_id,reviewed_at,settlement_fingerprint,recovery_account_id)
+                                VALUES(?,?,?,?,?,?,?,1,'SETTLED_DIFFERENTIAL_AUTHORIZED','synthetic-correction','synthetic-evidence',?,?,?,CAST(? AS uuid))""",
+                                UUID.randomUUID(),UUID.randomUUID(),org,currentSubject.subjectId,correctedRun,newer.first.sourceFingerprint,
+                                corrected.sourceFingerprint,fixture.reviewer,time,fingerprint,account)
+                        }}
+                    }
+                    rejectRecoveryAccount(null)
+                    rejectRecoveryAccount(fixture.payableAccount)
+                }
                 val request=com.hiltech.server.finance.FinancePayrollClearanceInput(UUID.randomUUID(),currentSubject.subjectId,correctedRun,
-                    "SETTLED_DIFFERENTIAL_AUTHORIZED","synthetic-approved-input","synthetic-settled-source",fingerprint)
+                    "SETTLED_DIFFERENTIAL_AUTHORIZED","synthetic-approved-input","synthetic-settled-source",fingerprint,recoveryAccount)
                 val receipt=clearance.record(fixture.reviewer,org,request,"synthetic-settled-positive")
                 assertEquals("CLEARED",receipt.state)
                 assertFalse(receipt.bankExecutionInitiated)
@@ -727,20 +746,27 @@ class Payroll9bDraftPostgresContractTest {
                 jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE")
                 val repo=com.hiltech.server.finance.FinancePayrollDisbursementRepository(jdbc)
                 val expected=repo.expected(org,correctedRun)
-                assertEquals(0,BigDecimal("5").compareTo(expected.single().amount))
+                if(recovering)assertTrue(expected.isEmpty())else assertEquals(0,additional.compareTo(expected.single().amount))
                 Payroll9cExpectedBatchGuard.validateAgainstDatabase(jdbc,org,correctedRun,expected)
                 val basis=requireNotNull(repo.differentialPaymentBasis(org,correctedRun))
                 assertTrue(basis.available)
-                assertEquals(0,BigDecimal("5").compareTo(basis.lines.single().net))
+                assertEquals(0,additional.compareTo(basis.lines.single().net))
+                assertEquals(if(recovering)setOf(employee)else emptySet<UUID>(),basis.recoveryEmployees)
                 val adapter=com.hiltech.server.finance.FinancePayrollPaymentResultsAdapter(repo)
                 val status=Payroll9cRunFinanceStatusService(service,permission,reviewPublisher,
                     StaticListableBeanFactory(mapOf("actualFinance" to adapter)).getBeanProvider(PayrollFinancePaymentResultsPort::class.java))
-                assertEquals("PAYMENT_NOT_RECORDED",status.status(actor,correctedRun).status)
+                val runStatus=status.status(actor,correctedRun)
+                assertEquals(if(recovering)"REQUIRES_REVIEW" else "PAYMENT_NOT_RECORDED",runStatus.status)
+                if(recovering){
+                    assertEquals(0,runStatus.settledCount)
+                    assertEquals(1,runStatus.unresolvedCount)
+                    assertEquals("PAYMENT_STATUS_UNAVAILABLE",runStatus.employeeOutcomes.single().outcome)
+                }
                 val slip=Payroll9cPayslipService(jdbc,JdbcPeoplePersistence(jdbc),JdbcRoleTeamSourceAuthority(jdbc),reviewPublisher,
                     StaticListableBeanFactory(mapOf("actualFinance" to adapter)).getBeanProvider(PayrollFinancePaymentResultsPort::class.java),clock)
                 val own=slip.own(actor,org,"synthetic-settled-positive").items.single()
                 assertEquals(corrected.runVersionId,own.runVersionId)
-                assertEquals("PAYMENT_NOT_RECORDED",own.paymentStatus)
+                assertEquals(if(recovering)"PAYMENT_STATUS_UNAVAILABLE" else "PAYMENT_NOT_RECORDED",own.paymentStatus)
                 val preparedAt=jdbc.queryForObject("SELECT prepared_at FROM finance_payroll_payment_batch WHERE organization_id=? AND run_version_id=?",
                     java.time.OffsetDateTime::class.java,org,correctedRun)
                 fun postCorrection(wageAccount:UUID):UUID {
@@ -757,16 +783,54 @@ class Payroll9bDraftPostgresContractTest {
                 jdbc.update("""INSERT INTO finance_gl_account(id,organization_id,account_code,account_name,account_kind,currency,state,approved_company_chart_reference,created_at)
                     VALUES(?,?,'SYNTH-DELTA-WRONG','Synthetic alternative','PAYROLL_EXPENSE','EGP','APPROVED','SYNTHETIC-CHART',?)""",alternate,org,time)
                 assertThrows<Exception>{nested.execute{postCorrection(alternate)}}
-                postCorrection(fixture.wageAccount)
+                val closeBefore=jdbc.queryForObject("SELECT snapshot_sha256 FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",
+                    String::class.java,org,fixture.accountingPeriod)
+                val journal=postCorrection(fixture.wageAccount)
+                val closeAfter=jdbc.queryForObject("SELECT snapshot_sha256 FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",
+                    String::class.java,org,fixture.accountingPeriod)
+                assertFalse(closeBefore==closeAfter)
                 val remaining=jdbc.queryForObject("""SELECT coalesce(sum(CASE WHEN l.side='CREDIT' THEN l.amount ELSE -l.amount END),0)
                     FROM finance_payroll_gl_journal_line l WHERE l.organization_id=? AND l.gl_account_id=?""",BigDecimal::class.java,org,fixture.payableAccount)
-                assertEquals(0,BigDecimal("5").compareTo(remaining!!))
-                assertEquals(0,BigDecimal("5").compareTo(repo.expected(org,correctedRun).single().amount))
+                assertEquals(0,additional.compareTo(remaining!!))
+                if(recovering){
+                    assertTrue(repo.expected(org,correctedRun).isEmpty())
+                    val obligation=jdbc.queryForMap("""SELECT employee_id,amount,recovery_account_id,journal_id
+                        FROM finance_payroll_recovery_obligation WHERE organization_id=? AND run_version_id=?""",org,correctedRun)
+                    assertEquals(employee,obligation["employee_id"])
+                    assertEquals(recoveryAccount,obligation["recovery_account_id"])
+                    assertEquals(journal,obligation["journal_id"])
+                    assertEquals(0,recovery.compareTo(obligation["amount"] as BigDecimal))
+                    assertEquals(0,recovery.compareTo(jdbc.queryForObject("""SELECT amount FROM finance_payroll_gl_journal_line
+                        WHERE organization_id=? AND journal_id=? AND gl_account_id=? AND side='DEBIT' AND line_number=65""",
+                        BigDecimal::class.java,org,journal,recoveryAccount)!!))
+                    assertEquals(0,recovery.compareTo(jdbc.queryForObject("""SELECT amount FROM finance_payroll_gl_journal_line
+                        WHERE organization_id=? AND journal_id=? AND gl_account_id=? AND side='CREDIT' AND line_number=66""",
+                        BigDecimal::class.java,org,journal,fixture.payableAccount)!!))
+                    assertEquals(0,jdbc.queryForObject("""SELECT sum(CASE WHEN side='DEBIT' THEN amount ELSE -amount END)
+                        FROM finance_payroll_gl_journal_line WHERE organization_id=? AND journal_id=?""",
+                        BigDecimal::class.java,org,journal)!!.signum())
+                    assertThrows<Exception>{nested.execute{postCorrection(fixture.wageAccount)}}
+                }else assertEquals(0,additional.compareTo(repo.expected(org,correctedRun).single().amount))
                 correctedRun
             } finally {
                 permittedSubject=previousSubject;verifiedCorrection=previousCorrection
                 attestationVersion=previousAttestation;correctionExtra=BigDecimal.ZERO
             }
+            }
+            // Negative correction in an isolated savepoint; leave the original
+            // settled bank fixture intact for the positive payment scenario.
+            val recoveryCase=TransactionTemplate(DataSourceTransactionManager(datasource)).apply{
+                propagationBehavior=TransactionDefinition.PROPAGATION_NESTED
+            }
+            recoveryCase.execute{transaction->
+                val recoveryAccount=UUID.randomUUID()
+                jdbc.update("""INSERT INTO finance_gl_account(id,organization_id,account_code,account_name,account_kind,currency,state,approved_company_chart_reference,created_at)
+                    VALUES(?,?,'SYNTH-RECOVERY','Synthetic employee overpayment receivable','OTHER_ASSET','EGP','APPROVED','SYNTHETIC-CHART',?)""",
+                    recoveryAccount,org,time)
+                verifyDifferential(BigDecimal("-5"),recoveryAccount)
+                transaction.setRollbackOnly()
+            }
+            verifyDifferential(BigDecimal("5"),null)
         }
         // One exact run may never be handed off with a second operation/hash.
         assertThrows<ProductApiException> {

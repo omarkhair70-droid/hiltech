@@ -64,16 +64,23 @@ class Payroll9cRunFinanceStatusService(
                 employeeOutcomes=run.lines.map{PayrollEmployeeFinanceStatusDto(it.employeeId,"PAYMENT_STATUS_UNAVAILABLE")}.sortedBy{it.employeeId})
         }
         val payableLines=differential?.lines?:ordinaryLines
-        val zeroDifference=differential?.lines.orEmpty().filter{it.net.signum()==0}.map{it.employeeId}.toSet()
+        val recoveryEmployees=differential?.recoveryEmployees.orEmpty()
+        if(recoveryEmployees.any{id->payableLines.none{it.employeeId==id&&it.net.signum()==0}})
+            return pending(run,"REQUIRES_REVIEW",true,true).copy(unresolvedCount=run.lines.size,
+                employeeOutcomes=run.lines.map{PayrollEmployeeFinanceStatusDto(it.employeeId,"PAYMENT_STATUS_UNAVAILABLE")}.sortedBy{it.employeeId})
+        val zeroDifference=differential?.lines.orEmpty().filter{it.net.signum()==0}.map{it.employeeId}.toSet()-recoveryEmployees
         if (expected.isEmpty() && events.isNotEmpty()) {
             Payroll9aPolicy.fail("PAYROLL_FINANCE_UNEXPECTED_EVENT", HttpStatus.CONFLICT)
         }
         if (expected.isEmpty() && payableLines.any { it.net.signum() > 0 }) {
             val pending=pending(run, "PAYMENT_NOT_RECORDED", true, true)
-            return if(differential==null)pending else pending.copy(settledCount=zeroDifference.size,
-                unresolvedCount=payableLines.count{it.net.signum()>0},
-                employeeOutcomes=payableLines.map{PayrollEmployeeFinanceStatusDto(it.employeeId.toString(),
-                    if(it.employeeId in zeroDifference)"SUCCESS" else "PAYMENT_NOT_RECORDED")}.sortedBy{it.employeeId})
+            return if(differential==null)pending else pending.copy(
+                status=if(recoveryEmployees.isEmpty())pending.status else "REQUIRES_REVIEW",
+                settledCount=zeroDifference.size,unresolvedCount=payableLines.count{it.net.signum()>0}+recoveryEmployees.size,
+                employeeOutcomes=payableLines.map{PayrollEmployeeFinanceStatusDto(it.employeeId.toString(),when{
+                    it.employeeId in recoveryEmployees->"PAYMENT_STATUS_UNAVAILABLE"
+                    it.employeeId in zeroDifference->"SUCCESS"
+                    else->"PAYMENT_NOT_RECORDED"})}.sortedBy{it.employeeId})
         }
         Payroll9cExpectedBatchGuard.validate(org,runVersionId,payableLines,expected)
         val reconciled = if (expected.isEmpty()) null else
@@ -81,13 +88,14 @@ class Payroll9cRunFinanceStatusService(
         val noTransferEmployees = payableLines.filter { it.net.signum()==0 }
         return Payroll9cRunFinanceStatusDto(
             runVersionId = run.runVersionId,
-            status = if (expected.isNotEmpty() && events.isEmpty()) "PAYMENT_NOT_RECORDED"
+            status = if(recoveryEmployees.isNotEmpty())"REQUIRES_REVIEW"
+                else if (expected.isNotEmpty() && events.isEmpty()) "PAYMENT_NOT_RECORDED"
                 else reconciled?.status?.name ?: if(differential!=null)"PAID" else "NO_PAYMENT_REQUIRED",
             financeConnected = true,
             publicationApproved = true,
             employeeCount = run.lines.size,
             settledCount = (reconciled?.settledCount ?: 0)+zeroDifference.size,
-            unresolvedCount = reconciled?.unresolvedCount ?: 0,
+            unresolvedCount = (reconciled?.unresolvedCount ?: 0)+recoveryEmployees.size,
             employeeOutcomes = (
                 (reconciled?.employees ?: emptyList()).map {
                     PayrollEmployeeFinanceStatusDto(
@@ -97,7 +105,11 @@ class Payroll9cRunFinanceStatusService(
                 } + noTransferEmployees.map {
                     PayrollEmployeeFinanceStatusDto(
                         employeeId = it.employeeId.toString(),
-                        outcome = if(it.employeeId in zeroDifference)"SUCCESS" else "NOT_APPLICABLE",
+                        outcome = when{
+                            it.employeeId in recoveryEmployees->"PAYMENT_STATUS_UNAVAILABLE"
+                            it.employeeId in zeroDifference->"SUCCESS"
+                            else->"NOT_APPLICABLE"
+                        },
                     )
                 }
             ).sortedBy { it.employeeId },
