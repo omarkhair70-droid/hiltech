@@ -480,11 +480,16 @@ private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,o
             Text(payrollGlTitle("PAYROLL_ACCRUAL"),style=MaterialTheme.typography.titleMedium)
             Text(data.gross+" "+data.currency)
             data.recovery?.let{recovery->
-                Text(if(recovery.posted)hiltechText("رصيد استرداد مثبت — لم يُحصّل بعد","Recovery receivable posted — not collected")
-                    else hiltechText("رصيد استرداد معتمد للترحيل","Approved recovery receivable to post"),style=MaterialTheme.typography.titleMedium)
+                Text(when{
+                    !recovery.posted->hiltechText("رصيد استرداد معتمد للترحيل","Approved recovery receivable to post")
+                    recovery.remainingToPost?.let{settlementCanonicalAmount(it)}==null->hiltechText("تم تحصيل الرصيد وترحيله","Recovery collected and posted")
+                    else->hiltechText("رصيد استرداد مثبت","Posted recovery receivable")
+                },style=MaterialTheme.typography.titleMedium)
                 HiltechKeyValue(recovery.accountCode+" · "+recovery.accountName,recovery.amount+" "+data.currency)
                 HiltechKeyValue(hiltechText("عدد الموظفين","Employees"),recovery.employeeCount.toString())
-                Text(hiltechText("لا يتم تنفيذ خصم أو تحصيل تلقائي.","No automatic deduction or collection."))
+                recovery.remainingToRecord?.let{HiltechKeyValue(hiltechText("متبقي للتحصيل المثبت","Remaining to record"),it+" "+data.currency)}
+                recovery.remainingToPost?.let{HiltechKeyValue(hiltechText("متبقي في دفتر الأستاذ","Remaining in ledger"),it+" "+data.currency)}
+                Text(hiltechText("سجل التحصيل البنكي من تسويات الموظفين، ثم رحّله. لا خصم أو تحصيل تلقائي.","Record bank collection through employee settlements, then post it. No automatic deduction or collection."))
             }
             when(data.accrualState) {
                 "POSTED"->HiltechStateTag(hiltechText("تم إثبات الاستحقاق","Accrual posted"),HiltechStateTone.CURRENT)

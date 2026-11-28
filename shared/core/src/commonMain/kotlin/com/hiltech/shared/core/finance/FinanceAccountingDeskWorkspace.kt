@@ -52,7 +52,7 @@ private fun deskKind(kind:String):String=when(kind) {
     "AP_REVERSAL" -> hiltechText("عكس قيد مورد","Supplier reversal")
     "BALANCES" -> hiltechText("أرصدة الحسابات","Account balances")
     "OPENING_BALANCE" -> hiltechText("قيد افتتاح","Opening journal")
-    "BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID","EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT" -> settlementLedgerTitle(kind)
+    "BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID","EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT","PAYROLL_RECOVERY" -> settlementLedgerTitle(kind)
     in payrollDeskSources -> payrollGlTitle(kind)
     else -> hiltechText("القيود","Journal entries")
 }

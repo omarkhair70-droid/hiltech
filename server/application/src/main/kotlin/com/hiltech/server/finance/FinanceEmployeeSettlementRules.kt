@@ -14,12 +14,14 @@ enum class FinanceEmployeeSettlementKind {
     EXPENSE_REIMBURSEMENT,
     EMPLOYEE_ADVANCE,
     FINANCIAL_IMPREST,
+    PAYROLL_OVERPAYMENT,
 }
 enum class FinanceEmployeeSettlementAction {
     REIMBURSEMENT_CONFIRMED,
     ADVANCE_RECOVERY_CONFIRMED,
     IMPREST_RECEIPTS_ACCEPTED,
     IMPREST_CASH_RETURN_CONFIRMED,
+    PAYROLL_RECOVERY_CONFIRMED,
 }
 data class FinanceEmployeeSettlementPlan(
     val organizationId: UUID,
@@ -44,6 +46,7 @@ data class FinanceEmployeeSettlementPlan(
     val settlementBankEvidenceSha256: String? = null,
     val approvedPayrollDeductionEventId: UUID? = null,
     val openingSourceFingerprint:String?=null,
+    val payrollRecoveryFingerprint:String?=null,
 )
 data class FinanceEmployeeSettlementValidation(
     val kind: FinanceEmployeeSettlementKind,
@@ -69,7 +72,20 @@ object FinanceEmployeeSettlementRules {
         require(p.settlementAmount.add(p.previouslySettled)<=p.sourceAmount) {
             "EMPLOYEE_SETTLEMENT_OVERALLOCATED"
         }
+        require(p.kind==FinanceEmployeeSettlementKind.PAYROLL_OVERPAYMENT || p.payrollRecoveryFingerprint==null) {
+            "PAYROLL_RECOVERY_IS_NOT_ADVANCE_OR_CUSTODY"
+        }
         when(p.kind) {
+            FinanceEmployeeSettlementKind.PAYROLL_OVERPAYMENT -> {
+                require(p.action==FinanceEmployeeSettlementAction.PAYROLL_RECOVERY_CONFIRMED &&
+                    !p.approvedFundingRecorded && p.sourceBankTransactionId==null &&
+                    p.sourceBankEvidenceSha256==null && p.openingSourceFingerprint==null &&
+                    p.payrollRecoveryFingerprint?.matches(Regex("^[a-f0-9]{64}$"))==true &&
+                    p.recoveryMethod=="CONFIRMED_BANK_CREDIT" && p.approvedPayrollDeductionEventId==null) {
+                    "POSTED_PAYROLL_RECEIVABLE_AND_SEPARATE_BANK_CREDIT_REQUIRED"
+                }
+                verifiedSettlementBank(p)
+            }
             FinanceEmployeeSettlementKind.EXPENSE_REIMBURSEMENT -> {
                 require(p.action==FinanceEmployeeSettlementAction.REIMBURSEMENT_CONFIRMED) {
                     "EXPENSE_REIMBURSEMENT_IS_NOT_A_LOAN_OR_CUSTODY"
@@ -141,7 +157,7 @@ object FinanceEmployeeSettlementRules {
             p.sourceAmount.stripTrailingZeros().toPlainString(),
             p.settlementAmount.stripTrailingZeros().toPlainString(),
             p.previouslySettled.stripTrailingZeros().toPlainString(),
-        )+listOfNotNull(p.openingSourceFingerprint)).joinToString("|")
+        )+listOfNotNull(p.openingSourceFingerprint,p.payrollRecoveryFingerprint)).joinToString("|")
         val sha=MessageDigest.getInstance("SHA-256")
             .digest(canonical.toByteArray(Charsets.UTF_8))
         return FinanceEmployeeSettlementValidation(

@@ -255,7 +255,10 @@ class FinancePayrollDisbursementRepository(private val jdbc: JdbcTemplate) {
             {r,_->com.hiltech.server.payroll.PayrollFrozenPaymentLine(r.getObject(1,UUID::class.java),r.getBigDecimal(2),r.getString(3).trim())},org,run)
         val recoveryEmployees=jdbc.query("""SELECT (x->>'employeeId')::uuid FROM finance_payroll_recovery_source s
             CROSS JOIN LATERAL jsonb_array_elements(s.recovery_schedule) x
-            WHERE s.organization_id=? AND s.run_version_id=?""",{r,_->r.getObject(1,UUID::class.java)},org,run).toSet()
+            LEFT JOIN finance_payroll_recovery_balance b ON b.organization_id=s.organization_id
+               AND b.run_version_id=s.run_version_id AND b.employee_id=(x->>'employeeId')::uuid
+            WHERE s.organization_id=? AND s.run_version_id=? AND (b.id IS NULL OR b.remaining_to_post>0)""",
+            {r,_->r.getObject(1,UUID::class.java)},org,run).toSet()
         return com.hiltech.server.payroll.PayrollDifferentialPaymentBasis(lines.isNotEmpty(),lines,recoveryEmployees)
     }
 

@@ -55,7 +55,7 @@ data class FinancePayrollGlCorrection(val originalJournalId:UUID?,val clearanceR
     val fixedExpenseAccountId:UUID?=null,val fixedPayableAccountId:UUID?=null,
     val fixedAllocations:List<FinancePayrollGlAllocation> = emptyList())
 data class FinancePayrollRecoverySummary(val accountCode:String,val accountName:String,val amount:String,
-    val employeeCount:Int,val posted:Boolean)
+    val employeeCount:Int,val posted:Boolean,val remainingToRecord:String?=null,val remainingToPost:String?=null)
 data class FinancePayrollGlView(
     val organizationId:UUID,val runVersionId:UUID,val period:FinanceDeskPeriod?,
     val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
@@ -234,10 +234,13 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
         val rows=events(org,runId,offset)
         val recovery=jdbc.query("""SELECT a.account_code,a.account_name,s.amount,jsonb_array_length(s.recovery_schedule),
             EXISTS(SELECT 1 FROM finance_payroll_gl_journal j WHERE j.organization_id=s.organization_id
-                AND j.run_version_id=s.run_version_id AND j.entry_type='PAYROLL_ACCRUAL') AS posted
+                AND j.run_version_id=s.run_version_id AND j.entry_type='PAYROLL_ACCRUAL') AS posted,
+            (SELECT sum(b.remaining_to_record) FROM finance_payroll_recovery_balance b WHERE b.organization_id=s.organization_id AND b.run_version_id=s.run_version_id),
+            (SELECT sum(b.remaining_to_post) FROM finance_payroll_recovery_balance b WHERE b.organization_id=s.organization_id AND b.run_version_id=s.run_version_id)
             FROM finance_payroll_recovery_source s JOIN finance_gl_account a ON a.organization_id=s.organization_id
                 AND a.id=s.recovery_account_id WHERE s.organization_id=? AND s.run_version_id=?""",
-            {r,_->FinancePayrollRecoverySummary(r.getString(1),r.getString(2),r.getBigDecimal(3).toPlainString(),r.getInt(4),r.getBoolean(5))},
+            {r,_->FinancePayrollRecoverySummary(r.getString(1),r.getString(2),r.getBigDecimal(3).toPlainString(),r.getInt(4),r.getBoolean(5),
+                r.getBigDecimal(6)?.toPlainString(),r.getBigDecimal(7)?.toPlainString())},
             org,runId).singleOrNull()
         return FinancePayrollGlView(org,runId,period,state,source.gross.toPlainString(),source.currency,offset,rows.size>50,
             expense.take(100),payable.take(100),listOf(expense,payable,deduction,reimbursement).any{it.size>100},rows.take(50),

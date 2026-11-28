@@ -61,13 +61,14 @@ data class FinanceSettlementReceipt(
 )
 
 internal val settlementTypes=setOf("BANK_ALLOCATION","CASH_VOUCHER","BANK_VOID")
-internal val employeeSettlementTypes=setOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT")
+internal val employeeSettlementTypes=setOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT","PAYROLL_RECOVERY")
 private val costAccountKinds=setOf("EXPENSE","INVENTORY_ASSET","FIXED_ASSET","OTHER_ASSET")
 internal fun settlementSourcePair(type:String,kind:String):Boolean=when(type) {
     in settlementTypes -> kind in setOf("AP","AR")
     "EMPLOYEE_FUNDING","EMPLOYEE_RETURN" -> kind in setOf("EA","EI")
     "IMPREST_EXPENSE" -> kind=="EI"
     "EXPENSE_REIMBURSEMENT" -> kind=="ER"
+    "PAYROLL_RECOVERY" -> kind=="PR"
     else -> false
 }
 internal fun settlementDebitKindAllowed(required:String,actual:String):Boolean=
@@ -175,12 +176,12 @@ class FinanceSettlementLedgerService @org.springframework.beans.factory.annotati
             "CASH_VOUCHER"->"hiltech.finance.cashbox" to ".voucher-operator-authority-key"
             "BANK_VOID"->"hiltech.finance.cash-allocation-void" to ".operator-authority-key"
             "EMPLOYEE_FUNDING"->"hiltech.finance.employee-funding" to ".operator-authority-key"
-            "EMPLOYEE_RETURN","IMPREST_EXPENSE"->"hiltech.finance.employee-settlement" to ".operator-authority-key"
+            "EMPLOYEE_RETURN","IMPREST_EXPENSE","PAYROLL_RECOVERY"->"hiltech.finance.employee-settlement" to ".operator-authority-key"
             "EXPENSE_REIMBURSEMENT"->"hiltech.finance.expense-reimbursement" to ".operator-authority-key"
             else->return false
         }
         val posting=when(kind) {
-            "AP","EA","EI","ER"->"hiltech.finance.ap-posting"
+            "AP","EA","EI","ER","PR"->"hiltech.finance.ap-posting"
             "AR"->"hiltech.finance.receivables.ar-posting"
             else->return false
         }
@@ -196,7 +197,7 @@ class FinanceSettlementLedgerService @org.springframework.beans.factory.annotati
     fun queue(actor:UUID,org:UUID,offset:Int,includeEmployee:Boolean=false):FinanceSettlementQueue {
         if(offset !in 0..1_000_000) settlementDenied()
         val types=settlementTypes+(if(includeEmployee) employeeSettlementTypes else emptySet())
-        val pairs=types.flatMap {type->listOf("AP","AR","EA","EI","ER").map{type to it}}
+        val pairs=types.flatMap {type->listOf("AP","AR","EA","EI","ER","PR").map{type to it}}
             .filter{authorized(actor,org,it.first,it.second)}
         if(pairs.isEmpty()) settlementDenied()
         val period=store.period(org,LocalDate.ofInstant(clock.instant(),ZoneOffset.UTC))

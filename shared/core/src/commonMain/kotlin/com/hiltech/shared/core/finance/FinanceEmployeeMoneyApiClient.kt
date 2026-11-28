@@ -109,7 +109,7 @@ class FinanceEmployeeMoneyApiClient(
             check(page.organizationId.equals(org,true)&&page.offset==offset&&page.records.size<=50&&
                 page.records.map{it.id.lowercase()}.distinct().size==page.records.size&&page.records.all{r->
                     financeLookupIdIsUuid(r.id)&&r.employeeName.isNotBlank()&&r.employeeCode.isNotBlank()&&
-                    r.kind in setOf("EMPLOYEE_ADVANCE","FINANCIAL_IMPREST")&&r.currency.matches(Regex("[A-Z]{3}"))&&
+                    r.kind in setOf("EMPLOYEE_ADVANCE","FINANCIAL_IMPREST","PAYROLL_OVERPAYMENT")&&r.currency.matches(Regex("[A-Z]{3}"))&&
                     settlementCanonicalAmount(r.remaining)!=null&&(r.openingDocumentReference==null||r.openingDocumentReference.isNotBlank())})
         }
     }
@@ -119,7 +119,7 @@ class FinanceEmployeeMoneyApiClient(
     ):FinanceEmployeeSettlementReceiptDto {
         val id=uuid(body.operationId)
         require(body.action in setOf(
-            "ADVANCE_RECOVERY_CONFIRMED",
+            "ADVANCE_RECOVERY_CONFIRMED","PAYROLL_RECOVERY_CONFIRMED",
             "IMPREST_CASH_RETURN_CONFIRMED","IMPREST_RECEIPTS_ACCEPTED",
         ))
         if(body.action=="IMPREST_RECEIPTS_ACCEPTED")

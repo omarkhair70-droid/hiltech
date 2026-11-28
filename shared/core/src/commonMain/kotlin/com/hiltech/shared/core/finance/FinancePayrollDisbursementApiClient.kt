@@ -78,7 +78,7 @@ data class FinancePayrollCommandReceiptDto(
     val fixedExpenseAccountId:String?=null,val fixedPayableAccountId:String?=null,
     val fixedAllocations:List<FinancePayrollGlAllocationDto> = emptyList())
 @Serializable data class FinancePayrollRecoverySummaryDto(val accountCode:String,val accountName:String,val amount:String,
-    val employeeCount:Int,val posted:Boolean)
+    val employeeCount:Int,val posted:Boolean,val remainingToRecord:String?=null,val remainingToPost:String?=null)
 @Serializable data class FinancePayrollGlViewDto(
     val organizationId:String,val runVersionId:String,val period:FinanceDeskPeriodDto?=null,
     val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
@@ -225,7 +225,10 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
                          else v.correction.fixedExpenseAccountId==null&&v.correction.fixedPayableAccountId==null&&v.correction.fixedAllocations.isEmpty()))) &&
                     (v.recovery==null||(v.recovery.accountName.isNotBlank()&&v.recovery.accountCode.isNotBlank()&&
                         settlementCanonicalAmount(v.recovery.amount)!=null&&v.recovery.employeeCount in 1..10000&&
-                        (v.recovery.posted==(v.accrualState in setOf("POSTED","REPLACED"))))) &&
+                        (v.recovery.posted==(v.accrualState in setOf("POSTED","REPLACED")))&&
+                        (if(v.recovery.posted)v.recovery.remainingToRecord?.matches(Regex("[0-9]+([.][0-9]{1,6})?"))==true&&
+                            v.recovery.remainingToPost?.matches(Regex("[0-9]+([.][0-9]{1,6})?"))==true
+                         else v.recovery.remainingToRecord==null&&v.recovery.remainingToPost==null))) &&
                     listOf(v.net,v.deductions,v.reimbursements).all{it.matches(Regex("[0-9]+([.][0-9]+)?"))} &&
                     v.groups.size<=30 && v.groups.map{Triple(it.kind,it.domain,it.code)}.distinct().size==v.groups.size &&
                     v.groups.all{it.kind in setOf("DEDUCTION","REIMBURSEMENT") && settlementCanonicalAmount(it.amount)!=null &&

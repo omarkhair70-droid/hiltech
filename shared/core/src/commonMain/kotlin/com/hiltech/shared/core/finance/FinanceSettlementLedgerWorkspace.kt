@@ -44,6 +44,7 @@ internal fun settlementLedgerTitle(type:String):String=when(type) {
     "BANK_VOID"->hiltechText("عكس تخصيص سابق","Reverse an earlier allocation")
     "EMPLOYEE_FUNDING"->hiltechText("صرف سلفة أو عهدة","Employee advance or imprest funding")
     "EMPLOYEE_RETURN"->hiltechText("استرداد سلفة أو رد عهدة","Employee advance recovery or custody return")
+    "PAYROLL_RECOVERY"->hiltechText("تحصيل زيادة راتب","Payroll overpayment collection")
     "IMPREST_EXPENSE"->hiltechText("تسوية مستندات عهدة","Accepted imprest receipts")
     "EXPENSE_REIMBURSEMENT"->hiltechText("رد مصروف موظف","Employee expense reimbursement")
     else->hiltechText("قيد تسوية","Settlement journal")

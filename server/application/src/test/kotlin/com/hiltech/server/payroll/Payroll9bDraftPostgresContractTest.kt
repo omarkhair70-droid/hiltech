@@ -810,6 +810,12 @@ class Payroll9bDraftPostgresContractTest {
                         FROM finance_payroll_gl_journal_line WHERE organization_id=? AND journal_id=?""",
                         BigDecimal::class.java,org,journal)!!.signum())
                     assertThrows<Exception>{nested.execute{postCorrection(fixture.wageAccount)}}
+                    fixture.collectRecovery(correctedRun)
+                    val settled=status.status(actor,correctedRun)
+                    assertEquals("PAID",settled.status)
+                    assertEquals(1,settled.settledCount)
+                    assertEquals(0,settled.unresolvedCount)
+                    assertEquals("SUCCESS",slip.own(actor,org,"synthetic-recovered").items.single().paymentStatus)
                 }else assertEquals(0,additional.compareTo(repo.expected(org,correctedRun).single().amount))
                 correctedRun
             } finally {

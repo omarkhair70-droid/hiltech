@@ -21,9 +21,13 @@ new accrual, and reclassifies the overpayment from payroll payable to the
 selected receivable account in the same journal. Additional payables and
 receivables are not netted across employees. A recovery-only batch has no
 payment instructions. Recognition is not collection: no automatic wage
-deduction, bank collection or new employee funding is introduced. Recovery
-employees remain unresolved in payroll settlement and final-pay reads until a
-separate evidence-backed settlement path exists. Recovery corrections currently
+deduction, bank collection or new employee funding is introduced. Bank-backed collection uses the existing employee settlement preparation,
+independent approval, recording and general ledger posting. The posted
+receivable is a distinct PAYROLL_OVERPAYMENT source, not company funding.
+The existing shared bank allocation cap and source balance cap apply to each
+partial collection. Operational remaining and GL remaining are separate; a
+recovery employee is unresolved until all collections have been posted.
+Automatic payroll deduction remains unsupported. Recovery corrections currently
 require the same employee cohort; another correction of a run carrying a
 recovery schedule remains blocked pending explicit recovery reconciliation.
 

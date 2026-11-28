@@ -48,7 +48,8 @@ import java.util.Base64
  */
 object FinancePayrollResultPostgresScenario {
     data class SettledCorrectionFixture(val reviewer:UUID,val originalJournal:UUID,val wageAccount:UUID,
-        val payableAccount:UUID,val accountingPeriod:UUID,val allocations:String,val disbursements:FinancePayrollDisbursementService)
+        val payableAccount:UUID,val accountingPeriod:UUID,val allocations:String,val disbursements:FinancePayrollDisbursementService,
+        val collectRecovery:(UUID)->Unit)
     fun verify(jdbc: JdbcTemplate, tx: TransactionTemplate, org: UUID, preparer: UUID, run: UUID,
         clock: Clock, publication: PayrollRunPublicationPort,settledCorrection:((SettledCorrectionFixture)->UUID)?=null) {
         // Keep the parent release/correction fixture unchanged after verifying this separate journey.
@@ -263,7 +264,100 @@ object FinancePayrollResultPostgresScenario {
                     val correctionBranch=transaction.createSavepoint()
                     val readsBefore=storageReads
                     try {
-                        val correctedRun=settledCorrection(SettledCorrectionFixture(reviewer,accrual,wageGl,liabilityGl,glPeriod,allocations,service))
+                        val correctedRun=settledCorrection(SettledCorrectionFixture(reviewer,accrual,wageGl,liabilityGl,glPeriod,allocations,service){recoveryRun->
+                            val obligation=jdbc.queryForMap("""SELECT id,employee_id,recovery_account_id,amount,currency
+                                FROM finance_payroll_recovery_obligation WHERE organization_id=? AND run_version_id=?""",org,recoveryRun)
+                            val source=obligation["id"] as UUID
+                            val employee=obligation["employee_id"] as UUID
+                            val asset=obligation["recovery_account_id"] as UUID
+                            val currency=(obligation["currency"] as String).trim()
+                            val total=obligation["amount"] as BigDecimal
+                            assertEquals(0,BigDecimal("5").compareTo(total))
+                            val settlementPreparer=member(jdbc,org,"Synthetic recovery preparer",at)
+                            val recorder=member(jdbc,org,"Synthetic recovery recorder",at)
+                            val key="FINANCE_EMPLOYEE_SETTLEMENT"
+                            val auth="FINANCE_EMPLOYEE_SETTLEMENT_REVIEWER"
+                            policy(jdbc,org,key,auth,settlementPreparer,reviewer,at)
+                            val guards="finance_bank_proposal_complete_header,finance_bank_proposal_complete_line,"+
+                                "finance_bank_intake_complete_header,finance_bank_intake_complete_line"
+                            fun balance()=jdbc.queryForMap("""SELECT remaining_to_record,remaining_to_post
+                                FROM finance_payroll_recovery_balance WHERE organization_id=? AND id=?""",org,source)
+                            fun expectBalance(record:String,post:String) {
+                                val b=balance()
+                                assertEquals(0,BigDecimal(record).compareTo(b["remaining_to_record"] as BigDecimal))
+                                assertEquals(0,BigDecimal(post).compareTo(b["remaining_to_post"] as BigDecimal))
+                            }
+                            expectBalance("5","5")
+                            assertTrue(repo.differentialPaymentBasis(org,recoveryRun)!!.recoveryEmployees.contains(employee))
+                            val sourceRow=jdbc.queryForMap("""SELECT draft_kind,recovery_current,bank_statement_line_id,opening_fingerprint,recovery_fingerprint
+                                FROM finance_employee_settlement_source WHERE organization_id=? AND id=?""",org,source)
+                            assertEquals("PAYROLL_OVERPAYMENT",sourceRow["draft_kind"])
+                            assertEquals(true,sourceRow["recovery_current"])
+                            assertNull(sourceRow["bank_statement_line_id"]);assertNull(sourceRow["opening_fingerprint"])
+                            assertNotNull(sourceRow["recovery_fingerprint"])
+                            fun receipt(value:String,number:Int,remaining:String,beforePost:String) {
+                                val amount=BigDecimal(value)
+                                jdbc.execute("SET CONSTRAINTS "+guards+" DEFERRED")
+                                val creditLine=bank(jdbc,org,preparer,reviewer,importer,amount,currency,FinanceBankFlow.CREDIT,at)
+                                jdbc.execute("SET CONSTRAINTS "+guards+" IMMEDIATE")
+                                val bankGl=payrollChart("BANK_ASSET","SYNTH-RECOVERY-BANK-"+number,creditLine.line)
+                                val proposal=UUID.randomUUID()
+                                val proof=evidence(jdbc,org,"FINANCE_EMPLOYEE_SETTLEMENT",proposal,settlementPreparer,at)
+                                val version=102L+number
+                                jdbc.update("""INSERT INTO finance_employee_settlement_proposal(id,operation_id,organization_id,funding_record_id,
+                                    employee_id,action,bank_statement_line_id,settlement_evidence_id,settlement_evidence_sha256,
+                                    amount,currency,review_version,policy_key,prepared_by_user_id,created_at)
+                                    VALUES(?,?,?,?,?,'PAYROLL_RECOVERY_CONFIRMED',?,?,?,?,?,?,?,?,?)""",
+                                    proposal,UUID.randomUUID(),org,source,employee,creditLine.line,proof.first,proof.second,
+                                    amount,currency,version,key,settlementPreparer,at)
+                                val approval=approved(jdbc,org,"FINANCE_EMPLOYEE_SETTLEMENT",proposal,version,key,auth,settlementPreparer,reviewer,at)
+                                fun record(actor:UUID):UUID {
+                                    val id=UUID.randomUUID()
+                                    jdbc.update("""INSERT INTO finance_employee_settlement_record(id,operation_id,organization_id,proposal_id,
+                                        funding_record_id,employee_id,action,bank_statement_line_id,settlement_evidence_id,approval_request_id,
+                                        amount,currency,recorded_by_user_id,recorded_at,correlation_id)
+                                        VALUES(?,?,?,?,?,?,'PAYROLL_RECOVERY_CONFIRMED',?,?,?,?,?,?,?,'synthetic-payroll-recovery')""",
+                                        id,UUID.randomUUID(),org,proposal,source,employee,creditLine.line,proof.first,approval,
+                                        amount,currency,actor,at)
+                                    return id
+                                }
+                                // Three separate roles: the reviewer cannot record, the employee
+                                // cannot record their own recovery, and no duplicate proposal can post.
+                                assertThrows<Exception>{negativeCommand.execute{record(reviewer)}}
+                                assertThrows<Exception>{negativeCommand.execute{record(preparer)}}
+                                val record=record(recorder)
+                                expectBalance(remaining,beforePost)
+                                assertTrue(repo.differentialPaymentBasis(org,recoveryRun)!!.recoveryEmployees.contains(employee))
+                                assertThrows<Exception>{negativeCommand.execute{record(recorder)}}
+                                val projection=jdbc.queryForMap("""SELECT debit_account_id,credit_account_id,source_kind,amount
+                                    FROM finance_settlement_gl_source_v2 WHERE organization_id=? AND source_type='PAYROLL_RECOVERY' AND source_id=?""",org,record)
+                                assertEquals(bankGl,projection["debit_account_id"])
+                                assertEquals(asset,projection["credit_account_id"])
+                                assertEquals("PR",projection["source_kind"])
+                                fun post(creditAccount:UUID) {
+                                    jdbc.update("""INSERT INTO finance_settlement_gl_journal(id,operation_id,organization_id,source_type,source_id,source_kind,
+                                        source_approval_id,period_id,debit_account_id,credit_account_id,amount,currency,source_recorded_at,
+                                        posted_by_user_id,posted_at,correlation_id,employee_funding_record_id)
+                                        VALUES(?,?,?,'PAYROLL_RECOVERY',?,'PR',?,?,?,?,?,?,?,?,?,'synthetic-payroll-recovery',?)""",
+                                        UUID.randomUUID(),UUID.randomUUID(),org,record,approval,glPeriod,bankGl,creditAccount,
+                                        amount,currency,at,recorder,at,source)
+                                }
+                                assertThrows<Exception>{negativeCommand.execute{post(liabilityGl)}}
+                                post(asset)
+                                expectBalance(remaining,remaining)
+                                assertThrows<Exception>{negativeCommand.execute{post(asset)}}
+                                assertEquals(0,repo.bank(org,creditLine.line)!!.remaining.signum())
+                            }
+                            receipt("2",1,"3","5")
+                            receipt("3",2,"0","3")
+                            assertTrue(repo.differentialPaymentBasis(org,recoveryRun)!!.recoveryEmployees.isEmpty())
+                            val balanceGl=jdbc.queryForObject("""SELECT sum(signed) FROM (
+                                SELECT CASE WHEN side='DEBIT' THEN amount ELSE -amount END AS signed FROM finance_payroll_gl_journal_line
+                                 WHERE organization_id=? AND gl_account_id=?
+                                UNION ALL SELECT CASE WHEN side='DEBIT' THEN amount ELSE -amount END FROM finance_settlement_gl_journal_line
+                                 WHERE organization_id=? AND gl_account_id=?) x""",BigDecimal::class.java,org,asset,org,asset)
+                            assertEquals(0,balanceGl!!.signum())
+                        })
                         val extraInstruction=repo.instruction(org,repo.expected(org,correctedRun).single().financeInstructionId)!!
                         assertEquals(0,BigDecimal("5").compareTo(extraInstruction.amount))
                         // This fixture creates a bank statement header and its exact line
