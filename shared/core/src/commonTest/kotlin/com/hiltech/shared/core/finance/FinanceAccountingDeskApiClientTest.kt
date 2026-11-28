@@ -50,11 +50,15 @@ class FinanceAccountingDeskApiClientTest {
         val sources=report.includedSources+financeSettlementTypes+financeEmployeeSettlementTypes
         val data=FinanceDeskBalancesDto(org,period,"2026-11-01","2026-11-30",sources,1,"2026-10-01",false,
             "PRIOR_POSTED_MOVEMENTS_ONLY",false,false,listOf(row),
-            listOf(FinanceDeskBalanceTotalDto("EGP","100","0","50","0","150","0",false,"0","0","0")))
+            listOf(FinanceDeskBalanceTotalDto("EGP","100","0","50","0","150","0",false,"0","0","0")),
+            positions=listOf(FinanceDeskPositionDto("EGP","150","0","0","0","0",false)))
         assertTrue(financeDeskBalancesMatches(data,org,period))
         assertFalse(financeDeskBalancesMatches(data.copy(isCompanyWideTrialBalance=true),org,period))
         assertFalse(financeDeskBalancesMatches(data.copy(openingBasis="VERIFIED_OPENING"),org,period))
         assertFalse(financeDeskBalancesMatches(data.copy(isCompleteIncomeStatement=true),org,period))
+        assertFalse(financeDeskBalancesMatches(data.copy(isCompleteBalanceSheet=true),org,period))
+        assertFalse(financeDeskBalancesMatches(data.copy(isCompleteCashFlowStatement=true),org,period))
+        assertFalse(financeDeskBalancesMatches(data.copy(positions=emptyList()),org,period))
         assertFalse(financeDeskBalancesMatches(data.copy(periodId=journal),org,period))
         val recorded=data.copy(openingBasis="RECORDED_OPENING_PLUS_PRIOR_MOVEMENTS",recordedOpeningCurrencies=listOf("EGP"),includedSources=sources+"OPENING_BALANCE")
         assertTrue(financeDeskBalancesMatches(recorded,org,period))

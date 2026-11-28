@@ -29,12 +29,27 @@ import kotlinx.serialization.json.Json
     val closingDebit:String,val closingCredit:String,val balanced:Boolean,
     val recognizedRevenue:String,val recognizedExpense:String,val recognizedResult:String,
 )
+@Serializable data class FinanceDeskPositionDto(
+    val currency:String,val assets:String,val liabilities:String,val equity:String,
+    val cumulativeRecognizedResult:String,val unclassifiedDebitNet:String,val equationBalances:Boolean,
+)
+@Serializable data class FinanceDeskTreasuryDto(
+    val currency:String,val accountKind:String,val carriedNet:String,val debits:String,val credits:String,
+    val netMovement:String,val closingNet:String,val movementBalances:Boolean,
+)
+@Serializable data class FinanceDeskTreasurySourceDto(
+    val currency:String,val accountKind:String,val sourceKind:String,val debits:String,val credits:String,
+)
 @Serializable data class FinanceDeskBalancesDto(
     val organizationId:String,val periodId:String,val dateStart:String,val dateEnd:String,
     val includedSources:List<String>,val priorPeriodCount:Int,val firstIncludedDate:String,
     val priorCoverageHasGaps:Boolean,val openingBasis:String,val isCompanyWideTrialBalance:Boolean,
     val isCompleteIncomeStatement:Boolean,val rows:List<FinanceDeskAccountBalanceDto>,val totals:List<FinanceDeskBalanceTotalDto>,
     val recordedOpeningCurrencies:List<String> = emptyList(),
+    val positions:List<FinanceDeskPositionDto> = emptyList(),
+    val treasury:List<FinanceDeskTreasuryDto> = emptyList(),
+    val treasurySources:List<FinanceDeskTreasurySourceDto> = emptyList(),
+    val isCompleteBalanceSheet:Boolean=false,val isCompleteCashFlowStatement:Boolean=false,
 )
 @Serializable data class FinanceDeskExposureTotalDto(val currency:String,val knownOutstanding:String,val knownOverdue:String,
     val openWithoutDueDate:Long,val exceptionCount:Long,val recordCount:Long)
@@ -50,6 +65,9 @@ private val employeeDeskSources=expandedDeskSources+financeEmployeeSettlementTyp
 internal val payrollDeskSources=setOf("PAYROLL_ACCRUAL","PAYROLL_PAYMENT","PAYROLL_RETURN","PAYROLL_VOID")
 private fun currency(value:String)=value.matches(Regex("[A-Z]{3}"))
 private fun amount(value:String)=value.matches(Regex("[0-9]+([.][0-9]+)?"))
+private fun signedAmount(value:String)=amount(value.removePrefix("-"))
+private fun nonzero(value:String)=value.any{it in '1'..'9'}
+private val treasuryAccountKinds=setOf("BANK_ASSET","CASH_ASSET")
 
 internal fun financeDeskLedgerMatches(report:FinanceDeskLedgerDto,org:String,period:String,offset:Int):Boolean =
     report.organizationId.equals(org,true) && report.periodId.equals(period,true) && report.offset==offset &&
@@ -72,19 +90,29 @@ internal fun financeDeskBalancesMatches(data:FinanceDeskBalancesDto,org:String,p
         data.priorPeriodCount>=0 && data.openingBasis in setOf("PRIOR_POSTED_MOVEMENTS_ONLY","RECORDED_OPENING_PLUS_PRIOR_MOVEMENTS") &&
         (data.openingBasis=="PRIOR_POSTED_MOVEMENTS_ONLY")==data.recordedOpeningCurrencies.isEmpty() &&
         data.recordedOpeningCurrencies.distinct().size==data.recordedOpeningCurrencies.size && data.recordedOpeningCurrencies.all(::currency) &&
-        !data.isCompanyWideTrialBalance && !data.isCompleteIncomeStatement &&
+        !data.isCompanyWideTrialBalance && !data.isCompleteIncomeStatement && !data.isCompleteBalanceSheet && !data.isCompleteCashFlowStatement &&
         (data.includedSources.toSet()-"OPENING_BALANCE") in setOf(employeeDeskSources,employeeDeskSources+payrollDeskSources) &&
         (data.recordedOpeningCurrencies.isEmpty() || "OPENING_BALANCE" in data.includedSources) &&
         data.includedSources.distinct().size==data.includedSources.size &&
         data.rows.map{it.accountId.lowercase() to it.currency}.distinct().size==data.rows.size &&
         data.rows.all{r->financeLookupIdIsUuid(r.accountId)&&r.accountCode.isNotBlank()&&r.accountName.isNotBlank()&&currency(r.currency)&&
             listOf(r.openingDebit,r.openingCredit,r.periodDebit,r.periodCredit,r.closingDebit,r.closingCredit).all(::amount)&&
-            (settlementCanonicalAmount(r.openingDebit)==null||settlementCanonicalAmount(r.openingCredit)==null)&&
-            (settlementCanonicalAmount(r.closingDebit)==null||settlementCanonicalAmount(r.closingCredit)==null)} &&
+            (!nonzero(r.openingDebit)||!nonzero(r.openingCredit))&&
+            (!nonzero(r.closingDebit)||!nonzero(r.closingCredit))} &&
         data.totals.map{it.currency}.distinct().size==data.totals.size &&
         data.totals.map{it.currency}.toSet()==data.rows.map{it.currency}.toSet() &&
         data.totals.all{r->currency(r.currency)&&listOf(r.openingDebit,r.openingCredit,r.periodDebit,r.periodCredit,r.closingDebit,r.closingCredit).all(::amount)&&
-            listOf(r.recognizedRevenue,r.recognizedExpense,r.recognizedResult).all{amount(it.removePrefix("-"))}}
+            listOf(r.recognizedRevenue,r.recognizedExpense,r.recognizedResult).all(::signedAmount)} &&
+        data.positions.map{it.currency}.distinct().size==data.positions.size &&
+        data.positions.map{it.currency}.toSet()==data.totals.map{it.currency}.toSet() &&
+        data.positions.all{currency(it.currency)&&listOf(it.assets,it.liabilities,it.equity,it.cumulativeRecognizedResult,it.unclassifiedDebitNet).all(::signedAmount)} &&
+        data.treasury.map{it.currency to it.accountKind}.distinct().size==data.treasury.size &&
+        data.treasury.map{it.currency to it.accountKind}.toSet()==data.rows.filter{it.accountKind in treasuryAccountKinds}.map{it.currency to it.accountKind}.toSet() &&
+        data.treasury.all{currency(it.currency)&&it.accountKind in treasuryAccountKinds&&amount(it.debits)&&amount(it.credits)&&
+            listOf(it.carriedNet,it.netMovement,it.closingNet).all(::signedAmount)} &&
+        data.treasurySources.map{Triple(it.currency,it.accountKind,it.sourceKind)}.distinct().size==data.treasurySources.size &&
+        data.treasurySources.all{s->s.sourceKind in data.includedSources&&s.sourceKind!="OPENING_BALANCE"&&
+            amount(s.debits)&&amount(s.credits)&&data.treasury.any{it.currency==s.currency&&it.accountKind==s.accountKind}}
 
 class FinanceAccountingDeskApiClient(private val api:HiltechApiClient,
     private val json:Json=Json { ignoreUnknownKeys=true; explicitNulls=false }) {

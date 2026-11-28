@@ -3,7 +3,6 @@ package com.hiltech.server.companysettings
 import com.hiltech.server.approval.ApprovalPersistencePort
 import com.hiltech.server.audit.AuditEventRecord
 import com.hiltech.server.audit.AuditEventWriter
-import com.hiltech.server.finance.settlementAmount
 import com.hiltech.server.identity.IdentitySessionService
 import com.hiltech.server.operationalaccess.OperationalAuthorityPort
 import com.hiltech.server.operationalaccess.currentOperationalAuthority
@@ -40,11 +39,14 @@ data class FinanceOpeningReceipt(val organizationId:UUID,val operationId:UUID,va
     val currency:String,val openingDate:String,val replayed:Boolean)
 
 private fun openingRef(value:String,max:Int)=value.length in 8..max && value==value.trim() && value.none{it.code<32||it.code==127}
+private fun openingAmount(value:String):BigDecimal? =
+    value.takeIf{it.matches(Regex("[0-9]{1,18}([.][0-9]{1,6})?"))}
+        ?.let(::BigDecimal)?.takeIf{it.signum()>0}
 internal fun validFinanceOpening(input:FinanceOpeningInput):Boolean {
     if(!input.currency.matches(Regex("[A-Z]{3}")) || !openingRef(input.companyReference,160) ||
         !openingRef(input.sourceReference,240) || input.lines.size !in 2..32 ||
         input.lines.map{it.accountId}.distinct().size!=input.lines.size)return false
-    if(input.lines.any{it.side !in setOf("DEBIT","CREDIT")||settlementAmount(it.amount)==null||!openingRef(it.reference,240)})return false
+    if(input.lines.any{it.side !in setOf("DEBIT","CREDIT")||openingAmount(it.amount)==null||!openingRef(it.reference,240)})return false
     fun total(side:String)=input.lines.filter{it.side==side}.fold(BigDecimal.ZERO){sum,line->sum+BigDecimal(line.amount)}
     val debit=total("DEBIT")
     return debit.signum()>0 && debit.compareTo(total("CREDIT"))==0
@@ -55,7 +57,7 @@ private fun openingChanged():Nothing=throw ProductApiException("FINANCE_OPENING_
     "The opening source, period, accounts or balance is no longer eligible.",HttpStatus.CONFLICT)
 
 @Service
-class FinanceOpeningService(
+class FinanceOpeningService @org.springframework.beans.factory.annotation.Autowired constructor(
     private val authority:CompanySettingsAuthorityPort,private val approvals:ApprovalPersistencePort,
     private val environment:Environment,private val jdbc:JdbcTemplate,private val commands:IdempotentCommandExecutor,
     private val audit:AuditEventWriter,private val clock:Clock,private val operationalAuthority:OperationalAuthorityPort?=null,

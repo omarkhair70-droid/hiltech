@@ -829,6 +829,25 @@ class FinanceMixedBankCashPostgresContractTest {
        assertEquals(0,openingCarry.rows.single{it.accountId==fixed}.closingDebit.toBigDecimal().compareTo(BigDecimal("250")))
        assertTrue(openingCarry.totals.single().balanced)
        assertFalse(openingCarry.isCompanyWideTrialBalance)
+       val position=initial.positions.single()
+       assertTrue(position.equationBalances)
+       assertEquals(0,position.equity.toBigDecimal().compareTo(BigDecimal("250")))
+       assertEquals(0,position.cumulativeRecognizedResult.toBigDecimal().compareTo(initial.totals.single().recognizedResult.toBigDecimal()))
+       assertFalse(initial.isCompleteBalanceSheet)
+       assertFalse(initial.isCompleteCashFlowStatement)
+       assertEquals(setOf("BANK_ASSET","CASH_ASSET"),initial.treasury.map{it.accountKind}.toSet())
+       initial.treasury.forEach{treasury->
+           val account=initial.rows.single{it.accountKind==treasury.accountKind}
+           assertTrue(treasury.movementBalances)
+           assertEquals(0,treasury.debits.toBigDecimal().compareTo(account.periodDebit.toBigDecimal()))
+           assertEquals(0,treasury.credits.toBigDecimal().compareTo(account.periodCredit.toBigDecimal()))
+           val sources=initial.treasurySources.filter{it.accountKind==treasury.accountKind}
+           assertEquals(0,sources.fold(BigDecimal.ZERO){sum,s->sum+s.debits.toBigDecimal()}.compareTo(treasury.debits.toBigDecimal()))
+           assertEquals(0,sources.fold(BigDecimal.ZERO){sum,s->sum+s.credits.toBigDecimal()}.compareTo(treasury.credits.toBigDecimal()))
+       }
+       assertTrue(initial.treasurySources.none{it.sourceKind in setOf("OPENING_BALANCE","IMPREST_EXPENSE","AR","AP")})
+       assertTrue(openingCarry.treasurySources.isEmpty())
+       assertTrue(openingCarry.treasury.all{it.netMovement.toBigDecimal().signum()==0&&it.movementBalances})
      } finally { connection.rollback() }
    }
  }

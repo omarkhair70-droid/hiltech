@@ -53,6 +53,17 @@ data class FinanceDeskBalanceTotal(
     val closingDebit:String,val closingCredit:String,val balanced:Boolean,
     val recognizedRevenue:String,val recognizedExpense:String,val recognizedResult:String,
 )
+data class FinanceDeskPosition(
+    val currency:String,val assets:String,val liabilities:String,val equity:String,
+    val cumulativeRecognizedResult:String,val unclassifiedDebitNet:String,val equationBalances:Boolean,
+)
+data class FinanceDeskTreasury(
+    val currency:String,val accountKind:String,val carriedNet:String,val debits:String,val credits:String,
+    val netMovement:String,val closingNet:String,val movementBalances:Boolean,
+)
+data class FinanceDeskTreasurySource(
+    val currency:String,val accountKind:String,val sourceKind:String,val debits:String,val credits:String,
+)
 data class FinanceDeskBalances(
     val organizationId:UUID,val periodId:UUID,val dateStart:String,val dateEnd:String,
     val includedSources:List<String>,val priorPeriodCount:Int,val firstIncludedDate:String,
@@ -60,6 +71,10 @@ data class FinanceDeskBalances(
     val isCompanyWideTrialBalance:Boolean=false,val isCompleteIncomeStatement:Boolean=false,
     val recordedOpeningCurrencies:List<String> = emptyList(),
     val rows:List<FinanceDeskAccountBalance>,val totals:List<FinanceDeskBalanceTotal>,
+    val positions:List<FinanceDeskPosition> = emptyList(),
+    val treasury:List<FinanceDeskTreasury> = emptyList(),
+    val treasurySources:List<FinanceDeskTreasurySource> = emptyList(),
+    val isCompleteBalanceSheet:Boolean=false,val isCompleteCashFlowStatement:Boolean=false,
 )
 data class FinanceDeskExposureTotal(
     val currency: String, val knownOutstanding: String, val knownOverdue: String,
@@ -77,6 +92,39 @@ data class FinanceDeskExposure(
 )
 
 private const val PAGE_SIZE = 50
+private val assetKinds=setOf("INVENTORY_ASSET","FIXED_ASSET","TAX_RECOVERABLE","OTHER_ASSET",
+    "CUSTOMER_RECEIVABLE","BANK_ASSET","CASH_ASSET","EMPLOYEE_ADVANCE_ASSET","EMPLOYEE_IMPREST_ASSET")
+private val liabilityKinds=setOf("SUPPLIER_PAYABLE","TAX_PAYABLE","PAYROLL_PAYABLE","PAYROLL_DEDUCTION_PAYABLE","OTHER_LIABILITY")
+private val expenseKinds=setOf("EXPENSE","PAYROLL_EXPENSE")
+private val resultKinds=expenseKinds+"SALES_REVENUE"
+private val classifiedKinds=assetKinds+liabilityKinds+resultKinds+"EQUITY"
+private val treasuryKinds=setOf("BANK_ASSET","CASH_ASSET")
+
+private fun FinanceDeskAccountBalance.closingNet()=BigDecimal(closingDebit)-BigDecimal(closingCredit)
+private fun FinanceDeskAccountBalance.carriedNet()=BigDecimal(openingDebit)-BigDecimal(openingCredit)
+private fun List<FinanceDeskAccountBalance>.sumMoney(amount:(FinanceDeskAccountBalance)->BigDecimal)=
+    fold(BigDecimal.ZERO){sum,row->sum+amount(row)}
+
+internal fun financeDeskPosition(currency:String,accounts:List<FinanceDeskAccountBalance>):FinanceDeskPosition {
+    val assets=accounts.filter{it.accountKind in assetKinds}.sumMoney{it.closingNet()}
+    val liabilities=accounts.filter{it.accountKind in liabilityKinds}.sumMoney{-it.closingNet()}
+    val equity=accounts.filter{it.accountKind=="EQUITY"}.sumMoney{-it.closingNet()}
+    // Includes cumulative nominal-account balances; not an invented retained-earnings closing.
+    val result=accounts.filter{it.accountKind in resultKinds}.sumMoney{-it.closingNet()}
+    val other=accounts.filter{it.accountKind !in classifiedKinds}.sumMoney{it.closingNet()}
+    return FinanceDeskPosition(currency,assets.toPlainString(),liabilities.toPlainString(),equity.toPlainString(),
+        result.toPlainString(),other.toPlainString(),
+        other.signum()==0 && accounts.none{it.accountKind !in classifiedKinds} && assets.compareTo(liabilities+equity+result)==0)
+}
+
+internal fun financeDeskTreasury(currency:String,kind:String,accounts:List<FinanceDeskAccountBalance>):FinanceDeskTreasury {
+    val opening=accounts.sumMoney{it.carriedNet()}
+    val debit=accounts.sumMoney{BigDecimal(it.periodDebit)}
+    val credit=accounts.sumMoney{BigDecimal(it.periodCredit)}
+    val closing=accounts.sumMoney{it.closingNet()}
+    return FinanceDeskTreasury(currency,kind,opening.toPlainString(),debit.toPlainString(),credit.toPlainString(),
+        (debit-credit).toPlainString(),closing.toPlainString(),closing.compareTo(opening+debit-credit)==0)
+}
 
 /**
  * Read projections over the existing immutable ledger and recognized source balance.
@@ -213,10 +261,12 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
                 (SELECT count(*) FROM earlier)::int AS prior_count,
                 coalesce((SELECT min(date_start) FROM earlier),s.date_start) AS first_date,
                 (EXISTS(SELECT 1 FROM earlier WHERE previous_end IS NOT NULL AND date_start<>previous_end+1)
-                    OR coalesce((SELECT max(date_end)+1<>s.date_start FROM earlier),false)) AS gaps
+                    OR coalesce((SELECT max(date_end)+1<>s.date_start FROM earlier),false)
+                    OR EXISTS(SELECT 1 FROM finance_gl_period p WHERE p.organization_id=? AND p.id<>s.id
+                        AND p.date_start<=s.date_end AND p.date_end>=s.date_start)) AS gaps
             FROM selected s
         """.trimIndent(),{r,_->Coverage(r.getDate("date_start").toString(),r.getDate("date_end").toString(),
-            r.getInt("prior_count"),r.getDate("first_date").toString(),r.getBoolean("gaps"))},org,period,org).singleOrNull()
+            r.getInt("prior_count"),r.getDate("first_date").toString(),r.getBoolean("gaps"))},org,period,org,org).singleOrNull()
             ?:financeDeskUnavailable()
         val rows=jdbc.query(lines(includeSettlements,includeEmployee,includePayroll,cumulative=true,includeOpening=true)+"""
             , account_sums AS (
@@ -253,6 +303,23 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
                 cd.toPlainString(),cc.toPlainString(),od.compareTo(oc)==0&&pd.compareTo(pc)==0&&cd.compareTo(cc)==0,
                 revenue.toPlainString(),expense.toPlainString(),(revenue-expense).toPlainString())
         }
+        val positions=rows.groupBy{it.currency}.map{(currency,accounts)->financeDeskPosition(currency,accounts)}
+        val treasury=rows.filter{it.accountKind in treasuryKinds}.groupBy{it.currency to it.accountKind}.map{(key,accounts)->
+            financeDeskTreasury(key.first,key.second,accounts)
+        }
+        // Only posted treasury lines from the selected period; opening journals
+        // and non-cash accruals are excluded. Voids remain visible as accounting
+        // adjustments, not implied physical receipts or payments.
+        val treasurySources=jdbc.query(lines(includeSettlements,includeEmployee,includePayroll)+"""
+            SELECT l.currency,a.account_kind,l.kind,
+                sum(CASE WHEN l.side='DEBIT' THEN l.amount ELSE 0 END) AS debit,
+                sum(CASE WHEN l.side='CREDIT' THEN l.amount ELSE 0 END) AS credit
+            FROM posted_lines l JOIN scope s ON true
+            JOIN finance_gl_account a ON a.organization_id=s.org AND a.id=l.gl_account_id
+            WHERE a.account_kind IN('BANK_ASSET','CASH_ASSET')
+            GROUP BY l.currency,a.account_kind,l.kind ORDER BY l.currency,a.account_kind,l.kind
+        """,{r,_->FinanceDeskTreasurySource(r.getString("currency").trim(),r.getString("account_kind"),
+            r.getString("kind"),r.getBigDecimal("debit").toPlainString(),r.getBigDecimal("credit").toPlainString())},org,period)
         val recordedOpenings=jdbc.query("""SELECT j.currency FROM finance_gl_opening_journal j
             JOIN finance_gl_period p ON p.organization_id=j.organization_id AND p.id=j.period_id
             WHERE j.organization_id=? AND p.date_start<=? ORDER BY j.currency""",
@@ -263,7 +330,8 @@ internal class FinanceAccountingDeskReadStore(private val jdbc: JdbcTemplate) {
                 (if(includeSettlements&&includeEmployee)listOf("EMPLOYEE_FUNDING","EMPLOYEE_RETURN","IMPREST_EXPENSE","EXPENSE_REIMBURSEMENT")else emptyList())+
                 (if(includePayroll)listOf("PAYROLL_ACCRUAL","PAYROLL_PAYMENT","PAYROLL_RETURN","PAYROLL_VOID")else emptyList())+listOf("OPENING_BALANCE"),
             coverage.count,coverage.first,coverage.gaps,openingBasis=if(recordedOpenings.isEmpty())"PRIOR_POSTED_MOVEMENTS_ONLY" else "RECORDED_OPENING_PLUS_PRIOR_MOVEMENTS",
-            recordedOpeningCurrencies=recordedOpenings,rows=rows,totals=totals)
+            recordedOpeningCurrencies=recordedOpenings,rows=rows,totals=totals,
+            positions=positions,treasury=treasury,treasurySources=treasurySources)
     }
     private data class Coverage(val start:String,val end:String,val count:Int,val first:String,val gaps:Boolean)
 

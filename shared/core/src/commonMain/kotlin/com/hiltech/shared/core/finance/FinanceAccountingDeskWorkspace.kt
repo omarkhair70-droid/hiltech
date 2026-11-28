@@ -223,6 +223,7 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
 
 @Composable
 private fun DeskBalances(data:FinanceDeskBalancesDto) {
+    var report by remember {mutableStateOf("BALANCES")}
     HiltechPanel(Modifier.fillMaxWidth()) {
         Text(hiltechText("الأرصدة من القيود المرحلة","Balances from posted journals"),style=MaterialTheme.typography.titleLarge)
         Text(if(data.recordedOpeningCurrencies.isNotEmpty()) hiltechText("يشمل الرصيد المرحّل قيود الافتتاح المسجلة وصافي القيود السابقة. لا يعني اكتمال افتتاح الدفاتر الفرعية أو كل الحركات؛ ليس ميزان مراجعة شاملًا.","Carried balances include recorded opening journals and net prior entries. Subledger openings and all movements are not necessarily complete; not a complete trial balance.")
@@ -233,6 +234,21 @@ private fun DeskBalances(data:FinanceDeskBalancesDto) {
         if(data.recordedOpeningCurrencies.isNotEmpty())Text(hiltechText("عملات لها قيد افتتاح مسجل: ","Currencies with recorded opening: ")+data.recordedOpeningCurrencies.joinToString(", "))
         if(data.priorCoverageHasGaps) Text(hiltechText("توجد فجوات أو تداخلات في الفترات السابقة. راجع التقويم المحاسبي.","Earlier periods have gaps or overlaps. Review the accounting calendar."),color=MaterialTheme.colorScheme.error)
         if(!data.includedSources.containsAll(payrollDeskSources)) Text(hiltechText("قيود الرواتب غير مشمولة في صلاحيتك الحالية.","Payroll journals are outside your current reporting scope."))
+    }
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+        listOf("BALANCES" to hiltechText("ميزان الأرصدة","Trial balances"),
+            "POSITION" to hiltechText("المركز المسجل","Recorded position"),
+            "TREASURY" to hiltechText("حركة النقد والبنوك","Cash & bank movement")).forEach{(id,label)->
+            FilterChip(selected=report==id,onClick={report=id},label={Text(label)})
+        }
+    }
+    if(report=="POSITION") {
+        DeskRecordedPosition(data)
+        return
+    }
+    if(report=="TREASURY") {
+        DeskTreasury(data)
+        return
     }
     data.totals.forEach { total ->
         HiltechPanel(Modifier.fillMaxWidth()) {
@@ -259,6 +275,50 @@ private fun DeskBalances(data:FinanceDeskBalancesDto) {
         }
     }
     if(data.rows.isEmpty()) Text(hiltechText("لا توجد قيود مرحلة في نطاق التقرير.","No posted entries in this report scope."))
+}
+
+@Composable
+private fun DeskRecordedPosition(data:FinanceDeskBalancesDto) {
+    Text(hiltechText("المركز المالي من القيود المتاحة","Financial position from available journals"),style=MaterialTheme.typography.titleLarge)
+    Text(hiltechText("الأصول والالتزامات وحقوق الملكية بحسب تصنيف دليل الحسابات. نتيجة القيود التراكمية منفصلة عن حقوق الملكية؛ لا تفترض إقفال الأرباح أو اكتمال قائمة المركز المالي.",
+        "Assets, liabilities and equity use chart classifications. Cumulative journal result stays separate from equity; neither profit closing nor a complete balance sheet is assumed."),style=MaterialTheme.typography.bodySmall)
+    data.positions.forEach{p->
+        HiltechPanel(Modifier.fillMaxWidth()){
+            Text(p.currency,style=MaterialTheme.typography.titleMedium)
+            HiltechKeyValue(hiltechText("صافي الأصول المسجلة","Recorded net assets"),p.assets)
+            HiltechKeyValue(hiltechText("الالتزامات المسجلة","Recorded liabilities"),p.liabilities)
+            HiltechKeyValue(hiltechText("حقوق الملكية المسجلة","Recorded equity"),p.equity)
+            HiltechKeyValue(hiltechText("النتيجة التراكمية غير المقفلة","Cumulative nominal-account result"),p.cumulativeRecognizedResult)
+            HiltechKeyValue(hiltechText("صافي حسابات غير مصنفة","Unclassified debit net"),p.unclassifiedDebitNet)
+            Text(if(p.equationBalances)hiltechText("المعادلة المحاسبية للمصادر متوازنة","Recorded-source accounting equation balances")
+                else hiltechText("راجع التصنيف أو عدم التوازن","Review classification or imbalance"),
+                color=if(p.equationBalances)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+        }
+    }
+    if(data.positions.isEmpty())Text(hiltechText("لا توجد أرصدة مسجلة.","No recorded balances."))
+}
+
+@Composable
+private fun DeskTreasury(data:FinanceDeskBalancesDto) {
+    Text(hiltechText("حركة النقد والبنوك المرحلة","Posted cash & bank movement"),style=MaterialTheme.typography.titleLarge)
+    Text(hiltechText("حركة حسابات الخزائن والبنوك في الدفتر، لا رصيد كشف البنك أو دليل حركة نقدية فعلية. تشمل تصحيحات القيود؛ لا تمثل قائمة تدفقات نقدية مصنفة مكتملة.",
+        "Ledger movements of cashboxes and banks, not statement balances or proof of actual cash transfer. Includes accounting adjustments; not a complete classified cash flow statement."),style=MaterialTheme.typography.bodySmall)
+    data.treasury.forEach{t->
+        HiltechPanel(Modifier.fillMaxWidth()){
+            Text((if(t.accountKind=="BANK_ASSET")hiltechText("البنوك","Banks")else hiltechText("الخزائن","Cashboxes"))+" · "+t.currency,style=MaterialTheme.typography.titleMedium)
+            HiltechKeyValue(hiltechText("صافي المرحّل","Carried net"),t.carriedNet)
+            HiltechKeyValue(hiltechText("الزيادة المدينة","Debit increases"),t.debits)
+            HiltechKeyValue(hiltechText("النقص الدائن","Credit decreases"),t.credits)
+            HiltechKeyValue(hiltechText("صافي الحركة","Net movement"),t.netMovement)
+            HiltechKeyValue(hiltechText("صافي الختامي","Closing net"),t.closingNet)
+            if(!t.movementBalances)Text(hiltechText("حركة غير متطابقة مع الرصيد؛ راجع المصدر.","Movement does not reconcile to balance; review source."),color=MaterialTheme.colorScheme.error)
+            val sources=data.treasurySources.filter{it.currency==t.currency&&it.accountKind==t.accountKind}
+            if(sources.isNotEmpty())HiltechRecordTable(listOf(HiltechTableColumn(hiltechText("مصدر القيد","Journal source"),2f),
+                HiltechTableColumn(hiltechText("مدين","Debit"),numeric=true),HiltechTableColumn(hiltechText("دائن","Credit"),numeric=true)),
+                sources.map{HiltechTableRecord(listOf(deskKind(it.sourceKind),it.debits,it.credits))},"")
+        }
+    }
+    if(data.treasury.isEmpty())Text(hiltechText("لا توجد قيود خزائن أو بنوك في النطاق الحالي.","No cashbox or bank journals in the current scope."))
 }
 
 @Composable
