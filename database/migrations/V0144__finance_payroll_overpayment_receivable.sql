@@ -93,7 +93,7 @@ BEGIN
    RAISE EXCEPTION 'Recovery account is not applicable to this clearance' USING ERRCODE='23514';
  END IF;
  RETURN NEW;
-END; $;
+END; $$;
 
 -- The exact clearance cited by the immutable correction, independent of
 -- later source re-evaluation. This is deliberately not a cash receipt.
