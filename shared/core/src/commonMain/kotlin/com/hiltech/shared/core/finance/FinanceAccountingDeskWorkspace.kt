@@ -125,8 +125,8 @@ private fun FinanceAccountingDesk(client:FinanceAccountingDeskApiClient,org:Stri
                 HiltechPanel(Modifier.fillMaxWidth()) {
                     Text(hiltechText("حركة الحسابات خلال الفترة","Account movements for the period"),style=MaterialTheme.typography.titleLarge)
                     Text(if(data.includedSources.containsAll(payrollDeskSources))
-                        hiltechText("تشمل القيود المرحلة ضمن المصادر المتاحة، ومنها قيود الرواتب البسيطة. لا تشمل أرصدة الافتتاح أو الرواتب التي تتطلب توزيعًا محاسبيًا أو حركات لم ترحل؛ ليست ميزان مراجعة شاملًا.",
-                            "Includes posted journals from available sources, including earnings-only payroll. Excludes opening balances, payroll requiring allocation, and unposted movements; not a complete trial balance.")
+                        hiltechText("تشمل القيود المرحلة ضمن المصادر المتاحة، ومنها قيود الرواتب الموزعة. لا تشمل أرصدة الافتتاح أو الرواتب غير المرحلة أو حركات لم ترحل؛ ليست ميزان مراجعة شاملًا.",
+                            "Includes posted journals from available sources, including allocated payroll. Excludes opening balances, unposted payroll, and unposted movements; not a complete trial balance.")
                     else if(data.includedSources.containsAll(financeEmployeeSettlementTypes))
                         hiltechText("تشمل القيود المرحلة للموردين والعملاء والسداد والتحصيل والسلف والعهد والمصروفات. لا تشمل أرصدة الافتتاح والرواتب والحركات غير المرحلة؛ ليست ميزان مراجعة شاملًا.",
                             "Includes posted AP/AR, settlement, custody and paid-cost journals. Excludes opening balances, payroll and unposted movements; not a complete trial balance.")

@@ -60,9 +60,12 @@ data class FinancePayrollCommandReceiptDto(
     val operationId: String, val organizationId: String, val targetId: String, val state: String,
     val replayed: Boolean, val bankExecutionInitiated: Boolean, val ledgerPosted: Boolean,
 )
+@Serializable data class FinancePayrollGlAllocationDto(val kind:String,val domain:String,val code:String,val accountId:String,val reference:String)
+@Serializable data class FinancePayrollGlGroupDto(val kind:String,val domain:String,val code:String,val amount:String)
 @Serializable data class FinancePayrollGlPostDto(
     val operationId:String,val entryType:String,val sourceEventId:String?=null,val originalJournalId:String?=null,
     val periodId:String,val debitAccountId:String,val creditAccountId:String,val amount:String,val currency:String,
+    val allocations:List<FinancePayrollGlAllocationDto> = emptyList(),
 )
 @Serializable data class FinancePayrollGlEventDto(
     val eventId:String,val entryType:String,val employeeName:String,val amount:String,val currency:String,
@@ -74,6 +77,8 @@ data class FinancePayrollCommandReceiptDto(
     val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
     val expenseAccounts:List<FinanceSettlementAccountChoiceDto>,val payableAccounts:List<FinanceSettlementAccountChoiceDto>,
     val hasMoreAccounts:Boolean,val events:List<FinancePayrollGlEventDto>,
+    val net:String=gross,val deductions:String="0",val reimbursements:String="0",val groups:List<FinancePayrollGlGroupDto> = emptyList(),
+    val deductionAccounts:List<FinanceSettlementAccountChoiceDto> = emptyList(),val reimbursementAccounts:List<FinanceSettlementAccountChoiceDto> = emptyList(),
 )
 internal fun payrollGlIntentValid(input:FinancePayrollGlPostDto):Boolean =
     input.entryType in payrollDeskSources &&
@@ -81,7 +86,12 @@ internal fun payrollGlIntentValid(input:FinancePayrollGlPostDto):Boolean =
     !input.debitAccountId.equals(input.creditAccountId,true) && settlementCanonicalAmount(input.amount)!=null &&
     input.currency.matches(Regex("[A-Z]{3}")) &&
     (input.entryType=="PAYROLL_ACCRUAL")==(input.sourceEventId==null) &&
-    (input.entryType in setOf("PAYROLL_RETURN","PAYROLL_VOID"))==(input.originalJournalId!=null)
+    (input.entryType in setOf("PAYROLL_RETURN","PAYROLL_VOID"))==(input.originalJournalId!=null) &&
+    input.allocations.size<=30 && (input.entryType=="PAYROLL_ACCRUAL" || input.allocations.isEmpty()) &&
+    input.allocations.map{Triple(it.kind,it.domain,it.code)}.distinct().size==input.allocations.size &&
+    input.allocations.all{it.kind in setOf("DEDUCTION","REIMBURSEMENT") && financeLookupIdIsUuid(it.accountId) &&
+        it.domain.matches(Regex("[A-Z][A-Z0-9_-]{0,79}")) && it.code.matches(Regex("[A-Z][A-Z0-9_-]{0,79}")) &&
+        it.reference.length in 8..240 && it.reference==it.reference.trim() && it.reference.none{c->c.code<32||c.code==127}}
 
 @Serializable
 data class FinancePayrollIntent(
@@ -129,6 +139,13 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
                 check(sameId(v.organizationId,org) && sameId(v.runVersionId,run) && v.offset==offset &&
                     v.currency.matches(Regex("[A-Z]{3}")) && v.gross.matches(Regex("[0-9]+([.][0-9]+)?")) &&
                     v.accrualState in setOf("POSTED","NOT_PREPARED","CORRECTION_REQUIRED","NO_AMOUNT","TREATMENT_REQUIRED","READY") &&
+                    listOf(v.net,v.deductions,v.reimbursements).all{it.matches(Regex("[0-9]+([.][0-9]+)?"))} &&
+                    v.groups.size<=30 && v.groups.map{Triple(it.kind,it.domain,it.code)}.distinct().size==v.groups.size &&
+                    v.groups.all{it.kind in setOf("DEDUCTION","REIMBURSEMENT") && settlementCanonicalAmount(it.amount)!=null &&
+                        it.domain.matches(Regex("[A-Z][A-Z0-9_-]{0,79}")) && it.code.matches(Regex("[A-Z][A-Z0-9_-]{0,79}"))} &&
+                    listOf(v.deductionAccounts to setOf("PAYROLL_DEDUCTION_PAYABLE","TAX_PAYABLE"),v.reimbursementAccounts to setOf("EXPENSE")).all{(rows,kinds)->
+                        rows.size<=100 && rows.map{a->a.id.lowercase()}.distinct().size==rows.size &&
+                        rows.all{a->financeLookupIdIsUuid(a.id) && a.name.isNotBlank() && a.accountKind in kinds}} &&
                     (v.period==null || (financeLookupIdIsUuid(v.period.id) && v.period.state=="OPEN" && financeValidCalendarDate(v.period.dateStart) && financeValidCalendarDate(v.period.dateEnd) && v.period.dateStart<=v.period.dateEnd)) &&
                     v.events.size<=50 && v.events.map{e->e.eventId.lowercase()}.distinct().size==v.events.size &&
                     v.events.all{e-> e.entryType in payrollDeskSources-"PAYROLL_ACCRUAL" && financeLookupIdIsUuid(e.eventId) &&

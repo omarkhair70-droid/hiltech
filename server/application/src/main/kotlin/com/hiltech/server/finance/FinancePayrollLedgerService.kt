@@ -14,6 +14,8 @@ import com.hiltech.server.platform.IdempotentCommandSpec
 import com.hiltech.server.platform.ProductApiException
 import jakarta.servlet.http.HttpServletRequest
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
 import org.springframework.core.env.Environment
 import org.springframework.dao.DataIntegrityViolationException
@@ -36,9 +38,12 @@ import java.util.UUID
 
 internal val payrollGlTypes=setOf("PAYROLL_ACCRUAL","PAYROLL_PAYMENT","PAYROLL_RETURN","PAYROLL_VOID")
 
+data class FinancePayrollGlAllocation(val kind:String,val domain:String,val code:String,val accountId:UUID,val reference:String)
+data class FinancePayrollGlGroup(val kind:String,val domain:String,val code:String,val amount:String)
 data class FinancePayrollGlPost(
     val operationId:UUID,val entryType:String,val sourceEventId:UUID?=null,val originalJournalId:UUID?=null,
     val periodId:UUID,val debitAccountId:UUID,val creditAccountId:UUID,val amount:String,val currency:String,
+    val allocations:List<FinancePayrollGlAllocation> = emptyList(),
 )
 data class FinancePayrollGlEvent(
     val eventId:UUID,val entryType:String,val employeeName:String,val amount:String,val currency:String,
@@ -50,10 +55,13 @@ data class FinancePayrollGlView(
     val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
     val expenseAccounts:List<FinanceSettlementAccountChoice>,val payableAccounts:List<FinanceSettlementAccountChoice>,
     val hasMoreAccounts:Boolean,val events:List<FinancePayrollGlEvent>,
+    val net:String,val deductions:String,val reimbursements:String,val groups:List<FinancePayrollGlGroup>,
+    val deductionAccounts:List<FinanceSettlementAccountChoice>,val reimbursementAccounts:List<FinanceSettlementAccountChoice>,
 )
 private data class PayrollGlRun(
     val payrollPeriodId:UUID,val releaseId:UUID,val preparedAt:OffsetDateTime?,val gross:BigDecimal,
     val currency:String,val eligible:Boolean,val superseded:Boolean,val accrued:Boolean,
+    val net:BigDecimal,val deductions:BigDecimal,val reimbursements:BigDecimal,
 )
 
 private fun payrollGlDenied():Nothing=throw ProductApiException("FINANCE_PAYROLL_GL_UNAVAILABLE",
@@ -77,10 +85,8 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
     }
 
     private fun run(org:UUID,id:UUID):PayrollGlRun? = jdbc.query("""
-        SELECT r.payroll_period_id,rel.id AS release_id,b.prepared_at,r.gross,r.currency,
-          (r.gross>0 AND r.gross=r.net AND r.deductions=0 AND r.reimbursements=0
-            AND NOT EXISTS(SELECT 1 FROM payroll_run_employee_line l WHERE l.run_version_id=r.id AND (l.deductions<>0 OR l.reimbursements<>0))
-            AND (SELECT coalesce(sum(l.gross),0) FROM payroll_run_employee_line l WHERE l.run_version_id=r.id)=r.gross) AS eligible,
+        SELECT r.payroll_period_id,rel.id AS release_id,b.prepared_at,r.gross,r.currency,r.net,r.deductions,r.reimbursements,
+          finance_payroll_gl_components_complete(r.organization_id,r.id) AS eligible,
           (EXISTS(SELECT 1 FROM payroll_run_correction c WHERE c.organization_id=r.organization_id AND c.replacement_run_version_id=r.id)
             OR EXISTS(SELECT 1 FROM payroll_run_version newer JOIN payroll_run_release pub ON pub.run_version_id=newer.id
               WHERE newer.organization_id=r.organization_id AND newer.payroll_period_id=r.payroll_period_id AND newer.generation>r.generation)) AS superseded,
@@ -92,7 +98,13 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
         WHERE r.organization_id=? AND r.id=?
     """.trimIndent(),{r,_->PayrollGlRun(r.getObject("payroll_period_id",UUID::class.java),r.getObject("release_id",UUID::class.java),
         r.getObject("prepared_at",OffsetDateTime::class.java),r.getBigDecimal("gross"),r.getString("currency").trim(),
-        r.getBoolean("eligible"),r.getBoolean("superseded"),r.getBoolean("accrued"))},org,id).singleOrNull()
+        r.getBoolean("eligible"),r.getBoolean("superseded"),r.getBoolean("accrued"),
+        r.getBigDecimal("net"),r.getBigDecimal("deductions"),r.getBigDecimal("reimbursements"))},org,id).singleOrNull()
+
+    private fun groups(org:UUID,run:UUID)=jdbc.query("""SELECT component_kind,source_domain,component_code,amount
+        FROM finance_payroll_gl_component_group WHERE organization_id=? AND run_version_id=?
+        ORDER BY component_kind,source_domain,component_code LIMIT 31""",
+        {r,_->FinancePayrollGlGroup(r.getString(1),r.getString(2),r.getString(3),r.getBigDecimal(4).toPlainString())},org,run)
 
     private fun events(org:UUID,run:UUID,offset:Int):List<FinancePayrollGlEvent> = jdbc.query("""
         WITH source AS (
@@ -149,19 +161,26 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
         if(offset !in 0..1_000_000) payrollGlDenied()
         val source=run(org,runId) ?: payrollGlDenied()
         val period=accounting.period(org,LocalDate.ofInstant(clock.instant(),ZoneOffset.UTC))
+        val components=groups(org,runId)
         val state=when {
             source.accrued -> "POSTED"
             source.preparedAt==null -> "NOT_PREPARED"
             source.superseded -> "CORRECTION_REQUIRED"
             source.gross.signum()==0 -> "NO_AMOUNT"
-            !source.eligible -> "TREATMENT_REQUIRED"
+            !source.eligible || components.size>30 -> "TREATMENT_REQUIRED"
             else -> "READY"
         }
         val expense=if(state=="READY") accounting.debitChoices(org,source.currency,"PAYROLL_EXPENSE") else emptyList()
         val payable=if(state=="READY") accounting.debitChoices(org,source.currency,"PAYROLL_PAYABLE") else emptyList()
+        val deduction=if(state=="READY" && components.any{it.kind=="DEDUCTION"})
+            (accounting.debitChoices(org,source.currency,"PAYROLL_DEDUCTION_PAYABLE")+accounting.debitChoices(org,source.currency,"TAX_PAYABLE")).sortedBy{it.code}
+            else emptyList()
+        val reimbursement=if(state=="READY" && components.any{it.kind=="REIMBURSEMENT"}) accounting.debitChoices(org,source.currency,"EXPENSE") else emptyList()
         val rows=events(org,runId,offset)
         return FinancePayrollGlView(org,runId,period,state,source.gross.toPlainString(),source.currency,offset,rows.size>50,
-            expense.take(100),payable.take(100),expense.size>100||payable.size>100,rows.take(50))
+            expense.take(100),payable.take(100),listOf(expense,payable,deduction,reimbursement).any{it.size>100},rows.take(50),
+            source.net.toPlainString(),source.deductions.toPlainString(),source.reimbursements.toPlainString(),
+            if(state=="READY") components else emptyList(),deduction.take(100),reimbursement.take(100))
     }
 
     fun post(actor:UUID,org:UUID,runId:UUID,request:FinancePayrollGlPost,correlation:String):FinancePayrollCommandReceipt {
@@ -171,10 +190,21 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
             request.debitAccountId==request.creditAccountId ||
             (request.entryType=="PAYROLL_ACCRUAL")!=(request.sourceEventId==null) ||
             (request.entryType in setOf("PAYROLL_RETURN","PAYROLL_VOID"))!=(request.originalJournalId!=null)) payrollGlChanged()
+        if(request.allocations.size>30 || (request.entryType!="PAYROLL_ACCRUAL" && request.allocations.isNotEmpty()) ||
+            request.allocations.any{it.kind !in setOf("DEDUCTION","REIMBURSEMENT") ||
+                !it.domain.matches(Regex("[A-Z][A-Z0-9_-]{0,79}")) || !it.code.matches(Regex("[A-Z][A-Z0-9_-]{0,79}")) ||
+                it.reference.length !in 8..240 || it.reference!=it.reference.trim() || it.reference.any{c->c.code<32||c.code==127}} ||
+            request.allocations.map{Triple(it.kind,it.domain,it.code)}.distinct().size!=request.allocations.size) payrollGlChanged()
+        val allocationJson=buildJsonArray {
+            request.allocations.sortedWith(compareBy({it.kind},{it.domain},{it.code})).forEach { a ->
+                add(buildJsonObject{put("kind",a.kind);put("domain",a.domain);put("code",a.code);put("accountId",a.accountId.toString());put("reference",a.reference)})
+            }
+        }
         val id=UUID.nameUUIDFromBytes(("finance-payroll-gl:"+request.operationId).toByteArray(Charsets.UTF_8))
         val fingerprint=IdempotencyKeyContract.fingerprint(buildJsonObject {
             put("organizationId",org.toString());put("runVersionId",runId.toString());put("entryType",request.entryType)
             request.sourceEventId?.let{put("sourceEventId",it.toString())};request.originalJournalId?.let{put("originalJournalId",it.toString())}
+            if(request.allocations.isNotEmpty()) put("allocations",allocationJson)
             put("periodId",request.periodId.toString());put("debitAccountId",request.debitAccountId.toString())
             put("creditAccountId",request.creditAccountId.toString());put("amount",amount.stripTrailingZeros().toPlainString());put("currency",request.currency)
         }.toString())
@@ -195,10 +225,10 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
                 // rejects duplicate/stale postings, and derives the permissible account roles.
                 check(jdbc.update("""INSERT INTO finance_payroll_gl_journal(id,operation_id,organization_id,payroll_period_id,run_version_id,
                     release_id,entry_type,source_event_id,original_journal_id,period_id,debit_account_id,credit_account_id,amount,currency,
-                    source_recorded_at,posted_by_user_id,posted_at,correlation_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    source_recorded_at,posted_by_user_id,posted_at,correlation_id,component_allocations) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CAST(? AS jsonb))""",
                     id,request.operationId,org,source.payrollPeriodId,runId,source.releaseId,request.entryType,request.sourceEventId,
                     request.originalJournalId,period.id,request.debitAccountId,request.creditAccountId,amount,request.currency,
-                    sourceAt,actor,now.atOffset(ZoneOffset.UTC),correlation)==1)
+                    sourceAt,actor,now.atOffset(ZoneOffset.UTC),correlation,allocationJson.toString())==1)
                 audit.append(AuditEventRecord(actorUserId=actor,action="FINANCE_PAYROLL_GL_POSTED",targetType="FINANCE_PAYROLL_GL",
                     targetId=id,previousStateRef=null,newStateRef="POSTED",safeDiffJson="""{"entryType":"${request.entryType}"}""",
                     occurredAt=now,correlationId=correlation,reason="Accounting effect of recorded payroll source"))

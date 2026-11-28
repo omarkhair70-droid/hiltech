@@ -436,6 +436,8 @@ private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,o
     var error by remember { mutableStateOf(false) }
     var expenseId by rememberSaveable { mutableStateOf("") }
     var payableId by rememberSaveable { mutableStateOf("") }
+    var mapped by remember { mutableStateOf<Map<String,String>>(emptyMap()) }
+    var references by remember { mutableStateOf<Map<String,String>>(emptyMap()) }
     LaunchedEffect(client,org,run,installation,offset,refresh) {
         view=null;loading=true;error=false;unavailable=false
         try { view=client.ledger(org,run,offset,installation) }
@@ -460,13 +462,17 @@ private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,o
             Text(data.gross+" "+data.currency)
             when(data.accrualState) {
                 "POSTED"->HiltechStateTag(hiltechText("تم إثبات الاستحقاق","Accrual posted"),HiltechStateTone.CURRENT)
-                "TREATMENT_REQUIRED"->Text(hiltechText("يتضمن الكشف خصومات أو مستردات تحتاج توزيعًا محاسبيًا. لا يُرحل صافي الراتب كتكلفة.","Deductions or reimbursements require accounting allocation. Net pay is not posted as expense."))
+                "TREATMENT_REQUIRED"->Text(hiltechText("تعذر إثبات اكتمال مكونات الكشف أو تجاوزت البنود حد القيد الواحد. لا يُرحل أي مبلغ غير مطابق.","Source components are incomplete or exceed the single-journal limit. No unmatched amount can be posted."))
                 "CORRECTION_REQUIRED"->Text(hiltechText("تحتاج النسخة المصححة معالجة الفروق قبل ترحيل استحقاق آخر.","The corrected run requires differential accounting before another accrual."))
                 "NO_AMOUNT"->Text(hiltechText("لا يوجد استحقاق موجب.","No positive accrual."))
                 "NOT_PREPARED"->Text(hiltechText("جهز سجل المطابقة المالي أولًا.","Prepare the Finance reconciliation record first."))
                 "READY"->{
                     val dr=data.expenseAccounts.singleOrNull{it.id==expenseId}
                     val cr=data.payableAccounts.singleOrNull{it.id==payableId}
+                    val netLabel=hiltechText("صافي المستحق: ","Net payable: ")
+                    Text(netLabel+data.net+" "+data.currency)
+                    if(data.groups.isNotEmpty()) Text(hiltechText("حدد حساب كل بند. استخدم الخصومات المستحقة لجهة أخرى فقط، والمستردات التي لم تُثبت تكلفتها سابقًا. لا تستخدم هذا المسار لاسترداد السلف أو تكرار المصروف.",
+                        "Map each component. Only third-party deduction obligations and costs not previously recognized belong here. Do not use for advance recovery or duplicate expenses."))
                     if(data.expenseAccounts.isEmpty()||data.payableAccounts.isEmpty()) Text(hiltechText(
                         "أضف حساب تكلفة الرواتب وحساب الرواتب المستحقة المعتمدين في الإعداد المالي.",
                         "Add approved payroll expense and payroll payable accounts in financial configuration."))
@@ -476,14 +482,36 @@ private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,o
                         HiltechRecordPicker(hiltechText("دائن: الرواتب المستحقة","Credit: payroll payable"),payableId,
                             data.payableAccounts.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={payableId=it},allowKnownReference=false,enabled=canPost)
                         if(data.hasMoreAccounts)Text(hiltechText("تظهر أول 100 حساب معتمد من كل نوع.","Showing the first 100 approved accounts of each kind."))
+                        data.groups.forEach { group ->
+                            val k=group.kind+"|"+group.domain+"|"+group.code
+                            val choices=if(group.kind=="DEDUCTION") data.deductionAccounts else data.reimbursementAccounts
+                            val side=if(group.kind=="DEDUCTION") hiltechText("خصم — دائن","Deduction — credit") else hiltechText("مسترد — مدين","Reimbursement — debit")
+                            Text(side+" · "+group.code+" · "+group.amount+" "+data.currency)
+                            HiltechRecordPicker(hiltechText("الحساب المعتمد","Approved account"),mapped[k].orEmpty(),
+                                choices.map{HiltechRecordChoice(it.id,it.name,it.code)},onChange={mapped=mapped+(k to it)},allowKnownReference=false,enabled=canPost)
+                            OutlinedTextField(references[k].orEmpty(),onValueChange={value->if(value.length<=240 && value.none{it.code<32||it.code==127})references=references+(k to value)},
+                                label={Text(hiltechText("مرجع المعالجة المعتمدة","Approved treatment reference"))},modifier=Modifier.fillMaxWidth(),enabled=canPost)
+                        }
+                        val allocations=data.groups.mapNotNull{group->
+                            val k=group.kind+"|"+group.domain+"|"+group.code
+                            val choices=if(group.kind=="DEDUCTION") data.deductionAccounts else data.reimbursementAccounts
+                            val account=choices.singleOrNull{it.id==mapped[k]}
+                            val reference=references[k].orEmpty().trim()
+                            if(account==null || reference.length !in 8..240)null else FinancePayrollGlAllocationDto(group.kind,group.domain,group.code,account.id,reference)
+                        }
                         val title=payrollGlTitle("PAYROLL_ACCRUAL")
                         val debitLabel=hiltechText("مدين: ","Debit: ");val creditLabel=hiltechText("دائن: ","Credit: ")
-                        Button(enabled=canPost && dr!=null && cr!=null,onClick={
+                        Button(enabled=canPost && dr!=null && cr!=null && allocations.size==data.groups.size,onClick={
                             val fiscal=period?:return@Button
                             val debit=dr?:return@Button;val credit=cr?:return@Button
                             val post=FinancePayrollGlPostDto(newOperationId(),"PAYROLL_ACCRUAL",periodId=fiscal.id,
-                                debitAccountId=debit.id,creditAccountId=credit.id,amount=data.gross,currency=data.currency)
-                            onReview(post,title,data.gross+" "+data.currency+"\n"+debitLabel+debit.name+"\n"+creditLabel+credit.name+"\n"+fiscal.dateStart+" — "+fiscal.dateEnd)
+                                debitAccountId=debit.id,creditAccountId=credit.id,amount=data.gross,currency=data.currency,allocations=allocations)
+                            val detail=allocations.joinToString("\n"){a->
+                                val group=data.groups.single{it.kind==a.kind&&it.domain==a.domain&&it.code==a.code}
+                                val choices=if(a.kind=="DEDUCTION")data.deductionAccounts else data.reimbursementAccounts
+                                (if(a.kind=="DEDUCTION")creditLabel else debitLabel)+choices.single{it.id==a.accountId}.name+" · "+group.code+" · "+group.amount+" · "+a.reference
+                            }
+                            if(payrollGlIntentValid(post))onReview(post,title,debitLabel+debit.name+" · "+data.gross+" "+data.currency+"\n"+creditLabel+credit.name+" · "+data.net+" "+data.currency+"\n"+detail+"\n"+fiscal.dateStart+" — "+fiscal.dateEnd)
                         }){Text(hiltechText("مراجعة قيد الاستحقاق","Review accrual journal"))}
                     }
                 }
