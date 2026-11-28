@@ -29,8 +29,10 @@ import java.util.UUID
 
 data class FinanceOpeningObligation(val counterpartyId:UUID,val documentReference:String,val documentDate:String,
     val amount:String,val dueDate:String?=null)
+data class FinanceOpeningStockValue(val movementId:UUID,val quantity:String,val unit:String,val sourceFingerprint:String,
+    val amount:String,val valuationReference:String)
 data class FinanceOpeningLine(val accountId:UUID,val side:String,val amount:String,val reference:String,val bankStatementId:UUID?=null,
-    val obligations:List<FinanceOpeningObligation> = emptyList())
+    val obligations:List<FinanceOpeningObligation> = emptyList(),val stockValues:List<FinanceOpeningStockValue> = emptyList())
 data class FinanceOpeningInput(val operationId:UUID,val periodId:UUID,val currency:String,
     val companyReference:String,val sourceReference:String,val lines:List<FinanceOpeningLine>)
 data class FinanceOpeningAccount(val id:UUID,val code:String,val name:String,val accountKind:String,
@@ -40,6 +42,10 @@ data class FinanceOpeningCounterparty(val id:UUID,val kind:String,val code:Strin
 data class FinanceOpeningView(val organizationId:UUID,val currency:String,val period:FinanceOpeningPeriod?,
     val existingJournalId:UUID?,val canPost:Boolean,val accounts:List<FinanceOpeningAccount>,val hasMore:Boolean,
     val counterparties:List<FinanceOpeningCounterparty> = emptyList(),val hasMoreCounterparties:Boolean=false)
+data class FinanceOpeningStockChoice(val movementId:UUID,val itemCode:String,val itemName:String,val locationCode:String,
+    val quantity:String,val unit:String,val sourceFingerprint:String)
+data class FinanceOpeningStockChoices(val organizationId:UUID,val periodId:UUID,val currency:String,val offset:Int,
+    val records:List<FinanceOpeningStockChoice>,val hasMore:Boolean)
 data class FinanceOpeningReceipt(val organizationId:UUID,val operationId:UUID,val journalId:UUID,val periodId:UUID,
     val currency:String,val openingDate:String,val replayed:Boolean)
 
@@ -63,6 +69,16 @@ internal fun validFinanceOpening(input:FinanceOpeningInput):Boolean {
             (o.dueDate!=null&&(due==null||due<date))||openingAmount(o.amount)==null
         }||line.obligations.map{it.counterpartyId to it.documentReference.lowercase(java.util.Locale.ROOT)}.distinct().size!=line.obligations.size)return false
         if(line.obligations.fold(BigDecimal.ZERO){s,o->s+BigDecimal(o.amount)}.compareTo(BigDecimal(line.amount))!=0)return false
+    }
+    val stock=input.lines.flatMap{it.stockValues}
+    if(stock.size>1000||stock.map{it.movementId}.distinct().size!=stock.size)return false
+    for(line in input.lines.filter{it.stockValues.isNotEmpty()}){
+        if(line.side!="DEBIT"||line.bankStatementId!=null||line.obligations.isNotEmpty()||
+            line.stockValues.any{v->!v.quantity.matches(Regex("[0-9]{1,14}([.][0-9]{1,6})?"))||
+                BigDecimal(v.quantity).signum()<=0||v.unit.isBlank()||v.unit.length>32||
+                !v.sourceFingerprint.matches(Regex("[0-9a-f]{64}"))||
+                openingAmount(v.amount)==null||!openingRef(v.valuationReference,240)}||
+            line.stockValues.fold(BigDecimal.ZERO){s,v->s+BigDecimal(v.amount)}.compareTo(BigDecimal(line.amount))!=0)return false
     }
     fun total(side:String)=input.lines.filter{it.side==side}.fold(BigDecimal.ZERO){sum,line->sum+BigDecimal(line.amount)}
     val debit=total("DEBIT")
@@ -111,7 +127,7 @@ class FinanceOpeningService @org.springframework.beans.factory.annotation.Autowi
                       AND x.account_id=b.account_id AND x.currency=b.currency AND x.date_start=b.date_start)=1
             ) s ON a.account_kind='BANK_ASSET'
             WHERE a.organization_id=? AND a.state='APPROVED' AND (a.currency IS NULL OR a.currency=?)
-            AND a.account_kind IN('FIXED_ASSET','OTHER_ASSET','OTHER_LIABILITY','EQUITY','BANK_ASSET','CUSTOMER_RECEIVABLE','SUPPLIER_PAYABLE')
+            AND a.account_kind IN('FIXED_ASSET','OTHER_ASSET','OTHER_LIABILITY','EQUITY','BANK_ASSET','CUSTOMER_RECEIVABLE','SUPPLIER_PAYABLE','INVENTORY_ASSET')
             AND (a.account_kind<>'BANK_ASSET' OR s.id IS NOT NULL)
             ORDER BY a.account_code,a.id LIMIT 101
         """.trimIndent(),{r,_->
@@ -130,6 +146,24 @@ class FinanceOpeningService @org.springframework.beans.factory.annotation.Autowi
             counterparties.take(500),counterparties.size>500)
     }
 
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    fun stockSources(actor:UUID,org:UUID,currency:String,offset:Int):FinanceOpeningStockChoices {
+        authorize(actor,org)
+        if(!currency.matches(Regex("[A-Z]{3}"))||offset !in 0..1_000_000)openingChanged()
+        val first=period(org)?:openingChanged()
+        if(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM finance_gl_opening_journal WHERE organization_id=? AND currency=?)",
+            Boolean::class.java,org,currency)==true)openingChanged()
+        val rows=jdbc.query("""
+            SELECT s.movement_id,s.item_code,s.item_name,s.location_code,s.quantity,s.unit_code,s.source_fingerprint
+            FROM finance_stock_opening_source s WHERE s.organization_id=? AND s.opening_date=? AND s.recorded_at<=?
+            AND NOT EXISTS(SELECT 1 FROM finance_gl_opening_stock_value v WHERE v.organization_id=s.organization_id AND v.movement_id=s.movement_id)
+            ORDER BY s.item_code,s.location_code,s.movement_id LIMIT 51 OFFSET ?
+        """.trimIndent(),{r,_->FinanceOpeningStockChoice(r.getObject(1,UUID::class.java),r.getString(2),r.getString(3),r.getString(4),
+            r.getBigDecimal(5).toPlainString(),r.getString(6),r.getString(7))},org,java.sql.Date.valueOf(first.dateStart),
+            clock.instant().atOffset(ZoneOffset.UTC),offset)
+        return FinanceOpeningStockChoices(org,first.id,currency,offset,rows.take(50),rows.size>50)
+    }
+
     fun post(actor:UUID,org:UUID,input:FinanceOpeningInput,correlation:String):FinanceOpeningReceipt {
         authorize(actor,org)
         if(!validFinanceOpening(input))openingChanged()
@@ -139,6 +173,13 @@ class FinanceOpeningService @org.springframework.beans.factory.annotation.Autowi
                 put("accountId",line.accountId.toString());put("side",line.side)
                 put("amount",BigDecimal(line.amount).stripTrailingZeros().toPlainString());put("reference",line.reference)
                 line.bankStatementId?.let{put("bankStatementId",it.toString())}
+                if(line.stockValues.isNotEmpty())put("stockValues",buildJsonArray{
+                    line.stockValues.sortedBy{it.movementId.toString()}.forEach{v->add(buildJsonObject{
+                        put("movementId",v.movementId.toString());put("quantity",BigDecimal(v.quantity).stripTrailingZeros().toPlainString())
+                        put("unit",v.unit);put("sourceFingerprint",v.sourceFingerprint)
+                        put("amount",BigDecimal(v.amount).stripTrailingZeros().toPlainString());put("valuationReference",v.valuationReference)
+                    })}
+                })
                 if(line.obligations.isNotEmpty())put("obligations",buildJsonArray{
                     line.obligations.sortedWith(compareBy({it.counterpartyId.toString()},{it.documentReference})).forEach{o->
                         add(buildJsonObject{
@@ -185,6 +226,10 @@ class FinanceOpeningController(private val service:FinanceOpeningService,private
     @GetMapping
     fun view(request:HttpServletRequest,@PathVariable organizationId:UUID,@RequestParam currency:String) =
         ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.view(actor(request),organizationId,currency))
+    @GetMapping("/stock-sources")
+    fun stockSources(request:HttpServletRequest,@PathVariable organizationId:UUID,@RequestParam currency:String,
+        @RequestParam(defaultValue="0") offset:Int)=ResponseEntity.ok().cacheControl(CacheControl.noStore())
+        .body(service.stockSources(actor(request),organizationId,currency,offset))
     @PostMapping
     fun post(request:HttpServletRequest,@PathVariable organizationId:UUID,@AuthenticationPrincipal jwt:Jwt,
         @RequestHeader("Idempotency-Key") key:String,@RequestHeader("X-Device-Installation-Id") installation:UUID,

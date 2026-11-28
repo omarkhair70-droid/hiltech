@@ -73,4 +73,15 @@ class FinanceConfigurationApiClientTest {
         assertFalse(openingLineValid(line.copy(obligations=listOf(row.copy(dueDate="2026-09-30")))))
         assertFalse(openingLineValid(line.copy(bankStatementId=party)))
     }
+    @Test fun stockValuesUseExactQuantityAndReviewedAmountRatherThanAnInventedPrice() {
+        val movement="33333333-4444-4555-8666-777777777777"
+        val source=FinanceOpeningStockValueDto(movement,"10.123456","PC","a".repeat(64),"125.50","SYNTHETIC-VALUATION")
+        val line=FinanceOpeningLineDto(account,"DEBIT","125.50","SYNTHETIC-STOCK-SCHEDULE",stockValues=listOf(source))
+        assertTrue(openingLineValid(line))
+        assertEquals("125.500000",openingStockTotal(line.stockValues))
+        assertFalse(openingLineValid(line.copy(stockValues=listOf(source.copy(quantity="0")))))
+        assertFalse(openingLineValid(line.copy(stockValues=listOf(source.copy(valuationReference="")))))
+        assertFalse(openingLineValid(line.copy(stockValues=listOf(source.copy(amount="125.49")))))
+        assertFalse(openingLineValid(line.copy(side="CREDIT")))
+    }
 }
