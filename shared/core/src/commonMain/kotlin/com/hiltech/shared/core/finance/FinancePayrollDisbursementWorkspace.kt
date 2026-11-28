@@ -462,8 +462,9 @@ private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,o
             Text(data.gross+" "+data.currency)
             when(data.accrualState) {
                 "POSTED"->HiltechStateTag(hiltechText("تم إثبات الاستحقاق","Accrual posted"),HiltechStateTone.CURRENT)
+                "REPLACED"->Text(hiltechText("تم عكس هذا الاستحقاق في قيد النسخة المصححة؛ التاريخ محفوظ.","This accrual was reversed in the replacement journal; history is preserved."))
                 "TREATMENT_REQUIRED"->Text(hiltechText("تعذر إثبات اكتمال مكونات الكشف أو تجاوزت البنود حد القيد الواحد. لا يُرحل أي مبلغ غير مطابق.","Source components are incomplete or exceed the single-journal limit. No unmatched amount can be posted."))
-                "CORRECTION_REQUIRED"->Text(hiltechText("تحتاج النسخة المصححة معالجة الفروق قبل ترحيل استحقاق آخر.","The corrected run requires differential accounting before another accrual."))
+                "CORRECTION_REQUIRED"->Text(hiltechText("لا يتوفر تصحيح مؤيد بعدم تحويل سابق، أو يوجد صرف أو مقترح سابق يحتاج تسوية. لا يمكن تكرار الاستحقاق.","No eligible no-transfer correction is available, or earlier payment evidence needs reconciliation. The accrual cannot be duplicated."))
                 "NO_AMOUNT"->Text(hiltechText("لا يوجد استحقاق موجب.","No positive accrual."))
                 "NOT_PREPARED"->Text(hiltechText("جهز سجل المطابقة المالي أولًا.","Prepare the Finance reconciliation record first."))
                 "READY"->{
@@ -471,6 +472,12 @@ private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,o
                     val cr=data.payableAccounts.singleOrNull{it.id==payableId}
                     val netLabel=hiltechText("صافي المستحق: ","Net payable: ")
                     Text(netLabel+data.net+" "+data.currency)
+                    data.correction?.let{correction->
+                        Text(hiltechText("استحقاق مصحح — لا تحويل سابق مؤكد","Corrected accrual — verified no prior transfer"),style=MaterialTheme.typography.titleMedium)
+                        Text(correction.clearanceReference,style=MaterialTheme.typography.bodySmall)
+                        Text(if(correction.originalJournalId==null)hiltechText("لا يوجد استحقاق سابق مرحل.","No earlier accrual was posted.") else hiltechText("ستنعكس البنود التالية تلقائيًا في نفس القيد.","The following lines are reversed automatically in the same journal."))
+                        correction.reversalLines.forEach{line->HiltechKeyValue(line.accountName,(if(line.side=="DEBIT")hiltechText("مدين: ","Debit: ")else hiltechText("دائن: ","Credit: "))+line.amount+" "+data.currency)}
+                    }
                     if(data.groups.isNotEmpty()) Text(hiltechText("حدد حساب كل بند. استخدم الخصومات المستحقة لجهة أخرى فقط، والمستردات التي لم تُثبت تكلفتها سابقًا. لا تستخدم هذا المسار لاسترداد السلف أو تكرار المصروف.",
                         "Map each component. Only third-party deduction obligations and costs not previously recognized belong here. Do not use for advance recovery or duplicate expenses."))
                     if(data.expenseAccounts.isEmpty()||data.payableAccounts.isEmpty()) Text(hiltechText(
@@ -504,14 +511,17 @@ private fun FinancePayrollGlSection(client:FinancePayrollDisbursementApiClient,o
                         Button(enabled=canPost && dr!=null && cr!=null && allocations.size==data.groups.size,onClick={
                             val fiscal=period?:return@Button
                             val debit=dr?:return@Button;val credit=cr?:return@Button
-                            val post=FinancePayrollGlPostDto(newOperationId(),"PAYROLL_ACCRUAL",periodId=fiscal.id,
+                            val post=FinancePayrollGlPostDto(newOperationId(),"PAYROLL_ACCRUAL",originalJournalId=data.correction?.originalJournalId,periodId=fiscal.id,
                                 debitAccountId=debit.id,creditAccountId=credit.id,amount=data.gross,currency=data.currency,allocations=allocations)
                             val detail=allocations.joinToString("\n"){a->
                                 val group=data.groups.single{it.kind==a.kind&&it.domain==a.domain&&it.code==a.code}
                                 val choices=if(a.kind=="DEDUCTION")data.deductionAccounts else data.reimbursementAccounts
                                 (if(a.kind=="DEDUCTION")creditLabel else debitLabel)+choices.single{it.id==a.accountId}.name+" · "+group.code+" · "+group.amount+" · "+a.reference
                             }
-                            if(payrollGlIntentValid(post))onReview(post,title,debitLabel+debit.name+" · "+data.gross+" "+data.currency+"\n"+creditLabel+credit.name+" · "+data.net+" "+data.currency+"\n"+detail+"\n"+fiscal.dateStart+" — "+fiscal.dateEnd)
+                            val reversal=data.correction?.let{c->hiltechText("عكس الاستحقاق السابق","Reverse prior accrual")+" · "+c.clearanceReference+"\n"+c.reversalLines.joinToString("\n"){line->
+                                (if(line.side=="DEBIT")debitLabel else creditLabel)+line.accountName+" · "+line.amount+" "+data.currency
+                            }+"\n"} .orEmpty()
+                            if(payrollGlIntentValid(post))onReview(post,title,reversal+debitLabel+debit.name+" · "+data.gross+" "+data.currency+"\n"+creditLabel+credit.name+" · "+data.net+" "+data.currency+"\n"+detail+"\n"+fiscal.dateStart+" — "+fiscal.dateEnd)
                         }){Text(hiltechText("مراجعة قيد الاستحقاق","Review accrual journal"))}
                     }
                 }

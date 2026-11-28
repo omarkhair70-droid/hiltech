@@ -12,6 +12,8 @@ class FinancePayrollGlIntentTest {
     private val post=FinancePayrollGlPostDto(a,"PAYROLL_ACCRUAL",periodId=b,debitAccountId=c,creditAccountId=d,amount="100.00",currency="EGP")
     @Test fun accrualAndRecordedResultsHaveDistinctSourceContracts() {
         assertTrue(payrollGlIntentValid(post))
+        assertTrue(payrollGlIntentValid(post.copy(originalJournalId=c)))
+        assertFalse(payrollGlIntentValid(post.copy(entryType="PAYROLL_PAYMENT",sourceEventId=b,originalJournalId=c)))
         assertFalse(payrollGlIntentValid(post.copy(sourceEventId=a)))
         assertFalse(payrollGlIntentValid(post.copy(entryType="PAYROLL_PAYMENT")))
         assertTrue(payrollGlIntentValid(post.copy(entryType="PAYROLL_PAYMENT",sourceEventId=b)))

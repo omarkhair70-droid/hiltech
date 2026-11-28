@@ -72,6 +72,8 @@ data class FinancePayrollCommandReceiptDto(
     val recordedAt:String,val originalJournalId:String?=null,val debitAccountId:String?=null,val debitAccountName:String?=null,
     val creditAccountId:String?=null,val creditAccountName:String?=null,val ready:Boolean,
 )
+@Serializable data class FinancePayrollGlCorrectionDto(val originalJournalId:String?=null,val clearanceReference:String,
+    val reversalLines:List<FinanceDeskJournalLineDto>)
 @Serializable data class FinancePayrollGlViewDto(
     val organizationId:String,val runVersionId:String,val period:FinanceDeskPeriodDto?=null,
     val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
@@ -79,6 +81,7 @@ data class FinancePayrollCommandReceiptDto(
     val hasMoreAccounts:Boolean,val events:List<FinancePayrollGlEventDto>,
     val net:String=gross,val deductions:String="0",val reimbursements:String="0",val groups:List<FinancePayrollGlGroupDto> = emptyList(),
     val deductionAccounts:List<FinanceSettlementAccountChoiceDto> = emptyList(),val reimbursementAccounts:List<FinanceSettlementAccountChoiceDto> = emptyList(),
+    val correction:FinancePayrollGlCorrectionDto?=null,
 )
 internal fun payrollGlIntentValid(input:FinancePayrollGlPostDto):Boolean =
     input.entryType in payrollDeskSources &&
@@ -86,7 +89,7 @@ internal fun payrollGlIntentValid(input:FinancePayrollGlPostDto):Boolean =
     !input.debitAccountId.equals(input.creditAccountId,true) && settlementCanonicalAmount(input.amount)!=null &&
     input.currency.matches(Regex("[A-Z]{3}")) &&
     (input.entryType=="PAYROLL_ACCRUAL")==(input.sourceEventId==null) &&
-    (input.entryType in setOf("PAYROLL_RETURN","PAYROLL_VOID"))==(input.originalJournalId!=null) &&
+    (input.entryType=="PAYROLL_ACCRUAL" || (input.entryType in setOf("PAYROLL_RETURN","PAYROLL_VOID"))==(input.originalJournalId!=null)) &&
     input.allocations.size<=30 && (input.entryType=="PAYROLL_ACCRUAL" || input.allocations.isEmpty()) &&
     input.allocations.map{Triple(it.kind,it.domain,it.code)}.distinct().size==input.allocations.size &&
     input.allocations.all{it.kind in setOf("DEDUCTION","REIMBURSEMENT") && financeLookupIdIsUuid(it.accountId) &&
@@ -138,7 +141,14 @@ class FinancePayrollDisbursementApiClient(private val api: HiltechApiClient,
             decode={json.decodeFromString<FinancePayrollGlViewDto>(it).also { v ->
                 check(sameId(v.organizationId,org) && sameId(v.runVersionId,run) && v.offset==offset &&
                     v.currency.matches(Regex("[A-Z]{3}")) && v.gross.matches(Regex("[0-9]+([.][0-9]+)?")) &&
-                    v.accrualState in setOf("POSTED","NOT_PREPARED","CORRECTION_REQUIRED","NO_AMOUNT","TREATMENT_REQUIRED","READY") &&
+                    v.accrualState in setOf("POSTED","REPLACED","NOT_PREPARED","CORRECTION_REQUIRED","NO_AMOUNT","TREATMENT_REQUIRED","READY") &&
+                    (v.correction==null || (v.accrualState=="READY" && v.correction.clearanceReference.isNotBlank() &&
+                        (v.correction.originalJournalId==null)==v.correction.reversalLines.isEmpty() &&
+                        (v.correction.originalJournalId==null || financeLookupIdIsUuid(v.correction.originalJournalId)) &&
+                        v.correction.reversalLines.size<=32 &&
+                        v.correction.reversalLines.map{it.number}.distinct().size==v.correction.reversalLines.size &&
+                        v.correction.reversalLines.all{it.number in 1..32 && it.side in setOf("DEBIT","CREDIT") &&
+                            it.accountName.isNotBlank() && settlementCanonicalAmount(it.amount)!=null})) &&
                     listOf(v.net,v.deductions,v.reimbursements).all{it.matches(Regex("[0-9]+([.][0-9]+)?"))} &&
                     v.groups.size<=30 && v.groups.map{Triple(it.kind,it.domain,it.code)}.distinct().size==v.groups.size &&
                     v.groups.all{it.kind in setOf("DEDUCTION","REIMBURSEMENT") && settlementCanonicalAmount(it.amount)!=null &&

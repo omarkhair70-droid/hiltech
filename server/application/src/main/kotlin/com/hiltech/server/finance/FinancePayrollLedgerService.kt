@@ -50,6 +50,8 @@ data class FinancePayrollGlEvent(
     val recordedAt:String,val originalJournalId:UUID?,val debitAccountId:UUID?,val debitAccountName:String?,
     val creditAccountId:UUID?,val creditAccountName:String?,val ready:Boolean,
 )
+data class FinancePayrollGlCorrection(val originalJournalId:UUID?,val clearanceReference:String,
+    val reversalLines:List<FinanceDeskJournalLine>)
 data class FinancePayrollGlView(
     val organizationId:UUID,val runVersionId:UUID,val period:FinanceDeskPeriod?,
     val accrualState:String,val gross:String,val currency:String,val offset:Int,val hasMore:Boolean,
@@ -57,10 +59,11 @@ data class FinancePayrollGlView(
     val hasMoreAccounts:Boolean,val events:List<FinancePayrollGlEvent>,
     val net:String,val deductions:String,val reimbursements:String,val groups:List<FinancePayrollGlGroup>,
     val deductionAccounts:List<FinanceSettlementAccountChoice>,val reimbursementAccounts:List<FinanceSettlementAccountChoice>,
+    val correction:FinancePayrollGlCorrection?=null,
 )
 private data class PayrollGlRun(
     val payrollPeriodId:UUID,val releaseId:UUID,val preparedAt:OffsetDateTime?,val gross:BigDecimal,
-    val currency:String,val eligible:Boolean,val superseded:Boolean,val accrued:Boolean,
+    val currency:String,val eligible:Boolean,val superseded:Boolean,val accrued:Boolean,val correctionRequired:Boolean,val replaced:Boolean,
     val net:BigDecimal,val deductions:BigDecimal,val reimbursements:BigDecimal,
 )
 
@@ -87,19 +90,36 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
     private fun run(org:UUID,id:UUID):PayrollGlRun? = jdbc.query("""
         SELECT r.payroll_period_id,rel.id AS release_id,b.prepared_at,r.gross,r.currency,r.net,r.deductions,r.reimbursements,
           finance_payroll_gl_components_complete(r.organization_id,r.id) AS eligible,
-          (EXISTS(SELECT 1 FROM payroll_run_correction c WHERE c.organization_id=r.organization_id AND c.replacement_run_version_id=r.id)
-            OR EXISTS(SELECT 1 FROM payroll_run_version newer JOIN payroll_run_release pub ON pub.run_version_id=newer.id
-              WHERE newer.organization_id=r.organization_id AND newer.payroll_period_id=r.payroll_period_id AND newer.generation>r.generation)) AS superseded,
+          EXISTS(SELECT 1 FROM payroll_run_version newer JOIN payroll_run_release pub ON pub.run_version_id=newer.id
+              WHERE newer.organization_id=r.organization_id AND newer.payroll_period_id=r.payroll_period_id AND newer.generation>r.generation) AS superseded,
           EXISTS(SELECT 1 FROM finance_payroll_gl_journal j WHERE j.organization_id=r.organization_id
-            AND j.run_version_id=r.id AND j.entry_type='PAYROLL_ACCRUAL') AS accrued
+            AND j.run_version_id=r.id AND j.entry_type='PAYROLL_ACCRUAL') AS accrued,
+          EXISTS(SELECT 1 FROM payroll_run_correction c WHERE c.organization_id=r.organization_id AND c.replacement_run_version_id=r.id) AS correction_required,
+          EXISTS(SELECT 1 FROM finance_payroll_gl_journal j JOIN finance_payroll_gl_journal replacement
+              ON replacement.organization_id=j.organization_id AND replacement.original_journal_id=j.id AND replacement.entry_type='PAYROLL_ACCRUAL'
+              WHERE j.organization_id=r.organization_id AND j.run_version_id=r.id AND j.entry_type='PAYROLL_ACCRUAL') AS replaced
         FROM payroll_run_version r JOIN payroll_run_release rel ON rel.organization_id=r.organization_id AND rel.run_version_id=r.id
         JOIN finance_payroll_review_batch review ON review.organization_id=r.organization_id AND review.run_version_id=r.id AND review.release_id=rel.id
         LEFT JOIN finance_payroll_payment_batch b ON b.organization_id=r.organization_id AND b.run_version_id=r.id
         WHERE r.organization_id=? AND r.id=?
     """.trimIndent(),{r,_->PayrollGlRun(r.getObject("payroll_period_id",UUID::class.java),r.getObject("release_id",UUID::class.java),
         r.getObject("prepared_at",OffsetDateTime::class.java),r.getBigDecimal("gross"),r.getString("currency").trim(),
-        r.getBoolean("eligible"),r.getBoolean("superseded"),r.getBoolean("accrued"),
+        r.getBoolean("eligible"),r.getBoolean("superseded"),r.getBoolean("accrued"),r.getBoolean("correction_required"),r.getBoolean("replaced"),
         r.getBigDecimal("net"),r.getBigDecimal("deductions"),r.getBigDecimal("reimbursements"))},org,id).singleOrNull()
+
+    private fun correction(org:UUID,run:UUID):FinancePayrollGlCorrection? {
+        val source=jdbc.query("""SELECT original_journal_id,finance_clearance_ref FROM finance_payroll_gl_correction_source
+            WHERE organization_id=? AND replacement_run_version_id=?""",
+            {r,_->r.getObject("original_journal_id",UUID::class.java) to r.getString("finance_clearance_ref")},org,run).singleOrNull()?:return null
+        val lines=source.first?.let{id->jdbc.query("""
+            SELECT l.line_number,a.account_code,a.account_name,
+              CASE WHEN l.side='DEBIT' THEN 'CREDIT' ELSE 'DEBIT' END AS side,l.amount
+            FROM finance_payroll_gl_base_line l JOIN finance_gl_account a ON a.organization_id=l.organization_id AND a.id=l.gl_account_id
+            WHERE l.organization_id=? AND l.journal_id=? ORDER BY l.line_number
+        """.trimIndent(),{r,_->FinanceDeskJournalLine(r.getInt("line_number"),r.getString("account_code"),
+            r.getString("account_name"),r.getString("side"),r.getBigDecimal("amount").toPlainString())},org,id)}?:emptyList()
+        return FinancePayrollGlCorrection(source.first,source.second,lines)
+    }
 
     private fun groups(org:UUID,run:UUID)=jdbc.query("""SELECT component_kind,source_domain,component_code,amount
         FROM finance_payroll_gl_component_group WHERE organization_id=? AND run_version_id=?
@@ -162,10 +182,13 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
         val source=run(org,runId) ?: payrollGlDenied()
         val period=accounting.period(org,LocalDate.ofInstant(clock.instant(),ZoneOffset.UTC))
         val components=groups(org,runId)
+        val correction=if(source.correctionRequired&&!source.superseded&&!source.accrued)correction(org,runId) else null
         val state=when {
+            source.replaced -> "REPLACED"
             source.accrued -> "POSTED"
-            source.preparedAt==null -> "NOT_PREPARED"
             source.superseded -> "CORRECTION_REQUIRED"
+            source.preparedAt==null -> "NOT_PREPARED"
+            source.correctionRequired && correction==null -> "CORRECTION_REQUIRED"
             source.gross.signum()==0 -> "NO_AMOUNT"
             !source.eligible || components.size>30 -> "TREATMENT_REQUIRED"
             else -> "READY"
@@ -180,7 +203,8 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
         return FinancePayrollGlView(org,runId,period,state,source.gross.toPlainString(),source.currency,offset,rows.size>50,
             expense.take(100),payable.take(100),listOf(expense,payable,deduction,reimbursement).any{it.size>100},rows.take(50),
             source.net.toPlainString(),source.deductions.toPlainString(),source.reimbursements.toPlainString(),
-            if(state=="READY") components else emptyList(),deduction.take(100),reimbursement.take(100))
+            if(state=="READY") components else emptyList(),deduction.take(100),reimbursement.take(100),
+            correction.takeIf{state=="READY"})
     }
 
     fun post(actor:UUID,org:UUID,runId:UUID,request:FinancePayrollGlPost,correlation:String):FinancePayrollCommandReceipt {
@@ -189,7 +213,7 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
         if(request.entryType !in payrollGlTypes || !request.currency.matches(Regex("[A-Z]{3}")) ||
             request.debitAccountId==request.creditAccountId ||
             (request.entryType=="PAYROLL_ACCRUAL")!=(request.sourceEventId==null) ||
-            (request.entryType in setOf("PAYROLL_RETURN","PAYROLL_VOID"))!=(request.originalJournalId!=null)) payrollGlChanged()
+            (request.entryType!="PAYROLL_ACCRUAL" && (request.entryType in setOf("PAYROLL_RETURN","PAYROLL_VOID"))!=(request.originalJournalId!=null))) payrollGlChanged()
         if(request.allocations.size>30 || (request.entryType!="PAYROLL_ACCRUAL" && request.allocations.isNotEmpty()) ||
             request.allocations.any{it.kind !in setOf("DEDUCTION","REIMBURSEMENT") ||
                 !it.domain.matches(Regex("[A-Z][A-Z0-9_-]{0,79}")) || !it.code.matches(Regex("[A-Z][A-Z0-9_-]{0,79}")) ||
@@ -216,6 +240,11 @@ class FinancePayrollLedgerService @org.springframework.beans.factory.annotation.
                 val now=clock.instant()
                 val period=accounting.period(org,LocalDate.ofInstant(now,ZoneOffset.UTC)) ?: payrollGlChanged()
                 if(period.id!=request.periodId || source.currency!=request.currency || source.preparedAt==null) payrollGlChanged()
+                if(request.entryType=="PAYROLL_ACCRUAL") {
+                    if(source.superseded||source.accrued)payrollGlChanged()
+                    val correction=if(source.correctionRequired)correction(org,runId)?:payrollGlChanged() else null
+                    if(request.originalJournalId!=correction?.originalJournalId)payrollGlChanged()
+                }
                 val sourceAt=if(request.sourceEventId==null) source.preparedAt
                     else jdbc.query("""SELECT e.recorded_at FROM finance_payroll_result_event e JOIN finance_payroll_instruction i
                         ON i.organization_id=e.organization_id AND i.id=e.instruction_id

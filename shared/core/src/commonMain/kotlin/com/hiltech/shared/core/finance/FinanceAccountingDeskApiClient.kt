@@ -80,8 +80,8 @@ internal fun financeDeskLedgerMatches(report:FinanceDeskLedgerDto,org:String,per
         report.currencyTotals.all { currency(it.currency) && amount(it.debit) && amount(it.credit) } &&
         report.journals.size<=50 && report.journals.map { it.kind to it.id.lowercase() }.distinct().size==report.journals.size &&
         report.journals.all { j -> financeLookupIdIsUuid(j.id) && j.kind in report.includedSources && currency(j.currency) &&
-            j.lines.isNotEmpty() && j.lines.size<=32 && j.lines.map { it.number }.distinct().size==j.lines.size &&
-            j.lines.all { it.number in 1..32 && it.side in setOf("DEBIT","CREDIT") && amount(it.amount) } }
+            j.lines.isNotEmpty() && j.lines.size<=(if(j.kind=="PAYROLL_ACCRUAL")64 else 32) && j.lines.map { it.number }.distinct().size==j.lines.size &&
+            j.lines.all { it.number in 1..(if(j.kind=="PAYROLL_ACCRUAL")64 else 32) && it.side in setOf("DEBIT","CREDIT") && amount(it.amount) } }
 
 internal fun financeDeskBalancesMatches(data:FinanceDeskBalancesDto,org:String,period:String):Boolean =
     data.organizationId.equals(org,true) && data.periodId.equals(period,true) &&

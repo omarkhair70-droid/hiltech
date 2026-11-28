@@ -882,6 +882,70 @@ class Payroll9bDraftPostgresContractTest {
                 correctedRun, corrected.first.sourceFingerprint, actor, time,
             )
         }
+        // Exercise an independently verified no-transfer correction in a
+        // rollback-only transaction. Keep the separate reversal-authorized
+        // publication test below unchanged.
+        val reversalAttestation=checkNotNull(verifiedCorrection)
+        verifiedCorrection=reversalAttestation.copy(
+            financeDisposition=PayrollFinanceCorrectionDisposition.NO_PRIOR_TRANSFER_VERIFIED,
+            financeClearanceReference="synthetic-no-prior-transfer")
+        tx.execute { transaction ->
+            try {
+                jdbc.update("UPDATE finance_payroll_authority_binding SET active=true,version=version+1 WHERE organization_id=? AND identity_id=? AND authority_key='PREPARE'",org,actor)
+                val glPeriod=UUID.randomUUID()
+                jdbc.update("""INSERT INTO finance_gl_period(id,organization_id,date_start,date_end,state,approved_company_period_reference,created_at)
+                    VALUES(?,?,?,?,'OPEN','SYNTHETIC-CORRECTION-PERIOD',?)""",glPeriod,org,time.toLocalDate().minusDays(1),time.toLocalDate().plusDays(1),time)
+                fun chart(kind:String,code:String):UUID {
+                    val id=UUID.randomUUID()
+                    jdbc.update("""INSERT INTO finance_gl_account(id,organization_id,account_code,account_name,account_kind,currency,state,approved_company_chart_reference,created_at)
+                        VALUES(?,?,?,?,?,'EGP','APPROVED','SYNTHETIC-CORRECTION-CHART',?)""",id,org,code,code,kind,time)
+                    return id
+                }
+                val oldWages=chart("PAYROLL_EXPENSE","CORRECTION-OLD-WAGES")
+                val newWages=chart("PAYROLL_EXPENSE","CORRECTION-NEW-WAGES")
+                val liability=chart("PAYROLL_PAYABLE","CORRECTION-PAYABLE")
+                val deduction=chart("PAYROLL_DEDUCTION_PAYABLE","CORRECTION-DEDUCTION")
+                val expense=chart("EXPENSE","CORRECTION-EXPENSE")
+                val allocations="""[{"kind":"DEDUCTION","domain":"SYNTHETIC_FIXTURE","code":"SYNTHETIC_DEDUCTION","accountId":"$deduction","reference":"SYNTHETIC-TREATMENT-01"},{"kind":"REIMBURSEMENT","domain":"SYNTHETIC_FIXTURE","code":"SYNTHETIC_REIMBURSEMENT","accountId":"$expense","reference":"SYNTHETIC-FIRST-RECOGNITION"}]"""
+                fun post(runId:UUID,original:UUID?,wages:UUID):UUID {
+                    val id=UUID.randomUUID()
+                    val release=jdbc.queryForObject("SELECT id FROM payroll_run_release WHERE organization_id=? AND run_version_id=?",UUID::class.java,org,runId)
+                    val prepared=jdbc.queryForObject("SELECT prepared_at FROM finance_payroll_payment_batch WHERE organization_id=? AND run_version_id=?",java.time.OffsetDateTime::class.java,org,runId)
+                    val gross=jdbc.queryForObject("SELECT gross FROM payroll_run_version WHERE organization_id=? AND id=?",java.math.BigDecimal::class.java,org,runId)
+                    jdbc.update("""INSERT INTO finance_payroll_gl_journal(id,operation_id,organization_id,payroll_period_id,run_version_id,
+                        release_id,entry_type,original_journal_id,period_id,debit_account_id,credit_account_id,amount,currency,
+                        source_recorded_at,posted_by_user_id,posted_at,correlation_id,component_allocations)
+                        VALUES(?,?,?,?,?,?,'PAYROLL_ACCRUAL',?,?,?,?,?,'EGP',?,?,?,'synthetic-correction-ledger',CAST(? AS jsonb))""",
+                        id,UUID.randomUUID(),org,periodId,runId,release,original,glPeriod,wages,liability,gross,prepared,actor,time,allocations)
+                    return id
+                }
+                val previous=post(publishedRunId,null,oldWages)
+                checkNotNull(releases.release(actor,correctedRun,UUID.randomUUID(),"synthetic-no-transfer-release"))
+                val handoff=checkNotNull(realHandoff.handoff(actor,correctedRun,UUID.randomUUID(),"synthetic-no-transfer-review"))
+                val batch=UUID.randomUUID()
+                jdbc.update("""INSERT INTO finance_payroll_payment_batch(id,operation_id,organization_id,review_batch_id,run_version_id,prepared_by_user_id,prepared_at)
+                    VALUES(?,?,?,?,?,?,?)""",batch,UUID.randomUUID(),org,UUID.fromString(handoff.financeReviewBatchId),correctedRun,actor,time)
+                jdbc.update("""INSERT INTO finance_payroll_instruction(id,organization_id,batch_id,run_version_id,employee_id,amount,currency,source_fingerprint)
+                    SELECT gen_random_uuid(),?,?,r.id,l.employee_id,l.net,l.currency,r.source_fingerprint
+                    FROM payroll_run_version r JOIN payroll_run_employee_line l ON l.run_version_id=r.id
+                    WHERE r.organization_id=? AND r.id=? AND l.net>0""",org,batch,org,correctedRun)
+                jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE")
+                assertEquals(previous,jdbc.queryForObject("SELECT original_journal_id FROM finance_payroll_gl_correction_source WHERE organization_id=? AND replacement_run_version_id=?",UUID::class.java,org,correctedRun))
+                val sp=transaction.createSavepoint()
+                try { assertThrows<Exception>{post(correctedRun,null,newWages)} }
+                finally {transaction.rollbackToSavepoint(sp);transaction.releaseSavepoint(sp)}
+                val replacement=post(correctedRun,previous,newWages)
+                assertEquals(8,jdbc.queryForObject("SELECT count(*) FROM finance_payroll_gl_journal_line WHERE organization_id=? AND journal_id=?",Int::class.java,org,replacement))
+                assertEquals(4,jdbc.queryForObject("SELECT count(*) FROM finance_payroll_gl_journal_line WHERE organization_id=? AND journal_id=?",Int::class.java,org,previous))
+                val report=com.hiltech.server.finance.FinanceAccountingDeskReadStore(jdbc).balances(org,glPeriod,true,true,true)
+                assertTrue(report.totals.single().balanced)
+                assertEquals(0,report.rows.single{it.accountId==oldWages}.closingDebit.toBigDecimal().signum())
+                assertEquals(0,report.rows.single{it.accountId==newWages}.closingDebit.toBigDecimal().compareTo(newer.first.gross.toBigDecimal()))
+                assertEquals(0,report.rows.single{it.accountId==liability}.closingCredit.toBigDecimal().compareTo(newer.first.net.toBigDecimal()))
+                assertEquals(2L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,glPeriod))
+            } finally { transaction.setRollbackOnly() }
+        }
+        verifiedCorrection=reversalAttestation
         val correctionOperation = UUID.randomUUID()
         val correctedRelease = tx.execute {
             releases.release(actor, correctedRun, correctionOperation, "p9c-correction")
