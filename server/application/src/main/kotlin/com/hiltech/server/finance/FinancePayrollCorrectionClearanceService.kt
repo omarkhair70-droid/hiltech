@@ -115,8 +115,9 @@ class FinancePayrollCorrectionClearanceService(
         val result=try{commands.execute(IdempotentCommandSpec(input.operationId,actor,"FINANCE_PAYROLL_CORRECTION_CLEARANCE",
             "FINANCE_PAYROLL_CORRECTION_CLEARANCE",id,fingerprint,correlation)){
             requireReview(actor,org)
-            check(jdbc.queryForObject("""SELECT EXISTS(SELECT 1 FROM payroll_period p JOIN payroll_run_version r ON r.payroll_period_id=p.id
-                WHERE r.organization_id=? AND r.id=? FOR UPDATE OF p)""",Boolean::class.java,org,input.replacementRunVersionId)==true)
+            val period=jdbc.query("""SELECT p.id FROM payroll_period p JOIN payroll_run_version r ON r.payroll_period_id=p.id
+                WHERE r.organization_id=? AND r.id=? FOR UPDATE OF p""",
+                {r,_->r.getObject(1,UUID::class.java)},org,input.replacementRunVersionId).singleOrNull()?:correctionChanged()
             val at=clock.instant()
             val inserted=jdbc.update("""
                 INSERT INTO finance_payroll_correction_clearance(id,operation_id,organization_id,original_run_version_id,replacement_run_version_id,
@@ -125,12 +126,13 @@ class FinancePayrollCorrectionClearanceService(
                     (SELECT coalesce(max(r.revision),0)+1 FROM finance_payroll_correction_clearance r WHERE r.organization_id=v.organization_id AND r.replacement_run_version_id=v.replacement_run_version_id),
                     ?,?,?,?,? FROM finance_payroll_correction_candidate v
                 WHERE v.organization_id=? AND v.original_run_version_id=? AND v.replacement_run_version_id=? AND v.eligible_disposition=?
+                  AND v.draft_creator<>?
                   AND NOT EXISTS(SELECT 1 FROM finance_payroll_correction_clearance c WHERE c.organization_id=v.organization_id
                     AND c.replacement_run_version_id=v.replacement_run_version_id AND c.disposition=v.eligible_disposition
                     AND c.revision=(SELECT max(r.revision) FROM finance_payroll_correction_clearance r WHERE r.organization_id=v.organization_id AND r.replacement_run_version_id=v.replacement_run_version_id)
                     AND finance_payroll_current_authority(c.organization_id,c.reviewed_by_user_id,'REVIEW'))
             """.trimIndent(),id,input.operationId,input.disposition,input.reasonReference,input.financeReference,actor,at.atOffset(ZoneOffset.UTC),
-                org,input.originalRunVersionId,input.replacementRunVersionId,input.disposition)
+                org,input.originalRunVersionId,input.replacementRunVersionId,input.disposition,actor)
             if(inserted!=1)correctionChanged()
             audit.append(AuditEventRecord(actorUserId=actor,action="FINANCE_PAYROLL_CORRECTION_CLEARED",targetType="FINANCE_PAYROLL_CORRECTION_CLEARANCE",
                 targetId=id,occurredAt=at,correlationId=correlation))

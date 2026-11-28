@@ -10,6 +10,14 @@ class FinancePayrollGlIntentTest {
     private val c="22222222-3333-4444-8555-666666666666"
     private val d="33333333-4444-4555-8666-777777777777"
     private val post=FinancePayrollGlPostDto(a,"PAYROLL_ACCRUAL",periodId=b,debitAccountId=c,creditAccountId=d,amount="100.00",currency="EGP")
+    @Test fun clearanceBindsDistinctRunsAndRequiresExplicitReviewedSource() {
+        val input=FinancePayrollClearanceInputDto(a,b,c,"NO_PRIOR_TRANSFER_VERIFIED","synthetic-hr-correction","synthetic-finance-register")
+        assertTrue(payrollClearanceIntentValid(input))
+        assertTrue(payrollClearanceIntentValid(input.copy(disposition="REVERSAL_VERIFIED")))
+        assertFalse(payrollClearanceIntentValid(input.copy(replacementRunVersionId=b)))
+        assertFalse(payrollClearanceIntentValid(input.copy(financeReference="")))
+        assertFalse(payrollClearanceIntentValid(input.copy(disposition="SETTLED_DIFFERENTIAL_AUTHORIZED")))
+    }
     @Test fun accrualAndRecordedResultsHaveDistinctSourceContracts() {
         assertTrue(payrollGlIntentValid(post))
         assertTrue(payrollGlIntentValid(post.copy(originalJournalId=c)))

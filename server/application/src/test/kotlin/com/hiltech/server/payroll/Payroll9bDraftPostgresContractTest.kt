@@ -927,7 +927,43 @@ class Payroll9bDraftPostgresContractTest {
                 assertNull(actualSource.verifiedFor(org,publishedRunId,correctedRun))
                 assertEquals("NO_PRIOR_TRANSFER_VERIFIED",jdbc.queryForObject(
                     "SELECT eligible_disposition FROM finance_payroll_correction_candidate WHERE organization_id=? AND replacement_run_version_id=?",String::class.java,org,correctedRun))
+                val reviewer=UUID.randomUUID()
+                jdbc.update("""INSERT INTO user_identity(id,auth_provider,auth_subject,status,primary_organization_id,created_at)
+                    VALUES (?,'synthetic-correction-reviewer',?,'ACTIVE',?,?)""",reviewer,reviewer.toString(),org,time)
+                jdbc.update("""INSERT INTO organization_membership(id,organization_id,user_identity_id,membership_type,state,valid_from)
+                    VALUES (?,?,?,'EMPLOYEE','ACTIVE',?)""",UUID.randomUUID(),org,reviewer,time.minusDays(1))
+                jdbc.update("""INSERT INTO finance_payroll_authority_binding(id,organization_id,identity_id,authority_key,effective_from,created_by_user_id,created_at)
+                    VALUES (?,?,?,'REVIEW',?,?,?)""",UUID.randomUUID(),org,reviewer,time.minusDays(1),actor,time)
+                val clearanceAuthority=com.hiltech.server.finance.CurrentFinancePayrollAuthority(jdbc,clock)
+                val clearanceCommands=com.hiltech.server.platform.command.JdbcIdempotentCommandExecutor(jdbc,
+                    DataSourceTransactionManager(datasource),clock,
+                    com.hiltech.server.telemetry.HiltechTelemetryRuntime(io.opentelemetry.api.OpenTelemetry.noop()) {})
+                val clearanceService=com.hiltech.server.finance.FinancePayrollCorrectionClearanceService(jdbc,clearanceAuthority,
+                    clearanceCommands,AuditEventWriter.NOOP,clock)
+                val request=com.hiltech.server.finance.FinancePayrollClearanceInput(UUID.randomUUID(),publishedRunId,correctedRun,
+                    "NO_PRIOR_TRANSFER_VERIFIED","synthetic-approved-hr-correction","synthetic-reviewed-no-transfer-register")
+                assertThrows<ProductApiException>{clearanceService.candidates(actor,org)}
+                assertThrows<ProductApiException>{clearanceService.record(actor,org,request,"synthetic-clearance-denied")}
+                assertTrue(clearanceService.candidates(reviewer,org).records.single{it.replacementRunVersionId==correctedRun}.canRecord)
+                val clearance=clearanceService.record(reviewer,org,request,"synthetic-clearance")
+                assertEquals("CLEARED",clearance.state)
+                assertFalse(clearance.bankExecutionInitiated)
+                assertFalse(clearance.ledgerPosted)
+                assertTrue(clearanceService.record(reviewer,org,request,"synthetic-clearance").replayed)
+                val realClearance=checkNotNull(actualSource.verifiedFor(org,publishedRunId,correctedRun))
+                assertEquals(PayrollFinanceCorrectionDisposition.NO_PRIOR_TRANSFER_VERIFIED,realClearance.financeDisposition)
+                assertEquals(newer.first.sourceFingerprint,realClearance.originalSourceFingerprint)
+                assertEquals(corrected.first.sourceFingerprint,realClearance.replacementSourceFingerprint)
+                assertEquals("FINANCE_CLEARANCE:"+clearance.targetId,realClearance.financeClearanceReference)
+                assertNull(actualSource.verifiedFor(UUID.randomUUID(),publishedRunId,correctedRun))
+                assertTrue(clearanceService.candidates(reviewer,org).records.single{it.replacementRunVersionId==correctedRun}.alreadyCleared)
+                val guarded=transaction.createSavepoint()
+                try { assertThrows<Exception>{jdbc.update("UPDATE finance_payroll_correction_clearance SET finance_reference='synthetic-mutated-source' WHERE id=?",clearance.targetId)} }
+                finally {transaction.rollbackToSavepoint(guarded);transaction.releaseSavepoint(guarded)}
+                // The release fixture's source port now returns the real persisted clearance.
+                verifiedCorrection=realClearance
                 checkNotNull(releases.release(actor,correctedRun,UUID.randomUUID(),"synthetic-no-transfer-release"))
+                assertNull(actualSource.verifiedFor(org,publishedRunId,correctedRun))
                 val handoff=checkNotNull(realHandoff.handoff(actor,correctedRun,UUID.randomUUID(),"synthetic-no-transfer-review"))
                 val batch=UUID.randomUUID()
                 jdbc.update("""INSERT INTO finance_payroll_payment_batch(id,operation_id,organization_id,review_batch_id,run_version_id,prepared_by_user_id,prepared_at)
