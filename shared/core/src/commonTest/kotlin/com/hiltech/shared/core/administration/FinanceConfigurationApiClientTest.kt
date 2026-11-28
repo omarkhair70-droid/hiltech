@@ -84,4 +84,15 @@ class FinanceConfigurationApiClientTest {
         assertFalse(openingLineValid(line.copy(stockValues=listOf(source.copy(amount="125.49")))))
         assertFalse(openingLineValid(line.copy(side="CREDIT")))
     }
+    @Test fun openingEmployeeResidualMustNotBeAnAggregateOrAnotherFunding() {
+        val employee="44444444-5555-4666-8777-888888888888"
+        val row=FinanceOpeningEmployeeObligationDto(employee,"SYNTHETIC-OLD-IMPREST","2026-10-01","60.25")
+        val line=FinanceOpeningLineDto(account,"DEBIT","60.25","SYNTHETIC-CUSTODY-SCHEDULE",employeeObligations=listOf(row))
+        assertTrue(openingLineValid(line))
+        assertEquals("60.250000",openingEmployeeTotal(line.employeeObligations))
+        assertFalse(openingLineValid(line.copy(amount="60.24")))
+        assertFalse(openingLineValid(line.copy(employeeObligations=listOf(row,row))))
+        assertFalse(openingLineValid(line.copy(bankStatementId=employee)))
+        assertFalse(openingLineValid(line.copy(side="CREDIT")))
+    }
 }

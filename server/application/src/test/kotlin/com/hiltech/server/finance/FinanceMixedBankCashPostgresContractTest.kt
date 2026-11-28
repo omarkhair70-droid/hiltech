@@ -2,6 +2,7 @@ package com.hiltech.server.finance
 
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -646,7 +647,7 @@ class FinanceMixedBankCashPostgresContractTest {
            VALUES(?,?,?,?,?,'FINANCIAL_IMPREST',?,?,?,?,'EGP',?,?,'mixed-funded')""",
            funding,UUID.randomUUID(),org,fundingProposal,draft,employee,actualBankIds[2],fundingApproval,funding80,
            journalRecorder,t.plusHours(6))
-       fun recordEmployeeSettlement(action:String,bankLine:UUID?,amount:BigDecimal):UUID {
+       fun recordEmployeeSettlement(action:String,bankLine:UUID?,amount:BigDecimal,custody:UUID=funding,at:OffsetDateTime=t.plusHours(9)):UUID {
            val proposal=UUID.randomUUID()
            val proofHash="4".repeat(64)
            val proof=evidence("FINANCE_EMPLOYEE_SETTLEMENT",proposal,proofHash)
@@ -655,10 +656,10 @@ class FinanceMixedBankCashPostgresContractTest {
                employee_id,action,bank_statement_line_id,settlement_evidence_id,settlement_evidence_sha256,amount,currency,
                review_version,policy_key,prepared_by_user_id,created_at)
                VALUES(?,?,?,?,?,?,?,?,?,?,'EGP',808,?,?,?)""",
-               proposal,UUID.randomUUID(),org,funding,employee,action,bankLine,proof,proofHash,amount,policy,issuer,t.plusHours(7))
-           val decision=approval("FINANCE_EMPLOYEE_SETTLEMENT",proposal,808,policy,issuer,t.plusHours(8))
+               proposal,UUID.randomUUID(),org,custody,employee,action,bankLine,proof,proofHash,amount,policy,issuer,at.minusHours(2))
+           val decision=approval("FINANCE_EMPLOYEE_SETTLEMENT",proposal,808,policy,issuer,at.minusHours(1))
            val id=UUID.randomUUID()
-           val unrelated=approval("FINANCE_EMPLOYEE_SETTLEMENT",UUID.randomUUID(),808,policy,issuer,t.plusHours(8))
+           val unrelated=approval("FINANCE_EMPLOYEE_SETTLEMENT",UUID.randomUUID(),808,policy,issuer,at.minusHours(1))
            val wrongSubject=connection.setSavepoint()
            try {
                assertThrows(DataIntegrityViolationException::class.java) {
@@ -666,14 +667,14 @@ class FinanceMixedBankCashPostgresContractTest {
                        funding_record_id,employee_id,action,bank_statement_line_id,settlement_evidence_id,approval_request_id,
                        amount,currency,recorded_by_user_id,recorded_at,correlation_id)
                        VALUES(?,?,?,?,?,?,?,?,?,?,?,'EGP',?,?,'mixed-wrong-subject')""",
-                       id,UUID.randomUUID(),org,proposal,funding,employee,action,bankLine,proof,unrelated,amount,bankImporter,t.plusHours(9))
+                       id,UUID.randomUUID(),org,proposal,custody,employee,action,bankLine,proof,unrelated,amount,bankImporter,at)
                }
            } finally {connection.rollback(wrongSubject);connection.releaseSavepoint(wrongSubject)}
            insert("""INSERT INTO finance_employee_settlement_record(id,operation_id,organization_id,proposal_id,
                funding_record_id,employee_id,action,bank_statement_line_id,settlement_evidence_id,approval_request_id,
                amount,currency,recorded_by_user_id,recorded_at,correlation_id)
                VALUES(?,?,?,?,?,?,?,?,?,?,?,'EGP',?,?,'mixed-custody-settlement')""",
-               id,UUID.randomUUID(),org,proposal,funding,employee,action,bankLine,proof,decision,amount,bankImporter,t.plusHours(9))
+               id,UUID.randomUUID(),org,proposal,custody,employee,action,bankLine,proof,decision,amount,bankImporter,at)
            return id
        }
        val returned=recordEmployeeSettlement("IMPREST_CASH_RETURN_CONFIRMED",actualBankIds[3],return30)
@@ -865,16 +866,20 @@ class FinanceMixedBankCashPostgresContractTest {
            "SELECT on_hand_qty FROM stock_balance WHERE stock_item_id=? AND storage_location_id=?",BigDecimal::class.java,stockItem,location)))
        fun openingWithObligations(customerId:UUID=customer,customerRef:String="SYNTHETIC-OLD-AR",residual:String="200",
            supplierRef:String="SYNTHETIC-OLD-AP",documentDate:LocalDate=day.minusDays(30),
-           stockQuantity:String="10.123456",sourceFingerprint:String=stockFingerprint,stockAmount:String="125.50"):String =
+           stockQuantity:String="10.123456",sourceFingerprint:String=stockFingerprint,stockAmount:String="125.50",employeeId:UUID=employee,employeeResidual:String="60"):String =
            """[{"accountId":"$fixed","side":"DEBIT","amount":"250","reference":"SYNTHETIC-ASSET-SCHEDULE"},
-               {"accountId":"$equity","side":"CREDIT","amount":"425.50","reference":"SYNTHETIC-EQUITY-SCHEDULE"},
+               {"accountId":"$equity","side":"CREDIT","amount":"585.50","reference":"SYNTHETIC-EQUITY-SCHEDULE"},
                {"accountId":"$receivable","side":"DEBIT","amount":"200","reference":"SYNTHETIC-CUSTOMER-SCHEDULE",
                 "obligations":[{"counterpartyId":"$customerId","documentReference":"$customerRef","documentDate":"$documentDate","dueDate":"$day","amount":"$residual"}]},
                {"accountId":"$payable","side":"CREDIT","amount":"150","reference":"SYNTHETIC-SUPPLIER-SCHEDULE",
                 "obligations":[{"counterpartyId":"$supplier","documentReference":"$supplierRef","documentDate":"$documentDate","amount":"150"}]},
                {"accountId":"$stockAsset","side":"DEBIT","amount":"125.50","reference":"SYNTHETIC-STOCK-SCHEDULE",
                 "stockValues":[{"movementId":"$stockMovement","quantity":"$stockQuantity","unit":"SYNTH-PC","sourceFingerprint":"$sourceFingerprint",
-                    "amount":"$stockAmount","valuationReference":"SYNTHETIC-FINANCE-VALUATION"}]}]"""
+                    "amount":"$stockAmount","valuationReference":"SYNTHETIC-FINANCE-VALUATION"}]},
+               {"accountId":"$advanceGl","side":"DEBIT","amount":"100","reference":"SYNTHETIC-ADVANCE-SCHEDULE",
+                "employeeObligations":[{"employeeId":"$employeeId","documentReference":"SYNTH-OLD-ADVANCE","documentDate":"${day.minusDays(30)}","amount":"100"}]},
+               {"accountId":"$custodyGl","side":"DEBIT","amount":"60","reference":"SYNTHETIC-IMPREST-SCHEDULE",
+                "employeeObligations":[{"employeeId":"$employeeId","documentReference":"SYNTH-OLD-IMPREST","documentDate":"${day.minusDays(30)}","amount":"$employeeResidual"}]}]"""
        rejectedOpening{postOpening(openingWithObligations(residual="199.999999"))}
        rejectedOpening{postOpening(openingWithObligations(customerId=UUID.randomUUID()))}
        rejectedOpening{postOpening(openingWithObligations(documentDate=day))}
@@ -883,6 +888,8 @@ class FinanceMixedBankCashPostgresContractTest {
        rejectedOpening{postOpening(openingWithObligations(stockQuantity="10.123455"))}
        rejectedOpening{postOpening(openingWithObligations(sourceFingerprint="0".repeat(64)))}
        rejectedOpening{postOpening(openingWithObligations(stockAmount="125.49"))}
+       rejectedOpening{postOpening(openingWithObligations(employeeId=UUID.randomUUID()))}
+       rejectedOpening{postOpening(openingWithObligations(employeeResidual="59.999999"))}
        val openingId=postOpening(openingWithObligations())
        val postedStock=jdbc.queryForMap("""SELECT movement_id,quantity,carrying_amount FROM finance_gl_opening_stock_value
            WHERE organization_id=? AND opening_journal_id=?""",org,openingId)
@@ -916,7 +923,7 @@ class FinanceMixedBankCashPostgresContractTest {
        assertFalse(openingCarry.isCompanyWideTrialBalance)
        val position=initial.positions.single()
        assertTrue(position.equationBalances)
-       assertEquals(0,position.equity.toBigDecimal().compareTo(BigDecimal("425.50")))
+       assertEquals(0,position.equity.toBigDecimal().compareTo(BigDecimal("585.50")))
        assertEquals(0,position.cumulativeRecognizedResult.toBigDecimal().compareTo(initial.totals.single().recognizedResult.toBigDecimal()))
        assertFalse(initial.isCompleteBalanceSheet)
        assertFalse(initial.isCompleteCashFlowStatement)
@@ -991,6 +998,28 @@ class FinanceMixedBankCashPostgresContractTest {
        // The new source shares the same bank/cash capacity, with no double recognition.
        rejectedOpening{recordBankAllocation(actualBankIds[1],money,alternativeRecorder,arId,historicalAr["ledger_fingerprint_sha256"] as String,t.plusHours(19))}
        assertEquals(11L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,period))
+       val historicalCustody=checkNotNull(jdbc.queryForObject("""SELECT id FROM finance_gl_opening_employee_obligation
+           WHERE organization_id=? AND opening_journal_id=? AND draft_kind='FINANCIAL_IMPREST'""",UUID::class.java,org,openingId))
+       val historicalAdvance=checkNotNull(jdbc.queryForObject("""SELECT id FROM finance_gl_opening_employee_obligation
+           WHERE organization_id=? AND opening_journal_id=? AND draft_kind='EMPLOYEE_ADVANCE'""",UUID::class.java,org,openingId))
+       assertEquals(1L,jdbc.queryForObject("SELECT count(*) FROM finance_employee_funding_record WHERE organization_id=?",Long::class.java,org))
+       assertNull(settlementStore.source(org,"EMPLOYEE_FUNDING",historicalCustody))
+       assertEquals(0,initial.rows.single{it.accountId==advanceGl}.openingDebit.toBigDecimal().compareTo(bank100))
+       assertEquals(0,initial.rows.single{it.accountId==custodyGl}.openingDebit.toBigDecimal().compareTo(BigDecimal("60")))
+       rejectedOpening{recordEmployeeSettlement("IMPREST_RECEIPTS_ACCEPTED",null,BigDecimal("60.000001"),historicalCustody,t.plusHours(19))}
+       rejectedOpening{recordEmployeeSettlement("IMPREST_RECEIPTS_ACCEPTED",null,expense20,historicalAdvance,t.plusHours(19))}
+       val oldReceipts=recordEmployeeSettlement("IMPREST_RECEIPTS_ACCEPTED",null,expense20,historicalCustody,t.plusHours(19))
+       val oldSource=checkNotNull(settlementStore.source(org,"IMPREST_EXPENSE",oldReceipts))
+       assertEquals(historicalCustody,oldSource.employeeFundingRecordId)
+       assertEquals(custodyGl,oldSource.creditAccountId)
+       assertEquals("COST",oldSource.requiredDebitKind)
+       settlementStore.insert(org,journalRecorder,FinanceSettlementPost(UUID.randomUUID(),"IMPREST_EXPENSE",oldReceipts,
+           "EI",period,expenseGl,custodyGl,oldSource.amount,"EGP",accountingTreatmentRef="SYNTHETIC-FIRST-COST-RECOGNITION"),
+           oldSource,UUID.randomUUID(),t.plusHours(20),"historical-custody-receipts")
+       assertEquals(0,BigDecimal("40").compareTo(jdbc.queryForObject("SELECT remaining_amount FROM finance_employee_custody_balance WHERE organization_id=? AND id=?",
+           BigDecimal::class.java,org,historicalCustody)))
+       assertEquals(0,desk.balances(org,period,true,true,false).rows.single{it.accountId==custodyGl}.closingDebit.toBigDecimal().compareTo(BigDecimal("40")))
+       assertEquals(12L,jdbc.queryForObject("SELECT journal_count FROM finance_gl_period_close_source WHERE organization_id=? AND period_id=?",Long::class.java,org,period))
      } finally { connection.rollback() }
    }
  }
